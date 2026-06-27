@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The MMCA Platform · Ivan Ball-llovera</title>
+  <meta name="description" content="MMCA is an open-source .NET 10 platform: a 13-package framework (DDD, Clean Architecture, CQRS) plus reference apps that extract a modular monolith into microservices, proven in production on Azure.">
+  <link rel="canonical" href="https://ivanball.github.io/platform.html">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="The MMCA Platform · Ivan Ball-llovera">
+  <meta property="og:description" content="An open-source .NET 10 framework (13 packages) plus reference apps that take a modular monolith to microservices, proven in production on Azure.">
+  <meta property="og:url" content="https://ivanball.github.io/platform.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="assets/css/styles.css">
+  <script defer src="assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="index.html">Home</a></li>
+          <li><a href="resume.html">Résumé</a></li>
+          <li><a href="platform.html" aria-current="page">Platform</a></li>
+          <li><a href="writing.html">Writing</a></li>
+          <li><a href="speaking.html">Speaking</a></li>
+          <li><a href="contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- Intro -->
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Featured work · Open source</p>
+          <h1 style="margin:0 0 0.75rem">The MMCA platform</h1>
+          <p style="font-size:1.12rem;max-width:70ch">A production-grade .NET 10 platform that demonstrates modern enterprise architecture end to end: an open-source framework of thirteen NuGet packages plus real applications that prove the patterns under live traffic. The design goal is one sentence: build the monolith now, extract a service later, without a rewrite.</p>
+          <div class="btn-row" style="margin-top:1.25rem">
+            <a class="btn btn--primary" href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">View on GitHub ↗</a>
+            <a class="btn btn--ghost" href="writing.html">Read the deep dives</a>
+          </div>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="num">13</div><div class="label">NuGet packages</div></div>
+          <div class="stat"><div class="num">25</div><div class="label">Architecture Decision Records</div></div>
+          <div class="stat"><div class="num">68</div><div class="label">Architecture fitness tests</div></div>
+          <div class="stat"><div class="num">3</div><div class="label">Reference applications</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- The framework -->
+    <section class="section section--alt">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">The framework</p>
+          <h2>MMCA.Common</h2>
+          <p>A NuGet package framework for building modular-monolith applications with DDD, Clean Architecture, and CQRS, and the seams to extract a module into its own microservice later. Thirteen packages release in lockstep and span every layer.</p>
+        </div>
+        <ul class="pill-list">
+          <li class="pill">MMCA.Common.Shared</li>
+          <li class="pill">MMCA.Common.Domain</li>
+          <li class="pill">MMCA.Common.Application</li>
+          <li class="pill">MMCA.Common.Infrastructure</li>
+          <li class="pill">MMCA.Common.API</li>
+          <li class="pill">MMCA.Common.Grpc</li>
+          <li class="pill">MMCA.Common.UI</li>
+          <li class="pill">MMCA.Common.Aspire</li>
+          <li class="pill">MMCA.Common.Aspire.Hosting</li>
+          <li class="pill">MMCA.Common.Testing</li>
+          <li class="pill">MMCA.Common.Testing.Architecture</li>
+          <li class="pill">MMCA.Common.Testing.E2E</li>
+          <li class="pill">MMCA.Common.Testing.UI</li>
+        </ul>
+
+        <div class="grid grid--3" style="margin-top:2rem">
+          <div class="card">
+            <h3>Strict layered core</h3>
+            <p class="mb-0">Shared → Domain → Application → Infrastructure → API/Grpc. The Result pattern carries expected failures, entities are rich aggregates with factory methods, and queries compose from specifications instead of LINQ spaghetti.</p>
+          </div>
+          <div class="card">
+            <h3>CQRS decorator pipeline</h3>
+            <p class="mb-0">Thin command and query handlers wrapped by a Scrutor decorator chain: FeatureGate → Logging → Caching → Validating → Transactional → Handler. The order is load-bearing and registered once.</p>
+          </div>
+          <div class="card">
+            <h3>Extraction seams</h3>
+            <p class="mb-0">Application code talks to abstractions; transport lives at the edge. A transport-agnostic message bus, gRPC contracts, JWKS cross-service auth, and Aspire hosting let a module become a service with no domain rewrite.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Reference apps -->
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Proof, not slideware</p>
+          <h2>Three reference applications</h2>
+          <p>The framework is consumed by real apps. Each one exercises the patterns differently, and the conference app ran a live event on Azure.</p>
+        </div>
+        <div class="grid grid--3">
+          <div class="card">
+            <span class="kicker" style="color:var(--accent)">Conference</span>
+            <h3>MMCA.ADC</h3>
+            <p class="mb-0">A production-deployed conference platform: four microservices (Identity, Conference, Engagement, Notification) behind a YARP gateway, cross-service JWKS auth, bidirectional gRPC, polyglot persistence, and load testing at conference-day scale. It powered the Atlanta Cloud + AI Conference.</p>
+          </div>
+          <div class="card">
+            <span class="kicker" style="color:var(--accent)">E-commerce</span>
+            <h3>MMCA.Store</h3>
+            <p class="mb-0">An e-commerce app refactored from a monolith into three microservices (Catalog, Sales, Identity) with Stripe payments, output caching, role-based access control, and an accessible Blazor and .NET MAUI UI.</p>
+          </div>
+          <div class="card">
+            <span class="kicker" style="color:var(--accent)">Reference seed</span>
+            <h3>MMCA.Helpdesk</h3>
+            <p class="mb-0">The deliberately minimal seed: a single Tickets module exercised through all five layers. It is the worked companion to the framework's getting-started guide and the easiest entry point for exploring the patterns.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Screenshots -->
+    <section class="section section--alt">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">A look inside</p>
+          <h2>From one graph, laptop to cloud</h2>
+          <p>Orchestrated locally with .NET Aspire, then deployed to Azure Container Apps from the same declarative model.</p>
+        </div>
+        <div class="grid grid--2">
+          <figure>
+            <div class="shot"><img src="assets/img/aspire-dashboard.jpg" alt="The .NET Aspire dashboard showing the MMCA services, databases, and message broker running locally" loading="lazy"></div>
+            <figcaption>The .NET Aspire dashboard: services, databases, and the broker as one orchestrated graph.</figcaption>
+          </figure>
+          <figure>
+            <div class="shot"><img src="assets/img/github-repo-readme.jpg" alt="The MMCA.Common GitHub repository README" loading="lazy"></div>
+            <figcaption>MMCA.Common on GitHub: MIT-licensed, documented, released in lockstep.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- Architecture principles -->
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">How it holds together</p>
+          <h2>Architecture principles</h2>
+          <p>The same invariants are enforced across every repo, twice: a compile-time MSBuild layer guard and a shared NetArchTest rule library run as fitness functions.</p>
+        </div>
+        <div class="grid grid--2">
+          <div class="card">
+            <h3>Database-per-service, with an outbox</h3>
+            <p class="mb-0">Each module or service owns its own database and outbox. Domain events are persisted atomically with the data, then delivered at least once, in-process for the monolith or over a broker once extracted. The outbox is the cross-source consistency mechanism.</p>
+          </div>
+          <div class="card">
+            <h3>Cross-service auth without shared secrets</h3>
+            <p class="mb-0">Extracted services validate the issuer's RS256 tokens via JWKS / OIDC discovery, routed through the gateway with a direct fallback. No symmetric secret crosses a service boundary.</p>
+          </div>
+          <div class="card">
+            <h3>Soft-delete plus a right to erasure</h3>
+            <p class="mb-0">Entities are soft-deleted for lifecycle and never hard-deleted; an anonymization seam plus outbox purge satisfies GDPR/CCPA erasure. Audit fields are stamped automatically on every save.</p>
+          </div>
+          <div class="card">
+            <h3>Polyglot persistence behind one model</h3>
+            <p class="mb-0">SQL Server, Cosmos DB, and SQLite sit behind a single entity model; the engine is an attribute on the configuration, orthogonal to the database-name axis. Plumbing shipped and tested.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Scorecard -->
+    <section class="section section--alt">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Graded honestly</p>
+          <h2>A two-axis architecture scorecard</h2>
+          <p>Every repo is scored against a 34-category rubric on two axes, Maturity (how complete the decision is) and Implementation (how well it is realized in code), with evidence and recorded gaps rather than a single vanity number.</p>
+        </div>
+        <div class="grid grid--2">
+          <div class="card">
+            <h3>MMCA.Common <span class="muted" style="font-weight:400">(framework)</span></h3>
+            <p class="mb-0"><strong>Maturity 92.2%</strong> · <strong>Implementation 82.9%</strong><br><span class="muted">Across 33 applicable categories; only the i18n category is scoped out by design.</span></p>
+          </div>
+          <div class="card">
+            <h3>MMCA.ADC <span class="muted" style="font-weight:400">(conference app)</span></h3>
+            <p class="mb-0"><strong>Maturity 90.5%</strong> · <strong>Implementation 84.3%</strong><br><span class="muted">Scored the same way, then remediated and re-scored as the apps evolved.</span></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ADRs -->
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Why, not just what</p>
+          <h2>Architecture Decision Records</h2>
+          <p>Twenty-five accepted ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge.</p>
+        </div>
+        <div class="adr-list">
+          <div class="adr"><span class="adr-num">001</span><span><span class="adr-title">Manual DTO mapping</span><span class="adr-sum">Per-entity source-generated mappers chosen over reflection-based AutoMapper.</span></span></div>
+          <div class="adr"><span class="adr-num">002</span><span><span class="adr-title">Navigation populators</span><span class="adr-sum">Cross-container and cross-source eager loading via an explicit populator contract.</span></span></div>
+          <div class="adr"><span class="adr-num">003</span><span><span class="adr-title">Outbox dual dispatch</span><span class="adr-sum">Outbox plus in-process dispatch plus a background processor for at-least-once delivery.</span></span></div>
+          <div class="adr"><span class="adr-num">004</span><span><span class="adr-title">Cross-service token validation (JWKS)</span><span class="adr-sum">Extracted services validate RS256 tokens via JWKS / OIDC discovery, no shared key.</span></span></div>
+          <div class="adr"><span class="adr-num">005</span><span><span class="adr-title">Soft-delete vs. erasure</span><span class="adr-sum">Soft-delete for lifecycle; anonymization plus outbox purge for GDPR/CCPA erasure.</span></span></div>
+          <div class="adr"><span class="adr-num">006</span><span><span class="adr-title">Database per service</span><span class="adr-sum">Each service owns its DB and outbox; one context class, one instance per database.</span></span></div>
+          <div class="adr"><span class="adr-num">007</span><span><span class="adr-title">gRPC cross-service calls</span><span class="adr-sum">Shared contracts, typed clients, and Result-over-the-wire for synchronous calls.</span></span></div>
+          <div class="adr"><span class="adr-num">008</span><span><span class="adr-title">Monolith to services plus gateway</span><span class="adr-sum">One service host per module behind a YARP gateway; transport at the edge keeps it reversible.</span></span></div>
+          <div class="adr"><span class="adr-num">009</span><span><span class="adr-title">Resilience and recovery objectives</span><span class="adr-sum">A standard resilience handler on every outbound client; declared RTO/RPO and drilled restore.</span></span></div>
+          <div class="adr"><span class="adr-num">010</span><span><span class="adr-title">Integration-event schema versioning</span><span class="adr-sum">Every event carries a SchemaVersion; breaking changes use a new event type plus upcaster.</span></span></div>
+          <div class="adr"><span class="adr-num">011</span><span><span class="adr-title">Single-locale by design</span><span class="adr-sum">en-US only is a deliberate, revisitable non-goal.</span></span></div>
+          <div class="adr"><span class="adr-num">012</span><span><span class="adr-title">gRPC-host transport convention</span><span class="adr-sum">Two coherent Kestrel profiles; the choice forces the gateway-forward mode and JWKS routing.</span></span></div>
+          <div class="adr"><span class="adr-num">013</span><span><span class="adr-title">Result pattern over exceptions</span><span class="adr-sum">Expected failures are Result values; only the edge maps to HTTP or gRPC status.</span></span></div>
+          <div class="adr"><span class="adr-num">014</span><span><span class="adr-title">CQRS decorator pipeline</span><span class="adr-sum">Thin handlers behind a Scrutor decorator chain whose order is load-bearing.</span></span></div>
+          <div class="adr"><span class="adr-num">015</span><span><span class="adr-title">Architecture fitness functions</span><span class="adr-sum">Invariants gate the build twice: a compile-time layer guard plus a shared NetArchTest library.</span></span></div>
+          <div class="adr"><span class="adr-num">016</span><span><span class="adr-title">Lockstep versioning + MassTransit pin</span><span class="adr-sum">All packages release at one version; the MassTransit v8 pin is a build gate.</span></span></div>
+          <div class="adr"><span class="adr-num">017</span><span><span class="adr-title">HTTP request idempotency</span><span class="adr-sum">An attribute dedups client retries via an Idempotency-Key header and cached replay.</span></span></div>
+          <div class="adr"><span class="adr-num">018</span><span><span class="adr-title">Polyglot persistence</span><span class="adr-sum">SQL Server, Cosmos, and SQLite behind one model; engine is an attribute on the config.</span></span></div>
+          <div class="adr"><span class="adr-num">019</span><span><span class="adr-title">Layered rate limiting</span><span class="adr-sum">An always-on global limiter caps authenticated callers per user and exempts infra traffic.</span></span></div>
+          <div class="adr"><span class="adr-num">020</span><span><span class="adr-title">Permission-based authorization</span><span class="adr-sum">An opt-in capability layer over RBAC; permission policies resolve on demand from a registry.</span></span></div>
+          <div class="adr"><span class="adr-num">021</span><span><span class="adr-title">Consumer-side inbox idempotency</span><span class="adr-sum">An opt-in inbox dedups broker redeliveries by message id in the consumer's own database.</span></span></div>
+          <div class="adr"><span class="adr-num">022</span><span><span class="adr-title">Browser session-cookie auth</span><span class="adr-sum">HttpOnly cookies plus an SSR-time non-validating scheme so [Authorize] passes during prerender.</span></span></div>
+          <div class="adr"><span class="adr-num">023</span><span><span class="adr-title">Security-response headers plus CSP</span><span class="adr-sum">Hardened security-headers middleware with a pluggable CSP that cannot break Blazor.</span></span></div>
+          <div class="adr"><span class="adr-num">024</span><span><span class="adr-title">Two-channel user notifications</span><span class="adr-sum">One use case writes a durable inbox and fires a transient SignalR push; transport is pluggable.</span></span></div>
+          <div class="adr"><span class="adr-num">025</span><span><span class="adr-title">Startup warm-up plus readiness gating</span><span class="adr-sum">Warm-up tasks run at startup and a readiness gate holds probes off a warming replica.</span></span></div>
+        </div>
+
+        <div class="btn-row" style="margin-top:2rem">
+          <a class="btn btn--primary" href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">View on GitHub ↗</a>
+          <a class="btn btn--ghost" href="writing.html">Read the deep-dive series</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="resume.html">Résumé</a></li>
+          <li><a href="platform.html">Platform</a></li>
+          <li><a href="writing.html">Writing</a></li>
+          <li><a href="speaking.html">Speaking</a></li>
+          <li><a href="contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Built as a static site.</p>
+    </div>
+  </footer>
+</body>
+</html>
