@@ -479,3 +479,46 @@ figcaption { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem; t
 .lead-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.6rem; }
 .lead-list li { display: grid; grid-template-columns: auto 1fr; gap: 0.6rem; align-items: baseline; color: var(--text); }
 .lead-list .check { color: var(--accent); font-weight: 800; }
+
+/* ----- Print (résumé PDF export) ----- */
+@media print {
+  /* Force clean, ink-friendly light rendering regardless of the active theme */
+  :root, :root[data-theme="dark"], :root[data-theme="light"] {
+    --bg: #fff; --bg-alt: #fff; --surface: #fff; --surface-alt: #fff;
+    --border: #c9d2dc; --text: #14202c; --text-muted: #38465a;
+    --accent: #14409a; --accent-strong: #0f2f72; --accent-contrast: #fff; --accent-soft: #fff;
+    --shadow: none; --shadow-sm: none;
+  }
+  @page { size: Letter; margin: 0.5in 0.6in; }
+  html { font-size: 12.5px; }
+  body { background: #fff; color: var(--text); line-height: 1.4; display: block; min-height: 0; }
+
+  /* Hide site chrome and screen-only controls */
+  .skip-link, .site-header, .site-footer, .nav-tools, .nav-toggle, .btn-row { display: none !important; }
+
+  /* Full-bleed content */
+  .container { max-width: none; padding: 0; }
+  main { padding: 0 !important; }
+  .section, .section--alt { padding: 0.35rem 0 !important; background: #fff !important; }
+  .section:first-of-type { padding-top: 0 !important; }
+
+  /* Headings tuned for paper */
+  h1 { font-size: 1.7rem; margin: 0 0 0.2rem; }
+  h2 { font-size: 1.05rem; margin: 0.55rem 0 0.5rem; padding-bottom: 0.15rem; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 0.98rem; }
+  .role { font-size: 1rem !important; }
+  p, li, dd, dt { font-size: 0.86rem; }
+
+  a { color: var(--text); text-decoration: none; }
+
+  /* Keep each job / card / row intact across page breaks */
+  .timeline { border-left: none; margin-left: 0; padding-left: 0; }
+  .job { padding-bottom: 0.7rem; }
+  .job::before { display: none; }
+  .job ul { padding-left: 1.05rem; }
+  .job li { margin-bottom: 0.2rem; }
+  .job, .row, .card, .deflist .row { break-inside: avoid; page-break-inside: avoid; }
+  .deflist .row { grid-template-columns: 170px 1fr; }
+  .grid--2 { grid-template-columns: 1fr 1fr; }
+  .card { border: none; padding: 0; box-shadow: none; }
+}

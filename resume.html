@@ -92,10 +92,12 @@
             <h3>Senior Software Engineer · Assurant</h3>
             <p class="job-meta">June 2025 – Present · Architect-level scope: platform, security, and cross-team technical decisions</p>
             <ul>
-              <li>Drive architecture and platform decisions on Assurant's Renters Insurance platform (Angular, C#, Azure Service Fabric microservices, SQL Server), delivering multi-factor authentication across the FlexDeposit and SureDeposit products and serving as a trusted technical authority across the Renters organization.</li>
-              <li>Established testing and quality strategy in partnership with QA, driving new-code test coverage toward an 80% target, reducing defects and increasing deployment confidence.</li>
-              <li>Set and enforced application-security standards, remediating Fortify/Snyk/Wiz SAST/DAST findings and instituting stricter code-review gates to sustain a zero-new-vulnerability baseline.</li>
-              <li>Architected a Clean Architecture and machine-learning solution for automated insurance-claim fraud detection at a company hackathon; architected "A.I.M." (AI Initiative &amp; Modernization), an AI assistant embedded in Azure DevOps spanning the full delivery lifecycle, delivering 20 capabilities across 6 squad roles with a human-in-the-loop design.</li>
+              <li>Re-architected the AR.com renters quote and issue flow for multi-product quoting (Renters Insurance plus General Liability) against Guidewire, delivering Orchestration and Sales API changes, Angular UI updates, reusable producer-code propagation, and a new guidewireData integration contract that enabled the modern Guidewire system-of-record path end to end.</li>
+              <li>Delivered Okta-based multi-factor authentication (SMS and voice, magic-link, and sign-in widget) across all FlexDeposit flows (payment, search-bond, tenant-portal, and extension), with OTP retry, resend throttling, and account lockout.</li>
+              <li>Led the Angular 18 to 21 major-version upgrade and hardened application security: remediated 9 high-severity and 12 medium and low Wiz vulnerabilities, ran Snyk scans across the UI and Places API, and completed a full Fortify-to-Snyk SAST migration.</li>
+              <li>Led the migration of the AR.com repositories from Azure DevOps to GitHub Enterprise with full history preserved, re-pointing CI/CD pipelines, branch protection, and team permissions, which unlocked GitHub Copilot PR review.</li>
+              <li>Designed and shipped branch-level coverage sync (Azure Data Factory, API, and SQL) that resolved a production data-integrity incident in which Model-to-Prod syncs were silently overwriting production coverage changes.</li>
+              <li>Architected AI delivery tooling in two company hackathons: a Clean Architecture and machine-learning solution for automated insurance-claim fraud detection, and "A.I.M." (AI Initiative &amp; Modernization), an AI assistant embedded in Azure DevOps that spans the full delivery lifecycle (plan, build, test, ship, operate) with a multi-provider, human-in-the-loop design; adopted GitHub Copilot and Claude Code to raise code quality and developer efficiency.</li>
             </ul>
           </div>
 
@@ -157,8 +159,8 @@
             <li>Authored a 13-package shared framework (DDD, Clean Architecture, CQRS) published to GitHub Packages and consumed by an e-commerce app (Stripe) and a conference app.</li>
             <li>Implemented database-per-service with an at-least-once outbox plus dual dispatch, soft-delete, automatic audit stamping, and GDPR/CCPA anonymization.</li>
             <li>Deployed to Azure with Bicep IaC, Service Bus, Container Apps, App Insights, and Log Analytics, using OIDC / managed-identity authentication; orchestrated locally with .NET Aspire.</li>
-            <li>Built Blazor (MudBlazor) and .NET MAUI clients; enforced quality with xUnit v3, Playwright E2E, and automated accessibility testing (axe, WCAG 2.1 AA: zero violations).</li>
-            <li>Documented decisions with 25 ADRs and a 34-category architecture-review rubric; built Roslyn-based code-inventory tooling and AI/multi-agent development workflows.</li>
+            <li>Built Blazor (MudBlazor) and .NET MAUI clients; enforced quality with xUnit v3, Playwright E2E, 71 architecture-fitness tests, and automated accessibility testing (axe, WCAG 2.1 AA: zero violations).</li>
+            <li>Documented decisions with 28 ADRs and a 34-category architecture-review rubric; built Roslyn-based code-inventory tooling and AI/multi-agent development workflows.</li>
           </ul>
           <p><a href="platform.html">Read the full platform breakdown →</a></p>
         </div>
