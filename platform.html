@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>The MMCA Platform · Ivan Ball-llovera</title>
-  <meta name="description" content="MMCA is an open-source .NET 10 platform: a 13-package framework (DDD, Clean Architecture, CQRS) plus reference apps that extract a modular monolith into microservices, proven in production on Azure.">
+  <meta name="description" content="MMCA is an open-source .NET 10 platform: a 15-package framework (DDD, Clean Architecture, CQRS) plus reference apps that extract a modular monolith into microservices, proven in production on Azure.">
   <link rel="canonical" href="https://ivanball.github.io/platform.html">
   <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="website">
   <meta property="og:title" content="The MMCA Platform · Ivan Ball-llovera">
-  <meta property="og:description" content="An open-source .NET 10 framework (13 packages) plus reference apps that take a modular monolith to microservices, proven in production on Azure.">
+  <meta property="og:description" content="An open-source .NET 10 framework (15 packages) plus reference apps that take a modular monolith to microservices, proven in production on Azure.">
   <meta property="og:url" content="https://ivanball.github.io/platform.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -53,16 +53,16 @@
         <div class="section-head">
           <p class="eyebrow">Featured work · Open source</p>
           <h1 style="margin:0 0 0.75rem">The MMCA platform</h1>
-          <p style="font-size:1.12rem;max-width:70ch">A production-grade .NET 10 platform that demonstrates modern enterprise architecture end to end: an open-source framework of thirteen NuGet packages plus real applications that prove the patterns under live traffic. The design goal is one sentence: build the monolith now, extract a service later, without a rewrite.</p>
+          <p style="font-size:1.12rem;max-width:70ch">A production-grade .NET 10 platform that demonstrates modern enterprise architecture end to end: an open-source framework of fifteen NuGet packages plus real applications that prove the patterns under live traffic. The design goal is one sentence: build the monolith now, extract a service later, without a rewrite.</p>
           <div class="btn-row" style="margin-top:1.25rem">
             <a class="btn btn--primary" href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">View on GitHub ↗</a>
             <a class="btn btn--ghost" href="writing.html">Read the deep dives</a>
           </div>
         </div>
         <div class="stats">
-          <div class="stat"><div class="num">13</div><div class="label">NuGet packages</div></div>
-          <div class="stat"><div class="num">28</div><div class="label">Architecture Decision Records</div></div>
-          <div class="stat"><div class="num">71</div><div class="label">Architecture fitness tests</div></div>
+          <div class="stat"><div class="num">15</div><div class="label">NuGet packages</div></div>
+          <div class="stat"><div class="num">43</div><div class="label">Architecture Decision Records</div></div>
+          <div class="stat"><div class="num">78</div><div class="label">Architecture fitness tests</div></div>
           <div class="stat"><div class="num">3</div><div class="label">Reference applications</div></div>
         </div>
       </div>
@@ -74,7 +74,7 @@
         <div class="section-head">
           <p class="eyebrow">The framework</p>
           <h2>MMCA.Common</h2>
-          <p>A NuGet package framework for building modular-monolith applications with DDD, Clean Architecture, and CQRS, and the seams to extract a module into its own microservice later. Thirteen packages release in lockstep and span every layer.</p>
+          <p>A NuGet package framework for building modular-monolith applications with DDD, Clean Architecture, and CQRS, and the extension points to extract a module into its own microservice later. Fifteen packages release in lockstep and span every layer.</p>
         </div>
         <ul class="pill-list">
           <li class="pill">MMCA.Common.Shared</li>
@@ -102,7 +102,7 @@
             <p class="mb-0">Thin command and query handlers wrapped by a Scrutor decorator chain: FeatureGate → Logging → Caching → Validating → Transactional → Handler. The order is load-bearing and registered once.</p>
           </div>
           <div class="card">
-            <h3>Extraction seams</h3>
+            <h3>Extraction boundaries</h3>
             <p class="mb-0">Application code talks to abstractions; transport lives at the edge. A transport-agnostic message bus, gRPC contracts, JWKS cross-service auth, and Aspire hosting let a module become a service with no domain rewrite.</p>
           </div>
         </div>
@@ -177,7 +177,7 @@
           </div>
           <div class="card">
             <h3>Soft-delete plus a right to erasure</h3>
-            <p class="mb-0">Entities are soft-deleted for lifecycle and never hard-deleted; an anonymization seam plus outbox purge satisfies GDPR/CCPA erasure. Audit fields are stamped automatically on every save.</p>
+            <p class="mb-0">Entities are soft-deleted for lifecycle and never hard-deleted; an anonymization pathway plus outbox purge satisfies GDPR/CCPA erasure. Audit fields are stamped automatically on every save.</p>
           </div>
           <div class="card">
             <h3>Polyglot persistence behind one model</h3>
@@ -198,11 +198,11 @@
         <div class="grid grid--2">
           <div class="card">
             <h3>MMCA.Common <span class="muted" style="font-weight:400">(framework)</span></h3>
-            <p class="mb-0"><strong>Maturity 92.2%</strong> · <strong>Implementation 82.9%</strong><br><span class="muted">Across 33 applicable categories; only the i18n category is scoped out by design.</span></p>
+            <p class="mb-0"><strong>Maturity 94.4%</strong> · <strong>Implementation 83.7%</strong><br><span class="muted">Across all 34 categories; i18n is scored since multi-locale support shipped.</span></p>
           </div>
           <div class="card">
             <h3>MMCA.ADC <span class="muted" style="font-weight:400">(conference app)</span></h3>
-            <p class="mb-0"><strong>Maturity 90.5%</strong> · <strong>Implementation 84.3%</strong><br><span class="muted">Scored the same way, then remediated and re-scored as the apps evolved.</span></p>
+            <p class="mb-0"><strong>Maturity 94.1%</strong> · <strong>Implementation 85.8%</strong><br><span class="muted">Scored the same way, then remediated and re-scored as the apps evolved.</span></p>
           </div>
         </div>
       </div>
@@ -214,7 +214,7 @@
         <div class="section-head">
           <p class="eyebrow">Why, not just what</p>
           <h2>Architecture Decision Records</h2>
-          <p>Twenty-eight ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge.</p>
+          <p>Forty-three ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge.</p>
         </div>
         <div class="adr-list">
           <div class="adr"><span class="adr-num">001</span><span><span class="adr-title">Manual DTO mapping</span><span class="adr-sum">Per-entity source-generated mappers chosen over reflection-based AutoMapper.</span></span></div>
@@ -245,6 +245,21 @@
           <div class="adr"><span class="adr-num">026</span><span><span class="adr-title">Two-tier caching</span><span class="adr-sum">One swappable cache substrate (in-memory or Redis) plus an HTTP output-cache edge for public reads.</span></span></div>
           <div class="adr"><span class="adr-num">027</span><span><span class="adr-title">Multi-locale i18n (supersedes 011)</span><span class="adr-sum">English and Spanish via resource files; backend errors localized at the edge by error code, one culture cookie across SSR, Server, and WASM.</span></span></div>
           <div class="adr"><span class="adr-num">028</span><span><span class="adr-title">Day / dark theme mode</span><span class="adr-sum">A persisted light/dark toggle bound through MudThemeProvider, defaulting to the OS preference with a no-flash cookie bootstrap.</span></span></div>
+          <div class="adr"><span class="adr-num">029</span><span><span class="adr-title">Brute-force login protection</span><span class="adr-sum">Email-keyed login lockout with exponential backoff plus a per-IP registration cap, covering the anonymous surface the rate limiter exempts.</span></span></div>
+          <div class="adr"><span class="adr-num">030</span><span><span class="adr-title">Startup sole-migrator</span><span class="adr-sum">Each service applies its own EF migrations at boot and is the sole migrator; no deploy-step backstop.</span></span></div>
+          <div class="adr"><span class="adr-num">031</span><span><span class="adr-title">Feature-flag management</span><span class="adr-sum">One flag name enforced on two surfaces: a controller gate and the outermost CQRS decorator; disabled reads as 404.</span></span></div>
+          <div class="adr"><span class="adr-num">032</span><span><span class="adr-title">Password hashing with legacy migration</span><span class="adr-sum">PBKDF2 with 600k iterations for new passwords; legacy records still verify and migrate on the owner's next password set.</span></span></div>
+          <div class="adr"><span class="adr-num">033</span><span><span class="adr-title">Resource-ownership authorization</span><span class="adr-sum">A row-level ownership axis beside RBAC: an owner-or-admin filter rejects mismatches and a specification row-scopes queries.</span></span></div>
+          <div class="adr"><span class="adr-num">034</span><span><span class="adr-title">Generic entity controllers</span><span class="adr-sum">Every entity inherits a REST surface plus a bounded query contract: sparse fields, typed filters, sort, and pagination.</span></span></div>
+          <div class="adr"><span class="adr-num">035</span><span><span class="adr-title">Optimistic concurrency (RowVersion)</span><span class="adr-sum">A RowVersion token round-trips through DTOs so a stale write surfaces as HTTP 409, gated by a fitness rule.</span></span></div>
+          <div class="adr"><span class="adr-num">036</span><span><span class="adr-title">External OAuth login</span><span class="adr-sum">Google and GitHub sign-in swap a single-use code for local JWTs; provider tokens never ride the redirect URL.</span></span></div>
+          <div class="adr"><span class="adr-num">037</span><span><span class="adr-title">Field-level encryption at rest</span><span class="adr-sum">An EF converter encrypts string columns with AES-256-GCM; shipped and tested, not yet wired to an entity.</span></span></div>
+          <div class="adr"><span class="adr-num">038</span><span><span class="adr-title">Supply-chain provenance</span><span class="adr-sum">An SBOM release gate, committed lock files, a transitive vulnerability audit, and package sources pinned to nuget.org.</span></span></div>
+          <div class="adr"><span class="adr-num">039</span><span><span class="adr-title">Live channel push</span><span class="adr-sum">Ephemeral channel events ride the existing notification hub, so one WebSocket carries durable notifications and lossy live events.</span></span></div>
+          <div class="adr"><span class="adr-num">040</span><span><span class="adr-title">Authenticated output caching</span><span class="adr-sum">Public, user-independent GET endpoints cache even when requests carry a Bearer token; identity-dependent payloads never qualify.</span></span></div>
+          <div class="adr"><span class="adr-num">041</span><span><span class="adr-title">Observability and telemetry</span><span class="adr-sum">A shared OpenTelemetry baseline plus CQRS duration metrics, correlation IDs, head sampling, and outbox-poll span filtering.</span></span></div>
+          <div class="adr"><span class="adr-num">042</span><span><span class="adr-title">Device capability abstraction (MAUI)</span><span class="adr-sum">Per-capability contracts with browser fallbacks; the MAUI package overrides them for native heads (the fifteenth package).</span></span></div>
+          <div class="adr"><span class="adr-num">043</span><span><span class="adr-title">Mobile deep links and OAuth callback</span><span class="adr-sum">Allow-listed custom-scheme OAuth completion for MAUI plus app-association files served by each app's web host.</span></span></div>
         </div>
 
         <div class="btn-row" style="margin-top:2rem">
