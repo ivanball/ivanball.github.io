@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADR-043: Mobile Deep Links, App Association, and the Native OAuth Callback · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-07-10). The framework leg (the OAuth custom-scheme allowlist) is implemented; the per-app association files and platform intent filters…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ADR-043: Mobile Deep Links, App Association, and the Native OAuth Callback">
+  <meta property="og:description" content="Accepted (2026-07-10). The framework leg (the OAuth custom-scheme allowlist) is implemented; the per-app association files and platform intent filters…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 45 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html" aria-current="page">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-043-mobile-deep-links-app-association-and-the-native-oauth-callback">ADR-043: Mobile Deep Links, App Association, and the Native OAuth Callback</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-07-10). The framework leg (the OAuth custom-scheme allowlist) is implemented; the
+          per-app association files and platform intent filters land with each consumer&#39;s deep-link wave.</p>
+          <h2 id="context">Context</h2>
+          <p>Three mobile flows all need a URL to leave the web world and land inside the MAUI app:</p>
+          <ol>
+          <li><strong>Shared links and QR codes.</strong> The share sheet and QR codes carry ordinary https web URLs. With
+          Android App Links (<code>assetlinks.json</code>) and iOS Universal Links (<code>apple-app-site-association</code>),
+          the OS opens those URLs in the installed app instead of the browser.</li>
+          <li><strong>Notification taps and app actions</strong>, which are app-internal and covered by the
+          <code>IDeepLinkDispatcher</code> seam (ADR-042).</li>
+          <li><strong>External OAuth on a native head.</strong> Google and GitHub reject OAuth inside embedded WebViews, so
+          the MAUI head must run the provider flow in the system browser (<code>WebAuthenticator</code>) and needs
+          the API to redirect its completion BACK to the app. Today <code>OAuthControllerBase.CompleteAsync</code>
+          redirects only to the config-pinned <code>OAuth:UIBaseUrl</code>
+          (<code>Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs</code>), which a native app
+          cannot intercept.</li>
+          </ol>
+          <p>The completion redirect design (ADR-036 lineage) has a hard security property worth preserving:
+          tokens never ride a redirect URL. <code>CompleteAsync</code> stashes the token pair server-side under a
+          single-use code and the UI exchanges it out-of-band via POST.</p>
+          <h2 id="decision">Decision</h2>
+          <ul>
+          <li><strong>Custom-scheme returnUrl allowlist in the framework.</strong> <code>CompleteAsync</code> consults
+          <code>OAuth:AllowedReturnUrlSchemes</code> (a config array, default empty). When the challenge&#39;s stashed
+          <code>returnUrl</code> is an absolute URI whose scheme appears in the allowlist (for example
+          <code>atldevcon://oauth-complete</code>), the completion redirect (and completion errors) target that URL
+          instead of <code>OAuth:UIBaseUrl</code>, carrying only the same single-use code. The redirect echoes the
+          client&#39;s <code>Uri.OriginalString</code> because URI normalization would append a trailing slash and native
+          callback matching can be exact. <code>http</code>/<code>https</code> schemes never match even if listed, so web
+          destinations always flow through the pinned base URL and the allowlist cannot become an open
+          redirect. An empty allowlist reproduces the previous behavior byte for byte.</li>
+          <li><strong>Client flow.</strong> The MAUI head calls
+          <code>WebAuthenticator</code> with <code>{gateway}/auth/oauth/{provider}?returnUrl={scheme}://oauth-complete</code>,
+          captures <code>code</code> from the callback, POSTs the existing anonymous <code>/auth/oauth/exchange</code>, and
+          stores the pair via <code>ITokenStorageService</code>. This rides behind the <code>IExternalAuthBroker</code> contract
+          (ADR-042); the default broker is unavailable, which keeps the shared Login page on its anchor
+          flow for web heads.</li>
+          <li><strong>Association files are served by each app&#39;s UI.Web host</strong>, not the gateway: the shared web URLs
+          are UI-host URLs, and the gateway&#39;s <code>/.well-known</code> already forwards to Identity for JWKS.
+          Explicit anonymous endpoints return <code>assetlinks.json</code> (with the PLAY APP SIGNING certificate
+          fingerprint, not the local keystore&#39;s) and <code>apple-app-site-association</code> (team id + bundle id +
+          the shared route paths). Platform side: <code>AutoVerify</code> intent filters on Android, the
+          associated-domains entitlement on iOS, plus the <code>WebAuthenticatorCallbackActivity</code> /
+          <code>CFBundleURLTypes</code> scheme registrations.</li>
+          <li><strong>Incoming URIs reuse the ADR-042 dispatcher.</strong> App-link and callback URIs are reduced to their
+          path and query and published to <code>IDeepLinkDispatcher</code>; because all heads share one Blazor route
+          table, no mapping layer exists.</li>
+          </ul>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li>Reusing the single-use-code exchange keeps the token-never-in-URL invariant identical across web
+          and native; the only new surface is WHERE the code lands.</li>
+          <li>A scheme allowlist in configuration keeps the framework generic (Store can register its own
+          scheme) while defaulting closed.</li>
+          <li>Serving association files from the UI host keeps them next to the URLs they describe and out of
+          the gateway&#39;s routing table.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li>The app-facing hostname is baked into store binaries (intent filters, entitlements). The apps
+          currently ride the Azure Container Apps default domain, which changes if the environment is ever
+          recreated and would force store resubmissions. Every occurrence stays parameterized; a custom
+          domain is the durable fix.</li>
+          <li>A custom-scheme URI&#39;s host and path are attacker-choosable on a device with a hostile app
+          registered for the same scheme (scheme hijack). Accepted: the redirect carries only a two-minute
+          single-use code, the exchange is one-shot, and platform app-link verification does not exist for
+          custom schemes anywhere.</li>
+          <li>Completion failures that occur before authentication properties exist cannot know the native
+          callback and still land on the web login page; the broker times out and the user retries.</li>
+          </ul>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/043-mobile-deep-links-and-native-oauth-callback.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

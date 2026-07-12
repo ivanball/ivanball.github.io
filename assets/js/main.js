@@ -78,10 +78,21 @@
     });
   }
 
+  /* ----- Reference-doc sidebar: collapse the long collection nav on small
+     screens so the content leads; leave it open on wider viewports. ----- */
+  function initDocSidebar() {
+    var details = document.querySelector(".doc-sidebar-details");
+    if (!details) { return; }
+    if (window.matchMedia && window.matchMedia("(max-width: 900px)").matches) {
+      details.removeAttribute("open");
+    }
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     initThemeToggle();
     initNavToggle();
     initEmail();
     initYear();
+    initDocSidebar();
   });
 })();

@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADR-033: Resource-Ownership Authorization (Row-Level + Action Filter) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-07-02).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ADR-033: Resource-Ownership Authorization (Row-Level + Action Filter)">
+  <meta property="og:description" content="Accepted (2026-07-02).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 45 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html" aria-current="page">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-033-resource-ownership-authorization-row-level--action-filter">ADR-033: Resource-Ownership Authorization (Row-Level + Action Filter)</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-07-02).</p>
+          <h2 id="context">Context</h2>
+          <p>ADR-020 added a permission (capability) layer over RBAC: it answers &quot;what may this <strong>role</strong> do&quot;,
+          resolving a role to a permission so an endpoint can require a capability instead of a role name. It
+          explicitly scoped out the orthogonal question, &quot;is this <strong>my</strong> order&quot;, recording that &quot;per-resource
+          ownership (a customer may read only their own data) stays a separate concern (<code>OwnerOrAdminFilter</code>),
+          and a route needing both composes the two&quot; (<code>ADRs/020-permission-based-authorization.md:72</code>,
+          <code>020-permission-based-authorization.md:73</code>).</p>
+          <p>That carve-out names a mechanism that already ships in framework code but had no decision record of
+          its own. RBAC and permissions are principal-scoped: a customer with the Customer role may read orders,
+          but that role says nothing about <em>which</em> orders. Two endpoint shapes need a different, resource-scoped
+          check that the role/permission model cannot express:</p>
+          <ul>
+          <li><strong>Single-resource routes</strong> (<code>GET /orders/{id}</code>, <code>GET /customers/{id}</code>): the id in the URL identifies
+          one resource, and a non-admin caller must be denied if that resource is not theirs.</li>
+          <li><strong>Collection/list routes</strong> (<code>GET /orders</code>, <code>GET /shoppingcarts</code>): there is no id to check; the result
+          set itself must be narrowed to the caller&#39;s own rows rather than returning everyone&#39;s data.</li>
+          </ul>
+          <p>These are different problems (reject-one vs filter-many) and cannot be one mechanism. This ADR records
+          the shipped resource-ownership axis that sits beside ADR-020, not inside it.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Provide a row/resource-level ownership axis in <code>MMCA.Common.API</code> (the <code>Authorization</code> folder), with two
+          enforcement points keyed on the caller&#39;s owner claim (<code>customer_id</code> by default) and a configurable
+          bypass role (<code>Admin</code> by default).</p>
+          <ul>
+          <li><strong>Single-resource action filter.</strong> <code>OwnerOrAdminFilter</code>
+          (<code>Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:20</code>) is a sealed
+          <code>IAsyncActionFilter</code> whose primary constructor takes <code>ICurrentUserService</code> and
+          <code>IOptions&lt;OwnerOrAdminFilterOptions&gt;</code>. Its ownership vocabulary comes from
+          <code>OwnerOrAdminFilterOptions</code>
+          (<code>Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilterOptions.cs:11</code>), whose defaults
+          reproduce the original hard-coded behavior: <code>OwnerClaimType</code> <code>&quot;customer_id&quot;</code>
+          (<code>OwnerOrAdminFilterOptions.cs:14</code>), <code>BypassRole</code> <code>&quot;Admin&quot;</code> (<code>OwnerOrAdminFilterOptions.cs:17</code>), and
+          <code>OwnerParameterName</code> <code>&quot;id&quot;</code> (<code>OwnerOrAdminFilterOptions.cs:24</code>), so a host that configures nothing
+          behaves exactly as before. It short-circuits to the action for the bypass role
+          (<code>OwnershipHelper.IsAdmin(currentUserService, settings.BypassRole)</code>, <code>OwnerOrAdminFilter.cs:32</code>);
+          otherwise it reads the caller&#39;s owner claim via <code>GetClaimValue&lt;int&gt;(settings.OwnerClaimType)</code>
+          (<code>OwnerOrAdminFilter.cs:38</code>) and returns <code>ForbidResult</code> (HTTP 403) if the claim is missing
+          (<code>OwnerOrAdminFilter.cs:40</code>, <code>OwnerOrAdminFilter.cs:42</code>) or if the requested owner parameter resolves
+          to an int that does not equal the claim (<code>OwnerOrAdminFilter.cs:46</code>, <code>OwnerOrAdminFilter.cs:49</code>).
+          <code>TryGetOwnerParameter</code> (<code>OwnerOrAdminFilter.cs:58</code>) reads that parameter from a <strong>route value</strong>
+          (<code>/customers/{id}</code>) or, when the route lacks it, from a <strong>model-bound query/body argument</strong>
+          (<code>?userId=42</code>), so the guard now also covers list/query routes that carry the owner as a bound
+          argument, not only route ids. An absent or non-int parameter falls through to the action
+          (<code>OwnerOrAdminFilter.cs:53</code>). It is registered scoped by <code>AddAPI</code>
+          (<code>Source/Presentation/MMCA.Common.API/DependencyInjection.cs:68</code>) and applied per controller as
+          <code>[ServiceFilter(typeof(OwnerOrAdminFilter))]</code>.</li>
+          <li><strong>Collection ownership specification.</strong> <code>OwnershipHelper</code>
+          (<code>Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:10</code>) is a static helper.
+          <code>GetOwnershipSpecification&lt;TSpec, TId&gt;</code> returns <code>null</code> for the bypass role (<code>OwnershipHelper.cs:45</code>),
+          and otherwise reads the caller&#39;s id claim (<code>GetClaimValue&lt;TId&gt;(claimType)</code>, <code>OwnershipHelper.cs:50</code>)
+          and builds a <code>Specification</code> via the supplied factory (<code>OwnershipHelper.cs:51</code>); a convenience
+          overload defaults the claim to <code>&quot;customer_id&quot;</code> (<code>OwnershipHelper.cs:63</code>, <code>OwnershipHelper.cs:67</code>). The
+          returned spec is a <code>Specification&lt;TEntity, TId&gt;</code> (<code>Source/Core/MMCA.Common.Domain/Specifications/Specification.cs:15</code>)
+          whose <code>Criteria</code> expression (<code>Specification.cs:23</code>) the existing query pipeline (<code>IEntityQueryService</code>)
+          translates to SQL, so a non-admin list query returns only the caller&#39;s rows. A <code>null</code> spec (bypass
+          role) applies no filter.</li>
+          <li><strong>The bypass role is the single override on both.</strong> <code>OwnershipHelper.IsAdmin</code>
+          (<code>Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:17</code>) compares
+          <code>ICurrentUserService.Role</code> (<code>Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ICurrentUserService.cs:18</code>)
+          to its <code>bypassRole</code> argument (<code>&quot;Admin&quot;</code> by default) case-insensitively (<code>OwnershipHelper.cs:20</code>). Both
+          enforcement points consult it, so a caller in the bypass role sees and touches any resource through
+          either path.</li>
+          <li><strong>Two failure shapes, by design.</strong> The single-resource filter denies with 403 (<code>ForbidResult</code>); the
+          collection path never 403s, it returns a filtered (possibly empty) result set. Both flow through the
+          caller&#39;s normal <code>Result</code>/HTTP edge (ADR-013), not exceptions.</li>
+          </ul>
+          <p><strong>Adoption.</strong> MMCA.Store wires both in production. The filter guards
+          <code>MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:38</code> and
+          <code>MMCA.Store/.../Identity.API/Controllers/CustomersController.cs:32</code> as a <code>[ServiceFilter]</code>. The
+          ownership specification scopes list/get queries:
+          <code>ShoppingCartsController</code> builds a <code>ShoppingCartByCustomerSpecification</code>
+          (<code>MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:53</code>,
+          <code>MMCA.Store/.../Sales.Application/ShoppingCarts/Specifications/ShoppingCartByCustomerSpecification.cs:19</code>,
+          which filters by <code>Id</code> because a cart is keyed by customer, <code>ShoppingCartByCustomerSpecification.cs:23</code>)
+          and <code>OrdersController</code> builds an <code>OrdersByCustomerSpecification</code>
+          (<code>MMCA.Store/.../Sales.API/Controllers/OrdersController.cs:53</code>,
+          <code>MMCA.Store/.../Sales.Application/Orders/Specifications/OrdersByCustomerSpecification.cs:13</code>, filtering
+          by <code>CustomerId</code>, <code>OrdersByCustomerSpecification.cs:17</code>), passing it into each query (for example
+          <code>OrdersController.cs:68</code>). <code>OrdersController</code> does not use the class-level filter for its mutating
+          routes; it runs an explicit per-mutation ownership check, <code>ValidateOwnershipAsync</code>
+          (<code>OrdersController.cs:293</code>), that reuses <code>OwnershipHelper.IsAdmin</code> (<code>OrdersController.cs:51</code>) and
+          deliberately returns <strong>404 NotFound</strong> rather than 403 so it does not reveal that another customer&#39;s
+          order exists (<code>OrdersController.cs:291</code>, <code>OrdersController.cs:316</code>).</p>
+          <p>MMCA.ADC&#39;s Engagement module is the first host to configure the filter&#39;s vocabulary rather than take
+          the defaults. <code>AddModuleEngagementAPI</code>
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/DependencyInjection.cs:42</code>) calls
+          <code>services.Configure&lt;OwnerOrAdminFilterOptions&gt;(...)</code> (<code>DependencyInjection.cs:44</code>) to point the shared
+          filter at ADC&#39;s own ownership terms: the <code>user_id</code> claim its token service emits
+          (<code>DependencyInjection.cs:46</code>), the <code>Organizer</code> bypass role (<code>RoleNames.Organizer</code>,
+          <code>Source/Core/MMCA.Common.Shared/Auth/RoleNames.cs:15</code>, <code>DependencyInjection.cs:47</code>), and the <code>userId</code>
+          query argument its Bookmarks list endpoints bind (<code>DependencyInjection.cs:48</code>). The filter type is
+          unchanged; only the options differ, which is exactly what the options object exists for. The Bookmarks
+          <strong>delete</strong> keeps a separate DB-backed inline ownership check that returns 404-not-403 (the same
+          per-mutation, existence-hiding pattern Store&#39;s <code>OrdersController</code> uses).</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Reject-one and filter-many are genuinely two mechanisms.</strong> A single-resource route has an id to
+          compare, so a short action filter that 403s on a mismatch is the cheapest correct guard. A collection
+          route has no id; narrowing it means pushing a predicate into the query, which a filter cannot do
+          without re-running the query itself. Forcing both through one abstraction would either over-fetch then
+          post-filter (leaky, and breaks paging counts) or fail to scope lists at all.</li>
+          <li><strong>Ownership lives beside RBAC, not inside it.</strong> Role/permission resolution (ADR-020) is a property of
+          the principal; ownership is a relation between the principal and a specific row. Keeping them separate
+          lets a route compose both (require a capability <em>and</em> own the resource) without either model growing a
+          resource-condition concept it was not designed for.</li>
+          <li><strong>A <code>Specification</code> composes with the existing pipeline.</strong> The row-scope is expressed as a
+          <code>Specification&lt;TEntity, TId&gt;</code> whose <code>Criteria</code> is an EF-translatable expression
+          (<code>Specification.cs:9</code>, <code>Specification.cs:23</code>), so it slots into <code>IEntityQueryService</code> alongside
+          filtering, sorting, paging, and projection (and can be <code>And</code>-composed with other specs,
+          <code>Specification.cs:62</code>) rather than introducing a parallel query path.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Opt-in per controller/handler.</strong> Neither point is automatic: a controller that forgets the
+          <code>[ServiceFilter]</code> or omits the ownership spec from a query leaks across customers, the same
+          audit-the-inventory caveat as ADR-019 / ADR-020 / ADR-021. The two-enforcement-point split also means
+          one route can guard mutations but forget to scope its list (or vice versa).</li>
+          <li><strong>Claim-based ownership trusts the token.</strong> Both points key on the configured owner claim
+          (<code>customer_id</code> by default) being present and correct, so their correctness depends entirely on the
+          upstream token validation (ADR-004); a missing claim 403s (filter) or yields a <code>null</code> spec (helper,
+          which for a non-admin returns <code>null</code> and therefore no scoping, so callers must not treat a missing
+          claim as &quot;admin&quot;).</li>
+          <li><strong>The filter assumes the owner parameter equals the owning id.</strong> <code>OwnerOrAdminFilter</code> compares its
+          configured owner parameter, resolved from either a route value or a model-bound argument, against the
+          configured owner claim (<code>OwnerOrAdminFilter.cs:46</code>). That holds where the resource is keyed by the
+          owner (the cart, the customer profile, a user&#39;s own bookmarks) but not where a resource has a separate
+          id and a foreign-key owner; those (orders) need the spec or an explicit per-id check instead.</li>
+          <li><strong>This is ownership, not ABAC.</strong> It answers &quot;is this row mine&quot; against a single id claim with an admin
+          override; it does not evaluate arbitrary resource attributes, hierarchies, or delegated access. A
+          richer policy would be a different mechanism, not a parameter on this one.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p>ADR-020 (the role/permission RBAC layer this complements, and whose explicit
+          <code>020-permission-based-authorization.md:72</code> scope-out this fills), ADR-034 (the generic entity query
+          pipeline / <code>IEntityQueryService</code> the collection-scoping <code>Specification</code> slots into), ADR-013 (failures
+          surface as <code>Result</code>/HTTP at the edge, the filter as a 403 <code>ForbidResult</code>), ADR-004 (the validated
+          principal and owner claim both enforcement points trust).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/033-resource-ownership-authorization.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

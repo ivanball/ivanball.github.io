@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>6. Validation · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="This chapter covers the small, framework-level validation kit that MMCA.Common.Application ships so that every consuming module validates command input…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/group-06-validation.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="6. Validation">
+  <meta property="og:description" content="This chapter covers the small, framework-level validation kit that MMCA.Common.Application ships so that every consuming module validates command input…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/group-06-validation.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/onboarding/index.html">Onboarding Guide</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">6. Validation</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>Guide contents</summary>
+        <nav class="doc-nav" aria-label="Onboarding Guide">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="00-dependency-manifest.html">Phase 1: Dependency Manifest &amp; Leveling</a></li>
+        <li><a href="00-group-taxonomy.html">Phase 1b - Functional Group Taxonomy</a></li>
+        <li><a href="00-inventory.html">Phase 0: Type Inventory</a></li>
+        <li><a href="00-primer.html">Primer, the concepts, stack, and conventions you need first</a></li>
+        <li><a href="group-01-result-error-handling.html">1. Result &amp; Error Handling</a></li>
+        <li><a href="group-02-domain-building-blocks.html">2. Domain Building Blocks (Entities, Value Objects, Aggregates)</a></li>
+        <li><a href="group-03-querying-specifications.html">3. Querying: Specifications, Filtering &amp; the Entity Query Service</a></li>
+        <li><a href="group-04-events-outbox.html">4. Domain &amp; Integration Events + Outbox Dual-Dispatch</a></li>
+        <li><a href="group-05-cqrs-pipeline.html">5. CQRS: Commands, Queries &amp; the Decorator Pipeline</a></li>
+        <li><a href="group-06-validation.html" aria-current="page">6. Validation</a></li>
+        <li><a href="group-07-persistence-ef-core.html">7. Persistence &amp; EF Core</a></li>
+        <li><a href="group-08-auth.html">8. Authentication &amp; Authorization</a></li>
+        <li><a href="group-09-caching.html">9. Caching</a></li>
+        <li><a href="group-10-notifications.html">10. Notifications (Push + In-App Inbox + Email)</a></li>
+        <li><a href="group-11-navigation-populators.html">11. Navigation Metadata &amp; Populators (EF-decoupled eager loading)</a></li>
+        <li><a href="group-12-api-hosting-mapping.html">12. API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</a></li>
+        <li><a href="group-13-grpc-contracts.html">13. gRPC &amp; Inter-Service Contracts</a></li>
+        <li><a href="group-14-module-system-composition.html">14. Module System, Composition &amp; Configuration</a></li>
+        <li><a href="group-15-common-ui-framework.html">15. Common UI Framework (MudBlazor components, theme, base pages)</a></li>
+        <li><a href="group-16-aspire-orchestration.html">16. Aspire Orchestration &amp; Service Defaults</a></li>
+        <li><a href="group-17-conference-domain.html">17. ADC Conference - Domain Model &amp; Module Contracts</a></li>
+        <li><a href="group-18-conference-application.html">18. ADC Conference - Application &amp; Use Cases</a></li>
+        <li><a href="group-19-conference-infrastructure.html">19. ADC Conference - Infrastructure &amp; Persistence</a></li>
+        <li><a href="group-20-conference-api-grpc.html">20. ADC Conference - API, gRPC Contracts &amp; Service Host</a></li>
+        <li><a href="group-21-conference-ui.html">21. ADC Conference - UI</a></li>
+        <li><a href="group-22-engagement-module.html">22. ADC Engagement Module (Session Bookmarks)</a></li>
+        <li><a href="group-23-engagement-live-layer.html">23. ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></li>
+        <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
+        <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
+        <li><a href="group-26-testing-infrastructure.html">26. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
+        <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
+        <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
+        <li><a href="devops-runbooks.html">Operational Scripts &amp; Runbooks</a></li>
+        <li><a href="devops-testing.html">Testing Architecture &amp; Solution Composition</a></li>
+        <li><a href="99-coverage-audit.html">Phase 4, Coverage Audit</a></li>
+        <li><a href="CONCEPT-MAPS.html">MMCA Concept &amp; Pattern Maps</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Onboarding guide</p>
+          <h1 id="6-validation">6. Validation</h1>
+          <p>This chapter covers the small, framework-level <strong>validation kit</strong> that <code>MMCA.Common.Application</code>
+          ships so that every consuming module validates command input the same way: a set of composable
+          <strong>FluentValidation rule sets</strong> (<code>RequiredStringRules&lt;T&gt;</code>, <code>EmailRules&lt;T&gt;</code>, <code>StrongPasswordRules&lt;T&gt;</code>,
+          the six address-field rules, and the <code>AddressValidator</code> that assembles them), one <strong>convention
+          validator</strong> (<a href="#commandrequestvalidatortcommand-trequest"><code>CommandRequestValidator&lt;TCommand, TRequest&gt;</code></a>)
+          that auto-bridges a command to its request&#39;s validator, and one <strong>failure-mapping extension</strong>
+          (<a href="#validationfailureextensions"><code>ValidationFailureExtensions</code></a>) that turns FluentValidation output
+          into domain <a href="group-01-result-error-handling.html#error"><code>Error</code></a>s. These are the <em>reusable</em> pieces;
+          the per-feature validators that consume them (e.g. ADC&#39;s <code>SessionCreateRequestValidator</code>,
+          <code>EventUpdateRequestValidator</code>, Identity&#39;s <code>RegisterRequestValidator</code>) live in their own module
+          chapters. The external library underneath everything is <strong>FluentValidation 12</strong> (primer §3), the
+          codebase does not hand-roll validation.</p>
+          <p><strong>Where validation sits in the request lifecycle.</strong> Validation is not invoked by handlers; it is a
+          <em>cross-cutting stage of the CQRS pipeline</em> (primer §2, &quot;CQRS&quot;). When a command is dispatched it flows
+          through the decorator chain <code>Logging → Caching → Validating → Transactional → handler</code>. The
+          <a href="group-05-cqrs-pipeline.html#validatingcommanddecoratortcommand-tresult"><code>ValidatingCommandDecorator&lt;TCommand, TResult&gt;</code></a>
+          (G05) is the gate this chapter&#39;s types feed: it resolves the first registered <code>IValidator&lt;TCommand&gt;</code>,
+          calls <code>ValidateAsync</code>, and, critically, sits <em>before</em> the transactional decorator so an invalid
+          command <strong>short-circuits before any database transaction is opened</strong>
+          (<code>ValidatingCommandDecorator.cs:16-20</code>). On failure it never calls the inner handler; it converts the
+          failures to errors and returns a <code>Result</code> failure immediately (<code>ValidatingCommandDecorator.cs:46-55</code>).
+          This is the &quot;gate commands before they execute&quot; charter of the group, realized as one pipeline stage
+          rather than scattered <code>if (!valid) return</code> checks in every handler. <code>[Rubric §6, CQRS &amp; Event-Driven]</code>
+          (cross-cutting concerns belong in the pipeline) <code>[Rubric §24, Forms, Validation &amp; UX Safety]</code>
+          (centralized, consistent input validation).</p>
+          <p><strong>The failure-mapping seam.</strong> FluentValidation speaks in <code>ValidationResult</code> / <code>ValidationFailure</code>;
+          the rest of the codebase speaks in the <a href="group-01-result-error-handling.html#result">Result pattern</a>
+          (primer §2). <a href="#validationfailureextensions"><code>ValidationFailureExtensions.ToErrors</code></a> is the one-line
+          bridge: a C# <code>extension(ValidationResult)</code> block (primer §4) that projects each failure into an
+          <a href="group-01-result-error-handling.html#error"><code>Error.Validation(errorCode, message, source, propertyName)</code></a>,
+          tagged with the <a href="group-01-result-error-handling.html#errortype"><code>ErrorType.Validation</code></a> kind. The
+          decorator calls it with <code>typeof(TCommand).Name</code> as the <code>source</code> so a downstream consumer (or the API
+          error mapper) can see which command produced the failures (<code>ValidatingCommandDecorator.cs:52</code>). This
+          is why a validation failure surfaces to the client as an HTTP 400 with per-property messages: the
+          <code>ErrorType.Validation</code> tag is what the API layer&#39;s <code>HandleFailure</code> maps to <code>400 Bad Request</code>. Keeping
+          the FluentValidation type out of the domain <code>Error</code> (and the <code>Error</code> out of FluentValidation) is a
+          deliberate decoupling, neither library knows about the other.</p>
+          <p><strong>The reusable rule sets, composition over copy-paste.</strong> The eight rules in <code>CommonValidationRules.cs</code>
+          (<code>RequiredStringRules&lt;T&gt;</code>, <code>OptionalStringRules&lt;T&gt;</code>, <code>EmailRules&lt;T&gt;</code>, <code>PositiveIntRules&lt;T&gt;</code>,
+          <code>PositiveDecimalRules&lt;T&gt;</code>, <code>NonNegativeIntRules&lt;T&gt;</code>, <code>PasswordRules&lt;T&gt;</code>, <code>StrongPasswordRules&lt;T&gt;</code>) and
+          the six address rules in <code>AddressValidationRules.cs</code> (<code>AddressLine1Rules&lt;T&gt;</code> … <code>CountryRules&lt;T&gt;</code>) are
+          each a tiny <code>AbstractValidator&lt;T&gt;</code> generic over the parent type <code>T</code>, taking an
+          <code>Expression&lt;Func&lt;T, …&gt;&gt;</code> <em>selector</em> in its constructor. Because they&#39;re generic-plus-selector, the
+          same <code>EmailRules&lt;T&gt;</code> can validate a bare value object, a request DTO, or a command, a module composes
+          them with FluentValidation&#39;s <code>Include(...)</code> instead of re-writing the &quot;non-empty + valid format + max
+          length&quot; logic each time. Length limits are not literals in the rule: the address rules pull theirs
+          from <a href="group-02-domain-building-blocks.html#addressinvariants"><code>AddressInvariants</code></a> constants
+          (<code>AddressValidationRules.cs:36</code>), so the domain invariant and its validator agree by construction.
+          <a href="#addressvalidator"><code>AddressValidator</code></a> is the worked example of this composition, a single
+          <code>AbstractValidator&lt;Address&gt;</code> that <code>Include</code>s all six field rules (<code>AddressValidationRules.cs:14-22</code>).
+          <code>[Rubric §1, SOLID]</code> (each rule set has one responsibility; the composite assembles, never
+          duplicates) <code>[Rubric §15, Best Practices &amp; Code Quality]</code> (no copy-pasted length limits or messages).</p>
+          <p><strong>Convention over configuration, the request/command bridge.</strong> Most ADC commands wrap a request
+          record (e.g. <code>CreateSessionCommand(CreateSessionRequest Request)</code>) and implement
+          <a href="group-05-cqrs-pipeline.html#icommandwithrequestout-trequest"><code>ICommandWithRequest&lt;TRequest&gt;</code></a>. Rather
+          than force module authors to write a validator for <em>both</em> the request and the command,
+          <a href="#commandrequestvalidatortcommand-trequest"><code>CommandRequestValidator&lt;TCommand, TRequest&gt;</code></a> is
+          auto-registered for every such command: it resolves the registered <code>IValidator&lt;TRequest&gt;</code> and forwards
+          to it via <code>RuleFor(c =&gt; c.Request).SetValidator(...)</code>. Module authors thus write <em>one</em> validator,
+          for the request, and the command is validated for free. This wiring lives in
+          <a href="group-14-module-system-composition.html#imodule"><code>ScanModuleApplicationServices&lt;TAssemblyMarker&gt;</code></a>&#39;s
+          DI scan (<code>DependencyInjection.cs:162-176</code>): it reflects over the assembly for commands implementing
+          <code>ICommandWithRequest&lt;&gt;</code>, builds the closed <code>CommandRequestValidator&lt;TCommand, TRequest&gt;</code> type, and
+          registers it with <strong><code>TryAddTransient</code></strong>, so an explicitly-authored <code>IValidator&lt;TCommand&gt;</code> always wins
+          (<code>DependencyInjection.cs:158-159</code> doc). The same scan also calls
+          <code>AddValidatorsFromAssemblyContaining&lt;TAssemblyMarker&gt;</code> (<code>DependencyInjection.cs:156</code>) to discover every
+          hand-written validator by convention. <code>[Rubric §2, Design Patterns]</code> (convention over configuration)
+          <code>[Rubric §9, API &amp; Contract Design]</code> (input validation applied uniformly across every endpoint).</p>
+          <p><strong>End-to-end flow, concretely.</strong> A request arrives at a controller, is mapped to a command, and
+          dispatched. The pipeline reaches <code>ValidatingCommandDecorator</code>, which finds the <code>IValidator&lt;TCommand&gt;</code>
+          the module scan registered, either a hand-written one or the auto-generated <code>CommandRequestValidator</code>
+          delegating to the request validator. That validator runs the composed rule sets (a
+          <code>SessionCreateRequestValidator</code> might <code>Include</code> <code>RequiredStringRules</code> for the title and <code>EmailRules</code>
+          for a contact field). If valid, the handler runs inside the transaction; if not, <code>ToErrors</code> converts
+          the failures to <code>ErrorType.Validation</code> errors and the decorator returns a failed <code>Result</code> <em>without
+          touching the database</em>. The errors propagate up to the API layer, which maps them to <code>400</code>. Nothing
+          in the domain or the handler ever references FluentValidation, the validation kit is entirely an
+          application-layer concern, consistent with Clean Architecture&#39;s inward dependency rule (primer §1).</p>
+          <p>A note on placement and scope: all of this lives in <code>MMCA.Common.Application</code> so that <strong>both</strong> ADC and
+          Store inherit the same email/password/address rules and the same auto-validation convention without
+          duplicating them, the per-module validators only express <em>domain-specific</em> rules and reuse these
+          primitives. There is no separate ADR for validation; it is governed implicitly by the CQRS decorator
+          ADRs and the layering rules the architecture fitness tests enforce (primer §4).</p>
+          <h3 id="requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-passwordrulest-strongpasswordrulest">RequiredStringRules&lt;T&gt;, OptionalStringRules&lt;T&gt;, EmailRules&lt;T&gt;, PositiveIntRules&lt;T&gt;, PositiveDecimalRules&lt;T&gt;, NonNegativeIntRules&lt;T&gt;, PasswordRules&lt;T&gt;, StrongPasswordRules&lt;T&gt;</h3>
+          <p><a id="requiredstringrulest"></a><a id="optionalstringrulest"></a><a id="emailrulest"></a><a id="positiveintrulest"></a><a id="positivedecimalrulest"></a><a id="nonnegativeintrulest"></a><a id="passwordrulest"></a><a id="strongpasswordrulest"></a></p>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Validation</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Validation/CommonValidationRules.cs</code> · Level 0 · classes (<code>AbstractValidator&lt;T&gt;</code> subclasses)</p>
+          </blockquote>
+          <ul>
+          <li><p><strong>What it is</strong>: eight reusable FluentValidation rule fragments, each enforcing exactly one field
+          contract (a required string with a max length, a positive integer, a strong password, …). A
+          command/request validator composes them via FluentValidation&#39;s <code>Include()</code> instead of redeclaring
+          the same <code>RuleFor</code> chain. Each member, with its source line and the rule chain it builds:</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Type</th>
+          <th>File:Line</th>
+          <th>Rule chain</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>RequiredStringRules&lt;T&gt;</code></td>
+          <td><code>CommonValidationRules.cs:12</code></td>
+          <td><code>NotEmpty()</code> + <code>MaximumLength(maxLength)</code></td>
+          </tr>
+          <tr>
+          <td><code>OptionalStringRules&lt;T&gt;</code></td>
+          <td><code>CommonValidationRules.cs:24</code></td>
+          <td><code>MaximumLength(maxLength)</code> only (null/empty allowed)</td>
+          </tr>
+          <tr>
+          <td><code>EmailRules&lt;T&gt;</code></td>
+          <td><code>CommonValidationRules.cs:35</code></td>
+          <td><code>NotEmpty()</code> + <code>EmailAddress()</code> + <code>MaximumLength(maxLength)</code></td>
+          </tr>
+          <tr>
+          <td><code>PositiveIntRules&lt;T&gt;</code></td>
+          <td><code>CommonValidationRules.cs:48</code></td>
+          <td><code>GreaterThan(0)</code> (int)</td>
+          </tr>
+          <tr>
+          <td><code>PositiveDecimalRules&lt;T&gt;</code></td>
+          <td><code>CommonValidationRules.cs:59</code></td>
+          <td><code>GreaterThan(0)</code> (decimal)</td>
+          </tr>
+          <tr>
+          <td><code>NonNegativeIntRules&lt;T&gt;</code></td>
+          <td><code>CommonValidationRules.cs:70</code></td>
+          <td><code>GreaterThanOrEqualTo(0)</code></td>
+          </tr>
+          <tr>
+          <td><code>PasswordRules&lt;T&gt;</code></td>
+          <td><code>CommonValidationRules.cs:82</code></td>
+          <td><code>NotEmpty()</code> + <code>MinimumLength(8)</code> + <code>MaximumLength(128)</code></td>
+          </tr>
+          <tr>
+          <td><code>StrongPasswordRules&lt;T&gt;</code></td>
+          <td><code>CommonValidationRules.cs:96</code></td>
+          <td>all of <code>PasswordRules</code> + four <code>Matches(...)</code> regexes (uppercase, lowercase, digit, special char)</td>
+          </tr>
+          </tbody></table></div>
+          </li>
+          <li><p><strong>Depends on</strong>: FluentValidation&#39;s <code>AbstractValidator&lt;T&gt;</code> (NuGet, primer §3) and
+          <code>System.Linq.Expressions.Expression&lt;Func&lt;T,…&gt;&gt;</code> (BCL). No first-party dependencies, these sit at
+          the very bottom of the Application layer. Auto-wired for request types by
+          <a href="#commandrequestvalidatortcommand-trequest"><code>CommandRequestValidator&lt;TCommand, TRequest&gt;</code></a>.</p>
+          </li>
+          <li><p><strong>Concept introduced, reusable FluentValidation rule fragments via <code>Include()</code>.</strong>
+          This is the first place the guide meets FluentValidation&#39;s <em>fragment-composition</em> idiom. Rather
+          than each command validator owning a long <code>RuleFor(...)</code> chain, a fragment is a tiny
+          <code>AbstractValidator&lt;T&gt;</code> whose constructor builds <strong>one</strong> field&#39;s rules, and a real validator pulls it
+          in with <code>Include(new RequiredStringRules&lt;CreateSessionRequest&gt;(r =&gt; r.Title, &quot;Title&quot;, 200))</code>. Two
+          design choices make the fragment reusable across unrelated types: (1) it is <strong>generic over <code>T</code></strong> (the
+          parent type that contains the field), and (2) it takes a <strong>selector expression</strong>
+          <code>Expression&lt;Func&lt;T, string&gt;&gt;</code> rather than inheriting from the parent, so the same <code>EmailRules&lt;T&gt;</code>
+          validates a <code>RegisterRequest</code>, a <code>LoginRequest</code>, or a bare value object without any inheritance
+          coupling. <code>[Rubric §24, Forms, Validation &amp; UX Safety]</code> assesses whether validation is reused
+          rather than copy-pasted across create/update paths; these fragments are the framework&#39;s answer, one
+          definition, included everywhere. <code>[Rubric §1, SOLID]</code>: each fragment has a single responsibility
+          (one field contract), and changing, say, the minimum password length is a one-line edit in one place
+          rather than a grep-and-replace across every module.</p>
+          </li>
+          <li><p><strong>Walkthrough</strong>: every constructor is a single expression body (<code>=&gt;</code> returning the configured
+          <code>RuleFor</code> chain), which is why these classes are so terse.</p>
+          <ul>
+          <li><code>RequiredStringRules&lt;T&gt;</code> (<code>:14</code>) takes <code>(selector, fieldName, maxLength)</code> and chains
+          <code>NotEmpty().WithMessage($&quot;You must enter a {fieldName}&quot;)</code> then
+          <code>MaximumLength(maxLength).WithMessage(...)</code>. The <code>fieldName</code> is interpolated into the human-readable
+          message, so the same fragment yields &quot;You must enter a Title&quot; or &quot;You must enter a First Name&quot;.</li>
+          <li><code>OptionalStringRules&lt;T&gt;</code> (<code>:26</code>) drops the <code>NotEmpty</code>, selector is <code>Func&lt;T, string?&gt;</code> and only the
+          length ceiling is enforced.</li>
+          <li><code>EmailRules&lt;T&gt;</code> (<code>:37</code>) inserts FluentValidation&#39;s built-in <code>EmailAddress()</code> check between
+          <code>NotEmpty</code> and <code>MaximumLength</code>.</li>
+          <li><code>PositiveIntRules&lt;T&gt;</code> / <code>PositiveDecimalRules&lt;T&gt;</code> / <code>NonNegativeIntRules&lt;T&gt;</code> (<code>:50</code>, <code>:61</code>, <code>:72</code>)
+          take only <code>(selector, fieldName)</code>, no length, and emit one comparison rule each.</li>
+          <li><code>PasswordRules&lt;T&gt;</code> (<code>:84</code>) takes only a <code>selector</code> (the message strings are fixed, not
+          parameterised) and enforces non-empty + 8–128 length.</li>
+          <li><code>StrongPasswordRules&lt;T&gt;</code> (<code>:98</code>) extends that with four <code>Matches(...)</code> calls whose regex literals
+          are inline in the source: <code>&quot;[A-Z]&quot;</code>, <code>&quot;[a-z]&quot;</code>, <code>&quot;\\d&quot;</code>, and <code>&quot;[^a-zA-Z\\d]&quot;</code> for uppercase,
+          lowercase, digit, and special character respectively. The doc comment on <code>PasswordRules</code> (<code>:79</code>)
+          explicitly points callers needing complexity at <code>StrongPasswordRules</code> instead.</li>
+          </ul>
+          </li>
+          <li><p><strong>Why it&#39;s built this way</strong>: these fragments are the DRY core of the validation story. Because they
+          live in <code>MMCA.Common.Application</code> and are generic, <em>both</em> ADC and Store get identical, tested field
+          rules for free. <code>[Rubric §33, Developer Experience]</code>: a new request validator in any module reads
+          as a short list of <code>Include(...)</code> calls, and a security tweak (e.g. tightening the password regex)
+          propagates to every consumer on the next package bump rather than being missed in some forgotten
+          validator.</p>
+          </li>
+          <li><p><strong>Where it&#39;s used</strong>: request validators throughout ADC and Store <code>Include()</code> the appropriate
+          fragment; the Conference module&#39;s <code>*Rules&lt;T&gt;</code> validators (e.g. <code>SessionTitleRules&lt;T&gt;</code>,
+          <code>SpeakerFirstNameRules&lt;T&gt;</code> in <a href="group-18-conference-application.html">group-18</a>) inherit from
+          <code>RequiredStringRules&lt;T&gt;</code> to add domain max-length constants. <code>PasswordRules&lt;T&gt;</code> is the standard
+          password path; <code>StrongPasswordRules&lt;T&gt;</code> gates the initial registration / set-password flow where the
+          user chooses their own credential. Whichever validator wins, it is invoked by
+          <a href="group-05-cqrs-pipeline.html#validatingcommanddecoratortcommand-tresult"><code>ValidatingCommandDecorator&lt;TCommand, TResult&gt;</code></a>
+          in the CQRS pipeline before the command handler runs.</p>
+          </li>
+          </ul>
+          <h3 id="commandrequestvalidatortcommand-trequest">CommandRequestValidator&lt;TCommand, TRequest&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Validation</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Validation/CommandRequestValidator.cs:19</code> · Level 1 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: an auto-registered <code>AbstractValidator&lt;TCommand&gt;</code> for any command that implements
+          <a href="group-05-cqrs-pipeline.html#icommandwithrequestout-trequest"><code>ICommandWithRequest&lt;out TRequest&gt;</code></a>. It
+          validates the command by delegating to whatever <code>IValidator&lt;TRequest&gt;</code> is registered for the
+          embedded request payload.</li>
+          <li><strong>Depends on</strong>: <a href="group-05-cqrs-pipeline.html#icommandwithrequestout-trequest"><code>ICommandWithRequest&lt;out TRequest&gt;</code></a>
+          (Level 0; its <code>Request</code> property is the bridge) and FluentValidation. Registered automatically by
+          <code>ScanModuleApplicationServices&lt;TAssemblyMarker&gt;()</code> in the Application layer
+          <a href="group-14-module-system-composition.html#dependencyinjection"><code>DependencyInjection</code></a>.</li>
+          <li><strong>Concept, convention-over-configuration validation.</strong> <code>[Rubric §2, Design Patterns]</code> (convention
+          over configuration) and <code>[Rubric §9, API &amp; Contract Design]</code> (input validation applied uniformly at
+          the edge). Many commands are thin wrappers carrying a request DTO, e.g.
+          <code>CreateSessionCommand(CreateSessionRequest Request)</code>. Without this type you would have to register a
+          validator for <em>both</em> the request and the command. Instead the framework auto-binds
+          <code>CommandRequestValidator&lt;CreateSessionCommand, CreateSessionRequest&gt;</code> and routes its validation into
+          the registered <code>IValidator&lt;CreateSessionRequest&gt;</code>. The doc comment (<code>:12-15</code>) notes it is registered
+          with <strong><code>TryAdd</code> semantics</strong>, so an explicit, hand-written command validator the module ships always
+          takes precedence over this generic fallback.</li>
+          <li><strong>Walkthrough</strong>: the constructor (<code>CommandRequestValidator.cs:22-27</code>) receives
+          <code>IEnumerable&lt;IValidator&lt;TRequest&gt;&gt;</code> by DI, takes <code>FirstOrDefault()</code>, and, only if one exists,
+          applies <code>RuleFor(c =&gt; c.Request).SetValidator(validator)</code>. An <strong>empty</strong> validator collection is not
+          an error: it simply means the command&#39;s request has no validation rules, and the generic validator
+          becomes a no-op. The generic constraint <code>where TCommand : ICommandWithRequest&lt;TRequest&gt;</code> is what
+          guarantees the <code>c.Request</code> selector compiles.</li>
+          <li><strong>Why it&#39;s built this way</strong>: it removes the most common piece of validation boilerplate (re-stating
+          request rules at the command level) while staying overridable, so the convention never blocks a
+          bespoke case.</li>
+          <li><strong>Where it&#39;s used</strong>: the closed generic is discovered and registered per command during module
+          scanning; at runtime
+          <a href="group-05-cqrs-pipeline.html#validatingcommanddecoratortcommand-tresult"><code>ValidatingCommandDecorator&lt;TCommand, TResult&gt;</code></a>
+          resolves and runs all <code>IValidator&lt;TCommand&gt;</code> instances, including this one, before the handler.</li>
+          </ul>
+          <h3 id="addressline1rulest-addressline2rulest-cityrulest-staterulest-zipcoderulest-countryrulest">AddressLine1Rules&lt;T&gt;, AddressLine2Rules&lt;T&gt;, CityRules&lt;T&gt;, StateRules&lt;T&gt;, ZipCodeRules&lt;T&gt;, CountryRules&lt;T&gt;</h3>
+          <p><a id="addressline1rulest"></a><a id="addressline2rulest"></a><a id="cityrulest"></a><a id="staterulest"></a><a id="zipcoderulest"></a><a id="countryrulest"></a></p>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Validation</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Validation/AddressValidationRules.cs</code> · Level 4 · classes (sealed, <code>AbstractValidator&lt;T&gt;</code>)</p>
+          </blockquote>
+          <ul>
+          <li><p><strong>What it is</strong>: six composable FluentValidation rule sets, one per address field, each generic over
+          the parent type <code>T</code> and configured with a selector expression. Per member:</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Type</th>
+          <th>File:Line</th>
+          <th>Rule chain</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>AddressLine1Rules&lt;T&gt;</code></td>
+          <td><code>AddressValidationRules.cs:30</code></td>
+          <td><code>NotEmpty()</code> + <code>MaximumLength(AddressInvariants.AddressLine1MaxLength)</code> (the only required line)</td>
+          </tr>
+          <tr>
+          <td><code>AddressLine2Rules&lt;T&gt;</code></td>
+          <td><code>AddressValidationRules.cs:41</code></td>
+          <td><code>MaximumLength(AddressInvariants.AddressLine2MaxLength)</code> only (optional, nullable selector)</td>
+          </tr>
+          <tr>
+          <td><code>CityRules&lt;T&gt;</code></td>
+          <td><code>AddressValidationRules.cs:51</code></td>
+          <td><code>MaximumLength(AddressInvariants.CityMaxLength)</code> only</td>
+          </tr>
+          <tr>
+          <td><code>StateRules&lt;T&gt;</code></td>
+          <td><code>AddressValidationRules.cs:61</code></td>
+          <td><code>MaximumLength(AddressInvariants.StateMaxLength)</code> only</td>
+          </tr>
+          <tr>
+          <td><code>ZipCodeRules&lt;T&gt;</code></td>
+          <td><code>AddressValidationRules.cs:71</code></td>
+          <td><code>MaximumLength(AddressInvariants.ZipCodeMaxLength)</code> only</td>
+          </tr>
+          <tr>
+          <td><code>CountryRules&lt;T&gt;</code></td>
+          <td><code>AddressValidationRules.cs:81</code></td>
+          <td><code>MaximumLength(AddressInvariants.CountryMaxLength)</code> only</td>
+          </tr>
+          </tbody></table></div>
+          </li>
+          <li><p><strong>Depends on</strong>: <a href="group-02-domain-building-blocks.html#addressinvariants"><code>AddressInvariants</code></a> (the
+          <code>MMCA.Common.Shared.ValueObjects</code> constants that supply each <code>MaximumLength</code>, imported at
+          <code>AddressValidationRules.cs:3</code>) and FluentValidation. These are the same fragment shape as the
+          Level-0 <a href="#requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-passwordrulest-strongpasswordrulest">CommonValidationRules</a>
+          but pinned to address semantics; they sit at Level 4 because they reference the <code>AddressInvariants</code>
+          constants rather than taking <code>maxLength</code> as a constructor argument.</p>
+          </li>
+          <li><p><strong>Concept introduced, composable validation rule sets bound to domain invariants.</strong>
+          <code>[Rubric §24, Forms, Validation &amp; UX Safety]</code>: each rule set extends <code>AbstractValidator&lt;T&gt;</code> and
+          calls <code>RuleFor(selector)</code> once in its constructor, so the same <code>CityRules&lt;T&gt;</code> validates a bare
+          <a href="group-02-domain-building-blocks.html#address"><code>Address</code></a> value object <em>and</em> any request DTO that
+          embeds loose address fields without an <code>Address</code> wrapper (the class doc at <code>:25-29</code> calls this out
+          explicitly). <code>[Rubric §1, SOLID]</code> (SRP): one rule set per field, and the limit comes from a single
+          <code>AddressInvariants</code> constant so the max-length lives in exactly one place across the whole solution.</p>
+          </li>
+          <li><p><strong>Walkthrough</strong>: every constructor is a single <code>=&gt;</code> expression body.
+          <code>AddressLine1Rules&lt;T&gt;</code> (<code>:33-36</code>) is the only one with <code>NotEmpty()</code>; the other five take a nullable
+          <code>Expression&lt;Func&lt;T, string?&gt;&gt;</code> selector and enforce <code>MaximumLength</code> only, matching the fact that
+          lines 2 / city / state / zip / country are optional on the <code>Address</code> value object. Each <code>WithMessage</code>
+          bakes the actual numeric limit in from its invariant constant (e.g. &quot;City cannot be longer than
+          {AddressInvariants.CityMaxLength} characters&quot;).</p>
+          </li>
+          <li><p><strong>Why it&#39;s built this way</strong>: different commands (create event, update profile, register) all carry
+          address fields; each can <code>Include(new CityRules&lt;CreateEventRequest&gt;(p =&gt; p.City))</code> without
+          copy-pasting the length limit, and a change to the canonical limit flows through <code>AddressInvariants</code>.</p>
+          </li>
+          <li><p><strong>Where it&#39;s used</strong>: assembled by <a href="#addressvalidator"><code>AddressValidator</code></a> for the <code>Address</code> value
+          object, and included directly by module request validators in ADC and Store that embed address
+          fields.</p>
+          </li>
+          </ul>
+          <h3 id="addressvalidator">AddressValidator</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Validation</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Validation/AddressValidationRules.cs:12</code> · Level 5 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a composite <code>AbstractValidator&lt;Address&gt;</code> that validates the whole
+          <a href="group-02-domain-building-blocks.html#address"><code>Address</code></a> value object by <code>Include()</code>-ing the six
+          field-level rule sets at Level 4.</li>
+          <li><strong>Depends on</strong>: <a href="group-02-domain-building-blocks.html#address"><code>Address</code></a> (the validated type) and the
+          six field rule sets
+          <a href="#addressline1rulest-addressline2rulest-cityrulest-staterulest-zipcoderulest-countryrulest"><code>AddressLine1Rules&lt;T&gt;</code> … <code>CountryRules&lt;T&gt;</code></a>.</li>
+          <li><strong>Concept</strong>: composition over duplication: the address validator owns <em>no</em> <code>RuleFor</code> chains of its
+          own; its entire body (<code>AddressValidationRules.cs:14-22</code>) is six <code>Include(new XRules&lt;Address&gt;(p =&gt; p.Field))</code>
+          calls binding each rule set to the corresponding <code>Address</code> property. <code>[Rubric §15, Best Practices]</code>
+          (no copy-paste validation; each field&#39;s rules are isolated and independently testable, see
+          <code>AddressValidationRulesTests</code> in <a href="group-26-testing-infrastructure.html#addressvalidationrulestests">group-25</a>).
+          <code>[Rubric §24, Forms, Validation &amp; UX Safety]</code>: this lives in <code>MMCA.Common.Application</code> so both ADC
+          and Store reuse one framework-level address validator rather than each authoring its own.</li>
+          <li><strong>Caveats / not-in-source</strong>: the prior tier-05 edition described the six rule sets as &quot;derived from
+          <code>RequiredStringRules&lt;T&gt;</code>&quot;; that is <strong>stale</strong>. As of the current source each of
+          <code>AddressLine1Rules&lt;T&gt;</code>…<code>CountryRules&lt;T&gt;</code> extends <code>AbstractValidator&lt;T&gt;</code> <strong>directly</strong>
+          (<code>AddressValidationRules.cs:30-87</code>), not <code>RequiredStringRules&lt;T&gt;</code>, they share only the <em>shape</em>, not
+          an inheritance chain.</li>
+          <li><strong>Where it&#39;s used</strong>: referenced by command validators that carry an address (address-update flows in
+          ADC and Store); like every validator here it is invoked by
+          <a href="group-05-cqrs-pipeline.html#validatingcommanddecoratortcommand-tresult"><code>ValidatingCommandDecorator&lt;TCommand, TResult&gt;</code></a>
+          in the CQRS pipeline before the handler executes.</li>
+          </ul>
+          <h3 id="validationfailureextensions">ValidationFailureExtensions</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Extensions</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Extensions/ValidationFailureExtensions.cs:9</code> · Level 2 · class (static)</p>
+          </blockquote>
+          <ul>
+          <li><p><strong>What it is</strong>: a static class wrapping a C# <code>extension(ValidationResult)</code> block that adds one
+          method, <code>ToErrors(string source)</code>, which converts FluentValidation&#39;s <code>ValidationFailure</code> entries into
+          domain <a href="group-01-result-error-handling.html#error"><code>Error</code></a> instances. It is the single adapter that
+          lets FluentValidation output flow into the codebase&#39;s Result pattern.</p>
+          </li>
+          <li><p><strong>Depends on</strong>: <a href="group-01-result-error-handling.html#error"><code>Error</code></a> (Level 1) and its
+          <a href="group-01-result-error-handling.html#errortype"><code>ErrorType.Validation</code></a> classification; <code>FluentValidation.Results</code>
+          (<code>ValidationResult</code>, <code>ValidationFailure</code>, NuGet).</p>
+          </li>
+          <li><p><strong>Concept introduced, bridging FluentValidation to the Result pattern.</strong>
+          <code>[Rubric §15, Best Practices &amp; Code Quality]</code> (assesses consistent, idiomatic conventions over
+          one-off code; here the convention is <em>validators produce domain <code>Error</code>s, never raw strings or thrown
+          exceptions</em>). FluentValidation validators (<code>AbstractValidator&lt;T&gt;</code>) produce a <code>ValidationResult</code> whose
+          <code>Errors</code> are framework-specific <code>ValidationFailure</code> objects; the application pipeline needs those
+          surfaced as a <a href="group-01-result-error-handling.html#result"><code>Result</code></a> failure carrying domain
+          <a href="group-01-result-error-handling.html#error"><code>Error</code></a>s. This extension is the <em>only</em> seam where that
+          translation happens, so the rest of the pipeline depends on neither FluentValidation&#39;s failure shape
+          nor a hand-rolled mapping. It also touches <code>[Rubric §9, API &amp; Contract Design]</code> (assesses uniform,
+          standardized error responses): because each failure becomes an
+          <a href="group-01-result-error-handling.html#errortype"><code>ErrorType.Validation</code></a> error (which the API layer maps
+          to HTTP 400), validation failures look identical at the boundary regardless of which validator raised
+          them.</p>
+          </li>
+          <li><p><strong>Walkthrough</strong>: the file is a static class (<code>:9</code>) holding a single <code>extension(ValidationResult result)</code>
+          block (<code>:11</code>). Inside it, <code>ToErrors(string source)</code> (<code>:19</code>) projects <code>result.Errors</code> with a LINQ
+          <code>Select</code> (<code>:20</code>) into one
+          <a href="group-01-result-error-handling.html#error"><code>Error.Validation(...)</code></a> call per failure (<code>:21</code>), passing
+          four arguments in order: the failure&#39;s <code>ErrorCode</code> → the error <code>code</code>, its <code>ErrorMessage</code> → the error
+          <code>message</code>, the caller-supplied <code>source</code> → the error <code>source</code>, and its <code>PropertyName</code> → the error
+          <code>target</code>. (<code>Error.Validation</code> is declared as <code>Validation(string code, string message, string? source = null, string? target = null)</code>
+          in <code>MMCA.Common.Shared/Abstractions/Error.cs:37</code>, so <code>PropertyName</code> lands in the <code>target</code> slot,
+          identifying <em>which</em> field failed.) The method returns <code>IEnumerable&lt;Error&gt;</code> lazily; the caller
+          materializes it.</p>
+          </li>
+          <li><p><strong>Why it&#39;s built this way</strong>: the C# <code>extension(T)</code> syntax (see <a href="00-primer.html">primer §4</a>) lets the
+          conversion read as a natural method on <code>ValidationResult</code> (<code>result.ToErrors(&quot;X&quot;)</code>) without subclassing
+          FluentValidation or adding a static helper that consumers must remember to call. It keeps the
+          cross-cutting mapping co-located with its purpose and out of both <code>FluentValidation</code> and
+          <a href="group-01-result-error-handling.html#error"><code>Error</code></a>. Lazy <code>IEnumerable&lt;Error&gt;</code> defers the projection
+          until the caller enumerates (the decorator immediately <code>.ToList()</code>s it).</p>
+          </li>
+          <li><p><strong>Where it&#39;s used</strong>: the sole call site is
+          <a href="group-05-cqrs-pipeline.html#validatingcommanddecoratortcommand-tresult"><code>ValidatingCommandDecorator&lt;TCommand, TResult&gt;</code></a>
+          (<code>MMCA.Common.Application/UseCases/Decorators/ValidatingCommandDecorator.cs:52</code>), which runs the
+          command&#39;s <a href="#commandrequestvalidatortcommand-trequest"><code>CommandRequestValidator&lt;TCommand, TRequest&gt;</code></a>
+          and, on failure, calls <code>validationResult.ToErrors(typeof(TCommand).Name).ToList()</code>, passing the
+          command type name as <code>source</code>, then returns those errors as a
+          <a href="group-01-result-error-handling.html#result"><code>Result</code></a> failure, short-circuiting the pipeline before the
+          concrete handler runs.</p>
+          </li>
+          <li><p><strong>Caveats / not-in-source</strong>: the failure&#39;s <code>ErrorCode</code> is FluentValidation&#39;s per-rule code (e.g.
+          <code>&quot;NotEmptyValidator&quot;</code>) unless a validator overrides it with <code>.WithErrorCode(...)</code>; this extension
+          passes it through verbatim and does not normalize or validate it.</p>
+          </li>
+          </ul>
+          <hr>
+          <p><a href="group-05-cqrs-pipeline.html">⬅ CQRS: Commands, Queries &amp; the Decorator Pipeline</a>  •  <a href="index.html">Index</a>  •  <a href="group-07-persistence-ef-core.html">Persistence &amp; EF Core ➡</a></p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

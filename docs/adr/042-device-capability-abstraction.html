@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-07-10).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid)">
+  <meta property="og:description" content="Accepted (2026-07-10).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 45 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html" aria-current="page">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-042-device-capability-abstraction-maui-blazor-hybrid">ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid)</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-07-10).</p>
+          <h2 id="context">Context</h2>
+          <p>The consumer apps ship the same Blazor component set through three heads: MAUI Blazor Hybrid
+          (Android/iOS/MacCatalyst/Windows), Blazor Server SSR, and WebAssembly. Native device capabilities
+          (share sheet, clipboard, haptics, geolocation, local notifications, connectivity, biometrics,
+          text-to-speech) only exist on the MAUI head, and some have partial browser equivalents
+          (<code>navigator.share</code>, <code>navigator.clipboard</code>, <code>navigator.onLine</code>, aria-live regions). Shared Razor
+          components cannot reference MAUI APIs: <code>MMCA.Common.UI</code> is a single-target net10.0 Razor class
+          library that must stay WASM-compatible (its layer rule allows Shared only), and any MAUI-typed code
+          in it would break the web heads at compile time.</p>
+          <p>Two constraints shape the packaging. First, per-head service selection already has a working
+          precedent: <code>ITokenStorageService</code> is implemented by each host and registered after <code>AddUIShared</code>
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:70</code>). Second, MMCA.Common&#39;s CI and release
+          pipelines run on ubuntu-latest, which cannot build MAUI target frameworks at all, while the
+          framework&#39;s packages release in lockstep (ADR-016).</p>
+          <h2 id="decision">Decision</h2>
+          <p>Add a per-capability contract layer to <code>MMCA.Common.UI</code> and a fifteenth package,
+          <code>MMCA.Common.UI.Maui</code>, carrying the native implementations.</p>
+          <ul>
+          <li><p><strong>One small interface per capability, no aggregate device service.</strong> Contracts live in
+          <code>Source/Presentation/MMCA.Common.UI/Services/Capabilities/</code> (18 at introduction:
+          <code>IShareService</code>, <code>IClipboardService</code>, <code>IHapticFeedbackService</code>, <code>IMapNavigationService</code>,
+          <code>IGeolocationService</code>, <code>IExternalLinkService</code>, <code>ITextToSpeechService</code>, <code>IAccessibilityAnnouncer</code>,
+          <code>ILocalNotificationService</code>, <code>IScreenshotService</code>, <code>IDevicePreferences</code>, <code>IBatteryStatusService</code>,
+          <code>IBiometricAuthenticator</code>, <code>ISpeechToTextService</code>, <code>IExternalAuthBroker</code>, <code>IDeepLinkDispatcher</code>,
+          <code>IConnectivityStatusService</code>, <code>ILocalCacheStore</code>). Each capability has an independent fallback
+          story, and per-capability contracts let heads adopt incrementally.</p>
+          </li>
+          <li><p><strong>Safe defaults for every contract, TryAdd-registered by <code>AddUIShared</code>.</strong>
+          <code>AddDeviceCapabilityDefaults</code> (<code>Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs</code>)
+          registers a null or neutral implementation per contract (<code>Fallbacks/</code>), so shared components
+          resolve every capability on every head with zero host changes. Three fallback flavors:
+          browser-equivalent (JS interop), null-object exposing <code>IsSupported == false</code> (components hide the
+          affordance), and constant stubs (Blazor Server connectivity is always online: a dead circuit
+          already means the whole UI is down).</p>
+          </li>
+          <li><p><strong>Heads override AFTER <code>AddUIShared</code> with plain Add registrations.</strong> Last registration wins for
+          single-service resolution, so <code>AddBrowserDeviceCapabilities()</code> (browser implementations over
+          <code>wwwroot/capabilities-interop.js</code>, prerender-safe per the <code>MauiBackNavigationBridge</code> degradation
+          contract) and <code>AddMauiDeviceCapabilities()</code> / <code>UseMauiDeviceCapabilities()</code> (the MAUI package)
+          replace the defaults without touching them.</p>
+          </li>
+          <li><p><strong><code>MMCA.Common.UI.Maui</code> is the one MAUI-TFM package.</strong> It multi-targets
+          net10.0-android/ios/maccatalyst/windows, references <code>MMCA.Common.UI</code> plus <code>Microsoft.Maui.Controls</code>
+          and <code>Plugin.LocalNotification</code> (majors track MAUI majors, pinned together in
+          <code>Directory.Packages.props</code>), and stays OUT of <code>MMCA.Common.slnx</code>, the same mechanism that keeps
+          the UI gallery and E2E projects out of the ubuntu unit run. Dedicated windows jobs build
+          (<code>ci.yml</code> <code>build-maui</code>, a required gate) and pack (<code>release.yml</code> <code>publish-maui</code>, same tag, own
+          SBOM gate) it, so the lockstep release stays whole. Layer rule: UI + Shared only
+          (<code>Source/Build/MMCA.Common.LayerEnforcement.targets</code>, <code>EnforceUIMauiLayerBoundary</code>); it is
+          deliberately absent from the ubuntu NetArchTest runtime map because its assemblies cannot load
+          there, and the compile-time target is the enforcement.</p>
+          </li>
+          <li><p><strong>Deep links funnel through one seam.</strong> Native navigation sources (notification taps, app
+          actions, app links, QR scans) publish app-relative routes into the singleton
+          <code>IDeepLinkDispatcher</code> (buffered, capacity one, for cold starts); the <code>DeepLinkListener</code>
+          component in the shared layout drains the buffer after first render and navigates live requests.
+          The payoff of Blazor Hybrid: web URLs and app routes are identical, so no translation table
+          exists anywhere.</p>
+          </li>
+          <li><p><strong>Shared components adapt, never branch on platform.</strong> <code>ExternalLink</code> renders a real new-tab
+          anchor on web heads and intercepts the click into the system browser where
+          <code>IExternalLinkService.InterceptsLinks</code> is true, because <code>target=&quot;_blank&quot;</code> silently dead-ends
+          inside a BlazorWebView. <code>OfflineBanner</code> renders only when <code>IConnectivityStatusService</code> reports
+          offline. Permission flows live INSIDE each MAUI implementation (check, rationale, request,
+          degrade, never throw); components never see permission state.</p>
+          </li>
+          </ul>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li>A god <code>IDeviceCapabilities</code> interface would force every head to implement everything and turn
+          each new capability into a breaking change; per-capability contracts are open/closed and mock
+          cleanly in bUnit.</li>
+          <li>Null defaults inside <code>AddUIShared</code> mean a head that knows nothing about capabilities keeps
+          working, which is exactly the inert-by-default posture of ADR-024&#39;s notification layer.</li>
+          <li>Putting implementations in a framework package (not each app&#39;s MAUI head) gives the Store and
+          ADC heads the same capabilities for one registration line, and keeps the ADR-015 discipline:
+          reusable infrastructure belongs to Common.</li>
+          <li>The windows-job packaging exception is the smallest change that preserves both truths: ubuntu CI
+          stays fast and MAUI TFMs get built at all.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li>A fifteenth package raises release surface: two runners must both succeed for a whole release.
+          Accepted; the <code>publish-maui</code> job is gated by the same tag and SBOM discipline.</li>
+          <li>The TryAdd-default plus later-plain-Add pattern relies on registration order (<code>AddUIShared</code>
+          first). Documented on both extension methods; the order is already load-bearing in every host for
+          other reasons.</li>
+          <li>Null-object fallbacks can mask a missing registration (a MAUI head that forgets
+          <code>UseMauiDeviceCapabilities()</code> silently loses haptics rather than failing fast). Accepted for
+          decoration-grade capabilities; feature waves that depend on a capability assert <code>IsSupported</code> in
+          their UI and surface the gap visibly.</li>
+          <li>Biometrics, speech-to-text, and the external-auth broker ship contracts (and web/null fallbacks)
+          before their native implementations, which land with their feature waves. Until then the MAUI
+          head resolves their null defaults.</li>
+          </ul>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/042-device-capability-abstraction.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

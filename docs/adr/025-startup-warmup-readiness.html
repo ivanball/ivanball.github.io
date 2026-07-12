@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADR-025: Startup Warm-Up and Readiness Gating for Cold-Start Mitigation · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-06-27).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/025-startup-warmup-readiness.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ADR-025: Startup Warm-Up and Readiness Gating for Cold-Start Mitigation">
+  <meta property="og:description" content="Accepted (2026-06-27).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/025-startup-warmup-readiness.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 45 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html" aria-current="page">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-025-startup-warm-up-and-readiness-gating-for-cold-start-mitigation">ADR-025: Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-06-27).</p>
+          <h2 id="context">Context</h2>
+          <p>On the Azure Container Apps Consumption plan a replica that has been idle is CPU-throttled, and a
+          scale-from-zero or scaled-out replica starts cold. The first authenticated request on such a replica
+          pays costs that a warm replica does not: DNS resolution, TCP and TLS handshakes, the HTTP connection
+          pool warm-up, and the lazy fetch of the OIDC discovery document by the JwtBearer middleware. That fetch
+          can stretch past the client timeout, which is the textbook &quot;first request fails, second succeeds&quot;
+          symptom. The platform also routes traffic to a replica as soon as its readiness probe passes, so a
+          replica that is technically started but not yet warm gets live traffic it cannot serve cleanly. We need
+          a way to (a) pre-warm the expensive paths before the replica takes traffic and (b) hold the replica out
+          of rotation until that warm-up has had its chance, without letting a single stuck dependency keep a
+          replica permanently out of service.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Ship a small warm-up subsystem in <code>MMCA.Common.Aspire</code>, wired into <code>AddServiceDefaults()</code> so every host
+          gets it.</p>
+          <ul>
+          <li><strong>A readiness gate that starts closed.</strong> <code>WarmupReadinessGate</code> (singleton) begins not-ready;
+          <code>WarmupReadinessHealthCheck</code> is registered tagged <code>ready</code> and reports <code>Unhealthy</code> until the gate opens.
+          <code>MapDefaultEndpoints()</code> maps <code>/health/ready</code> to every non-<code>live</code> check, so while warm-up is running the
+          replica&#39;s readiness endpoint reports not-ready and the platform keeps traffic off it. (<code>/alive</code> maps
+          only the <code>live</code>-tagged self check, so liveness is unaffected and the container is not restarted.)</li>
+          <li><strong>A background runner that opens the gate once warm-up has had its chance.</strong> <code>WarmupHostedService</code>
+          runs every registered <code>IWarmupTask</code> exactly once, in parallel, then opens the gate. Critically the gate
+          is opened in a <code>finally</code>, so it <strong>opens even if tasks fail</strong>: a stuck dependency must not keep a replica
+          out of rotation forever.</li>
+          <li><strong>Per-task failure is logged, not fatal, and falls back to lazy retry.</strong> Each task runs in isolation; a
+          thrown task is caught and logged at warning level (&quot;will retry lazily on first use&quot;), so the missed
+          warm-up simply happens on the first real request (absorbed by the Polly pipeline, ADR-009). The one
+          exception that is rethrown is an <code>OperationCanceledException</code> during host shutdown, so stopping the host
+          is not mistaken for a task failure.</li>
+          <li><strong>A built-in task that pre-warms OIDC discovery.</strong> <code>OpenIdConnectMetadataWarmupTask</code> fetches
+          <code>{Authority}/.well-known/openid-configuration</code> over the shared <code>IHttpClientFactory</code>, warming DNS, TCP,
+          TLS, and the connection pool (and the authority&#39;s own discovery cache). It no-ops when no
+          <code>Authentication:JwtBearer:Authority</code> is configured. The JwtBearer middleware caches discovery
+          separately, so its own first fetch still runs, but over a now-warm connection it completes in
+          single-digit milliseconds.</li>
+          <li><strong>Extensible per host.</strong> <code>AddWarmupReadiness()</code> registers the gate, the runner, the readiness health
+          check, and the built-in OIDC task; a host adds its own pre-fetches (output cache, reference data) with
+          <code>AddWarmupTask&lt;T&gt;()</code>.</li>
+          </ul>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Keep cold replicas out of rotation, briefly.</strong> Gating readiness on warm-up means the platform does
+          not send a user request to a replica that is still doing its first handshakes, which is what turns a
+          cold start into a visible 5xx.</li>
+          <li><strong>Availability over strict warmth.</strong> Opening the gate even when a task fails is the load-bearing choice:
+          a warm-up that depends on a temporarily unreachable dependency would otherwise pin the replica
+          out of service indefinitely. Falling back to lazy retry (covered by the resilience pipeline) trades a
+          possibly-slow first request for guaranteed eventual availability.</li>
+          <li><strong>Warm the path, not just the cache.</strong> The OIDC fetch is the specific cold-start failure we saw; even
+          though the middleware re-fetches, warming the network path removes the timeout-sized first hit. This is
+          the active half of the same cold-start story ADR-004 references from the auth side.</li>
+          <li><strong>Free for every host, cheap for the ones that do not need it.</strong> Putting it in <code>AddServiceDefaults</code>
+          makes it the default posture; the built-in task self-disables when there is no authority, so a host
+          without JwtBearer pays nothing.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>A replica can enter rotation not fully warm.</strong> Because the gate opens on failure (or timeout), the
+          first request to such a replica still pays the lazy cost; the resilience pipeline mitigates this but
+          does not eliminate it. This is deliberate (availability over warmth) but means the gate is a
+          best-effort warm-up signal, not a guarantee.</li>
+          <li><strong>The gate does not surface a broken dependency.</strong> Since it opens regardless, a persistently failing
+          warm-up task is visible only in logs and (for dependencies that have their own health checks) through
+          the separate untagged readiness checks, not through the warm-up gate itself.</li>
+          <li><strong>Startup work on every host.</strong> Every host runs the warm-up runner and the built-in task even if the
+          benefit is marginal (the task no-ops without an authority, but the hosted service and gate still spin
+          up).</li>
+          <li><strong>Middleware cache is separate.</strong> The warm-up warms the connection, not the JwtBearer
+          <code>ConfigurationManager</code>&#39;s discovery cache, so the very first authenticated request still triggers the
+          middleware&#39;s own (now-fast) fetch; the optimization is on the network path, not on eliminating the
+          fetch.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p>ADR-004 (the OIDC discovery document the built-in task pre-fetches, and the auth-side view of the same
+          cold-start), ADR-009 (the Polly resilience pipeline that absorbs the lazy retry when the gate opens
+          before a task succeeds), ADR-019 (the rate limiter that exempts <code>/health</code> and <code>/alive</code>, the endpoints
+          this gate drives).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/025-startup-warmup-readiness.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

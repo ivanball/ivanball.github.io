@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>19. ADC Conference - Infrastructure &amp; Persistence · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="What this chapter covers. This is the adapter layer of the Conference module, the place where the engine-agnostic domain meets concrete technology.…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/group-19-conference-infrastructure.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="19. ADC Conference - Infrastructure &amp; Persistence">
+  <meta property="og:description" content="What this chapter covers. This is the adapter layer of the Conference module, the place where the engine-agnostic domain meets concrete technology.…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/group-19-conference-infrastructure.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/onboarding/index.html">Onboarding Guide</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">19. ADC Conference - Infrastructure &amp; Persistence</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>Guide contents</summary>
+        <nav class="doc-nav" aria-label="Onboarding Guide">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="00-dependency-manifest.html">Phase 1: Dependency Manifest &amp; Leveling</a></li>
+        <li><a href="00-group-taxonomy.html">Phase 1b - Functional Group Taxonomy</a></li>
+        <li><a href="00-inventory.html">Phase 0: Type Inventory</a></li>
+        <li><a href="00-primer.html">Primer, the concepts, stack, and conventions you need first</a></li>
+        <li><a href="group-01-result-error-handling.html">1. Result &amp; Error Handling</a></li>
+        <li><a href="group-02-domain-building-blocks.html">2. Domain Building Blocks (Entities, Value Objects, Aggregates)</a></li>
+        <li><a href="group-03-querying-specifications.html">3. Querying: Specifications, Filtering &amp; the Entity Query Service</a></li>
+        <li><a href="group-04-events-outbox.html">4. Domain &amp; Integration Events + Outbox Dual-Dispatch</a></li>
+        <li><a href="group-05-cqrs-pipeline.html">5. CQRS: Commands, Queries &amp; the Decorator Pipeline</a></li>
+        <li><a href="group-06-validation.html">6. Validation</a></li>
+        <li><a href="group-07-persistence-ef-core.html">7. Persistence &amp; EF Core</a></li>
+        <li><a href="group-08-auth.html">8. Authentication &amp; Authorization</a></li>
+        <li><a href="group-09-caching.html">9. Caching</a></li>
+        <li><a href="group-10-notifications.html">10. Notifications (Push + In-App Inbox + Email)</a></li>
+        <li><a href="group-11-navigation-populators.html">11. Navigation Metadata &amp; Populators (EF-decoupled eager loading)</a></li>
+        <li><a href="group-12-api-hosting-mapping.html">12. API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</a></li>
+        <li><a href="group-13-grpc-contracts.html">13. gRPC &amp; Inter-Service Contracts</a></li>
+        <li><a href="group-14-module-system-composition.html">14. Module System, Composition &amp; Configuration</a></li>
+        <li><a href="group-15-common-ui-framework.html">15. Common UI Framework (MudBlazor components, theme, base pages)</a></li>
+        <li><a href="group-16-aspire-orchestration.html">16. Aspire Orchestration &amp; Service Defaults</a></li>
+        <li><a href="group-17-conference-domain.html">17. ADC Conference - Domain Model &amp; Module Contracts</a></li>
+        <li><a href="group-18-conference-application.html">18. ADC Conference - Application &amp; Use Cases</a></li>
+        <li><a href="group-19-conference-infrastructure.html" aria-current="page">19. ADC Conference - Infrastructure &amp; Persistence</a></li>
+        <li><a href="group-20-conference-api-grpc.html">20. ADC Conference - API, gRPC Contracts &amp; Service Host</a></li>
+        <li><a href="group-21-conference-ui.html">21. ADC Conference - UI</a></li>
+        <li><a href="group-22-engagement-module.html">22. ADC Engagement Module (Session Bookmarks)</a></li>
+        <li><a href="group-23-engagement-live-layer.html">23. ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></li>
+        <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
+        <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
+        <li><a href="group-26-testing-infrastructure.html">26. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
+        <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
+        <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
+        <li><a href="devops-runbooks.html">Operational Scripts &amp; Runbooks</a></li>
+        <li><a href="devops-testing.html">Testing Architecture &amp; Solution Composition</a></li>
+        <li><a href="99-coverage-audit.html">Phase 4, Coverage Audit</a></li>
+        <li><a href="CONCEPT-MAPS.html">MMCA Concept &amp; Pattern Maps</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Onboarding guide</p>
+          <h1 id="19-adc-conference---infrastructure--persistence">19. ADC Conference - Infrastructure &amp; Persistence</h1>
+          <p><strong>What this chapter covers.</strong> This is the <strong>adapter</strong> layer of the Conference module, the place where
+          the engine-agnostic domain meets concrete technology. Three concerns live here: (1) <strong>persistence
+          mapping</strong>, the EF Core entity configurations that turn plain domain classes into SQL Server tables,
+          the abstract <code>DbContext</code> that declares the module&#39;s <code>DbSet</code>s, and the seeder that puts the real
+          conference event and feedback questions into a fresh database; (2) <strong>outbound integration services</strong>,
+          the HTTP clients that talk to <strong>Sessionize</strong> (the conference&#39;s session-submission platform) and to the
+          <strong>Anthropic Claude API</strong> (the AI session scorer); and (3) the <strong>DI wiring</strong> that registers those
+          services with the right resilience policy. It is the per-module realization of Clean Architecture&#39;s
+          &quot;ports and adapters&quot; idea: the <a href="group-18-conference-application.html">Application</a> layer declares the
+          ports (<a href="group-18-conference-application.html#isessionizeservice"><code>ISessionizeService</code></a>,
+          <a href="group-18-conference-application.html#iaiscoringservice"><code>IAiScoringService</code></a>), and this Infrastructure
+          layer supplies the adapters. <code>[Rubric §3, Clean Architecture]</code> assesses whether dependencies point
+          inward and the domain stays framework-free; here every EF/HTTP/Anthropic concern is quarantined in
+          Infrastructure, so the domain entities in <a href="group-17-conference-domain.html">Group 17</a> carry no
+          persistence or transport attribute at all.</p>
+          <h2 id="engine-agnostic-entities-engine-chosen-by-the-config-base-class">Engine-agnostic entities, engine chosen by the config base class</h2>
+          <p>The most important idea in this chapter is one the entities themselves never express: <strong>what storage
+          engine each entity uses is decided here, not in the domain.</strong> A Conference domain entity, <code>Session</code>,
+          <code>Speaker</code>, <code>Event</code>, <code>Room</code>, the join entities, is a plain class. The <em>only</em> thing that binds it to SQL
+          Server is which base class its configuration inherits from. Every config in this group
+          (<a href="group-19-conference-infrastructure.html#sessionconfiguration"><code>SessionConfiguration</code></a>,
+          <a href="group-19-conference-infrastructure.html#speakerconfiguration"><code>SpeakerConfiguration</code></a>,
+          <a href="group-19-conference-infrastructure.html#eventconfiguration"><code>EventConfiguration</code></a>, and the rest)
+          derives from
+          <a href="group-07-persistence-ef-core.html#entitytypeconfigurationsqlservertentity-tidentifiertype"><code>EntityTypeConfigurationSQLServer&lt;TEntity, TIdentifierType&gt;</code></a>,
+          which itself sits on the engine-neutral
+          <a href="group-07-persistence-ef-core.html#entitytypeconfigurationbasetentity-tidentifiertype"><code>EntityTypeConfigurationBase&lt;TEntity, TIdentifierType&gt;</code></a>
+          in the Common framework. That base carries the <code>[UseDataSource(SQLServer)]</code> marker the
+          <code>EntityDataSourceRegistry</code> reads to decide which physical <code>DbContext</code> an entity is built into. Swapping
+          just that one base class would re-point the same <code>Session</code> to Cosmos or SQLite with zero change to the
+          domain, the application handlers, or the entity, this is the per-entity half of the
+          <strong>database-per-service</strong> strategy (ADR-006). In practice all 15 Conference configs use the <code>…SQLServer</code>
+          base (the primer&#39;s adoption note explains why Cosmos/SQLite are supported-but-dormant seams).
+          <code>[Rubric §8, Data Architecture]</code> (deliberate persistence: transactions, migrations, soft-delete,
+          audit, concurrency) is the dominant lens for the whole persistence half of this chapter.</p>
+          <h2 id="each-config-inherits-the-cross-cutting-behavior-then-adds-entity-specifics">Each config inherits the cross-cutting behavior, then adds entity specifics</h2>
+          <p>Every configuration&#39;s <code>Configure</code> method begins with <code>base.Configure(builder)</code> (e.g.
+          <code>SessionConfiguration.cs:18</code>) and <em>then</em> adds its own mappings. That one <code>base</code> call is where the
+          framework injects the conventions you&#39;ll see applied uniformly: the strongly-typed key, the
+          soft-delete <code>IsDeleted</code> shadow handling, the audit columns, and a <code>rowversion</code> concurrency token,
+          none of which any individual config re-states. The per-entity bodies then declare what is unique:
+          column lengths sourced from the domain&#39;s invariant constants (<code>SessionInvariants.TitleMaxLength</code>,
+          <code>EventInvariants.NameMaxLength</code>), required/optional flags, computed properties excluded with
+          <code>builder.Ignore(...)</code> (e.g. <code>Session.Duration</code>, <code>SessionConfiguration.cs:67</code>), and <strong>filtered unique
+          indexes</strong> that scope uniqueness to non-deleted rows, <code>HasFilter(&quot;[IsDeleted] = 0&quot;)</code> appears on the
+          <code>SessionSpeaker</code> (Session, Speaker) pair, the one-score-per-<code>Session</code> index on <code>SessionAiScore</code>, and
+          others, so soft-deleted rows don&#39;t block a re-insert. A couple of configs carry a deliberate quirk
+          worth knowing: <a href="group-19-conference-infrastructure.html#conferencecategoryconfiguration"><code>ConferenceCategoryConfiguration</code></a>
+          calls <code>ToTable(&quot;Category&quot;, &quot;Conference&quot;)</code> explicitly (<code>ConferenceCategoryConfiguration.cs:24</code>) so the
+          Conference <code>Category</code> table doesn&#39;t collide with another module&#39;s <code>Category</code>, and
+          <a href="group-19-conference-infrastructure.html#sessionconfiguration"><code>SessionConfiguration</code></a> maps the
+          <code>Session→Room</code> relationship with <code>OnDelete(DeleteBehavior.Restrict)</code> so deleting a room can&#39;t cascade
+          sessions away.</p>
+          <h2 id="dbsets-and-the-dbcontext-shape">DbSets and the DbContext shape</h2>
+          <p><a href="group-19-conference-infrastructure.html#moduleapplicationdbcontext"><code>ModuleApplicationDbContext</code></a> is the
+          Conference module&#39;s abstract <code>DbContext</code>. It does one job: declare the <code>DbSet&lt;T&gt;</code> for every Conference
+          entity, <code>Events</code>, <code>Rooms</code>, <code>Sessions</code>, <code>Speakers</code>, the four join entities, <code>Categories</code>,
+          <code>CategoryItems</code>, <code>Questions</code>, and the answer tables. It is <strong>abstract</strong> and inherits from the Common
+          <a href="group-07-persistence-ef-core.html#applicationdbcontext"><code>ApplicationDbContext</code></a>, from which it gets the
+          real machinery: the <code>SaveChangesAsync</code> override that stamps audit fields, applies soft-delete, captures
+          domain events into the outbox, and the global query filters that hide deleted rows. The concrete class
+          that EF actually instantiates is the single
+          <a href="group-07-persistence-ef-core.html#sqlserverdbcontext"><code>SQLServerDbContext</code></a> in the Common framework,
+          <strong>one concrete context class, one instance per database</strong> (ADR-006). The codebase deliberately does
+          <strong>not</strong> split into per-module context classes; <code>ModuleApplicationDbContext</code> exists only to declare the
+          module&#39;s <code>DbSet</code>s and discover its configurations, not to be a second concrete context. This is the
+          per-database half of database-per-service: the Conference service owns the <code>ADC_Conference</code> database
+          and its own <code>dbo.OutboxMessages</code>, so it never races another service for outbox rows.
+          <code>[Rubric §7, Microservices Readiness]</code> (can a module become its own service without a rewrite?) is
+          embodied here, the Conference module already runs as <code>MMCA.ADC.Conference.Service</code> over its own DB,
+          and cross-module references (a speaker&#39;s linked user, a bookmark&#39;s session) are scalar columns resolved
+          via gRPC + integration events, never cross-database foreign keys.</p>
+          <h2 id="seeding-real-data-always-sample-data-only-in-devci">Seeding: real data always, sample data only in dev/CI</h2>
+          <p><a href="group-19-conference-infrastructure.html#conferencemoduledbseeder"><code>ConferenceModuleDbSeeder</code></a> is run
+          after schema initialization (invoked from the module&#39;s <code>SeedAsync</code>, wired in the API layer&#39;s
+          <code>ConferenceModuleSeeder</code>). It is idempotent, every seed step first does an <code>ExistsAsync</code> check and
+          returns early if the row is already present, so it is safe to run on every startup, which is exactly
+          how production&#39;s <code>&quot;Migrate&quot;</code> database-init strategy uses it. It always seeds two things: the real
+          <strong>Atlanta Cloud + AI Conference</strong> <code>Event</code> (date, venue, time zone, and the <code>SessionizeCode</code> that links
+          the event to its Sessionize submission, <code>ConferenceModuleDbSeeder.cs:52-62</code>) and the fixed set of
+          <strong>feedback <code>Question</code>s</strong> (session ratings + conference ratings, using a reserved manual-ID range so
+          they never collide with imported data). It conditionally seeds two sample <strong><code>Speaker</code>s</strong> and two sample
+          <strong><code>Session</code>s</strong> <em>only</em> when <code>Seeding:IncludeSampleConferenceData=true</code>, a flag set by the local Aspire
+          AppHost and the E2E CI workflow but left unset in production. The reason is concrete and documented in
+          the seeder&#39;s own remarks (<code>ConferenceModuleDbSeeder.cs:14-21</code>): the public-browse E2E tests need at
+          least one session and one speaker row to exist deterministically, while production&#39;s real sessions and
+          speakers arrive through the Sessionize import, not the seeder. This is the seam that the
+          <code>ConferenceModuleDbSeederTests</code> in <a href="group-26-testing-infrastructure.html">Group 25</a> exercise.</p>
+          <h2 id="the-sessionize-adapter">The Sessionize adapter</h2>
+          <p><a href="group-19-conference-infrastructure.html#sessionizeservice"><code>SessionizeService</code></a> is a deliberately thin
+          HTTP client (the whole class is ~25 lines): given a Sessionize event code, it <code>GET</code>s the platform&#39;s
+          &quot;View All&quot; endpoint and deserializes the JSON into the <code>SessionizeResponse</code> model owned by the
+          Application layer. It implements <a href="group-18-conference-application.html#isessionizeservice"><code>ISessionizeService</code></a>
+          and is registered as a <strong>typed <code>HttpClient</code></strong> in
+          <a href="group-19-conference-infrastructure.html#dependencyinjection"><code>DependencyInjection</code></a>
+          (<code>DependencyInjection.cs:23-24</code>) with the Sessionize base address baked in. Because it is registered
+          via <code>AddHttpClient&lt;,&gt;</code>, it automatically inherits the standard Aspire resilience handler (Polly
+          retry/timeout/circuit-breaker) configured in <code>ServiceDefaults</code>, <code>[Rubric §29, Resilience]</code>, the
+          ADR-009 policy that every outbound client gets resilience by default. The thinness is intentional:
+          parsing, mapping, and the actual import workflow live in Application use-cases; this adapter only owns
+          the wire call.</p>
+          <h2 id="the-anthropic-ai-scoring-adapter">The Anthropic AI scoring adapter</h2>
+          <p><a href="group-19-conference-infrastructure.html#anthropicscoringservice"><code>AnthropicScoringService</code></a> is the
+          richer of the two adapters, it scores a single session proposal against a Program-Committee rubric
+          using the <strong>Anthropic Claude Messages API</strong>. It implements
+          <a href="group-18-conference-application.html#iaiscoringservice"><code>IAiScoringService</code></a>, exposes the model id it
+          uses (<code>claude-haiku-4-5-20251001</code>, <code>AnthropicScoringService.cs:21</code>), reads the API key from
+          configuration (<code>Anthropic:ApiKey</code>, expected in user secrets), and, importantly, <strong>never throws</strong>:
+          every failure path (missing key, non-2xx response, empty body, deserialization failure, any exception)
+          funnels into a <code>FailedResult</code> carrying zero scores and <code>Success = false</code>. That non-throwing contract
+          matters because scoring runs in batches and a single bad proposal must not abort the batch. The wire
+          shapes are the small private records grouped in this chapter,
+          <a href="group-19-conference-infrastructure.html#anthropicrequest"><code>AnthropicRequest</code></a>,
+          <a href="group-19-conference-infrastructure.html#anthropicmessage"><code>AnthropicMessage</code></a>,
+          <a href="group-19-conference-infrastructure.html#anthropicresponse"><code>AnthropicResponse</code></a>,
+          <a href="group-19-conference-infrastructure.html#anthropiccontentblock"><code>AnthropicContentBlock</code></a>, and
+          <a href="group-19-conference-infrastructure.html#aiscoreresponse"><code>AiScoreResponse</code></a> (the JSON the model is
+          prompted to return, parsed by locating the <code>{...}</code> span in the response text). The prompt is built
+          inline (<code>BuildPrompt</code>), the speaker block is formatted with <code>CultureInfo.InvariantCulture</code> to stay
+          culture-deterministic (<code>AnthropicScoringService.cs:145</code>, the §27 invariant-formatting point the primer
+          flags), and each returned score is clamped to <code>[1.0, 10.0]</code> with banker&#39;s rounding before it becomes a
+          <code>SessionScoringResult</code>. <code>[Rubric §11, Security]</code> shows up in the obvious place, the API key is a
+          configuration secret, never hard-coded, and <code>[Rubric §13, Observability]</code> in the <code>[LoggerMessage]</code>
+          source-generated warning that records every scoring failure with the session id and reason.</p>
+          <h2 id="di-wiring-and-a-deliberate-resilience-override">DI wiring and a deliberate resilience override</h2>
+          <p><a href="group-19-conference-infrastructure.html#dependencyinjection"><code>DependencyInjection</code></a> is a single
+          <code>extension(IServiceCollection)</code> block (the codebase&#39;s standard DI-registration idiom, taught in the
+          primer) exposing <code>AddModuleConferenceInfrastructure()</code>. It registers both adapters as typed HTTP
+          clients, but the Anthropic client gets a <strong>custom resilience policy</strong>: it calls
+          <code>RemoveAllResilienceHandlers()</code> and re-adds a <code>StandardResilienceHandler</code> with much longer timeouts,
+          a 3-minute attempt timeout, a 5-minute total request timeout, a 7-minute circuit-breaker sampling
+          window, and only <strong>one</strong> retry (<code>DependencyInjection.cs:35-42</code>). The inline comment explains why: AI
+          scoring of a large batch can take several minutes, which would blow through Aspire&#39;s default 30s/90s
+          limits, and retrying an expensive LLM call aggressively is wasteful. This is a precise illustration of
+          the resilience story from ADR-009, every outbound client is resilient by default, but a client with
+          genuinely different latency characteristics tunes the policy rather than disabling it. The Sessionize
+          client, by contrast, takes the defaults unchanged.</p>
+          <h2 id="how-it-fits-together-at-runtime">How it fits together at runtime</h2>
+          <p>Two flows tie the chapter together. <strong>Persistence flow:</strong> a Conference command handler mutates an
+          aggregate and calls <code>SaveChangesAsync</code> on the unit of work; that resolves the concrete
+          <code>SQLServerDbContext</code> over the <code>ADC_Conference</code> database, which applies the configurations registered
+          here (lengths, indexes, relationships), stamps audit fields, soft-deletes via global filters, and
+          captures any domain events into the per-database outbox, all in one transaction. <strong>Integration flow:</strong>
+          an organizer triggers a Sessionize refresh or an AI-scoring run; the Application use-case calls the
+          port, the typed <code>HttpClient</code> adapter here makes the outbound call wrapped in its (default or tuned)
+          Polly pipeline, and the result flows back as either a parsed <code>SessionizeResponse</code> or a
+          <code>SessionScoringResult</code>, never an unhandled exception in the AI case. The two
+          <a href="group-19-conference-infrastructure.html#assemblyreference"><code>AssemblyReference</code></a> /
+          <a href="group-19-conference-infrastructure.html#classreference"><code>ClassReference</code></a> marker types in this assembly
+          exist purely so the module loader and Scrutor can scan this assembly to discover the configurations,
+          seeder, and services without a hard-coded type list, the same scanning seam every module assembly
+          provides.</p>
+          <h3 id="aiscoreresponse-anthropiccontentblock-anthropicmessage">AiScoreResponse, AnthropicContentBlock, AnthropicMessage</h3>
+          <p><a id="anthropicmessage"></a><a id="anthropiccontentblock"></a><a id="aiscoreresponse"></a></p>
+          <blockquote>
+          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure.Services</code> · Level 0 · record (sealed, private)</p>
+          </blockquote>
+          <p>Three <code>private sealed record</code> types nested inside <a href="#anthropicscoringservice"><code>AnthropicScoringService</code></a> that model the Anthropic Messages API wire shapes. They are invisible outside that class, the encapsulation point that keeps the AI vendor&#39;s JSON contract from leaking past the Infrastructure layer.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Type</th>
+          <th>File:Line</th>
+          <th>Purpose</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>AiScoreResponse</code></td>
+          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/AnthropicScoringService.cs:215</code></td>
+          <td>The score JSON the model is prompted to return: <code>overall</code>, <code>topic_relevance</code>, <code>description_quality</code>, <code>novelty</code>, <code>actionable_takeaways</code>, <code>depth_or_insight_quality</code>, <code>credibility_experience</code> (all <code>decimal</code>), plus <code>reasoning</code> (<code>string?</code>)</td>
+          </tr>
+          <tr>
+          <td><code>AnthropicContentBlock</code></td>
+          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/AnthropicScoringService.cs:206</code></td>
+          <td>One block from the response <code>content</code> array: <code>type</code> (<code>&quot;text&quot;</code>) + <code>text</code>, both nullable</td>
+          </tr>
+          <tr>
+          <td><code>AnthropicMessage</code></td>
+          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/AnthropicScoringService.cs:191</code></td>
+          <td>One conversation message: <code>required</code> <code>role</code> (<code>&quot;user&quot;</code>) + <code>required</code> <code>content</code> (the prompt)</td>
+          </tr>
+          </tbody></table></div>
+          <ul>
+          <li><strong>What they are</strong>: passive serialization records. <code>AnthropicMessage</code> is the request-side payload (one user-role message carrying the prompt); <code>AnthropicContentBlock</code> is one element of the response&#39;s <code>content</code> array; <code>AiScoreResponse</code> is the structured score the JSON body inside the chosen text block deserializes to.</li>
+          <li><strong>Depends on</strong>: no first-party types. External: <code>System.Text.Json.Serialization.JsonPropertyName</code> only.</li>
+          <li><strong>Concept introduced, anti-corruption serialization records at the edge.</strong> <code>[Rubric §3, Clean Architecture]</code> (assesses whether external contracts stay out of inner layers): the vendor&#39;s snake_case envelope (<code>max_tokens</code>, <code>topic_relevance</code>, …) is named on these records via <code>[JsonPropertyName]</code> and <strong>nowhere else</strong>: the Application layer sees only <a href="group-18-conference-application.html#sessionscoringresult"><code>SessionScoringResult</code></a>, never an Anthropic type. <code>[Rubric §32, Dependency &amp; Supply-Chain]</code> (assesses how a third-party API dependency is isolated): if Anthropic reshapes its envelope, as it has before, only this one file changes.</li>
+          <li><strong>Walkthrough</strong>: <code>AnthropicMessage</code> uses <code>required string Role</code>/<code>required string Content</code> (<code>:193-197</code>) so a message can&#39;t be half-built. <code>AnthropicContentBlock</code> keeps <code>Type</code>/<code>Text</code> nullable (<code>:209-212</code>) because a response block may carry a non-text type. <code>AiScoreResponse</code>&#39;s eight properties (<code>:217-239</code>) map the snake_case keys the prompt instructs Claude to emit; <code>Reasoning</code> is the only nullable one. The deserialization is case-insensitive (<code>JsonOptions</code>, <code>AnthropicScoringService.cs:173</code>), so casing drift in the model output is tolerated.</li>
+          <li><strong>Why it&#39;s built this way</strong>: nesting all three as private inner records of the adapter (rather than public DTOs) makes them an implementation detail of the one class that talks HTTP. Records give value semantics and concise <code>init</code> properties for what are pure data carriers.</li>
+          <li><strong>Where it&#39;s used</strong>: <a href="#anthropicscoringservice"><code>AnthropicScoringService</code></a> only: <code>AnthropicMessage</code> inside the request, <code>AnthropicContentBlock</code> when scanning the response <code>content</code> list for the <code>&quot;text&quot;</code> block, <code>AiScoreResponse</code> when parsing that block&#39;s JSON body into per-criterion scores.</li>
+          </ul>
+          <hr>
+          <h3 id="assemblyreference-classreference">AssemblyReference, ClassReference</h3>
+          <p><a id="assemblyreference"></a><a id="classreference"></a></p>
+          <blockquote>
+          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/AssemblyReference.cs:5</code> · Level 0 · class (static) + class</p>
+          </blockquote>
+          <p>The assembly-marker pair for the Conference Infrastructure assembly. No behavior, a stable <code>typeof()</code> handle for reflection-based scanning.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Type</th>
+          <th>File:Line</th>
+          <th>Notes</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>AssemblyReference</code></td>
+          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/AssemblyReference.cs:5</code></td>
+          <td><code>static class</code> exposing <code>Assembly</code> and <code>AssemblyName</code></td>
+          </tr>
+          <tr>
+          <td><code>ClassReference</code></td>
+          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/AssemblyReference.cs:11</code></td>
+          <td>Empty non-static class; a <code>typeof(ClassReference)</code> token for <code>Add…(typeof(...))</code> registration calls</td>
+          </tr>
+          </tbody></table></div>
+          <ul>
+          <li><strong>What it is</strong>: the same two-type marker pattern every layer of every module repeats. <code>AssemblyReference.Assembly</code> returns <code>typeof(AssemblyReference).Assembly</code> and <code>AssemblyName</code> its simple name (<code>:7-8</code>); <code>ClassReference</code> is an empty class used purely as a generic/<code>typeof</code> anchor.</li>
+          <li><strong>Depends on</strong>: <code>System.Reflection</code> only. No first-party types.</li>
+          <li><strong>Concept introduced</strong>: cross-reference the framework explanation under <a href="group-17-conference-domain.html#assemblyreference--classreference-conferencedomain">AssemblyReference / ClassReference (Conference.Domain)</a>; identical structure, different assembly.</li>
+          <li><strong>Walkthrough</strong>: omitted; structurally identical to every other layer&#39;s marker pair.</li>
+          <li><strong>Why it&#39;s built this way</strong>: uniformity: Scrutor assembly scanning (EF entity configurations, DTO/request mappers, handlers) and <code>ModuleLoader</code> DI wiring all take a stable per-assembly handle, so each assembly ships one.</li>
+          <li><strong>Where it&#39;s used</strong>: Conference module DI registration and EF <code>IEntityTypeConfiguration</code> discovery scan this assembly via these markers.</li>
+          </ul>
+          <hr>
+          <h3 id="anthropicrequest-anthropicresponse">AnthropicRequest, AnthropicResponse</h3>
+          <p><a id="anthropicrequest"></a><a id="anthropicresponse"></a></p>
+          <blockquote>
+          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure.Services</code> · Level 1 · record (sealed, private)</p>
+          </blockquote>
+          <p>The two top-level request/response envelopes for the Anthropic Messages call, one rung above the leaf records because they compose them.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Type</th>
+          <th>File:Line</th>
+          <th>Notes</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>AnthropicRequest</code></td>
+          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/AnthropicScoringService.cs:179</code></td>
+          <td>Request body: <code>required</code> <code>Model</code> (<code>model</code>), <code>required</code> <code>MaxTokens</code> (<code>max_tokens</code>), <code>required List&lt;AnthropicMessage&gt; Messages</code> (<code>messages</code>)</td>
+          </tr>
+          <tr>
+          <td><code>AnthropicResponse</code></td>
+          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/AnthropicScoringService.cs:200</code></td>
+          <td>Response body: a nullable <code>List&lt;AnthropicContentBlock&gt;? Content</code> (<code>content</code>)</td>
+          </tr>
+          </tbody></table></div>
+          <ul>
+          <li><strong>What they are</strong>: the outer wire shapes. <code>AnthropicRequest</code> is what gets POSTed (model id + token cap + the message list); <code>AnthropicResponse</code> is the deserialized reply, whose <code>Content</code> is the list of <a href="#aiscoreresponse-anthropiccontentblock-anthropicmessage"><code>AnthropicContentBlock</code></a> the adapter scans for the <code>&quot;text&quot;</code> block.</li>
+          <li><strong>Depends on</strong>: first-party: <a href="#aiscoreresponse-anthropiccontentblock-anthropicmessage"><code>AnthropicMessage</code></a> (composed in <code>Messages</code>), <a href="#aiscoreresponse-anthropiccontentblock-anthropicmessage"><code>AnthropicContentBlock</code></a> (composed in <code>Content</code>). External: <code>System.Text.Json.Serialization</code>.</li>
+          <li><strong>Concept introduced</strong>: cross-reference the anti-corruption record concept taught under <a href="#aiscoreresponse-anthropiccontentblock-anthropicmessage">AiScoreResponse, AnthropicContentBlock, AnthropicMessage</a>; these are the composite layer of the same private envelope set.</li>
+          <li><strong>Walkthrough</strong>: <code>AnthropicRequest</code>&#39;s three properties are all <code>required</code> (<code>:181-188</code>) so the request can&#39;t be partially constructed; <code>MaxTokens</code> is set to <code>256</code> at the call site (<code>AnthropicScoringService.cs:42</code>) to bound cost and latency. <code>AnthropicResponse.Content</code> is nullable (<code>:202-203</code>) because a malformed/empty reply must deserialize without throwing, the adapter then falls through to a failed result.</li>
+          <li><strong>Why it&#39;s built this way</strong>: same encapsulation rationale as the leaf records: keep the Anthropic JSON shape private to the adapter. <code>required</code> on the request and nullable on the response mirror the asymmetry between &quot;we control what we send&quot; and &quot;we must defensively parse what we get back&quot;.</li>
+          <li><strong>Where it&#39;s used</strong>: <a href="#anthropicscoringservice"><code>AnthropicScoringService.ScoreSessionAsync</code></a>: builds an <code>AnthropicRequest</code>, deserializes the body to <code>AnthropicResponse</code>.</li>
+          </ul>
+          <hr>
+          <h3 id="anthropicscoringservice">AnthropicScoringService</h3>
+          <blockquote>
+          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure.Services</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/AnthropicScoringService.cs:15</code> · Level 3 · class (sealed partial)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the concrete adapter implementing <a href="group-18-conference-application.html#iaiscoringservice"><code>IAiScoringService</code></a> by calling the <strong>Anthropic Claude Messages API</strong> (model <code>claude-haiku-4-5-20251001</code>, <code>:21</code>) to score one session proposal against a Program-Committee rubric. Like its port, <strong>it never throws</strong>, every failure becomes a failed <code>SessionScoringResult</code>.</li>
+          <li><strong>Depends on</strong>: first-party: <a href="group-18-conference-application.html#iaiscoringservice"><code>IAiScoringService</code></a> (implements), <a href="group-18-conference-application.html#sessionscoringinput"><code>SessionScoringInput</code></a>, <a href="group-18-conference-application.html#sessionscoringresult"><code>SessionScoringResult</code></a>, <a href="group-18-conference-application.html#speakerinfo"><code>SpeakerInfo</code></a> (the Application decision-support types), and its own private records <a href="#anthropicrequest-anthropicresponse"><code>AnthropicRequest</code></a>/<a href="#aiscoreresponse-anthropiccontentblock-anthropicmessage"><code>AnthropicMessage</code></a>/<a href="#anthropicrequest-anthropicresponse"><code>AnthropicResponse</code></a>/<a href="#aiscoreresponse-anthropiccontentblock-anthropicmessage"><code>AnthropicContentBlock</code></a>/<a href="#aiscoreresponse-anthropiccontentblock-anthropicmessage"><code>AiScoreResponse</code></a>. External: <code>HttpClient</code>, <code>IConfiguration</code>, <code>ILogger&lt;T&gt;</code>, <code>System.Text.Json</code>, <code>System.Globalization</code>.</li>
+          <li><strong>Concept introduced, the adapter that keeps an SDK/HTTP dependency at the edge.</strong> <code>[Rubric §3, Clean Architecture]</code> / <code>[Rubric §1, SOLID, DIP]</code> (assess whether the inner layers depend on abstractions, not vendors): all Anthropic HTTP and JSON detail lives here in Infrastructure, behind the Application&#39;s port. <code>[Rubric §11, Security]</code> (assesses secrets handling): the API key is read from configuration (<code>Anthropic:ApiKey</code>, sourced from user secrets, <code>:28</code>) and sent as the <code>x-api-key</code> header, never hard-coded or logged. <code>[Rubric §13, Observability]</code> (assesses structured, low-cost logging): failures go through a source-generated <code>[LoggerMessage]</code> warning (<code>:175-176</code>). <code>[Rubric §29, Resilience]</code> (assesses graceful degradation): every failure path, missing key, non-2xx, empty body, any exception, funnels into <code>FailedResult</code> (<code>:31-33</code>, <code>:51-56</code>, <code>:62-66</code>, <code>:70-74</code>) so one session&#39;s API failure can&#39;t abort a batch. <code>[Rubric §12, Performance]</code> (assesses cost/latency bounds): <code>MaxTokens = 256</code> (<code>:42</code>) caps the response. <code>[Rubric §27, i18n]</code> (assesses culture-correctness): speaker formatting uses <code>CultureInfo.InvariantCulture</code> (<code>:145-150</code>) so prompt text never varies by server locale.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li>A <strong>primary constructor</strong> injects <code>HttpClient</code>, <code>IConfiguration</code>, <code>ILogger&lt;AnthropicScoringService&gt;</code> (<code>:15-18</code>); the class is <code>sealed partial</code> because <code>[LoggerMessage]</code> generates the partial method body.</li>
+          <li><code>ModelId</code> (<code>:21</code>) is a fixed string the port exposes so callers can record which model produced a score.</li>
+          <li><code>ScoreSessionAsync</code> (<code>:24</code>) guards on a missing key first (<code>:28-33</code>), builds the reviewer prompt via <code>BuildPrompt</code> (<code>:37</code>, <code>:106</code>, a weighted six-criterion ADC rubric with explicit scoring rules and penalties), assembles an <a href="#anthropicrequest-anthropicresponse"><code>AnthropicRequest</code></a> carrying one <a href="#aiscoreresponse-anthropiccontentblock-anthropicmessage"><code>AnthropicMessage</code></a> (<code>:39-44</code>), POSTs to the relative <code>v1/messages</code> with the <code>x-api-key</code> header (<code>:46-48</code>), and on a non-success status logs the body and returns <code>FailedResult</code> (<code>:51-56</code>).</li>
+          <li>On success it deserializes the body to <a href="#anthropicrequest-anthropicresponse"><code>AnthropicResponse</code></a>, <code>Find</code>s the first <code>&quot;text&quot;</code> block (<code>:58-60</code>), and hands the text to <code>ParseSingleScore</code> (<code>:68</code>, <code>:77</code>), which extracts the <code>{…}</code> substring (<code>:80-85</code>), deserializes it to <a href="#aiscoreresponse-anthropiccontentblock-anthropicmessage"><code>AiScoreResponse</code></a>, and <code>Clamp</code>s every score to <code>1.0–10.0</code> with banker&#39;s rounding to one decimal (<code>:94-100</code>, <code>:156</code>) before producing a successful <code>SessionScoringResult</code>.</li>
+          <li><code>FormatSpeakers</code> (<code>:135</code>) builds the speaker block from <a href="group-18-conference-application.html#speakerinfo"><code>SpeakerInfo</code></a> using <code>InvariantCulture</code>; <code>JsonOptions</code> (<code>:173</code>) enables case-insensitive matching.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: concentrating the vendor specifics here makes swapping AI providers (or mocking in tests) a one-class change behind the port; the never-throw + clamp discipline makes raw model output safe to persist. The prompt is deliberately prescriptive (&quot;respond with ONLY a JSON object&quot;) so the response reliably parses.</li>
+          <li><strong>Where it&#39;s used</strong>: registered as the <code>IAiScoringService</code> implementation by <a href="#dependencyinjection"><code>DependencyInjection</code></a> (with custom resilience timeouts for the long batch call); driven by the ScoreEventSessions command handler in <a href="group-18-conference-application.html">Conference Application</a>.</li>
+          <li><strong>Caveats / not-in-source</strong>: behavior depends on Anthropic returning parseable JSON; malformed output falls through to <code>FailedResult</code>. There is <strong>no retry inside this class</strong>, the retry/timeout policy is configured externally on the <code>HttpClient</code> in <a href="#dependencyinjection"><code>DependencyInjection</code></a>, and the in-class resilience contract is &quot;never throw + let the batch continue&quot;, not internal retries.</li>
+          </ul>
+          <hr>
+          <h3 id="sessionizeservice">SessionizeService</h3>
+          <blockquote>
+          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure.Services</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/SessionizeService.cs:10</code> · Level 4 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the HTTP-client implementation of <a href="group-18-conference-application.html#isessionizeservice"><code>ISessionizeService</code></a>: it calls the Sessionize &quot;View All&quot; API to retrieve every session/speaker/room/category for a conference in one document.</li>
+          <li><strong>Depends on</strong>: first-party: <a href="group-18-conference-application.html#isessionizeservice"><code>ISessionizeService</code></a> (implements), <a href="group-18-conference-application.html#sessionizeresponse"><code>SessionizeResponse</code></a> (return shape). External: <code>HttpClient</code>, <code>System.Net.Http.Json</code>.</li>
+          <li><strong>Concept</strong>: <code>[Rubric §2, Design Patterns]</code> / <code>[Rubric §1, SOLID, DIP]</code> (assess inversion of control): the Application defines <code>ISessionizeService</code>; Infrastructure provides the HTTP adapter, so the Application layer never references <code>HttpClient</code>. The implementation is intentionally minimal, a primary-constructor <code>HttpClient</code> (registered as a <strong>typed client</strong> in <a href="#dependencyinjection"><code>DependencyInjection</code></a>, so the base URL and Polly pipeline are configured once), a <code>GetAsync</code> to <code>{sessionizeCode}/view/All</code> relative to the base URL (<code>:15-18</code>), and <code>ReadFromJsonAsync&lt;SessionizeResponse&gt;</code> (<code>:22-24</code>). All awaits use <code>.ConfigureAwait(false)</code>.</li>
+          <li><strong>Caveat, error handling differs from the AI adapter.</strong> <code>response.EnsureSuccessStatusCode()</code> (<code>:20</code>) converts an HTTP error into an <code>HttpRequestException</code> that <strong>propagates</strong> uncaught, unlike <a href="#anthropicscoringservice"><code>AnthropicScoringService</code></a>&#39;s never-throw contract. The calling handler treats a thrown Sessionize failure as a non-domain error (mapped to a 5xx/Problem Details upstream), which is acceptable because a sync is an explicit organizer action, not a per-item batch.</li>
+          <li><strong>Where it&#39;s used</strong>: called by the Sessionize-sync command handler in <a href="group-18-conference-application.html">Conference Application</a> when an organizer triggers a data refresh (gated behind the <code>Conference.SessionizeIntegration</code> feature flag).</li>
+          </ul>
+          <hr>
+          <h3 id="dependencyinjection">DependencyInjection</h3>
+          <blockquote>
+          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:12</code> · Level 5 · class (static)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the DI wiring for Conference Infrastructure: it registers the two outbound HTTP integrations, the Sessionize client and the Anthropic AI-scoring client, as typed <code>HttpClient</code>s.</li>
+          <li><strong>Depends on</strong>: first-party: <a href="group-18-conference-application.html#isessionizeservice"><code>ISessionizeService</code></a>/<a href="#sessionizeservice"><code>SessionizeService</code></a>, <a href="group-18-conference-application.html#iaiscoringservice"><code>IAiScoringService</code></a>/<a href="#anthropicscoringservice"><code>AnthropicScoringService</code></a>. External: <code>Microsoft.Extensions.DependencyInjection</code>, <code>Microsoft.Extensions.Http.Resilience</code> (Polly).</li>
+          <li><strong>Concept introduced, custom resilience configuration for slow external APIs.</strong> <code>[Rubric §29, Resilience]</code> (assesses ADR-009: a resilience handler on every outbound client). The Sessionize client (<code>:23-24</code>) is a plain <code>AddHttpClient&lt;IService, Impl&gt;</code> with a base address, inheriting the Aspire standard resilience handler. The Anthropic client (<code>:29-42</code>) is the interesting case: AI batch scoring can take <strong>minutes</strong>, so the code calls <code>RemoveAllResilienceHandlers()</code> and then <code>AddStandardResilienceHandler</code> with hand-tuned timeouts, this is the correct pattern when the Aspire default (30s attempt / 90s total) is too short. The inline comment (<code>:26-27</code>) documents <em>why</em> the defaults are removed.</li>
+          <li><strong>Walkthrough</strong>: a single <code>extension(IServiceCollection services)</code> block (<code>:14</code>) exposes <code>AddModuleConferenceInfrastructure()</code> (<code>:20</code>). Sessionize (<code>:22-24</code>): typed client with <code>https://sessionize.com/api/v2/</code> base. Anthropic (<code>:28-42</code>): base <code>https://api.anthropic.com/</code>, an <code>anthropic-version: 2023-06-01</code> header (<code>:32</code>), a 5-minute <code>HttpClient.Timeout</code> (<code>:33</code>), then <code>.RemoveAllResilienceHandlers().AddStandardResilienceHandler(...)</code> configuring a 3-minute attempt timeout (<code>:38</code>), a 7-minute circuit-breaker sampling window (<code>:39</code>), a 5-minute total-request timeout (<code>:40</code>), and <code>MaxRetryAttempts = 1</code> (<code>:41</code>), a deliberate &quot;one retry only&quot; for an expensive non-idempotent batch. Returns <code>services</code> for chaining (<code>:44</code>).</li>
+          <li><strong>Why it&#39;s built this way</strong>: registering both integrations as typed clients centralizes base URL, default headers, and the resilience pipeline so the service classes stay thin (see <a href="#sessionizeservice"><code>SessionizeService</code></a>, <a href="#anthropicscoringservice"><code>AnthropicScoringService</code></a>). The C# <code>extension(IServiceCollection)</code> member (see the primer&#39;s <a href="00-primer.html#c-extensiont-types--read-this-once"><code>extension(T)</code> note</a>) keeps the registration call site readable: <code>services.AddModuleConferenceInfrastructure()</code>.</li>
+          <li><strong>Where it&#39;s used</strong>: invoked from the Conference module&#39;s top-level registration (the module <code>IModule.Register</code>/<code>AddModuleConference…</code> chain in <a href="group-20-conference-api-grpc.html">Conference API &amp; module composition</a>).</li>
+          </ul>
+          <hr>
+          <h3 id="moduleapplicationdbcontext">ModuleApplicationDbContext</h3>
+          <blockquote>
+          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure.Persistence.DbContexts</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:18</code> · Level 7 · class (abstract)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: an <strong>abstract</strong> EF Core context for the Conference module that declares typed <code>DbSet</code>s for all thirteen Conference entities and inherits auditing, soft-delete, and domain-event dispatch from the common <a href="group-07-persistence-ef-core.html#applicationdbcontext"><code>ApplicationDbContext</code></a> base.</li>
+          <li><strong>Depends on</strong>: first-party: <a href="group-07-persistence-ef-core.html#applicationdbcontext"><code>ApplicationDbContext</code></a> (base), <a href="group-07-persistence-ef-core.html#ientityconfigurationassemblyprovider"><code>IEntityConfigurationAssemblyProvider</code></a>, <a href="group-07-persistence-ef-core.html#physicaldatasource"><code>PhysicalDataSource</code></a>, and every Conference aggregate/child entity it sets (<code>Event</code>, <code>Room</code>, <code>EventSpeaker</code>, <code>EventQuestionAnswer</code>, <code>Session</code>, <code>SessionSpeaker</code>, <code>SessionQuestionAnswer</code>, <code>SessionCategoryItem</code>, <code>Speaker</code>, <code>SpeakerCategoryItem</code>, <code>Category</code>, <code>CategoryItem</code>, <code>Question</code>, see <a href="group-17-conference-domain.html">Conference Domain</a>). External: <code>Microsoft.EntityFrameworkCore</code>.</li>
+          <li><strong>Concept introduced, the module-scoped DbSet manifest that documents the bounded context&#39;s tables.</strong> <code>[Rubric §8, Data Architecture]</code> (assesses how persistence is organized per bounded context) and <code>[Rubric §4, DDD]</code> (assesses aggregate boundaries): this one file is the readable inventory of which entities the Conference database owns. Its primary constructor forwards all four parameters straight to the base (<code>:18-23</code>), so it picks up the audit-stamping <code>SaveChangesAsync</code>, the soft-delete global query filters, and the outbox/domain-event interceptors with no extra code, see ADR-005 (soft-delete) and ADR-003 (outbox).</li>
+          <li><strong>Walkthrough</strong>: the primary constructor <code>(DbContextOptions options, IServiceProvider serviceProvider, IEntityConfigurationAssemblyProvider assemblyProvider, PhysicalDataSource physicalDataSource)</code> chains to <code>ApplicationDbContext(...)</code> (<code>:18-23</code>). The body is purely thirteen <code>internal DbSet&lt;T&gt; { get; set; }</code> declarations (<code>:26-62</code>), one per Conference entity, each XML-documented. There is <strong>no</strong> <code>OnModelCreating</code>/<code>OnConfiguring</code> override here, entity mapping comes from per-entity <code>EntityTypeConfigurationSQLServer&lt;TEntity, TId&gt;</code> classes discovered by assembly scanning, not from this context.</li>
+          <li><strong>Why it&#39;s built this way</strong>: it mirrors the database-per-service strategy (ADR-006): each module declares its own table surface in its own Infrastructure project, so a module can be extracted into a standalone service without untangling a shared monolithic context. The <code>DbSet</code>s are <code>internal</code> because only Infrastructure-layer code (repositories, populators) addresses them directly.</li>
+          <li><strong>Caveats / not-in-source</strong>: <strong>this abstract class is never inherited or instantiated anywhere in the ADC source or tests</strong> (verified: the only reference to the symbol is its own declaration). At runtime the <em>concrete</em> context is the sealed <a href="group-07-persistence-ef-core.html#applicationdbcontext"><code>SQLServerDbContext</code></a> from MMCA.Common, which also derives from <code>ApplicationDbContext</code> and resolves entities by scanning <code>IEntityTypeConfiguration</code> types, not via these <code>DbSet</code>s (ADR-006 mandates one concrete context class, per database). So <code>ModuleApplicationDbContext</code> functions as a <strong>declarative manifest / documentation of the Conference bounded context&#39;s table surface</strong> rather than a live runtime context; its sibling files in Identity and Engagement Infrastructure play the identical role. Do not assume these <code>DbSet</code>s drive the actual EF model, the configuration classes and <code>SQLServerDbContext</code> do.</li>
+          </ul>
+          <h3 id="conference-ef-entity-configurations">Conference EF entity configurations</h3>
+          <p><a id="categoryitemconfiguration"></a><a id="conferencecategoryconfiguration"></a><a id="eventconfiguration"></a><a id="eventquestionanswerconfiguration"></a><a id="eventspeakerconfiguration"></a><a id="questionconfiguration"></a><a id="roomconfiguration"></a><a id="sessionaiscoreconfiguration"></a><a id="sessioncategoryitemconfiguration"></a><a id="sessionconfiguration"></a><a id="sessionquestionanswerconfiguration"></a><a id="sessionspeakerconfiguration"></a><a id="speakercategoryitemconfiguration"></a><a id="speakerconfiguration"></a><a id="speakerquestionanswerconfiguration"></a></p>
+          <blockquote>
+          <p>15 <code>internal sealed</code> classes in <code>MMCA.ADC.Conference.Infrastructure</code>, namespace
+          <code>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration</code>, all Level 7, each extending
+          <a href="group-07-persistence-ef-core.html#entitytypeconfigurationsqlservertentity-tidentifiertype"><code>EntityTypeConfigurationSQLServer&lt;TEntity, TIdentifierType&gt;</code></a>.</p>
+          </blockquote>
+          <p>These are the per-entity persistence maps for the Conference module. Every one follows the same
+          two-step shape: override <code>Configure(EntityTypeBuilder&lt;TEntity&gt; builder)</code>, call <code>base.Configure(builder)</code>
+          <strong>first</strong> (the framework base derives the table name from <code>typeof(TEntity).Name</code>, derives the schema
+          from the module namespace, installs the soft-delete global query filter, configures the audit fields,
+          and adds the <code>rowversion</code> concurrency token), then declare the entity-specific property constraints,
+          relationships, and indexes. Because the storage engine is decided <strong>entirely</strong> by the base class they
+          inherit (the <code>…SQLServer</code> base, see <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2 &quot;engine-agnostic entities&quot;</a>),
+          re-pointing any of these entities to Cosmos or SQLite would mean swapping only the base type, the
+          domain entity and everything above it stay untouched. All 15 use the <code>…SQLServer</code> base (ADC runs SQL
+          Server only).</p>
+          <p><code>[Rubric §8, Data Architecture]</code> (assesses deliberate persistence design: correct length
+          constraints, soft-delete-aware unique indexes, FK relationships, and ignoring computed properties so
+          they never reach a column). <code>[Rubric §3, Clean Architecture]</code> (assesses dependency direction, EF
+          configuration is confined to the Infrastructure layer; the <a href="group-17-conference-domain.html#event"><code>Event</code></a>,
+          <a href="group-17-conference-domain.html#session"><code>Session</code></a>, <a href="group-17-conference-domain.html#speaker"><code>Speaker</code></a>
+          etc. domain entities carry no EF attributes whatsoever, so the domain stays framework-free).</p>
+          <p><strong>Concept reinforced, length constants from the domain invariants.</strong> Almost every <code>HasMaxLength</code>
+          call reads a constant from the entity&#39;s <code>…Invariants</code> class
+          (<a href="group-17-conference-domain.html#eventinvariants"><code>EventInvariants</code></a>,
+          <a href="group-17-conference-domain.html#sessioninvariants"><code>SessionInvariants</code></a>,
+          <a href="group-17-conference-domain.html#speakerinvariants"><code>SpeakerInvariants</code></a>,
+          <a href="group-17-conference-domain.html#categoryinvariants"><code>CategoryInvariants</code></a>,
+          <a href="group-17-conference-domain.html#questioninvariants"><code>QuestionInvariants</code></a>) rather than a literal. That
+          makes the field length a <strong>single source of truth</strong> shared between the schema (here) and the
+          FluentValidation rule objects in the Application layer, change the constant once and both the column
+          width and the validator move together.</p>
+          <p><strong>Concept reinforced, the soft-delete-aware filtered unique index.</strong> Several join/child configs
+          declare <code>HasIndex(...).IsUnique().HasFilter(&quot;[IsDeleted] = 0&quot;)</code>. A plain unique index would forbid a
+          user from ever re-creating an association they previously soft-deleted (the old soft-deleted row still
+          occupies the unique slot). Filtering the index to <code>IsDeleted = 0</code> makes the constraint apply <strong>only to
+          live rows</strong>, so a delete-then-recreate cycle is legal while still guaranteeing at most one active
+          association at a time. This is the same pattern used framework-wide (compare <code>UserSessionBookmark</code> in
+          the Engagement module).</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Type</th>
+          <th>File:Line</th>
+          <th>Entity mapped</th>
+          <th>Notable configuration</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>CategoryItemConfiguration</code></td>
+          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/CategoryItemConfiguration.cs:11</code></td>
+          <td><a href="group-17-conference-domain.html#categoryitem"><code>CategoryItem</code></a></td>
+          <td><code>Name</code> (required, <code>CategoryItemNameMaxLength</code>), <code>Sort</code>; required FK to <code>Category</code>; composite unique index <code>(CategoryId, Name)</code></td>
+          </tr>
+          <tr>
+          <td><code>ConferenceCategoryConfiguration</code></td>
+          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/ConferenceCategoryConfiguration.cs:13</code></td>
+          <td><a href="group-17-conference-domain.html#category"><code>Category</code></a></td>
+          <td>Explicit <code>ToTable(&quot;Category&quot;, &quot;Conference&quot;)</code>; <code>Title</code> (required, <code>TitleMaxLength</code>), <code>Sort</code>, <code>Type</code> (optional, max 100)</td>
+          </tr>
+          <tr>
+          <td><code>EventConfiguration</code></td>
+          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/EventConfiguration.cs:11</code></td>
+          <td><a href="group-17-conference-domain.html#event"><code>Event</code></a></td>
+          <td><code>Name</code>, dates, <code>TimeZone</code> (required); optional <code>Description</code>, <code>SessionizeCode</code>, venue fields, <code>WiFiInfo</code>; filtered (non-unique) index on <code>SessionizeCode</code></td>
+          </tr>
+          <tr>
+          <td><code>EventQuestionAnswerConfiguration</code></td>
+          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/EventQuestionAnswerConfiguration.cs:11</code></td>
+          <td><a href="group-17-conference-domain.html#eventquestionanswer"><code>EventQuestionAnswer</code></a></td>
+          <td><code>EventId</code>, <code>QuestionId</code>, <code>AnswerValue</code> (required); FK to <code>Event</code>; filtered index on <code>EventId</code></td>
+          </tr>
+          <tr>
+          <td><code>EventSpeakerConfiguration</code></td>
+          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/EventSpeakerConfiguration.cs:11</code></td>
+          <td><a href="group-17-conference-domain.html#eventspeaker"><code>EventSpeaker</code></a></td>
+          <td>FK to <code>Event</code>; soft-delete-aware unique index <code>(EventId, SpeakerId)</code></td>
+          </tr>
+          <tr>
+          <td><code>QuestionConfiguration</code></td>
+          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/QuestionConfiguration.cs:10</code></td>
+          <td><a href="group-17-conference-domain.html#question"><code>Question</code></a></td>
+          <td><code>QuestionText</code>, <code>QuestionEntity</code>, <code>QuestionType</code>, <code>Sort</code>, <code>IsRequired</code>, <code>QuestionSource</code> (all required)</td>
+          </tr>
+          <tr>
+          <td><code>RoomConfiguration</code></td>
+          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/RoomConfiguration.cs:10</code></td>
+          <td><a href="group-17-conference-domain.html#room"><code>Room</code></a></td>
+          <td><code>Name</code>, <code>Sort</code> (required); optional <code>Capacity</code>, <code>Floor</code>, <code>Location</code>, <code>AccessibilityInfo</code>; required FK to <code>Event</code></td>
+          </tr>
+          <tr>
+          <td><code>SessionAiScoreConfiguration</code></td>
+          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SessionAiScoreConfiguration.cs:11</code></td>
+          <td><a href="group-17-conference-domain.html#sessionaiscore"><code>SessionAiScore</code></a></td>
+          <td>Seven <code>decimal(3,1)</code> score columns, <code>Reasoning</code> (max 4000), <code>ModelUsed</code> (max 100); one-score-per-session unique filtered index</td>
+          </tr>
+          <tr>
+          <td><code>SessionCategoryItemConfiguration</code></td>
+          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SessionCategoryItemConfiguration.cs:11</code></td>
+          <td><a href="group-17-conference-domain.html#sessioncategoryitem"><code>SessionCategoryItem</code></a></td>
+          <td>FK to <code>Session</code>; soft-delete-aware unique index <code>(SessionId, CategoryItemId)</code></td>
+          </tr>
+          <tr>
+          <td><code>SessionConfiguration</code></td>
+          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SessionConfiguration.cs:12</code></td>
+          <td><a href="group-17-conference-domain.html#session"><code>Session</code></a></td>
+          <td><code>Title</code> required; optional <code>Status</code>/dates/URLs; four <code>bool</code> flags; <code>Ignore(Duration)</code>; FKs to <code>Event</code> and (restrict-delete) <code>Room</code></td>
+          </tr>
+          <tr>
+          <td><code>SessionQuestionAnswerConfiguration</code></td>
+          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SessionQuestionAnswerConfiguration.cs:10</code></td>
+          <td><a href="group-17-conference-domain.html#sessionquestionanswer"><code>SessionQuestionAnswer</code></a></td>
+          <td><code>SessionId</code>, <code>QuestionId</code>, <code>AnswerValue</code> (required); FK to <code>Session</code></td>
+          </tr>
+          <tr>
+          <td><code>SessionSpeakerConfiguration</code></td>
+          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SessionSpeakerConfiguration.cs:11</code></td>
+          <td><a href="group-17-conference-domain.html#sessionspeaker"><code>SessionSpeaker</code></a></td>
+          <td>FK to <code>Session</code>; soft-delete-aware unique index <code>(SessionId, SpeakerId)</code></td>
+          </tr>
+          <tr>
+          <td><code>SpeakerCategoryItemConfiguration</code></td>
+          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SpeakerCategoryItemConfiguration.cs:11</code></td>
+          <td><a href="group-17-conference-domain.html#speakercategoryitem"><code>SpeakerCategoryItem</code></a></td>
+          <td>FK to <code>Speaker</code>; soft-delete-aware unique index <code>(SpeakerId, CategoryItemId)</code></td>
+          </tr>
+          <tr>
+          <td><code>SpeakerConfiguration</code></td>
+          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SpeakerConfiguration.cs:12</code></td>
+          <td><a href="group-17-conference-domain.html#speaker"><code>Speaker</code></a></td>
+          <td><code>Email</code> value-object conversion; filtered unique index on <code>LinkedUserId</code>; <code>Ignore(FullName)</code></td>
+          </tr>
+          <tr>
+          <td><code>SpeakerQuestionAnswerConfiguration</code></td>
+          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SpeakerQuestionAnswerConfiguration.cs:10</code></td>
+          <td><a href="group-17-conference-domain.html#speakerquestionanswer"><code>SpeakerQuestionAnswer</code></a></td>
+          <td><code>SpeakerId</code>, <code>QuestionId</code>, <code>AnswerValue</code> (required); FK to <code>Speaker</code></td>
+          </tr>
+          </tbody></table></div>
+          <p><strong><code>CategoryItemConfiguration</code>, the reference example</strong> (lines 11-34). After <code>base.Configure</code>, it sets
+          <code>Name</code> to <code>HasMaxLength(CategoryInvariants.CategoryItemNameMaxLength).IsRequired()</code> and <code>Sort</code> to
+          <code>IsRequired()</code>, declares the parent relationship fluently,
+          <code>HasOne(p =&gt; p.Category).WithMany(p =&gt; p.CategoryItems).HasForeignKey(p =&gt; p.CategoryId).IsRequired()</code>
+          (lines 26-29), then <code>HasIndex(p =&gt; new { p.CategoryId, p.Name }).IsUnique()</code> (lines 31-32), a
+          <strong>composite</strong> unique index so the same item name can&#39;t appear twice in one category. (Note: this one is
+          <em>not</em> <code>IsDeleted</code>-filtered, the uniqueness is on category+name regardless of delete state.)</p>
+          <p><strong><code>ConferenceCategoryConfiguration</code></strong> (line 13) is the only one that overrides the table name
+          explicitly: <code>builder.ToTable(&quot;Category&quot;, &quot;Conference&quot;)</code> (line 24). The base would already derive
+          <code>Category</code> from <code>typeof(Category).Name</code>, so the call is for clarity / disambiguation from any other
+          module&#39;s <code>Category</code>, the doc comment (lines 10-11) cites avoiding a collision with a Catalog-module
+          <code>Category</code>. <code>Type</code> is optional (<code>HasMaxLength(100).IsRequired(false)</code>).</p>
+          <p><strong><code>EventConfiguration</code></strong> (line 11) maps the event aggregate root: required <code>Name</code>
+          (<code>EventInvariants.NameMaxLength</code>), <code>StartDate</code>, <code>EndDate</code>, and <code>TimeZone</code>; everything else optional.
+          The <code>SessionizeCode</code> index (lines 41-42) is <code>HasIndex(p =&gt; p.SessionizeCode).HasFilter(&quot;[SessionizeCode] IS NOT NULL&quot;)</code>,
+          <strong>filtered but not unique</strong> (it indexes only events that have a Sessionize code, accelerating
+          import lookups, without forbidding two events from sharing a code or both being null).
+          <code>LastSessionizeRefreshOn</code>/<code>LastSessionizeRefreshBy</code> are optional audit-style columns for the
+          Sessionize sync.</p>
+          <p><strong><code>SessionConfiguration</code></strong> (line 12) is the busiest entity config. <code>Title</code> is required; <code>Description</code>,
+          <code>StartsAt</code>, <code>EndsAt</code>, <code>Status</code> (max <code>SessionInvariants.StatusMaxLength</code>), and the URL/accessibility/
+          resource fields are all optional. Four booleans (<code>IsInformed</code>, <code>IsConfirmed</code>, <code>IsServiceSession</code>,
+          <code>IsPlenumSession</code>) are required. <code>builder.Ignore(p =&gt; p.Duration)</code> (line 67) keeps the computed
+          <code>Duration</code> property out of the schema. Two relationships: a required FK to <code>Event</code> declared with
+          <code>WithMany()</code> (no inverse navigation collection on <code>Event</code>, lines 72-75) plus a filtered index on
+          <code>EventId</code> (lines 77-78), and an <strong>optional</strong> FK to <code>Room</code> configured with
+          <code>.OnDelete(DeleteBehavior.Restrict)</code> (lines 83-87) so deleting a room cannot cascade-orphan the
+          sessions scheduled in it. (<code>Status</code> is stored as a plain nullable string with a max length, it is
+          <em>not</em> an enum-to-string <code>HasConversion</code>, so adding a status value needs no migration anyway.)</p>
+          <p><strong><code>SessionAiScoreConfiguration</code></strong> (line 11) persists the Anthropic-generated session scoring. Seven
+          score properties (<code>OverallScore</code>, <code>TopicRelevanceScore</code>, <code>DescriptionQualityScore</code>, <code>NoveltyScore</code>,
+          <code>ActionableTakeawaysScore</code>, <code>DepthOrInsightQualityScore</code>, <code>CredibilityExperienceScore</code>) each use
+          <code>HasPrecision(3, 1)</code>, a <code>decimal(3,1)</code>, i.e. a 0.0–99.9 column sized for a one-decimal 0–10 rating
+          (lines 22-48). <code>Reasoning</code> is capped at 4000 chars and <code>ModelUsed</code> at 100. The
+          <code>HasIndex(p =&gt; p.SessionId).IsUnique().HasFilter(&quot;[IsDeleted] = 0&quot;)</code> (lines 59-61) enforces <strong>one live
+          AI score per session</strong>. <code>[Rubric §13, Observability &amp; Operability]</code> (assesses recording the <em>origin</em>
+          of derived data): persisting <code>ModelUsed</code> and free-text <code>Reasoning</code> alongside the numeric scores keeps
+          the AI judgement auditable and reproducible, you can tell which model produced a given score and why.</p>
+          <p><strong><code>SpeakerConfiguration</code></strong> (line 12) carries the only value-object mapping in the set. The <code>Email</code>
+          property (lines 42-47) uses
+          <code>HasConversion(e =&gt; e == null ? null : e.Value, v =&gt; v == null ? null : Email.Create(v).Value)</code> to
+          round-trip the <a href="group-02-domain-building-blocks.html#email"><code>Email</code></a> value object to/from a nullable
+          <code>string</code> column (speaker email is optional). The unique index on <code>LinkedUserId</code>
+          (<code>IsUnique().HasFilter(&quot;[LinkedUserId] IS NOT NULL&quot;)</code>, lines 65-67) enforces the 1:1 User↔Speaker link
+          only among speakers that <em>have</em> a linked user, leaving unlinked speakers unconstrained.
+          <code>builder.Ignore(p =&gt; p.FullName)</code> (line 70) drops the computed <code>FullName</code> from the schema.</p>
+          <p><strong>The join-entity configs</strong> (<code>EventSpeaker</code>, <code>SessionSpeaker</code>, <code>SpeakerCategoryItem</code>,
+          <code>SessionCategoryItem</code>) are structurally identical: both FK scalar columns required, a required <code>HasOne</code>
+          relationship to the <em>owning</em> aggregate (the one whose collection navigation they belong to), and a
+          <strong>soft-delete-aware composite unique index</strong> on the two FKs. <code>EventQuestionAnswer</code>,
+          <code>SessionQuestionAnswer</code>, and <code>SpeakerQuestionAnswer</code> follow the same FK pattern but carry a required
+          <code>AnswerValue</code> string column instead of a second association; only <code>EventQuestionAnswer</code> adds a filtered
+          lookup index on its parent FK.</p>
+          <p><strong>Why they&#39;re built this way</strong>: confining all EF mapping to small, single-responsibility
+          configuration classes in Infrastructure keeps the domain entities pure POCOs (Clean Architecture
+          dependency rule) and lets Scrutor auto-discover every <code>IEntityTypeConfiguration</code> by assembly scan, so
+          adding an entity is &quot;add the config class&quot; with no central registration edit. Driving every length
+          from the shared invariants constant prevents schema/validator drift.</p>
+          <p><strong>Where they&#39;re used</strong>: discovered and applied by the Conference module&#39;s <code>DbContext</code>
+          (<code>ModuleApplicationDbContext</code> → the concrete <code>SQLServerDbContext</code>) when EF builds the model; the
+          per-module migrations project (<code>MMCA.ADC.Migrations.SqlServer.Conference</code>) snapshots the resulting
+          schema. Cross-module FKs (e.g. <code>UserSessionBookmark.SessionId → Session</code>) are deliberately <strong>not</strong>
+          configured here, that would create a cross-module Infrastructure→Domain coupling, and instead degrade
+          to scalar columns under the database-per-service model (see <span class="doc-deadlink" title="Reference outside the published set">ADR-006</span>).</p>
+          <ul>
+          <li><strong>Caveats / not-in-source</strong>: <code>SessionAiScore</code> persistence exists, but whether AI scoring is run in
+          production at all is a runtime/config concern not visible in these configs (see the Anthropic scoring
+          service and feature gating elsewhere). The configs only define the table that <em>would</em> hold scores.</li>
+          </ul>
+          <h3 id="conferencemoduledbseeder">ConferenceModuleDbSeeder</h3>
+          <blockquote>
+          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure.Persistence.DbContexts.Seeding</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:22</code> · Level 8 · class</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the Conference module&#39;s idempotent database seeder. It always seeds the default
+          conference event and the standard feedback questions, and <em>optionally</em> seeds sample browse data
+          (speakers + sessions) when an <code>includeSampleData</code> flag is set. It derives from the framework&#39;s
+          <a href="group-07-persistence-ef-core.html#dbseeder"><code>DbSeeder</code></a> base.</li>
+          <li><strong>Depends on</strong>: <a href="group-07-persistence-ef-core.html#iunitofwork"><code>IUnitOfWork</code></a> (ctor); the domain
+          factories/repositories for <a href="group-17-conference-domain.html#event"><code>Event</code></a>,
+          <a href="group-17-conference-domain.html#question"><code>Question</code></a>,
+          <a href="group-17-conference-domain.html#speaker"><code>Speaker</code></a>, and
+          <a href="group-17-conference-domain.html#session"><code>Session</code></a>; the invariants constants
+          (<a href="group-17-conference-domain.html#questioninvariants"><code>QuestionInvariants</code></a><code>.ManualIdRangeStart</code>,
+          <a href="group-17-conference-domain.html#sessioninvariants"><code>SessionInvariants</code></a><code>.ManualIdRangeStart</code>); BCL
+          (<code>DateOnly</code>, <code>DateTime</code>).</li>
+          <li><strong>Concept reinforced, idempotent, environment-gated seeding through the domain factories.</strong>
+          <code>[Rubric §17, DevOps &amp; Deployment]</code> (assesses repeatable, safe-to-re-run database initialization)
+          and <code>[Rubric §14, Testability]</code> (deterministic fixtures the E2E suite can rely on). Every seed
+          method calls <code>repository.ExistsAsync(...)</code> before inserting (lines 45-50 for the event, 77-82 for the
+          questions, 134-139 per speaker, 193-201 per session), so re-running on an already-seeded database is a
+          no-op. Crucially, seed rows go through the same <code>Event.Create</code> / <code>Question.Create</code> / <code>Speaker.Create</code>
+          / <code>Session.Create</code> factory methods the handlers use (each returns a <code>Result&lt;T&gt;</code> that is checked for
+          <code>IsFailure</code> before <code>AddAsync</code>), so seeded data satisfies the identical domain invariants as
+          user-created data, there is no &quot;raw insert&quot; back door.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><strong>Constructor</strong> (line 22): primary constructor <code>(IUnitOfWork unitOfWork, bool includeSampleData = false)</code>;
+          <code>unitOfWork</code> is null-guarded (line 24), <code>includeSampleData</code> defaults to <code>false</code> (production-safe).</li>
+          <li><strong><code>SeedAsync</code></strong> (lines 28-38): awaits <code>SeedEventAsync</code> then <code>SeedQuestionsAsync</code> unconditionally;
+          only if <code>_includeSampleData</code> does it then run <code>SeedSpeakersAsync</code> and <code>SeedSessionsAsync</code>. This is
+          the <strong>environment gate</strong>, the real event + feedback questions are always present, sample
+          browse rows only in dev/CI.</li>
+          <li><strong><code>SeedEventAsync</code></strong> (lines 41-71): if no event named &quot;Atlanta Cloud + AI Conference&quot; exists,
+          builds it via <code>Event.Create(...)</code> (single-day 2026-05-30, <code>America/New_York</code>, Sessionize code
+          <code>z1ecmzux</code>, FCS Innovation Academy venue), calls <code>.Publish()</code> on the result (line 67) so it is
+          immediately public, then <code>AddAsync</code> + <code>SaveChangesAsync</code>. The hard-coded venue map URL carries a
+          justified <code>S1075</code> suppression (line 40), <code>[Rubric §15, Best Practices]</code> (suppressions are scoped
+          and explained, not blanket-disabled).</li>
+          <li><strong><code>SeedQuestionsAsync</code></strong> (lines 73-118): seeds ten standard feedback questions, six Session-scoped
+          (five <code>Rating</code> + one <code>Text</code> <code>Comments</code>) and four Event-scoped, all with <code>questionSource: &quot;User&quot;</code>.
+          IDs are explicitly assigned from <code>QuestionInvariants.ManualIdRangeStart</code> upward (line 98), reserving
+          a manual ID band so they never collide with Sessionize-imported or organizer-created questions.</li>
+          <li><strong><code>SeedSpeakersAsync</code> / <code>SeedSessionsAsync</code></strong> (lines 120-230, sample-only): seed two sample speakers
+          (Ada Lovelace, Alan Turing) and two sample sessions, each existence-checked individually. Sessions
+          are assigned explicit IDs from <code>SessionInvariants.ManualIdRangeStart</code> (lines 184-185), the comment
+          (lines 178-181) explains the Session int PK <em>is</em> the Sessionize id, so sample sessions take IDs at
+          the top of a reserved range above any real Sessionize id to avoid collision.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: seeding through the domain factories keeps seed data valid by
+          construction; the <code>includeSampleData</code> flag (default <code>false</code>) keeps test/browse fixtures out of
+          production while guaranteeing the public-browse E2E tests (<code>PublicBrowseTests.PublicSessionList_*</code> /
+          <code>PublicSpeakerList_*</code>, cited in the remarks, lines 17-20) always have at least one session and
+          speaker row in dev/CI.</li>
+          <li><strong>Where it&#39;s used</strong>: instantiated and run by <code>ConferenceModuleSeeder</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/ConferenceModuleSeeder.cs:26-29</code>), which
+          reads <code>Seeding:IncludeSampleConferenceData</code> from configuration, resolves an <code>IUnitOfWork</code>, constructs
+          <code>new ConferenceModuleDbSeeder(unitOfWork, includeSampleData)</code>, and calls <code>SeedAsync</code>. That module
+          seeder is invoked by the framework&#39;s database-initialization path after schema migration. The
+          <code>IncludeSampleConferenceData</code> flag is set only by the local Aspire AppHost and the E2E CI workflow;
+          production leaves it unset.</li>
+          <li><strong>Caveats / not-in-source</strong>: the seeder itself does not read configuration; the
+          <code>includeSampleData</code> boolean is decided by the caller (<code>ConferenceModuleSeeder</code>, API layer). The exact
+          step that calls <code>ConferenceModuleSeeder.SeedAsync</code> (database-initialization extension) lives outside
+          this file and is covered in the persistence/module chapters.</li>
+          </ul>
+          <hr>
+          <p><a href="group-18-conference-application.html">⬅ ADC Conference - Application &amp; Use Cases</a>  •  <a href="index.html">Index</a>  •  <a href="group-20-conference-api-grpc.html">ADC Conference - API, gRPC Contracts &amp; Service Host ➡</a></p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

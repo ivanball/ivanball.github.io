@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADR-018: Polyglot Persistence (Multiple Storage Engines Behind One Model) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted. The framework plumbing is complete, covered by unit and integration tests (DataSourceResolverTests, CrossDataSourceDegradeConventionTests,…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/018-polyglot-persistence.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ADR-018: Polyglot Persistence (Multiple Storage Engines Behind One Model)">
+  <meta property="og:description" content="Accepted. The framework plumbing is complete, covered by unit and integration tests (DataSourceResolverTests, CrossDataSourceDegradeConventionTests,…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/018-polyglot-persistence.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 45 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html" aria-current="page">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-018-polyglot-persistence-multiple-storage-engines-behind-one-model">ADR-018: Polyglot Persistence (Multiple Storage Engines Behind One Model)</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted. The framework plumbing is complete, covered by unit and integration tests
+          (<code>DataSourceResolverTests</code>, <code>CrossDataSourceDegradeConventionTests</code>, <code>EntityTypeConfigurationTests</code>,
+          <code>CosmosConfigurationPortabilityTests</code>, <code>MultiSourceSqliteIntegrationTests</code>, and others), and shipped to
+          production (the engine-agnostic plumbing released in Common v1.79.0; see <code>FACTS.md</code> for the current
+          framework version). No production entity routes to a non-SQL-Server engine today. An end-to-end
+          trial (ADC&#39;s Conference <code>Session</code> to Cosmos DB and <code>Room</code> to SQLite, with its child entities) was built
+          and tested locally, then deliberately reverted to all-SQL-Server while every framework seam was kept.
+          Moving an aggregate to another engine later is a config-base-class change plus connection strings (and
+          one AppHost helper line), not a rewrite. This ADR records the decision and the seam, because the
+          machinery is load-bearing and already in production.</p>
+          <h2 id="context">Context</h2>
+          <p>ADR-006 (database-per-service) splits storage along the <strong>Name</strong> axis: several physically separate
+          databases, all on the same engine (SQL Server), one per service. A second, orthogonal axis is the
+          storage <strong>Engine</strong> itself. Not every aggregate fits a relational store equally well:</p>
+          <ul>
+          <li>High-volume public read models (for example the conference&#39;s published-session surface) suit a
+          document store with cheap horizontal reads.</li>
+          <li>Transactional modules (Identity, Sales) want relational integrity and JOINs.</li>
+          <li>Small, self-contained, or edge/offline data suits an embedded file database.</li>
+          </ul>
+          <p>Putting every aggregate on SQL Server is a default, not a decision. We wanted the engine to be a
+          <strong>per-aggregate choice driven by access pattern</strong>, without that choice leaking into domain or
+          application code, and without rewriting an entity to move it between engines.</p>
+          <p>The <code>DataSourceKey(Engine, Name)</code> pair already present for ADR-006 carries an <code>Engine</code> component, so
+          routing by engine was a natural extension of the same resolver, registry, and context factory rather
+          than a separate subsystem.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Support three storage engines behind one entity model and one set of repository abstractions, selected
+          per entity configuration.</p>
+          <ol>
+          <li><strong><code>DataSource</code> engine enum:</strong> <code>SQLServer</code> (full relational JOINs), <code>CosmosDB</code> (document store, no
+          cross-container JOINs), <code>Sqlite</code> (JOINs within one file). <code>DataSourceKey(Engine, Name)</code> identifies a
+          physical source: the <strong>Name</strong> axis is ADR-006, the <strong>Engine</strong> axis is this ADR.</li>
+          <li><strong>Engine is a one-line declaration on the entity&#39;s configuration.</strong> A configuration derives from an
+          engine shim base (<code>EntityTypeConfigurationSQLServer</code> / <code>EntityTypeConfigurationCosmos</code> /
+          <code>EntityTypeConfigurationSqlite</code>), or annotates <code>[UseDataSource(DataSource.X)]</code> directly. The
+          engine-aware <code>EntityTypeConfiguration&lt;TEntity, TId&gt;</code> reads that attribute and applies the matching
+          mapping (table + schema for SQL Server, table for SQLite, container + partition key for Cosmos) plus
+          the right key generation (server identity, vs. client-side <code>CosmosIntIdValueGenerator</code>, vs. never).
+          The configuration <strong>body is portable</strong>: moving an entity between engines is a single attribute
+          change with no body edits.</li>
+          <li><strong>One concrete context per engine, one instance per database.</strong> <code>SQLServerDbContext</code>,
+          <code>SqliteDbContext</code>, and <code>CosmosDbContext</code> are sealed contexts over the abstract <code>ApplicationDbContext</code>.
+          Combined with ADR-006&#39;s &quot;one instance per <code>DataSourceKey</code>&quot;, a host materializes one context instance
+          per physical (engine, name) source.</li>
+          <li><strong>Configuration drives routing.</strong> <code>DataSourceResolver</code> builds a per-engine logical-to-physical map
+          from the engine-specific connection strings (<code>SQLServerConnectionString</code> / <code>CosmosConnectionString</code> /
+          <code>SqliteConnectionString</code>, plus <code>CosmosDatabaseName</code> and per-source <code>SQLServerMigrationsAssembly</code>).
+          Logical names with no entry for an engine collapse onto that engine&#39;s <code>Default</code>; engines never
+          collapse into each other. <code>EntityDataSourceRegistry</code> (and the <code>DataSourceService</code> facade) eagerly map
+          every entity to its physical source up front, so routing never depends on a model already being built.</li>
+          <li><strong>Cross-engine relationships auto-degrade.</strong> <code>CrossDataSourceDegradeConvention</code> removes FK constraints
+          and navigations whose ends live in different physical sources (which now includes different engines);
+          scalar FK columns plus a compensating index survive. Runtime joins flow through <code>INavigationPopulator</code>
+          (ADR-002); cross-source consistency flows through the outbox (ADR-003).</li>
+          <li><strong>Cosmos specifics.</strong> All of a module&#39;s entities share one container (so intra-module relationships
+          and the navigation populators work), the entity Id is the partition key, Ids are generated client-side
+          (<code>CosmosIntIdValueGenerator</code>, since a document store has no server identity), and relational-only
+          constructs (indexes) are stripped at model-build time.</li>
+          </ol>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Right store per access pattern, as a configuration decision.</strong> The engine becomes an attribute on a
+          configuration class, not a rewrite. The same domain entity, application handler, and repository code
+          run unchanged whichever engine backs the aggregate.</li>
+          <li><strong>One mental model, one set of seams.</strong> Polyglot persistence reuses the exact resolver, registry,
+          context-factory, and degrade-convention machinery that database-per-service already needed, so there
+          is no parallel data layer to maintain.</li>
+          <li><strong>Portability lowers the cost of being wrong.</strong> Because the configuration body is engine-agnostic, an
+          aggregate that turns out to be a poor fit for its engine can be moved with an attribute change plus a
+          data migration, not a code rewrite.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>No cross-engine JOINs, FKs, or transactions.</strong> This is the ADR-006 cost made sharper: across engines
+          it is a hard limit, not a deployment choice. A query spanning engines (for example a public-session
+          read that needs published-event Ids from a relational source) must be split into per-engine steps
+          rather than one LINQ query, and consistency across engines is eventual via the outbox. The
+          <code>CrossSourceSpecification</code> helper makes that split engine-portable (resolve principal keys, then filter
+          by <code>FK IN (keys)</code> with no navigation), and the <code>SpecificationsDoNotNavigateToOtherEntities</code> fitness
+          rule (the <code>specifications</code> category in ADR-015) fails the build if a specification silently embeds a
+          cross-engine navigation.</li>
+          <li><strong>Each engine carries its own operational model.</strong> Separate EF provider, separate migration story
+          (Cosmos has no relational migrations), separate backup/restore and cost profile. Adding an engine to a
+          deployment is a real operational commitment, not just a connection string.</li>
+          <li><strong>Cosmos constraints leak into modeling.</strong> Container-per-module, Id-as-partition-key, and client-side
+          Id generation are not the relational defaults; an aggregate moved to Cosmos must tolerate them.</li>
+          <li><strong>Latent today.</strong> The plumbing is complete, tested, and in production, but no production entity uses a
+          non-SQL engine, so the cross-engine paths (degrade across engines, the <code>CrossSourceSpecification</code>
+          helper, Cosmos client-side Id generation) are proven by tests and a reverted local trial rather than by
+          production load until the first migration ships.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p>ADR-006 (database-per-service: the <strong>Name</strong> axis this ADR&#39;s <strong>Engine</strong> axis is orthogonal to; they share
+          <code>DataSourceKey</code>), ADR-002 (navigation populators bridge the relationships the degrade convention strips
+          across sources), ADR-003 (the outbox is the cross-source, and now cross-engine, consistency mechanism).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/018-polyglot-persistence.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

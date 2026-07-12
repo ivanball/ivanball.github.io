@@ -1,0 +1,17 @@
+{
+  "name": "mmca-website-docs-builder",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Renders the MMCA ADRs and Onboarding guide into static HTML pages for the site. Run: npm install && npm run build",
+  "scripts": {
+    "build": "node build-docs.mjs"
+  },
+  "dependencies": {
+    "marked": "^15.0.0",
+    "marked-gfm-heading-id": "^4.1.0"
+  },
+  "devDependencies": {
+    "mermaid": "^11.0.0"
+  }
+}

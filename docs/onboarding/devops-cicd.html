@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CI/CD and Operations · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="This chapter walks the GitHub Actions workflows that govern MMCA, from the framework&#39;s continuous integration and lockstep NuGet release in…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/devops-cicd.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="CI/CD and Operations">
+  <meta property="og:description" content="This chapter walks the GitHub Actions workflows that govern MMCA, from the framework&#39;s continuous integration and lockstep NuGet release in…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/devops-cicd.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/onboarding/index.html">Onboarding Guide</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">CI/CD and Operations</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>Guide contents</summary>
+        <nav class="doc-nav" aria-label="Onboarding Guide">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="00-dependency-manifest.html">Phase 1: Dependency Manifest &amp; Leveling</a></li>
+        <li><a href="00-group-taxonomy.html">Phase 1b - Functional Group Taxonomy</a></li>
+        <li><a href="00-inventory.html">Phase 0: Type Inventory</a></li>
+        <li><a href="00-primer.html">Primer, the concepts, stack, and conventions you need first</a></li>
+        <li><a href="group-01-result-error-handling.html">1. Result &amp; Error Handling</a></li>
+        <li><a href="group-02-domain-building-blocks.html">2. Domain Building Blocks (Entities, Value Objects, Aggregates)</a></li>
+        <li><a href="group-03-querying-specifications.html">3. Querying: Specifications, Filtering &amp; the Entity Query Service</a></li>
+        <li><a href="group-04-events-outbox.html">4. Domain &amp; Integration Events + Outbox Dual-Dispatch</a></li>
+        <li><a href="group-05-cqrs-pipeline.html">5. CQRS: Commands, Queries &amp; the Decorator Pipeline</a></li>
+        <li><a href="group-06-validation.html">6. Validation</a></li>
+        <li><a href="group-07-persistence-ef-core.html">7. Persistence &amp; EF Core</a></li>
+        <li><a href="group-08-auth.html">8. Authentication &amp; Authorization</a></li>
+        <li><a href="group-09-caching.html">9. Caching</a></li>
+        <li><a href="group-10-notifications.html">10. Notifications (Push + In-App Inbox + Email)</a></li>
+        <li><a href="group-11-navigation-populators.html">11. Navigation Metadata &amp; Populators (EF-decoupled eager loading)</a></li>
+        <li><a href="group-12-api-hosting-mapping.html">12. API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</a></li>
+        <li><a href="group-13-grpc-contracts.html">13. gRPC &amp; Inter-Service Contracts</a></li>
+        <li><a href="group-14-module-system-composition.html">14. Module System, Composition &amp; Configuration</a></li>
+        <li><a href="group-15-common-ui-framework.html">15. Common UI Framework (MudBlazor components, theme, base pages)</a></li>
+        <li><a href="group-16-aspire-orchestration.html">16. Aspire Orchestration &amp; Service Defaults</a></li>
+        <li><a href="group-17-conference-domain.html">17. ADC Conference - Domain Model &amp; Module Contracts</a></li>
+        <li><a href="group-18-conference-application.html">18. ADC Conference - Application &amp; Use Cases</a></li>
+        <li><a href="group-19-conference-infrastructure.html">19. ADC Conference - Infrastructure &amp; Persistence</a></li>
+        <li><a href="group-20-conference-api-grpc.html">20. ADC Conference - API, gRPC Contracts &amp; Service Host</a></li>
+        <li><a href="group-21-conference-ui.html">21. ADC Conference - UI</a></li>
+        <li><a href="group-22-engagement-module.html">22. ADC Engagement Module (Session Bookmarks)</a></li>
+        <li><a href="group-23-engagement-live-layer.html">23. ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></li>
+        <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
+        <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
+        <li><a href="group-26-testing-infrastructure.html">26. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
+        <li><a href="devops-cicd.html" aria-current="page">CI/CD and Operations</a></li>
+        <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
+        <li><a href="devops-runbooks.html">Operational Scripts &amp; Runbooks</a></li>
+        <li><a href="devops-testing.html">Testing Architecture &amp; Solution Composition</a></li>
+        <li><a href="99-coverage-audit.html">Phase 4, Coverage Audit</a></li>
+        <li><a href="CONCEPT-MAPS.html">MMCA Concept &amp; Pattern Maps</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Onboarding guide</p>
+          <h1 id="cicd-and-operations">CI/CD and Operations</h1>
+          <p>This chapter walks the GitHub Actions workflows that govern MMCA, from the framework&#39;s continuous
+          integration and lockstep NuGet release in <code>MMCA.Common</code>, through the ADC application&#39;s build/test/deploy
+          pipeline, end-to-end Playwright testing, cost-guard automation, performance load testing, and the one-time
+          data-migration cutover that enacted the database-per-service architecture (ADR-006). (A seventh ADC
+          workflow, <code>dr-drill.yml</code>, is summarized in the cross-workflow table at the end rather than given its own
+          section.) For each workflow you
+          will learn the triggers, the job/step sequence with file-and-line citations, and, critically, <em>why</em> each
+          gate exists and what would break without it. Rubric categories are tagged inline so you can connect each
+          pipeline decision to its architecture-quality axis. Cross-links to the primer and other tier chapters are
+          included throughout.</p>
+          <hr>
+          <h2 id="mmcacommon-ciyml">MMCA.Common, <code>ci.yml</code></h2>
+          <p><strong>File:</strong> <code>MMCA.Common/.github/workflows/ci.yml</code></p>
+          <h3 id="what-it-is">What it is</h3>
+          <p>The continuous-integration workflow for the MMCA.Common framework. Because the thirteen packages are
+          consumed by every downstream application, a regression here propagates to both <code>MMCA.ADC</code> and
+          <code>MMCA.Store</code>. The workflow runs three jobs: a fast <code>build-and-test</code> covering unit and architecture
+          tests (with coverage collection), a slower <code>ui-e2e</code> cross-browser matrix for real-browser accessibility
+          and render-smoke testing, and a <code>coverage</code> job that merges the coverage tiers and enforces a coverage
+          floor.</p>
+          <p>[Rubric §17, DevOps &amp; Deployment] assesses whether CI/CD is automated, gates are meaningful, and
+          deployments are reproducible. This workflow embodies §17 as the automated gate that every MMCA.Common
+          change must pass before it can influence downstream consumers.</p>
+          <h3 id="triggers">Triggers</h3>
+          <pre class="doc-pre"><code class="language-yaml"># ci.yml:3-7
+          on:
+            pull_request:
+              branches: [main]
+            push:
+              branches: [main]</code></pre>
+          <p>Every push to <code>main</code> and every pull-request targeting <code>main</code> runs both jobs. There is no manual trigger,
+          the gate is always-on.</p>
+          <pre class="doc-pre"><code class="language-yaml"># ci.yml:9-10
+          env:
+            FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true</code></pre>
+          <p>This env var forces GitHub&#39;s bundled JavaScript actions to use the Node 24 runtime, avoiding deprecation
+          warnings that would surface as build noise under <code>TreatWarningsAsErrors</code>-minded practice.</p>
+          <h3 id="job-build-and-test">Job: <code>build-and-test</code></h3>
+          <p><strong>Runs on:</strong> <code>ubuntu-latest</code> (<code>ci.yml:14</code>). The Ubuntu runner matters: the Linux file system is
+          case-sensitive, so path-casing bugs that Windows masks are caught in CI. This is a deliberate choice
+          documented in <code>MMCA.Common/CLAUDE.md</code> (&quot;CI runs on Ubuntu, file paths are case-sensitive&quot;).</p>
+          <p><strong>Step 1, Checkout with full history</strong> (<code>ci.yml:16-18</code>):</p>
+          <pre class="doc-pre"><code class="language-yaml">- uses: actions/checkout@v5
+            with:
+              fetch-depth: 0 # MinVer needs full history</code></pre>
+          <p><code>fetch-depth: 0</code> fetches all tags and the complete git history. Without it, MinVer (the version-derivation
+          tool) cannot walk back to find the nearest <code>vX.Y.Z</code> tag and would produce an unstable pre-release version
+          string. Shallow clones (the GitHub default of depth 1) silently break reproducible versioning.</p>
+          <p><strong>Step 2, .NET 10 setup</strong> (<code>ci.yml:20-22</code>): <code>actions/setup-dotnet@v5</code> pinned to <code>10.0.x</code> ensures the
+          runner matches the <code>&lt;TargetFramework&gt;net10.0&lt;/TargetFramework&gt;</code> in every project.</p>
+          <p><strong>Step 3, Restore</strong> (<code>ci.yml:24-25</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">dotnet restore MMCA.Common.slnx</code></pre>
+          <p>MMCA.Common uses NuGet lock files (<code>RestorePackagesWithLockFile</code>) and pins <code>packageSourceMapping</code> to
+          nuget.org only, no <code>GITHUB_TOKEN</code> is needed to restore. This is explicitly documented in
+          <code>MMCA.Common/CLAUDE.md</code> (&quot;MMCA.Common builds/tests locally with NO token&quot;). The lock file makes the
+          restore reproducible: the exact dependency graph is committed and any unexpected transitive upgrade fails
+          the restore.</p>
+          <p>[Rubric §32, Dependency &amp; Supply-Chain] assesses whether package sources are pinned, audited, and
+          supply-chain risks are visible. The pinned source mapping plus committed lock files are the §32
+          implementation: a compromised or mutated transitive package cannot silently enter the build.</p>
+          <p><strong>Step 4, Build in Release mode</strong> (<code>ci.yml:27-28</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">dotnet build MMCA.Common.slnx -c Release --no-restore</code></pre>
+          <p>Building in <code>Release</code> mode matters because the five analyzers (Meziantou, SonarAnalyzer, StyleCop,
+          Roslynator, Microsoft.VisualStudio.Threading) run at error severity. Some analyzer rules only trigger
+          in Release (e.g. certain null-forgiving suppression patterns). <code>TreatWarningsAsErrors</code> is globally
+          enabled; a single analyzer finding fails the build. The <code>--no-restore</code> flag re-uses the locked packages
+          from Step 3.</p>
+          <p>[Rubric §15, Best Practices &amp; Code Quality] (quality enforcement via analyzers at error severity) is
+          realized here: the build <em>is</em> the static-analysis gate.</p>
+          <p><strong>Step 5, Vulnerability audit</strong> (<code>ci.yml:30-46</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">dotnet list MMCA.Common.slnx package --vulnerable --include-transitive &gt; audit.log 2&gt;&amp;1 || true
+          cat audit.log
+          suppressed=$(grep -oE &#39;GHSA-[a-z0-9-]+&#39; Directory.Build.props | sort -u | paste -sd&#39;|&#39; -)
+          vulns=$(grep -E &#39;^[[:space:]]*&gt;[[:space:]]&#39; audit.log || true)
+          # drop any vulnerable-package row whose advisory is in the suppressed list, then fail on the rest
+          if printf &#39;%s&#39; &quot;$vulns&quot; | grep -q .; then
+            echo &quot;::error::Non-suppressed vulnerable NuGet packages detected, see log above&quot;; exit 1
+          fi</code></pre>
+          <p><code>dotnet list package --vulnerable</code> queries NuGet&#39;s vulnerability database for every direct and transitive
+          dependency and writes any hits to <code>audit.log</code>. The <code>|| true</code> prevents an API-call failure from masking the
+          parse. The gate is not a simple sentinel grep: because <code>dotnet list --vulnerable</code> ignores
+          <code>NuGetAuditSuppress</code>, the step honors the same accepted-advisory list itself, it extracts every suppressed
+          <code>GHSA-…</code> id from <code>Directory.Build.props</code> (the single source of truth), filters those advisories out of the
+          vulnerable-package rows (the <code>&gt;</code>-prefixed lines), and fails only if a <em>non-suppressed</em> vulnerable row
+          remains (e.g. the unpatched SQLite advisory is an accepted exception). If any such package is found, the
+          step fails and the workflow stops before tests run.</p>
+          <p>Why this gate exists and why it comes <em>before</em> tests: a vulnerable dependency that reaches the published
+          packages is a supply-chain liability for every downstream consumer. Catching it before the release
+          workflow runs (and before the package is published) is cheaper than retracting a published version.</p>
+          <p>[Rubric §32, Dependency &amp; Supply-Chain] is directly served by this step. [Rubric §11, Security]
+          (assesses whether secrets, auth, and dependency security are properly managed) is also touched: the
+          vulnerability audit ensures the framework&#39;s own dependencies do not carry known CVEs.</p>
+          <p><strong>Steps 6–7, Test with coverage and minimum-expected-tests guard</strong> (<code>ci.yml:48-57</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">dotnet tool install --global dotnet-coverage
+          dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
+            &quot;dotnet test --solution MMCA.Common.slnx -c Release --no-build --minimum-expected-tests 1&quot;</code></pre>
+          <p>The test run is wrapped in <code>dotnet-coverage collect</code> (installed in the step before), which emits a
+          cobertura report and returns the inner test command&#39;s exit code, so a test failure still gates the build,
+          coverage itself is report-only (the <code>coverage</code> job below consumes it). <code>--minimum-expected-tests 1</code> is a
+          Microsoft Testing Platform (MTP) flag that fails the run if any test project discovers zero tests (MTP
+          would otherwise exit with code 8, which is ambiguous). If a test project is added to the solution but all
+          its tests are accidentally skipped or the test class is empty, this guard catches it immediately. The
+          solution test suite covers the per-layer projects (<code>Shared.Tests</code>, <code>Domain.Tests</code>, <code>Application.Tests</code>,
+          <code>Infrastructure.Tests</code>, <code>API.Tests</code>, <code>Grpc.Tests</code>, <code>UI.Tests</code>, <code>Aspire.Tests</code>) plus <code>Architecture.Tests</code>
+          (NetArchTest layer/purity/extraction fitness functions, see
+          <a href="00-primer.html#architecture-enforcement-is-doubled-fitness-functions-rubric-34-3">the doubled architecture-enforcement / fitness functions</a>).</p>
+          <p>[Rubric §14, Testability &amp; Test Strategy] assesses whether tests actually run and cover the system. The
+          <code>--minimum-expected-tests 1</code> guard is a mechanical enforcement of §14: you cannot merge a test project
+          that executes no tests.</p>
+          <p>The unit-tier cobertura report is uploaded as the <code>coverage-unit</code> artifact (<code>ci.yml:59-65</code>) for the
+          <code>coverage</code> job to merge and gate on.</p>
+          <h3 id="job-ui-e2e-accessibility-and-render-smoke-gate">Job: <code>ui-e2e</code>, accessibility and render-smoke gate</h3>
+          <p>This job runs in parallel with <code>build-and-test</code>, on its own <code>ubuntu-latest</code> runner, with a 20-minute
+          timeout (<code>ci.yml:75</code>). It is a <strong>cross-browser matrix</strong> over <code>chromium</code>, <code>firefox</code>, and <code>webkit</code>
+          (<code>ci.yml:76-80</code>) with <code>fail-fast: false</code>, so one engine&#39;s failure does not cancel the others. <strong>Chromium
+          is the required merge gate; firefox and webkit are advisory</strong>, <code>continue-on-error: ${{ matrix.browser != &#39;chromium&#39; }}</code> (<code>ci.yml:83</code>) makes the non-chromium legs non-blocking until the matrix is proven reliably
+          green. Its purpose is to catch two distinct failure classes that the unit-test job cannot: WCAG 2.1 AA
+          accessibility violations in the shared Blazor UI components, and rendering regressions (a component that
+          compiles but throws during SSR).</p>
+          <p><strong>Why a separate job?</strong> The gallery host (<code>Tests/Presentation/MMCA.Common.UI.Gallery</code>) and the E2E test
+          project (<code>Tests/Presentation/MMCA.Common.UI.E2E.Tests</code>) are <strong>intentionally excluded from
+          <code>MMCA.Common.slnx</code></strong> (<code>ci.yml:67-71</code> comment). Playwright requires a full browser install
+          (several hundred megabytes) and a headed-mode-capable runner config. Including these in <code>dotnet test --solution</code> would slow every CI run for every code change, most of which do not touch the UI. Keeping the
+          E2E gate separate means the unit/arch job stays fast while accessibility remains enforced.</p>
+          <p><strong>Step-by-step:</strong></p>
+          <ol>
+          <li><p><strong>Checkout</strong> (<code>ci.yml:85-87</code>): <code>fetch-depth: 0</code> (the comment notes &quot;MinVer needs full history&quot;), same
+          as <code>build-and-test</code>.</p>
+          </li>
+          <li><p><strong>Build the E2E project directly</strong> (<code>ci.yml:93-96</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">dotnet build Tests/Presentation/MMCA.Common.UI.E2E.Tests/MMCA.Common.UI.E2E.Tests.csproj -c Release</code></pre>
+          <p>Building by csproj path, not solution, ensures only the gallery and E2E graphs are compiled (restore
+          included). The E2E project references MMCA.Common source projects directly (via project references, not
+          NuGet packages), so no <code>GITHUB_TOKEN</code> is needed.</p>
+          </li>
+          <li><p><strong>Install Playwright for the matrix browser</strong> (<code>ci.yml:98-101</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">script=$(find Tests/Presentation/MMCA.Common.UI.E2E.Tests/bin/Release -name playwright.ps1 | head -1)
+          pwsh &quot;$script&quot; install --with-deps ${{ matrix.browser }}</code></pre>
+          <p>The <code>playwright.ps1</code> script is emitted into the build output by the Playwright MSBuild integration.
+          <code>find</code> locates it dynamically so the step does not hard-code a .NET version suffix in the path.
+          <code>--with-deps</code> installs the OS-level dependencies (font packages, shared libs) the engine needs and that
+          Ubuntu lacks by default. The engine is whichever matrix leg this run is (<code>chromium</code> / <code>firefox</code> /
+          <code>webkit</code>).</p>
+          </li>
+          <li><p><strong>Run the E2E suite</strong> (<code>ci.yml:103-119</code>): the chromium leg installs <code>dotnet-coverage</code> (<code>ci.yml:103-105</code>)
+          and wraps the run in <code>dotnet-coverage collect</code>; the firefox/webkit legs run the same command plain
+          (<code>eval &quot;$CMD&quot;</code>). The inner command is:</p>
+          <pre class="doc-pre"><code class="language-yaml">env:
+            E2E_HEADLESS: &quot;true&quot;
+            E2E_BROWSER: ${{ matrix.browser }}
+          run: dotnet test --project Tests/Presentation/MMCA.Common.UI.E2E.Tests/MMCA.Common.UI.E2E.Tests.csproj -c Release --no-build -- --minimum-expected-tests 1</code></pre>
+          <p><code>E2E_HEADLESS: true</code> runs the browser without a display server (no Xvfb needed). <code>E2E_BROWSER</code> selects
+          the engine; <code>MMCA.Common.Testing.E2E</code>&#39;s <code>PlaywrightFixture</code> reads this env var. The <code>-- --minimum- expected-tests 1</code> suffix is the MTP filter separator, the same guard as in <code>build-and-test</code>.</p>
+          <p>The suite self-hosts the gallery (<code>MMCA.Common.UI.Gallery</code>) in-process, then scans the Login and
+          Register pages plus a primitives showcase with <strong>axe-core</strong> (via <code>Deque.AxeCore.Playwright</code>) at
+          WCAG 2.1 AA conformance level. Any failing violation causes a test failure, which fails the job.</p>
+          <p>[Rubric §21, Accessibility (a11y)] (assesses whether the UI is programmatically tested against a
+          standard like WCAG 2.1 AA) is enforced here. [Rubric §28, Front-End Testing &amp; Quality] (assesses
+          whether browser-level tests catch rendering and functional regressions) is also embodied: the render
+          smoke confirms that the real component tree renders without exceptions in a real browser context.</p>
+          </li>
+          <li><p><strong>Upload coverage and Playwright traces</strong>, the chromium leg uploads its E2E cobertura report as the
+          <code>coverage-e2e</code> artifact (<code>ci.yml:121-127</code>), and on failure each leg uploads its traces
+          (<code>ci.yml:129-135</code>):</p>
+          <pre class="doc-pre"><code class="language-yaml">if: failure()
+          uses: actions/upload-artifact@v4
+          with:
+            name: ui-e2e-traces-${{ matrix.browser }}
+            path: Tests/Presentation/MMCA.Common.UI.E2E.Tests/bin/Release/net10.0/playwright-traces/**
+            if-no-files-found: ignore</code></pre>
+          <p>Playwright traces (HAR + screenshots + video) are produced only on failure and uploaded as a
+          per-browser GitHub artifact. <code>if-no-files-found: ignore</code> prevents the upload step from failing if no
+          trace was recorded (e.g. the failure occurred before any browser interaction). This is a
+          developer-experience detail: without traces, diagnosing a flaky E2E failure in CI requires reproducing
+          it locally.</p>
+          <p>[Rubric §33, Developer Experience &amp; Inner Loop] (assesses whether CI gives developers actionable
+          feedback fast) is served: the trace artifact turns an opaque CI failure into a reproducible debugging
+          session.</p>
+          </li>
+          </ol>
+          <h3 id="job-coverage-merge-report-and-coverage-floor">Job: <code>coverage</code>, merge report and coverage floor</h3>
+          <p>A third job (<code>ci.yml:140-194</code>) runs after both test jobs (<code>needs: [build-and-test, ui-e2e]</code>, <code>if: always()</code>). It downloads the <code>coverage-*</code> artifacts, merges the unit/architecture/bUnit and E2E cobertura
+          tiers with ReportGenerator (<code>+MMCA.*;-*.Tests</code>, generated <code>*.generated.cs</code>/<code>*.g.cs</code> filtered out), and
+          publishes the summary to the run&#39;s Step Summary (<code>ci.yml:156-168</code>). It then <strong>enforces a coverage floor</strong>
+          (<code>ci.yml:182-193</code>) as a regression backstop: the <em>unit tier alone</em> (not the gallery-diluted merged report)
+          must stay <strong>≥ 53% line coverage</strong> with generated code excluded, gated only when <code>build-and-test</code> succeeded.
+          The comment explains the generated-code exclusion: source generators (e.g. Microsoft.AspNetCore.OpenApi)
+          emit large uncovered files that otherwise tank the number (raw 45.3% vs hand-written 61.9%), so the floor
+          sits a few points below the hand-written baseline and is meant to be ratcheted up as coverage grows.</p>
+          <p>[Rubric §14, Testability &amp; Test Strategy] is served: the coverage floor is a mechanical regression
+          backstop on top of the <code>--minimum-expected-tests 1</code> guard.</p>
+          <hr>
+          <h2 id="mmcacommon-releaseyml">MMCA.Common, <code>release.yml</code></h2>
+          <p><strong>File:</strong> <code>MMCA.Common/.github/workflows/release.yml</code></p>
+          <h3 id="what-it-is-1">What it is</h3>
+          <p>The lockstep NuGet release workflow. When a maintainer pushes a <code>vX.Y.Z</code> git tag, this workflow
+          deterministically derives the version, packs all thirteen packages, generates a CycloneDX SBOM (a hard
+          gate), and pushes to GitHub Packages. Thirteen packages. One tag. One version. Every time.</p>
+          <h3 id="why-lockstep-matters">Why lockstep matters</h3>
+          <p>MMCA.Common&#39;s thirteen packages form a coherent framework layer. A consumer&#39;s <code>Directory.Packages.props</code>
+          references all thirteen at the same version number. If they could release independently, a consumer bumping
+          only some of them would import incompatible API surfaces, for example, an <code>Application</code> handler
+          interface that references a <code>Shared</code> type that was renamed in <code>Shared</code> v2 but not yet reflected in the
+          old <code>Application</code> v1. Lockstep eliminates this class of dependency mismatch entirely. This policy is
+          <strong>ADR-016</strong> (lockstep versioning + the MassTransit-v8 pin), documented in <code>MMCA.Common/VERSIONING.md</code>
+          and in <code>MMCA.Common/CLAUDE.md</code> (&quot;consumers bump every entry together in their <code>Directory.Packages.props</code>,
+          no phased rollout&quot;), and enforced as a build gate (<code>DependencyVersionTests</code> fails the build if
+          MassTransit&#39;s major reaches 9).</p>
+          <p>[Rubric §32, Dependency &amp; Supply-Chain] is embodied: the lockstep mechanism means a consumer&#39;s
+          <code>Directory.Packages.props</code> is the single source of truth for which generation of the framework is in use,
+          with no possibility of a half-upgraded state. (The thirteen are the four core, <code>.Shared</code>, <code>.Domain</code>,
+          <code>.Application</code>, <code>.Infrastructure</code>; three presentation, <code>.API</code>, <code>.Grpc</code>, <code>.UI</code>; two Aspire, <code>.Aspire</code>,
+          <code>.Aspire.Hosting</code>; and four testing, <code>.Testing</code>, <code>.Testing.E2E</code>, <code>.Testing.UI</code>, <code>.Testing.Architecture</code>.)</p>
+          <p>[Rubric §17, DevOps &amp; Deployment] is embodied: releasing is a tag-driven, automated, reproducible action
+          with no manual steps after the tag is pushed.</p>
+          <h3 id="trigger">Trigger</h3>
+          <pre class="doc-pre"><code class="language-yaml"># release.yml:5
+          on:
+            push:
+              tags: [&#39;v*&#39;]</code></pre>
+          <p>Any tag matching <code>v*</code> (e.g. <code>v1.52.0</code>) triggers the workflow. There is no branch condition, releases
+          can be cut from any state of the repository that has a valid tag. In practice, releases are always cut
+          from <code>main</code>.</p>
+          <h3 id="job-publish">Job: <code>publish</code></h3>
+          <p><strong>Permissions</strong> (<code>release.yml:13-15</code>):</p>
+          <pre class="doc-pre"><code class="language-yaml">permissions:
+            packages: write
+            contents: read</code></pre>
+          <p><code>packages: write</code> is required to push to GitHub Packages using <code>GITHUB_TOKEN</code>. <code>contents: read</code> is the
+          minimum for checkout. No other permissions are granted, least-privilege OAuth scope for the token.</p>
+          <p>[Rubric §11, Security] (assesses secrets, OIDC, and minimal-permission token usage) is served: the job
+          token only has write access to Packages, not to repo contents, issues, or deployments.</p>
+          <p><strong>Step 1, Checkout with full history</strong> (<code>release.yml:18-20</code>): <code>fetch-depth: 0</code> for MinVer, same as CI.</p>
+          <p><strong>Step 2, .NET 10 setup</strong> (<code>release.yml:21-23</code>): same as CI.</p>
+          <p><strong>Step 3, Restore</strong> (<code>release.yml:24-25</code>): <code>dotnet restore MMCA.Common.slnx</code>, lock files apply; no
+          <code>GITHUB_TOKEN</code> needed.</p>
+          <p><strong>Step 4, Determine version from tag</strong> (<code>release.yml:28-30</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">echo &quot;VERSION=${GITHUB_REF_NAME#v}&quot; &gt;&gt; $GITHUB_OUTPUT</code></pre>
+          <p><code>GITHUB_REF_NAME</code> is the full tag name (e.g. <code>v1.52.0</code>). The <code>#v</code> parameter expansion strips the leading
+          <code>v</code>, yielding <code>1.52.0</code>. This string is then passed to the build and pack steps as an explicit version
+          override.</p>
+          <p><strong>Step 5, Build with explicit version</strong> (<code>release.yml:32-33</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">dotnet build MMCA.Common.slnx -c Release --no-restore -p:MinVerSkip=true -p:Version=${{ steps.version.outputs.VERSION }}</code></pre>
+          <p><code>-p:MinVerSkip=true</code> disables MinVer&#39;s git-tag-based version derivation and <code>-p:Version=...</code> injects the
+          tag-derived version directly. This pattern avoids a subtle race: if MinVer ran here, it would derive the
+          version from the tag, which should be the same value, but in edge cases (e.g. detached HEAD, retagged
+          commit) the two sources could diverge. Making the version explicit from the start removes the ambiguity.</p>
+          <p><strong>Step 6, Test</strong> (<code>release.yml:35-36</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">dotnet test --solution MMCA.Common.slnx -c Release --no-build</code></pre>
+          <p>Tests run again (no <code>--minimum-expected-tests 1</code> here, the release workflow is not the primary test
+          gate; CI already covered this). This is a belt-and-suspenders pass to ensure the tagged commit is green
+          before packaging.</p>
+          <p><strong>Step 7, Pack</strong> (<code>release.yml:38-39</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">dotnet pack MMCA.Common.slnx -c Release --no-build -o ./nupkgs -p:MinVerSkip=true -p:PackageVersion=${{ steps.version.outputs.VERSION }}</code></pre>
+          <p><code>dotnet pack</code> over the entire solution packs all thirteen packable projects (<code>Source/**</code>) in one command.
+          <code>-p:PackageVersion</code> sets the NuGet package version metadata. <code>-o ./nupkgs</code> collects all <code>.nupkg</code> files
+          in one directory for the push step. The thirteen packages produced here all share the same version string.</p>
+          <p><strong>Steps 8–9, SBOM generation and upload</strong> (<code>release.yml:45-57</code>):</p>
+          <pre class="doc-pre"><code class="language-yaml">- name: Generate SBOM (CycloneDX)
+            run: |
+              dotnet tool install --global CycloneDX
+              dotnet CycloneDX MMCA.Common.slnx --output ./sbom --json
+              ls -la ./sbom
+              test -n &quot;$(ls -A ./sbom 2&gt;/dev/null)&quot; || { echo &quot;::error::SBOM generation produced no output&quot;; exit 1; }
+          - name: Upload SBOM
+            uses: actions/upload-artifact@v4
+            with:
+              name: sbom
+              path: ./sbom
+              if-no-files-found: error</code></pre>
+          <p>CycloneDX generates a Software Bill of Materials, a machine-readable inventory of every dependency&#39;s
+          identity, version, and license. The SBOM is now a <strong>hard gate</strong> (the comment on <code>release.yml:42-44</code> records
+          that it &quot;was continue-on-error while the tooling was being validated in CI, now promoted to a blocking
+          step&quot;): a failed generation, an <em>empty</em> <code>./sbom</code> directory, or a missing artifact (<code>if-no-files-found: error</code>) fails the release. Every published version must ship a verifiable SBOM.</p>
+          <p>[Rubric §30, Compliance, Privacy &amp; Data Governance] (assesses whether supply-chain and licensing
+          obligations are tracked) is served: the SBOM is the machine-readable artifact that fulfills the
+          &quot;know your dependencies&quot; requirement for regulated or commercially-distributed software, and gating on it
+          guarantees no version ships without one.</p>
+          <p><strong>Step 10, Push to GitHub Packages</strong> (<code>release.yml:59-60</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">dotnet nuget push ./nupkgs/*.nupkg \
+            --source &quot;https://nuget.pkg.github.com/ivanball/index.json&quot; \
+            --api-key ${{ secrets.GITHUB_TOKEN }} \
+            --skip-duplicate</code></pre>
+          <p><code>--skip-duplicate</code> means an accidental re-push of an already-published version does not fail the
+          workflow, it silently skips duplicates. This is important because <code>dotnet nuget push ./nupkgs/*.nupkg</code>
+          expands the glob before the push, and if the thirteen packages happen to be in non-alphabetical order, a
+          partial push followed by a retry would otherwise fail on already-uploaded packages.</p>
+          <p><code>GITHUB_TOKEN</code> is automatically provided by GitHub Actions when <code>packages: write</code> is in the job
+          permissions. No external secret is needed.</p>
+          <hr>
+          <h2 id="mmcaadc-deployyml">MMCA.ADC, <code>deploy.yml</code></h2>
+          <p><strong>File:</strong> <code>MMCA.ADC/.github/workflows/deploy.yml</code></p>
+          <h3 id="what-it-is-2">What it is</h3>
+          <p>The primary CI/CD pipeline for the Atlanta Developers Conference application. It runs on every push to
+          <code>main</code>, on every pull request targeting <code>main</code>, and on manual <code>workflow_dispatch</code>. On a push to <code>main</code> (or
+          dispatch) it also deploys to Azure; on a pull request it only runs the build and test jobs as a merge gate.</p>
+          <h3 id="triggers-and-concurrency">Triggers and concurrency</h3>
+          <pre class="doc-pre"><code class="language-yaml"># deploy.yml:3-8
+          on:
+            push:
+              branches: [main]
+            pull_request:
+              branches: [main]
+            workflow_dispatch:</code></pre>
+          <pre class="doc-pre"><code class="language-yaml"># deploy.yml:23-26
+          concurrency:
+            group: prod-azure
+            cancel-in-progress: false</code></pre>
+          <p>The <code>prod-azure</code> concurrency group serializes all production Azure mutations. <code>cancel-in-progress: false</code>
+          means a second push to <code>main</code> while a deploy is in flight does not cancel the running deploy, it waits.
+          This is deliberately conservative: an in-flight deploy that gets cancelled mid-Bicep-apply or mid-
+          migration can leave the environment in a partially-updated state. The one-time <code>cutover-per-service-dbs.yml</code>
+          workflow shares the same group (<code>cutover-per-service-dbs.yml:38-39</code>) for the same reason: a standard push
+          cannot roll container-app revisions while the cutover is migrating data.</p>
+          <p>[Rubric §29, Resilience, Reliability &amp; Business Continuity] (assesses whether the system has deployment
+          patterns that protect against partial-update failures) is served by the non-cancellable concurrency
+          group: it is a mechanical guarantee that two competing mutations cannot interleave.</p>
+          <p><strong>Permissions</strong> (<code>deploy.yml:16-19</code>):</p>
+          <pre class="doc-pre"><code class="language-yaml">permissions:
+            id-token: write
+            contents: read
+            packages: read</code></pre>
+          <p><code>id-token: write</code> enables OIDC-based Azure login (no long-lived credential stored as a secret). The Azure
+          login step (<code>azure/login@v3</code>) exchanges the OIDC token for a scoped Azure access token at runtime. No
+          static client secret is ever stored in GitHub. <code>packages: read</code> is needed for <code>GITHUB_TOKEN</code>-authenticated
+          NuGet restore of the MMCA.Common packages.</p>
+          <p>[Rubric §11, Security] is embodied: OIDC federated identity eliminates the secret-rotation burden and
+          the credential-leak surface area of a static client secret. The federated credential is scoped to the
+          <code>production</code> environment, so only runs that target that environment can obtain the Azure token.</p>
+          <h3 id="job-build-and-test-1">Job: <code>build-and-test</code></h3>
+          <p><strong>Step 1, Restore</strong> (<code>deploy.yml:40-42</code>):</p>
+          <pre class="doc-pre"><code class="language-yaml">- name: Restore dependencies
+            run: dotnet restore MMCA.ADC.CI.slnf
+            env:
+              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}</code></pre>
+          <p><code>MMCA.ADC.CI.slnf</code> is the CI solution filter, it excludes the MAUI UI project (whose <code>maui-android</code>
+          workload is not on Ubuntu runners), the AppHost (Aspire orchestration), and the integration and E2E test
+          projects. The filter gives a fast, reliable build without requiring workloads beyond the standard .NET SDK.
+          <code>GITHUB_TOKEN</code> is passed as an env var so the NuGet credential provider can authenticate to GitHub
+          Packages and pull the thirteen MMCA.Common packages.</p>
+          <p><strong>Step 2, Build</strong> (<code>deploy.yml:44-45</code>): <code>dotnet build MMCA.ADC.CI.slnf --no-restore -c Release</code>, same
+          TreatWarningsAsErrors + five-analyzer enforcement as Common.</p>
+          <p><strong>Step 3, Unit and architecture tests with coverage</strong> (<code>deploy.yml:47-65</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">dotnet tool install --global dotnet-coverage
+          dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
+            &quot;dotnet test --solution MMCA.ADC.CI.slnf --no-build -c Release --minimum-expected-tests 1&quot;</code></pre>
+          <p>As in Common&#39;s CI, the run is wrapped in <code>dotnet-coverage collect</code> (it returns the inner exit code so a
+          failure still gates) and uploaded as the <code>coverage-unit</code> artifact (<code>deploy.yml:59-65</code>) for the report-only
+          <code>coverage</code> job. Same <code>--minimum-expected-tests 1</code> guard. Covers unit tests for all module layers plus
+          <code>Architecture.Tests</code> (NetArchTest fitness functions, layer flow, domain purity, module isolation).</p>
+          <p>[Rubric §14, Testability &amp; Test Strategy] is served: architecture tests enforce that the modular
+          structure is not accidentally violated by a new project reference (e.g. <code>Domain</code> referencing
+          <code>Infrastructure</code>).</p>
+          <p><strong>Step 4, EF migrations model-drift gate</strong> (<code>deploy.yml:70-83</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">for module in Identity Conference Engagement Notification; do
+            project=&quot;Source/Hosting/MMCA.ADC.Migrations.SqlServer.$module&quot;
+            dotnet ef migrations has-pending-model-changes \
+              --project &quot;$project&quot; --startup-project &quot;$project&quot; \
+              --context SQLServerDbContext --configuration Release --no-build
+          done</code></pre>
+          <p><code>dotnet ef migrations has-pending-model-changes</code> compares the EF design-time model to the committed
+          migration snapshot <strong>without connecting to a database</strong>. If a developer changes an entity configuration
+          (adds a column, renames a property) but forgets to author a new migration, this step fails the build. The
+          comment on <code>deploy.yml:70-74</code> states the rationale: &quot;a drift here means the deploy&#39;s idempotent migration
+          script would not capture the schema change.&quot;</p>
+          <p>This is one of the most important gates in the pipeline. An entity model that diverges from the migration
+          history means the production schema diverges from the application&#39;s EF model, a runtime crash on first
+          query of the changed entity. The gate catches it at build time, before any container image is pushed. It
+          is doubly important now that <code>deploy.yml</code> has <em>no</em> sqlcmd migration step: this build-time gate is the
+          guarantee that the services&#39; startup <code>Migrate()</code> always has a migration to apply for every model change.</p>
+          <p>The <code>--no-build</code> flag reuses the Release build from Step 2, so there is no rebuild overhead. <code>dotnet-ef</code>
+          is installed globally (version <code>10.0.8</code>) in the step before this one (<code>deploy.yml:67-68</code>).</p>
+          <p>[Rubric §8, Data Architecture] (assesses whether schema management is automated, versioned, and safe)
+          is directly served. [Rubric §17, DevOps &amp; Deployment] is served: the migration gate is the CI
+          enforcement of the &quot;migrations-before-code&quot; discipline.</p>
+          <h3 id="job-supply-chain">Job: <code>supply-chain</code></h3>
+          <p>This job runs in parallel with <code>build-and-test</code> on every push and PR. It is non-gating (<code>continue-on- error: true</code> on every step), it produces artifacts, not failures.</p>
+          <p><strong>What it produces</strong> (<code>deploy.yml:104-129</code>):</p>
+          <ul>
+          <li><code>supply-chain/deprecated.txt</code>, packages that NuGet marks as deprecated (i.e. the publisher has
+          flagged them as obsolete or replaced).</li>
+          <li><code>supply-chain/vulnerable.txt</code>, packages with known CVEs (same data as the <code>build-and-test</code> audit
+          in Common&#39;s CI, but here it is an artifact rather than a gate, the gate is NuGetAudit during
+          <code>dotnet restore</code> in the build step).</li>
+          <li><code>supply-chain/adc-sbom.json</code>, CycloneDX SBOM for the ADC dependency graph.</li>
+          <li><code>supply-chain/licenses.json</code>, license metadata for every transitive package (via <code>nuget-license</code>).</li>
+          </ul>
+          <p>The comment on <code>deploy.yml:85-88</code> explains the design: &quot;Non-gating (the vulnerability GATE is NuGetAudit
+          during restore in build-and-test / the Docker builds); these steps add the bill-of-materials and
+          license/deprecation reports NuGetAudit does not produce.&quot;</p>
+          <p>[Rubric §32, Dependency &amp; Supply-Chain] is served: the SBOM and license report are the artifact tier of
+          supply-chain hygiene. [Rubric §30, Compliance, Privacy &amp; Data Governance] is touched: the license report
+          is the mechanism for discovering GPL or AGPL dependencies that would create licensing obligations.</p>
+          <h3 id="job-integration-tests">Job: <code>integration-tests</code></h3>
+          <p>This job is a required dependency of <code>deploy</code> (<code>deploy.yml:244</code>):</p>
+          <pre class="doc-pre"><code class="language-yaml">needs: [build-and-test, integration-tests]</code></pre>
+          <p>It runs the per-service <code>WebApplicationFactory</code> integration tests against a real SQL Server service
+          container, covering approximately 290 tests across Identity, Conference, and Engagement. It gates every
+          production deploy.</p>
+          <p><strong>SQL Server service container</strong> (<code>deploy.yml:139-147</code>):</p>
+          <pre class="doc-pre"><code class="language-yaml">services:
+            sqlserver:
+              image: mcr.microsoft.com/mssql/server:2022-latest
+              env:
+                ACCEPT_EULA: &quot;Y&quot;
+                MSSQL_SA_PASSWORD: &quot;Adc_Integration!Test1&quot;
+                MSSQL_PID: Developer
+              ports:
+                - 1433:1433</code></pre>
+          <p>An ephemeral SQL Server Developer Edition container starts alongside the job. The password is hardcoded
+          (<code>deploy.yml:138</code>, <code>deploy.yml:144</code>) because it is a throwaway SA credential for an ephemeral container,
+          not a production secret, not stored in GitHub Secrets. The comment on <code>deploy.yml:136</code> states this
+          explicitly: &quot;Throwaway SA password, not a secret.&quot;</p>
+          <p><strong>Wait-for-SQL-Server gate</strong> (<code>deploy.yml:161-172</code>): A 30-iteration poll loop (5-second sleep each)
+          using <code>sqlcmd</code> to execute <code>SELECT 1</code>. SQL Server takes 10–20 seconds to initialize in a fresh container;
+          proceeding immediately would cause the restore or build to fail with a connection error. The loop exits
+          early on success, not after the full 150-second maximum.</p>
+          <p><strong>Integration test run</strong> (<code>deploy.yml:185-191</code>): like the unit tier, the test command is wrapped in
+          <code>dotnet-coverage collect</code> (emitting the <code>coverage.integration.cobertura.xml</code> artifact):</p>
+          <pre class="doc-pre"><code class="language-yaml">env:
+            ADC_TEST_SQL_BASE: &quot;Server=localhost,1433;User Id=sa;Password=${{ env.MSSQL_SA_PASSWORD }};TrustServerCertificate=True;Encrypt=False;&quot;
+          run: dotnet test --solution MMCA.ADC.Integration.slnf --no-build -c Release --minimum-expected-tests 1</code></pre>
+          <p>The <code>ADC_TEST_SQL_BASE</code> connection string is consumed by <code>IntegrationTestBase</code> to provision per-test
+          databases (each test gets a fresh database, reset between tests). <code>MMCA.ADC.Integration.slnf</code> is a
+          separate solution filter that includes only the integration test projects; the build step immediately
+          before (<code>deploy.yml:179-180</code>) targets this filter.</p>
+          <p>[Rubric §14, Testability &amp; Test Strategy] is served at a higher tier than the unit tests: these tests
+          exercise real EF migrations, real HTTP middleware, real domain logic through a real SQL Server engine. A
+          bug that only manifests under an actual database connection (e.g. a LINQ translation error, a migration
+          column type mismatch) is caught here before it reaches production.</p>
+          <h3 id="job-deploy">Job: <code>deploy</code></h3>
+          <p>Runs only on push to <code>main</code> or <code>workflow_dispatch</code> (never on pull requests):</p>
+          <pre class="doc-pre"><code class="language-yaml"># deploy.yml:247
+          if: github.event_name != &#39;pull_request&#39;</code></pre>
+          <p><strong>Phase 1, Azure login and foundation infrastructure</strong> (<code>deploy.yml:257-271</code>):</p>
+          <pre class="doc-pre"><code class="language-yaml">- name: Log in to Azure
+            uses: azure/login@v3
+            with:
+              client-id: ${{ secrets.AZURE_CLIENT_ID }}
+              tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+              subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          
+          - name: Deploy foundation infrastructure
+            uses: azure/arm-deploy@v2
+            with:
+              resourceGroupName: ${{ env.AZURE_RESOURCE_GROUP }}
+              template: infra/foundation.bicep
+              parameters: environmentName=${{ env.ENVIRONMENT_NAME }}</code></pre>
+          <p><code>foundation.bicep</code> provisions the two durable resources needed before container images can be pushed:
+          Azure Container Registry (ACR) and Log Analytics Workspace. These resources must exist before Docker
+          pushes can succeed, so they are deployed first in their own Bicep step. The outputs of this step
+          (<code>acrName</code>, <code>acrLoginServer</code>, <code>logAnalyticsName</code>) are consumed by every subsequent step.</p>
+          <p><strong>Phase 2, Container image builds and pushes</strong> (<code>deploy.yml:274-329</code>):</p>
+          <p>After <code>az acr login</code> (<code>deploy.yml:274-275</code>), six images are built and pushed: Gateway, UI, Conference,
+          Identity, Engagement, Notification. Each is its own step but they follow the same pattern (the four
+          back-end services live under <code>Source/Services/</code>, while the Gateway and UI Dockerfiles live under
+          <code>Source/Hosts/</code>, e.g. Gateway is <code>Source/Hosts/MMCA.ADC.Gateway/Dockerfile</code> at <code>deploy.yml:279</code> and UI is
+          <code>Source/Hosts/UI/MMCA.ADC.UI.Web/Dockerfile</code> at <code>deploy.yml:288</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">docker build -f &lt;Dockerfile path&gt; \
+            --build-arg GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
+            -t ${{ steps.foundation.outputs.acrLoginServer }}/mmca-adc-{service}:${{ github.sha }} \
+            -t ${{ steps.foundation.outputs.acrLoginServer }}/mmca-adc-{service}:latest \
+            .
+          docker push ${{ steps.foundation.outputs.acrLoginServer }}/mmca-adc-{service} --all-tags</code></pre>
+          <p><code>--build-arg GITHUB_TOKEN</code> passes the token into the Docker build context so the Dockerfile&#39;s
+          <code>dotnet restore</code> step can pull MMCA.Common packages from GitHub Packages. Images are tagged with both
+          <code>${{ github.sha }}</code> (the exact commit hash, immutable, traceable) and <code>latest</code> (for convenience in
+          manual operations). The SHA-tagged image is what the Bicep deploy uses; <code>latest</code> is a reference only.</p>
+          <p>[Rubric §17, DevOps &amp; Deployment] is served: each image is uniquely identified by the commit SHA,
+          making every deployment fully traceable to its source code.</p>
+          <p><strong>Phase 3, Deployment parameters file</strong> (<code>deploy.yml:334-447</code>):</p>
+          <p>Rather than passing <code>key=value</code> pairs inline to <code>arm-deploy</code>, the step builds a JSON parameters file
+          from scratch using <code>jq</code> (there is no committed parameters template, see the IaC chapter&#39;s note that
+          <code>infra/main.parameters.json</code> does not exist). The <code>jq --arg</code> flag properly JSON-escapes multiline values (critical for the RSA PEM keys,
+          which contain newlines). Optional parameters (RSA keys, OAuth credentials, Anthropic API key, SMTP
+          config, alert email) are conditionally appended only if their env vars are non-empty:</p>
+          <pre class="doc-pre"><code class="language-bash">if [ -n &quot;$RSA_PRIVATE_KEY&quot; ] &amp;&amp; [ -n &quot;$RSA_PUBLIC_KEY&quot; ]; then
+            jq --arg k &quot;$RSA_PRIVATE_KEY&quot; &#39;.parameters.rsaPrivateKeyPem = {&quot;value&quot;: $k}&#39; ...
+          fi</code></pre>
+          <p>This pattern means the deployment is not blocked if an optional secret has not been configured, it
+          simply omits that parameter, and the Bicep template&#39;s <code>@secure()</code> <code>param</code> falls back to its default
+          (typically an empty string, which disables the feature). For example, if <code>JWT_RSA_PRIVATE_KEY_PEM</code> is
+          not set, the Identity service falls back to HS256 signing.</p>
+          <p>There is an important SQL location note in the Bicep parameters step (<code>deploy.yml:353-358</code>): Azure SQL
+          is region-gated on the QiMata Sponsorship subscription, <code>eastus2</code> (where <code>acc-rg</code> lives) does not
+          allow <code>Microsoft.Sql</code>, so SQL Server and databases are deployed to <code>westus2</code> while Container Apps remain
+          in the RG&#39;s location. The <code>SQL_LOCATION=&quot;${SQL_LOCATION_OVERRIDE:-westus2}&quot;</code> line defaults to <code>westus2</code>
+          but honors the <code>AZURE_SQL_LOCATION</code> repo variable (passed in as <code>SQL_LOCATION_OVERRIDE</code> at <code>deploy.yml:337</code>)
+          so a different subscription or region can override it.</p>
+          <p><strong>Phase 3 (continued), Application infrastructure</strong> (<code>deploy.yml:449-455</code>):</p>
+          <pre class="doc-pre"><code class="language-yaml">- name: Deploy application infrastructure
+            id: deploy
+            uses: azure/arm-deploy@v2
+            with:
+              template: infra/main.bicep
+              parameters: /tmp/deploy-params.json</code></pre>
+          <p><code>main.bicep</code> provisions the Container Apps Environment, six Container Apps (one per service + Gateway +
+          UI), Azure Service Bus (Standard tier, with Manage rights for MassTransit topology), Azure SQL Server
+          and four per-service databases, App Insights, SLO alerts, and the monthly cost budget. (See the IaC
+          chapter for the full resource inventory, note Redis is <em>not</em> provisioned by <code>main.bicep</code>.) The
+          <code>environmentName=prod</code> parameter selects the environment-specific naming convention.</p>
+          <p><strong>Phase 4, Database migrations: there is no sqlcmd backstop</strong> (<code>deploy.yml:457-467</code>):</p>
+          <p>Phase 4 is a comment block, not a step. The deploy <strong>deliberately does not run an external <code>sqlcmd</code>
+          migration step</strong>. Each service self-applies its own migrations at startup
+          (<code>ApplicationSettings__DatabaseInitStrategy=Migrate</code>) as the <strong>sole migrator</strong>, and <code>minReplicas: 1</code>
+          guarantees exactly one replica migrates before the revision serves. The comment (<code>deploy.yml:458-467</code>)
+          records <em>why</em> the previous backstop was removed: a <code>sqlcmd</code> step here would race the container&#39;s startup
+          <code>Migrate()</code> on a fresh per-service DB, both applying the same <code>InitialCreate</code> concurrently and
+          non-atomically, leaving a table created <strong>without</strong> its <code>__EFMigrationsHistory</code> row (Msg 2714 &quot;object
+          already exists&quot; on every retry, exactly what wedged MMCA.Store&#39;s first per-service deploy). The
+          build-and-test model-drift gate still guarantees a migration exists for every model change, so removing
+          the backstop does not weaken the schema-safety story.</p>
+          <p>[Rubric §8, Data Architecture] and [Rubric §17, DevOps &amp; Deployment] are both served here: per-service,
+          single-applier, idempotent-by-construction migration is the data-architecture discipline made operational
+          without a racing dual-applier.</p>
+          <p><strong>Phase 5, Post-deploy smoke gate with automatic rollback</strong> (<code>deploy.yml:469-531</code>):</p>
+          <p>The smoke test probes three endpoints after the new revision is active:</p>
+          <pre class="doc-pre"><code class="language-bash">probe() {
+            for i in $(seq 1 12); do
+              code=$(curl -s -o /dev/null -w &quot;%{http_code}&quot; --max-time 15 &quot;$url&quot; || echo 000)
+              [ &quot;$code&quot; = &quot;200&quot; ] &amp;&amp; return 0
+              sleep 10
+            done
+            return 1
+          }
+          
+          probe &quot;https://${GATEWAY_FQDN}/health&quot;
+          probe &quot;https://${GATEWAY_FQDN}/.well-known/jwks.json&quot;
+          probe &quot;https://${UI_FQDN}/&quot;</code></pre>
+          <p>Each probe polls up to 12 times (10-second intervals, 15-second curl timeout), two minutes total per
+          endpoint. The three probes together exercise: Container Apps routing (Gateway health), cross-service
+          dependency (JWKS endpoint exercises Identity, which must have reached its database and loaded its RSA
+          keys), and the Blazor UI host.</p>
+          <p>The comment on <code>deploy.yml:470-473</code> explains why JWKS is the key probe: &quot;a backend-through-gateway path
+          (JWKS exercises Identity, this is what catches a service that deployed but can&#39;t reach its secrets/DB).&quot;</p>
+          <p>If any probe fails, the rollback path (<code>deploy.yml:518-530</code>) activates:</p>
+          <pre class="doc-pre"><code class="language-bash">for app in $APPS; do
+            prev=$(az containerapp revision list ... --query &quot;reverse(sort_by(...))[1].name&quot; ...)
+            az containerapp revision copy -g &quot;$RG&quot; -n &quot;$app&quot; --from-revision &quot;$prev&quot;
+          done
+          exit 1</code></pre>
+          <p>Every Container App is rolled back to its previous (provisioned) revision by copying it. The rollback is
+          best-effort (individual rollback failures are logged but do not prevent other apps from rolling back), and
+          the job exits with code 1 so the failure is visible in the GitHub workflow run.</p>
+          <p>There is also an informational security-headers check (<code>deploy.yml:504-511</code>, labeled TD-09) that confirms
+          the Gateway emits <code>X-Content-Type-Options: nosniff</code>. This check is explicitly non-gating (it cannot trip
+          the rollback) because a missing header is a hardening gap, not a &quot;revision not serving&quot; condition.</p>
+          <p>[Rubric §29, Resilience, Reliability &amp; Business Continuity] is directly embodied: the smoke gate with
+          automatic rollback means a broken deploy is both detected and partially self-corrected within minutes.
+          [Rubric §13, Observability &amp; Operability] (assesses whether failures surface actionable signals) is
+          served: the workflow fails loudly with the specific failing endpoint printed, and the rollback log names
+          each app and its rollback revision.</p>
+          <hr>
+          <h2 id="mmcaadc-e2eyml">MMCA.ADC, <code>e2e.yml</code></h2>
+          <p><strong>File:</strong> <code>MMCA.ADC/.github/workflows/e2e.yml</code></p>
+          <h3 id="what-it-is-3">What it is</h3>
+          <p>The full-stack Playwright E2E test workflow. It brings up the complete Aspire stack (SQL Server + Redis +
+          RabbitMQ + four services + Gateway + UI) inside the CI runner, then runs the Playwright suite against it
+          across a <code>chromium</code>/<code>firefox</code>/<code>webkit</code> matrix.</p>
+          <p>[Rubric §28, Front-End Testing &amp; Quality] (assesses whether browser-level tests cover real user
+          journeys in a production-like environment) is the primary category this workflow serves.</p>
+          <h3 id="trigger-workflow_dispatch--nightly-not-yet-a-merge-gate">Trigger, <code>workflow_dispatch</code> + nightly, not yet a merge gate</h3>
+          <pre class="doc-pre"><code class="language-yaml"># e2e.yml:26-30
+          on:
+            workflow_dispatch:
+            schedule:
+              # Nightly ~07:00 UTC so cold-start/cross-browser flakiness surfaces on a cadence, off the deploy path.
+              - cron: &quot;0 7 * * *&quot;</code></pre>
+          <p>It runs on manual dispatch <strong>and</strong> nightly (<code>cron: &quot;0 7 * * *&quot;</code>). The workflow header comment
+          (<code>e2e.yml:3-24</code>) explains that it is &quot;Still NOT a push/PR gate: bringing up SQL + Redis + RabbitMQ + 4
+          services + Gateway + UI in CI is being hardened via scheduled runs first. Once it&#39;s reliably green across
+          engines, promote it to a merge gate.&quot; This is honest operational practice: a flaky E2E gate is worse than
+          no gate because developers start ignoring it. The nightly cadence surfaces cold-start/cross-browser
+          flakiness without blocking the delivery pipeline.</p>
+          <p>The engine comes from the <strong>job matrix</strong> (<code>e2e.yml:56-57</code>), not a workflow input, <code>chromium</code> is the
+          canonical engine and <code>firefox</code>/<code>webkit</code> are advisory (<code>continue-on-error: ${{ matrix.browser != &#39;chromium&#39; }}</code>, <code>e2e.yml:59</code>). <code>E2E_BROWSER</code> is set from <code>matrix.browser</code> and consumed by
+          <code>MMCA.Common.Testing.E2E</code>&#39;s <code>PlaywrightFixture</code>.</p>
+          <h3 id="job-e2e-50-minute-timeout-cross-browser-matrix">Job: <code>e2e</code> (50-minute timeout, cross-browser matrix)</h3>
+          <p>The 50-minute timeout (<code>e2e.yml:52</code>) reflects the cumulative startup time of the Aspire stack: SQL Server
+          container initialization (~15–20s), broker startup, all four services booting and running their
+          <code>DatabaseInitStrategy=Migrate</code> initialization, the per-service readiness gate, the warm-up pass, and actual
+          test execution. The timeout must be generous enough that a slow runner does not fail a legitimate green
+          run. The matrix is <code>fail-fast: false</code> so one engine&#39;s flake does not cancel the others.</p>
+          <p><strong>Step 1, Trust the dev HTTPS certificate</strong> (<code>e2e.yml:68-69</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">dotnet dev-certs https --trust || dotnet dev-certs https</code></pre>
+          <p>The <code>--trust</code> flag only succeeds on a runner that supports certificate trust stores (Linux runners may
+          not). The <code>|| dotnet dev-certs https</code> fallback generates the certificate without trusting it. Playwright
+          probes use <code>-k</code> (skip verification) for the HTTPS UI endpoint, so the certificate does not need to be
+          trusted for the test suite, the certificate only needs to exist so the Aspire AppHost can bind to HTTPS.</p>
+          <p><strong>Step 2, Build</strong> (<code>e2e.yml:71-79</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">dotnet build Source/Hosting/MMCA.ADC.AppHost -c Release
+          dotnet build Tests/E2E/MMCA.ADC.E2E.Tests -c Release</code></pre>
+          <p>Both project graphs are built directly (not via the <code>.slnx</code>) to avoid pulling in the MAUI UI project,
+          which requires a <code>maui-android</code> workload not available on standard Ubuntu runners (<code>e2e.yml:72-74</code>
+          comment). <code>GITHUB_TOKEN</code> is passed for NuGet restore of MMCA.Common packages.</p>
+          <p><strong>Step 3, Install Playwright browsers</strong> (<code>e2e.yml:81-84</code>):
+          Same <code>find ... playwright.ps1</code> pattern as <code>MMCA.Common/ci.yml</code>&#39;s <code>ui-e2e</code> job, with the matrix browser
+          engine.</p>
+          <p><strong>Step 4, Start the Aspire stack</strong> (<code>e2e.yml:86-98</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out artifacts/jwt-priv.pem
+          openssl rsa -pubout -in artifacts/jwt-priv.pem -out artifacts/jwt-pub.pem
+          export E2E_JWT_PRIVATE_KEY_PEM=&quot;$(cat artifacts/jwt-priv.pem)&quot;
+          export E2E_JWT_PUBLIC_KEY_PEM=&quot;$(cat artifacts/jwt-pub.pem)&quot;
+          nohup dotnet run --project Source/Hosting/MMCA.ADC.AppHost -c Release --no-build \
+            &gt; artifacts/apphost.log 2&gt;&amp;1 &amp;
+          echo &quot;APPHOST_PID=$!&quot; &gt;&gt; &quot;$GITHUB_ENV&quot;
+          rm -f artifacts/jwt-priv.pem artifacts/jwt-pub.pem</code></pre>
+          <p>An ephemeral RSA keypair is generated at CI startup and exported as env vars. The AppHost forwards these
+          to the Identity service, which needs an RSA key to sign RS256 tokens. Without this, Identity would fall
+          back to HS256 (or refuse to start if configured to require RS256). The private key file is deleted
+          immediately after being read into the env var, it is never written to an artifact or log.</p>
+          <p>The AppHost runs in the background (<code>nohup ... &amp;</code>). Its PID is saved to <code>$GITHUB_ENV</code> so the &quot;Stop Aspire
+          stack&quot; step can kill it at the end. The stdout/stderr stream goes to <code>artifacts/apphost.log</code> so any
+          startup failure is visible in the uploaded artifact.</p>
+          <p>[Rubric §11, Security] is served: the ephemeral keypair is generated fresh per run (no long-lived key
+          material in secrets), and the private key file is deleted before any subsequent step runs.</p>
+          <p><strong>Step 5, Wait for the stack (per-service readiness gate)</strong> (<code>e2e.yml:100-123</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">ready() {
+            ui=$(curl -k -s -o /dev/null -w &#39;%{http_code}&#39; --max-time 10 &quot;$UI_URL/health&quot;)
+            id=$(curl -k -s -o /dev/null -w &#39;%{http_code}&#39; --max-time 10 &quot;$GATEWAY_URL/.well-known/jwks.json&quot;)
+            conf=$(curl -k -s -o /dev/null -w &#39;%{http_code}&#39; --max-time 20 &quot;$GATEWAY_URL/Events&quot;)
+            [ &quot;$ui&quot; = &quot;200&quot; ] &amp;&amp; [ &quot;$id&quot; = &quot;200&quot; ] &amp;&amp; [ &quot;$conf&quot; = &quot;200&quot; ]
+          }
+          for i in $(seq 1 90); do
+            if ready; then echo &quot;stack ready after ~${i}0s&quot;; exit 0; fi
+            sleep 10
+          done</code></pre>
+          <p>This is <strong>not</strong> just a UI-health poll: it gates on <em>every</em> service the suite depends on, each probed
+          through the Gateway on an anonymous endpoint so a 200 means the service is up <em>and</em> its EF model + SQL pool
+          are built, UI <code>/health</code> (the Blazor host), <code>/.well-known/jwks.json</code> (Identity, the login path), and
+          <code>/Events</code> (Conference, the data path). 90 iterations × 10 seconds = up to 15 minutes. A half-warm backend
+          is exactly what produced the historical login/data-page timeouts, so the suite does not start until all
+          three are green (<code>UI_URL</code>/<code>GATEWAY_URL</code> are pinned to <code>https://localhost:6002</code>/<code>6001</code> in the workflow env).</p>
+          <p><strong>Step 6, Warm up services incl. the login path</strong> (<code>e2e.yml:125-167</code>): a best-effort step (never fails
+          the job) that JITs each service&#39;s hot path before the timed suite, two passes over the anonymous
+          Conference endpoints plus a <strong>real admin login POST</strong> to <code>/Auth/login</code> that exercises Identity&#39;s
+          DB user-lookup + password-hash verify + RS256 signing (the dominant cold-start login-timeout culprit a
+          UI-only warm-up never touched), and a prerender warm-up of the UI host&#39;s <code>/</code>, <code>/login</code>, <code>/register</code>.</p>
+          <p><strong>Step 7, Run E2E tests</strong> (<code>e2e.yml:169-197</code>):</p>
+          <pre class="doc-pre"><code class="language-yaml">env:
+            E2E_BASE_URL: ${{ env.UI_URL }}
+            E2E_HEADLESS: &quot;true&quot;
+            E2E_BROWSER: ${{ matrix.browser }}
+            E2E_TIMEOUT: &quot;45000&quot;
+            E2E_AUTH_TIMEOUT: &quot;60000&quot;
+          run: &gt;-
+            dotnet test --project Tests/E2E/MMCA.ADC.E2E.Tests/MMCA.ADC.E2E.Tests.csproj
+            -c Release --no-build
+            --retry-failed-tests 2 --retry-failed-tests-max-percentage 40</code></pre>
+          <p><code>E2E_BASE_URL</code> points the Playwright tests at the live Aspire-hosted UI. <code>E2E_TIMEOUT: 45000</code> (raised from
+          20000) absorbs residual first-navigation cold-start latency on a 2-core runner, and <code>E2E_AUTH_TIMEOUT: 60000</code> gives the auth round-trip its own headroom. <code>--retry-failed-tests 2 --retry-failed-tests-max-percentage 40</code> (MTP&#39;s retry extension) re-runs only the failed tests up to twice,
+          but skips retry when &gt;40% of tests fail (a real breakage, not a contention spike). No coverage is collected
+          here because the app runs out-of-process (the in-process integration tier in <code>deploy.yml</code> is the backend
+          coverage signal).</p>
+          <p><strong>Steps 8–10, Collect logs, stop stack, upload diagnostics</strong> (<code>e2e.yml:198-224</code>): on <code>always()</code> the job
+          collects each service&#39;s Serilog file into <code>artifacts/service-logs</code>, kills the AppHost, and uploads the
+          per-browser <code>e2e-diagnostics-${{ matrix.browser }}</code> artifact (AppHost log + service logs + probe capture)
+          so startup failures (where no tests ran at all) still produce a diagnostic artifact.</p>
+          <p>[Rubric §33, Developer Experience &amp; Inner Loop] is served: the diagnostics upload makes CI failures
+          diagnosable without local reproduction of the full Aspire stack.</p>
+          <hr>
+          <h2 id="mmcaadc-cost-guardyml">MMCA.ADC, <code>cost-guard.yml</code></h2>
+          <p><strong>File:</strong> <code>MMCA.ADC/.github/workflows/cost-guard.yml</code></p>
+          <h3 id="what-it-is-4">What it is</h3>
+          <p>A scheduled, read-only FinOps check that confirms the production Azure footprint is at its cost baseline.
+          It detects a specific operational anti-pattern: a conference-day surge scale-up (SQL tier upgrade + higher
+          Container App replica caps) that was never reverted after the event.</p>
+          <p>[Rubric §31, Cost Efficiency / FinOps] (assesses whether cloud resource costs are governed and
+          optimized, with visibility into spend) is the primary category this workflow serves. The workflow
+          header comment (<code>cost-guard.yml:3-8</code>) states its purpose precisely: &quot;a scheduled, READ-ONLY check that
+          the production footprint is still at its cost baseline... It complements the cost budget in main.bicep
+          (which alerts on $ spend) by flagging the <em>configuration</em> drift directly.&quot;</p>
+          <h3 id="why-this-workflow-exists">Why this workflow exists</h3>
+          <p>Conference-day surges are deliberate: SQL tier is upgraded from Basic to S4, Container App replica caps
+          are increased from 2 to 8. After the event, both must be reverted manually (or by re-running <code>deploy.yml</code>).
+          There is no automated revert, reverting automatically would require knowing when the conference is over,
+          which is operational context the CI system does not have. Instead, the cost-guard detects the failure to
+          revert and produces a GitHub workflow failure (which notifies via GitHub) every Monday until it is fixed.</p>
+          <p>The 2026 conference-day memory (<code>project_adc_2026_actual_load.md</code>) records that the surge was
+          over-provisioned relative to actual load. The cost-guard exists in part because the cost of a forgotten
+          surge is non-trivial: SQL Server Standard S4 costs roughly 60× more per DTU than Basic tier.</p>
+          <h3 id="triggers-1">Triggers</h3>
+          <pre class="doc-pre"><code class="language-yaml"># cost-guard.yml:10-13
+          on:
+            schedule:
+              - cron: &quot;0 7 * * 1&quot; # Mondays 07:00 UTC
+            workflow_dispatch:</code></pre>
+          <p>Weekly on Monday mornings (UTC), early in the work week so a drift is noticed promptly, with time to
+          investigate before the next week. <code>workflow_dispatch</code> allows a manual run at any time (e.g. to verify
+          that a revert applied correctly).</p>
+          <h3 id="job-surge-drift">Job: <code>surge-drift</code></h3>
+          <p><strong>Environment: <code>production</code></strong> (<code>cost-guard.yml:27</code>): this scopes the OIDC token to the same federated
+          credential as <code>deploy.yml</code>, giving the read-only Azure CLI calls access to the production resource group
+          without a separate credential.</p>
+          <p><strong>Step, Check replica caps and SQL tiers</strong> (<code>cost-guard.yml:36-82</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">BASELINE_MAX_REPLICAS: &quot;2&quot;   # cost-guard.yml:21
+          
+          for app in $(az containerapp list -g &quot;$rg&quot; --query &quot;[?starts_with(name, &#39;adc-&#39;)].name&quot; -o tsv); do
+            max=$(az containerapp show ... --query &quot;properties.template.scale.maxReplicas&quot; -o tsv)
+            if [ &quot;${max:-0}&quot; -gt &quot;$BASELINE_MAX_REPLICAS&quot; ]; then status=&quot;⚠️ DRIFT&quot;; drift=1; fi
+          done
+          
+          for server in $(az sql server list ...); do
+            for db in $(az sql db list ...); do
+              tier=$(az sql db show ... --query &quot;sku.tier&quot; -o tsv)
+              if [ &quot;$tier&quot; != &quot;Basic&quot; ]; then status=&quot;⚠️ DRIFT&quot;; drift=1; fi
+            done
+          done
+          
+          if [ &quot;$drift&quot; -ne 0 ]; then
+            echo &quot;❌ Surge drift detected, ... Reset to baseline ...&quot;
+            exit 1
+          fi</code></pre>
+          <p>The baseline is defined directly in the workflow file:</p>
+          <ul>
+          <li><code>BASELINE_MAX_REPLICAS: &quot;2&quot;</code>, maximum replicas per Container App at rest.</li>
+          <li>SQL tier must be <code>&quot;Basic&quot;</code>, the lowest Azure SQL tier, sufficient for ADC&#39;s off-conference workload
+          and priced at a few dollars per month.</li>
+          </ul>
+          <p>Every <code>adc-*</code> Container App and every <code>adc-*</code> SQL server/database in the resource group is checked. The
+          results are written to the GitHub Step Summary as a Markdown table, so the check result is visible in the
+          GitHub Actions UI without opening the logs.</p>
+          <p>The workflow <strong>never mutates anything</strong>, it is read-only. On drift it fails and prints instructions
+          (<code>cost-guard.yml:78</code>), but it does not attempt to downscale automatically. The operator must choose how
+          to revert (typically by re-running <code>deploy.yml</code>, which re-applies the Bicep baseline).</p>
+          <p>[Rubric §31, Cost Efficiency / FinOps] is directly embodied. [Rubric §34, Architecture Governance &amp;
+          Documentation] (assesses whether operational decisions are recorded and enforced) is also served: the
+          cost guard is the enforcement mechanism for the &quot;revert after event&quot; policy, governance made executable.</p>
+          <hr>
+          <h2 id="mmcaadc-load-testyml">MMCA.ADC, <code>load-test.yml</code></h2>
+          <p><strong>File:</strong> <code>MMCA.ADC/.github/workflows/load-test.yml</code></p>
+          <h3 id="what-it-is-5">What it is</h3>
+          <p>A k6 load test targeting the output-cached Conference read endpoints through the production Gateway. It
+          establishes a repeatable performance baseline and alerts on threshold breaches via GitHub workflow failure.</p>
+          <p>[Rubric §12, Performance &amp; Scalability] (assesses whether the system has been load-tested and has
+          defined capacity thresholds) is the primary category served. The workflow header comment (<code>load-test.yml:3-7</code>)
+          describes it as &quot;a repeatable k6 load test against the public, output-cached Conference read endpoints
+          through the Gateway. Read-only and safe against prod.&quot;</p>
+          <h3 id="why-only-the-conference-read-endpoints">Why only the Conference read endpoints?</h3>
+          <p>The Conference module&#39;s read endpoints (events, sessions, speakers, rooms, categories) are output-cached
+          with 5-minute TTL and tag-based invalidation. They are the highest-traffic paths under conference-day
+          load, and they are read-only (safe to hammer in production). The Engagement write endpoints (bookmarks)
+          and Identity endpoints (auth) have different performance profiles and carry real-write risk, they are
+          not targeted by this load test.</p>
+          <h3 id="triggers-2">Triggers</h3>
+          <pre class="doc-pre"><code class="language-yaml"># load-test.yml:8-18
+          on:
+            workflow_dispatch:
+              inputs:
+                peak_vus:
+                  description: &quot;Peak concurrent virtual users&quot;
+                  default: &quot;67&quot; # observed 2026 conference-day peak
+                base_url:
+                  description: &quot;Target base URL (blank = discover the prod Gateway)&quot;
+                  default: &quot;&quot;
+            schedule:
+              - cron: &quot;0 6 1 * *&quot; # 06:00 UTC, 1st of each month (off-peak)</code></pre>
+          <p>The default <code>peak_vus: &quot;67&quot;</code> is explicitly annotated as &quot;observed 2026 conference-day peak&quot;, the actual
+          measured concurrent-user count from the 2026 conference (recorded in <code>project_adc_2026_actual_load.md</code>).
+          This makes the load test meaningful rather than arbitrary: it verifies that the system can handle <em>what it
+          actually handled</em> in production.</p>
+          <p>The monthly schedule runs at 06:00 UTC on the 1st, off-peak, minimizing interference with real users.</p>
+          <h3 id="job-k6">Job: <code>k6</code></h3>
+          <p><strong>Environment: <code>production</code></strong> (<code>load-test.yml:31</code>): OIDC-scoped to the production federated credential
+          so the Azure CLI step can discover the Gateway FQDN from the resource group.</p>
+          <p><strong>Step, Resolve target URL</strong> (<code>load-test.yml:42-55</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">url=&quot;${{ inputs.base_url }}&quot;
+          if [ -z &quot;$url&quot; ]; then
+            fqdn=$(az containerapp list -g &quot;$AZURE_RESOURCE_GROUP&quot; \
+              --query &quot;[?contains(name, &#39;gateway&#39;)].properties.configuration.ingress.fqdn | [0]&quot; -o tsv)
+            url=&quot;https://$fqdn&quot;
+          fi
+          echo &quot;url=$url&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;</code></pre>
+          <p>If <code>base_url</code> is blank (the normal case), the step queries Azure for the Gateway&#39;s FQDN dynamically.
+          This means the load test does not need to be updated when the resource group or environment name changes,
+          it discovers the target at runtime. An explicit <code>base_url</code> input allows targeting a non-production
+          environment (e.g. a staging slot) without modifying the workflow.</p>
+          <p><strong>Step, Run k6</strong> (<code>load-test.yml:57-63</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">docker run --rm -i \
+            -e BASE_URL=&#39;${{ steps.target.outputs.url }}&#39; \
+            -e PEAK_VUS=&#39;${{ inputs.peak_vus || &#39;40&#39; }}&#39; \
+            -v &quot;$PWD/Tests/Load/k6:/scripts&quot; \
+            grafana/k6 run /scripts/conference-read-load.js</code></pre>
+          <p>k6 runs in Docker (<code>grafana/k6</code> image), with the k6 script directory mounted as a volume. <code>PEAK_VUS</code> and
+          <code>BASE_URL</code> are passed as environment variables into the k6 runtime. The k6 script is at
+          <code>Tests/Load/k6/conference-read-load.js</code>. Note: the content of the k6 script (thresholds, ramping
+          profile, endpoint list) is not determinable from the workflow file alone, it lives in the script.</p>
+          <p>The <code>|| &#39;40&#39;</code> fallback in <code>PEAK_VUS</code> (<code>load-test.yml:61</code>) is a safety net: if the scheduled run (which
+          has no <code>inputs.peak_vus</code> value because inputs are only set on <code>workflow_dispatch</code>) reaches this
+          expression, it defaults to 40 VUs rather than empty, which k6 would interpret as 0.</p>
+          <p>[Rubric §12, Performance &amp; Scalability] is served: the load test documents the observed conference-day
+          peak as the benchmark VU count and verifies the system can sustain it within the defined thresholds.
+          [Rubric §29, Resilience, Reliability &amp; Business Continuity] is also touched: a load test that catches
+          a threshold regression before the next conference is a proactive resilience measure.</p>
+          <hr>
+          <h2 id="mmcaadc-cutover-per-service-dbsyml">MMCA.ADC, <code>cutover-per-service-dbs.yml</code></h2>
+          <p><strong>File:</strong> <code>MMCA.ADC/.github/workflows/cutover-per-service-dbs.yml</code></p>
+          <h3 id="what-it-is-6">What it is</h3>
+          <p>A one-time, manually-triggered workflow that migrated the four empty per-service databases
+          (<code>ADC_Identity</code>, <code>ADC_Conference</code>, <code>ADC_Engagement</code>, <code>ADC_Notification</code>) and copied the legacy
+          <code>AtlDevCon</code> data into them, enacting ADR-006 (database-per-service) in production.</p>
+          <p>The workflow header (<code>cutover-per-service-dbs.yml:3-14</code>) states its scope: &quot;ONE-TIME, manually-triggered
+          workflow... Run this AFTER commit 1 is deployed and BEFORE commit 2 (the container-app flip) is merged.&quot;</p>
+          <h3 id="why-this-workflow-exists-the-adr-006-context">Why this workflow exists, the ADR-006 context</h3>
+          <p>Before ADR-006, all four ADC services shared a single <code>AtlDevCon</code> database and a single <code>OutboxMessages</code>
+          table. Every service&#39;s <code>OutboxProcessor</code> polled the same table with no origin filter, they raced to
+          claim each other&#39;s outbox rows. ADR-006 (2026-06-07) adopted database-per-service to eliminate this race
+          and give each service its own schema evolution path. The cutover workflow enacted that decision in
+          production by:</p>
+          <ol>
+          <li>Creating the four per-service databases (via <code>main.bicep</code>).</li>
+          <li>Applying each database&#39;s migration baseline (its full schema history).</li>
+          <li>Copying the relevant data from <code>AtlDevCon</code> into the correct per-service database.</li>
+          <li>Leaving <code>AtlDevCon</code> completely untouched as a read-only archive and rollback path.</li>
+          </ol>
+          <p>[Rubric §8, Data Architecture] (assesses schema management, migration safety, and data-migration
+          strategy) is embodied: the cutover is a phased, gated, non-destructive migration with explicit outbox-
+          drain and deployment-state pre-conditions.</p>
+          <p>[Rubric §17, DevOps &amp; Deployment] is served: the cutover is an automated, auditable, idempotent workflow
+          rather than a manual script run ad-hoc.</p>
+          <h3 id="trigger-manual-with-required-confirmation">Trigger, manual with required confirmation</h3>
+          <pre class="doc-pre"><code class="language-yaml"># cutover-per-service-dbs.yml:17-25
+          on:
+            workflow_dispatch:
+              inputs:
+                confirm:
+                  description: &#39;Type &quot;cutover&quot; to confirm the one-time production data migration&#39;
+                  required: true
+                freeze_traffic:
+                  description: &#39;Disable gateway ingress during the copy (recommended)&#39;
+                  type: boolean
+                  default: false</code></pre>
+          <p>The <code>confirm</code> input requires the operator to type the exact word <code>&quot;cutover&quot;</code>, the first step validates
+          this (<code>cutover-per-service-dbs.yml:48-53</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">if [ &quot;${{ inputs.confirm }}&quot; != &quot;cutover&quot; ]; then
+            echo &quot;::error::Confirmation input must be exactly &#39;cutover&#39;.&quot;
+            exit 1
+          fi</code></pre>
+          <p>This guard prevents accidental triggering, a workflow_dispatch from a mobile device or a mis-click
+          without typing the confirmation string will fail immediately before any Azure operation. This is a UX
+          safety mechanism borrowed from runbook practice.</p>
+          <p>The optional <code>freeze_traffic</code> boolean (<code>cutover-per-service-dbs.yml:22-25</code>, default <code>false</code>) controls
+          whether the Gateway&#39;s ingress is disabled during the data copy to eliminate the drift window (new writes
+          arriving during the copy that would not be captured). The <code>Re-enable gateway ingress</code> step
+          (<code>cutover-per-service-dbs.yml:168-172</code>) runs on <code>if: ${{ always() &amp;&amp; inputs.freeze_traffic }}</code>, the
+          <code>always()</code> guard ensures that a step failure after the freeze but before the re-enable does not leave the
+          Gateway permanently down.</p>
+          <h3 id="concurrency-shares-prod-azure-group">Concurrency: shares <code>prod-azure</code> group</h3>
+          <pre class="doc-pre"><code class="language-yaml"># cutover-per-service-dbs.yml:37-39
+          concurrency:
+            group: prod-azure
+            cancel-in-progress: false</code></pre>
+          <p>The cutover shares the same group as <code>deploy.yml</code> (<code>deploy.yml:24</code>). This ensures that if a push to
+          <code>main</code> triggers a deploy while the cutover is running (or vice versa), they do not interleave. A standard
+          deploy rolling new container-app revisions while the cutover is copying data would be catastrophic,
+          services pointing at both the old and new databases simultaneously.</p>
+          <h3 id="job-cutover-step-by-step">Job: <code>cutover</code>, step-by-step</h3>
+          <p><strong>GATE 1, Assert the app is still on AtlDevCon</strong> (<code>cutover-per-service-dbs.yml:69-81</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">N=$(az containerapp show -n adc-prod-identity -g &quot;$AZURE_RESOURCE_GROUP&quot; \
+            --query &quot;length(properties.template.containers[0].env[?name==&#39;DataSources__Identity__SQLServerConnectionString&#39;])&quot; -o tsv)
+          if [ &quot;$N&quot; != &quot;0&quot; ]; then
+            echo &quot;::error::adc-prod-identity already carries per-service DB config, commit 2 deployed before the cutover ran.&quot;
+            exit 1
+          fi</code></pre>
+          <p>This gate checks whether <code>adc-prod-identity</code> already has the per-service database connection string in
+          its environment. If it does, &quot;commit 2&quot; (the container-app flip) has already been deployed, meaning the
+          services have already auto-migrated and seeded the per-service databases, running the copy on top would
+          silently skip already-seeded tables (the copy script uses skip-if-nonempty logic). The gate prevents a
+          re-run from corrupting freshly-seeded production data.</p>
+          <p><strong>Discover SQL server FQDN</strong> (<code>cutover-per-service-dbs.yml:83-90</code>): Queries Azure for the first SQL
+          server whose name starts with <code>adc-prod-sql-</code>, the naming convention established by <code>main.bicep</code>. The
+          FQDN is stored as a step output and reused in all subsequent SQL-targeting steps.</p>
+          <p><strong>Freeze gateway traffic (optional)</strong> (<code>cutover-per-service-dbs.yml:99-101</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">if: ${{ inputs.freeze_traffic }}
+          run: az containerapp ingress disable -n adc-prod-gateway -g &quot;$AZURE_RESOURCE_GROUP&quot;</code></pre>
+          <p>Disabling the Gateway ingress stops new user traffic from reaching the services during the copy window.
+          New writes during the copy would be captured in <code>AtlDevCon</code>&#39;s outbox but not in the per-service
+          databases (which are the copy targets). The freeze eliminates this window. The tradeoff is a brief user-
+          visible outage; the operator chooses based on the data&#39;s staleness tolerance.</p>
+          <p><strong>GATE 2, Outbox drain gate</strong> (<code>cutover-per-service-dbs.yml:102-117</code>):</p>
+          <pre class="doc-pre"><code class="language-bash">PENDING=$(sqlcmd -S ... -d AtlDevCon ... -Q &quot;SET NOCOUNT ON; SELECT COUNT(*) FROM dbo.OutboxMessages WHERE ProcessedOn IS NULL;&quot;)
+          if [ &quot;$PENDING&quot; != &quot;0&quot; ]; then
+            echo &quot;::error::AtlDevCon outbox not drained ($PENDING unprocessed rows).&quot;
+            exit 1
+          fi</code></pre>
+          <p>The outbox gate runs <em>after</em> the optional freeze, so no new rows can appear while the count is being
+          read. An unprocessed outbox row represents a domain event that has not been delivered, if the data copy
+          ran with pending outbox rows, the integration events for those rows would be delivered after the cutover
+          and might update rows in <code>AtlDevCon</code> (which is the source) rather than in the per-service databases (the
+          new targets). The gate ensures all in-flight events are settled before the copy begins.</p>
+          <p>[Rubric §29, Resilience, Reliability &amp; Business Continuity] is served: the outbox drain gate ensures
+          consistency at the migration boundary. An undrained outbox means the data snapshot is not quiescent.</p>
+          <p><strong>Generate per-service migration scripts</strong> (<code>cutover-per-service-dbs.yml:119-135</code>):
+          A <code>dotnet ef migrations script --idempotent</code> per module for each of the four per-module migration
+          projects, producing <code>/tmp/migrations-${MODULE}.sql</code>. (<code>deploy.yml</code> no longer runs migrations at all, each
+          service self-applies at startup, so this is the only workflow that generates and applies migration scripts
+          via <code>sqlcmd</code>, and only for this one-time cutover.) <code>GITHUB_TOKEN</code> authenticates NuGet restore of the
+          MMCA.Common.Infrastructure package, which the migration projects depend on.</p>
+          <p><strong>Apply migrations to the four databases</strong> (<code>cutover-per-service-dbs.yml:137-146</code>): Each <code>ADC_${MODULE}</code>
+          database receives its full schema via the idempotent migration script applied with <code>sqlcmd</code>.</p>
+          <p><strong>Copy AtlDevCon data</strong> (<code>cutover-per-service-dbs.yml:148-162</code>):</p>
+          <pre class="doc-pre"><code class="language-powershell">./scripts/copy-atldevcon-to-per-service-dbs.azure.ps1 `
+            -ServerFqdn $env:SQL_SERVER `
+            -AdminUser adcadmin `
+            -AdminPassword $env:SQL_PASSWORD `
+            -VerifyCounts</code></pre>
+          <p>The PowerShell script (not included in this workflow&#39;s file, it is in <code>scripts/</code>) uses <code>SqlBulkCopy</code>
+          (via the <code>SqlServer</code> PowerShell module, installed in the preceding step) to transfer data table-by-table
+          from <code>AtlDevCon</code> into the four per-service databases. <code>-VerifyCounts</code> asserts row counts match between
+          source and target after the copy. <code>AtlDevCon</code> is never modified, it is read-only throughout.</p>
+          <p><strong>Re-enable gateway ingress</strong> (<code>cutover-per-service-dbs.yml:164-172</code>):</p>
+          <pre class="doc-pre"><code class="language-yaml">if: ${{ always() &amp;&amp; inputs.freeze_traffic }}
+          run: az containerapp ingress enable -n adc-prod-gateway -g &quot;$AZURE_RESOURCE_GROUP&quot; --type external --target-port 8080 --transport http</code></pre>
+          <p><code>always()</code> ensures the Gateway is re-enabled even if a later step failed, so the site is never left in
+          a permanently-disabled state. The explicit <code>--type external --target-port 8080 --transport http</code> args
+          are required because <code>az containerapp ingress enable</code> does not accept a bare <code>enable</code> without specifying
+          the ingress configuration.</p>
+          <p>[Rubric §8, Data Architecture] and [Rubric §29, Resilience, Reliability &amp; Business Continuity] are
+          both embodied: the two-gate (deployment-state + outbox-drain) precondition sequence, the traffic freeze
+          option, the non-destructive read-only copy, the row-count verification, and the always-run re-enable all
+          contribute to a migration pattern that minimizes data loss risk and recovery time.</p>
+          <hr>
+          <h2 id="cross-workflow-summary">Cross-workflow summary</h2>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Workflow</th>
+          <th>Trigger</th>
+          <th>Gates production</th>
+          <th>Mutates Azure</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>MMCA.Common/ci.yml</code></td>
+          <td>push/PR → main</td>
+          <td>No (framework gate)</td>
+          <td>No</td>
+          </tr>
+          <tr>
+          <td><code>MMCA.Common/release.yml</code></td>
+          <td><code>v*</code> tag</td>
+          <td>No (publish gate)</td>
+          <td>No (GitHub Packages only)</td>
+          </tr>
+          <tr>
+          <td><code>MMCA.ADC/deploy.yml</code></td>
+          <td>push → main / dispatch</td>
+          <td>Yes</td>
+          <td>Yes</td>
+          </tr>
+          <tr>
+          <td><code>MMCA.ADC/e2e.yml</code></td>
+          <td>nightly 07:00 UTC / dispatch</td>
+          <td>No (pending promotion)</td>
+          <td>No</td>
+          </tr>
+          <tr>
+          <td><code>MMCA.ADC/cost-guard.yml</code></td>
+          <td>Monday 07:00 UTC / dispatch</td>
+          <td>No</td>
+          <td>No (read-only)</td>
+          </tr>
+          <tr>
+          <td><code>MMCA.ADC/load-test.yml</code></td>
+          <td>monthly / dispatch</td>
+          <td>No</td>
+          <td>No (read-only)</td>
+          </tr>
+          <tr>
+          <td><code>MMCA.ADC/dr-drill.yml</code></td>
+          <td>dispatch</td>
+          <td>No</td>
+          <td>No (restores a throwaway copy, then deletes it)</td>
+          </tr>
+          <tr>
+          <td><code>MMCA.ADC/cutover-per-service-dbs.yml</code></td>
+          <td>dispatch (one-time)</td>
+          <td>N/A (complete)</td>
+          <td>Yes (one-time)</td>
+          </tr>
+          </tbody></table></div>
+          <p>(<code>dr-drill.yml</code> is the ADR-009 §29 restore drill: it PITR-restores a <em>copy</em> of a chosen database, times the
+          restore for the RTO record, verifies it comes back Online, then deletes the copy, the live databases are
+          never touched. It is not given its own section above, but it is part of the workflow set.)</p>
+          <p>The Azure-mutating workflows (<code>deploy.yml</code>, <code>cutover-per-service-dbs.yml</code>) share the <code>prod-azure</code>
+          concurrency group with <code>cancel-in-progress: false</code>, ensuring the two cannot interleave. All Azure access
+          uses OIDC federated identity (no static client secrets). The <code>.slnf</code>/<code>.slnx</code> test runs use
+          <code>--minimum-expected-tests 1</code> to prevent empty test suites from silently passing.</p>
+          <hr>
+          <h2 id="rubric-category-index-for-this-chapter">Rubric category index for this chapter</h2>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Category</th>
+          <th>Where primarily embodied</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>§8 Data Architecture</td>
+          <td><code>deploy.yml</code> build-time EF model-drift gate (migrations applied by services at startup, not by <code>deploy.yml</code>); <code>cutover-per-service-dbs.yml</code> gates</td>
+          </tr>
+          <tr>
+          <td>§11 Security</td>
+          <td>OIDC in <code>deploy.yml</code>/<code>load-test.yml</code>/<code>cost-guard.yml</code>/<code>cutover</code>; ephemeral RSA key in <code>e2e.yml</code>; least-privilege tokens in <code>release.yml</code></td>
+          </tr>
+          <tr>
+          <td>§12 Performance &amp; Scalability</td>
+          <td><code>load-test.yml</code> k6 baseline at observed peak VUs</td>
+          </tr>
+          <tr>
+          <td>§13 Observability &amp; Operability</td>
+          <td>Smoke-gate failure output and rollback log in <code>deploy.yml</code>; AppHost log artifact in <code>e2e.yml</code></td>
+          </tr>
+          <tr>
+          <td>§14 Testability &amp; Test Strategy</td>
+          <td><code>--minimum-expected-tests 1</code> in all test steps; integration tests gate <code>deploy</code>; architecture fitness functions in <code>build-and-test</code></td>
+          </tr>
+          <tr>
+          <td>§17 DevOps &amp; Deployment</td>
+          <td>The full workflow set collectively; SHA-tagged images; phased Bicep deploy; smoke+rollback</td>
+          </tr>
+          <tr>
+          <td>§21 Accessibility</td>
+          <td><code>ci.yml</code> <code>ui-e2e</code> axe-core WCAG 2.1 AA gate on every MMCA.Common push</td>
+          </tr>
+          <tr>
+          <td>§28 Front-End Testing &amp; Quality</td>
+          <td><code>ci.yml</code> <code>ui-e2e</code> render smoke; <code>e2e.yml</code> full Playwright suite</td>
+          </tr>
+          <tr>
+          <td>§29 Resilience &amp; Business Continuity</td>
+          <td><code>prod-azure</code> concurrency group; smoke+rollback in <code>deploy.yml</code>; outbox drain gate in <code>cutover</code>; <code>dr-drill.yml</code> PITR restore drill (ADR-009 objectives)</td>
+          </tr>
+          <tr>
+          <td>§30 Compliance &amp; Privacy</td>
+          <td>SBOM generation in <code>release.yml</code> and <code>deploy.yml</code>; license report in <code>deploy.yml</code> supply-chain job</td>
+          </tr>
+          <tr>
+          <td>§31 Cost / FinOps</td>
+          <td><code>cost-guard.yml</code> surge-drift detection and Monday notifications</td>
+          </tr>
+          <tr>
+          <td>§32 Dependency &amp; Supply-Chain</td>
+          <td>Lock files + source mapping in MMCA.Common; vulnerability audit in <code>ci.yml</code>; SBOM artifacts</td>
+          </tr>
+          <tr>
+          <td>§33 Developer Experience</td>
+          <td>Playwright trace upload on failure in <code>ci.yml</code>; AppHost log in <code>e2e.yml</code>; step summaries in <code>cost-guard.yml</code></td>
+          </tr>
+          <tr>
+          <td>§34 Architecture Governance</td>
+          <td><code>cost-guard.yml</code> as executable governance for the surge-revert policy; concurrency group as deployment-ordering governance</td>
+          </tr>
+          </tbody></table></div>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

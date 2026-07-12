@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>2. Domain Building Blocks (Entities, Value Objects, Aggregates) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="What this group covers. This is the DDD heart of the framework, the small, dependency-light primitives every business model in MMCA.Common and MMCA.ADC…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/group-02-domain-building-blocks.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="2. Domain Building Blocks (Entities, Value Objects, Aggregates)">
+  <meta property="og:description" content="What this group covers. This is the DDD heart of the framework, the small, dependency-light primitives every business model in MMCA.Common and MMCA.ADC…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/group-02-domain-building-blocks.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/onboarding/index.html">Onboarding Guide</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">2. Domain Building Blocks (Entities, Value Objects, Aggregates)</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>Guide contents</summary>
+        <nav class="doc-nav" aria-label="Onboarding Guide">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="00-dependency-manifest.html">Phase 1: Dependency Manifest &amp; Leveling</a></li>
+        <li><a href="00-group-taxonomy.html">Phase 1b - Functional Group Taxonomy</a></li>
+        <li><a href="00-inventory.html">Phase 0: Type Inventory</a></li>
+        <li><a href="00-primer.html">Primer, the concepts, stack, and conventions you need first</a></li>
+        <li><a href="group-01-result-error-handling.html">1. Result &amp; Error Handling</a></li>
+        <li><a href="group-02-domain-building-blocks.html" aria-current="page">2. Domain Building Blocks (Entities, Value Objects, Aggregates)</a></li>
+        <li><a href="group-03-querying-specifications.html">3. Querying: Specifications, Filtering &amp; the Entity Query Service</a></li>
+        <li><a href="group-04-events-outbox.html">4. Domain &amp; Integration Events + Outbox Dual-Dispatch</a></li>
+        <li><a href="group-05-cqrs-pipeline.html">5. CQRS: Commands, Queries &amp; the Decorator Pipeline</a></li>
+        <li><a href="group-06-validation.html">6. Validation</a></li>
+        <li><a href="group-07-persistence-ef-core.html">7. Persistence &amp; EF Core</a></li>
+        <li><a href="group-08-auth.html">8. Authentication &amp; Authorization</a></li>
+        <li><a href="group-09-caching.html">9. Caching</a></li>
+        <li><a href="group-10-notifications.html">10. Notifications (Push + In-App Inbox + Email)</a></li>
+        <li><a href="group-11-navigation-populators.html">11. Navigation Metadata &amp; Populators (EF-decoupled eager loading)</a></li>
+        <li><a href="group-12-api-hosting-mapping.html">12. API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</a></li>
+        <li><a href="group-13-grpc-contracts.html">13. gRPC &amp; Inter-Service Contracts</a></li>
+        <li><a href="group-14-module-system-composition.html">14. Module System, Composition &amp; Configuration</a></li>
+        <li><a href="group-15-common-ui-framework.html">15. Common UI Framework (MudBlazor components, theme, base pages)</a></li>
+        <li><a href="group-16-aspire-orchestration.html">16. Aspire Orchestration &amp; Service Defaults</a></li>
+        <li><a href="group-17-conference-domain.html">17. ADC Conference - Domain Model &amp; Module Contracts</a></li>
+        <li><a href="group-18-conference-application.html">18. ADC Conference - Application &amp; Use Cases</a></li>
+        <li><a href="group-19-conference-infrastructure.html">19. ADC Conference - Infrastructure &amp; Persistence</a></li>
+        <li><a href="group-20-conference-api-grpc.html">20. ADC Conference - API, gRPC Contracts &amp; Service Host</a></li>
+        <li><a href="group-21-conference-ui.html">21. ADC Conference - UI</a></li>
+        <li><a href="group-22-engagement-module.html">22. ADC Engagement Module (Session Bookmarks)</a></li>
+        <li><a href="group-23-engagement-live-layer.html">23. ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></li>
+        <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
+        <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
+        <li><a href="group-26-testing-infrastructure.html">26. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
+        <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
+        <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
+        <li><a href="devops-runbooks.html">Operational Scripts &amp; Runbooks</a></li>
+        <li><a href="devops-testing.html">Testing Architecture &amp; Solution Composition</a></li>
+        <li><a href="99-coverage-audit.html">Phase 4, Coverage Audit</a></li>
+        <li><a href="CONCEPT-MAPS.html">MMCA Concept &amp; Pattern Maps</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Onboarding guide</p>
+          <h1 id="2-domain-building-blocks-entities-value-objects-aggregates">2. Domain Building Blocks (Entities, Value Objects, Aggregates)</h1>
+          <p><strong>What this group covers.</strong> This is the DDD heart of the framework, the small, dependency-light
+          primitives every business model in <code>MMCA.Common</code> and <code>MMCA.ADC</code> is built from. There are three
+          families here, and they interlock:</p>
+          <ol>
+          <li><strong>The entity hierarchy</strong>, a three-rung inheritance chain (<a href="#baseentitytidentifiertype"><code>BaseEntity&lt;TIdentifierType&gt;</code></a> →
+          <a href="#auditablebaseentitytidentifiertype"><code>AuditableBaseEntity&lt;TIdentifierType&gt;</code></a> →
+          <a href="#auditableaggregaterootentitytidentifiertype"><code>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code></a>) plus the
+          contracts that describe each rung (<a href="#ibaseentitytidentifiertype"><code>IBaseEntity&lt;TIdentifierType&gt;</code></a>,
+          <a href="#iauditableentity"><code>IAuditableEntity</code></a>, <a href="#iaggregateroot"><code>IAggregateRoot</code></a>). Each rung adds exactly one
+          capability: identity, then audit/soft-delete, then domain-event collection and aggregate operations.</li>
+          <li><strong>The value-object family</strong>, the <a href="#valueobject"><code>ValueObject</code></a> base and the concrete, immutable
+          concepts built on it: <a href="#address"><code>Address</code></a>, <a href="#money"><code>Money</code></a>, <a href="#currency"><code>Currency</code></a>,
+          <a href="#email"><code>Email</code></a>, <a href="#phonenumber"><code>PhoneNumber</code></a>, <a href="#daterange"><code>DateRange</code></a>, and
+          <a href="#datetimerange"><code>DateTimeRange</code></a>, each guarded by a matching invariants helper
+          (<a href="#addressinvariants"><code>AddressInvariants</code></a>, <a href="#emailinvariants"><code>EmailInvariants</code></a>,
+          <a href="#phonenumberinvariants"><code>PhoneNumberInvariants</code></a>) plus the shared <a href="#commoninvariants"><code>CommonInvariants</code></a>
+          toolbox, and the <a href="#currencyjsonconverter"><code>CurrencyJsonConverter</code></a> that puts <code>Currency</code> on the wire.</li>
+          <li><strong>The governance markers and helpers</strong>, the attributes and small utilities that drive
+          metadata-based behavior across the stack: <a href="#piiattribute"><code>PiiAttribute</code></a> (erasure/log-masking),
+          <a href="#idvaluegeneratedattribute"><code>IdValueGeneratedAttribute</code></a> + <a href="#entitytypeextensions"><code>EntityTypeExtensions</code></a>
+          (database-generated IDs), <a href="#ianonymizable"><code>IAnonymizable</code></a> (GDPR/CCPA erasure), the
+          <a href="#domainentitystate"><code>DomainEntityState</code></a> enum (state-change classification for domain events), and
+          <a href="#domainhelper"><code>DomainHelper</code></a> (culture-invariant identifier parsing).</li>
+          </ol>
+          <p>All of these live in the two innermost layers, <code>MMCA.Common.Shared</code> (value objects, invariants,
+          <code>DomainHelper</code>) and <code>MMCA.Common.Domain</code> (entities, interfaces, attributes, enums), so the whole
+          group sits below Application and Infrastructure in the dependency flow (see
+          <span class="doc-deadlink" title="Reference outside the published set">primer §1</span>). Nothing here references EF Core, ASP.NET, or a message
+          broker; persistence and dispatch are <em>described</em> by these types and <em>implemented</em> by higher groups.
+          That separation is the [Rubric §3, Clean Architecture] and [Rubric §4, Domain-Driven Design] story
+          in miniature: the model is framework-free, and the framework adapts to it.</p>
+          <h2 id="the-entity-chain-one-capability-per-rung">The entity chain, one capability per rung</h2>
+          <p>Read the chain bottom-up. <a href="#baseentitytidentifiertype"><code>BaseEntity&lt;TIdentifierType&gt;</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/BaseEntity.cs:14</code>) is almost nothing: a single
+          <code>required init</code> identifier of the per-entity alias type (see
+          <span class="doc-deadlink" title="Reference outside the published set">identifier aliases</span>). <code>required init</code>
+          is the load-bearing choice, a factory method sets <code>Id</code> once at construction and it is immutable
+          thereafter, while EF Core still materializes the entity through the parameterless constructor.</p>
+          <p><a href="#auditablebaseentitytidentifiertype"><code>AuditableBaseEntity&lt;TIdentifierType&gt;</code></a>
+          (<code>AuditableBaseEntity.cs:13</code>) adds the two cross-cutting facts every persisted row needs: <strong>soft-delete</strong>
+          (<code>IsDeleted</code> plus a <code>Delete()</code>/<code>Undelete()</code> pair that return <a href="group-01-result-error-handling.html#result"><code>Result</code></a>
+          and refuse to double-delete) and <strong>audit fields</strong> (<code>CreatedOn/By</code>, <code>LastModifiedOn/By</code>) with <em>private</em>
+          setters. The domain never writes the audit fields, they are stamped centrally by
+          <a href="group-07-persistence-ef-core.html#applicationdbcontext"><code>ApplicationDbContext</code></a>&#39;s <code>SaveChangesAsync</code>
+          via change-tracker reflection. It also carries the <code>RowVersion</code> optimistic-concurrency token. This is
+          where [Rubric §8, Data Architecture] (soft-delete, audit, concurrency) and [Rubric §5, Vertical
+          Slice]/[§10, Cross-Cutting] meet: three concerns that would otherwise be copy-pasted into every entity
+          are inherited once and enforced centrally (ADR-005 for soft-delete-vs-erasure).</p>
+          <p><a href="#auditableaggregaterootentitytidentifiertype"><code>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code></a>
+          (<code>AuditableAggregateRootEntity.cs:13</code>) is the top rung and the one that earns the DDD name &quot;aggregate
+          root.&quot; It implements <a href="#iaggregateroot"><code>IAggregateRoot</code></a>, so it owns a private domain-event list
+          (<code>AddDomainEvent</code> / <code>ClearDomainEvents</code> / a read-only <code>DomainEvents</code> view), and it adds the two helpers
+          that let a root police its own consistency boundary: <code>SetItems&lt;T&gt;</code> (replace a child collection, routed
+          through an overridable <code>ValidateSetItems</code> hook so a root can veto, say, removing a shipped order line)
+          and <code>GetChildOrNotFound&lt;T&gt;</code> (find an active child by id or return an
+          <a href="group-01-result-error-handling.html#error"><code>Error.NotFound</code></a> failure). Only aggregate roots raise domain
+          events, that is how the persistence layer knows where to look. This rung is the clearest [Rubric §4,
+          Domain-Driven Design] and [Rubric §6, CQRS &amp; Event-Driven] expression in the codebase: invariants are
+          enforced <em>inside</em> the boundary, and state changes are announced as events rather than leaked as side
+          effects.</p>
+          <h2 id="how-a-domain-event-leaves-an-aggregate">How a domain event leaves an aggregate</h2>
+          <p>The runtime flow ties this group to the events/outbox group. A command handler loads an aggregate,
+          calls a business method, and that method calls <code>AddDomainEvent(...)</code>, the event sits in the aggregate&#39;s
+          private list, doing nothing yet. When the handler saves, <code>SaveChangesAsync</code> (in
+          <a href="group-07-persistence-ef-core.html#applicationdbcontext"><code>ApplicationDbContext</code></a>) walks every tracked
+          <a href="#iaggregateroot"><code>IAggregateRoot</code></a>, stamps audit fields, serializes the pending
+          <a href="group-04-events-outbox.html#idomainevent"><code>IDomainEvent</code></a>s into
+          <a href="group-04-events-outbox.html#outboxmessage"><code>OutboxMessage</code></a> rows <strong>in the same transaction</strong> as the data,
+          commits, dispatches in-process, then calls <code>ClearDomainEvents()</code> so nothing is delivered twice. The
+          <a href="#domainentitystate"><code>DomainEntityState</code></a> enum (<code>Added</code>/<code>Updated</code>/<code>Deleted</code>) is the small vocabulary an
+          event uses to say <em>what kind</em> of change happened. The aggregate base is the producer end of the
+          at-least-once outbox pipeline (ADR-003); the consumer end lives in
+          <a href="group-04-events-outbox.html">Group 04</a>.</p>
+          <h2 id="value-objects-invalid-instances-cannot-exist">Value objects, invalid instances cannot exist</h2>
+          <p>The second family models concepts with <strong>no identity</strong>: two <code>Money(10, USD)</code> are equal because their
+          values match, not because they are the same row. <a href="#valueobject"><code>ValueObject</code></a> is the cheapest possible
+          base, <code>public abstract record ValueObject;</code>, so every value object inherits compiler-generated
+          structural equality and immutability for free (the canonical Value Object teaching is in
+          <span class="doc-deadlink" title="Reference outside the published set">primer §2</span>).</p>
+          <p>The shared shape across all of them is the <strong>private-constructor + static <code>Create</code> factory returning
+          <a href="group-01-result-error-handling.html#result"><code>Result&lt;T&gt;</code></a></strong> idiom: you cannot <code>new</code> a value object, and
+          the only way in runs through validation, so an invalid <code>Email</code>, <code>Money</code>, <code>Address</code>, or <code>DateRange</code>
+          simply cannot be constructed. The validation logic itself is factored out into static <em>invariants</em>
+          classes, <a href="#addressinvariants"><code>AddressInvariants</code></a>, <a href="#emailinvariants"><code>EmailInvariants</code></a>,
+          <a href="#phonenumberinvariants"><code>PhoneNumberInvariants</code></a>, which also publish the <code>MaxLength</code> constants that EF
+          entity configurations and FluentValidation validators reuse, so the field-length rules have <strong>one source
+          of truth</strong>. <a href="#commoninvariants"><code>CommonInvariants</code></a> is the reusable lower layer that module-specific
+          invariants delegate to (<code>EnsureStringIsNotEmpty</code>, <code>EnsureStringMaxLength</code>, <code>EnsureIdIsNotDefault</code>,
+          <code>EnsureBytesAreNotEmpty</code>). This whole family is the [Rubric §4, Domain-Driven Design] and [Rubric §1,
+          SOLID] (the factory enforces invariants; invariants are a single-responsibility unit) story.</p>
+          <p>The concrete value objects split into a few patterns worth knowing up front:</p>
+          <ul>
+          <li><strong>Owned-type composites</strong>: <a href="#address"><code>Address</code></a> and <a href="#money"><code>Money</code></a> are stored by EF as <code>OwnsOne</code>
+          nested columns; they carry <code>[DataContract]</code>/<code>[DataMember(Order = …)]</code> to pin the serialization shape.
+          <code>Money</code> is the richest: it pairs a <code>decimal Amount</code> with a <a href="#currency"><code>Currency</code></a>, defines <code>+</code>/<code>*</code>
+          operators <em>and</em> a <code>Result</code>-returning <code>Add</code>, and treats <code>Currency.None</code> as an additive identity so
+          <code>Money.Zero()</code> works as an accumulator seed regardless of the eventual currency.</li>
+          <li><strong>Closed enumeration</strong>: <a href="#currency"><code>Currency</code></a> is a record with a private constructor and a fixed
+          <code>All</code> set (<code>Usd</code>, <code>Eur</code>, plus the internal <code>None</code> sentinel); <code>FromCode</code> is the only public way to get
+          one, and <a href="#currencyjsonconverter"><code>CurrencyJsonConverter</code></a> serializes it as its bare ISO-4217 code on
+          the wire (and rejects unknown codes on read).</li>
+          <li><strong>Converted scalars</strong>: <a href="#email"><code>Email</code></a> and <a href="#phonenumber"><code>PhoneNumber</code></a> are stored via EF
+          <code>HasConversion</code> (not <code>OwnsOne</code>), so the column stays a flat <code>nvarchar</code>. Both normalize on creation
+          (<code>Email</code> lowercases; <code>PhoneNumber</code> trims) and expose an implicit <code>string</code> conversion for ergonomics.</li>
+          <li><strong>Interval pairs</strong>: <a href="#daterange"><code>DateRange</code></a> (date-only) and <a href="#datetimerange"><code>DateTimeRange</code></a>
+          (full precision) are near-identical: a validated start/end pair with <code>Overlaps</code>, <code>Contains</code>,
+          <code>Deconstruct</code>, and a length/duration accessor; <code>Create</code> rejects <code>end &lt; start</code>.</li>
+          </ul>
+          <h2 id="governance-markers-metadata-that-other-layers-act-on">Governance markers, metadata that other layers act on</h2>
+          <p>The last family is tiny attributes and helpers that carry <em>intent</em> the rest of the stack reads
+          reflectively. <a href="#piiattribute"><code>PiiAttribute</code></a> tags a property as data-subject PII; two mechanisms watch
+          for it, an architecture fitness test asserts any entity with a <code>[Pii]</code> property also implements
+          <a href="#ianonymizable"><code>IAnonymizable</code></a> (so every piece of personal data has an erasure path), and a logging
+          destructuring policy masks marked members so PII never reaches structured logs. <a href="#ianonymizable"><code>IAnonymizable</code></a>
+          itself defines the erasure contract, an idempotent <code>Anonymize()</code> returning
+          <a href="group-01-result-error-handling.html#result"><code>Result</code></a>, that an application-layer handler invokes to
+          overwrite personal fields in place while keeping the row for referential integrity. Together these are
+          the [Rubric §11, Security] and [Rubric §30, Compliance/Privacy/Data Governance] story, and they are
+          why soft-delete and erasure are <em>different</em> mechanisms (ADR-005): soft-delete hides a row but keeps its
+          data; anonymize destroys the data but keeps the row.</p>
+          <p><a href="#idvaluegeneratedattribute"><code>IdValueGeneratedAttribute</code></a> marks an entity whose id the database
+          generates (SQL Server <code>IDENTITY</code>); factory methods consult it at runtime through
+          <a href="#entitytypeextensions"><code>EntityTypeExtensions</code></a>&#39;s <code>IsIdValueGenerated</code> (a C# <code>extension(Type)</code> member) to
+          decide whether to assign an explicit id or leave it <code>default</code> for the database to fill. Finally,
+          <a href="#domainhelper"><code>DomainHelper</code></a> is the culture-invariant string→identifier parser controllers use to turn
+          route parameters into strongly-typed ids without coupling to a concrete id type, its
+          <code>CultureInfo.InvariantCulture</code> parsing is also the codebase&#39;s headline [Rubric §27,
+          Internationalization] decision (deliberate culture-invariance where culture would otherwise introduce
+          bugs; see <span class="doc-deadlink" title="Reference outside the published set">primer §6</span>).</p>
+          <h2 id="where-this-group-sits">Where this group sits</h2>
+          <p>Everything above is consumed by the layers that follow: every module entity (e.g. the
+          <a href="group-17-conference-domain.html">Conference domain</a>, Engagement, and Identity modules) derives from one
+          of the three entity base classes; the
+          persistence group (<a href="group-07-persistence-ef-core.html">Group 07</a>) maps value objects and stamps the audit
+          fields these types declare; the events/outbox group (<a href="group-04-events-outbox.html">Group 04</a>) drains the
+          domain events aggregates raise; and the CQRS handlers throughout the application return the
+          <a href="group-01-result-error-handling.html#result"><code>Result</code></a> values these factories produce. Read this group as
+          the <em>grammar</em> of the domain, the rest of the guide is the sentences written in it.</p>
+          <h3 id="domainentitystate">DomainEntityState</h3>
+          <blockquote>
+          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Enums</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Enums/DomainEntityState.cs:7</code> · Level 0 · enum</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: describes the state change that triggered a domain event: <code>Unchanged</code>, <code>Added</code>,
+          <code>Updated</code>, <code>Deleted</code>.</li>
+          <li><strong>Depends on</strong>: nothing first-party.</li>
+          <li><strong>Concept</strong>: a small payload enum for domain events. <code>[Rubric §6, CQRS &amp; Event-Driven]</code> assesses
+          whether events carry enough context to be acted on; when an aggregate raises an event about a child,
+          this enum communicates <em>what kind</em> of change happened so consumers can react appropriately.</li>
+          <li><strong>Walkthrough</strong>: four explicitly-numbered members (<code>DomainEntityState.cs:9-12</code>); <code>Unchanged = 0</code> so
+          the default value is the no-op state.</li>
+          <li><strong>Why it&#39;s built this way</strong>: explicit numeric values make the enum stable across serialization (a
+          reordering won&#39;t change the wire meaning), relevant since these may travel inside events.</li>
+          <li><strong>Where it&#39;s used</strong>: included in domain-event payloads that report per-child changes (see
+          <a href="group-04-events-outbox.html#idomainevent"><code>IDomainEvent</code></a> and the event base classes in G04).</li>
+          </ul>
+          <h3 id="domainhelper">DomainHelper</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Extensions</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Extensions/DomainHelper.cs:8</code> · Level 0 · class (static)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a static class that adds a generic <code>Parse&lt;TIdentifier&gt;()</code> <strong>extension member</strong> to
+          <code>string?</code>, converting a route-parameter string into a strongly-typed identifier.</li>
+          <li><strong>Depends on</strong>: BCL only (<code>System.Globalization</code>).</li>
+          <li><strong>Concept introduced, C# <code>extension(T)</code> members.</strong> <code>[Rubric §15, Best Practices &amp; Code Quality]</code>
+          (assesses idiomatic, modern-language use). This is the first concrete sighting of the C# 14 preview
+          feature described in
+          <a href="00-primer.html#c-extensiont-types--read-this-once">primer §4</a>. The block
+          <code>extension(string? id) { … }</code> (<code>DomainHelper.cs:13</code>) means any nullable string can call
+          <code>someId.Parse&lt;int&gt;()</code>. The receiver <code>id</code> is the &quot;this&quot; value.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>Parse&lt;TIdentifier&gt;()</code> (<code>DomainHelper.cs:21</code>): special-cases <code>string</code> (returns the value or
+          empty), short-circuits null/whitespace to <code>default</code>, then delegates to <code>ParseNonEmpty</code>.</li>
+          <li><code>ParseNonEmpty&lt;TIdentifier&gt;</code> (line 37) and <code>ParseOtherTypes&lt;TIdentifier&gt;</code> (line 52): a chain of
+          <code>typeof(TIdentifier) == typeof(Guid|int|long|ulong|bool|enum)</code> checks using culture-invariant
+          <code>TryParse</code>; an unsupported type throws <code>FormatException</code> (line 63). Splitting into two private
+          methods keeps each within the analyzers&#39; cyclomatic-complexity budget.</li>
+          <li>Note the <code>#pragma warning disable IDE0051</code> (lines 36-38) around <code>ParseNonEmpty</code> with a comment
+          explaining it&#39;s a false positive: the analyzer can&#39;t see that the method is called from inside the
+          <code>extension</code> block. A justified, scoped suppression.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: controllers receive ids as <code>string</code> route values; this converts them
+          to the entity&#39;s id alias type <strong>without</strong> the controller coupling to a specific id type, generic
+          over <code>TIdentifier</code>. Culture-invariant parsing avoids locale-dependent bugs and is one of the few
+          places §27 (i18n) bites, see <a href="00-primer.html#6-the-34-category-architecture-evaluation-lens">primer §6</a>.</li>
+          <li><strong>Where it&#39;s used</strong>: controller base classes converting route parameters to typed ids (API layer,
+          G12).</li>
+          <li><strong>Caveats / not-in-source</strong>: supported target types are exactly those enumerated; anything else
+          throws at runtime (there is no compile-time constraint preventing an unsupported <code>TIdentifier</code>).</li>
+          </ul>
+          <h3 id="iauditableentity">IAuditableEntity</h3>
+          <blockquote>
+          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IAuditableEntity.cs:8</code> · Level 0 · interface</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the contract for entities that support <strong>soft-delete</strong> and <strong>audit tracking</strong>:
+          <code>IsDeleted</code>, <code>CreatedOn/By</code>, <code>LastModifiedOn/By</code>.</li>
+          <li><strong>Depends on</strong>: nothing first-party (uses the <code>UserIdentifierType</code> alias → <code>int</code>).</li>
+          <li><strong>Concept introduced, soft-delete + centralized audit.</strong> <code>[Rubric §8, Data Architecture]</code>
+          (assesses soft-delete + global query filters and audit fields stamped centrally, not per-handler).
+          Entities are never hard-deleted; <code>IsDeleted</code> (<code>IAuditableEntity.cs:11</code>) flips to <code>true</code> and EF global
+          query filters hide the row. The audit fields (<code>CreatedOn</code> line 14, <code>CreatedBy</code> line 17,
+          <code>LastModifiedOn?</code> line 20, <code>LastModifiedBy?</code> line 23) are <strong>read-only from the domain&#39;s view</strong>, the
+          doc comment (lines 4-7) states infrastructure populates them in <code>SaveChangesAsync</code> via EF&#39;s
+          <code>ChangeTracker</code>. So the domain <em>declares</em> the audit contract; the <em>stamping</em> happens centrally in
+          one interceptor (the <code>AuditSaveChangesInterceptor</code> in G07). This is also <code>[Rubric §30, Compliance, Privacy &amp; Data Governance]</code> (audit trail supports accountability) and ties to ADR-005 (soft-delete
+          vs. erasure).</li>
+          <li><strong>Walkthrough</strong>: five getter-only properties. <code>CreatedBy</code> is <code>UserIdentifierType</code>;
+          <code>LastModifiedBy</code> is <code>UserIdentifierType?</code> (nullable, null until first modified, matching
+          <code>LastModifiedOn?</code>). No setters at all: the domain can <em>read</em> audit state but only infrastructure
+          writes it.</li>
+          <li><strong>Why it&#39;s built this way</strong>: making audit a contract (not a base-class detail) lets the EF
+          interceptor recognize &quot;any <code>IAuditableEntity</code>&quot; and stamp it uniformly; centralizing it is exactly the
+          cross-cutting discipline §8/§10 reward. The identifier alias keeps &quot;who&quot; strongly named.</li>
+          <li><strong>Where it&#39;s used</strong>: implemented by <a href="#auditablebaseentitytidentifiertype"><code>AuditableBaseEntity&lt;TIdentifierType&gt;</code></a>;
+          recognized by the audit <code>SaveChanges</code> interceptor and the soft-delete query filter (G07). Its
+          <code>IsDeleted</code> flag is the counterpart that <a href="#ianonymizable"><code>IAnonymizable</code></a> deliberately does <em>not</em>
+          satisfy on its own (see ADR-005).</li>
+          </ul>
+          <h3 id="ibaseentitytidentifiertype">IBaseEntity&lt;TIdentifierType&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IBaseEntity.cs:7</code> · Level 0 · interface</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the base contract for every domain entity: a single strongly-typed, immutable
+          identifier.</li>
+          <li><strong>Depends on</strong>: nothing first-party.</li>
+          <li><strong>Concept introduced, entity identity.</strong> <code>[Rubric §4, DDD]</code> (assesses aggregates/entities with
+          clear identity). An <strong>entity</strong> (unlike a <a href="#valueobject">value object</a>) <em>has</em> identity, it&#39;s the same
+          thing across changes because its <code>Id</code> is the same. This interface is the minimal expression of that:
+          <code>TIdentifierType Id { get; init; }</code> with <code>where TIdentifierType : notnull</code> (<code>IBaseEntity.cs:7-11</code>).</li>
+          <li><strong>Walkthrough</strong>: one <code>init</code> property. <code>init</code> (set at construction, immutable after) encodes &quot;an
+          entity&#39;s identity is assigned once and never changes&quot;, the doc comment (<code>IBaseEntity.cs:10</code>) says
+          exactly this.</li>
+          <li><strong>Why it&#39;s built this way</strong>: generic id type so each entity binds its strong-id alias; the contract
+          is intentionally tiny so the concrete base classes
+          (<a href="#baseentitytidentifiertype"><code>BaseEntity&lt;TIdentifierType&gt;</code></a> →
+          <a href="#auditablebaseentitytidentifiertype"><code>AuditableBaseEntity&lt;TIdentifierType&gt;</code></a> →
+          <a href="#auditableaggregaterootentitytidentifiertype"><code>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code></a>) can
+          layer behavior on top.</li>
+          <li><strong>Where it&#39;s used</strong>: implemented (indirectly) by every entity in both apps via the
+          <a href="#baseentitytidentifiertype"><code>BaseEntity&lt;TIdentifierType&gt;</code></a> hierarchy; the parallel DTO contract is
+          <a href="group-12-api-hosting-mapping.html#ibasedtotidentifiertype"><code>IBaseDTO&lt;TIdentifierType&gt;</code></a>.</li>
+          </ul>
+          <h3 id="idvaluegeneratedattribute">IdValueGeneratedAttribute</h3>
+          <blockquote>
+          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Attributes</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Attributes/IdValueGeneratedAttribute.cs:9</code> · Level 0 · class (sealed attribute)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: marks an entity whose <code>Id</code> is <strong>generated by the database</strong> (e.g. SQL Server
+          <code>IDENTITY</code>) rather than assigned by the application.</li>
+          <li><strong>Depends on</strong>: <code>System.Attribute</code> (BCL) only.</li>
+          <li><strong>Concept introduced, attribute-driven behavior in the domain.</strong> <code>[Rubric §8, Data Architecture]</code>
+          (deliberate key-generation strategy). A factory method needs to know whether to assign an explicit
+          <code>Id</code> or leave it <code>default</code> for the database to fill. Rather than hard-code that per entity, the
+          decision is declared with this attribute and read reflectively at runtime
+          (<a href="#entitytypeextensions"><code>EntityTypeExtensions.IsIdValueGenerated</code></a>). The doc comment
+          (<code>IdValueGeneratedAttribute.cs:3-7</code>) describes exactly this. <code>[Rubric §3, Clean Architecture]</code>:
+          this is a <em>domain-level</em> attribute (no EF reference), so the key-generation policy lives with the
+          entity, not in infrastructure.</li>
+          <li><strong>Walkthrough</strong>: <code>[AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]</code>
+          (line 8); the attribute body is empty (<code>sealed class IdValueGeneratedAttribute : Attribute;</code>, line 9)
+           , it&#39;s a pure marker.</li>
+          <li><strong>Why it&#39;s built this way</strong>: <code>Inherited = false</code> means a subclass doesn&#39;t silently inherit
+          database-generated semantics; the marker keeps key-generation policy <em>declarative</em> and co-located with
+          the entity.</li>
+          <li><strong>Where it&#39;s used</strong>: read by <a href="#entitytypeextensions"><code>EntityTypeExtensions</code></a> (Level 1) and by entity
+          factory methods deciding whether to set <code>Id</code>.</li>
+          </ul>
+          <h3 id="piiattribute">PiiAttribute</h3>
+          <blockquote>
+          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Attributes</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Attributes/PiiAttribute.cs:19</code> · Level 0 · class (sealed attribute)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: marks a property as <strong>personally identifiable information</strong> belonging to a data
+          subject.</li>
+          <li><strong>Depends on</strong>: <code>System.Attribute</code> (BCL) only.</li>
+          <li><strong>Concept introduced, privacy governance reconciled with soft-delete.</strong> <code>[Rubric §30, Compliance, Privacy &amp; Data Governance]</code> (assesses a PII inventory, retention/erasure, and, critically,
+          reconciling soft-delete with right-to-erasure) and <code>[Rubric §13, Observability &amp; Operability]</code>
+          (keeping PII out of logs). This one tiny attribute powers <strong>two</strong> governance mechanisms, per its doc
+          comment (<code>PiiAttribute.cs:5-13</code>): (1) an <strong>architecture fitness test</strong> asserts that any entity
+          declaring a <code>[Pii]</code> property also implements <a href="#ianonymizable"><code>IAnonymizable</code></a>, so every data
+          subject&#39;s data has a real right-to-erasure path (soft-delete preserves rows, so erasure needs a
+          separate anonymize path, the exact §30 red flag this avoids; ADR-005); and (2) <a href="#piiredactor"><code>PiiRedactor</code></a>,
+          the <strong>redaction half</strong> of the contract (<code>PiiAttribute.cs:10-12</code>), masks <code>[Pii]</code>-marked members with
+          the literal <code>[REDACTED]</code> so an entity carrying personal data can be written to a structured log or
+          telemetry attribute without the data subject&#39;s PII leaking in clear text. Both halves now exist in
+          source: mechanism (1) is <code>[Rubric §34, Architecture Governance &amp; Documentation]</code>, a rule enforced by
+          an executable fitness function rather than prose; mechanism (2) (<a href="#piiredactor"><code>PiiRedactor</code></a>) is a
+          real, unit-tested helper. ⚠️ The redactor is <strong>not auto-wired into a logging/destructuring policy</strong>
+          (verified by search: only its own tests and definition reference it, no Serilog sink or call site
+          routes entities through it). So the <code>[Rubric §13]</code> &quot;PII out of logs&quot; control is <em>available and
+          tested</em> but <em>opt-in per call site</em>, not an automatic, enforced pipeline stage.</li>
+          <li><strong>Walkthrough</strong>: <code>[AttributeUsage(AttributeTargets.Property, Inherited = false, AllowMultiple = false)]</code> (line 18); empty body (<code>sealed class PiiAttribute : Attribute;</code>, line 19). The doc comment
+          (lines 14-16) adds important <em>judgement</em>: apply only to genuine data-subject PII (an account holder&#39;s
+          email/name), <strong>not</strong> to public content that merely contains a name (e.g. a public conference speaker
+          profile), a nuance that prevents over-tagging.</li>
+          <li><strong>Why it&#39;s built this way</strong>: marking PII declaratively at the property lets both the erasure fitness
+          test and <a href="#piiredactor"><code>PiiRedactor</code></a> find it automatically by reflection; the alternative
+          (a hand-maintained list of which fields are personal) drifts out of sync with the model.</li>
+          <li><strong>Where it&#39;s used</strong>: applied to three properties of the Identity <code>User</code> aggregate
+          (<code>Email</code>/<code>FirstName</code>/<code>LastName</code>,
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:19,23,27</code>; <code>User</code> implements
+          <a href="#ianonymizable"><code>IAnonymizable</code></a>, <code>:16</code>). The detection now lives <strong>once</strong> in the shared
+          <code>MMCA.Common.Testing.Architecture</code> package: the <code>EntitiesWithPiiImplementAnonymizable</code> rule
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Governance.cs:6</code>)
+          scans every Domain-layer type for a <code>[Pii]</code> property via the <code>HasPiiProperty</code> helper (same file,
+          lines 43-45), which matches by attribute type <em>name</em> (<code>a.GetType().Name == &quot;PiiAttribute&quot;</code>), not a
+          typed <code>GetCustomAttribute&lt;PiiAttribute&gt;()</code>, because the rule library does not reference the Domain
+          attribute type. Each repo then supplies a thin sealed subclass of <code>PiiConventionTestsBase</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/PiiConventionTestsBase.cs:7</code>)
+          that just passes its <code>IArchitectureMap</code>:
+          <code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/PiiConventionTests.cs:13</code> (the <em>scan</em>
+          is structurally vacuous today, the framework Domain ships no data-subject type) and
+          <code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/PiiConventionTests.cs:3</code>. The framework
+          closes that vacuity gap with a non-vacuous companion, <code>PiiErasureContractFitnessTests</code>
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/PiiErasureContractFitnessTests.cs:19</code>),
+          which forces a representative <code>[Pii]</code>-carrying sample through both halves end to end (recognized and
+          masked by <a href="#piiredactor"><code>PiiRedactor</code></a>, then erased idempotently via <a href="#ianonymizable"><code>IAnonymizable</code></a>).
+          The <strong>redaction</strong> half is <a href="#piiredactor"><code>PiiRedactor</code></a>, which reads <code>[Pii]</code> reflectively via
+          <code>IsDefined(typeof(PiiAttribute), inherit: false)</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Privacy/PiiRedactor.cs:119</code>); <strong>no logging/destructuring
+          policy invokes it automatically</strong>, Serilog is configured in the four ADC service hosts without a
+          PII-aware masking sink, so log-masking is an available helper a call site opts into, not an enforced
+          pipeline stage.</li>
+          </ul>
+          <h3 id="iaggregateroot">IAggregateRoot</h3>
+          <blockquote>
+          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IAggregateRoot.cs:9</code> · Level 1 · interface</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the contract that marks a type as a DDD aggregate root and gives it the ability
+          to accumulate domain events for post-persistence dispatch.</li>
+          <li><strong>Depends on</strong>: <a href="group-04-events-outbox.html#idomainevent"><code>IDomainEvent</code></a> (Level 0).</li>
+          <li><strong>Concept introduced, the Aggregate Root.</strong> <code>[Rubric §4, DDD]</code> (aggregates as the sole
+          external-change entry point; transactional consistency boundary). An <strong>aggregate root</strong> owns a
+          cluster of related objects (the aggregate) and is the <em>only</em> entity in that cluster that
+          the rest of the system interacts with directly. DDD&#39;s rule is: &quot;save or delete as a unit, never
+          reference internal entities from outside&quot;. By implementing <code>IAggregateRoot</code>, a class declares
+          itself as that transactional boundary. The doc comment (<code>IAggregateRoot.cs:5-8</code>) states the
+          contract explicitly: aggregates raise domain events; the infrastructure layer
+          (<code>ApplicationDbContext</code>) uses this interface to discover pending events across all tracked
+          aggregates during <code>SaveChangesAsync</code>, this is the hook that feeds the
+          <a href="group-04-events-outbox.html#outboxmessage">outbox pattern</a> (ADR-003).</li>
+          <li><strong>Walkthrough</strong>: three members (<code>IAggregateRoot.cs:12-19</code>):
+          <code>IReadOnlyCollection&lt;IDomainEvent&gt; DomainEvents { get; }</code>, the pending event queue (read-only
+          from outside); <code>void AddDomainEvent(IDomainEvent)</code>, called by the aggregate&#39;s own methods to
+          record that something happened; <code>void ClearDomainEvents()</code>, called by infrastructure after the
+          events have been serialized to the outbox. <code>[Rubric §8, Data Architecture]</code> (SaveChanges flow):
+          the sequence is aggregate mutates state → calls <code>AddDomainEvent</code> → EF saves data + serializes
+          events to outbox in same DB transaction → <code>ClearDomainEvents()</code> → dispatcher dispatches
+          in-process copies (for immediate reactions that don&#39;t need the outbox).</li>
+          <li><strong>Why it&#39;s built this way</strong>: keeping the event queue behind a read-only collection plus
+          explicit add/clear methods means only the aggregate&#39;s own behavior can raise events and only
+          infrastructure can clear them after a successful save, preserving the at-least-once outbox
+          contract (ADR-003).</li>
+          <li><strong>Where it&#39;s used</strong>: implemented by
+          <a href="#auditableaggregaterootentitytidentifiertype"><code>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code></a>,
+          which adds the <code>_domainEvents</code> list and the <code>AddDomainEvent</code>/<code>ClearDomainEvents</code> implementations;
+          every aggregate in both apps inherits from that. Discovered by the
+          <code>DomainEventSaveChangesInterceptor</code> (G07) during persistence.</li>
+          </ul>
+          <h3 id="piiredactor">PiiRedactor</h3>
+          <blockquote>
+          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Privacy</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Privacy/PiiRedactor.cs:24</code> · Level 1 · class (static)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a static helper that produces a log- and telemetry-safe view of any object by
+          masking every property marked with <a href="#piiattribute"><code>PiiAttribute</code></a>, replacing each PII value with the
+          literal <code>[REDACTED]</code>. It is the <strong>redaction half</strong> of the <a href="#piiattribute"><code>PiiAttribute</code></a> contract.</li>
+          <li><strong>Depends on</strong>: <a href="#piiattribute"><code>PiiAttribute</code></a> (the marker it reads, <code>PiiRedactor.cs:6,119</code>); BCL
+          only (<code>System.Reflection</code>, <code>System.Collections.Concurrent</code>, <code>System.Collections.ObjectModel</code>,
+          <code>System.Text</code>, <code>System.Globalization</code>).</li>
+          <li><strong>Concept introduced, value-erasing PII redaction for logs/telemetry.</strong> <code>[Rubric §13, Observability &amp; Operability]</code> (assesses keeping personal data out of structured logs) and <code>[Rubric §30, Compliance, Privacy &amp; Data Governance]</code> (assesses a real data-minimization control, not just an
+          intent). This is the implementation that <a href="#piiattribute"><code>PiiAttribute</code></a>&#39;s second mechanism refers to.
+          The framework&#39;s logging convention is to record scalar identifiers, not whole entities; but when an
+          aggregate that carries a data subject&#39;s personal data <em>must</em> be written to a structured log or a
+          telemetry attribute, route it through <code>Redact</code>/<code>RedactToString</code> so the PII never leaves the process
+          in clear text (the rationale is stated in the doc comment, <code>PiiRedactor.cs:10-22</code>). Masking is
+          deliberately <strong>value-erasing</strong> rather than truncating or hashing (<code>PiiRedactor.cs:19-22</code>): even a
+          value&#39;s length or hash can leak information about a data subject, so a <code>[Pii]</code> value is replaced
+          wholesale with <code>RedactedToken</code>. This is the log-side counterpart to <a href="#ianonymizable"><code>IAnonymizable</code></a>&#39;s
+          storage-side erasure: together they are the two halves of the §30/ADR-005 story (<code>[Pii]</code> says <em>what</em>
+          is personal; <code>PiiRedactor</code> keeps it out of <em>logs</em>; <code>IAnonymizable</code> erases it from <em>storage</em>).</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>RedactedToken</code> (<code>PiiRedactor.cs:27</code>): the public <code>const string = &quot;[REDACTED]&quot;</code> substituted for
+          every masked value, so callers and tests can assert against one constant. A private
+          <code>UnreadableToken = &quot;[unreadable]&quot;</code> (<code>PiiRedactor.cs:29</code>) is the fallback for a throwing getter.</li>
+          <li><code>Cache</code> (<code>PiiRedactor.cs:31</code>): a <code>ConcurrentDictionary&lt;Type, IReadOnlyList&lt;RedactableProperty&gt;&gt;</code>
+          holding the reflected, per-type property metadata so a hot logging path does not re-run reflection
+          on every call (this is what makes repeated redaction allocation-light).</li>
+          <li><code>Redact(object?)</code> (<code>PiiRedactor.cs:42</code>): the primary entry point. <code>null</code> yields the shared empty
+          map (<code>PiiRedactor.cs:33-34,44-47</code>); otherwise it walks the cached properties and builds a
+          <code>property-name → value</code> dictionary where each PII property is replaced by <code>RedactedToken</code> and every
+          other property passes through via <code>property.Read(value)</code> (<code>PiiRedactor.cs:49-56</code>).</li>
+          <li><code>RedactToString(object?)</code> (<code>PiiRedactor.cs:65</code>): renders a single-line
+          <code>TypeName { Prop = value, Pii = [REDACTED] }</code> string for a log-message argument; <code>null</code> yields the
+          literal <code>&quot;null&quot;</code>, and non-PII scalars are formatted with <code>CultureInfo.InvariantCulture</code>
+          (<code>PiiRedactor.cs:65-90</code>), keeping the rendering locale-stable (the same culture-invariance discipline
+          as <a href="#domainhelper"><code>DomainHelper</code></a>).</li>
+          <li><code>HasPii(Type)</code> (<code>PiiRedactor.cs:98</code>): throws on a null <code>type</code>, then returns whether the type
+          declares any <code>[Pii]</code> property, i.e. whether redaction would mask anything (<code>PiiRedactor.cs:98-110</code>).</li>
+          <li><code>GetProperties(Type)</code> (<code>PiiRedactor.cs:112</code>): the cache filler. <code>Cache.GetOrAdd</code> runs a <code>static</code>
+          lambda that reflects public, instance, readable, non-indexer properties and builds a
+          <a href="#redactableproperty"><code>RedactableProperty</code></a> for each, recording whether it carries the marker via
+          <code>p.IsDefined(typeof(PiiAttribute), inherit: false)</code> (<code>PiiRedactor.cs:112-121</code>). The <code>inherit: false</code>
+          mirrors <a href="#piiattribute"><code>PiiAttribute</code></a>&#39;s <code>Inherited = false</code>.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: a <code>static</code> pure helper has no DI dependency, so it can be called from
+          any layer, including a transport edge, without wiring. Per-type caching keeps the logging path cheap;
+          value-erasure (over truncation/hashing) is the conservative §30 choice; and routing personal data
+          through one named gate makes the redaction policy auditable in one place (ADR-005).</li>
+          <li><strong>Where it&#39;s used</strong>: unit-verified by <code>PiiRedactorTests</code> (G25) and exercised end to end (composed
+          with <a href="#ianonymizable"><code>IAnonymizable</code></a>) by <code>PiiErasureContractFitnessTests</code>
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/PiiErasureContractFitnessTests.cs:19</code>).
+          No production logging call site routes entities through it yet, so it is a <em>ready, tested</em> control
+          rather than an automatic one (see the caveat on <a href="#piiattribute"><code>PiiAttribute</code></a>).</li>
+          <li><strong>Caveats / not-in-source</strong>: redaction is <strong>shallow</strong> (one level): a non-PII property whose value is
+          itself an object with nested <code>[Pii]</code> members is read and emitted as-is, not recursively masked. Only
+          public instance properties are inspected (fields and non-public members are ignored). A property
+          getter that throws <code>TargetInvocationException</code> yields <code>[unreadable]</code> instead of crashing the log call
+          (<code>PiiRedactor.cs:135-139</code>).</li>
+          </ul>
+          <h3 id="redactableproperty">RedactableProperty</h3>
+          <blockquote>
+          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Privacy</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Privacy/PiiRedactor.cs:123</code> · Level 0 · class (private sealed, nested)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: <a href="#piiredactor"><code>PiiRedactor</code></a>&#39;s private sealed nested cached-metadata helper, one
+          entry per public readable property, capturing the name, whether the property is PII, and how to read
+          its value. It exists only to back <code>PiiRedactor.Cache</code> (<code>PiiRedactor.cs:31</code>); it is not visible outside
+          the redactor.</li>
+          <li><strong>Depends on</strong>: <code>System.Reflection.PropertyInfo</code> (BCL); constructed by <a href="#piiredactor"><code>PiiRedactor</code></a>.</li>
+          <li><strong>Walkthrough</strong>: a primary-constructor class
+          <code>RedactableProperty(string name, bool isPii, PropertyInfo info)</code> (<code>PiiRedactor.cs:123</code>) exposing
+          <code>Name</code> (<code>PiiRedactor.cs:125</code>), the precomputed <code>IsPii</code> flag (<code>PiiRedactor.cs:127</code>), and
+          <code>Read(object target)</code> (<code>PiiRedactor.cs:129</code>), which calls <code>info.GetValue(target)</code> and catches
+          <code>TargetInvocationException</code> to return <code>UnreadableToken</code> rather than propagate, the inline comment
+          noting that a throwing getter must never break a logging call site (<code>PiiRedactor.cs:131-139</code>).</li>
+          <li><strong>Why it&#39;s built this way</strong>: precomputing the <code>IsPii</code> flag and holding the <code>PropertyInfo</code> once per
+          type (cached in <code>PiiRedactor.Cache</code>) means redaction never re-evaluates the <code>[Pii]</code> reflection check
+          on the hot path, it just reads the cached flag and (for non-PII members) invokes the captured getter.</li>
+          <li><strong>Where it&#39;s used</strong>: produced and consumed entirely within <a href="#piiredactor"><code>PiiRedactor</code></a>
+          (<code>GetProperties</code>, <code>PiiRedactor.cs:112-121</code>); it has no independent consumers.</li>
+          </ul>
+          <h3 id="ianonymizable">IAnonymizable</h3>
+          <blockquote>
+          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IAnonymizable.cs:22</code> · Level 3 · interface</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a single-method contract (<code>Result Anonymize()</code>) for aggregates that store
+          personal data and must support GDPR/CCPA right-to-erasure.</li>
+          <li><strong>Depends on</strong>: <a href="group-01-result-error-handling.html#result"><code>Result</code></a> (via
+          <code>MMCA.Common.Shared.Abstractions</code>, <code>IAnonymizable.cs:1</code>).</li>
+          <li><strong>Concept reinforced, reconciling soft-delete with erasure.</strong> <code>[Rubric §30, Compliance, Privacy &amp; Data Governance]</code> (assesses a real erasure path, not just soft-delete). The doc comment
+          (lines 5-21) explains the tension: soft-delete (<a href="#iauditableentity"><code>IAuditableEntity.IsDeleted</code></a>)
+          keeps rows for referential integrity, but that means personal data survives. <code>IAnonymizable</code>
+          provides the erasure path: an application-layer erasure handler loads the aggregate, calls
+          <code>Anonymize()</code>, and saves, overwriting PII fields with non-identifying placeholders <strong>in place</strong>
+          rather than hard-deleting. The row stays (FKs and audit trail intact); the person&#39;s data is gone.
+          This is the second half of the <a href="#piiattribute"><code>PiiAttribute</code></a> story (ADR-005): <code>[Pii]</code> marks
+          <em>what</em> is PII; <code>IAnonymizable</code> defines <em>how</em> it is erased. <code>[Rubric §34, Architecture Governance &amp; Documentation]</code>: architecture tests assert that any entity with a <code>[Pii]</code> property implements
+          <code>IAnonymizable</code>, enforcing the contract at the type-system level rather than by review.</li>
+          <li><strong>Walkthrough</strong>: <code>Anonymize()</code> (line 30): <code>Result</code> return type (not <code>void</code>) because anonymization
+          might fail (e.g. entity not found, or concurrent deletion). The doc comment mandates <strong>idempotency</strong>
+          (lines 24-28): calling <code>Anonymize()</code> on an already-anonymized entity must be a no-op returning
+          success, important under at-least-once erasure-event delivery. The remarks (lines 16-20) add the
+          storage guidance: fields that must remain retrievable after erasure are persisted through the
+          AES-256-GCM <a href="group-07-persistence-ef-core.html#encryptedstringconverter"><code>EncryptedStringConverter</code></a>;
+          fields that need not survive are overwritten with placeholders inside <code>Anonymize()</code>.</li>
+          <li><strong>Why it&#39;s built this way</strong>: making erasure a one-method contract keeps the <em>policy</em> (which fields,
+          what placeholders) inside the aggregate that owns the data, while the <em>trigger</em> lives in an
+          application handler, and the <code>[Pii] ⇒ IAnonymizable</code> fitness test guarantees no PII-holding entity
+          silently lacks an erasure path (ADR-005).</li>
+          <li><strong>Where it&#39;s used</strong>: implemented by <code>User</code> in the Identity module (which holds <code>[Pii]</code> fields like
+          <code>Email</code>/<code>FirstName</code>/<code>LastName</code>,
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:16</code>); called by the
+          application-layer erasure handler and enforced by <code>PiiConventionTests</code> (G25).</li>
+          </ul>
+          <h3 id="valueobject">ValueObject</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.ValueObjects</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/ValueObject.cs:8</code> · Level 0 · record</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the abstract base for all value objects, declared as a single line:
+          <code>public abstract record ValueObject;</code> (<code>ValueObject.cs:8</code>).</li>
+          <li><strong>Depends on</strong>: nothing first-party.</li>
+          <li><strong>Concept introduced, the Value Object.</strong> <code>[Rubric §4, Domain-Driven Design]</code> (assesses whether
+          the model mirrors the business, aggregates, value objects, ubiquitous language, immutability). A
+          <strong>value object</strong> models a concept with <strong>no identity</strong>: two <code>Money(10, USD)</code> instances are equal
+          because their <em>values</em> are equal, not because they&#39;re the same row. By inheriting from <code>record</code>,
+          every value object gets compiler-generated <strong>structural equality</strong> (<code>Equals</code>/<code>GetHashCode</code> over all
+          declared properties) and immutability for free, the design rationale is stated in the doc comment
+          (<code>ValueObject.cs:3-7</code>). This is the cheapest possible base: it adds a <em>type</em> (so code can say
+          &quot;this is a value object&quot; and architecture tests can assert rules about them) without adding members.</li>
+          <li><strong>Walkthrough</strong>: there are no members. The whole contract is &quot;be a record, be abstract, be named
+          <code>ValueObject</code>&quot;. The work happens in derived types.</li>
+          <li><strong>Why it&#39;s built this way</strong>: using C#&#39;s <code>record</code> for value-object semantics avoids hand-writing
+          equality (a classic DDD chore and bug source). The base type exists so the <em>family</em> is nameable and
+          enforceable, not for shared behavior.</li>
+          <li><strong>Where it&#39;s used</strong>: base of <a href="#address"><code>Address</code></a>, <a href="#money"><code>Money</code></a>, <a href="#email"><code>Email</code></a>,
+          <a href="#currency"><code>Currency</code></a>, <a href="#daterange"><code>DateRange</code></a>, <a href="#datetimerange"><code>DateTimeRange</code></a>,
+          <a href="#phonenumber"><code>PhoneNumber</code></a>, each adds a factory method returning
+          <a href="group-01-result-error-handling.html#result"><code>Result&lt;T&gt;</code></a> so an invalid value object can&#39;t be
+          constructed.</li>
+          <li><strong>Caveats / not-in-source</strong>: equality is purely structural; if a future value object holds a
+          mutable collection, record equality would compare references, not contents. None of the current
+          value objects do.</li>
+          </ul>
+          <h3 id="baseentitytidentifiertype">BaseEntity&lt;TIdentifierType&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Entities</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/BaseEntity.cs:14</code> · Level 1 · class (abstract)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the concrete base class for every domain entity: implements
+          <a href="#ibaseentitytidentifiertype"><code>IBaseEntity&lt;TIdentifierType&gt;</code></a> with a <code>required init Id</code>.</li>
+          <li><strong>Depends on</strong>: <a href="#ibaseentitytidentifiertype"><code>IBaseEntity&lt;TIdentifierType&gt;</code></a> (Level 0).</li>
+          <li><strong>Concept introduced, entity base class + EF Core materialisation pattern.</strong> <code>[Rubric §4, DDD]</code>
+          (entities with clear identity). The doc comment (<code>BaseEntity.cs:5-13</code>) explains the two-path
+          design: application code calls a static factory method (which sets <code>Id</code> explicitly), while EF
+          Core materialises existing rows through the parameterless constructor and then sets <code>Id</code> via the
+          <code>init</code> accessor. Because <code>init</code> is only callable during object initialization, <code>Id</code> is immutable
+          after construction regardless of which path is used. <code>[Rubric §8, Data Architecture]</code> (deliberate
+          key-generation strategy): whether the id is DB-generated or app-assigned is declared on the
+          entity with <a href="#idvaluegeneratedattribute"><code>IdValueGeneratedAttribute</code></a> and read by
+          <a href="#entitytypeextensions"><code>EntityTypeExtensions.IsIdValueGenerated</code></a>, <code>BaseEntity</code> itself is
+          neutral on this.</li>
+          <li><strong>Walkthrough</strong>: a single line: <code>public required TIdentifierType Id { get; init; }</code>
+          (<code>BaseEntity.cs:17</code>). Everything else is inherited or added in subclasses.</li>
+          <li><strong>Why it&#39;s built this way</strong>: <code>required</code> means a factory method cannot accidentally skip setting
+          <code>Id</code>; the <code>where TIdentifierType : notnull</code> constraint (<code>BaseEntity.cs:15</code>) prevents nullable id
+          types. The class is <code>abstract</code> so it cannot be instantiated directly. <code>TIdentifierType</code> is bound
+          per-entity to a strongly-typed alias (<code>OrderIdentifierType = int</code>, named in the doc comment), see
+          the identifier-alias convention in the <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer</a>.</li>
+          <li><strong>Where it&#39;s used</strong>: base of <a href="#auditablebaseentitytidentifiertype"><code>AuditableBaseEntity&lt;TIdentifierType&gt;</code></a>
+          → <a href="#auditableaggregaterootentitytidentifiertype"><code>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code></a>;
+          every entity in both apps ultimately inherits from this.</li>
+          </ul>
+          <h3 id="entitytypeextensions">EntityTypeExtensions</h3>
+          <blockquote>
+          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Extensions</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Extensions/EntityTypeExtensions.cs:9</code> · Level 1 · class (static, extension block)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: adds a single computed property <code>IsIdValueGenerated</code> to <code>System.Type</code>, reading
+          the presence of <a href="#idvaluegeneratedattribute"><code>IdValueGeneratedAttribute</code></a> via reflection.</li>
+          <li><strong>Depends on</strong>: <a href="#idvaluegeneratedattribute"><code>IdValueGeneratedAttribute</code></a> (Level 0).</li>
+          <li><strong>Concept, C# <code>extension(T)</code> syntax</strong> (taught in the <a href="00-primer.html#c-extensiont-types--read-this-once">primer</a>).
+          The <code>extension(Type entityType)</code> block at <code>EntityTypeExtensions.cs:11</code> means any <code>Type</code> instance can
+          call <code>.IsIdValueGenerated</code> without inheriting from or being wrapped by anything:
+          <code>typeof(MyEntity).IsIdValueGenerated</code>. The implementation (<code>EntityTypeExtensions.cs:19</code>):
+          <code>entityType.GetCustomAttribute&lt;IdValueGeneratedAttribute&gt;() is not null</code>, a single reflection
+          call, cached by factory methods in practice. <code>[Rubric §8, Data Architecture]</code> (deliberate
+          key-generation strategy declared at the entity level, not scattered in configuration).</li>
+          <li><strong>Where it&#39;s used</strong>: entity factory methods call <code>typeof(TEntity).IsIdValueGenerated</code> to decide
+          whether to assign <code>default</code> for <code>Id</code> (letting the DB generate it) or an explicit value; EF
+          entity configurations also use it.</li>
+          </ul>
+          <h3 id="address">Address</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.ValueObjects</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Address.cs:16</code> · Level 3 · record (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: an immutable value object for a postal address. <code>AddressLine1</code> is required;
+          the remaining five fields (<code>AddressLine2</code>, <code>City</code>, <code>State</code>, <code>ZipCode</code>, <code>Country</code>) are optional
+          to accommodate international formats.</li>
+          <li><strong>Depends on</strong>: <a href="#addressinvariants"><code>AddressInvariants</code></a> (mutual, see the cycle note below),
+          <a href="group-01-result-error-handling.html#result"><code>Result</code></a>, <a href="#valueobject"><code>ValueObject</code></a>.</li>
+          <li><strong>Concept introduced, the value-object factory method returning <code>Result&lt;T&gt;</code>.</strong> <code>[Rubric §4, Domain-Driven Design]</code> (assesses value objects with enforced invariants) and <code>[Rubric §15, Best Practices &amp; Code Quality]</code> (assesses &quot;unconstructable invalid state&quot;). The key pattern:
+          the constructor is <code>private</code> (<code>Address.cs:43</code>), preventing ad-hoc instantiation. The only public
+          entry point is a <code>static Result&lt;Address&gt; Create(…)</code> factory method (<code>Address.cs:69-89</code>). If the
+          invariants pass, <code>Create</code> returns <code>Result.Success(new Address(…))</code>; if they fail, it returns a
+          <code>Result.Failure</code>. This makes an <em>invalid <code>Address</code> unconstructable</em>, you cannot bypass validation
+          with <code>new Address(…)</code> from outside the class. The <code>[JsonConstructor]</code> on the private ctor
+          (<code>Address.cs:42</code>) is the one exception: <code>System.Text.Json</code> is permitted to round-trip the object
+          from serialized form (where the fields are already validated). <code>[DataContract]</code>/<code>[DataMember(Order = …)]</code>
+          tags (<code>Address.cs:15-40</code>) pin the wire shape and serialization order, making the contract stable.</li>
+          <li><strong>Documented cycle, <code>Address</code> ↔ <code>AddressInvariants</code>.</strong> Both types are Level 3 in the same SCC
+          (strongly connected component). <code>Address.Create</code> calls <code>AddressInvariants.EnsureAddressLine1IsValid</code>,
+          while <code>AddressInvariants.EnsureAddressIsValid</code> accepts an <code>Address?</code> parameter. This is deliberate:
+          the invariant helper is the canonical place for constraints (max-length constants, error codes)
+          while the value object owns construction. Because both reference the other, the leveling algorithm
+          assigns them the same level rather than an impossible ordering. <code>[Rubric §2, Design Patterns]</code>
+          (mutual delegation is fine here; neither owns the other&#39;s core identity).</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>Create</code> (<code>Address.cs:69</code>): calls <code>Result.Combine(AddressInvariants.EnsureAddressLine1IsValid(…))</code>
+          (<code>Address.cs:77-78</code>); on failure re-wraps the errors as <code>Result.Failure&lt;Address&gt;</code>. Only
+          <code>AddressLine1</code> is validated at the value-object level; the other fields are length-checked by the
+          FluentValidation rules in higher tiers.</li>
+          <li><code>ToString()</code> (<code>Address.cs:93</code>): joins the non-empty parts with <code>, </code> via LINQ, producing a
+          human-readable address string.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: EF stores <code>Address</code> as an <em>owned type</em> via <code>OwnsOne</code> (noted in the
+          doc comment, <code>Address.cs:13</code>). Owned types have value semantics at the persistence level, they
+          share the parent entity&#39;s row. The private constructor prevents accidental <code>new Address()</code> from EF
+          materializers; the <code>[JsonConstructor]</code> provides a sanctioned JSON path.</li>
+          <li><strong>Where it&#39;s used</strong>: applied to entity properties carrying a postal address; <code>Create</code> is called
+          from domain aggregate factories. <code>AddressInvariants</code> constants drive EF column max-lengths and the
+          <a href="group-06-validation.html#addressline1rulest"><code>AddressLine1Rules&lt;T&gt;</code></a> family of FluentValidation rules
+          (consumed in turn by <a href="group-06-validation.html#addressvalidator"><code>AddressValidator</code></a>). Carried by
+          <a href="group-08-auth.html#registerrequest"><code>RegisterRequest</code></a>.</li>
+          </ul>
+          <h3 id="addressinvariants">AddressInvariants</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.ValueObjects</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/AddressInvariants.cs:9</code> · Level 3 · class (static)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a static helper that holds the address field <strong>max-length constants</strong> (shared by
+          EF configurations and FluentValidation validators) and two invariant-check methods that return
+          <a href="group-01-result-error-handling.html#result"><code>Result</code></a>.</li>
+          <li><strong>Depends on</strong>: <a href="#address"><code>Address</code></a> (mutual cycle, same SCC),
+          <a href="group-01-result-error-handling.html#error"><code>Error</code></a>, <a href="group-01-result-error-handling.html#result"><code>Result</code></a>.</li>
+          <li><strong>Concept introduced, the shared-constants invariant class.</strong> <code>[Rubric §16, Maintainability &amp; Evolvability]</code> (a single place to change a constraint). <code>AddressLine1MaxLength = 200</code>
+          (<code>AddressInvariants.cs:12</code>) is a <code>static readonly int</code> that EF entity configurations,
+          FluentValidation rules, and this invariant all read from. Change it in one place and every layer
+          picks it up. This is the pattern repeated for every value type: the invariant class is the <em>single
+          source of truth</em> for both the constraint value and the error shape. Six max-length constants are
+          declared (<code>AddressInvariants.cs:12-27</code>), one per address field.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>EnsureAddressLine1IsValid(string addressLine1, string source)</code> (<code>AddressInvariants.cs:50</code>):
+          checks <code>string.IsNullOrWhiteSpace</code>; on failure returns <code>Error.Invariant(&quot;Address.Line1.Empty&quot;, …)</code>
+          with the caller&#39;s method name as <code>source</code> for stack-free tracing.</li>
+          <li><code>EnsureAddressIsValid(Address? address, string source)</code> (<code>AddressInvariants.cs:35</code>): allows
+          <code>null</code> (address is optional on many entities) and otherwise delegates to
+          <code>EnsureAddressLine1IsValid</code>.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: separating the constants from the value object means EF
+          configurations can reference <code>AddressInvariants.AddressLine1MaxLength</code> without referencing
+          <code>Address</code> itself, keeping Infrastructure&#39;s dependency on Shared lightweight.</li>
+          <li><strong>Where it&#39;s used</strong>: called inside <code>Address.Create</code>; max-length constants referenced by EF
+          <code>EntityTypeConfiguration</code> classes (Infrastructure) and the
+          <a href="group-06-validation.html#addressline1rulest"><code>AddressLine1Rules&lt;T&gt;</code></a> family (Application).</li>
+          </ul>
+          <h3 id="auditablebaseentitytidentifiertype">AuditableBaseEntity&lt;TIdentifierType&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Entities</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:13</code> · Level 3 · class (abstract)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the second level of the entity hierarchy: extends
+          <a href="#baseentitytidentifiertype"><code>BaseEntity&lt;TIdentifierType&gt;</code></a> with <strong>soft-delete</strong>, <strong>audit
+          tracking</strong>, and <strong>optimistic concurrency</strong>. Every domain entity in both apps inherits (transitively)
+          from this class.</li>
+          <li><strong>Depends on</strong>: <a href="#baseentitytidentifiertype"><code>BaseEntity&lt;TIdentifierType&gt;</code></a>,
+          <a href="group-01-result-error-handling.html#error"><code>Error</code></a>, <a href="#iauditableentity"><code>IAuditableEntity</code></a>,
+          <a href="group-01-result-error-handling.html#result"><code>Result</code></a>.</li>
+          <li><strong>Concept introduced, private setters on audit properties stamped via EF reflection.</strong>
+          <code>[Rubric §8, Data Architecture]</code> (assesses audit fields stamped centrally, not per-handler) and
+          <code>[Rubric §3, Clean Architecture]</code> (the domain never sets its own audit fields, infrastructure
+          does). <code>CreatedOn</code>, <code>CreatedBy</code>, <code>LastModifiedOn</code>, <code>LastModifiedBy</code> (<code>AuditableBaseEntity.cs:25-31</code>)
+          all have <code>private set</code>, the domain <em>reads</em> them but does not write them. The doc comment
+          (<code>AuditableBaseEntity.cs:8-10</code>) explains the mechanism: EF Core&#39;s <code>SaveChangesAsync</code> override
+          accesses these via <code>entry.Property(…).CurrentValue</code> reflection, bypassing setter visibility. The
+          <code>#pragma warning disable S1144, CA1819</code> (<code>AuditableBaseEntity.cs:24</code>) suppresses &quot;private setter
+          unused&quot; and &quot;return array from property&quot; analyzer warnings that would otherwise fire, scoped and
+          justified inline. <code>[Rubric §10, Cross-Cutting Concerns]</code> (centralized stamping eliminates
+          per-handler boilerplate).</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>IsDeleted</code> (<code>AuditableBaseEntity.cs:20</code>): <code>virtual bool</code>, <code>private set</code>, soft-delete flag.
+          <code>virtual</code> so EF lazy-load proxies and test subclasses can override.</li>
+          <li><code>RowVersion</code> (<code>AuditableBaseEntity.cs:39</code>): <code>byte[]</code>, <code>private set</code>, initialized to <code>[]</code>. EF maps
+          this as a <code>[Timestamp]</code>/SQL Server <code>rowversion</code> column. Its presence in <code>UPDATE</code>/<code>DELETE</code> WHERE
+          clauses is what makes optimistic concurrency automatic, if another writer changed the row between
+          read and save, EF throws <code>DbUpdateConcurrencyException</code>.</li>
+          <li><code>Delete()</code> (<code>AuditableBaseEntity.cs:47</code>): <code>virtual Result</code>, checks <code>IsDeleted</code> first (idempotency
+          guard), returning <code>Error.AlreadyDeleted</code> if so; otherwise sets it to <code>true</code> and returns
+          <code>Result.Success()</code>. Returning <code>Result</code> instead of <code>void</code> lets callers propagate the &quot;already
+          deleted&quot; failure through the standard error flow.</li>
+          <li><code>Undelete()</code> (<code>AuditableBaseEntity.cs:67</code>): <code>protected</code> (only callable by derived classes that
+          deliberately support reactivation, BR-135 in the ADC spec). Mirrors <code>Delete()</code>&#39;s pattern: guard
+          (<code>Error.Invariant(&quot;Entity.NotDeleted&quot;, …)</code>) → mutate → return <code>Result</code>.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: three concerns (identity, audit, concurrency) are layered as separate
+          base classes so each can be tested and evolved independently.
+          <a href="#auditableaggregaterootentitytidentifiertype"><code>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code></a>
+          (Level 4) adds domain-event collection on top.</li>
+          <li><strong>Where it&#39;s used</strong>: every entity in Conference, Engagement, Identity, Notification inherits from
+          <a href="#auditableaggregaterootentitytidentifiertype"><code>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code></a>,
+          which inherits from this. Used directly by child entities (non-aggregate-root entities that need
+          audit but don&#39;t raise events).</li>
+          </ul>
+          <h3 id="currency">Currency</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.ValueObjects</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Currency.cs:14</code> · Level 3 · record (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: an ISO 4217 currency value object using a <strong>closed set</strong> pattern: only
+          <code>Currency.Usd</code> and <code>Currency.Eur</code> are public instances; the constructor is private. <code>None</code> is an
+          internal sentinel for <a href="#money"><code>Money.Zero()</code></a>.</li>
+          <li><strong>Depends on</strong>: <a href="#currencyjsonconverter"><code>CurrencyJsonConverter</code></a> (mutual cycle),
+          <a href="group-01-result-error-handling.html#error"><code>Error</code></a>, <a href="group-01-result-error-handling.html#result"><code>Result</code></a>,
+          <a href="#valueobject"><code>ValueObject</code></a>.</li>
+          <li><strong>Documented cycle, <code>Currency</code> ↔ <code>CurrencyJsonConverter</code>.</strong> Both are defined in the same file
+          (<code>Currency.cs:14</code> and <code>:65</code>). <code>Currency</code> carries <code>[JsonConverter(typeof(CurrencyJsonConverter))]</code>
+          (<code>Currency.cs:13</code>), while <code>CurrencyJsonConverter.Read</code> calls <code>Currency.FromCode</code>. Because of the
+          mutual reference both are assigned Level 3.</li>
+          <li><strong>Concept introduced, the closed-set (type-safe enum) pattern for value objects.</strong> <code>[Rubric §4, DDD]</code> (eliminates primitive obsession for currency codes). Rather than passing a raw <code>string &quot;USD&quot;</code>
+          around, all code uses <code>Currency.Usd</code>, a statically typed singleton. New currencies are added by
+          adding a field to <code>All</code> (<code>Currency.cs:54</code>). <code>FromCode</code> validates at the boundary; once inside the
+          domain you always hold a known-valid <code>Currency</code>.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>EmptyCurrency</code> / <code>InvalidCurrency</code> (<code>Currency.cs:17,20</code>): pre-constructed <code>Error</code> singletons for
+          the two failure paths, so <code>FromCode</code> doesn&#39;t allocate a new error on each bad call.</li>
+          <li><code>None</code> (<code>Currency.cs:23</code>): an <code>internal</code> empty-code sentinel used only by <code>Money</code> as an additive
+          identity, never exposed to API consumers.</li>
+          <li><code>FromCode(string code)</code> (<code>Currency.cs:41</code>): empty-guard, then a case-insensitive linear scan over
+          <code>All</code>; on success returns the <em>singleton</em> (no allocation, <code>Currency.Usd</code> is the same object every
+          time).</li>
+          <li><code>All</code> (<code>Currency.cs:54</code>): <code>IReadOnlyCollection&lt;Currency&gt;</code>, the extension point for adding
+          currencies.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: pre-constructing the singleton instances avoids per-call allocation
+          and makes equality comparison trivial (reference equality). The closed set enforces that unknown
+          codes can never appear as <code>Currency</code> values inside the domain.</li>
+          <li><strong>Where it&#39;s used</strong>: <a href="#money"><code>Money</code></a> holds a <code>Currency</code>; <code>CurrencyJsonConverter</code> serializes it
+          for API responses; the API-layer
+          <a href="group-12-api-hosting-mapping.html#currencyjsonconverter"><code>CurrencyJsonConverter</code></a> (Level 4) registers
+          the converter globally.</li>
+          </ul>
+          <h3 id="currencyjsonconverter">CurrencyJsonConverter</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.ValueObjects</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Currency.cs:65</code> · Level 3 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a <code>JsonConverter&lt;Currency&gt;</code> that serializes <a href="#currency"><code>Currency</code></a> as its ISO code
+          string and deserializes via <code>Currency.FromCode</code>.</li>
+          <li><strong>Depends on</strong>: <a href="#currency"><code>Currency</code></a> (mutual cycle, see above).</li>
+          <li><strong>Concept reinforced, converter-per-value-object.</strong> <code>[Rubric §9, API &amp; Contract Design]</code>
+          (assesses consistent, stable serialization). Registering the converter on the record type itself
+          (via the <code>[JsonConverter]</code> attribute on <code>Currency</code>) means it applies automatically wherever
+          <code>Currency</code> appears in a response, no per-controller configuration needed.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>Read</code> (<code>Currency.cs:68</code>): reads the code string (returns <code>null</code> if the JSON token is null),
+          calls <code>Currency.FromCode</code>; on failure throws <code>JsonException</code> (the correct boundary behavior,
+          invalid JSON input is a deserialization error, not a domain <code>Result.Failure</code>).</li>
+          <li><code>Write</code> (<code>Currency.cs:82</code>): <code>writer.WriteStringValue(value.Code)</code>, the wire shape is just the
+          three-letter string.</li>
+          </ul>
+          </li>
+          <li><strong>Where it&#39;s used</strong>: registered automatically via the <code>[JsonConverter]</code> attribute on <code>Currency</code>;
+          the <a href="group-12-api-hosting-mapping.html#currencyjsonconverter"><code>CurrencyJsonConverter</code></a> wrapper in
+          <code>MMCA.Common.API</code> (Level 4) registers the same converter with <code>JsonOptions</code> globally.</li>
+          <li><strong>Caveats / not-in-source</strong>: the converter has no version sentinel; if the closed code set
+          changes, deserializing an old code from a stored document (e.g. a stale cache) will throw
+          <code>JsonException</code>.</li>
+          </ul>
+          <h3 id="daterange">DateRange</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.ValueObjects</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/DateRange.cs:9</code> · Level 3 · record (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: an immutable value object for a date-only range (<code>DateOnly Start</code>, <code>DateOnly End</code>),
+          inclusive on both ends, with the invariant that <code>End ≥ Start</code>.</li>
+          <li><strong>Depends on</strong>: <a href="group-01-result-error-handling.html#error"><code>Error</code></a>,
+          <a href="group-01-result-error-handling.html#result"><code>Result</code></a>, <a href="#valueobject"><code>ValueObject</code></a>.</li>
+          <li><strong>Concept reinforced, lightweight single-invariant factory.</strong> <code>[Rubric §4, DDD]</code> (temporal
+          ranges are domain concepts, not raw pairs of <code>DateTime</code>). Compare <code>DateRange</code> to <a href="#address"><code>Address</code></a>:
+          <code>Address.Create</code> delegates to <code>AddressInvariants</code>; <code>DateRange.Create</code> (<code>DateRange.cs:30</code>) enforces
+          the single <code>end &lt; start</code> rule inline, no separate invariant class is needed when there is only one
+          constraint.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>Create(DateOnly start, DateOnly end)</code> (<code>DateRange.cs:30</code>): a one-liner conditional expression.
+          Failure uses <code>Error.Validation</code> (not <code>Error.Invariant</code>) because the caller passes raw
+          user-supplied dates, this is a <em>validation</em> problem, not a corrupted-state invariant.</li>
+          <li><code>LengthInDays</code> (<code>DateRange.cs:38</code>): <code>End.DayNumber - Start.DayNumber</code>, <code>DayNumber</code> avoids
+          <code>TimeSpan</code> arithmetic on <code>DateOnly</code>.</li>
+          <li><code>Overlaps(DateRange other)</code> (<code>DateRange.cs:46</code>): half-open interval logic (<code>Start &lt; other.End &amp;&amp; End &gt; other.Start</code>), null-guarded, the standard range-overlap formula, documented in the method
+          comment.</li>
+          <li><code>Contains(DateOnly instant)</code> (<code>DateRange.cs:55</code>): inclusive check.</li>
+          <li><code>Deconstruct</code> (<code>DateRange.cs:61</code>): lets callers use <code>var (start, end) = dateRange</code>.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: <code>DateOnly</code> (not <code>DateTime</code>) signals that the concept is purely
+          date-level; using a value object instead of a bare pair prevents accidentally swapping <code>start</code> and
+          <code>end</code> at call sites.</li>
+          <li><strong>Where it&#39;s used</strong>: event date ranges in the ADC Conference module (validated through
+          FluentValidation <code>EventDateRangeRules</code>).</li>
+          </ul>
+          <h3 id="datetimerange">DateTimeRange</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.ValueObjects</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/DateTimeRange.cs:10</code> · Level 3 · record (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the <code>DateTime</code>-precision sibling of <a href="#daterange"><code>DateRange</code></a>; carries
+          <code>DateTime Start</code> and <code>DateTime End</code>.</li>
+          <li><strong>Depends on</strong>: <a href="group-01-result-error-handling.html#error"><code>Error</code></a>,
+          <a href="group-01-result-error-handling.html#result"><code>Result</code></a>, <a href="#valueobject"><code>ValueObject</code></a>.</li>
+          <li><strong>Concept</strong>: the same factory/invariant pattern as <a href="#daterange"><code>DateRange</code></a>. The difference is
+          <code>Duration</code> (<code>DateTimeRange.cs:39</code>) returns a <code>TimeSpan</code> instead of an integer day count. The
+          structural shape is otherwise identical; this section cross-references rather than repeating.</li>
+          <li><strong>Walkthrough</strong>: <code>Create(DateTime start, DateTime end)</code> (<code>DateTimeRange.cs:31</code>) uses the same
+          conditional-expression pattern (<code>Error.Validation</code> on <code>end &lt; start</code>); <code>Overlaps</code>/<code>Contains</code>/
+          <code>Deconstruct</code> (<code>DateTimeRange.cs:46/55/61</code>) mirror <code>DateRange</code> exactly.</li>
+          <li><strong>Where it&#39;s used</strong>: session time slots and room scheduling windows in the Conference module.</li>
+          </ul>
+          <h3 id="emailinvariants">EmailInvariants</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.ValueObjects</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/EmailInvariants.cs:10</code> · Level 3 · class (static, partial)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: invariant checks for email addresses: not-empty, max-length (256), and format via
+          a <code>[GeneratedRegex]</code> method.</li>
+          <li><strong>Depends on</strong>: <a href="group-01-result-error-handling.html#error"><code>Error</code></a>,
+          <a href="group-01-result-error-handling.html#result"><code>Result</code></a>.</li>
+          <li><strong>Concept introduced, <code>[GeneratedRegex]</code> for performance.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code> (assesses avoiding allocations and per-call regex compilation). The <code>partial</code>
+          class/property pair (<code>EmailInvariants.cs:10,54-55</code>) lets the C# source generator bake a pre-compiled
+          <code>Regex</code> instance at compile time, with a hard <code>matchTimeoutMilliseconds: 1000</code> to prevent
+          catastrophic backtracking. No <code>new Regex(…)</code> at runtime. The pattern (<code>^[^@\s]+@[^@\s]+\.[^@\s]+$</code>)
+          is &quot;practical&quot; rather than full RFC-5322, the doc comment (<code>EmailInvariants.cs:17</code>) is honest about
+          this.</li>
+          <li><strong>Walkthrough</strong>: <code>EnsureEmailIsValid(string email, string source)</code> (<code>EmailInvariants.cs:22</code>):
+          three sequential guards, empty, length, format, each returning a distinct <code>Error.Invariant</code> whose
+          code encodes the failure sub-type (<code>&quot;Email.Empty&quot;</code>, <code>&quot;Email.TooLong&quot;</code>, <code>&quot;Email.InvalidFormat&quot;</code>).
+          Using <code>Error.Invariant</code> (not <code>Error.Validation</code>) signals these are domain-level data-integrity
+          requirements, not user-input validations.</li>
+          <li><strong>Why it&#39;s built this way</strong>: the same <code>MaxLength = 256</code> constant (<code>EmailInvariants.cs:13</code>) is
+          referenced by EF <code>HasMaxLength</code> calls, keeping the schema and the invariant in sync.</li>
+          <li><strong>Where it&#39;s used</strong>: called from <a href="#email"><code>Email.Create</code></a> (Level 4) and the FluentValidation email
+          rule helpers (Application).</li>
+          </ul>
+          <h3 id="phonenumberinvariants">PhoneNumberInvariants</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.ValueObjects</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/PhoneNumberInvariants.cs:10</code> · Level 3 · class (static, partial)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: invariant checks for phone numbers: not-empty, length range (7–20 chars), and
+          format via <code>[GeneratedRegex]</code> (<code>^[\d\s\-\(\)\+]+$</code>).</li>
+          <li><strong>Depends on</strong>: <a href="group-01-result-error-handling.html#error"><code>Error</code></a>,
+          <a href="group-01-result-error-handling.html#result"><code>Result</code></a>.</li>
+          <li><strong>Concept</strong>: the same <code>[GeneratedRegex]</code> pattern as <a href="#emailinvariants"><code>EmailInvariants</code></a>; the
+          guard sequence checks empty → length → format (<code>PhoneNumberInvariants.cs:25</code> onwards), and it
+          validates against the <em>trimmed</em> string (<code>PhoneNumberInvariants.cs:36</code>). <code>MinLength = 7</code> and
+          <code>MaxLength = 20</code> (<code>PhoneNumberInvariants.cs:13,16</code>) are the shared constants used by EF and
+          FluentValidation.</li>
+          <li><strong>Where it&#39;s used</strong>: called from <a href="#phonenumber"><code>PhoneNumber.Create</code></a> (Level 4).</li>
+          </ul>
+          <h3 id="auditableaggregaterootentitytidentifiertype">AuditableAggregateRootEntity&lt;TIdentifierType&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Entities</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableAggregateRootEntity.cs:13</code> · Level 4 · class (abstract)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the base class for <strong>aggregate roots</strong>: entities that own a consistency boundary,
+          collect domain events, and control child-collection mutation. Extends
+          <a href="#auditablebaseentitytidentifiertype"><code>AuditableBaseEntity&lt;TIdentifierType&gt;</code></a> with a private
+          <code>_domainEvents</code> list, <code>SetItems&lt;TChildEntity&gt;</code>, and <code>GetChildOrNotFound</code>.</li>
+          <li><strong>Depends on</strong>: <a href="#auditablebaseentitytidentifiertype"><code>AuditableBaseEntity&lt;TIdentifierType&gt;</code></a>
+          (Level 3); <a href="group-01-result-error-handling.html#error"><code>Error</code></a> (Level 1);
+          <a href="#iaggregateroot"><code>IAggregateRoot</code></a> (Level 1); <a href="#iauditableentity"><code>IAuditableEntity</code></a> (Level 0);
+          <a href="group-04-events-outbox.html#idomainevent"><code>IDomainEvent</code></a> (Level 0);
+          <a href="group-01-result-error-handling.html#result"><code>Result</code></a> (Level 2).</li>
+          <li><strong>Concept introduced, the aggregate root pattern.</strong> <code>[Rubric §4, Domain-Driven Design]</code> (assesses
+          aggregates as consistency boundaries that own child entities and raise domain events). An
+          <strong>aggregate root</strong> is the sole entry point to a cluster of related entities: only the root exposes
+          mutation methods; outsiders cannot reach children directly. In DDD terms the root <em>protects the
+          invariants of the whole cluster</em>. This class embodies three aggregate responsibilities:<ol>
+          <li><strong>Domain event collection</strong> (<code>AddDomainEvent</code> / <code>ClearDomainEvents</code>,
+          <code>AuditableAggregateRootEntity.cs:24,34</code>), the aggregate records side-effects as <code>IDomainEvent</code>
+          objects; they are dispatched by the infrastructure after a successful <code>SaveChangesAsync</code>, not
+          during the domain operation itself. This is the &quot;domain events transact with the aggregate&quot;
+          design from ADR-003.</li>
+          <li><strong>Child collection mutation</strong> (<code>SetItems&lt;TChildEntity&gt;</code>, <code>AuditableAggregateRootEntity.cs:44</code>),
+          replaces an entire child list atomically, calling the <code>ValidateSetItems</code> hook (line 69, virtual,
+          no-op by default) so subclasses can enforce business rules <em>before</em> the mutation occurs (e.g.,
+          preventing removal of fulfilled order lines).</li>
+          <li><strong>Child lookup</strong> (<code>GetChildOrNotFound&lt;TChild, TChildId&gt;</code>, <code>AuditableAggregateRootEntity.cs:87</code>),
+          searches the in-memory collection for an active (non-soft-deleted) child by id, returning
+          <code>Result&lt;TChild&gt;</code> rather than throwing.
+          <code>[Rubric §6, CQRS &amp; Event-Driven]</code> (domain events raised at the aggregate level, dispatched after
+          successful persistence).</li>
+          </ol>
+          </li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>private readonly List&lt;IDomainEvent&gt; _domainEvents</code> (<code>AuditableAggregateRootEntity.cs:16</code>): the
+          in-memory accumulator. <code>IReadOnlyCollection&lt;IDomainEvent&gt; DomainEvents</code> (line 18) exposes it
+          read-only so infrastructure can drain it but handlers cannot add events through the property.</li>
+          <li><code>AddDomainEvent(IDomainEvent domainEvent)</code> (<code>AuditableAggregateRootEntity.cs:24</code>): null-guards and
+          appends. Called by entity factory and mutation methods inside the aggregate.</li>
+          <li><code>ClearDomainEvents()</code> (<code>AuditableAggregateRootEntity.cs:34</code>): called by <code>ApplicationDbContext</code>
+          after dispatching, prevents re-dispatch if a second save occurs.</li>
+          <li><code>SetItems&lt;TChildEntity&gt;(List&lt;TChildEntity&gt; collection, IEnumerable&lt;TChildEntity&gt; items)</code>
+          (<code>AuditableAggregateRootEntity.cs:44</code>): materializes <code>items</code> once (avoiding double enumeration via
+          <code>items as IList&lt;…&gt; ?? [.. items]</code>), calls <code>ValidateSetItems</code>, then <code>Clear()</code> + <code>AddRange()</code>. The
+          EF-tracked list reference (<code>collection</code>) is <em>never replaced</em>, only mutated, EF change tracking
+          requires the original list reference to detect adds/removes.</li>
+          <li><code>ValidateSetItems&lt;TChildEntity&gt;</code> (<code>AuditableAggregateRootEntity.cs:69</code>): protected virtual, empty
+          by default; override in aggregates that have rules about child-collection shape.</li>
+          <li><code>GetChildOrNotFound&lt;TChild, TChildId&gt;</code> (<code>AuditableAggregateRootEntity.cs:87</code>): <code>FirstOrDefault</code>
+          against the in-memory collection checking <code>Id.Equals(childId) &amp;&amp; !c.IsDeleted</code>; returns
+          <code>Error.NotFound</code> (with source and target set) when missing.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: ADR-003 (outbox + in-process dispatch) requires domain events to
+          &quot;ride along&quot; with the entity in memory and be captured during <code>SaveChangesAsync</code>; the collection
+          lives on the root because it is the consistency boundary. <code>SetItems</code> + <code>ValidateSetItems</code> gives a
+          single protected-hook mutation path, avoiding scattered collection-manipulation logic in handlers.</li>
+          <li><strong>Where it&#39;s used</strong>: base class for every domain aggregate root in both ADC and Store (the ADC
+          <code>Event</code>, <code>Session</code>, <code>Speaker</code>, <code>ConferenceCategory</code>, <code>User</code>, <code>UserSessionBookmark</code>, and
+          notification entities all extend it).</li>
+          </ul>
+          <h3 id="email">Email</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.ValueObjects</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Email.cs:13</code> · Level 4 · record (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a validated, normalized value object for email addresses. Construction always goes
+          through <code>Create</code>, which rejects invalid formats and normalizes to lowercase; the private constructor
+          is JSON-only.</li>
+          <li><strong>Depends on</strong>: <a href="#valueobject"><code>ValueObject</code></a> (Level 0); <a href="#emailinvariants"><code>EmailInvariants</code></a>
+          (Level 3); <a href="group-01-result-error-handling.html#result"><code>Result&lt;T&gt;</code></a> (Level 2).</li>
+          <li><strong>Concept introduced, value-object factory + implicit conversion.</strong> <code>[Rubric §4, Domain-Driven Design]</code> (assesses rich value objects with invariant-protected construction). The pattern combines
+          three ideas: (1) the private <code>[JsonConstructor]</code>-tagged constructor (<code>Email.cs:19-20</code>) prevents
+          accidental construction outside JSON deserialization; (2) the static <code>Create</code> factory validates and
+          normalizes, returning <code>Result&lt;Email&gt;</code> rather than throwing; (3) <code>public static implicit operator string(Email email)</code> (<code>Email.cs:42</code>) lets the value object drop in where a plain string is expected
+          without an explicit cast, a backward-compatibility bridge. The <code>#pragma warning disable CA1308</code>
+          around <code>ToLowerInvariant</code> (<code>Email.cs:35-37</code>) is justified inline (&quot;Email addresses are
+          conventionally lowercase per RFC 5321&quot;), a scoped, explained suppression. <code>[Rubric §15, Best Practices &amp; Code Quality]</code> (justified suppressions, no blanket disables).</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>Value</code> (<code>Email.cs:17</code>): <code>string</code>, getter-only, the normalized address; <code>[DataMember(Order = 1)]</code>
+          controls the wire-format order.</li>
+          <li><code>Create(string value)</code> (<code>Email.cs:27</code>): trims whitespace (null-safe via <code>value?.Trim() ?? string.Empty</code>), calls <code>EmailInvariants.EnsureEmailIsValid</code>, then converts to lowercase-invariant
+          on success.</li>
+          <li><code>implicit operator string</code> (<code>Email.cs:42</code>): enables <code>string s = email;</code> without a cast.</li>
+          <li><code>ToString()</code> (<code>Email.cs:45</code>): delegates to <code>Value</code>. The EF doc comment (<code>Email.cs:8-10</code>) notes
+          <code>HasConversion</code> (not <code>OwnsOne</code>), so the column stays a flat <code>nvarchar</code>, no nested owned-type
+          table.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: normalizing at construction time lets the entire system compare and
+          store emails case-insensitively without per-use <code>.ToLower()</code> calls.</li>
+          <li><strong>Where it&#39;s used</strong>: domain entities that carry an email field;
+          <a href="group-08-auth.html#registerrequest"><code>RegisterRequest</code></a> includes a raw <code>string Email</code> that gets
+          converted to an <code>Email</code> value object inside the domain factory. <code>[Rubric §9, API &amp; Contract Design]</code> (normalized shapes crossing layers).</li>
+          </ul>
+          <h3 id="money">Money</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.ValueObjects</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Money.cs:18</code> · Level 4 · record (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a value object pairing a <code>decimal Amount</code> with a <a href="#currency"><code>Currency</code></a>, with
+          arithmetic operators, a safe <code>Add</code> method, and <code>Currency.None</code> as a zero-accumulator sentinel.</li>
+          <li><strong>Depends on</strong>: <a href="#valueobject"><code>ValueObject</code></a> (Level 0); <a href="#currency"><code>Currency</code></a> (Level 3);
+          <a href="group-01-result-error-handling.html#error"><code>Error</code></a> (Level 1);
+          <a href="group-01-result-error-handling.html#result"><code>Result&lt;T&gt;</code></a> (Level 2).</li>
+          <li><strong>Concept introduced, domain-level arithmetic on value objects.</strong> <code>[Rubric §4, DDD]</code> (rich value
+          objects encapsulate behavior, not just data). <code>Money</code> is concept-rich:<ul>
+          <li>Two static <code>Error</code> fields (<code>NoCurrency</code>, <code>CurrencyMismatch</code>, <code>Money.cs:21,24</code>) are class-level
+          constants. This is the &quot;error as a named constant&quot; sub-pattern: callers can compare
+          <code>result.Errors[0] == Money.CurrencyMismatch</code> without string matching.</li>
+          <li><code>operator +</code> (<code>Money.cs:68</code>) delegates to <code>Add</code> and <em>throws</em> <code>InvalidOperationException</code> on
+          mismatch, the unsafe operator path. The doc comment (<code>Money.cs:61-64</code>) explicitly warns: &quot;Prefer
+          <code>Add</code> for Result-based error handling.&quot; This is a deliberate usability trade-off: operator syntax
+          for trusted arithmetic (order-line totalling within a known currency), the Result path for
+          untrusted cross-currency input.</li>
+          <li><code>Currency.None</code> acts as the additive identity: <code>AddUnchecked</code> (<code>Money.cs:115</code>) preserves the other
+          side&#39;s currency when one side is <code>None</code>, enabling <code>Zero()</code> as an <code>Enumerable.Aggregate</code> seed
+          without knowing the target currency in advance.</li>
+          <li><code>internal static Money CreateUnsafe</code> (<code>Money.cs:137</code>) is exposed to test assemblies via
+          <code>InternalsVisibleTo</code>, a test-only back-door without a public loophole.</li>
+          <li><code>[DataContract]</code>/<code>[DataMember]</code> and <code>[JsonConstructor]</code> (<code>Money.cs:17,27,31,37</code>) give the same
+          controlled construction + serialization as <code>Email</code>.</li>
+          </ul>
+          </li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>Create(decimal amount, Currency currency)</code> (<code>Money.cs:51</code>): null-guards the currency reference
+          and rejects <code>Currency.None</code> (external callers must specify a real currency).</li>
+          <li><code>operator +</code> (<code>Money.cs:68</code>) and <code>operator *</code> (<code>Money.cs:80</code>): conventional arithmetic
+          (multiplication is by <code>int</code> quantity).</li>
+          <li><code>Add(Money first, Money second)</code> (<code>Money.cs:91</code>): Result-safe addition; returns
+          <code>CurrencyMismatch</code> (with source/target set) only when both sides have a real, differing currency,
+          otherwise delegates to <code>AddUnchecked</code>.</li>
+          <li><code>Zero()</code> / <code>Zero(Currency)</code> (<code>Money.cs:126,131</code>): static factories for accumulator seeds.</li>
+          <li><code>IsZero()</code> (<code>Money.cs:141</code>) and <code>IsNegative</code> (<code>Money.cs:35</code>): convenience predicates.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: encapsulating arithmetic on the value object eliminates scattered
+          <code>Amount + Amount</code> calls that ignore currency; the two-path design (<code>operator +</code> vs <code>Add</code>) matches
+          the two callers: trusted internal sums and API-boundary input validation.</li>
+          <li><strong>Where it&#39;s used</strong>: configured as an EF <code>OwnsOne</code> in entity configurations (Store modules); the
+          <code>Zero()</code> accumulator seed is used in order-total calculations; the UI formats it via
+          <a href="group-15-common-ui-framework.html#moneyextensions"><code>MoneyExtensions</code></a>.</li>
+          </ul>
+          <h3 id="phonenumber">PhoneNumber</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.ValueObjects</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/PhoneNumber.cs:13</code> · Level 4 · record (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a validated, trimmed value object for phone numbers; structurally parallel to
+          <a href="#email"><code>Email</code></a>.</li>
+          <li><strong>Depends on</strong>: <a href="#valueobject"><code>ValueObject</code></a> (Level 0);
+          <a href="#phonenumberinvariants"><code>PhoneNumberInvariants</code></a> (Level 3);
+          <a href="group-01-result-error-handling.html#result"><code>Result&lt;T&gt;</code></a> (Level 2).</li>
+          <li><strong>Concept</strong>: the same factory + implicit-conversion pattern as <a href="#email"><code>Email</code></a>. <code>PhoneNumber.cs:13</code>
+          is <code>sealed record PhoneNumber : ValueObject</code>. No lowercasing (phone numbers have no case), but
+          trimming applies, the validation runs on the raw string and the stored <code>Value</code> is <code>value.Trim()</code>
+          (<code>PhoneNumber.cs:33</code>). The EF doc comment (<code>PhoneNumber.cs:8-10</code>) notes <code>HasConversion</code> keeps the
+          column a plain <code>nvarchar</code>.</li>
+          <li><strong>Walkthrough</strong>: <code>Value</code> (getter-only, <code>[DataMember(Order = 1)]</code>), <code>Create(string value)</code>
+          (<code>PhoneNumber.cs:27</code>) calling <code>PhoneNumberInvariants.EnsurePhoneNumberIsValid</code>, the implicit
+          <code>operator string</code> (<code>PhoneNumber.cs:38</code>), and <code>ToString</code> (<code>PhoneNumber.cs:41</code>).</li>
+          <li><strong>Where it&#39;s used</strong>: entities with phone fields (the Identity-module <code>User</code> aggregate in Store).</li>
+          </ul>
+          <h3 id="commoninvariants">CommonInvariants</h3>
+          <blockquote>
+          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Invariants</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Invariants/CommonInvariants.cs:10</code> · Level 3 · class (static)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a shared library of four reusable domain invariant methods: <code>EnsureStringIsNotEmpty</code>,
+          <code>EnsureStringMaxLength</code>, <code>EnsureIdIsNotDefault&lt;TId&gt;</code>, and <code>EnsureBytesAreNotEmpty</code>. All return
+          <a href="group-01-result-error-handling.html#result"><code>Result</code></a>, so an invariant check either passes
+          (<code>Result.Success()</code>) or yields a typed invariant failure rather than throwing.</li>
+          <li><strong>Depends on</strong>: <a href="group-01-result-error-handling.html#result"><code>Result</code></a>,
+          <a href="group-01-result-error-handling.html#error"><code>Error</code></a> (via the <code>Error.Invariant(...)</code> factory).
+          No external dependencies, <code>string.IsNullOrWhiteSpace</code> and <code>IEquatable&lt;T&gt;</code> are BCL.</li>
+          <li><strong>Concept introduced, centralized invariant helpers vs. per-entity duplication.</strong>
+          <code>[Rubric §16, Maintainability]</code>, §16 assesses whether repeated rules have a single source of
+          truth; here every &quot;string must be non-empty&quot;/&quot;id must not be default&quot; check resolves to one
+          canonical implementation instead of being re-coded per entity. <code>[Rubric §4, DDD]</code>, §4 assesses
+          whether the domain layer expresses business invariants in ubiquitous language; these helpers
+          standardize the <em>shape</em> of invariant errors (code/message/source/target) that module invariant
+          classes speak. Without <code>CommonInvariants</code>, every module&#39;s invariant class would independently
+          reimplement <code>string.IsNullOrWhiteSpace</code> checks with slightly different error codes and messages.
+          <code>CommonInvariants</code> provides the canonical implementations; module-specific invariant classes
+          delegate to these. <code>[Rubric §1, SOLID]</code>, DRY is an SRP corollary: one place owns each kind of
+          check, so a fix (e.g. tightening the max-length comparison) lands once.</li>
+          <li><strong>Walkthrough</strong> (all members are <code>static</code>, expression-bodied, and take the diagnostic quartet
+          <code>code, message, source, target</code> so the helper itself stays domain-neutral):<ul>
+          <li><code>EnsureStringIsNotEmpty(string value, string code, string message, string source, string target)</code>
+          (line 21): fails with <code>Error.Invariant(...)</code> when <code>string.IsNullOrWhiteSpace(value)</code>, else
+          <code>Result.Success()</code> (lines 23–25).</li>
+          <li><code>EnsureStringMaxLength(string? value, int maxLength, …)</code> (line 38): accepts a nullable string and
+          fails <em>only</em> when <code>value is not null &amp;&amp; value.Length &gt; maxLength</code> (line 40), so <code>null</code>/empty pass.
+          Callers that also require non-empty compose this with <code>EnsureStringIsNotEmpty</code>.</li>
+          <li><code>EnsureIdIsNotDefault&lt;TId&gt;(TId id, …)</code> (line 54): constrained <code>where TId : struct, IEquatable&lt;TId&gt;</code>
+          and fails when <code>id.Equals(default)</code> (line 57), detects the &quot;id was never set&quot; case (default
+          <code>int</code> = 0, default <code>Guid</code> = <code>Guid.Empty</code>).</li>
+          <li><code>EnsureBytesAreNotEmpty(byte[] value, …)</code> (line 70): fails when <code>value is null || value.Length == 0</code>
+          (line 72), validates that a required <code>byte[]</code> (e.g. a <code>RowVersion</code>/concurrency token) has content.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: placing these in <code>MMCA.Common.Domain</code> (not <code>MMCA.Common.Shared</code>)
+          keeps them below the Application layer in the dependency stack while still being reachable by every
+          module&#39;s domain invariant class; and returning <a href="group-01-result-error-handling.html#result"><code>Result</code></a>
+          rather than throwing is the codebase-wide flow-control convention (see the Result pattern in the
+          <a href="00-primer.html">primer</a>). The <code>Error.Invariant</code> factory tags each failure with
+          <a href="group-01-result-error-handling.html#errortype"><code>ErrorType</code></a><code>.Invariant</code>, which the API layer later
+          maps to an HTTP status.</li>
+          <li><strong>Where it&#39;s used</strong>: delegated to by the value-object invariant classes in this group
+          (<a href="#addressinvariants"><code>AddressInvariants</code></a>, <a href="#emailinvariants"><code>EmailInvariants</code></a>,
+          <a href="#phonenumberinvariants"><code>PhoneNumberInvariants</code></a>, all Level 3) and by the module entity invariant
+          classes: <a href="group-17-conference-domain.html#eventinvariants"><code>EventInvariants</code></a>,
+          <a href="group-17-conference-domain.html#sessioninvariants"><code>SessionInvariants</code></a>,
+          <a href="group-17-conference-domain.html#speakerinvariants"><code>SpeakerInvariants</code></a> (Level 4, Conference),
+          <a href="group-22-engagement-module.html#usersessionbookmarkinvariants"><code>UserSessionBookmarkInvariants</code></a>
+          (Level 4, Engagement), and <a href="group-24-identity-module.html#userinvariants"><code>UserInvariants</code></a>
+          (Level 4, Identity). Exercised by
+          <a href="group-26-testing-infrastructure.html#commoninvariantstests"><code>CommonInvariantsTests</code></a>.</li>
+          </ul>
+          <hr>
+          <p><a href="group-01-result-error-handling.html">⬅ Result &amp; Error Handling</a>  •  <a href="index.html">Index</a>  •  <a href="group-03-querying-specifications.html">Querying: Specifications, Filtering &amp; the Entity Query Service ➡</a></p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

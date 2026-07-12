@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADR-027: Multi-Locale Internationalization (Supersedes ADR-011) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, and 2026-07-09). Supersedes ADR-011 (single-locale by design).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ADR-027: Multi-Locale Internationalization (Supersedes ADR-011)">
+  <meta property="og:description" content="Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, and 2026-07-09). Supersedes ADR-011 (single-locale by design).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">027 · Multi-Locale Internationalization (Supersedes ADR-011)</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 45 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html" aria-current="page">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-027-multi-locale-internationalization-supersedes-adr-011">ADR-027: Multi-Locale Internationalization (Supersedes ADR-011)</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, and 2026-07-09). <strong>Supersedes <a href="011-single-locale-i18n.html">ADR-011</a></strong> (single-locale by design).</p>
+          <h2 id="context">Context</h2>
+          <p>ADR-011 recorded single-locale (en-US) as a deliberate, <em>revisitable</em> non-goal and sketched what
+          re-introducing i18n would entail. That revisit has now happened: the framework adds first-class
+          internationalization so consumers can serve en-US and Spanish (<code>es</code>), with the structure to add more
+          locales later. ADR-011&#39;s own &quot;if multi-locale is ever required&quot; scope is the blueprint this ADR
+          implements; ADR-011 is now superseded, not deleted (the history matters).</p>
+          <p>The hard part is not translation files — it is making one culture decision flow consistently through a
+          Blazor <code>InteractiveAuto</code> app (SSR prerender → InteractiveServer circuit → InteractiveWebAssembly client)
+          <em>and</em> through the cross-origin REST services behind the Gateway, without a flash of the wrong language or
+          a prerender/hydration mismatch. The Result pattern (ADR-013) already gives every <code>Error</code> a stable
+          machine <code>Code</code>, which makes server-side error localization a keyed lookup rather than a rewrite.</p>
+          <h2 id="decision">Decision</h2>
+          <ol>
+          <li><p><strong>Supported cultures are an explicit allowlist: <code>en-US</code> (default) + <code>es</code>.</strong> Adding a locale is adding a
+          <code>.es.resx</code> sibling set and one allowlist entry, not new infrastructure.</p>
+          </li>
+          <li><p><strong>Strings are externalized to <code>.resx</code>, co-located with the type that uses them, looked up by
+          <code>IStringLocalizer&lt;T&gt;</code>.</strong> <code>AddLocalization()</code> is registered with <strong>no <code>ResourcesPath</code></strong> so a type&#39;s
+          resource base name is its full type name and the <code>.resx</code> lives next to it (<code>Login.razor</code> →
+          <code>Login.resx</code> / <code>Login.es.resx</code>; a <code>*.Resources.SharedResource</code> marker for cross-cutting chrome). Keys
+          are dotted and stable (<code>Nav.Home</code>, <code>Common.Button.Save</code>). Parameterized text uses <strong>composite format
+          keys</strong> (<code>&quot;Error loading {0}. {1}&quot;</code>) consumed as <code>L[&quot;Common.Error.Load&quot;, entity, detail]</code> — never string
+          concatenation. The <code>.resx</code> compile to <strong>satellite assemblies</strong> that pack into the NuGet packages
+          automatically (no <code>.csproj</code> change) and flow identically via <code>local.props</code> source mode.</p>
+          </li>
+          <li><p><strong>Backend user-facing error text is localized server-side at the HTTP edge, keyed by <code>Error.Code</code>.</strong>
+          <code>IErrorLocalizer</code> (<code>MMCA.Common.API/Localization</code>) maps an error&#39;s stable <code>Code</code> to a localized string
+          against <code>CurrentUICulture</code>, falling back to the error&#39;s existing English <code>Message</code> when no resource key
+          exists. It is applied at the single Result→ProblemDetails projection point
+          (<code>ErrorHttpMapping.BuildErrorsExtension</code>, used by <code>ApiControllerBase.HandleFailure</code> and
+          <code>UnhandledResultFailureFilter</code>). <strong>Domain, handler, and <code>Result</code> signatures do not change</strong> — they stay
+          culture-agnostic; only the edge speaks a culture. Modules register their own resource sources
+          (<code>ErrorResourceSource</code>) additively; Common registers its own in <code>AddAPI</code>. FluentValidation rules carry
+          stable <code>.WithErrorCode(&quot;&lt;Area&gt;.&lt;Field&gt;.&lt;Rule&gt;&quot;)</code> codes so validation errors localize through the same
+          mechanism.</p>
+          </li>
+          <li><p><strong>The ProblemDetails <code>title</code> is a machine marker and is never localized.</strong> The UI error parser
+          (<code>ServiceExceptionHelper</code>) branches on <code>title</code> (<code>&quot;Operation failed&quot;</code> / <code>&quot;Domain Exception&quot;</code> /
+          <code>&quot;Validation Exception&quot;</code>); only the human-facing <code>message</code>/<code>detail</code> is translated.</p>
+          </li>
+          <li><p><strong>One culture cookie is the single source of truth across SSR + Server + WASM.</strong> UI hosts run
+          <code>UseRequestLocalization([en-US, es])</code> with a <code>CookieRequestCultureProvider</code> so SSR prerender renders in
+          the right culture; a <code>/culture/set</code> endpoint writes the standard ASP.NET culture cookie and forces a
+          full reload; the WASM client reads the same cookie on startup (<code>MmcaCultureBootstrap.SetBrowserCultureAsync</code>) and sets
+          <code>CultureInfo.DefaultThreadCurrent[UI]Culture</code> before <code>RunAsync()</code>, so prerender and hydration agree.
+          The UI forwards the active culture to the API as <code>Accept-Language</code> (<code>CultureDelegatingHandler</code> on the
+          <code>&quot;APIClient&quot;</code>), because the cross-origin Gateway does not carry the cookie to the services — that header
+          is what makes backend errors come back localized.</p>
+          </li>
+          <li><p><strong>A user&#39;s chosen culture is persisted to the Identity profile (<code>User.PreferredCulture</code>).</strong> The DB value
+          is the cross-device source of truth; the cookie is the runtime channel. On login the cookie is set from
+          the profile; an authenticated switch persists to both DB and cookie; anonymous users get the cookie only.</p>
+          </li>
+          <li><p><strong>Display formatting is culture-aware; machine boundaries stay invariant.</strong> UI rendering of dates /
+          numbers uses <code>CurrentCulture</code>. <code>InvariantCulture</code> is retained where the string is a machine contract
+          (JWT timestamps, EF/grid filter parsing, URL/query state, claims, value-object canonical strings).
+          Hygiene against accidental culture-less formatting is <strong>enforced as a build gate</strong> (since 2026-06-29):
+          the Meziantou analyzer <code>MA0076</code> (implicit culture-sensitive <code>ToString</code> in interpolation) is set to
+          <code>error</code> severity in <code>.editorconfig</code>, so a culture-less interpolation fails the build and must declare an
+          explicit <code>IFormatProvider</code> (<code>CultureInfo.InvariantCulture</code> at machine boundaries, <code>CurrentCulture</code> for
+          UI display). This closes the prior &quot;advisory only&quot; follow-up.</p>
+          </li>
+          <li><p><strong>Translation completeness is a fitness gate (ADR-015).</strong> <code>ResourceTranslationsAreComplete</code>
+          (<code>MMCA.Common.Testing.Architecture</code>, run as <code>LocalizationResourceTests</code> against <code>SupportedCultures.All</code>)
+          fails the build if any base <code>.resx</code> under <code>Source/</code> lacks a complete, non-empty sibling for a required
+          culture — so a new English string cannot ship without its Spanish translation. Coverage is <strong>verified,
+          not assumed</strong>, closing the prior &quot;no missing-key/translation-coverage gate&quot; follow-up. The rule is opt-in
+          and repo-agnostic (it takes the required-culture list), so the consumer apps can adopt the same gate for
+          their module <code>.resx</code>.</p>
+          <p><strong>Locale-addition governance.</strong> Adding a locale is a bounded, gated process: (a) add the culture to
+          <code>SupportedCultures.All</code>; (b) add the <code>.&lt;culture&gt;.resx</code> sibling for every base <code>.resx</code>; (c) the coverage
+          fitness gate then refuses to build until every key is translated. No other infrastructure change is
+          needed: <code>UseRequestLocalization</code>, the culture switcher, and the Identity <code>User.PreferredCulture</code> guard
+          all read <code>SupportedCultures</code>, so they cannot drift from the allowlist.</p>
+          <p><strong>Development-only pseudo-localization.</strong> A Windows-standard pseudo-locale, <code>qps-Ploc</code>
+          (<code>SupportedCultures.PseudoLocale</code>), is available as a developer diagnostic and is deliberately kept out of
+          <code>SupportedCultures.All</code> so the coverage gate never demands a <code>.qps-Ploc.resx</code> sibling. It is offered only
+          when the host runs in Development: <code>UseCommonRequestLocalization</code> adds it to the request-localization
+          allowlist under <code>IsDevelopment()</code>, and <code>MapCultureEndpoint</code> honors it from the culture switcher only under
+          the same guard. When it is the active UI culture, a <code>PseudoStringLocalizerFactory</code> decorator (registered
+          unconditionally, inert under every other culture) runtime-transforms every resolved resource string
+          (accents, padding, and a bracket sentinel) so that hard-coded strings, truncation, and string
+          concatenation become visible without translating anything. Outside Development it is never offered and the
+          decorator stays inert, so it is a build-and-test aid, not a production culture.</p>
+          <p><strong>The pseudo pass is also a required CI gate (since 2026-07-03).</strong> The backend-less gallery host
+          (test-only, never packaged) enables <code>qps-Ploc</code> unconditionally, and <code>PseudoLocalizationE2ETests</code>
+          (in the required chromium <code>ui-e2e</code> job) renders <code>/login</code>, <code>/register</code>, and <code>/components</code> under it,
+          asserting (a) the bracket sentinel appears (every displayed string made the resource round-trip)
+          and (b) the page does not overflow horizontally under the ~40% expansion (the layout-tolerance
+          criterion). A leak-guard test asserts the sentinel is absent under <code>en-US</code>. Production hosts are
+          unchanged: they keep <code>qps-Ploc</code> Development-only.</p>
+          </li>
+          <li><p><strong>User-visible literals are kept out of markup and code-behind by a second fitness gate, and
+          composed sentences are banned.</strong> <code>LocalizedTextConventionTestsBase</code>
+          (<code>MMCA.Common.Testing.Architecture</code>, subclassed by every repo) scans <code>Source/**/*.razor{,.cs}</code> and
+          fails the build on hard-coded snackbar messages, page <code>Title</code> properties, literal <code>&lt;PageTitle&gt;</code>
+          markup, literal breadcrumb labels, and <code>NavItem</code> rows that carry no <code>TitleResource</code>; deliberate
+          literals (brand names) are exempted per line with an <code>i18n: allow</code> marker. Snackbar text uses
+          <strong>whole-sentence keys in the page&#39;s own resource pair</strong> (<code>Snackbar.Created</code> = &quot;Event created
+          successfully.&quot; / &quot;Evento creado correctamente.&quot;): <code>ErrorMessages.Success(entity, action)</code> is
+          <code>[Obsolete]</code> because fragment composition cannot translate (Spanish gender agreement breaks), and
+          the shared <code>Common.Error.Load/Save/Delete</code> templates no longer append raw <code>ex.Message</code> (neither
+          localizable nor safe to surface).</p>
+          <p><strong>Carve-out (2026-07-09): a <code>DomainInvariantViolationException</code> message IS shown verbatim.</strong>
+          <code>ErrorMessages.LoadError/SaveError/DeleteError</code> return that exception&#39;s <code>Message</code> in place of the
+          generic template, and the new <code>ErrorMessages.ActionError(ex, localizedFallback)</code> does the same for
+          pages whose fallback is a whole-sentence snackbar key. This does not weaken the raw-text rule:
+          <code>ServiceExceptionHelper</code> mints that exception type exclusively from the API&#39;s Problem Details
+          errors, whose text is curated domain wording already localized server-side to the request culture
+          (Decision 3, carried by the Decision 5 <code>Accept-Language</code> forwarding), so the user sees the actual
+          business rule (&quot;This action is only available while the event is live.&quot;) instead of a generic
+          failure toast. All other exception types keep the generic localized message.</p>
+          <p><code>NavItem</code> gained an optional <code>TitleResource</code> type: when set, the
+          shared <code>NavMenu</code> treats <code>Title</code>/<code>Group</code> as resource keys resolved per circuit at render time, so
+          module nav menus follow the active culture. MudBlazor&#39;s own component chrome localizes through
+          <code>ResxMudLocalizer</code> over the <code>MudTranslations</code> resource pair (all built-in keys of the pinned
+          MudBlazor version, en + es), registered in <code>AddUIShared</code> and covered by the same completeness gate.</p>
+          </li>
+          </ol>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Keying error localization on the existing <code>Error.Code</code> is the cheapest correct seam.</strong> The codes are
+          already stable and already cross the wire; localizing at the edge keeps the Result pattern pure and means
+          an untranslated code degrades gracefully to its English message instead of throwing.</li>
+          <li><strong>A single cookie avoids the InteractiveAuto split-brain.</strong> SSR and WASM run in different runtimes; the
+          only state both can read before first paint is a non-HttpOnly cookie, so it is the source of truth.</li>
+          <li><strong>Co-located <code>.resx</code> with no <code>ResourcesPath</code></strong> makes the resource base name predictable (the full type
+          name) and packs cleanly through the lockstep NuGet pipeline (ADR-016) without per-project MSBuild tweaks.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Every view and every user-facing message is touched</strong> — a large, mostly mechanical sweep, accepted as
+          the cost ADR-011 always named.</li>
+          <li><strong>WASM Spanish formatting needs ICU globalization data</strong> (not <code>InvariantGlobalization</code>), a payload cost
+          on the client bundle.</li>
+          <li><strong>Mixed-language responses are possible during rollout</strong>: an untranslated code falls back to English by
+          design, so coverage is incremental rather than all-or-nothing within a release.</li>
+          <li><strong>MudBlazor&#39;s own built-in component text</strong> may need a <code>MudLocalizer</code> for full coverage; tracked as a
+          follow-up rather than blocking. <strong>Closed 2026-07-03:</strong> <code>ResxMudLocalizer</code> + the <code>MudTranslations</code>
+          resource pair now localize the MudBlazor chrome (Decision 9); unknown keys still fall back to
+          MudBlazor&#39;s built-in English, and <code>en-US</code> deliberately keeps the built-ins.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p><a href="011-single-locale-i18n.html">ADR-011</a> (superseded), <a href="013-result-pattern.html">ADR-013</a> (the <code>Error.Code</code>
+          this localizes on), <a href="015-architecture-fitness-functions.html">ADR-015</a> (the i18n gates now live here: the <code>MA0076</code> culture-less
+          formatting build gate and the <code>ResourceTranslationsAreComplete</code> translation-coverage fitness rule),
+          <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (satellite assemblies ship in the lockstep release),
+          <a href="022-browser-session-cookie-auth.html">ADR-022</a> (the SSR cookie pattern this mirrors),
+          <a href="028-dark-theme-mode.html">ADR-028</a> (the theme toggle that shares this cookie/profile/bootstrap machinery).</p>
+          <pre class="doc-pre"><code></code></pre>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/027-multi-locale-i18n.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

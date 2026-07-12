@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADR-029: Authentication Brute-Force Protection and Registration Throttling · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-06-27). Updated 2026-07-02 (the check/increment/reset call sequence was hoisted into AuthenticationServiceBase&lt;TUser; the adoption note…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ADR-029: Authentication Brute-Force Protection and Registration Throttling">
+  <meta property="og:description" content="Accepted (2026-06-27). Updated 2026-07-02 (the check/increment/reset call sequence was hoisted into AuthenticationServiceBase&lt;TUser; the adoption note…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">029 · Authentication Brute-Force Protection and Registration Throttling</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 45 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html" aria-current="page">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-029-authentication-brute-force-protection-and-registration-throttling">ADR-029: Authentication Brute-Force Protection and Registration Throttling</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-06-27). Updated 2026-07-02 (the check/increment/reset call sequence was hoisted
+          into <code>AuthenticationServiceBase&lt;TUser&gt;</code>; the adoption note and the &quot;convention the consumer must
+          call&quot; trade-off were rewritten to match).</p>
+          <h2 id="context">Context</h2>
+          <p>ADR-019&#39;s global rate limiter is <strong>authenticated-only</strong>: it caps requests per authenticated principal
+          and deliberately <em>exempts</em> anonymous traffic. That leaves the highest-value anonymous attack surface —
+          the login and registration endpoints — uncovered by the limiter (credential stuffing, password
+          spraying, registration spam). Two of those defences also cannot live in a per-principal limiter at all:
+          at login time there is <strong>no principal yet</strong>, so account lockout must key on the <em>submitted</em> identity
+          (email) and the client IP, not on an authenticated user. We needed a small, always-available service
+          that the Identity flow calls to throttle these pre-authentication paths.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Provide a framework <code>ILoginProtectionService</code> (<code>MMCA.Common.Application.Auth</code>) with a single
+          implementation <code>LoginProtectionService</code> (<code>MMCA.Common.Infrastructure.Auth</code>), registered unconditionally
+          by <code>AddInfrastructure</code> (<code>services.TryAddScoped&lt;ILoginProtectionService, LoginProtectionService&gt;()</code>), so
+          every host that wires infrastructure has it. Its state lives in <code>ICacheService</code> (ADR-026), never in a
+          table.</p>
+          <ul>
+          <li><strong>Login lockout (email-keyed).</strong> <code>IncrementFailedAttemptsAsync(email)</code> counts consecutive failures in
+          a window (<code>FailedAttemptWindowMinutes</code>, default 30). Once <code>MaxFailedAttempts</code> (default 5) is reached it
+          writes a lockout key with <strong>exponential backoff</strong> <code>min(1 &lt;&lt; excessAttempts, MaxLockoutSeconds)</code> (cap
+          default 300s). <code>CheckLockoutAsync(email)</code> returns <code>Result.Failure(Error.Unauthorized( &quot;Auth.TooManyAttempts&quot;, …))</code> while locked, and <code>ResetFailedAttemptsAsync(email)</code> clears both the
+          attempt and lockout keys on a successful login.</li>
+          <li><strong>Registration throttle (IP-keyed).</strong> <code>CheckRegistrationRateLimitAsync(ip)</code> fails with
+          <code>Error.Unauthorized(&quot;Auth.RegistrationRateLimitExceeded&quot;, …)</code> once <code>MaxRegistrationsPerIpPerHour</code>
+          (default 10) registrations from one IP land inside <code>RegistrationRateLimitWindowMinutes</code> (default 60);
+          <code>IncrementRegistrationCountAsync(ip)</code> bumps the per-IP counter. A missing/empty IP is a deliberate
+          <strong>no-op (fail-open)</strong>.</li>
+          <li><strong>Keyed by submitted email / client IP, not by principal</strong>, so it works before authentication — the
+          gap a per-principal limiter cannot fill.</li>
+          <li><strong>Counters are cache-scoped and TTL-bounded.</strong> They live in the same swappable <code>ICacheService</code>
+          substrate as ADR-026 (in-process memory in the monolith, distributed/Redis when wired) and self-expire
+          via cache TTL — a lockout is inherently ephemeral, so expiry <em>is</em> the reset.</li>
+          <li><strong>Returns <code>Result</code> (ADR-013)</strong>, so the HTTP edge maps every failure to a uniform <code>401</code> without the
+          endpoint special-casing it.</li>
+          <li><strong>Centralized in the shared authentication base.</strong> The call sequence lives once in
+          <code>AuthenticationServiceBase&lt;TUser&gt;</code> (<code>MMCA.Common.Application.Auth</code>): <code>CheckLockoutAsync</code> before
+          credential validation, <code>IncrementFailedAttemptsAsync</code> on each failed attempt,
+          <code>ResetFailedAttemptsAsync</code> on a successful login, and <code>CheckRegistrationRateLimitAsync</code> /
+          <code>IncrementRegistrationCountAsync</code> around sign-up. Store and ADC <code>AuthenticationService</code> are sealed
+          subclasses that inject <code>ILoginProtectionService</code> into the base constructor and inherit those calls;
+          neither app invokes the protection methods directly. Settings bind from the <code>&quot;LoginProtection&quot;</code>
+          section.</li>
+          </ul>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Complements ADR-019 rather than duplicating it.</strong> The global limiter protects authenticated
+          <em>throughput</em> per principal; this protects the anonymous <em>auth surface</em> that limiter exempts. The
+          threat and the partition key differ (per-principal request flood vs. per-identity credential guessing
+          and per-IP signup spam), so they are two mechanisms by design, not one.</li>
+          <li><strong>Cache-backed, no new table.</strong> Reusing ADR-026&#39;s substrate means the protection scales from monolith
+          to distributed with no schema and no per-handler branching, and a lockout&#39;s natural lifetime is a TTL,
+          not a row to clean up.</li>
+          <li><strong>Exponential backoff</strong> frustrates automated guessing (each excess attempt doubles the wait) while a
+          legitimate user&#39;s brief lockout self-heals within the cap.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Cache-scoped state weakens under scale-out without Redis.</strong> In memory mode the counters are
+          per-replica and evaporate on restart, so a multi-replica deployment that did not wire a distributed
+          cache does not aggregate an attacker hitting different replicas. The answer is the same as ADR-026:
+          register a distributed cache once scaled out (both apps do).</li>
+          <li><strong>Email-keyed lockout is a targeted-DoS lever.</strong> An attacker can lock a <em>known</em> account out by
+          deliberately failing its logins. The short backoff cap (default 300s) and the generic 401 bound the
+          harm, but it is an accepted availability-for-security trade.</li>
+          <li><strong>IP-keyed registration throttle is coarse.</strong> Shared NAT/proxy IPs throttle innocents together, and
+          per-attacker IP rotation evades it; it is fail-open on a missing IP. It raises the cost of bulk signup,
+          it does not stop a determined distributed attacker.</li>
+          <li><strong>Protection rides on the shared base class, not on the HTTP edge.</strong> Because the call sequence is
+          centralized in <code>AuthenticationServiceBase&lt;TUser&gt;</code>, a consumer whose <code>AuthenticationService</code>
+          subclasses it inherits the lockout and registration-throttle checks automatically (both apps do), so
+          it is no longer a per-flow convention that a subclass can forget. What the framework still does not do
+          is intercept the HTTP endpoints: an Identity flow written <em>without</em> the base class (calling
+          <code>ILoginProtectionService</code> by hand, or not at all) remains unprotected. That residual is the same
+          audit-the-inventory caveat as the other opt-in capabilities (ADR-019/020/021/026).</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p>ADR-019 (the authenticated-only global rate limiter that exempts this anonymous surface),
+          ADR-026 (the <code>ICacheService</code> substrate these counters live in),
+          ADR-013 (the <code>Result</code> / <code>Error</code> the checks return),
+          ADR-022 (the browser session-cookie auth flow these endpoints sit behind).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/029-authentication-brute-force-protection.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

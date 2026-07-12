@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADR-044: Native Push Delivery (the Third Notification Channel) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-07-11). Amends ADR-024. The framework pipeline is implemented and inert by default; each consumer switches it on by provisioning a…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ADR-044: Native Push Delivery (the Third Notification Channel)">
+  <meta property="og:description" content="Accepted (2026-07-11). Amends ADR-024. The framework pipeline is implemented and inert by default; each consumer switches it on by provisioning a…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/044-native-push-delivery.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">044 · Native Push Delivery (the Third Notification Channel)</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 45 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html" aria-current="page">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-044-native-push-delivery-the-third-notification-channel">ADR-044: Native Push Delivery (the Third Notification Channel)</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-07-11). Amends ADR-024. The framework pipeline is implemented and inert by
+          default; each consumer switches it on by provisioning a notification hub with platform
+          credentials and enabling the <code>NativePush</code> configuration section.</p>
+          <h2 id="context">Context</h2>
+          <p>ADR-024 established two notification channels: a durable per-user <code>UserNotification</code> inbox (the
+          source of truth) and a transient SignalR push behind <code>IPushNotificationSender</code>. Both stop at the
+          edge of a connected client: a phone with the app backgrounded, killed, or offline hears nothing
+          until the next launch. Conference announcements (&quot;lunch is served&quot;, &quot;room change&quot;) are exactly
+          the messages that must reach pockets, not open tabs.</p>
+          <p>OS-level delivery needs three things the framework did not have: a per-device registration
+          store keyed to users, a sender that speaks FCM v1 (Android) and APNs (iOS), and a client-side
+          lifecycle that registers the device after sign-in and unregisters it before sign-out. It also
+          needs credentials (a Firebase service account, an APNs auth key) that cannot live in source and
+          may not exist when the code ships.</p>
+          <h2 id="decision">Decision</h2>
+          <ul>
+          <li><strong>Azure Notification Hubs as the delivery fan-out.</strong> One hub abstracts both platforms behind
+          one API, holds the platform credentials outside our code, and its installation model gives
+          upsert semantics with client-generated stable ids. The free tier covers conference volumes.</li>
+          <li><strong>Two new Application abstractions, Null by default</strong> (the ADR-024 pattern):
+          <code>INativePushSender</code> (user-targeted and broadcast native sends) and <code>IPushDeviceRegistrar</code>
+          (installation upsert/delete). <code>AddInfrastructure</code> TryAdds no-op defaults;
+          <code>AddNativePushNotifications(configuration)</code> swaps in the Azure Notification Hubs
+          implementations only when the <code>NativePush</code> section is enabled AND complete
+          (<code>ConnectionString</code>, <code>HubName</code>) - so hosts call it unconditionally and deployments flip the
+          channel on by configuration alone.</li>
+          <li><strong>Installations are tagged <code>user:{id}</code>.</strong> Sends target users, never raw tokens; a user&#39;s
+          every device gets the message. Tag expressions are OR-chunked at the hub&#39;s 20-tag cap
+          (<code>NativePushPayloads</code>, unit-tested), so audience size is unbounded.</li>
+          <li><strong><code>SendPushNotificationHandler</code> gains the third leg.</strong> After the inbox write and the SignalR
+          attempt, it calls <code>INativePushSender.SendToUsersAsync</code> inside its own non-fatal catch. The
+          audit status (<code>Sent</code>/<code>Failed</code>) stays owned by the SignalR leg: the inbox remains the source
+          of truth, and a hub outage must not fail the command or the other channels.</li>
+          <li><strong><code>DevicesController</code> (PUT/DELETE <code>/Notifications/Devices</code>)</strong> ships in <code>MMCA.Common.API</code> via
+          the existing <code>AddNotificationControllers</code> application part, <code>[Authorize]</code> for any signed-in
+          user and feature-gated with the same <code>Notification.PushNotifications</code> flag as the rest of the
+          pipeline. Ownership is stamped server-side from the current user; installation ids are
+          client-generated GUIDs (not enumerable). DELETE is idempotent (unknown id = success).</li>
+          <li><strong>Client orchestration behind two UI capability contracts</strong> (ADR-042 pattern):
+          <code>IPushRegistrationService</code> (register after sign-in, unregister BEFORE sign-out - the delete
+          call is authenticated) and <code>IPushDeviceTokenProvider</code> (the platform token seam). UI.Maui
+          ships <code>MauiPushRegistrationService</code> (stable installation id in <code>IDevicePreferences</code>, sync
+          over the named API client); the token provider defaults to <code>NullPushDeviceTokenProvider</code>
+          everywhere, so a build WITHOUT push credentials is wired but inert end to end.
+          <code>PushRegistrationListener</code> (rendered through the host layout seam) re-registers on
+          auth-state changes; <code>AuthUIService.LogoutAsync</code> owns the unregister leg.</li>
+          </ul>
+          <h2 id="consequences">Consequences</h2>
+          <ul>
+          <li>Sends fan out per 20-user chunk and per platform: an audience of N users costs
+          <code>ceil(N/20) * 2</code> hub calls. Acceptable at conference scale; a template-based send can
+          consolidate later without touching callers.</li>
+          <li>The handler&#39;s third leg is fire-and-forget: no per-device delivery tracking. The hub&#39;s
+          telemetry is the observability surface; the inbox remains the recovery path.</li>
+          <li>Anyone holding an installation id could delete that registration through the authenticated
+          DELETE. Ids are client-generated GUIDs stored only on the device, so this is not enumerable;
+          re-registration on next launch self-heals.</li>
+          <li>Consumers must update PRIVACY.md/store data-safety forms (push tokens are device identifiers)
+          BEFORE store metadata mentions push. Credential provisioning (Firebase service account, APNs
+          key) is a manual runbook step per app; until done, the hub rejects sends and the client
+          token provider yields nothing - both by design.</li>
+          <li><code>SendPushNotificationHandler</code> gained a constructor parameter (DI-resolved; source-compatible
+          for every host, breaking only for code constructing it manually - none known).</li>
+          </ul>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/044-native-push-delivery.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

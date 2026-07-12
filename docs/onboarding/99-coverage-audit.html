@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Phase 4, Coverage Audit · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="This audit reconciles the written guide against the mechanically-extracted inventory, logs every deliberate exception, verifies the grouping/ordering…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/99-coverage-audit.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Phase 4, Coverage Audit">
+  <meta property="og:description" content="This audit reconciles the written guide against the mechanically-extracted inventory, logs every deliberate exception, verifies the grouping/ordering…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/99-coverage-audit.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/onboarding/index.html">Onboarding Guide</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">Phase 4, Coverage Audit</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>Guide contents</summary>
+        <nav class="doc-nav" aria-label="Onboarding Guide">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="00-dependency-manifest.html">Phase 1: Dependency Manifest &amp; Leveling</a></li>
+        <li><a href="00-group-taxonomy.html">Phase 1b - Functional Group Taxonomy</a></li>
+        <li><a href="00-inventory.html">Phase 0: Type Inventory</a></li>
+        <li><a href="00-primer.html">Primer, the concepts, stack, and conventions you need first</a></li>
+        <li><a href="group-01-result-error-handling.html">1. Result &amp; Error Handling</a></li>
+        <li><a href="group-02-domain-building-blocks.html">2. Domain Building Blocks (Entities, Value Objects, Aggregates)</a></li>
+        <li><a href="group-03-querying-specifications.html">3. Querying: Specifications, Filtering &amp; the Entity Query Service</a></li>
+        <li><a href="group-04-events-outbox.html">4. Domain &amp; Integration Events + Outbox Dual-Dispatch</a></li>
+        <li><a href="group-05-cqrs-pipeline.html">5. CQRS: Commands, Queries &amp; the Decorator Pipeline</a></li>
+        <li><a href="group-06-validation.html">6. Validation</a></li>
+        <li><a href="group-07-persistence-ef-core.html">7. Persistence &amp; EF Core</a></li>
+        <li><a href="group-08-auth.html">8. Authentication &amp; Authorization</a></li>
+        <li><a href="group-09-caching.html">9. Caching</a></li>
+        <li><a href="group-10-notifications.html">10. Notifications (Push + In-App Inbox + Email)</a></li>
+        <li><a href="group-11-navigation-populators.html">11. Navigation Metadata &amp; Populators (EF-decoupled eager loading)</a></li>
+        <li><a href="group-12-api-hosting-mapping.html">12. API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</a></li>
+        <li><a href="group-13-grpc-contracts.html">13. gRPC &amp; Inter-Service Contracts</a></li>
+        <li><a href="group-14-module-system-composition.html">14. Module System, Composition &amp; Configuration</a></li>
+        <li><a href="group-15-common-ui-framework.html">15. Common UI Framework (MudBlazor components, theme, base pages)</a></li>
+        <li><a href="group-16-aspire-orchestration.html">16. Aspire Orchestration &amp; Service Defaults</a></li>
+        <li><a href="group-17-conference-domain.html">17. ADC Conference - Domain Model &amp; Module Contracts</a></li>
+        <li><a href="group-18-conference-application.html">18. ADC Conference - Application &amp; Use Cases</a></li>
+        <li><a href="group-19-conference-infrastructure.html">19. ADC Conference - Infrastructure &amp; Persistence</a></li>
+        <li><a href="group-20-conference-api-grpc.html">20. ADC Conference - API, gRPC Contracts &amp; Service Host</a></li>
+        <li><a href="group-21-conference-ui.html">21. ADC Conference - UI</a></li>
+        <li><a href="group-22-engagement-module.html">22. ADC Engagement Module (Session Bookmarks)</a></li>
+        <li><a href="group-23-engagement-live-layer.html">23. ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></li>
+        <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
+        <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
+        <li><a href="group-26-testing-infrastructure.html">26. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
+        <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
+        <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
+        <li><a href="devops-runbooks.html">Operational Scripts &amp; Runbooks</a></li>
+        <li><a href="devops-testing.html">Testing Architecture &amp; Solution Composition</a></li>
+        <li><a href="99-coverage-audit.html" aria-current="page">Phase 4, Coverage Audit</a></li>
+        <li><a href="CONCEPT-MAPS.html">MMCA Concept &amp; Pattern Maps</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Onboarding guide</p>
+          <h1 id="phase-4-coverage-audit">Phase 4, Coverage Audit</h1>
+          <p>This audit reconciles the written guide against the mechanically-extracted inventory, logs every
+          deliberate exception, verifies the grouping/ordering rules, proves all 34 rubric categories are
+          explained, and lists what could not be determined from source. All counts are reproducible from
+          <code>Tools/invtool/</code> (<code>classify.ps1</code>, <code>plan.ps1</code>, <code>verify.ps1</code>).</p>
+          <hr>
+          <h2 id="1-coverage-reconciliation">1. Coverage reconciliation</h2>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Quantity</th>
+          <th align="right">Count</th>
+          <th>Source</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>.cs</code> files scanned</td>
+          <td align="right">1,931</td>
+          <td><code>00-inventory.md</code></td>
+          </tr>
+          <tr>
+          <td>, in-scope</td>
+          <td align="right">1,865</td>
+          <td></td>
+          </tr>
+          <tr>
+          <td>, generated/excluded</td>
+          <td align="right">66</td>
+          <td>logged exception §2.1</td>
+          </tr>
+          <tr>
+          <td>Type declaration rows (incl. partial-class fragments)</td>
+          <td align="right">2,406</td>
+          <td><code>00-inventory.md</code></td>
+          </tr>
+          <tr>
+          <td><strong>Distinct type nodes (partials collapsed)</strong></td>
+          <td align="right"><strong>2,287</strong></td>
+          <td>the master checklist</td>
+          </tr>
+          <tr>
+          <td>→ mapped to a functional group</td>
+          <td align="right">2,287</td>
+          <td><code>classify.ps1</code> (0 unmapped)</td>
+          </tr>
+          <tr>
+          <td>→ individually sectioned (named in a chapter)</td>
+          <td align="right">1,284</td>
+          <td><code>verify.ps1</code></td>
+          </tr>
+          <tr>
+          <td>→ rolled up by project (G25 test classes)</td>
+          <td align="right">1,003</td>
+          <td>logged exception §2.2</td>
+          </tr>
+          <tr>
+          <td>Distinct <code>###</code> sections written across 26 chapters</td>
+          <td align="right">1,143</td>
+          <td>covering the 1,284 (sibling families share a section, §2.3)</td>
+          </tr>
+          <tr>
+          <td>Chapter overviews written</td>
+          <td align="right">26</td>
+          <td>one per group</td>
+          </tr>
+          </tbody></table></div>
+          <p><strong>Cross-check result:</strong> <code>verify.ps1</code> confirms <strong>0</strong> of the 1,284 individually-sectioned types are
+          missing from their group chapter, every one appears as a <code>###</code> heading or in a sibling-family
+          <code>File:Line</code> table. 2,287 = 1,284 individually-sectioned + 1,003 rolled-up. Nothing dropped, nothing
+          double-counted (each type maps to exactly one group).</p>
+          <blockquote>
+          <p><strong>Regeneration note (re-verified against current source, polyglot-persistence update).</strong> This audit
+          was regenerated after the <strong>polyglot-persistence framework enhancement</strong> (MMCA.Common commit
+          <code>74c0372</code>, ADR-018) and the matching ADC change. The net change since the previous pass (<strong>+25</strong>
+          distinct nodes: 1,826 → 1,851) is:</p>
+          <ul>
+          <li><strong>G03 (+3):</strong> the cross-source specification helper, <code>CrossSourceSpecification</code> + its
+          <code>ParameterReplacer</code> (Application layer) and the new <code>InlineSpecification&lt;T,TId&gt;</code> (Domain layer)
+          that resolve a related principal&#39;s keys and filter by foreign-key <code>IN</code>, so a predicate stays
+          translatable when the principal lives in a different physical data source.</li>
+          <li><strong>G07 (+1):</strong> the unified engine-aware <code>EntityTypeConfiguration&lt;T,TId&gt;</code> base (declares its engine
+          via <code>[UseDataSource]</code>); the three <code>…SQLServer/Sqlite/Cosmos</code> bases are now thin shims over it.</li>
+          <li><strong>G18 (+1 net):</strong> ADC Conference&#39;s public-session filter was refactored from the cross-source-unsafe
+          <code>PublicSessionSpecification</code> (removed) to <code>GetPublicSessionFilterQuery</code> + <code>GetPublicSessionFilterHandler</code>
+          built on <code>CrossSourceSpecification</code>.</li>
+          <li><strong>G25 (+20):</strong> the polyglot test suites (<code>CrossSourceSpecificationTests</code>, <code>SpecificationFitnessTests</code>,
+          <code>CosmosConfigurationPortabilityTests</code>, <code>DatabaseInitializationExtensionsTests</code>, plus fixtures) and the
+          shared <code>SpecificationConventionTestsBase</code> + the opt-in <code>SpecificationsDoNotNavigateToOtherEntities</code>
+          fitness rule, against the removed <code>PublicSessionSpecificationTests</code>.</li>
+          </ul>
+          <p>The Aspire hosting API was also renamed (<code>WithDataSource</code> → <code>WithSQLServerDataSource</code>, plus new
+          <code>WithCosmosDataSource</code>/<code>WithSqliteDataSource</code>), and ADRs 011–018 (which post-date the first build) are
+          now cross-referenced where their patterns are taught.</p>
+          </blockquote>
+          <blockquote>
+          <p><strong>Regeneration note (re-verified against current source, permission-authorization + TimeProvider
+          update).</strong> This audit was regenerated again after the <strong>permission-based authorization</strong> mechanism
+          (MMCA.Common commit <code>bc6c5d7</code>, released v1.80.0) and ADC&#39;s adoption of it (commit <code>ac5b175</code>), together
+          with a framework-wide move off ambient <code>DateTime.UtcNow</code> to an injected <code>TimeProvider</code>. The net change
+          since the polyglot pass (<strong>+16</strong> distinct nodes: 1,851 → 1,867) is:</p>
+          <ul>
+          <li><strong>G08 (+9):</strong> the Common permission mechanism, <code>IPermissionRegistry</code> / <code>PermissionRegistry</code> /
+          <code>PermissionRegistryBuilder</code> / <code>AuthClaimTypes</code> (Shared) and <code>HasPermissionAttribute</code> /
+          <code>PermissionAuthorizationHandler</code> / <code>PermissionPolicy</code> / <code>PermissionPolicyProvider</code> /
+          <code>PermissionRequirement</code> (API). <code>AuthorizationExtensions</code> gained <code>AddPermissions</code>, and <code>RoleNames</code>
+          gained <code>ContentEditor</code>.</li>
+          <li><strong>G17 (+1):</strong> ADC&#39;s <code>ConferencePermissions</code> capability catalog (Conference.Shared).</li>
+          <li><strong>G23 (+2):</strong> ADC&#39;s <code>IdentityPermissions</code> catalog (Identity.Shared) and the <code>AuthenticationValidators</code>
+          parameter object (Identity.Application) that keeps <code>AuthenticationService</code> under the constructor-arity
+          ceiling. <code>UserRole</code> gained <code>ContentEditor</code>.</li>
+          <li><strong>G25 (+4):</strong> the new permission tests, <code>PermissionRegistryTests</code>, <code>PermissionAuthorizationHandlerTests</code>,
+          <code>PermissionPolicyProviderTests</code> (Common), and <code>ConferencePermissionGrantsTests</code> (ADC).</li>
+          </ul>
+          <p>TimeProvider adoption changed signatures without adding types: <code>TokenService</code> (G08),
+          <code>UserNotification.MarkAsRead</code> + the two notification read handlers (G10), <code>Event.RecordSessionizeRefresh</code>
+          (G17), <code>RefreshFromSessionizeHandler</code> (G18), and <code>AuthenticationService</code> (G23) now take or inject the
+          clock. ADR-019 (layered rate limiting) was added to the ADR set (001–019) and is cross-referenced where
+          rate limiting is taught (G08/G12).</p>
+          </blockquote>
+          <blockquote>
+          <p><strong>Regeneration note (re-verified against current source, v1.83.0 full drift sweep).</strong> This audit was
+          regenerated again at <strong>framework v1.83.0</strong> (MMCA.Common <code>b9a6a28</code>; MMCA.ADC <code>17dce5a</code>; FACTS.md is the
+          source of truth for the version / 13-package / 23-ADR figures). The net change since the permission pass
+          (<strong>+2</strong> distinct nodes: 1,867 to 1,869) is entirely in <strong>G25 (+2):</strong> <code>FixedTimeProvider</code> (the injected-<code>TimeProvider</code>
+          test clock in <code>MarkAllNotificationsReadHandlerTests.cs:65</code>) and <code>RateLimitPartitionTests</code>
+          (<code>MMCA.Common.API.Tests/Startup/RateLimitPartitionTests.cs:16</code>, ADR-019). Both are per-project test types
+          and roll up by project (768 to 770), so the individually-sectioned count is unchanged at 1,099. No type was
+          added, removed, or regrouped outside G25.</p>
+          <ul>
+          <li><strong>Two moved declaration citations</strong> were re-verified and corrected: <code>BaseDomainEvent</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseDomainEvent.cs</code> <code>:10</code> to <code>:18</code>, an <code>&lt;remarks&gt;</code>
+          block now documenting the creation-time <code>DateOccurred</code> default as a deliberate choice, comment-only,
+          commit <code>b99f46c</code>) and <code>OpenApiEndpointExtensions</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/OpenApiEndpointExtensions.cs</code> <code>:16</code> to <code>:18</code>),
+          which gained an opt-in <strong>Scalar OpenAPI UI</strong> helper (<code>MapCommonScalarUi</code>, behind the non-production guard,
+          commit <code>706df4d</code>); the G12 section now documents it.</li>
+          <li><strong>Four ADRs finalized since the last pass (020-023) are now cross-referenced</strong> where their patterns are
+          taught. The code for all four predated the last guide pass (the types were already in the baseline), so
+          the sections existed but did not yet cite the ADRs: <strong>ADR-020</strong> (permission authorization) in G08 (the
+          permission-policy sections + the <code>IPermissionRegistry</code>/<code>PermissionRegistry</code>/<code>PermissionRegistryBuilder</code>
+          registry), <strong>ADR-021</strong> (consumer inbox idempotency) in G04 (the <code>IInboxStore</code>/<code>EfInboxStore</code>/<code>InboxMessage</code>
+          sections), <strong>ADR-022</strong> (browser session-cookie auth) in G08 (the session-cookie subsystem), and <strong>ADR-023</strong>
+          (security response headers + pluggable CSP) in G16 (<code>SecurityHeadersMiddleware</code>/<code>ICspPolicyProvider</code> in
+          <code>MMCA.Common.Aspire</code>) and G24 (ADC&#39;s <code>BlazorCspPolicyProvider</code>).</li>
+          <li><strong>G08 unit repack (no content lost).</strong> Re-running <code>plan.ps1</code> repartitioned G08&#39;s sections units: the
+          session-cookie (<code>MMCA.Common.API.SessionCookies</code>) and permission (<code>MMCA.Common.API.Authorization</code>)
+          namespaces shifted the level-ordered packing, so G08 was re-authored across five units (p00 overview +
+          p01 to p04, 49 <code>###</code> sections) to restore the twelve session-cookie sections and re-home the JWT/token/DTO/
+          registry sections without any drop or duplicate (<code>verify.ps1</code>: 0 missing; no new same-name-collision
+          headings). The G25 per-project rollup (<code>-p07</code>) was reconciled to <strong>770</strong>, correcting four pre-existing
+          undercounts (<code>MMCA.Common.Shared.Tests</code> 18 to 19, <code>MMCA.Common.API.Tests</code> 37 to 40,
+          <code>MMCA.Common.Application.Tests</code> 133 to 134, <code>MMCA.ADC.Conference.API.Tests</code> 13 to 14). Scope note: <code>build/facts</code>
+          (the new FACTS.md generator in the MMCA.Common repo root) is build tooling, not framework/app source, and
+          is excluded from the inventory by the same rule as <code>Tools/invtool</code>.</li>
+          </ul>
+          </blockquote>
+          <blockquote>
+          <p><strong>Regeneration note (re-verified against current source, v1.93.0 full drift sweep).</strong> Regenerated at
+          <strong>framework v1.93.0</strong> (MMCA.Common <code>3e72bfa</code>; MMCA.ADC <code>89d8439</code>; FACTS.md is the source of truth for the
+          version / 13-package / <strong>34-ADR (001-034)</strong> figures). Net change since the v1.83.0 pass: <strong>+41</strong> distinct
+          nodes (1,869 → 1,910), individually-sectioned 1,099 → <strong>1,137</strong>, rolled-up 770 → <strong>773</strong>, <code>###</code> sections
+          883 → <strong>931</strong>. The change is <strong>+73 added, 9 removed (all G25 test renames/consolidation), 0 regrouped</strong>,
+          clustered around the post-v1.83 ADRs (<code>verify.ps1</code>: 0 missing; rubric 34/34):</p>
+          <ul>
+          <li><strong>i18n / multi-locale (ADR-027, supersedes ADR-011).</strong> Server-side edge error localization keyed by
+          <code>Error.Code</code>: <strong>G12 (+5)</strong> <code>ErrorLocalizer</code> / <code>IErrorLocalizer</code> / <code>ErrorResourceSource</code>
+          (<code>MMCA.Common.API/Localization/</code>), <code>ErrorResources</code> (<code>MMCA.Common.API/Resources/ErrorResources.cs:9</code>),
+          and <code>SupportedCultures</code> (<code>MMCA.Common.Shared/Globalization/SupportedCultures.cs:9</code>, re-homed from the
+          <code>Shared</code>-to-G08 catch-all into G12 beside the edge localizer via a new classifier rule). Per-module
+          localized error resources: <strong>G20 (+1)</strong> <code>ConferenceErrorResources</code>, <strong>G22 (+1)</strong> <code>EngagementErrorResources</code>,
+          <strong>G23 (+1)</strong> <code>IdentityErrorResources</code>. Culture bootstrap + forwarding in <strong>G15</strong>: <code>MmcaCultureBootstrap</code>,
+          <code>CultureDelegatingHandler</code>, <code>SharedResource</code>, the <code>IUserPreferenceReader/Writer</code> + <code>ApiUserPreferenceReader/Writer</code>
+          pair, <code>UserPreferences</code> / <code>UserPreferencesRequest</code> (<code>MMCA.Common.UI/</code>).</li>
+          <li><strong>Day/Dark theme (ADR-028).</strong> <strong>G15</strong> <code>ThemeService</code> (<code>MMCA.Common.UI/Services/ThemeService.cs:16</code>) plus the
+          per-user preference plumbing above; <strong>G23 (+6)</strong> <code>ChangePreferences{Command,Handler,Request}</code> /
+          <code>GetUserPreferences{Query,Handler}</code> / <code>UserPreferencesResponse</code> persist <code>PreferredCulture</code> / <code>PreferredTheme</code>.
+          <em>Honest adoption note:</em> the <code>AddUserPreferences</code> EF migration is <strong>not yet applied to the production ADC /
+          Store Identity databases</strong>, so the Profile preferences endpoint errors in prod until it is (stated in G23).</li>
+          <li><strong>PII redaction (§30 / ADR-005).</strong> <strong>G02 (+2)</strong> <code>PiiRedactor</code> + its private nested <code>RedactableProperty</code>
+          (<code>MMCA.Common.Domain/Privacy/PiiRedactor.cs:24,123</code>, commit <code>b2b0aae</code>) mask <code>[Pii]</code>-marked members for
+          log/telemetry-safe output; a new classifier rule routes <code>MMCA.Common.Domain.Privacy.*</code> to G02 beside the
+          existing <code>PiiAttribute</code> / <code>IAnonymizable</code>.</li>
+          <li><strong>G25 (+12 net, 874 total).</strong> New reusable/fitness infra sectioned in full: <code>LocalizationResourceTestsBase</code><ul>
+          <li><code>TranslationCompletenessTests</code> (ADR-027 resx parity), <code>PiiErasureContractFitnessTests</code> + <code>DataSubjectSample</code>
+          (§30/ADR-005), <code>SliceCohesionTests</code>/<code>SliceCohesionTestsBase</code> (§5 VSA), <code>MarkupSnapshot</code>/<code>MarkupSnapshotResult</code>
+          (§28), <code>ConstructorDependencyCountTests</code> / <code>FormsConventionTests</code> / <code>FrameworkVersionConsistencyTests</code>. New
+          <strong><code>MMCA.Common.Benchmarks</code></strong> project (4 BenchmarkDotNet types: <code>SpecificationBenchmarks</code> / <code>SampleItem</code> /
+          <code>MinValueSpec</code> / <code>ActiveSpec</code>, §12 perf smoke) added to the per-project rollup. The 9 removed are G25 renames
+          (<code>OrganizerSpeaker*Tests</code> / <code>SpeakerProfileTests</code> / <code>AttendeeBookmarkEdgeCaseTests</code> → <code>CrossService*</code>;
+          <code>IntegrationTestBase</code> / <code>*Fixture</code> / <code>*Collection</code> / <code>TestWebApplicationFactory</code> consolidated).</li>
+          </ul>
+          </li>
+          <li><strong>ADRs 024-034 are now cross-referenced</strong> where their patterns are taught even when they added no type
+          (their code predated the baseline): <strong>ADR-024</strong> (two-channel notifications) in G10, <strong>ADR-025</strong> (startup
+          warm-up/readiness) in G16, <strong>ADR-026</strong> (two-tier caching) in G09, <strong>ADR-029</strong> (brute-force protection) /
+          <strong>ADR-032</strong> (password hashing) / <strong>ADR-033</strong> (resource-ownership, <code>OwnerOrAdminFilter</code>/<code>OwnershipHelper</code>,
+          Store-adopted) in G08, <strong>ADR-030</strong> (startup sole-migrator) in G07/G12, <strong>ADR-031</strong> (feature-flag management)
+          and <strong>ADR-034</strong> (generic entity controllers + dynamic query contract) in G12/G03. The primer&#39;s ADR table was
+          extended 019 → 034 and its §27 note rewritten (ADR-011 → ADR-027), with a new §20 day/dark-theme note (ADR-028).</li>
+          <li><strong>Pipeline governance changes</strong> (classifier/extractor, in the uncommittable workspace <code>Tools/invtool</code>): one
+          new prefix rule <code>Domain.Privacy → G02</code>, one <code>Shared.Globalization → G12</code> (SupportedCultures), <code>Benchmarks → G25</code>
+          test-detection, and an extractor exclusion of <code>build/facts</code> (the FACTS.md generator) so <code>FactsGenerator</code> no
+          longer leaks into the inventory. Cycles 13 → <strong>14</strong> (a new G25 test SCC). Edge resolution: <strong>6,238</strong> namespace-
+          visible (~98%) + <strong>140</strong> globally-unique fallback, <strong>25</strong> dropped ambiguous.</li>
+          </ul>
+          </blockquote>
+          <blockquote>
+          <p><strong>Regeneration note (re-verified against current source, v1.103.1 full drift sweep).</strong> Regenerated at
+          <strong>framework v1.103.1</strong> (MMCA.Common <code>62fefa9</code>, MMCA.ADC <code>bdf8604d</code>, both clean; FACTS.md is the source of
+          truth for the version / <strong>14-package</strong> / ADR-range figures, the fourteenth package being the new
+          <code>MMCA.Common.UI.Web</code> project). Net change since the v1.93.0 pass: <strong>+31</strong> distinct nodes (1,910 → 1,941),
+          individually-sectioned 1,137 → <strong>1,166</strong>, rolled-up 773 → <strong>775</strong>, <code>###</code> sections 931 → <strong>996</strong>
+          (<code>verify.ps1</code>: 0 missing; rubric 34/34). The change is <strong>+34 added, 2 removed, 8 moved repo-to-repo, 1
+          two-to-one merge, 0 regrouped</strong>, clustered around the move-to-Common extraction Waves 2-3 and the i18n
+          pseudo-localization gate:</p>
+          <ul>
+          <li><strong>Shared authentication workflow (ADR-032, Wave 3, MMCA.Common commit <code>69dfd53</code>).</strong> <strong>G08 (+4, 54 total):</strong>
+          <code>AuthenticationServiceBase&lt;TUser&gt;</code> (<code>MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:34</code>),
+          <code>IAuthUser</code> (<code>MMCA.Common.Domain/Auth/IAuthUser.cs:10</code>), <code>OwnerOrAdminFilterOptions</code>
+          (<code>MMCA.Common.API/Authorization/OwnerOrAdminFilterOptions.cs:11</code>), plus <code>AuthenticationValidators</code> moved in
+          from ADC Identity.Application (byte-identical body). ADC&#39;s <code>AuthenticationService</code> is now a thin subclass
+          supplying per-app hooks (its G23 section was rewritten accordingly). One new classifier prefix rule,
+          <code>MMCA.Common.Domain.Auth → G08</code> (user-approved 2026-07-04), resolved the only unmapped type.</li>
+          <li><strong>Edge controller bases hoisted (G12 +5, 52 total):</strong> <code>OAuthControllerBase</code> and <code>ServiceInfoControllerBase</code>
+          (new, with nested <code>ServiceInfoResponse</code>/<code>ServiceInfoV2Response</code> moved from ADC&#39;s <code>ServiceInfoController</code>),
+          plus <code>ExternalAuthExtensions</code> moved from ADC Identity.API (the ADC copies were deleted).</li>
+          <li><strong>UI auth/CSP plumbing hoisted + pseudo-loc gate (G15 +11, 80 total).</strong> Moved in: <code>BlazorCspPolicyProvider</code>
+          and <code>ServerTokenStorageService</code> (into the new <code>MMCA.Common.UI.Web</code> project, whose <code>DependencyInjection</code> is
+          also new), <code>WasmTokenStorageService</code>, <code>ChildEntityServiceBase</code>, and <code>ConfigurationOAuthUISettings</code> (a 2-to-1
+          merge of ADC&#39;s <code>AdcOAuthUISettings</code> + <code>WasmOAuthUISettings</code>, the sole -1 in the node arithmetic). New for the
+          ADR-027 pseudo-localization gate: <code>PseudoLocalizer</code> / <code>PseudoStringLocalizer</code> / <code>PseudoStringLocalizerFactory</code> /
+          <code>ResxMudLocalizer</code> (<code>MMCA.Common.UI/Globalization/</code>) and <code>MudTranslations</code>. <strong>G16 (+1, 15 total):</strong>
+          <code>GatewayCorsExtensions</code>. Donor chapters shrank accordingly: G20 38 → 36, G21 71 → 70, G23 68 → 66, G24 35 → 30.</li>
+          <li><strong>G22 (-1, 56 total):</strong> <code>OwnBookmarkSpecification</code> deleted as dead code (zero call sites at prior HEAD
+          <code>89d8439</code>; its ownership-scoping role had already been superseded by the shared <code>OwnerOrAdminFilter</code>, ADR-033).</li>
+          <li><strong>G25 (+21 net, 895 total).</strong> New sectioned infrastructure: six Testing.Architecture bases
+          (<code>BrandColorTokenTestsBase</code>, <code>ConstructorDependencyCountTestsBase</code>, <code>DataResidencyTestsBase</code>,
+          <code>FormsConventionTestsBase</code>, <code>FrameworkVersionConsistencyTestsBase</code>, <code>LocalizedTextConventionTestsBase</code>),
+          the <code>WebVitalsCollector</code>/<code>WebVitalsSample</code>/<code>WebVitalsArtifact</code> trio, <code>AuthorizationTestsBase</code>,
+          <code>SecurityHeadersTestsBase</code>, and <code>SqlServerIntegrationTestFixtureBase&lt;TEntryPoint&gt;</code>; plus rolled-up test
+          classes (pseudo-loc and web-vitals suites, <code>LocalizedTextConventionTests</code> in both repos). ADC&#39;s
+          <code>ProtectedPageExtensions</code> was removed, functionally superseded by <code>AuthorizationTestsBase</code> (different shape,
+          tracked as removed+added, not moved). Rollup reconciled: <code>MMCA.Common.UI.Tests</code> 26 → 31,
+          <code>MMCA.Common.UI.E2E.Tests</code> 7 → 9.</li>
+          <li><strong>Level repack (no content lost).</strong> The new Common bases changed dependency Levels, which re-sorted
+          <code>plan.ps1</code>&#39;s packing in G08/G12/G15/G18/G21/G22/G23/G25. 48 units (10 overviews + 37 section units + the G25
+          rollup) were re-authored to the new unit boundaries and the orphaned part <code>group-25-adc-host-composition-p03</code>
+          (all-stale sections) was deleted (<code>verify.ps1</code>: 0 missing, no duplicate headings). G18&#39;s inputs repacked with
+          zero content change, so its parts were deliberately left as-is (chapter coverage is unaffected; part/unit
+          alignment catches up on the next G18-touching pass).</li>
+          <li><strong>Corrections made while re-verifying:</strong> the stale G23 callout that the Profile preferences endpoint errors
+          in production was removed (the <code>AddUserPreferences</code> migrations were since applied; applied-state itself is
+          Not determinable from source), <code>IdentitySettings</code> is now documented as an unwired placeholder (no
+          <code>Configure&lt;IdentitySettings&gt;</code> and no reader anywhere in MMCA.ADC; the live BR-213 registration throttle is
+          Common&#39;s <code>LoginProtectionSettings.MaxRegistrationsPerIpPerHour</code>), and <code>EngagementUIModule</code>&#39;s stale XML-doc
+          claim of contributing navigation items is corrected to the code&#39;s actual <code>NavItems = []</code>. Cycles 14 → <strong>13</strong>
+          (the extraction dissolved one SCC). Edge resolution: <strong>143</strong> globally-unique fallback, <strong>25</strong> dropped ambiguous.</li>
+          </ul>
+          </blockquote>
+          <blockquote>
+          <p><strong>Regeneration note (re-verified against current source, v1.111.0 full drift sweep + new group creation).</strong>
+          Regenerated at <strong>framework v1.111.0</strong> (MMCA.Common <code>c50d86f</code>, clean; MMCA.ADC <code>f3aba4b9</code>, working tree dirty
+          only on three governance files unrelated to this pass: <code>ArchitectureScorecard.md</code>, <code>RemediationBacklog.md</code>,
+          <code>infra/main.bicep</code>; <code>FACTS.md</code> is the source of truth for the version / 14-package / ADR-range (001-041)
+          figures). Net change since the v1.103.1 pass: <strong>+346</strong> distinct nodes (1,941 -&gt; 2,287), individually-sectioned
+          1,166 -&gt; <strong>1,284</strong>, rolled-up 775 -&gt; <strong>1,003</strong>, <code>###</code> sections 996 -&gt; <strong>1,143</strong> across the now-26 chapters
+          (<code>verify.ps1</code>: 0 missing; rubric 34/34). The change is <strong>+346 added, 0 removed, 0 moved repo-to-repo,
+          7 regrouped (all approved classifier fixes, below)</strong>, clustered around the v1.106.0-v1.111.0 release train:</p>
+          <ul>
+          <li><strong>New group created (governance event, user-approved 2026-07-10): G26, &quot;ADC Engagement Live Layer
+          (Real-Time Polls &amp; Session Q&amp;A)&quot;</strong>, chapter file <code>group-23-engagement-live-layer.md</code> (89 types). All 89
+          land mechanically in G22 via the broad <code>MMCA.ADC.Engagement</code> prefix rule, but G22&#39;s charter is explicitly
+          the async Session-Bookmarks slice; the live layer (added whole in MMCA.ADC commits <code>58476d84</code>/<code>e2f304ea</code>)
+          is a synchronous, SignalR-hub-channel-driven (ADR-039), cross-service (gRPC) audience-interaction
+          capability with its own aggregates (<code>LivePoll</code>/<code>LivePollOption</code>/<code>LivePollVote</code>,
+          <code>SessionQuestion</code>/<code>SessionQuestionUpvote</code>), 7 CQRS use-case folders, 2 controllers, and the
+          HappeningNow / SessionLive / PresenterView UI. Approved with <strong>mid-list placement directly after G22</strong>
+          (IDs are append-only, so the new group ID is G26 while the chapter takes file slot 23); renumber fallout:
+          identity-module 23 -&gt; 24, adc-host-composition 24 -&gt; 25, testing-infrastructure 25 -&gt; 26 (17 part files
+          renamed content-unchanged, 3 stale assembled chapters deleted, 110 link occurrences fixed across 30 files).</li>
+          <li><strong>Three approved regroups</strong> (catch-all fallback landings, classifier O-override/prefix fixes dated
+          2026-07-10 in <code>Tools/invtool/classify.ps1</code>): the ADR-039 hub-channel trio <code>ILiveChannelPublisher</code> /
+          <code>NullLiveChannelPublisher</code> / <code>SignalRLiveChannelPublisher</code> from the G07 fallback to <strong>G10</strong> (exact
+          structural sibling of the push-sender trio); the Result JSON round-trip trio <code>ResultJsonConverterFactory</code> /
+          <code>ResultConverter</code> / <code>PropertyReader</code> (<code>MMCA.Common.Shared/Serialization/ResultJsonConverterFactory.cs:15,35,95</code>)
+          from the G08 <code>Shared</code> catch-all to <strong>G01</strong> (the three form a 3-node cycle with <code>Result</code> itself); and
+          <code>HttpResilienceDefaults</code> (<code>MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:10</code>) to <strong>G16</strong>, since
+          its only consumers are ServiceDefaults (<code>MMCA.Common.Aspire/Extensions.cs:45-78</code>) and the typed gRPC
+          client (<code>MMCA.Common.Grpc/DependencyInjection.cs:87-108</code>), which re-apply the same Polly values.</li>
+          <li><strong>Per-group adds:</strong> G04 +1 <code>OutboxFinalizer</code>
+          (<code>MMCA.Common.Infrastructure/Persistence/Outbox/OutboxFinalizer.cs:12</code>, the v1.110.0 async outbox
+          finalize); G05 +1 <code>QueryCacheKeyLocks</code> (nested in <code>CachingQueryDecorator.cs</code>, cache-stampede lock);
+          G12 +2 ADR-040 authenticated output caching (<code>OutputCacheOptionsExtensions.cs:6</code>,
+          <code>PublicEndpointOutputCachePolicy.cs:35</code>); G15 +1 <code>ChannelSubscription</code> (nested in
+          <code>NotificationHubService.cs</code>, a new L2 cycle); G17 +7 two-event-home + live-validation contracts
+          (<code>MMCA.ADC.Conference.Shared/Events/</code>: <code>CurrentEventSelector</code>, <code>CurrentEventDefaults</code>, <code>EventLiveInfo</code>,
+          <code>SessionLiveInfo</code>, <code>IEventLiveValidationService</code>, <code>DisabledEventLiveValidationService</code>,
+          <code>QuestionModerationDefault</code>); G18 +3 (<code>EventLiveValidationService.cs:18</code> + the <code>GetSpeakersByEventFilter</code>
+          query/handler); G20 +3 cross-service live-validation gRPC (<code>EventLiveValidationServiceGrpcAdapter.cs:23</code>,
+          <code>GrpcErrorTrailerParser.cs:14</code>, <code>EventLiveValidationGrpcService.cs:22</code>); G10 +6 (adds
+          <code>LiveChannelPublisherGrpcAdapter.cs:20</code>, <code>LiveChannelGrpcService.cs:19</code>, the new Notification.Contracts
+          <code>DependencyInjection.cs:14</code>, plus the 3 regrouped in); G01 +3 and G16 +1 regrouped in; G26 +89 (the new
+          chapter); G25 +229 rolled-up test classes (the v1.106.0 unit/integration/E2E programs plus the live-layer
+          suites), including the new individually-sectioned <code>UserPreferencesTestsBase</code> (Testing.E2E), lifting the
+          sectioned G25 infrastructure count 120 -&gt; 121.</li>
+          <li><strong>Repack alignment repair.</strong> <code>plan.ps1</code>&#39;s repack shifted unit boundaries through G17/G18, so the first
+          assembly dropped 9 sections (the 5 DecisionSupport records and the 4 Questions/Update use-case types) and
+          duplicated 23 headings between re-authored and stale parts. Thirteen stale parts (G17 p01/p03/p04/p05,
+          G18 p04/p06-p13) were re-authored to the new boundaries; final <code>verify.ps1</code> reports 0 missing and the two
+          chapters have no same-type duplicate headings (the remaining <code>### StatusBucket</code> pair is two distinct
+          nested enums: <code>GetCategoryDistributionHandler.cs:94</code> and <code>GetSessionSelectionDashboardHandler.cs:308</code>).
+          G12&#39;s p02-p05 part/unit misalignment (chapter-complete, duplicate-free) is pre-existing and catches up on
+          the next G12-touching pass, per the same convention as the v1.103.1 G18 note.</li>
+          <li><strong>Corrections made while re-verifying</strong> (spot-checks + re-author passes): the G15 overview&#39;s claim that
+          <code>LayoutSettings</code> is validated on start was fixed (only <code>ApiSettings</code> has
+          <code>.ValidateDataAnnotations().ValidateOnStart()</code>, <code>MMCA.Common.UI/DependencyInjection.cs:29-32</code>;
+          <code>LayoutSettings</code> is bind-only with defaults, <code>:34-36</code>); the <code>Speaker</code> section&#39;s claim that category-item
+          adds have no duplicate guard was fixed (the guard exists at <code>Speaker.cs:296-303</code>; the unguarded add is
+          <code>AddSpeakerQuestionAnswer</code>, <code>:353</code>); the <code>Event</code> walkthrough was refreshed including the new
+          <code>QuestionModerationDefault</code> field (<code>Event.cs:54</code>, BR-233).</li>
+          <li><strong>ADR cross-references:</strong> ADR-039 (hub channels) is now cited in G10/G15 and throughout the new
+          live-layer chapter; ADR-040 (authenticated output caching) in G12/G20. <strong>ADR-041 (observability) is not
+          yet cross-referenced anywhere in the guide</strong>; its natural home is the devops-aspire chapter, which is
+          outside this pass&#39;s scope. Flagged for the next devops-touching pass rather than cited without
+          re-verifying that chapter.</li>
+          <li>Cycles 13 -&gt; <strong>16</strong> (new: the G15 <code>NotificationHubService</code>/<code>ChannelSubscription</code> pair and two G25 test
+          SCCs around <code>CosmosConfigurationPortabilityTests</code>/<code>DatabaseInitializationExtensionsTests</code>/
+          <code>FixedAssemblyProvider</code>/<code>MultiSourceSqliteIntegrationTests</code>); all three verified in-group. Edge
+          resolution: <strong>192</strong> globally-unique fallback, <strong>26</strong> dropped ambiguous.</li>
+          </ul>
+          </blockquote>
+          <hr>
+          <h2 id="2-exceptions-log-every-deliberate-omission-with-reason">2. Exceptions log (every deliberate omission, with reason)</h2>
+          <h3 id="21-generated--scaffolded-code-not-sectioned-66-files">2.1 Generated / scaffolded code, not sectioned (66 files)</h3>
+          <p>EF Core migrations (<code>/Migrations/</code>, <code>.Migrations.SqlServer</code>), <code>ModelSnapshot</code>, <code>*.Designer.cs</code>,
+          <code>*.g.cs</code>, <code>GlobalUsings.g.cs</code>, and <code>AssemblyInfo.cs</code> are excluded by rule (<code>Tools/invtool</code> <code>IsGenerated</code>).
+          The <strong>mechanisms</strong> that produce them are taught instead: the <code>DbContext</code>, the migration workflow, and
+          the <code>.proto</code>/gRPC contracts (see <a href="group-07-persistence-ef-core.html">group-07</a>,
+          <a href="group-13-grpc-contracts.html">group-13</a>, and <a href="devops-testing.html">devops-testing</a>). The full file list is
+          in <a href="00-inventory.html#generated--excluded-artifacts-no-type-sections-written"><code>00-inventory.md</code></a>.</p>
+          <h3 id="22-per-fact-test-classes-rolled-up-by-project-1003-types">2.2 Per-<code>[Fact]</code> test classes, rolled up by project (1,003 types)</h3>
+          <p>Per the guide&#39;s TESTS note, individual test classes are <strong>not</strong> given per-type sections. The
+          <a href="group-26-testing-infrastructure.html">Testing chapter (group-26)</a> instead:</p>
+          <ul>
+          <li>sections the <strong>reusable</strong> test infrastructure in full (the <strong>121</strong> types in <code>MMCA.Common.Testing</code>,
+          <code>.Testing.E2E</code>, <code>.Testing.UI</code>, the shared <strong><code>.Testing.Architecture</code></strong> rule library + bases, now
+          including the six convention/fitness bases added since v1.93.0, the web-vitals collector, the
+          localization resx-parity base, the slice-cohesion base, the markup-snapshot helper, and
+          the per-repo architecture-fitness test classes plus the <code>Gallery</code> harness), and</li>
+          <li>rolls the remaining <strong>1,003</strong> per-suite test classes (including the new <code>MMCA.Common.Benchmarks</code>
+          perf-smoke project) into a <strong>per-project table</strong> (purpose + style:
+          unit / integration / fitness / E2E / component / performance-smoke).
+          Every one of the 1,003 remains individually listed with <code>file:line</code> in
+          <a href="00-inventory.html"><code>00-inventory.md</code></a>. This is the only category of first-party type not given its own
+          prose section.</li>
+          </ul>
+          <h3 id="23-sibling-family-grouping-sibling-families-fold-into-shared-sections">2.3 Sibling-family grouping (sibling families fold into shared sections)</h3>
+          <p>Near-identical families (per-entity <code>Add*/Remove*/Update*</code> commands, <code>*DTOMapper</code>, <code>*CreateRequest</code>,
+          <code>*Validator</code>, per-type filter strategies, etc.) are taught in one <code>### A, B, C</code> section that explains
+          the shared shape once. <strong>Every</strong> grouped type is still named and cited individually via the section&#39;s
+          <code>File:Line</code> table, so citation coverage is complete (this is what <code>verify.ps1</code> checks). The 1,284
+          individually-sectioned types are covered by 1,143 <code>###</code> sections; the 141-type difference is family grouping.</p>
+          <hr>
+          <h2 id="3-grouping--ordering-verification">3. Grouping &amp; ordering verification</h2>
+          <ul>
+          <li><strong>Every type in exactly one group.</strong> <code>classify.ps1</code> assigns all 2,287 nodes via name-level overrides
+          (for the grab-bag <code>MMCA.Common.*Interfaces*/Services</code> namespaces) + ordered namespace-prefix rules;
+          it reports <strong>0 unmapped</strong> and the per-group counts sum to 2,287. See
+          <a href="00-group-taxonomy.html"><code>00-group-taxonomy.md</code></a>.</li>
+          <li><strong>Within-group ascending Level.</strong> Each chapter&#39;s sections were authored from a pre-sorted, Level-
+          ascending unit table, so no section precedes a same-group type it depends on (ties broken by name).</li>
+          <li><strong>Cycles kept whole.</strong> All <strong>16</strong> dependency cycles (SCCs) sit inside a single group, never split
+          (re-verified for the three cycles new in this pass: the <code>NotificationHubService</code>/<code>ChannelSubscription</code>
+          pair is wholly in <a href="group-15-common-ui-framework.html">group-15</a>, and the two new test SCCs around
+          <code>CosmosConfigurationPortabilityTests</code>/<code>DatabaseInitializationExtensionsTests</code>/<code>FixedAssemblyProvider</code>/
+          <code>MultiSourceSqliteIntegrationTests</code> are wholly in <a href="group-26-testing-infrastructure.html">group-26</a>):
+          the <code>ApplicationDbContext ↔ AuditSaveChangesInterceptor ↔ DomainEventSaveChangesInterceptor ↔ DataSourceModelCacheKeyFactory</code> cycle is wholly in <a href="group-07-persistence-ef-core.html">group-07</a>; the
+          Event/Session/Speaker/Category aggregate nav-cycles are wholly in
+          <a href="group-17-conference-domain.html">group-17</a>; the <code>Address</code>/<code>Currency</code> value-object + converter pairs in
+          <a href="group-02-domain-building-blocks.html">group-02</a> (plus polyglot-fitness and the new localization/markup
+          test cycles in <a href="group-26-testing-infrastructure.html">group-26</a>). Full list:
+          <a href="00-dependency-manifest.html#cycles-scc-size--1-14">manifest</a>.</li>
+          <li><strong>Cross-group forward references are allowed and cross-linked.</strong> Because group order is functional
+          (not a strict global topological sort), some sections reference a first-party type whose home group
+          comes later. These are correct <strong>by construction</strong>: every cross-link target is resolved through
+          <code>_typemap.tsv</code> (type → group file + anchor), so a link can only point at the type&#39;s actual home.
+          Representative forward references (lower group → later group), each cross-linked in the text:<ul>
+          <li><code>ErrorType</code>/<code>Result</code> (group-01) → <code>ApiControllerBase</code>/<code>ErrorHttpMapping</code> (group-12) and
+          <code>ResultGrpcExtensions</code> (group-13) for the HTTP/gRPC mapping.</li>
+          <li><code>EntityQueryService</code> (group-03) → the repository contracts and <code>EFRepository</code> (group-07).</li>
+          <li><code>INavigationPopulator</code> (group-11) → its concrete ADC populators (groups 18/22/23).</li>
+          <li>The Common base classes (groups 01–16) → their ADC consumers (groups 17–24) throughout.
+          <em>Scope note:</em> this list is representative, not exhaustive; an exhaustive enumeration is unnecessary
+          because the typemap guarantees every link resolves to the correct home group.</li>
+          </ul>
+          </li>
+          </ul>
+          <hr>
+          <h2 id="4-rubric-coverage-matrix">4. Rubric coverage matrix</h2>
+          <p><a id="rubric-coverage-matrix"></a></p>
+          <p>Every one of the 34 categories is explained at least once against real code. &quot;First explained in&quot; is
+          the earliest group chapter (by order) that tags it; many recur and several are also developed in the
+          DevOps/test chapters (noted).</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>§</th>
+          <th>Category</th>
+          <th>First explained in</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>§1</td>
+          <td>SOLID Principles</td>
+          <td><a href="group-02-domain-building-blocks.html">group-02</a></td>
+          </tr>
+          <tr>
+          <td>§2</td>
+          <td>Design Patterns</td>
+          <td><a href="group-01-result-error-handling.html">group-01</a></td>
+          </tr>
+          <tr>
+          <td>§3</td>
+          <td>Clean Architecture</td>
+          <td><a href="group-01-result-error-handling.html">group-01</a></td>
+          </tr>
+          <tr>
+          <td>§4</td>
+          <td>Domain-Driven Design</td>
+          <td><a href="group-01-result-error-handling.html">group-01</a></td>
+          </tr>
+          <tr>
+          <td>§5</td>
+          <td>Vertical Slice Architecture</td>
+          <td><a href="group-02-domain-building-blocks.html">group-02</a> (developed in groups 17–23)</td>
+          </tr>
+          <tr>
+          <td>§6</td>
+          <td>CQRS &amp; Event-Driven</td>
+          <td><a href="group-02-domain-building-blocks.html">group-02</a> (developed in groups 04–05)</td>
+          </tr>
+          <tr>
+          <td>§7</td>
+          <td>Microservices Readiness</td>
+          <td><a href="group-04-events-outbox.html">group-04</a> (developed in groups 13–14, <a href="devops-iac.html">devops-iac</a>)</td>
+          </tr>
+          <tr>
+          <td>§8</td>
+          <td>Data Architecture</td>
+          <td><a href="group-02-domain-building-blocks.html">group-02</a> (developed in group-07)</td>
+          </tr>
+          <tr>
+          <td>§9</td>
+          <td>API &amp; Contract Design</td>
+          <td><a href="group-01-result-error-handling.html">group-01</a> (developed in groups 12–13)</td>
+          </tr>
+          <tr>
+          <td>§10</td>
+          <td>Cross-Cutting Concerns</td>
+          <td><a href="group-02-domain-building-blocks.html">group-02</a> (developed in group-05)</td>
+          </tr>
+          <tr>
+          <td>§11</td>
+          <td>Security</td>
+          <td><a href="group-02-domain-building-blocks.html">group-02</a> (developed in group-08)</td>
+          </tr>
+          <tr>
+          <td>§12</td>
+          <td>Performance &amp; Scalability</td>
+          <td><a href="group-01-result-error-handling.html">group-01</a></td>
+          </tr>
+          <tr>
+          <td>§13</td>
+          <td>Observability &amp; Operability</td>
+          <td><a href="group-02-domain-building-blocks.html">group-02</a> (developed in <a href="devops-aspire.html">devops-aspire</a>)</td>
+          </tr>
+          <tr>
+          <td>§14</td>
+          <td>Testability &amp; Test Strategy</td>
+          <td><a href="group-03-querying-specifications.html">group-03</a> (developed in group-26, <a href="devops-testing.html">devops-testing</a>)</td>
+          </tr>
+          <tr>
+          <td>§15</td>
+          <td>Best Practices &amp; Code Quality</td>
+          <td><a href="group-02-domain-building-blocks.html">group-02</a> (also <a href="00-primer.html#4-c-build-and-code-style-conventions">primer §4</a>)</td>
+          </tr>
+          <tr>
+          <td>§16</td>
+          <td>Maintainability &amp; Evolvability</td>
+          <td><a href="group-02-domain-building-blocks.html">group-02</a></td>
+          </tr>
+          <tr>
+          <td>§17</td>
+          <td>DevOps &amp; Deployment</td>
+          <td><a href="group-07-persistence-ef-core.html">group-07</a> (developed in <a href="devops-cicd.html">devops-cicd</a>/<a href="devops-iac.html">iac</a>)</td>
+          </tr>
+          <tr>
+          <td>§18</td>
+          <td>UI Architecture &amp; Component Design</td>
+          <td><a href="group-08-auth.html">group-08</a> (developed in groups 15, 21)</td>
+          </tr>
+          <tr>
+          <td>§19</td>
+          <td>State Management &amp; Data Flow</td>
+          <td><a href="group-08-auth.html">group-08</a> (developed in group-15)</td>
+          </tr>
+          <tr>
+          <td>§20</td>
+          <td>Design System, Theming &amp; Consistency</td>
+          <td><a href="group-15-common-ui-framework.html">group-15</a> (incl. day/dark <code>ThemeService</code>, ADR-028)</td>
+          </tr>
+          <tr>
+          <td>§21</td>
+          <td>Accessibility (a11y)</td>
+          <td><a href="group-15-common-ui-framework.html">group-15</a> (developed in group-26/<a href="devops-testing.html">devops-testing</a>)</td>
+          </tr>
+          <tr>
+          <td>§22</td>
+          <td>Responsive &amp; Cross-Browser/Device</td>
+          <td><a href="group-15-common-ui-framework.html">group-15</a></td>
+          </tr>
+          <tr>
+          <td>§23</td>
+          <td>Front-End Performance &amp; Rendering</td>
+          <td><a href="group-15-common-ui-framework.html">group-15</a></td>
+          </tr>
+          <tr>
+          <td>§24</td>
+          <td>Forms, Validation &amp; UX Safety</td>
+          <td><a href="group-05-cqrs-pipeline.html">group-05</a> (developed in groups 06, 15, 21)</td>
+          </tr>
+          <tr>
+          <td>§25</td>
+          <td>Navigation, Routing &amp; Information Architecture</td>
+          <td><a href="group-15-common-ui-framework.html">group-15</a></td>
+          </tr>
+          <tr>
+          <td>§26</td>
+          <td>Front-End Security</td>
+          <td><a href="group-08-auth.html">group-08</a></td>
+          </tr>
+          <tr>
+          <td>§27</td>
+          <td>Internationalization &amp; Localization</td>
+          <td><a href="group-02-domain-building-blocks.html">group-02</a> (now multi-locale en-US + es per ADR-027, developed in groups 12/15/20/22/23; note in <a href="00-primer.html#6-the-34-category-architecture-evaluation-lens">primer §6</a>)</td>
+          </tr>
+          <tr>
+          <td>§28</td>
+          <td>Front-End Testing &amp; Quality</td>
+          <td><a href="group-15-common-ui-framework.html">group-15</a> (developed in group-26)</td>
+          </tr>
+          <tr>
+          <td>§29</td>
+          <td>Resilience, Reliability &amp; Business Continuity</td>
+          <td><a href="group-04-events-outbox.html">group-04</a> (developed in <a href="devops-runbooks.html">devops-runbooks</a>)</td>
+          </tr>
+          <tr>
+          <td>§30</td>
+          <td>Compliance, Privacy &amp; Data Governance</td>
+          <td><a href="group-02-domain-building-blocks.html">group-02</a> (developed in group-24)</td>
+          </tr>
+          <tr>
+          <td>§31</td>
+          <td>Cost Efficiency / FinOps</td>
+          <td><a href="group-04-events-outbox.html">group-04</a> (developed in <a href="devops-cicd.html">devops-cicd</a>)</td>
+          </tr>
+          <tr>
+          <td>§32</td>
+          <td>Dependency &amp; Supply-Chain</td>
+          <td><a href="group-18-conference-application.html">group-18</a> (also <a href="00-primer.html#4-c-build-and-code-style-conventions">primer §4</a>)</td>
+          </tr>
+          <tr>
+          <td>§33</td>
+          <td>Developer Experience &amp; Inner Loop</td>
+          <td><a href="group-06-validation.html">group-06</a> (developed in <a href="devops-aspire.html">devops-aspire</a>)</td>
+          </tr>
+          <tr>
+          <td>§34</td>
+          <td>Architecture Governance &amp; Documentation</td>
+          <td><a href="group-02-domain-building-blocks.html">group-02</a> (also <a href="00-primer.html#architecture-enforcement-is-doubled-fitness-functions-rubric-34-3">primer §4</a>)</td>
+          </tr>
+          </tbody></table></div>
+          <p><strong>Result: 34 / 34 categories explained.</strong> (<code>verify.ps1</code> confirms all 34 <code>§N</code> tokens appear across the
+          chapters. It also reports a 35th distinct <code>§N</code> token, <code>§1798</code>, which is the legal citation
+          &quot;CCPA §1798.100&quot; in <a href="group-24-identity-module.html">group-24</a>, not a rubric category; ignore it.)</p>
+          <hr>
+          <h2 id="5-open-questions--not-determinable-from-source">5. Open questions / not determinable from source</h2>
+          <ol>
+          <li><strong><code>IDbSeeder</code> host invocation</strong> (<a href="group-07-persistence-ef-core.html">group-07</a>). The seeding
+          <em>contract</em> and implementations are in <code>MMCA.Common</code>, but the <code>IHostedService</code>/startup invoker that
+          actually runs seeding at boot lives in <strong>consuming-app host code</strong>, not in <code>MMCA.Common</code> source, so
+          its exact wiring is noted as out-of-scope-for-source rather than asserted.</li>
+          <li><strong>Engine seams (Cosmos / SQLite) are supported, with a staged first adoption (ADR-018).</strong> All
+          <em>current</em> production entity configs use the <code>…SQLServer</code> base, so in deployed ADC the polyglot paths
+          are not yet live. But the polyglot-persistence framework work (ADR-018) added the unified engine-aware
+          <a href="group-07-persistence-ef-core.html#entitytypeconfigurationtentity-tidentifiertype"><code>EntityTypeConfiguration&lt;T,TId&gt;</code></a>
+          base, the cross-source <a href="group-03-querying-specifications.html#crosssourcespecification"><code>CrossSourceSpecification</code></a>,
+          the Cosmos-index skip in the degrade convention, SQLite <code>EnsureCreated</code>, and a fitness rule + new test
+          suites (Cosmos config portability, cross-source spec, SQLite init), and ADC Conference&#39;s
+          <code>Session</code>→Cosmos / <code>Room</code>→SQLite move is the staged-but-not-yet-deployed first use. The guide documents
+          these as real, exercised capabilities with honest adoption notes (see
+          <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a> and group-07), not yet as
+          live production options.</li>
+          <li><strong>Edge-resolution approximation.</strong> The dependency graph is a <em>syntactic</em> (namespace-aware) resolve,
+          not a full semantic compiler bind: ~98% of edges bind by namespace visibility, ~2% by a
+          globally-unique-name fallback (192 edges), and 26 references are dropped as ambiguous. This is accurate enough
+          for the leveling spine but is a documented approximation
+          (<a href="00-dependency-manifest.html#edge-resolution--accuracy">manifest accuracy note</a>).</li>
+          </ol>
+          <hr>
+          <h2 id="6-how-to-regenerate-this-audit">6. How to regenerate this audit</h2>
+          <pre class="doc-pre"><code># from C:\Projects\MMCA\Tools\invtool
+          dotnet run -- out  ../../MMCA.Common/Source ../../MMCA.Common/Tests ../../MMCA.ADC/Source ../../MMCA.ADC/Tests
+          pwsh -File classify.ps1   # -&gt; 00-group-taxonomy.md + _groups.tsv (0 unmapped check)
+          pwsh -File plan.ps1       # -&gt; _typemap.tsv + _units/* + _workplan.json
+          pwsh -File concat.ps1     # parts/* -&gt; group-NN-*.md
+          pwsh -File fixanchors.ps1 # inject &lt;a id&gt; aliases for sibling-family members (from _typemap.tsv)
+          pwsh -File fixanchors2.ps1 # conservative cross-link repair (unique-heading-token match)
+          pwsh -File verify.ps1     # 0-missing coverage check + rubric 34/34 check</code></pre>
+          <p>Then copy the refreshed <code>out/00-inventory.md</code> and <code>out/00-dependency-manifest.md</code> into
+          <code>Docs/Onboarding/</code> (the <code>00-group-taxonomy.md</code> is written there directly by <code>classify.ps1</code>).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

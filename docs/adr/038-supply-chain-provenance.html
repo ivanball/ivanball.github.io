@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADR-038: Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-07-06).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/038-supply-chain-provenance.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ADR-038: Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)">
+  <meta property="og:description" content="Accepted (2026-07-06).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/038-supply-chain-provenance.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 45 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html" aria-current="page">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-038-supply-chain-provenance-sbom-release-gate--lock-files--vulnerability-audit">ADR-038: Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-07-06).</p>
+          <h2 id="context">Context</h2>
+          <p>MMCA.Common is a published framework: it packs its NuGet packages and pushes them to GitHub Packages
+          on every <code>v*</code> tag (release.yml:59-60), where the two production apps and the reference seed consume
+          them. A published framework is a supply-chain amplifier: a vulnerable, substituted, or unreproducible
+          dependency does not stay in one repo, it ships downstream to every consumer. Rubric §32 (Dependency &amp;
+          Supply-Chain Management) is weighted higher for exactly this reason: its default weight rises to 3 for
+          a published framework such as MMCA.Common (ArchitectureEvaluationCriteria.md:817), and it asks for
+          provenance and integrity (SBOM, lock files, trusted sources only) on top of the versioning hygiene
+          §15 covers (ArchitectureEvaluationCriteria.md:808).</p>
+          <p>ADR-016 answers two dependency-governance questions (how the packages version and roll out, and the
+          MassTransit-v8 license pin), but it deliberately stops there. The four controls that actually
+          establish provenance and integrity, an SBOM release gate, committed lock files, a CI vulnerability
+          audit, and package source mapping, already live in the release and CI workflows,
+          <code>Directory.Build.props</code>, and <code>nuget.config</code>, and are summarized for consumers in SECURITY.md
+          (SECURITY.md:32-41). No ADR owned them as a single coherent posture. This record does, and it exceeds
+          ADR-016&#39;s scope: ADR-016 gestures at lock files as sweep mechanics, this ADR owns supply-chain
+          integrity as the decision.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Treat supply-chain integrity as a set of build-gating controls, the same invariant-over-discipline
+          posture ADR-015 applies to architecture rules. Four controls, each a hard gate:</p>
+          <ol>
+          <li><p><strong>A CycloneDX SBOM is a hard release gate.</strong> The release workflow installs the CycloneDX tool and
+          generates a JSON software bill of materials for the whole solution into <code>./sbom</code> (release.yml:45-49).
+          It then fails the release (<code>exit 1</code>) when generation produced no output
+          (<code>test -n &quot;$(ls -A ./sbom ...)&quot;</code>, release.yml:50), and the upload step sets <code>if-no-files-found: error</code> (release.yml:52-57). This step was promoted from <code>continue-on-error</code> (its tooling-validation
+          phase) to a blocking gate (release.yml:41-44), so every published version ships a verifiable SBOM or
+          no packages are pushed.</p>
+          </li>
+          <li><p><strong>NuGet lock files are committed for reproducible restores.</strong> <code>RestorePackagesWithLockFile</code> is set
+          repo-wide (Directory.Build.props:8), so each project records its full resolved transitive graph in a
+          committed <code>packages.lock.json</code> (for example Source/Core/MMCA.Common.Domain/packages.lock.json).
+          Restore in CI and in release runs against that committed graph (ci.yml:30-31, release.yml:25-26), so
+          the versions CI vets and the release packs are the ones on record.</p>
+          </li>
+          <li><p><strong>CI fails on any non-suppressed vulnerable package.</strong> The audit step runs
+          <code>dotnet list MMCA.Common.slnx package --vulnerable --include-transitive</code> (ci.yml:36-38) and fails the
+          build (<code>exit 1</code>) on any vulnerable-package row (ci.yml:45-51). Accepted advisories are the sole
+          exception, and their single source of truth is the <code>NuGetAuditSuppress</code> list in
+          <code>Directory.Build.props</code>. Because <code>dotnet list --vulnerable</code> ignores <code>NuGetAuditSuppress</code>, the step
+          re-derives that accept-list itself by reading the <code>GHSA-*</code> ids out of <code>Directory.Build.props</code>
+          (ci.yml:40-48). Today the one accepted advisory is the unpatched SQLite advisory
+          GHSA-2m69-gcr7-jv3q (CVE-2025-6965), suppressed at Directory.Build.props:26-27 with the rationale
+          recorded inline (Directory.Build.props:19-25): SQLitePCLRaw ships no patched build, SQLite is a
+          non-production alternate engine (production is SQL Server), no untrusted raw SQL runs, so the
+          memory-corruption vector is unreachable; the suppression is to be removed once a fix ships. This
+          complements the build-time audit: <code>NuGetAudit</code> with <code>NuGetAuditMode=all</code> (Directory.Build.props:9-10)
+          under repo-wide <code>TreatWarningsAsErrors</code> (Directory.Build.props:7) already promotes an advisory to a
+          build failure, and the CI step adds a solution-wide, transitive check carrying an auditable
+          accept-list.</p>
+          </li>
+          <li><p><strong>Package source mapping pins every dependency to an explicit feed.</strong> <code>nuget.config</code> clears
+          inherited sources and declares nuget.org only (nuget.config:9-12), then a <code>packageSourceMapping</code>
+          block routes package pattern <code>*</code> to that source (nuget.config:13-17). This is the
+          dependency-confusion and typosquat defense: a package from any other feed cannot be silently
+          substituted (nuget.config:3-8). MMCA.Common needs only the single <code>* -&gt; nuget.org</code> mapping because it
+          publishes the <code>MMCA.*</code> packages rather than consuming them (nuget.config:6-7), so no GitHub Packages
+          token is required to build or restore it.</p>
+          </li>
+          </ol>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Provenance is a gate, not a document.</strong> A hard-failing SBOM step means the bill of materials
+          cannot silently go missing on a release: the artifact is produced or the release stops
+          (release.yml:50, release.yml:57). That is the §32 provenance criterion enforced, not merely asserted
+          (ArchitectureEvaluationCriteria.md:808).</li>
+          <li><strong>One accept-list, re-applied where the tool ignores it.</strong> The audit keeps <code>Directory.Build.props</code>
+          as the only place an advisory is accepted, and re-reads that file in CI precisely because
+          <code>dotnet list --vulnerable</code> does not honor <code>NuGetAuditSuppress</code> (ci.yml:40-42). A reviewer sees every
+          accepted advisory in one place, with a dated rationale (Directory.Build.props:19-25), rather than a
+          blanket suppression.</li>
+          <li><strong>Build-gates-invariants, at the supply-chain layer.</strong> SBOM, audit, and source mapping turn
+          &quot;remember to check the dependencies&quot; into red builds, the same lever ADR-015 uses for the layer and
+          event rules and ADR-016 uses for the MassTransit pin.</li>
+          <li><strong>Reproducibility feeds the audit.</strong> Committed lock files (Directory.Build.props:8) record the exact
+          transitive graph the audit and SBOM run against, so the release ships the versions CI actually
+          vetted.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>The SBOM is generated and archived, not yet signed or attested.</strong> The gate proves a bill of
+          materials exists for each release (release.yml:50); it does not add cryptographic attestation or
+          signature verification of the pushed packages. That is a possible follow-up, not a claim made here.</li>
+          <li><strong>Accept-list drift is possible.</strong> A suppressed advisory (Directory.Build.props:26-27) silences the
+          audit for that id until someone removes it; the inline &quot;re-check periodically&quot; note
+          (Directory.Build.props:24-25) is a review reminder, not an automated expiry.</li>
+          <li><strong>Audit granularity is text-matched.</strong> The CI step matches vulnerable rows and <code>GHSA-*</code> ids by
+          parsing tool output (ci.yml:43-48). It is deliberately simple and depends on the <code>dotnet list</code>
+          output shape rather than a structured feed.</li>
+          <li><strong>Source mapping constrains where packages come from.</strong> Restricting to nuget.org (nuget.config:15)
+          is the point, but it means adding a dependency from any other feed is a deliberate <code>nuget.config</code>
+          edit, not an ambient possibility.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p>ADR-016 (lockstep versioning + the MassTransit-v8 license pin; this record extends dependency
+          governance from versioning and licensing into supply-chain provenance and integrity), ADR-015
+          (architecture invariants enforced as build-gating fitness functions; the same gate-the-build posture
+          applied here to dependencies), ADR-010 (integration-event schema versioning; another release-discipline
+          control that turns a contract into an enforced signal). See SECURITY.md (&quot;Dependency &amp; supply-chain
+          security&quot;, SECURITY.md:32-41) for the consumer-facing summary and rubric §32
+          (ArchitectureEvaluationCriteria.md:799-817) for the evaluation criteria.</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/038-supply-chain-provenance.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

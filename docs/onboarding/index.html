@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MMCA.Common + MMCA.ADC, Onboarding Guide · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="A teaching guide for an experienced .NET engineer who is new to this codebase. It walks every first-party type, explaining not just what each type is…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/index.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="MMCA.Common + MMCA.ADC, Onboarding Guide">
+  <meta property="og:description" content="A teaching guide for an experienced .NET engineer who is new to this codebase. It walks every first-party type, explaining not just what each type is…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/index.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/onboarding/index.html">Onboarding Guide</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">Overview</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>Guide contents</summary>
+        <nav class="doc-nav" aria-label="Onboarding Guide">
+          <ol>
+        <li><a href="index.html" aria-current="page">Overview</a></li>
+        <li><a href="00-dependency-manifest.html">Phase 1: Dependency Manifest &amp; Leveling</a></li>
+        <li><a href="00-group-taxonomy.html">Phase 1b - Functional Group Taxonomy</a></li>
+        <li><a href="00-inventory.html">Phase 0: Type Inventory</a></li>
+        <li><a href="00-primer.html">Primer, the concepts, stack, and conventions you need first</a></li>
+        <li><a href="group-01-result-error-handling.html">1. Result &amp; Error Handling</a></li>
+        <li><a href="group-02-domain-building-blocks.html">2. Domain Building Blocks (Entities, Value Objects, Aggregates)</a></li>
+        <li><a href="group-03-querying-specifications.html">3. Querying: Specifications, Filtering &amp; the Entity Query Service</a></li>
+        <li><a href="group-04-events-outbox.html">4. Domain &amp; Integration Events + Outbox Dual-Dispatch</a></li>
+        <li><a href="group-05-cqrs-pipeline.html">5. CQRS: Commands, Queries &amp; the Decorator Pipeline</a></li>
+        <li><a href="group-06-validation.html">6. Validation</a></li>
+        <li><a href="group-07-persistence-ef-core.html">7. Persistence &amp; EF Core</a></li>
+        <li><a href="group-08-auth.html">8. Authentication &amp; Authorization</a></li>
+        <li><a href="group-09-caching.html">9. Caching</a></li>
+        <li><a href="group-10-notifications.html">10. Notifications (Push + In-App Inbox + Email)</a></li>
+        <li><a href="group-11-navigation-populators.html">11. Navigation Metadata &amp; Populators (EF-decoupled eager loading)</a></li>
+        <li><a href="group-12-api-hosting-mapping.html">12. API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</a></li>
+        <li><a href="group-13-grpc-contracts.html">13. gRPC &amp; Inter-Service Contracts</a></li>
+        <li><a href="group-14-module-system-composition.html">14. Module System, Composition &amp; Configuration</a></li>
+        <li><a href="group-15-common-ui-framework.html">15. Common UI Framework (MudBlazor components, theme, base pages)</a></li>
+        <li><a href="group-16-aspire-orchestration.html">16. Aspire Orchestration &amp; Service Defaults</a></li>
+        <li><a href="group-17-conference-domain.html">17. ADC Conference - Domain Model &amp; Module Contracts</a></li>
+        <li><a href="group-18-conference-application.html">18. ADC Conference - Application &amp; Use Cases</a></li>
+        <li><a href="group-19-conference-infrastructure.html">19. ADC Conference - Infrastructure &amp; Persistence</a></li>
+        <li><a href="group-20-conference-api-grpc.html">20. ADC Conference - API, gRPC Contracts &amp; Service Host</a></li>
+        <li><a href="group-21-conference-ui.html">21. ADC Conference - UI</a></li>
+        <li><a href="group-22-engagement-module.html">22. ADC Engagement Module (Session Bookmarks)</a></li>
+        <li><a href="group-23-engagement-live-layer.html">23. ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></li>
+        <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
+        <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
+        <li><a href="group-26-testing-infrastructure.html">26. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
+        <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
+        <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
+        <li><a href="devops-runbooks.html">Operational Scripts &amp; Runbooks</a></li>
+        <li><a href="devops-testing.html">Testing Architecture &amp; Solution Composition</a></li>
+        <li><a href="99-coverage-audit.html">Phase 4, Coverage Audit</a></li>
+        <li><a href="CONCEPT-MAPS.html">MMCA Concept &amp; Pattern Maps</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Onboarding guide</p>
+          <h1 id="mmcacommon--mmcaadc-onboarding-guide">MMCA.Common + MMCA.ADC, Onboarding Guide</h1>
+          <p>A teaching guide for an experienced .NET engineer who is <strong>new to this codebase</strong>. It walks every
+          first-party type, explaining not just <em>what</em> each type is but <em>how</em> it works and <em>why</em> it was built
+          that way, introducing each project-specific concept the first time it appears, and connecting the
+          code to a 34-category architecture-evaluation rubric as it goes.</p>
+          <blockquote>
+          <p><strong>Ground rule for this guide:</strong> every statement is traceable to source actually read, cited as
+          <code>path/File.cs:line</code>. Where the source can&#39;t settle a question, the text says so explicitly
+          (&quot;Not determinable from source: …&quot;) rather than guessing. The existing docs
+          (<code>Architecture/ArchitecturalAnalysis.md</code>, <code>ADRs/</code>, per-project <code>CLAUDE.md</code>) are used as a map and cross-check,
+          but <strong>source code is ground truth</strong>, where a doc and the code disagree, the code wins and the
+          discrepancy is noted.</p>
+          </blockquote>
+          <hr>
+          <h2 id="how-the-guide-is-organized-two-axes">How the guide is organized, two axes</h2>
+          <p>The guide has <strong>two organizing axes that work together</strong>.</p>
+          <ol>
+          <li><p><strong>Primary axis, functional grouping.</strong> Every type lives in exactly <strong>one</strong> functional group: the
+          capability or cross-cutting concern it most exists to serve. The 26 group chapters
+          (<code>group-01-*.md</code> … <code>group-26-*.md</code>) are sequenced roughly topologically, foundational,
+          widely-depended-on concerns first (Result → domain blocks → querying → events → CQRS → …), then the
+          ASP.NET/UI/Aspire edges, then the <code>MMCA.ADC</code> business modules that build on all of it, then the test
+          infrastructure. The full assignment of every type to its group is
+          <a href="00-group-taxonomy.html"><code>00-group-taxonomy.md</code></a>.</p>
+          </li>
+          <li><p><strong>Secondary axis, dependency leveling within a group.</strong> Inside each chapter, the per-type sections
+          run in ascending <strong>Level</strong> (a longest-path topological layering over first-party dependencies), so
+          you meet a type only after the first-party types it depends on.</p>
+          </li>
+          </ol>
+          <p><strong>First-party type</strong> = any type declared in <code>MMCA.Common</code> or <code>MMCA.ADC</code> source. The .NET BCL and
+          external NuGet packages are <em>not</em> first-party, they are &quot;external Level 0&quot;, explained <strong>once</strong> in the
+          <a href="00-primer.html">primer</a>, never per class.</p>
+          <pre class="doc-pre"><code>Level(C) = 0                              if C references only external (BCL/NuGet) types
+          Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pre>
+          <p>When a type must reference a first-party type whose home group appears <strong>later</strong>, that forward
+          reference is allowed (functional cohesion can outrank strict progressive disclosure) and is
+          cross-linked. Sixteen dependency <strong>cycles</strong> exist (mutually-dependent types, e.g. an aggregate root and
+          its child entity with bidirectional EF navigations); each is kept whole within a single group and
+          called out where it occurs. They are listed in the
+          <a href="00-dependency-manifest.html#cycles-scc-size--1-16">dependency manifest</a>.</p>
+          <h3 id="how-the-inventory--leveling-were-computed">How the inventory &amp; leveling were computed</h3>
+          <p>The type inventory and dependency graph are produced <strong>mechanically</strong> by a small Roslyn syntactic
+          parser (<code>Tools/invtool/</code>), so the type list, namespaces, and <code>file:line</code> are exact and reproducible. Edges
+          are resolved by <strong>namespace-aware name matching</strong>; ~98% bind by namespace visibility, ~2% by a
+          globally-unique-name fallback, and 26 references are dropped as ambiguous. The functional grouping is
+          then applied mechanically (<code>Tools/invtool/classify.ps1</code> → <code>00-group-taxonomy.md</code>), so every one of the
+          <strong>2,287</strong> distinct type nodes maps to exactly one group with no silent drops. See the
+          <a href="00-dependency-manifest.html#edge-resolution--accuracy">manifest&#39;s accuracy note</a> for residual caveats.</p>
+          <hr>
+          <h2 id="chapters">Chapters</h2>
+          <h3 id="front-matter">Front matter</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>File</th>
+          <th>Contents</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><a href="00-primer.html"><code>00-primer.md</code></a></td>
+          <td>Cross-cutting concepts, the BCL/NuGet stack, build/language conventions, and the 34-category rubric, taught <strong>once</strong></td>
+          </tr>
+          <tr>
+          <td><a href="00-inventory.html"><code>00-inventory.md</code></a></td>
+          <td>Phase 0, every in-scope type (2,287 distinct), mechanically extracted, with <code>file:line</code></td>
+          </tr>
+          <tr>
+          <td><a href="00-dependency-manifest.html"><code>00-dependency-manifest.md</code></a></td>
+          <td>Phase 1a, per-type first-party deps + computed Level; the 16 cycles</td>
+          </tr>
+          <tr>
+          <td><a href="00-group-taxonomy.html"><code>00-group-taxonomy.md</code></a></td>
+          <td>Phase 1b, the ordered groups + every type&#39;s group assignment (the primary axis)</td>
+          </tr>
+          </tbody></table></div>
+          <h3 id="group-chapters-primary-axis">Group chapters (primary axis)</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>#</th>
+          <th>Chapter</th>
+          <th>Types</th>
+          <th>Concern</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>1</td>
+          <td><a href="group-01-result-error-handling.html">Result &amp; Error Handling</a></td>
+          <td>11</td>
+          <td>The <code>Result</code>/<code>Error</code> railway returned instead of throwing, incl. its own JSON round-trip converter</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><a href="group-02-domain-building-blocks.html">Domain Building Blocks</a></td>
+          <td>27</td>
+          <td>Entity/aggregate bases, value objects + invariants, domain markers, attributes, identifier aliases, <code>[Pii]</code> redaction</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><a href="group-03-querying-specifications.html">Querying: Specifications, Filtering &amp; the Entity Query Service</a></td>
+          <td>25</td>
+          <td>Specification pattern (incl. cross-source), dynamic filter/sort/page, the generic query pipeline</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><a href="group-04-events-outbox.html">Domain &amp; Integration Events + Outbox Dual-Dispatch</a></td>
+          <td>31</td>
+          <td>Event contracts, dispatcher, transactional outbox/inbox (incl. the async <code>OutboxFinalizer</code>), message buses</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td><a href="group-05-cqrs-pipeline.html">CQRS: Commands, Queries &amp; the Decorator Pipeline</a></td>
+          <td>23</td>
+          <td>Handler abstraction + the logging/transaction/caching/feature-gate/idempotency decorators (incl. the cache-stampede lock)</td>
+          </tr>
+          <tr>
+          <td>6</td>
+          <td><a href="group-06-validation.html">Validation</a></td>
+          <td>17</td>
+          <td>FluentValidation contracts + failure mapping that gate commands</td>
+          </tr>
+          <tr>
+          <td>7</td>
+          <td><a href="group-07-persistence-ef-core.html">Persistence &amp; EF Core</a></td>
+          <td>70</td>
+          <td><code>SQLServerDbContext</code> over abstract <code>ApplicationDbContext</code>, interceptors, repositories, engine-aware entity config, data-source routing, conventions, factories</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><a href="group-08-auth.html">Authentication &amp; Authorization</a></td>
+          <td>54</td>
+          <td>JWT/JWKS dual-fetch, the shared <code>AuthenticationServiceBase&lt;TUser&gt;</code> login/refresh workflow (<code>IAuthUser</code>), current-user/claims, password hashing, cookie sessions, role policies + the permission-based authorization mechanism (registry, <code>[HasPermission]</code>), the <code>RoleValue</code> base</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><a href="group-09-caching.html">Caching</a></td>
+          <td>4</td>
+          <td>The cache abstraction + its invalidation-aware decorator integration</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><a href="group-10-notifications.html">Notifications (Push + In-App Inbox + Email)</a></td>
+          <td>45</td>
+          <td>Push (SignalR), in-app inbox, email, recipient providers, the ADR-039 hub-channel live publisher, ADC Notification module + its cross-service gRPC live-channel plumbing</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><a href="group-11-navigation-populators.html">Navigation Metadata &amp; Populators</a></td>
+          <td>12</td>
+          <td>EF-decoupled cross-container/cross-source eager loading (ADR-002)</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><a href="group-12-api-hosting-mapping.html">API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</a></td>
+          <td>54</td>
+          <td>Controller bases (incl. OAuth + service-info), middleware, startup, model binders, JSON converters, feature mgmt, idempotency, mapping, edge error localization (i18n), authenticated output caching (ADR-040)</td>
+          </tr>
+          <tr>
+          <td>13</td>
+          <td><a href="group-13-grpc-contracts.html">gRPC &amp; Inter-Service Contracts</a></td>
+          <td>6</td>
+          <td>Typed gRPC clients/servers, interceptors, Result-over-the-wire (ADR-007)</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td><a href="group-14-module-system-composition.html">Module System, Composition &amp; Configuration</a></td>
+          <td>32</td>
+          <td><code>IModule</code> + Kahn-ordered loader, DI composition roots, data-source attributes, options binding</td>
+          </tr>
+          <tr>
+          <td>15</td>
+          <td><a href="group-15-common-ui-framework.html">Common UI Framework</a></td>
+          <td>81</td>
+          <td>Reusable MudBlazor building blocks: data-grid list page base, theme, common pages/services, i18n culture bootstrap + day/dark <code>ThemeService</code>, user-preference readers/writers, pseudo-localization gate, OAuth UI settings + token storage (Web/WASM), hub-channel subscriptions (ADR-039)</td>
+          </tr>
+          <tr>
+          <td>16</td>
+          <td><a href="group-16-aspire-orchestration.html">Aspire Orchestration &amp; Service Defaults</a></td>
+          <td>16</td>
+          <td>AppHost wiring, ServiceDefaults, warmup, telemetry, security helpers, the shared <code>HttpResilienceDefaults</code> Polly source of truth</td>
+          </tr>
+          <tr>
+          <td>17</td>
+          <td><a href="group-17-conference-domain.html">ADC Conference, Domain Model &amp; Module Contracts</a></td>
+          <td>83</td>
+          <td>Event/Session/Speaker/Category/Question aggregates + domain events + invariants + Shared contracts (incl. <code>ConferencePermissions</code>, the current/next-event selector + live-validation contracts)</td>
+          </tr>
+          <tr>
+          <td>18</td>
+          <td><a href="group-18-conference-application.html">ADC Conference, Application &amp; Use Cases</a></td>
+          <td>195</td>
+          <td>Conference CQRS handlers, validators, DTOs, specs, Sessionize import, decision-support analytics, event-filtering-by-role handlers</td>
+          </tr>
+          <tr>
+          <td>19</td>
+          <td><a href="group-19-conference-infrastructure.html">ADC Conference, Infrastructure &amp; Persistence</a></td>
+          <td>27</td>
+          <td>Conference DbContext registration, EF configs, seeding, infra services</td>
+          </tr>
+          <tr>
+          <td>20</td>
+          <td><a href="group-20-conference-api-grpc.html">ADC Conference, API, gRPC Contracts &amp; Service Host</a></td>
+          <td>39</td>
+          <td>REST controllers, <code>.Contracts</code> gRPC, the extractable service host, the gRPC adapters (incl. cross-service live-validation), localized error resources</td>
+          </tr>
+          <tr>
+          <td>21</td>
+          <td><a href="group-21-conference-ui.html">ADC Conference, UI</a></td>
+          <td>70</td>
+          <td>Conference Blazor pages + UI services</td>
+          </tr>
+          <tr>
+          <td>22</td>
+          <td><a href="group-22-engagement-module.html">ADC Engagement Module (Session Bookmarks)</a></td>
+          <td>56</td>
+          <td>The async session-bookmarking slice of the Engagement bounded context: bookmark aggregate, use cases, persistence, API/contracts/service, feedback UI</td>
+          </tr>
+          <tr>
+          <td>23</td>
+          <td><a href="group-23-engagement-live-layer.html">ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></td>
+          <td>89</td>
+          <td>Event-wide live polls with voting + moderated per-session Q&amp;A with upvoting, over the ADR-039 hub-channel transport and the cross-service gRPC live-channel adapter (HappeningNow / SessionLive / PresenterView)</td>
+          </tr>
+          <tr>
+          <td>24</td>
+          <td><a href="group-24-identity-module.html">ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></td>
+          <td>66</td>
+          <td>The Identity bounded context end-to-end (incl. <code>IdentityPermissions</code>, user culture/theme preferences; <code>AuthenticationService</code> now extends Common&#39;s shared base)</td>
+          </tr>
+          <tr>
+          <td>25</td>
+          <td><a href="group-25-adc-host-composition.html">ADC Application Host, UI Shell &amp; Cross-Module Composition</a></td>
+          <td>30</td>
+          <td>Blazor Web/WASM/WinUI shells, host pages/services, security, app composition</td>
+          </tr>
+          <tr>
+          <td>26</td>
+          <td><a href="group-26-testing-infrastructure.html">Testing &amp; Quality Infrastructure</a></td>
+          <td>1124</td>
+          <td>All test projects + reusable Testing/Testing.E2E/Testing.UI/<strong>Testing.Architecture</strong> bases + architecture-fitness tests + Gallery + the BenchmarkDotNet perf-smoke suite</td>
+          </tr>
+          </tbody></table></div>
+          <h3 id="devops--operations-chapters">DevOps &amp; operations chapters</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>File</th>
+          <th>Contents</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><a href="devops-cicd.html"><code>devops-cicd.md</code></a></td>
+          <td>CI/CD workflows (the 14-package lockstep release; ADC deploy/e2e/cost-guard/load-test/cutover)</td>
+          </tr>
+          <tr>
+          <td><a href="devops-iac.html"><code>devops-iac.md</code></a></td>
+          <td>Bicep infrastructure-as-code, the UAMI/OIDC + shared-RG + database-per-service deployment model</td>
+          </tr>
+          <tr>
+          <td><a href="devops-aspire.html"><code>devops-aspire.md</code></a></td>
+          <td>Aspire AppHost + ServiceDefaults orchestration; how local run and service wiring work</td>
+          </tr>
+          <tr>
+          <td><a href="devops-runbooks.html"><code>devops-runbooks.md</code></a></td>
+          <td>Operational scripts, SQL, and runbooks (disaster recovery, post-cutover downgrade)</td>
+          </tr>
+          <tr>
+          <td><a href="devops-testing.html"><code>devops-testing.md</code></a></td>
+          <td>Solution composition (<code>.slnx</code>/<code>.slnf</code>), MTP/xUnit v3 runner, the test strategy &amp; pyramid</td>
+          </tr>
+          </tbody></table></div>
+          <h3 id="back-matter">Back matter</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>File</th>
+          <th>Contents</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><a href="99-coverage-audit.html"><code>99-coverage-audit.md</code></a></td>
+          <td>Phase 4, coverage cross-check, exceptions log, grouping/ordering verification, rubric matrix, open questions</td>
+          </tr>
+          </tbody></table></div>
+          <hr>
+          <h2 id="legend-how-to-read-a-type-section">Legend, how to read a type section</h2>
+          <p>Every type gets one section using this template:</p>
+          <blockquote>
+          <h3 id="typename">{TypeName}</h3>
+          <blockquote>
+          <p>{Assembly} · <code>{namespace}</code> · <code>{file:line}</code> · Level {n} · {kind}</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: one or two plain-language sentences.</li>
+          <li><strong>Depends on</strong>: first-party types (linked) and notable externals.</li>
+          <li><strong>Concept introduced</strong>: taught from first principles the first time a pattern appears; otherwise
+          cross-references where it was introduced. Relevant rubric categories are tagged inline as
+          <code>[Rubric §N, Name]</code>.</li>
+          <li><strong>Walkthrough</strong>: members in teaching order (fields → constructor/factory → key methods), with
+          line numbers and the <em>mechanism</em>.</li>
+          <li><strong>Why it&#39;s built this way</strong>: design rationale; cites the relevant ADR when one applies.</li>
+          <li><strong>Where it&#39;s used</strong>: a forward pointer to consumers.</li>
+          <li><strong>Caveats / not-in-source</strong>: anything uncertain, stated explicitly.</li>
+          </ul>
+          </blockquote>
+          <ul>
+          <li><strong>Cross-links.</strong> A first-party type named in prose links to its section, e.g.
+          <a href="group-01-result-error-handling.html#result"><code>Result</code></a>. The target is computed from the type&#39;s group
+          (see <a href="00-group-taxonomy.html"><code>00-group-taxonomy.md</code></a>); within a chapter, links are same-page anchors.</li>
+          <li><strong>Sibling families.</strong> Near-identical types (per-entity <code>Add*/Remove*/Update*</code> commands, <code>*DTOMapper</code>,
+          <code>*Validator</code> families) may share one <code>### A, B, C</code> section that teaches the shared shape once, with a
+          per-member <code>File:Line</code> table so every type stays individually cited.</li>
+          <li><strong><code>[Rubric §N, Name]</code> tags.</strong> These connect the code to the 34-category rubric introduced in the
+          <a href="00-primer.html#6-the-34-category-architecture-evaluation-lens">primer</a>. A tag <em>explains</em> the category
+          and how this code embodies (or under-uses) it, it does <strong>not</strong> score it. Scoring lives in the
+          separate <code>ArchitectureEvaluation-*.md</code> reports.</li>
+          </ul>
+          <hr>
+          <h2 id="suggested-reading-paths">Suggested reading paths</h2>
+          <ul>
+          <li><strong>Framework-first (recommended).</strong> <a href="00-primer.html">Primer</a> → group-01 → upward. You meet the
+          <code>MMCA.Common</code> foundations before the <code>MMCA.ADC</code> features that build on them; this matches dependency
+          order across and within groups.</li>
+          <li><strong>&quot;I need to touch the ADC Conference module.&quot;</strong> Primer → skim group-01/02/05 (Result, domain blocks,
+          CQRS) → then <a href="group-17-conference-domain.html">Conference Domain</a> →
+          <a href="group-18-conference-application.html">Application</a> → <a href="group-21-conference-ui.html">UI</a>.</li>
+          <li><strong>Capability deep-dive.</strong> Jump straight to the group for the concern you care about, persistence,
+          auth, events/outbox, notifications, navigation populators, etc. Each chapter opens with a
+          &quot;how this capability is implemented&quot; overview before the per-type sections.</li>
+          <li><strong>Rubric-driven (architecture review).</strong> Read the <a href="00-primer.html#6-the-34-category-architecture-evaluation-lens">primer&#39;s rubric section</a>,
+          then follow the <code>[Rubric §N]</code> tags; the <a href="99-coverage-audit.html#rubric-coverage-matrix">coverage audit</a>
+          maps every category to where it&#39;s first explained.</li>
+          <li><strong>Operations / DevOps.</strong> Primer → the <a href="devops-cicd.html"><code>devops-*</code></a> chapters.</li>
+          </ul>
+          <hr>
+          <h2 id="the-companion-projects-context">The companion projects (context)</h2>
+          <pre class="doc-pre"><code>MMCA.Common , shared framework, published as 14 NuGet packages (DDD/Clean Arch/CQRS base classes)
+             ├── consumed by MMCA.ADC   (Atlanta Developers Conference app, the focus of this guide)
+             └── consumed by MMCA.Store  (e-commerce app, out of scope here)</code></pre>
+          <p>This guide covers <strong>MMCA.Common</strong> (the framework) and <strong>MMCA.ADC</strong> (one consumer). <code>MMCA.Store</code> is out
+          of scope. The dependency arrow is why the Common framework groups (1–16) come before the ADC
+          business-module groups (17–25), and the test infrastructure (26) last.</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

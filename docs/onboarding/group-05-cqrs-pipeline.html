@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>5. CQRS: Commands, Queries &amp; the Decorator Pipeline · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="What this group covers. Every write and every read in an MMCA application is a use case, a small, single-purpose object (a command or a query) handed…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/group-05-cqrs-pipeline.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="5. CQRS: Commands, Queries &amp; the Decorator Pipeline">
+  <meta property="og:description" content="What this group covers. Every write and every read in an MMCA application is a use case, a small, single-purpose object (a command or a query) handed…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/group-05-cqrs-pipeline.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/onboarding/index.html">Onboarding Guide</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">5. CQRS: Commands, Queries &amp; the Decorator Pipeline</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>Guide contents</summary>
+        <nav class="doc-nav" aria-label="Onboarding Guide">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="00-dependency-manifest.html">Phase 1: Dependency Manifest &amp; Leveling</a></li>
+        <li><a href="00-group-taxonomy.html">Phase 1b - Functional Group Taxonomy</a></li>
+        <li><a href="00-inventory.html">Phase 0: Type Inventory</a></li>
+        <li><a href="00-primer.html">Primer, the concepts, stack, and conventions you need first</a></li>
+        <li><a href="group-01-result-error-handling.html">1. Result &amp; Error Handling</a></li>
+        <li><a href="group-02-domain-building-blocks.html">2. Domain Building Blocks (Entities, Value Objects, Aggregates)</a></li>
+        <li><a href="group-03-querying-specifications.html">3. Querying: Specifications, Filtering &amp; the Entity Query Service</a></li>
+        <li><a href="group-04-events-outbox.html">4. Domain &amp; Integration Events + Outbox Dual-Dispatch</a></li>
+        <li><a href="group-05-cqrs-pipeline.html" aria-current="page">5. CQRS: Commands, Queries &amp; the Decorator Pipeline</a></li>
+        <li><a href="group-06-validation.html">6. Validation</a></li>
+        <li><a href="group-07-persistence-ef-core.html">7. Persistence &amp; EF Core</a></li>
+        <li><a href="group-08-auth.html">8. Authentication &amp; Authorization</a></li>
+        <li><a href="group-09-caching.html">9. Caching</a></li>
+        <li><a href="group-10-notifications.html">10. Notifications (Push + In-App Inbox + Email)</a></li>
+        <li><a href="group-11-navigation-populators.html">11. Navigation Metadata &amp; Populators (EF-decoupled eager loading)</a></li>
+        <li><a href="group-12-api-hosting-mapping.html">12. API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</a></li>
+        <li><a href="group-13-grpc-contracts.html">13. gRPC &amp; Inter-Service Contracts</a></li>
+        <li><a href="group-14-module-system-composition.html">14. Module System, Composition &amp; Configuration</a></li>
+        <li><a href="group-15-common-ui-framework.html">15. Common UI Framework (MudBlazor components, theme, base pages)</a></li>
+        <li><a href="group-16-aspire-orchestration.html">16. Aspire Orchestration &amp; Service Defaults</a></li>
+        <li><a href="group-17-conference-domain.html">17. ADC Conference - Domain Model &amp; Module Contracts</a></li>
+        <li><a href="group-18-conference-application.html">18. ADC Conference - Application &amp; Use Cases</a></li>
+        <li><a href="group-19-conference-infrastructure.html">19. ADC Conference - Infrastructure &amp; Persistence</a></li>
+        <li><a href="group-20-conference-api-grpc.html">20. ADC Conference - API, gRPC Contracts &amp; Service Host</a></li>
+        <li><a href="group-21-conference-ui.html">21. ADC Conference - UI</a></li>
+        <li><a href="group-22-engagement-module.html">22. ADC Engagement Module (Session Bookmarks)</a></li>
+        <li><a href="group-23-engagement-live-layer.html">23. ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></li>
+        <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
+        <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
+        <li><a href="group-26-testing-infrastructure.html">26. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
+        <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
+        <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
+        <li><a href="devops-runbooks.html">Operational Scripts &amp; Runbooks</a></li>
+        <li><a href="devops-testing.html">Testing Architecture &amp; Solution Composition</a></li>
+        <li><a href="99-coverage-audit.html">Phase 4, Coverage Audit</a></li>
+        <li><a href="CONCEPT-MAPS.html">MMCA Concept &amp; Pattern Maps</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Onboarding guide</p>
+          <h1 id="5-cqrs-commands-queries--the-decorator-pipeline">5. CQRS: Commands, Queries &amp; the Decorator Pipeline</h1>
+          <p><strong>What this group covers.</strong> Every write and every read in an MMCA application is a <em>use case</em>, a
+          small, single-purpose object (a command or a query) handed to a handler that does exactly one thing.
+          This group is the framework&#39;s implementation of <strong>CQRS</strong> (Command/Query Responsibility Segregation):
+          the two handler contracts (<a href="#icommandhandlerin-tcommand-tresult"><code>ICommandHandler&lt;in TCommand, TResult&gt;</code></a>,
+          <a href="#iqueryhandlerin-tquery-tresult"><code>IQueryHandler&lt;in TQuery, TResult&gt;</code></a>), the <strong>decorator pipeline</strong>
+          that wraps them with cross-cutting concerns (feature-gating, logging+metrics, caching, validation,
+          transactions, profiling), the small <strong>opt-in marker interfaces</strong> that let an individual handler switch
+          each concern on, and one generic reusable use case (<a href="#deleteentitycommandtentity-tidentifiertype"><code>DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;</code></a></p>
+          <ul>
+          <li><a href="#deleteentityhandlertentity-tidentifiertype"><code>DeleteEntityHandler&lt;TEntity, TIdentifierType&gt;</code></a>) that
+          shows the whole machine in motion. This is the central column of <code>[Rubric §6, CQRS &amp; Event-Driven]</code>
+          (separation of reads from writes, intent-revealing use cases) and <code>[Rubric §10, Cross-Cutting Concerns]</code> (the place those concerns are implemented once, uniformly, instead of scattered through
+          handlers).</li>
+          </ul>
+          <h2 id="the-shape-thin-handlers-fat-pipeline">The shape: thin handlers, fat pipeline</h2>
+          <p>A handler is deliberately tiny. <a href="#icommandhandlerin-tcommand-tresult"><code>ICommandHandler&lt;in TCommand, TResult&gt;</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/ICommandHandler.cs:9</code>) and
+          <a href="#iqueryhandlerin-tquery-tresult"><code>IQueryHandler&lt;in TQuery, TResult&gt;</code></a>
+          (<code>.../IQueryHandler.cs:9</code>) are one method each, <code>Task&lt;TResult&gt; HandleAsync(T, CancellationToken)</code>,
+          with <code>in</code> (contravariant) variance on the input. <code>TResult</code> is almost always the
+          <a href="group-01-result-error-handling.html#result"><code>Result</code></a> / <code>Result&lt;T&gt;</code> of the
+          <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">Result pattern</a>: a handler returns a
+          failure value, it does not throw for expected error paths. <strong>Commands</strong> mutate state and return a
+          <code>Result</code>; <strong>queries</strong> are side-effect-free reads. Splitting the two into distinct interfaces is what
+          lets the container apply a <em>different</em> set of cross-cutting concerns to each (writes get transactions
+          and validation; reads get result caching), and it is the seam <code>[Rubric §1, SOLID]</code> rewards: each
+          handler has one reason to change, and each decorator a single responsibility.</p>
+          <p>Everything that is <em>not</em> the business logic of a use case lives outside the handler, in a stack of
+          <strong>decorators</strong>. A decorator implements the same handler interface, takes the next handler in via its
+          constructor (<code>inner</code>), does its cross-cutting job, and delegates. Because each decorator <em>is</em> an
+          <code>ICommandHandler</code>/<code>IQueryHandler</code>, you can nest them arbitrarily and the concrete handler at the
+          bottom never knows it is wrapped. This is the textbook <strong>Decorator pattern</strong> (<code>[Rubric §2, Design Patterns]</code>), applied to the application boundary so that logging, caching, validation, feature flags,
+          and transactions are each written <em>once</em> and reused by every handler in every module.</p>
+          <h2 id="how-the-pipeline-is-assembled-scrutor-registration-vs-execution-order">How the pipeline is assembled (Scrutor, registration vs. execution order)</h2>
+          <p>The wiring lives in <code>DependencyInjection.cs</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs</code>), exposed as
+          <code>extension(IServiceCollection)</code> members (the C# <code>extension(T)</code> syntax,
+          <a href="00-primer.html#c-extensiont-types--read-this-once">primer §4</a>). The sequence a host must follow is
+          strict and ordered:</p>
+          <ol>
+          <li><code>AddApplication()</code> registers the core singletons (event dispatcher, navigation metadata, the
+          <a href="group-03-querying-specifications.html#entityquerypipeline"><code>EntityQueryPipeline</code></a>) and Common&#39;s own
+          validators (<code>DependencyInjection.cs:29-43</code>).</li>
+          <li><code>ScanModuleApplicationServices&lt;TMarker&gt;()</code> is called <strong>once per module</strong> and uses <strong>Scrutor</strong>
+          assembly scanning to register every concrete <code>ICommandHandler&lt;,&gt;</code>/<code>IQueryHandler&lt;,&gt;</code> (scoped),
+          plus DTO/request mappers and FluentValidation validators (<code>DependencyInjection.cs:115-179</code>).</li>
+          <li><code>AddApplicationDecorators()</code> is called <strong>last</strong> (<code>DependencyInjection.cs:89-106</code>). It uses Scrutor&#39;s
+          <code>TryDecorate</code> to wrap the already-registered handlers. <strong>This ordering matters</strong>: <code>TryDecorate</code> can
+          only wrap registrations that already exist, which is why decorators must come after every module&#39;s
+          handler scan.</li>
+          </ol>
+          <p>The subtle rule is <strong>registration order vs. execution order</strong>. <code>TryDecorate</code> applies decorators in
+          <em>reverse</em> registration order, the <strong>last</strong> one registered becomes the <strong>outermost</strong> wrapper. So the
+          command registrations (<code>DependencyInjection.cs:94-98</code>), read top-to-bottom, list innermost-first:</p>
+          <pre class="doc-pre"><code>FeatureGateCommandDecorator         ← outermost (registered last)
+            → LoggingCommandDecorator
+              → CachingCommandDecorator
+                → ValidatingCommandDecorator
+                  → TransactionalCommandDecorator   ← innermost (registered first)
+                    → ConcreteHandler               ← the actual business logic</code></pre>
+          <p>The query side (<code>DependencyInjection.cs:101-103</code>) is lighter, there is nothing to validate or commit
+          on a read:</p>
+          <pre class="doc-pre"><code>FeatureGateQueryDecorator
+            → LoggingQueryDecorator
+              → CachingQueryDecorator
+                → ConcreteHandler</code></pre>
+          <p>A separate optional call, <code>AddApplicationProfiling()</code> (<code>DependencyInjection.cs:186-192</code>), layers
+          <a href="#profilingcommanddecoratortcommand-tresult"><code>ProfilingCommandDecorator&lt;TCommand, TResult&gt;</code></a> /
+          <a href="#profilingquerydecoratortquery-tresult"><code>ProfilingQueryDecorator&lt;TQuery, TResult&gt;</code></a> (MiniProfiler)
+          on top, used only where step-level timing is wanted.</p>
+          <h2 id="why-this-exact-order-and-what-each-layer-guards">Why this exact order, and what each layer guards</h2>
+          <p>The nesting order is a deliberate cost-and-correctness argument, spelled out in the registration
+          XML-doc (<code>DependencyInjection.cs:73-86</code>):</p>
+          <ul>
+          <li><strong>Feature-gating is outermost</strong> so a disabled feature is rejected with <em>zero</em> downstream work, no
+          log scope, no cache touch, no validation, no transaction. <a href="#featuregatecommanddecoratortcommand-tresult"><code>FeatureGateCommandDecorator&lt;TCommand, TResult&gt;</code></a>
+          (<code>.../Decorators/FeatureGateCommandDecorator.cs:18</code>) and its query twin
+          <a href="#featuregatequerydecoratortquery-tresult"><code>FeatureGateQueryDecorator&lt;TQuery, TResult&gt;</code></a> check
+          <code>IFeatureManager.IsEnabledAsync</code> only when the use case opts in via <a href="#ifeaturegated"><code>IFeatureGated</code></a>,
+          and short-circuit with a <code>NotFound</code> failure when the flag is off.</li>
+          <li><strong>Logging sits just inside the gate</strong> so it measures only <em>enabled</em> executions. <a href="#loggingcommanddecoratortcommand-tresult"><code>LoggingCommandDecorator&lt;TCommand, TResult&gt;</code></a>
+          (<code>.../Decorators/LoggingCommandDecorator.cs:14</code>) opens a structured-logging scope carrying the
+          <code>CorrelationId</code> (from <a href="group-12-api-hosting-mapping.html#icorrelationcontext"><code>ICorrelationContext</code></a>)
+          and the command name, times the <em>whole</em> inner pipeline with a <code>Stopwatch</code>, distinguishes
+          success / business-failure / exception outcomes, and, in its <code>finally</code> block, records the duration
+          to the <a href="#cqrsmetrics"><code>CqrsMetrics</code></a> OpenTelemetry histogram tagged by command name and outcome.
+          This is the RED-metrics (Rate/Errors/Duration) anchor of <code>[Rubric §13, Observability &amp; Operability]</code>. The query-side <a href="#loggingquerydecoratortquery-tresult"><code>LoggingQueryDecorator&lt;TQuery, TResult&gt;</code></a>
+          does the same for reads.</li>
+          <li><strong>Cache invalidation sits outside validation</strong> so the cache is only cleared after a <em>valid,
+          committed</em> mutation; a validation failure or rollback leaves the cache intact.
+          <a href="#cachingcommanddecoratortcommand-tresult"><code>CachingCommandDecorator&lt;TCommand, TResult&gt;</code></a>
+          (<code>.../Decorators/CachingCommandDecorator.cs:16</code>) calls <code>ICacheService.RemoveByPrefixAsync</code> only when
+          the command opts in via <a href="#icacheinvalidating"><code>ICacheInvalidating</code></a> <strong>and</strong> the <code>Result</code> is not a
+          failure. On the read side, <a href="#cachingquerydecoratortquery-tresult"><code>CachingQueryDecorator&lt;TQuery, TResult&gt;</code></a>
+          serves cache hits and stores non-failure results for queries that implement
+          <a href="#iquerycacheable"><code>IQueryCacheable</code></a>; on a cold-key miss it holds a per-key <code>SemaphoreSlim</code> from the
+          process-wide <a href="#querycachekeylocks"><code>QueryCacheKeyLocks</code></a> table so only one caller repopulates the key
+          while the rest wait for the fresh entry (cache-stampede protection).
+          (<code>[Rubric §12, Performance &amp; Scalability]</code>.)</li>
+          <li><strong>Validation sits outside the transaction</strong> so a malformed command never opens a database
+          transaction. <a href="#validatingcommanddecoratortcommand-tresult"><code>ValidatingCommandDecorator&lt;TCommand, TResult&gt;</code></a>
+          (<code>.../Decorators/ValidatingCommandDecorator.cs:24</code>) resolves the registered <code>IValidator&lt;TCommand&gt;</code>,
+          and on failure returns a <code>Result</code> failure built from the validation errors <em>without ever calling the
+          handler</em>. Commands that embed a request DTO via <a href="#icommandwithrequestout-trequest"><code>ICommandWithRequest&lt;out TRequest&gt;</code></a>
+          get a validator wired automatically (the
+          <a href="group-06-validation.html#commandrequestvalidatortcommand-trequest"><code>CommandRequestValidator&lt;TCommand, TRequest&gt;</code></a>
+          registered in the module scan, <code>DependencyInjection.cs:160-176</code>), that whole story belongs to
+          <a href="group-06-validation.html">G06, Validation</a>. (<code>[Rubric §24, Forms, Validation &amp; UX Safety]</code>.)</li>
+          <li><strong>Transaction is innermost</strong> (closest to the handler) so the unit-of-work boundary is as tight as
+          possible. <a href="#transactionalcommanddecoratortcommand-tresult"><code>TransactionalCommandDecorator&lt;TCommand, TResult&gt;</code></a>
+          (<code>.../Decorators/TransactionalCommandDecorator.cs:18</code>) wraps the handler in
+          <code>IUnitOfWork.ExecuteInTransactionAsync</code> <strong>only</strong> when the command implements <a href="#itransactional"><code>ITransactional</code></a>;
+          on an exception the transaction rolls back. Crucially, a <em>business failure</em> (<code>Result.IsFailure</code>,
+          no exception) still commits, because nothing was mutated, while cache invalidation is skipped.
+          (<code>[Rubric §8, Data Architecture]</code>.)</li>
+          </ul>
+          <h2 id="opt-in-by-marker-interface-pay-only-for-what-you-use">Opt-in by marker interface, pay only for what you use</h2>
+          <p>The pipeline is registered for <em>every</em> handler, but most decorators are dormant unless the use case
+          asks for them. That switch is a set of tiny <strong>marker / role interfaces</strong> in
+          <code>MMCA.Common.Application.UseCases</code>:</p>
+          <ul>
+          <li><a href="#itransactional"><code>ITransactional</code></a> (empty marker), open a DB transaction.</li>
+          <li><a href="#icacheinvalidating"><code>ICacheInvalidating</code></a>, exposes a <code>CachePrefix</code> to evict after success.</li>
+          <li><a href="#iquerycacheable"><code>IQueryCacheable</code></a>, exposes a <code>CacheKey</code> + <code>CacheDuration</code> for read caching.</li>
+          <li><a href="#ifeaturegated"><code>IFeatureGated</code></a>, exposes a <code>FeatureName</code> to check before running.</li>
+          </ul>
+          <p>Each decorator does an <code>is</code>-check (<code>command is ITransactional</code>, <code>query is IQueryCacheable</code>, …) and
+          passes straight through when the interface is absent. This is <code>[Rubric §2, Design Patterns]</code> (marker
+          interfaces as declarative opt-in) layered with <code>[Rubric §1, SOLID]</code> Open/Closed: a new handler turns
+          a concern on by implementing an interface, no decorator, registration, or pipeline change. The result
+          is that a read-only command pays nothing for transactions, and an un-cached query pays nothing for
+          caching, while the <em>capability</em> is uniformly present. (Verified-by-source caveat surfaced in the
+          per-type sections: <a href="#iquerycacheable"><code>IQueryCacheable</code></a> is wired and unit-tested but <strong>no production
+          query opts in</strong>, read caching is currently done at the HTTP <code>OutputCache</code> layer instead.)</p>
+          <h2 id="two-supporting-pieces-and-a-worked-example">Two supporting pieces, and a worked example</h2>
+          <p>Two small helpers make the short-circuit decorators possible. <a href="#resultfailurefactory"><code>ResultFailureFactory</code></a>
+          (<code>.../Decorators/ResultFailureFactory.cs:11</code>) builds, and caches per closed generic, a delegate that
+          manufactures a <code>Result</code> or <code>Result&lt;T&gt;</code> failure from an error list; the feature-gate and validating
+          decorators use it to return a typed failure even though their <code>TResult</code> is unconstrained.
+          <a href="#cqrsmetrics"><code>CqrsMetrics</code></a> (<code>.../Decorators/CqrsMetrics.cs:12</code>) is the internal static holder of the
+          <code>MMCA.Common.Cqrs</code> OpenTelemetry meter and its command/query duration histograms, emitted by the
+          logging decorators, exported by hosts that register the meter (the Aspire service defaults do).</p>
+          <p>The reusable <a href="#deleteentitycommandtentity-tidentifiertype"><code>DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;</code></a>
+          (<code>.../UseCases/DeleteEntityCommand.cs:12</code>) and its
+          <a href="#deleteentityhandlertentity-tidentifiertype"><code>DeleteEntityHandler&lt;TEntity, TIdentifierType&gt;</code></a>
+          (<code>.../UseCases/DeleteEntityHandler.cs:14</code>) are the canonical end-to-end example: a single generic
+          command/handler pair that deletes <em>any</em>
+          <a href="group-02-domain-building-blocks.html#auditableaggregaterootentitytidentifiertype"><code>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code></a>
+          rather than forcing every module to author <code>DeleteSessionCommand</code>, <code>DeleteSpeakerCommand</code>, and so on.
+          The handler fetches via <a href="group-07-persistence-ef-core.html#iunitofwork"><code>IUnitOfWork</code></a>&#39;s repository,
+          returns a <code>NotFound</code> <a href="group-01-result-error-handling.html#error"><code>Error</code></a> when the row is missing, calls
+          the aggregate&#39;s own <code>Delete()</code> (which enforces invariants and may raise domain events), and saves only
+          on success. A teaching detail worth holding onto: the <code>TEntity</code> type parameter is a <strong>phantom</strong>, never
+          read at runtime, present purely so DI can tell <code>DeleteEntityCommand&lt;Session, int&gt;</code> apart from
+          <code>DeleteEntityCommand&lt;Speaker, int&gt;</code> and route each to its own handler (hence the documented
+          <code>#pragma warning disable S2326</code>, <code>DeleteEntityCommand.cs:11</code>).</p>
+          <h2 id="where-this-fits-and-the-failure-mode-contract">Where this fits, and the failure-mode contract</h2>
+          <p>These contracts sit in the <strong>Application</strong> layer of Clean Architecture
+          (<a href="00-primer.html#1-the-big-picture">primer §1</a>), above Domain, below Infrastructure and the API. The
+          API layer (<a href="group-12-api-hosting-mapping.html">G12</a>) resolves a closed handler from DI and calls
+          <code>HandleAsync</code>; the decorators it gets are invisible to the caller. Returned <code>Result</code> failures are
+          translated to HTTP status codes by
+          <a href="group-12-api-hosting-mapping.html#apicontrollerbase"><code>ApiControllerBase</code></a>. The transaction&#39;s domain
+          events feed the outbox (<a href="group-04-events-outbox.html">G04</a>, ADR-003) on save. And because the <em>only</em>
+          thing the handlers and decorators depend on are abstractions, <a href="group-07-persistence-ef-core.html#iunitofwork"><code>IUnitOfWork</code></a>,
+          <a href="group-09-caching.html#icacheservice"><code>ICacheService</code></a>, <a href="group-12-api-hosting-mapping.html#icorrelationcontext"><code>ICorrelationContext</code></a>,
+          <code>IFeatureManager</code>, <code>IValidator&lt;T&gt;</code>, the whole pipeline survives a module being extracted into its own
+          service unchanged (<code>[Rubric §7, Microservices Readiness]</code>; ADRs 007/008).</p>
+          <p>The contract to memorize, because the rest of the system relies on it
+          (<code>DependencyInjection.cs:80-85</code>): on a <strong>business failure</strong> (<code>Result.IsFailure</code>, no exception) the
+          transaction still commits but cache invalidation is skipped; on an <strong>exception</strong> the transaction rolls
+          back and the exception propagates outward through every decorator (logging records it, metrics tag it
+          <code>exception</code>). Reads cache only non-failure results. That asymmetry, failures are values that flow
+          through the pipeline, exceptions are escapes that unwind it, is the same Result-pattern discipline the
+          whole codebase is built on, expressed here as the rules of the pipeline.</p>
+          <h3 id="deleteentitycommandtentity-tidentifiertype">DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.UseCases</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/DeleteEntityCommand.cs:12</code> · Level 0 · record (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a generic delete command carrying only the entity&#39;s primary key <code>Id</code>. The phantom <code>TEntity</code> type parameter exists solely for DI type discrimination: <code>DeleteEntityCommand&lt;Session, int&gt;</code> and <code>DeleteEntityCommand&lt;Speaker, int&gt;</code> are distinct closed types that resolve to distinct handlers.</li>
+          <li><strong>Depends on</strong>: BCL only. Participates in the handler pipeline described under <a href="#icommandhandlerin-tcommand-tresult">ICommandHandler&lt;in TCommand, TResult&gt;</a>; handled generically by <a href="#deleteentityhandlertentity-tidentifiertype">DeleteEntityHandler&lt;TEntity, TIdentifierType&gt;</a>.</li>
+          <li><strong>Concept introduced, phantom type parameters for handler dispatch.</strong> <code>[Rubric §1, SOLID]</code> assesses whether each type has one responsibility and is open for extension without modification; here one handler per entity keeps SRP clean. <code>[Rubric §6, CQRS &amp; Event-Driven]</code> assesses whether writes (commands) are segregated from reads (queries); this is a pure write command. Without <code>TEntity</code>, every delete command sharing a <code>TIdentifierType</code> (e.g. <code>int</code>) would collapse onto the same closed generic, making Scrutor-based handler registration ambiguous. The <code>#pragma warning disable S2326</code> suppression (line 11) acknowledges that SonarAnalyzer flags the &quot;unused type parameter&quot;, the suppression is intentional and documented in both the XML doc (<code>DeleteEntityCommand.cs:4-9</code>) and the inline comment. The <code>where TIdentifierType : notnull</code> constraint (line 13) forbids nullable identifier types.</li>
+          <li><strong>Walkthrough</strong>: line 12: <code>public sealed record DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;(TIdentifierType Id)</code>. The record primary constructor makes <code>Id</code> a positional <code>init</code> property; <code>sealed</code> prevents inheritance. The S2326 suppression brackets only this single declaration (lines 11/14).</li>
+          <li><strong>Why it&#39;s built this way</strong>: it avoids hand-writing a bespoke <code>DeleteSessionCommand</code>, <code>DeleteSpeakerCommand</code>, … in every module; the one generic command + one generic handler covers the boilerplate while the type system still routes each call to the correct closed handler.</li>
+          <li><strong>Where it&#39;s used</strong>: the aggregate-root controllers&#39; delete actions (<code>AggregateRootEntityControllerBase</code>, G12) dispatch <code>DeleteEntityCommand&lt;TEntity, Id&gt;</code>; each module registers the matching handler (the generic default, or a custom override).</li>
+          </ul>
+          <hr>
+          <h3 id="icacheinvalidating">ICacheInvalidating</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.UseCases</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/ICacheInvalidating.cs:8</code> · Level 0 · interface</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: an opt-in interface for commands that should evict cached entries after a successful mutation. Implementing it exposes a <code>CachePrefix</code> string; <a href="group-05-cqrs-pipeline.html#cachingcommanddecoratortcommand-tresult">CachingCommandDecorator&lt;TCommand, TResult&gt;</a> calls <code>ICacheService.RemoveByPrefixAsync(CachePrefix)</code> after <code>HandleAsync</code> succeeds.</li>
+          <li><strong>Depends on</strong>: nothing first-party at the interface level. Works in concert with <a href="group-09-caching.html#icacheservice">ICacheService</a> (the eviction mechanism) and shares the marker/opt-in pattern with <a href="#itransactional">ITransactional</a>.</li>
+          <li><strong>Concept introduced, prefix-based cache invalidation as an opt-in pipeline concern.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code> assesses caching strategy and how stale reads are avoided; prefix-scoped eviction keeps read caches coherent after writes without the command site knowing individual cache keys. Naming the prefix (e.g. <code>&quot;Catalog:Products&quot;</code>) scopes eviction to only the affected segment. This reuses the marker/opt-in pattern that <a href="#itransactional">ITransactional</a> introduces, <code>[Rubric §2, Design Patterns]</code> (Decorator + a presence-as-signal marker interface).</li>
+          <li><strong>Walkthrough</strong>: line 8: <code>public interface ICacheInvalidating</code>. Line 14: <code>string CachePrefix { get; }</code>, the only member. Commands typically return the prefix from a constant to avoid magic strings.</li>
+          <li><strong>Why it&#39;s built this way</strong>: decoupling <em>what</em> to invalidate (the command&#39;s concern, via <code>CachePrefix</code>) from <em>how</em> to invalidate (the decorator + <code>ICacheService</code>) keeps handlers free of cache-infrastructure knowledge and makes invalidation testable in isolation. Per <code>MMCA.Common/CLAUDE.md</code>, a business <code>Result.Failure</code> still commits the transaction but <strong>skips</strong> invalidation, only a genuine success evicts.</li>
+          <li><strong>Where it&#39;s used</strong>: broadly adopted: ~33+ write commands across ADC (Conference category/event/session/speaker mutations) and Store (catalog, sales-cart, identity mutations) implement it. Consumed exclusively by <a href="group-05-cqrs-pipeline.html#cachingcommanddecoratortcommand-tresult">CachingCommandDecorator&lt;TCommand, TResult&gt;</a>.</li>
+          </ul>
+          <hr>
+          <h3 id="icommandhandlerin-tcommand-tresult">ICommandHandler&lt;in TCommand, TResult&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.UseCases</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/ICommandHandler.cs:9</code> · Level 0 · interface</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the CQRS command-handler contract: one method, <code>HandleAsync</code>, that accepts a mutation command and returns a result, typically <a href="group-01-result-error-handling.html#result">Result</a> or <code>Result&lt;T&gt;</code>.</li>
+          <li><strong>Depends on</strong>: BCL only (<code>Task</code>, <code>CancellationToken</code>). Implementations return types from <code>MMCA.Common.Shared</code> (<code>Result</code>/<code>Result&lt;T&gt;</code>).</li>
+          <li><strong>Concept introduced, the CQRS command side.</strong> <code>[Rubric §6, CQRS &amp; Event-Driven]</code> assesses the separation of mutating writes from side-effect-free reads; <strong>commands</strong> express intent to change state (create, update, delete) and return a <a href="group-01-result-error-handling.html#result">Result</a>. <code>[Rubric §1, SOLID]</code>: a one-method interface gives each handler a single responsibility and, via contravariance, clean substitutability. Implementations are auto-discovered by Scrutor and then wrapped by a layered decorator pipeline. The <strong>verified registration</strong> in <code>DependencyInjection.cs:94-98</code> registers (innermost→outermost) <code>Transactional → Validating → Caching → Logging → FeatureGate</code>; because Scrutor&#39;s <code>TryDecorate</code> applies decorators in <em>reverse</em> registration order, the <strong>execution order is</strong> <code>FeatureGate → Logging → Caching → Validating → Transactional → concrete handler</code>. That exact ordering is load-bearing and is the subject of <strong>ADR-014</strong> (the CQRS decorator pipeline). The default <code>CancellationToken = default</code> lets token-less callers invoke handlers while still letting every implementation honour cancellation.</li>
+          <li><strong>Walkthrough</strong>: line 9: <code>public interface ICommandHandler&lt;in TCommand, TResult&gt;</code>. The <code>in</code> variance on <code>TCommand</code> is contravariant: a handler accepting a base command can stand in where a handler of a derived command is expected. Line 17: <code>Task&lt;TResult&gt; HandleAsync(TCommand command, CancellationToken cancellationToken = default);</code>, the sole member.</li>
+          <li><strong>Why it&#39;s built this way</strong>: a thin one-method interface keeps handlers focused; the decorator pipeline adds cross-cutting concerns without each handler knowing about them. A single open-generic interface is exactly what lets Scrutor register every closed handler in one assembly pass and lets the decorator chain wrap them generically.</li>
+          <li><strong>Where it&#39;s used</strong>: every command handler in ADC and Store implements it, plus the framework&#39;s own <a href="#deleteentityhandlertentity-tidentifiertype">DeleteEntityHandler&lt;TEntity, TIdentifierType&gt;</a> and the notification command handlers (G10). <code>ScanModuleApplicationServices&lt;TMarker&gt;()</code> registers the closed implementations; the decorator extensions (<code>AddApplicationDecorators</code>, called <strong>last</strong>) wrap them.</li>
+          <li><strong>Caveats / not-in-source</strong>: <code>ProfilingCommandDecorator</code> exists but is <strong>not</strong> in the standard pipeline; it is added only by the separate opt-in <code>AddApplicationProfiling()</code> (<code>DependencyInjection.cs:188</code>).</li>
+          </ul>
+          <hr>
+          <h3 id="icommandwithrequestout-trequest">ICommandWithRequest&lt;out TRequest&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.UseCases</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/ICommandWithRequest.cs:14</code> · Level 0 · interface</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a contract for commands that embed a request DTO as a <code>Request</code> property, enabling automatic FluentValidation of that DTO by the validating decorator before the handler runs.</li>
+          <li><strong>Depends on</strong>: nothing first-party at the interface level; the validation plumbing resolves FluentValidation&#39;s <code>IValidator&lt;TRequest&gt;</code> from DI and is enforced by <a href="group-05-cqrs-pipeline.html#validatingcommanddecoratortcommand-tresult">ValidatingCommandDecorator&lt;TCommand, TResult&gt;</a> via the framework-supplied <a href="group-06-validation.html#commandrequestvalidatortcommand-trequest">CommandRequestValidator&lt;TCommand, TRequest&gt;</a>. Cross-reference <a href="#icommandhandlerin-tcommand-tresult">ICommandHandler&lt;in TCommand, TResult&gt;</a>.</li>
+          <li><strong>Concept introduced, automatic validator wiring via an interface contract.</strong> <code>[Rubric §24, Forms, Validation &amp; UX Safety]</code> assesses how server-side validation is centralised rather than scattered; instead of each handler calling <code>_validator.ValidateAsync(command.Request)</code>, the framework auto-registers a <code>CommandRequestValidator&lt;TCommand, TRequest&gt;</code> for any command implementing this interface using <strong><code>TryAdd</code> semantics</strong>: so an explicit <code>IValidator&lt;TCommand&gt;</code> always wins and the auto-wired one only fills the gap (<code>ICommandWithRequest.cs:6-11</code>). <code>[Rubric §1, SOLID]</code> (OCP): new commands get validation for free by implementing the interface, with no decorator or registration change.</li>
+          <li><strong>Walkthrough</strong>: line 14: <code>public interface ICommandWithRequest&lt;out TRequest&gt;</code>. The <code>out</code> (covariant) position means a command whose request is a derived type satisfies a constraint expecting the base request type. Line 17: <code>TRequest Request { get; }</code>, the embedded payload, typically deserialized from the HTTP body.</li>
+          <li><strong>Why it&#39;s built this way</strong>: it collapses the typical web-API pattern (&quot;receive body → map to command → validate body → call handler&quot;) into &quot;map to command (which implements <code>ICommandWithRequest</code>) → decorator validates → handler runs,&quot; removing per-handler validation boilerplate.</li>
+          <li><strong>Where it&#39;s used</strong>: implemented by the bulk of write commands in ADC and Store where the command wraps a request record from the HTTP body.</li>
+          </ul>
+          <hr>
+          <h3 id="icreaterequest">ICreateRequest</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICreateRequest.cs:8</code> · Level 0 · interface (marker, empty)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: an empty marker interface for &quot;create&quot; request DTOs, used as a generic type constraint by <code>IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;</code> to distinguish create-mapping from update-mapping at the type-system level.</li>
+          <li><strong>Depends on</strong>: nothing. Same presence-as-signal marker pattern as <a href="#itransactional">ITransactional</a>.</li>
+          <li><strong>Concept introduced, type-system constraints as documentation <em>and</em> enforcement.</strong> <code>[Rubric §9, API &amp; Contract Design]</code> assesses how request contracts are modelled and kept unambiguous; tagging a DTO as &quot;this is a create&quot; lets generic mapper infrastructure (G12) refuse anything that is not a create request on the create-mapping path, catching wiring mistakes at compile time rather than at runtime.</li>
+          <li><strong>Walkthrough</strong>: the body is empty (<code>{ }</code>, lines 8-10). All of its value is in the type hierarchy.</li>
+          <li><strong>Why it&#39;s built this way</strong>: a mapper constrained to <code>where TCreateRequest : ICreateRequest</code> makes it impossible to pass an update-request DTO into the create-mapping path, with no runtime check needed.</li>
+          <li><strong>Where it&#39;s used</strong>: implemented by create-request DTOs in every module (e.g. <code>EventCreateRequest</code>, <code>SessionCreateRequest</code>, <code>SpeakerCreateRequest</code>, <code>ProductCreateRequest</code>). Consumed as a generic constraint by <a href="group-12-api-hosting-mapping.html#ientityrequestmappertentity-tcreaterequest-tidentifiertype">IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;</a> (G12).</li>
+          </ul>
+          <hr>
+          <h3 id="ifeaturegated">IFeatureGated</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.UseCases</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/IFeatureGated.cs:10</code> · Level 0 · interface</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: an opt-in interface that causes both command and query handlers to be gated by Microsoft.FeatureManagement before execution. When the named feature is disabled, the gate short-circuits and returns a failure result without calling the handler.</li>
+          <li><strong>Depends on</strong>: nothing first-party at the interface level; enforcement lives in <a href="group-05-cqrs-pipeline.html#featuregatecommanddecoratortcommand-tresult">FeatureGateCommandDecorator&lt;TCommand, TResult&gt;</a> and <a href="group-05-cqrs-pipeline.html#featuregatequerydecoratortquery-tresult">FeatureGateQueryDecorator&lt;TQuery, TResult&gt;</a>, which depend on <code>IFeatureManager</code> (Microsoft.FeatureManagement) and call <code>IsEnabledAsync(FeatureName)</code> (<code>IFeatureGated.cs:5-8</code>).</li>
+          <li><strong>Concept introduced, feature flags as a cross-cutting pipeline concern.</strong> <code>[Rubric §10, Cross-Cutting Concerns]</code> assesses whether concerns like flags, logging, and caching are factored out of business logic; the gate sits at the handler boundary (the <strong>outermost</strong> command decorator, see <a href="#icommandhandlerin-tcommand-tresult">ICommandHandler&lt;in TCommand, TResult&gt;</a>), so no caller needs a flag check and the handler has no flag knowledge. Feature-name constants live in module classes (e.g. <a href="group-10-notifications.html#notificationfeatures">NotificationFeatures</a>) to avoid magic strings.</li>
+          <li><strong>Walkthrough</strong>: line 10: <code>public interface IFeatureGated</code>. Line 16: <code>string FeatureName { get; }</code>, must match a key in the <code>FeatureManagement</code> configuration section.</li>
+          <li><strong>Why it&#39;s built this way</strong>: putting the gate in the pipeline applies it uniformly to every gated handler with zero per-handler boilerplate, and the same interface serves commands <em>and</em> queries because a feature-gate decorator is registered for both handler base interfaces.</li>
+          <li><strong>Where it&#39;s used</strong>: implemented by handlers for features under controlled rollout (e.g. notification push features in ADC). Feature state is read from <code>appsettings.json</code> / Azure App Configuration at runtime.</li>
+          </ul>
+          <hr>
+          <h3 id="iquerycacheable">IQueryCacheable</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.UseCases</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/IQueryCacheable.cs:8</code> · Level 0 · interface</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the query-side opt-in for caching: a query implements this to declare a <code>CacheKey</code> (the exact lookup key for this query&#39;s result) and a <code>CacheDuration</code> (per-query TTL). <a href="group-05-cqrs-pipeline.html#cachingquerydecoratortquery-tresult">CachingQueryDecorator&lt;TQuery, TResult&gt;</a> checks the cache on the way in and stores the result on a miss.</li>
+          <li><strong>Depends on</strong>: nothing first-party. Query-side companion to <a href="#icacheinvalidating">ICacheInvalidating</a>; implemented through <a href="group-09-caching.html#icacheservice">ICacheService</a>.</li>
+          <li><strong>Concept introduced</strong>: <code>[Rubric §12, Performance &amp; Scalability]</code>. <code>CacheKey</code> must encode every query parameter that affects the result (e.g. <code>&quot;Catalog:Products:page=1&amp;size=10&quot;</code>, <code>IQueryCacheable.cs:11-12</code>); omit one and the cache returns stale results for a different query shape. <code>CacheDuration</code> gives per-query TTL control so high-volume stable lists can cache longer than volatile data, and, being on the interface, not in config, keeps each query the owner of its own staleness budget.</li>
+          <li><strong>Walkthrough</strong>: line 8: <code>public interface IQueryCacheable</code>. Line 14: <code>string CacheKey { get; }</code>, computed from the query&#39;s own properties. Line 19: <code>TimeSpan CacheDuration { get; }</code>.</li>
+          <li><strong>Why it&#39;s built this way</strong>: opt-in means only queries that genuinely benefit (frequently-called, expensive, not user-specific) pay the serialization overhead.</li>
+          <li><strong>Where it&#39;s used</strong>: ⚠️ <strong>currently unused in production (a wired-but-unadopted seam).</strong> Verified by source search across all three repos: the <em>only</em> type implementing <code>IQueryCacheable</code> anywhere is the test <code>CacheableTestQuery</code> (<code>CachingQueryDecoratorTests.cs</code>); <strong>no production query opts in.</strong> The decorator is registered and ready, but every query falls through its early-return (no-cache) path. Production read-side caching is instead done at the HTTP layer via <strong>ASP.NET Core OutputCache</strong>, the Conference read controllers (<code>EventsController</code>, <code>SessionsController</code>, <code>SessionSpeakersController</code>, …) use named output-cache policies configured by <code>AddOutputCache</code> in the service <code>Program.cs</code> files. Contrast the write-side sibling <a href="#icacheinvalidating">ICacheInvalidating</a>, which <strong>is</strong> broadly adopted.</li>
+          <li><strong>Caveats / not-in-source</strong>: the read-cache <em>mechanism</em> is fully functional and unit-tested but unadopted by real queries. If you add a hot, non-user-specific list query you can opt in by implementing this; do <strong>not</strong> assume existing queries are cached through this path (they aren&#39;t).</li>
+          </ul>
+          <hr>
+          <h3 id="iqueryhandlerin-tquery-tresult">IQueryHandler&lt;in TQuery, TResult&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.UseCases</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/IQueryHandler.cs:9</code> · Level 0 · interface</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the CQRS query-handler contract: <code>HandleAsync</code> accepts a read-only query and returns a result without mutating state.</li>
+          <li><strong>Depends on</strong>: BCL only. Mirrors <a href="#icommandhandlerin-tcommand-tresult">ICommandHandler&lt;in TCommand, TResult&gt;</a> on the read side.</li>
+          <li><strong>Concept introduced</strong>: <code>[Rubric §6, CQRS &amp; Event-Driven]</code>: the query side of the segregation. Queries carry no side effects, so their decorator pipeline is lighter. The <strong>verified registration</strong> in <code>DependencyInjection.cs:101-103</code> registers (innermost→outermost) <code>Caching → Logging → FeatureGate</code>, so the <strong>execution order is</strong> <code>FeatureGate → Logging → Caching → concrete handler</code>. Notably absent versus the command side: the <strong>Validating</strong> and <strong>Transactional</strong> decorators, queries don&#39;t mutate, so neither concern applies.</li>
+          <li><strong>Walkthrough</strong>: line 9: <code>public interface IQueryHandler&lt;in TQuery, TResult&gt;</code>, same contravariant <code>in</code> on the query type. Line 17: <code>Task&lt;TResult&gt; HandleAsync(TQuery query, CancellationToken cancellationToken = default);</code>.</li>
+          <li><strong>Why it&#39;s built this way</strong>: an identical shape to <code>ICommandHandler</code> (for the same Scrutor-discoverability and open-generic decorator reasons), but kept as a separate interface so DI can tell &quot;this is a query&quot; from &quot;this is a command&quot; and apply the correct, lighter decorator set.</li>
+          <li><strong>Where it&#39;s used</strong>: every read handler in ADC and Store, plus the framework&#39;s notification query handlers (G10). A dispatcher / direct DI resolution invokes the correct closed implementation.</li>
+          <li><strong>Caveats / not-in-source</strong>: like the command side, <code>ProfilingQueryDecorator</code> is added only by the opt-in <code>AddApplicationProfiling()</code> (<code>DependencyInjection.cs:189</code>), not the standard pipeline.</li>
+          </ul>
+          <hr>
+          <h3 id="itransactional">ITransactional</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.UseCases</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/ITransactional.cs:6</code> · Level 0 · interface (marker)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a C# empty-body interface (<code>public interface ITransactional;</code>) that command handlers implement to opt in to database-transaction wrapping by <a href="group-05-cqrs-pipeline.html#transactionalcommanddecoratortcommand-tresult">TransactionalCommandDecorator&lt;TCommand, TResult&gt;</a>.</li>
+          <li><strong>Depends on</strong>: nothing (BCL only).</li>
+          <li><strong>Concept introduced, marker interfaces as opt-in decorator switches.</strong> <code>[Rubric §2, Design Patterns]</code> assesses the deliberate, idiomatic use of patterns; a <strong>marker interface</strong> carries no members, its mere presence on a type is the signal. The transactional decorator checks <code>handler is ITransactional</code> before opening a transaction. This is also <code>[Rubric §1, SOLID]</code> (OCP): the pipeline is open for extension (new handlers opt in by implementing this) with no change to existing decorators. The C# semicolon-body syntax (<code>interface ITransactional;</code>, line 6) is the idiomatic zero-member declaration, adopted consistently across the framework&#39;s marker interfaces.</li>
+          <li><strong>Walkthrough</strong>: the entire file body is <code>public interface ITransactional;</code> at line 6. No members; the type <em>is</em> the message.</li>
+          <li><strong>Why it&#39;s built this way</strong>: keeping transaction scope opt-in spares read-only or single-statement commands the overhead of <code>BEGIN TRANSACTION / COMMIT</code>. Handlers that mutate multiple aggregates (or write an aggregate plus an outbox row) opt in; lightweight commands don&#39;t.</li>
+          <li><strong>Where it&#39;s used</strong>: implemented by multi-aggregate / outbox-writing command handlers. Inspected at resolution time by <a href="group-05-cqrs-pipeline.html#transactionalcommanddecoratortcommand-tresult">TransactionalCommandDecorator&lt;TCommand, TResult&gt;</a>, the <strong>innermost</strong> command decorator (so it sits closest to the handler, see the registration note under <a href="#icommandhandlerin-tcommand-tresult">ICommandHandler&lt;in TCommand, TResult&gt;</a>).</li>
+          </ul>
+          <hr>
+          <h3 id="deleteentityhandlertentity-tidentifiertype">DeleteEntityHandler&lt;TEntity, TIdentifierType&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.UseCases</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/DeleteEntityHandler.cs:14</code> · Level 8 · class</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the <em>generic</em> delete handler that works for any aggregate root, registered for <a href="#deleteentitycommandtentity-tidentifiertype">DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;</a>.</li>
+          <li><strong>Depends on</strong>: <a href="group-07-persistence-ef-core.html#iunitofwork">IUnitOfWork</a> (constructor-injected, line 15); constrained <code>where TEntity : AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code> (<a href="group-02-domain-building-blocks.html#auditableaggregaterootentitytidentifiertype">AuditableAggregateRootEntity&lt;TIdentifierType&gt;</a>, line 17) and <code>where TIdentifierType : notnull</code> (line 18). Returns <a href="group-01-result-error-handling.html#result">Result</a>; implements <a href="#icommandhandlerin-tcommand-tresult">ICommandHandler&lt;in TCommand, TResult&gt;</a>.</li>
+          <li><strong>Concept reinforced, one handler, every aggregate.</strong> <code>[Rubric §6, CQRS &amp; Event-Driven]</code> and <code>[Rubric §1, SOLID]</code> (DRY/SRP). The body (<code>DeleteEntityHandler.cs:21-35</code>) is the delete template made generic: get the repository via <code>unitOfWork.GetRepository&lt;TEntity, TIdentifierType&gt;()</code> (line 25); load by id and return <code>Error.NotFound</code> (sourced/targeted with the handler and entity names) if missing (lines 26-28); call <code>entity.Delete()</code>, which soft-deletes and may enforce rules / raise domain events (line 30); and <code>SaveChangesAsync</code> <strong>only when</strong> <code>result.IsSuccess</code> (lines 31-32). This is the default the aggregate-root controllers&#39; delete slot resolves to, <em>unless</em> a module registers a custom override (e.g. ADC&#39;s <code>DeleteEventHandler</code>, which needs a cross-aggregate cascade).</li>
+          <li><strong>Why it&#39;s built this way</strong>: most deletes are identical (load → <code>Delete()</code> → save), so the framework supplies the handler once via Common&#39;s <code>Delete()</code> + soft-delete convention (ADR-005); a module overrides only when there is a cascade or extra rule. Returning the entity&#39;s own <code>Delete()</code> <code>Result</code> lets a domain-level refusal (e.g. &quot;cannot delete a published event&quot;) propagate without an exception.</li>
+          <li><strong>Where it&#39;s used</strong>: registered generically; consumed by the aggregate-root controller delete actions (<a href="group-12-api-hosting-mapping.html#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest">AggregateRootEntityControllerBase&lt;...&gt;</a>, G12).</li>
+          <li><strong>Caveats / not-in-source</strong>: <code>DeleteEntityHandler</code> is <strong>not</strong> marked <a href="#itransactional">ITransactional</a>, so a delete that raises domain events relies on <code>SaveChangesAsync</code> writing the data + outbox rows atomically rather than on an explicit handler-level transaction; the outbox is the durability mechanism (ADR-003).</li>
+          </ul>
+          <h3 id="cqrsmetrics">CqrsMetrics</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.UseCases.Decorators</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CqrsMetrics.cs:12</code> · Level 0 · class (static, internal)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: an <code>internal static</code> class that owns one <code>System.Diagnostics.Metrics.Meter</code> and two duration histograms (<code>cqrs.command.duration</code>, <code>cqrs.query.duration</code>). The logging decorators record into these on every command and query, giving RED (Rate / Errors / Duration) instrumentation for the whole CQRS pipeline.</li>
+          <li><strong>Depends on</strong>: BCL only (<code>System.Diagnostics.Metrics</code>). Recorded into by <a href="#loggingcommanddecoratortcommand-tresult">LoggingCommandDecorator&lt;TCommand, TResult&gt;</a> and <a href="#loggingquerydecoratortquery-tresult">LoggingQueryDecorator&lt;TQuery, TResult&gt;</a>.</li>
+          <li><strong>Concept introduced, BCL-native metrics + RED instrumentation.</strong> <code>[Rubric §13, Observability &amp; Operability]</code> assesses whether every unit of work emits rate, error, and latency signals that an operator can dashboard and alert on. A single histogram tagged by <code>outcome</code> supplies all three dimensions at once: the measurement value is duration, the count is the rate, and the count filtered to a failure <code>outcome</code> is the error rate. Using <code>System.Diagnostics.Metrics</code> (not a third-party client) means the OpenTelemetry SDK exports these automatically once a host registers the meter name; the Aspire service defaults (<code>ConfigureOpenTelemetry</code>) do exactly that. The doc comment (<code>CqrsMetrics.cs:8-10</code>) notes the meter name is duplicated as a literal string in <code>MMCA.Common.Aspire</code> because that package holds no reference to Application, so both registrations must agree on the name by hand.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>MeterName</code> (<code>CqrsMetrics.cs:15</code>): <code>internal const string = &quot;MMCA.Common.Cqrs&quot;</code>, the single name a host registers for export.</li>
+          <li><code>Meter</code> (<code>CqrsMetrics.cs:17</code>): a <code>private static readonly Meter</code> created once at class initialization, so no instrument is re-registered across decorator instances.</li>
+          <li><code>CommandDuration</code> (<code>CqrsMetrics.cs:20-23</code>) and <code>QueryDuration</code> (<code>CqrsMetrics.cs:26-29</code>): <code>internal static readonly Histogram&lt;double&gt;</code> instruments named <code>cqrs.command.duration</code> / <code>cqrs.query.duration</code>, unit <code>&quot;ms&quot;</code>. <code>internal</code> visibility means only decorators in this assembly can record measurements, so no external code can pollute the series.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: one static holder avoids the duplicate-instrument warnings that would fire if each closed decorator created its own meter, and <code>internal</code> keeps the recording surface closed to the pipeline. The tag dimension (rather than three separate counters) is the idiomatic OpenTelemetry shape for RED.</li>
+          <li><strong>Where it&#39;s used</strong>: <a href="#loggingcommanddecoratortcommand-tresult">LoggingCommandDecorator&lt;TCommand, TResult&gt;</a> records <code>CommandDuration</code> in its <code>finally</code>; <a href="#loggingquerydecoratortquery-tresult">LoggingQueryDecorator&lt;TQuery, TResult&gt;</a> records <code>QueryDuration</code>. <code>MMCA.Common.Aspire</code> registers the meter name for OTel export.</li>
+          <li><strong>Caveats / not-in-source</strong>: the <code>outcome</code> tag values are set by the logging decorators, not here: they are <code>&quot;completed&quot;</code>, <code>&quot;failed&quot;</code>, or <code>&quot;exception&quot;</code> (see <a href="#loggingcommanddecoratortcommand-tresult">LoggingCommandDecorator&lt;TCommand, TResult&gt;</a>), not a bare success/failure pair.</li>
+          </ul>
+          <hr>
+          <h3 id="querycachekeylocks">QueryCacheKeyLocks</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.UseCases.Decorators</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:71</code> · Level 0 · class (static, internal)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a tiny <code>internal static</code> holder for the process-wide table of per-cache-key locks used by <a href="#cachingquerydecoratortquery-tresult">CachingQueryDecorator&lt;TQuery, TResult&gt;</a> for cache-stampede protection. It exposes a single field: a <code>ConcurrentDictionary&lt;string, SemaphoreSlim&gt;</code>.</li>
+          <li><strong>Depends on</strong>: BCL only (<code>System.Collections.Concurrent</code>, <code>System.Threading.SemaphoreSlim</code>). Consumed exclusively by <a href="#cachingquerydecoratortquery-tresult">CachingQueryDecorator&lt;TQuery, TResult&gt;</a>.</li>
+          <li><strong>Concept introduced, why the lock table lives in a non-generic class.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code> assesses whether a cache guards against the stampede (thundering herd) where many concurrent requests all miss a just-expired hot key and all run the expensive query at once. The lock table must be shared by every request for the same key, but the decorator is an open generic (<code>CachingQueryDecorator&lt;TQuery, TResult&gt;</code>): a <code>static</code> field on a generic type is per closed type, so <code>CachingQueryDecorator&lt;QueryA, ...&gt;</code> and <code>CachingQueryDecorator&lt;QueryB, ...&gt;</code> would get separate tables and never serialize on a shared key. Hoisting the table into this non-generic holder (the doc comment states this rationale, <code>CachingQueryDecorator.cs:66-70</code>) gives every closed decorator one shared table keyed by the cache-key string.</li>
+          <li><strong>Walkthrough</strong>: <code>Locks</code> (<code>CachingQueryDecorator.cs:74</code>): <code>internal static readonly ConcurrentDictionary&lt;string, SemaphoreSlim&gt;</code> built with <code>StringComparer.Ordinal</code> (exact, culture-insensitive key comparison). Entries are added on a miss and eagerly removed when no waiters remain, so the table does not grow unbounded (see the <code>finally</code> block of the decorator).</li>
+          <li><strong>Why it&#39;s built this way</strong>: it is the same per-key double-check-locking pattern as <a href="group-12-api-hosting-mapping.html#idempotencyfilter">IdempotencyFilter</a>, factored into a shared, non-generic table so the generic decorator can still coordinate across all closed instantiations.</li>
+          <li><strong>Where it&#39;s used</strong>: only by <a href="#cachingquerydecoratortquery-tresult">CachingQueryDecorator&lt;TQuery, TResult&gt;</a>, which calls <code>QueryCacheKeyLocks.Locks.GetOrAdd(...)</code> on the slow (cache-miss) path.</li>
+          </ul>
+          <hr>
+          <h3 id="profilingcommanddecoratortcommand-tresult">ProfilingCommandDecorator&lt;TCommand, TResult&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.UseCases.Decorators</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ProfilingCommandDecorator.cs:11</code> · Level 1 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a decorator that wraps command handler execution in a MiniProfiler step, so each command shows up as a timed node in a MiniProfiler trace.</li>
+          <li><strong>Depends on</strong>: <code>StackExchange.Profiling</code> (NuGet, MiniProfiler); <a href="#icommandhandlerin-tcommand-tresult">ICommandHandler&lt;in TCommand, TResult&gt;</a> (the inner handler it wraps and the interface it implements).</li>
+          <li><strong>Concept introduced, opt-in performance profiling separate from the standard pipeline.</strong> <code>[Rubric §13, Observability &amp; Operability]</code> assesses developer-facing profiling for pinpointing where time goes inside a request. This is the classic Decorator shape (a handler that holds a handler), but unlike the five standard decorators it is <strong>not</strong> registered by <code>AddApplicationDecorators()</code>. It is added only by the separate <code>AddApplicationProfiling()</code> extension (<code>DependencyInjection.cs:188</code>), which a host calls when it wants MiniProfiler; production hosts that do not enable MiniProfiler never pay for it.</li>
+          <li><strong>Walkthrough</strong>: <code>HandleAsync</code> (<code>ProfilingCommandDecorator.cs:15</code>) opens <code>using var step = MiniProfiler.Current?.Step($&quot;CommandHandler: {typeof(TCommand).Name}&quot;)</code> (<code>ProfilingCommandDecorator.cs:17</code>) then awaits the inner handler. The null-conditional <code>?.Step(...)</code> makes the whole thing a no-op when MiniProfiler is not active for the current request, so there is no cost when profiling is off; the step name carries the command type name for a readable profile.</li>
+          <li><strong>Why it&#39;s built this way</strong>: keeping profiling in its own opt-in decorator (rather than in the always-on logging decorator) means the profiler overhead and its ambient-profiler dependency only exist when a host explicitly turns it on.</li>
+          <li><strong>Where it&#39;s used</strong>: registered by <code>AddApplicationProfiling()</code> (<code>DependencyInjection.cs:186-192</code>) to wrap every command handler; only active behind the MiniProfiler middleware wired in the API layer (see <a href="group-12-api-hosting-mapping.html#miniprofilerextensions">MiniProfilerExtensions</a>).</li>
+          </ul>
+          <hr>
+          <h3 id="profilingquerydecoratortquery-tresult">ProfilingQueryDecorator&lt;TQuery, TResult&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.UseCases.Decorators</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ProfilingQueryDecorator.cs:11</code> · Level 1 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the query-side twin of <a href="#profilingcommanddecoratortcommand-tresult">ProfilingCommandDecorator&lt;TCommand, TResult&gt;</a>. Same shape, one method, wrapping an <a href="#iqueryhandlerin-tquery-tresult">IQueryHandler&lt;in TQuery, TResult&gt;</a>.</li>
+          <li><strong>Depends on</strong>: <code>StackExchange.Profiling</code> (NuGet); <a href="#iqueryhandlerin-tquery-tresult">IQueryHandler&lt;in TQuery, TResult&gt;</a>.</li>
+          <li><strong>Concept reinforced</strong>: see <a href="#profilingcommanddecoratortcommand-tresult">ProfilingCommandDecorator&lt;TCommand, TResult&gt;</a>. <code>[Rubric §13, Observability &amp; Operability]</code>. Also registered only by the opt-in <code>AddApplicationProfiling()</code> (<code>DependencyInjection.cs:189</code>), never by the standard <code>AddApplicationDecorators()</code>.</li>
+          <li><strong>Walkthrough</strong>: <code>HandleAsync</code> (<code>ProfilingQueryDecorator.cs:15</code>) opens <code>MiniProfiler.Current?.Step($&quot;QueryHandler: {typeof(TQuery).Name}&quot;)</code> (<code>ProfilingQueryDecorator.cs:17</code>), a no-op when the profiler is inactive, then awaits the inner query handler.</li>
+          <li><strong>Where it&#39;s used</strong>: registered by <code>AddApplicationProfiling()</code> to wrap every query handler; active only behind the MiniProfiler middleware.</li>
+          </ul>
+          <hr>
+          <h3 id="cachingcommanddecoratortcommand-tresult">CachingCommandDecorator&lt;TCommand, TResult&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.UseCases.Decorators</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingCommandDecorator.cs:16</code> · Level 3 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the caching decorator on the command side. It does not cache anything; it <strong>invalidates</strong> cached read data after a successful mutation, but only when the command opts in via <a href="#icacheinvalidating">ICacheInvalidating</a>.</li>
+          <li><strong>Depends on</strong>: <a href="#icacheinvalidating">ICacheInvalidating</a> (the opt-in marker exposing <code>CachePrefix</code>); <a href="group-09-caching.html#icacheservice">ICacheService</a> (the eviction mechanism); <a href="#icommandhandlerin-tcommand-tresult">ICommandHandler&lt;in TCommand, TResult&gt;</a>; <a href="group-01-result-error-handling.html#result">Result</a> (matched to detect failure).</li>
+          <li><strong>Concept introduced, invalidate-on-success, never on failure.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code> assesses whether write-side invalidation keeps read caches coherent without over-evicting. The invariant (doc comment <code>CachingCommandDecorator.cs:9-12</code>) is that eviction fires only when the command both implements <a href="#icacheinvalidating">ICacheInvalidating</a> and returned a non-failure result: a business failure did not mutate anything, so evicting valid cache entries on failure would just cost concurrent readers a needless miss. In the pipeline this decorator sits between Logging (outer) and Validating (inner), so invalidation runs after the transaction has committed (see the registration order under <a href="#icommandhandlerin-tcommand-tresult">ICommandHandler&lt;in TCommand, TResult&gt;</a>).</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>HandleAsync</code> (<code>CachingCommandDecorator.cs:21</code>): awaits <code>inner.HandleAsync(...)</code> first (<code>CachingCommandDecorator.cs:23</code>), so the mutation always runs before any cache decision.</li>
+          <li>Invalidation guard (<code>CachingCommandDecorator.cs:26</code>): <code>command is ICacheInvalidating cacheInvalidating &amp;&amp; !IsFailure(result)</code>; on both being true it calls <code>cacheService.RemoveByPrefixAsync(cacheInvalidating.CachePrefix, ...)</code> (<code>CachingCommandDecorator.cs:28</code>), evicting the whole prefix segment the command declared.</li>
+          <li><code>IsFailure</code> (<code>CachingCommandDecorator.cs:39-40</code>): <code>result is Shared.Abstractions.Result { IsFailure: true }</code>, pattern matching because <code>TResult</code> is not constrained to a <code>Result</code> type, so this handles both <code>Result</code> and <code>Result&lt;T&gt;</code> uniformly.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: the command names <em>what</em> to evict (its <code>CachePrefix</code>); the decorator plus <a href="group-09-caching.html#icacheservice">ICacheService</a> own <em>how</em>. Handlers stay free of cache-infrastructure knowledge, and the success-only rule matches the pipeline contract that a <code>Result.Failure</code> still commits but skips invalidation (<code>DependencyInjection.cs:80-84</code>).</li>
+          <li><strong>Where it&#39;s used</strong>: wraps every command handler; only commands whose <code>TCommand</code> implements <a href="#icacheinvalidating">ICacheInvalidating</a> actually evict (broadly adopted across ADC and Store write commands, see <a href="#icacheinvalidating">ICacheInvalidating</a>).</li>
+          </ul>
+          <hr>
+          <h3 id="cachingquerydecoratortquery-tresult">CachingQueryDecorator&lt;TQuery, TResult&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.UseCases.Decorators</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:16</code> · Level 3 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the read-caching decorator. On a cache hit it returns the stored result without touching the inner handler; on a miss it runs the handler once (under a per-key lock) and caches the non-failure result. It only engages for queries that opt in via <a href="#iquerycacheable">IQueryCacheable</a>.</li>
+          <li><strong>Depends on</strong>: <a href="#iquerycacheable">IQueryCacheable</a> (exposes <code>CacheKey</code> + <code>CacheDuration</code>); <a href="group-09-caching.html#icacheservice">ICacheService</a>; <a href="#iqueryhandlerin-tquery-tresult">IQueryHandler&lt;in TQuery, TResult&gt;</a>; <a href="#querycachekeylocks">QueryCacheKeyLocks</a> (the shared lock table); <a href="group-01-result-error-handling.html#result">Result</a>.</li>
+          <li><strong>Concept introduced, cache-stampede protection via per-key double-check locking.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code> assesses read-side caching and, critically, what happens when a hot key expires under load. A naive cache would let every concurrent request miss and all run the expensive query at once (the thundering-herd problem). This decorator instead uses the same double-check pattern as <a href="group-12-api-hosting-mapping.html#idempotencyfilter">IdempotencyFilter</a>: a fast lock-free hit path, and a slow path where exactly one request holds a per-key <code>SemaphoreSlim</code> from <a href="#querycachekeylocks">QueryCacheKeyLocks</a> and populates the cache while the rest wait and are then served the freshly cached entry.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li>Opt-out (<code>CachingQueryDecorator.cs:23-24</code>): <code>query is not IQueryCacheable</code> short-circuits straight to the inner handler, so non-cacheable queries pay nothing.</li>
+          <li>Fast path (<code>CachingQueryDecorator.cs:27-30</code>): a lock-free <code>cacheService.GetAsync&lt;TResult&gt;(cacheable.CacheKey, ...)</code>; a non-null hit returns immediately with no lock taken.</li>
+          <li>Slow path (<code>CachingQueryDecorator.cs:35-36</code>): <code>QueryCacheKeyLocks.Locks.GetOrAdd(cacheable.CacheKey, static _ =&gt; new SemaphoreSlim(1, 1))</code> then <code>await keyLock.WaitAsync(...)</code>, so only one request per key proceeds.</li>
+          <li>Double-check (<code>CachingQueryDecorator.cs:39-42</code>): inside the lock it re-reads the cache; a waiter that arrived while the leader populated returns the fresh entry without re-running the query.</li>
+          <li>Populate (<code>CachingQueryDecorator.cs:44-51</code>): the leader runs <code>inner.HandleAsync(...)</code> and stores the result via <code>SetAsync(cacheable.CacheKey, result, cacheable.CacheDuration, ...)</code> <strong>only</strong> when the result is not <code>Result { IsFailure: true }</code>, so failures are never cached.</li>
+          <li>Cleanup (<code>CachingQueryDecorator.cs:57-61</code>): the <code>finally</code> releases the semaphore and eagerly removes it from the table when <code>keyLock.CurrentCount == 1</code> (no waiters), keeping the lock table bounded.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: per-query <code>CacheKey</code>/<code>CacheDuration</code> (owned by the query) plus stampede-safe locking gives a correct, self-cleaning application-layer read cache. Keeping the semaphore table in the non-generic <a href="#querycachekeylocks">QueryCacheKeyLocks</a> is what lets all closed decorators share one lock per key.</li>
+          <li><strong>Where it&#39;s used</strong>: wraps every query handler, but is a no-op for all of them today. As verified for <a href="#iquerycacheable">IQueryCacheable</a>, no production query opts in (the only implementor is a unit test), and production read caching is done at the HTTP layer with ASP.NET Core OutputCache instead. This decorator is a ready, tested seam rather than an in-use one.</li>
+          <li><strong>Caveats / not-in-source</strong>: the class file also declares the <a href="#querycachekeylocks">QueryCacheKeyLocks</a> holder below it (<code>CachingQueryDecorator.cs:71</code>), which is documented as its own type in this group.</li>
+          </ul>
+          <hr>
+          <h3 id="loggingcommanddecoratortcommand-tresult">LoggingCommandDecorator&lt;TCommand, TResult&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.UseCases.Decorators</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingCommandDecorator.cs:14</code> · Level 3 · class (sealed, partial)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the observability decorator on the command side. It opens a correlated logging scope, times the full inner pipeline with a <code>Stopwatch</code>, logs start/completion/failure/exception, and records the duration into <a href="#cqrsmetrics">CqrsMetrics</a>. In the standard pipeline it is the second-outermost command decorator (just inside FeatureGate).</li>
+          <li><strong>Depends on</strong>: <a href="#cqrsmetrics">CqrsMetrics</a>; <a href="group-12-api-hosting-mapping.html#icorrelationcontext">ICorrelationContext</a> (supplies the <code>CorrelationId</code>); <a href="#icommandhandlerin-tcommand-tresult">ICommandHandler&lt;in TCommand, TResult&gt;</a>; <a href="group-01-result-error-handling.html#result">Result</a>; <code>Microsoft.Extensions.Logging</code> (BCL/NuGet).</li>
+          <li><strong>Concept introduced, structured logging + metrics as a single cross-cutting stage.</strong> <code>[Rubric §13, Observability &amp; Operability]</code> assesses whether every command emits correlated, structured logs and a latency/outcome metric without per-handler boilerplate; <code>[Rubric §10, Cross-Cutting Concerns]</code> assesses factoring that out of business logic. Every command is logged and measured uniformly regardless of whether it is cached, validated, or transactional, because this decorator sits above those in the chain. <code>[Rubric §12, Performance &amp; Scalability]</code> also applies: the log paths use the <code>[LoggerMessage]</code> source generator and a source-generated scope, so the hot path avoids interpolation and per-call dictionary boxing.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li>Scope (<code>LoggingCommandDecorator.cs:25</code>): <code>using (BeginCommandScope(logger, commandName, correlationId))</code> opens a structured scope so inner decorators and the handler share <code>CommandName</code> + <code>CorrelationId</code>. <code>BeginCommandScope</code> is a <code>static readonly</code> <code>LoggerMessage.DefineScope&lt;string, string&gt;(...)</code> (<code>LoggingCommandDecorator.cs:70-71</code>), the allocation-light alternative to an anonymous-dictionary <code>BeginScope</code>.</li>
+          <li>Start (<code>LoggingCommandDecorator.cs:27</code>): <code>LogCommandStarted</code> at <code>Debug</code> (<code>LoggingCommandDecorator.cs:75</code>), deliberately not <code>Information</code> (the completion line already carries name and duration, and two <code>Information</code> rows per command would double ingestion cost, per the inline comment).</li>
+          <li>Timing + outcome (<code>LoggingCommandDecorator.cs:29-30</code>): <code>Stopwatch.StartNew()</code>, <code>outcome = &quot;completed&quot;</code> default.</li>
+          <li>Failure branch (<code>LoggingCommandDecorator.cs:36-41</code>): on <code>Result { IsFailure: true }</code>, sets <code>outcome = &quot;failed&quot;</code>, builds an error summary from <code>Errors</code>, and logs <code>LogCommandFailed</code> at <code>Warning</code> (a business failure is not an exception).</li>
+          <li>Success (<code>LoggingCommandDecorator.cs:44</code>): <code>LogCommandCompleted</code> at <code>Information</code>.</li>
+          <li>Exception branch (<code>LoggingCommandDecorator.cs:49-55</code>): <code>outcome = &quot;exception&quot;</code>, <code>LogCommandException</code> at <code>Error</code>, then rethrow.</li>
+          <li>Metric (<code>LoggingCommandDecorator.cs:57-62</code>): the <code>finally</code> always records <code>CqrsMetrics.CommandDuration</code> tagged <code>command</code> and <code>outcome</code>, so a metric point is emitted even on a throw.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: <code>partial class</code> + <code>[LoggerMessage]</code> (<code>LoggingCommandDecorator.cs:75-85</code>) is the .NET-recommended high-performance structured logging shape; the three-valued <code>outcome</code> tag (<code>&quot;completed&quot;</code> / <code>&quot;failed&quot;</code> / <code>&quot;exception&quot;</code>) lets a dashboard separate success from domain failure from a genuine exception on one histogram.</li>
+          <li><strong>Where it&#39;s used</strong>: registered by <code>AddApplicationDecorators()</code> (<code>DependencyInjection.cs:97</code>) to wrap every command handler.</li>
+          </ul>
+          <hr>
+          <h3 id="loggingquerydecoratortquery-tresult">LoggingQueryDecorator&lt;TQuery, TResult&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.UseCases.Decorators</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingQueryDecorator.cs:13</code> · Level 3 · class (sealed, partial)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the query-side twin of <a href="#loggingcommanddecoratortcommand-tresult">LoggingCommandDecorator&lt;TCommand, TResult&gt;</a>: correlated scope, <code>Stopwatch</code> timing, completion/failure/exception logging, and a <a href="#cqrsmetrics">CqrsMetrics</a> duration recording.</li>
+          <li><strong>Depends on</strong>: <a href="#cqrsmetrics">CqrsMetrics</a>; <a href="group-12-api-hosting-mapping.html#icorrelationcontext">ICorrelationContext</a>; <a href="#iqueryhandlerin-tquery-tresult">IQueryHandler&lt;in TQuery, TResult&gt;</a>; <a href="group-01-result-error-handling.html#result">Result</a>; <code>Microsoft.Extensions.Logging</code>.</li>
+          <li><strong>Concept reinforced</strong>: see <a href="#loggingcommanddecoratortcommand-tresult">LoggingCommandDecorator&lt;TCommand, TResult&gt;</a>. <code>[Rubric §13, Observability &amp; Operability]</code> and <code>[Rubric §10, Cross-Cutting Concerns]</code>.</li>
+          <li><strong>Walkthrough</strong>: <code>HandleAsync</code> (<code>LoggingQueryDecorator.cs:19</code>) opens a <code>BeginScope</code> with a <code>Dictionary</code> keyed <code>CorrelationId</code> + <code>QueryName</code> (<code>LoggingQueryDecorator.cs:24-28</code>), times the inner handler, and in the <code>finally</code> records <code>CqrsMetrics.QueryDuration</code> tagged <code>query</code> + <code>outcome</code> (<code>LoggingQueryDecorator.cs:59-63</code>). Two differences from the command side are worth noting: (1) query <strong>completion</strong> logs at <code>Debug</code> (<code>LoggingQueryDecorator.cs:67</code>), not <code>Information</code>, since reads are far more frequent than writes; and (2) the scope uses a plain <code>Dictionary</code> rather than the source-generated <code>DefineScope</code> the command decorator uses. Failure still logs <code>Warning</code> (<code>LoggingQueryDecorator.cs:70</code>) and exception <code>Error</code> (<code>LoggingQueryDecorator.cs:73</code>).</li>
+          <li><strong>Where it&#39;s used</strong>: registered by <code>AddApplicationDecorators()</code> (<code>DependencyInjection.cs:102</code>) to wrap every query handler.</li>
+          </ul>
+          <hr>
+          <h3 id="resultfailurefactory">ResultFailureFactory</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.UseCases.Decorators</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ResultFailureFactory.cs:11</code> · Level 3 · class (static, internal)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: an <code>internal static</code> helper that builds a cached delegate turning an <code>IEnumerable&lt;Error&gt;</code> into a <code>TResult</code> failure, working for both non-generic <a href="group-01-result-error-handling.html#result">Result</a> and generic <code>Result&lt;T&gt;</code>, without constraining the caller&#39;s <code>TResult</code>.</li>
+          <li><strong>Depends on</strong>: <a href="group-01-result-error-handling.html#result">Result</a> and <a href="group-01-result-error-handling.html#error">Error</a>; BCL (<code>System.Linq.Expressions</code>, <code>System.Reflection</code>).</li>
+          <li><strong>Concept introduced, short-circuiting an unconstrained generic pipeline.</strong> <code>[Rubric §15, Best Practices &amp; Code Quality]</code> assesses how the codebase solves an awkward generic problem cleanly. The decorators need to <em>fail</em> a handler call without running the inner handler, but their <code>TResult</code> is an open type parameter that is either <code>Result</code> or <code>Result&lt;T&gt;</code>; you cannot write <code>return Result.Failure&lt;T&gt;(...)</code> when you do not know <code>T</code>. Constraining <code>TResult : Result</code> would break the handler interface contract, so instead this factory isolates the reflection to one place and, for the generic branch, compiles it into a delegate so the per-call cost is a plain invocation, not <code>MethodInfo.Invoke</code>.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>Build&lt;TResult&gt;()</code> (<code>ResultFailureFactory.cs:20</code>): the single entry point.</li>
+          <li>Non-generic branch (<code>ResultFailureFactory.cs:22-24</code>): when <code>TResult == Result</code>, returns <code>errors =&gt; (TResult)(object)Result.Failure(errors)</code>.</li>
+          <li>Generic branch (<code>ResultFailureFactory.cs:27-41</code>): when <code>TResult</code> is a closed <code>Result&lt;&gt;</code>, it reflects the static generic <code>Result.Failure</code> overload taking <code>IEnumerable&lt;Error&gt;</code> (<code>ResultFailureFactory.cs:30-36</code>), closes it over the inner type, and compiles an <code>Expression.Lambda&lt;Func&lt;IEnumerable&lt;Error&gt;, TResult&gt;&gt;</code> (<code>ResultFailureFactory.cs:38-40</code>). The reflection and compilation happen once per closed type, at warm-up.</li>
+          <li>Guard (<code>ResultFailureFactory.cs:43-45</code>): any other <code>TResult</code> throws <code>InvalidOperationException</code> naming the unsupported type.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: compiling the expression once per type keeps the short-circuit path allocation-light and reflection-free after warm-up, and centralizes the one piece of generic reflection so the decorators stay readable.</li>
+          <li><strong>Where it&#39;s used</strong>: cached into a <code>static readonly CreateFailure</code> field by <a href="#featuregatecommanddecoratortcommand-tresult">FeatureGateCommandDecorator&lt;TCommand, TResult&gt;</a>, <a href="#featuregatequerydecoratortquery-tresult">FeatureGateQueryDecorator&lt;TQuery, TResult&gt;</a>, and <a href="#validatingcommanddecoratortcommand-tresult">ValidatingCommandDecorator&lt;TCommand, TResult&gt;</a>.</li>
+          </ul>
+          <hr>
+          <h3 id="featuregatecommanddecoratortcommand-tresult">FeatureGateCommandDecorator&lt;TCommand, TResult&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.UseCases.Decorators</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/FeatureGateCommandDecorator.cs:18</code> · Level 4 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the outermost standard command decorator. When a command implements <a href="#ifeaturegated">IFeatureGated</a> and its feature flag is off, it short-circuits with a <code>NotFound</code> failure, before any logging, caching, validation, or transaction work.</li>
+          <li><strong>Depends on</strong>: <a href="#ifeaturegated">IFeatureGated</a> (the opt-in marker exposing <code>FeatureName</code>); <a href="group-01-result-error-handling.html#error">Error</a> / <a href="group-01-result-error-handling.html#errortype">ErrorType</a>; <a href="#resultfailurefactory">ResultFailureFactory</a>; <a href="#icommandhandlerin-tcommand-tresult">ICommandHandler&lt;in TCommand, TResult&gt;</a>; <code>Microsoft.FeatureManagement.IFeatureManager</code> (NuGet).</li>
+          <li><strong>Concept introduced, feature-flag gating in the pipeline.</strong> <code>[Rubric §10, Cross-Cutting Concerns]</code> assesses centralized feature-flag enforcement rather than a flag check duplicated in every handler. Registered as the outermost command decorator (<code>DependencyInjection.cs:98</code>), a disabled feature is rejected first, so no downstream work happens. Commands that do not implement <a href="#ifeaturegated">IFeatureGated</a> pass through via a type test at no cost. <code>[Rubric §12, Performance &amp; Scalability]</code> also applies through the cached <code>CreateFailure</code> delegate.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>CreateFailure</code> (<code>FeatureGateCommandDecorator.cs:27</code>): <code>static readonly Func&lt;IEnumerable&lt;Error&gt;, TResult&gt;</code> built once per closed type via <a href="#resultfailurefactory">ResultFailureFactory</a>.<code>Build&lt;TResult&gt;()</code>.</li>
+          <li><code>HandleAsync</code> (<code>FeatureGateCommandDecorator.cs:30</code>): <code>command is not IFeatureGated</code> passes straight through (<code>FeatureGateCommandDecorator.cs:32</code>); otherwise <code>await featureManager.IsEnabledAsync(featureGated.FeatureName)</code> (<code>FeatureGateCommandDecorator.cs:35</code>, async to support remote/config-backed flag stores). Enabled runs the inner handler; disabled returns <code>CreateFailure([Error.NotFoundError(&quot;Feature.Disabled&quot;, ...)])</code> (<code>FeatureGateCommandDecorator.cs:38-40</code>).</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: putting the gate in a decorator means handlers never inject <code>IFeatureManager</code>; a command opts in simply by implementing <a href="#ifeaturegated">IFeatureGated</a>. Returning <code>NotFound</code> (not <code>Forbidden</code>) tells the client the endpoint &quot;does not currently exist&quot; rather than &quot;is forbidden to you&quot;.</li>
+          <li><strong>Where it&#39;s used</strong>: registered by <code>AddApplicationDecorators()</code> as the outermost decorator on every command handler; engages only for commands implementing <a href="#ifeaturegated">IFeatureGated</a>.</li>
+          </ul>
+          <hr>
+          <h3 id="featuregatequerydecoratortquery-tresult">FeatureGateQueryDecorator&lt;TQuery, TResult&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.UseCases.Decorators</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/FeatureGateQueryDecorator.cs:18</code> · Level 4 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the query-side twin of <a href="#featuregatecommanddecoratortcommand-tresult">FeatureGateCommandDecorator&lt;TCommand, TResult&gt;</a>: the outermost standard query decorator, rejecting a gated query with <code>NotFound</code> when its feature flag is off.</li>
+          <li><strong>Depends on</strong>: <a href="#ifeaturegated">IFeatureGated</a>; <a href="group-01-result-error-handling.html#error">Error</a> / <a href="group-01-result-error-handling.html#errortype">ErrorType</a>; <a href="#resultfailurefactory">ResultFailureFactory</a>; <a href="#iqueryhandlerin-tquery-tresult">IQueryHandler&lt;in TQuery, TResult&gt;</a>; <code>Microsoft.FeatureManagement</code>.</li>
+          <li><strong>Concept reinforced</strong>: identical pattern to <a href="#featuregatecommanddecoratortcommand-tresult">FeatureGateCommandDecorator&lt;TCommand, TResult&gt;</a>. <code>[Rubric §10, Cross-Cutting Concerns]</code>. The doc comment (<code>FeatureGateQueryDecorator.cs:12-14</code>) says &quot;before logging or caching work&quot;: queries have no validation or transaction stage, so the list of things it front-runs is shorter.</li>
+          <li><strong>Walkthrough</strong>: <code>CreateFailure</code> (<code>FeatureGateQueryDecorator.cs:27</code>) cached per type; <code>HandleAsync</code> (<code>FeatureGateQueryDecorator.cs:30</code>) type-tests <a href="#ifeaturegated">IFeatureGated</a>, calls <code>IsEnabledAsync</code> (<code>FeatureGateQueryDecorator.cs:35</code>), and returns the same <code>Error.NotFoundError(&quot;Feature.Disabled&quot;, ...)</code> failure when disabled (<code>FeatureGateQueryDecorator.cs:38-40</code>).</li>
+          <li><strong>Where it&#39;s used</strong>: registered by <code>AddApplicationDecorators()</code> (<code>DependencyInjection.cs:103</code>) as the outermost decorator on every query handler.</li>
+          </ul>
+          <hr>
+          <h3 id="validatingcommanddecoratortcommand-tresult">ValidatingCommandDecorator&lt;TCommand, TResult&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.UseCases.Decorators</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/ValidatingCommandDecorator.cs:24</code> · Level 4 · class (sealed, partial)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the decorator that runs FluentValidation against a command before the handler executes, turning validation failures into a <a href="group-01-result-error-handling.html#result">Result</a> failure so the handler is never called with invalid input. It sits between Caching (outer) and Transactional (inner).</li>
+          <li><strong>Depends on</strong>: <code>FluentValidation.IValidator&lt;TCommand&gt;</code> (NuGet, resolved from DI); <a href="group-01-result-error-handling.html#error">Error</a>; <a href="#resultfailurefactory">ResultFailureFactory</a>; <a href="#icommandhandlerin-tcommand-tresult">ICommandHandler&lt;in TCommand, TResult&gt;</a>; the <code>ToErrors</code> extension (<code>MMCA.Common.Application.Extensions</code>).</li>
+          <li><strong>Concept introduced, automatic validation as a pipeline stage.</strong> <code>[Rubric §24, Forms, Validation &amp; UX Safety]</code> assesses whether server-side validation is applied consistently rather than hand-called per handler; <code>[Rubric §1, SOLID]</code> (SRP) assesses that validation is this decorator&#39;s single job and not the handler&#39;s. Placing it before <a href="#transactionalcommanddecoratortcommand-tresult">TransactionalCommandDecorator&lt;TCommand, TResult&gt;</a> (doc comment <code>ValidatingCommandDecorator.cs:17-20</code>) means a syntactically invalid command never opens a database transaction. Commands with no registered validator pass straight through, so validation is present-when-registered, not a hard requirement.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>_validator</code> (<code>ValidatingCommandDecorator.cs:29</code>): <code>validators.FirstOrDefault()</code>, the first registered <code>IValidator&lt;TCommand&gt;</code> or null, resolved once at construction.</li>
+          <li><code>CreateFailure</code> (<code>ValidatingCommandDecorator.cs:36</code>): the cached <a href="#resultfailurefactory">ResultFailureFactory</a> delegate.</li>
+          <li><code>HandleAsync</code> (<code>ValidatingCommandDecorator.cs:39</code>): a null <code>_validator</code> passes through (<code>ValidatingCommandDecorator.cs:41-44</code>); otherwise <code>await _validator.ValidateAsync(command, ...)</code> (<code>ValidatingCommandDecorator.cs:46</code>), and a valid result passes through (<code>ValidatingCommandDecorator.cs:47-50</code>).</li>
+          <li>Failure (<code>ValidatingCommandDecorator.cs:52-55</code>): <code>validationResult.ToErrors(typeof(TCommand).Name)</code> converts FluentValidation failures into an <a href="group-01-result-error-handling.html#error">Error</a> list, logs at <code>Debug</code>, and returns <code>CreateFailure(errors)</code>.</li>
+          <li>Logging (<code>ValidatingCommandDecorator.cs:58-67</code>): <code>partial</code> + <code>[LoggerMessage]</code> generates the low-allocation <code>LogValidationFailure(logger, commandName, errorCount)</code>.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: it removes the &quot;inject <code>IValidator&lt;T&gt;</code> and call <code>ValidateAsync</code> by hand&quot; boilerplate from every handler; short-circuiting before the transaction stage spares the database from work on invalid input; failing to a <code>Result</code> (not throwing) keeps validation on the same error channel as domain rules.</li>
+          <li><strong>Where it&#39;s used</strong>: registered by <code>AddApplicationDecorators()</code> (<code>DependencyInjection.cs:95</code>); every command with a matching <code>IValidator&lt;TCommand&gt;</code> in DI (including the auto-wired <code>CommandRequestValidator&lt;TCommand, TRequest&gt;</code> from <code>ScanModuleApplicationServices</code>) is validated here.</li>
+          </ul>
+          <hr>
+          <h3 id="transactionalcommanddecoratortcommand-tresult">TransactionalCommandDecorator&lt;TCommand, TResult&gt;</h3>
+          <p><a id="transactionalcommanddecorator"></a></p>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.UseCases.Decorators</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/TransactionalCommandDecorator.cs:18</code> · Level 8 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the innermost standard command decorator (closest to the concrete handler). It wraps the handler in a database transaction only when the command opts in via <a href="#itransactional">ITransactional</a>; non-transactional commands pass straight through.</li>
+          <li><strong>Depends on</strong>: <a href="#itransactional">ITransactional</a> (the opt-in marker); <a href="group-07-persistence-ef-core.html#iunitofwork">IUnitOfWork</a> (supplies <code>ExecuteInTransactionAsync</code>); <a href="#icommandhandlerin-tcommand-tresult">ICommandHandler&lt;in TCommand, TResult&gt;</a>.</li>
+          <li><strong>Concept introduced, declarative transaction boundaries via a marker.</strong> <code>[Rubric §2, Design Patterns]</code> assesses the deliberate use of the Decorator pattern; <code>[Rubric §10, Cross-Cutting Concerns]</code> assesses handling transactions once rather than per handler; <code>[Rubric §8, Data Architecture]</code> assesses deliberate transaction boundaries. The mechanism is small: a decorator that <em>is</em> an <code>ICommandHandler</code> holding an inner <code>ICommandHandler</code>. Because it is registered innermost (<code>DependencyInjection.cs:94</code>), the transaction opens closest to the handler and inside cache invalidation, so a business <code>Result.Failure</code> still commits (no data changed) while invalidation is skipped by the caching decorator outside it (the ordering contract described under <a href="#icommandhandlerin-tcommand-tresult">ICommandHandler&lt;in TCommand, TResult&gt;</a>).</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>HandleAsync</code> (<code>TransactionalCommandDecorator.cs:23</code>): <code>if (command is not ITransactional) return await inner.HandleAsync(...)</code> (<code>TransactionalCommandDecorator.cs:26-27</code>), so most commands skip transaction machinery entirely.</li>
+          <li>Transactional path (<code>TransactionalCommandDecorator.cs:29-31</code>): otherwise <code>unitOfWork.ExecuteInTransactionAsync(ct =&gt; inner.HandleAsync(command, ct), cancellationToken)</code>, which commits on success and rolls back on any exception before it propagates.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: opt-in via a marker means only handlers that mutate multiple aggregates (or write an aggregate plus an outbox row) pay for a transaction, and the boundary is declared on the command (a domain-adjacent type), not buried in handler code. Because transactions are per physical data source with no two-phase commit, cross-source consistency is the outbox&#39;s job, not this decorator&#39;s (ADR-006). The pipeline composition (Decorator over a base class) is what lets each concern live in its own type and be ordered at registration (ADR-014).</li>
+          <li><strong>Where it&#39;s used</strong>: registered by <code>AddApplicationDecorators()</code> as the innermost command decorator; transparently active for any <a href="#itransactional">ITransactional</a> command across both apps (for example handlers that create an aggregate and enqueue outbox events atomically).</li>
+          <li><strong>Caveats / not-in-source</strong>: the framework&#39;s generic <code>DeleteEntityHandler</code> is deliberately <strong>not</strong> <a href="#itransactional">ITransactional</a>: a soft-delete that raises domain events relies on <code>SaveChangesAsync</code> writing data and outbox rows in one transaction rather than on this decorator (see the note on <code>DeleteEntityHandler</code> in the sibling section for this group).</li>
+          </ul>
+          <hr>
+          <p><a href="group-04-events-outbox.html">⬅ Domain &amp; Integration Events + Outbox Dual-Dispatch</a>  •  <a href="index.html">Index</a>  •  <a href="group-06-validation.html">Validation ➡</a></p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

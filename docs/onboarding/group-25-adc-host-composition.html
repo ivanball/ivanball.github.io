@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>24. ADC Application Host, UI Shell &amp; Cross-Module Composition · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="What this chapter covers. Everything in the earlier ADC modules, Conference, Engagement, Identity, Notification, is consumed somewhere. This chapter is…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/group-25-adc-host-composition.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="24. ADC Application Host, UI Shell &amp; Cross-Module Composition">
+  <meta property="og:description" content="What this chapter covers. Everything in the earlier ADC modules, Conference, Engagement, Identity, Notification, is consumed somewhere. This chapter is…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/group-25-adc-host-composition.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/onboarding/index.html">Onboarding Guide</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>Guide contents</summary>
+        <nav class="doc-nav" aria-label="Onboarding Guide">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="00-dependency-manifest.html">Phase 1: Dependency Manifest &amp; Leveling</a></li>
+        <li><a href="00-group-taxonomy.html">Phase 1b - Functional Group Taxonomy</a></li>
+        <li><a href="00-inventory.html">Phase 0: Type Inventory</a></li>
+        <li><a href="00-primer.html">Primer, the concepts, stack, and conventions you need first</a></li>
+        <li><a href="group-01-result-error-handling.html">1. Result &amp; Error Handling</a></li>
+        <li><a href="group-02-domain-building-blocks.html">2. Domain Building Blocks (Entities, Value Objects, Aggregates)</a></li>
+        <li><a href="group-03-querying-specifications.html">3. Querying: Specifications, Filtering &amp; the Entity Query Service</a></li>
+        <li><a href="group-04-events-outbox.html">4. Domain &amp; Integration Events + Outbox Dual-Dispatch</a></li>
+        <li><a href="group-05-cqrs-pipeline.html">5. CQRS: Commands, Queries &amp; the Decorator Pipeline</a></li>
+        <li><a href="group-06-validation.html">6. Validation</a></li>
+        <li><a href="group-07-persistence-ef-core.html">7. Persistence &amp; EF Core</a></li>
+        <li><a href="group-08-auth.html">8. Authentication &amp; Authorization</a></li>
+        <li><a href="group-09-caching.html">9. Caching</a></li>
+        <li><a href="group-10-notifications.html">10. Notifications (Push + In-App Inbox + Email)</a></li>
+        <li><a href="group-11-navigation-populators.html">11. Navigation Metadata &amp; Populators (EF-decoupled eager loading)</a></li>
+        <li><a href="group-12-api-hosting-mapping.html">12. API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</a></li>
+        <li><a href="group-13-grpc-contracts.html">13. gRPC &amp; Inter-Service Contracts</a></li>
+        <li><a href="group-14-module-system-composition.html">14. Module System, Composition &amp; Configuration</a></li>
+        <li><a href="group-15-common-ui-framework.html">15. Common UI Framework (MudBlazor components, theme, base pages)</a></li>
+        <li><a href="group-16-aspire-orchestration.html">16. Aspire Orchestration &amp; Service Defaults</a></li>
+        <li><a href="group-17-conference-domain.html">17. ADC Conference - Domain Model &amp; Module Contracts</a></li>
+        <li><a href="group-18-conference-application.html">18. ADC Conference - Application &amp; Use Cases</a></li>
+        <li><a href="group-19-conference-infrastructure.html">19. ADC Conference - Infrastructure &amp; Persistence</a></li>
+        <li><a href="group-20-conference-api-grpc.html">20. ADC Conference - API, gRPC Contracts &amp; Service Host</a></li>
+        <li><a href="group-21-conference-ui.html">21. ADC Conference - UI</a></li>
+        <li><a href="group-22-engagement-module.html">22. ADC Engagement Module (Session Bookmarks)</a></li>
+        <li><a href="group-23-engagement-live-layer.html">23. ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></li>
+        <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
+        <li><a href="group-25-adc-host-composition.html" aria-current="page">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
+        <li><a href="group-26-testing-infrastructure.html">26. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
+        <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
+        <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
+        <li><a href="devops-runbooks.html">Operational Scripts &amp; Runbooks</a></li>
+        <li><a href="devops-testing.html">Testing Architecture &amp; Solution Composition</a></li>
+        <li><a href="99-coverage-audit.html">Phase 4, Coverage Audit</a></li>
+        <li><a href="CONCEPT-MAPS.html">MMCA Concept &amp; Pattern Maps</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Onboarding guide</p>
+          <h1 id="24-adc-application-host-ui-shell--cross-module-composition">24. ADC Application Host, UI Shell &amp; Cross-Module Composition</h1>
+          <p><strong>What this chapter covers.</strong> Everything in the earlier ADC modules, Conference, Engagement,
+          Identity, Notification, is <em>consumed</em> somewhere. This chapter is that somewhere: the <strong>client tier</strong>
+          of ADC, the code that turns the shared, per-module Razor Class Libraries (<code>MMCA.ADC.{Module}.UI</code>) and
+          the framework UI package (<a href="group-15-common-ui-framework.html"><code>MMCA.Common.UI</code></a>) into actually running
+          applications and composes every conference module into one coherent shell. Two application shapes are
+          built from the same components: a <strong>Blazor Web</strong> app (Server + WebAssembly) and a <strong>.NET MAUI</strong> native
+          app for Android, iOS, macOS, and Windows. The types this group owns are deliberately thin: the
+          <a href="#adchome"><code>ADCHome</code></a> landing page and its page-local carrier records, three per-host
+          <a href="#formfactor"><code>FormFactor</code></a> implementations, the MAUI <a href="#mauitokenstorageservice"><code>MauiTokenStorageService</code></a>,
+          the <a href="#adchomepagecontent"><code>ADCHomePageContent</code></a> home-content adapter, and the MAUI bootstrap chain
+          (<a href="#mauiprogram"><code>MauiProgram</code></a>, <a href="#app"><code>App</code></a>, <a href="#mainpage"><code>MainPage</code></a>, and the per-OS entry points
+          <a href="#mainactivity"><code>MainActivity</code></a>/<a href="#mainapplication"><code>MainApplication</code></a>/<a href="#appdelegate"><code>AppDelegate</code></a>/
+          <a href="#program"><code>Program</code></a>/the WinUI <a href="#app"><code>App</code></a>). The heavy lifting lives below them in the modules and
+          in <a href="group-15-common-ui-framework.html"><code>MMCA.Common.UI</code></a>; this chapter is about <strong>wiring and hosting</strong>,
+          the half of &quot;UI architecture&quot; the modules cannot do for themselves.</p>
+          <p><strong>Three hosts, one shared component set.</strong> The central idea, taught in
+          <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2, &quot;Write-once UI, render everywhere&quot;</a>,
+          is that a page is authored <strong>once</strong> as a Razor component in a module&#39;s UI library and then rendered by
+          every host without per-platform reimplementation. There are three host projects under
+          <code>MMCA.ADC/Source/Hosts/UI/</code>: <code>MMCA.ADC.UI.Web</code> (the Blazor <strong>Server</strong> host, SSR prerender plus the
+          interactive Server circuit), <code>MMCA.ADC.UI.Web.Client</code> (the Blazor <strong>WebAssembly</strong> client, compiled to
+          run in the browser), and <code>MMCA.ADC.UI</code> (the <strong>.NET MAUI</strong> host, which packages the same components into
+          a native app that hosts them in a <code>BlazorWebView</code>). <code>[Rubric §18, UI Architecture]</code> assesses cohesive,
+          composable components and a clean host/shell split; <code>[Rubric §22, Responsive &amp; Cross-Browser/Device]</code>
+          assesses that one UI renders correctly across browsers and devices. Both are embodied by this
+          single-component-set, multi-host design: adding a platform is &quot;add a host that references the shared
+          libraries,&quot; not &quot;fork the UI.&quot;</p>
+          <p><strong>The shared-vs-host seam: interfaces in Common, implementations per host.</strong> The reason one component
+          can run in three places is that everything platform-specific hides behind interfaces declared in
+          <a href="group-15-common-ui-framework.html"><code>MMCA.Common.UI</code></a>. A component never asks &quot;am I on MAUI?&quot;; it asks an
+          injected abstraction, and each host supplies the adapter. <code>[Rubric §1, SOLID]</code> (Dependency Inversion)
+          and <code>[Rubric §3, Clean Architecture]</code> are visible right here: the shared library defines the <em>ports</em>,
+          the host defines the <em>adapters</em>, and the framework depends on nothing host-specific. This group holds
+          three of those adapters. <strong>Form factor</strong>: <a href="group-15-common-ui-framework.html#iformfactor"><code>IFormFactor</code></a>
+          lets a component report its host and OS without <code>#ifdef</code>, and each host registers its own
+          <a href="#formfactor"><code>FormFactor</code></a> (the Server one returns the literal <code>&quot;Web&quot;</code>,
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Services/FormFactor.cs:12</code>; the WASM one returns
+          <code>&quot;WebAssembly&quot;</code>, <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Services/FormFactor.cs:12</code>; the MAUI
+          one returns the live <code>DeviceInfo.Idiom</code>/<code>DeviceInfo.Platform</code>,
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Services/FormFactor.cs:12,15</code>). <strong>Home-page content</strong>:
+          <a href="group-15-common-ui-framework.html#ihomepagecontent"><code>IHomePageContent</code></a> lets the shared <code>/</code> route render
+          an app-specific landing page via <code>DynamicComponent</code>, and <a href="#adchomepagecontent"><code>ADCHomePageContent</code></a>
+          points it at ADC&#39;s <a href="#adchome"><code>ADCHome</code></a>
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHomePageContent.cs:10-12</code>). <strong>Token
+          storage</strong>: <a href="group-15-common-ui-framework.html#itokenstorageservice"><code>ITokenStorageService</code></a> abstracts
+          where JWTs live; this group supplies the MAUI implementation
+          <a href="#mauitokenstorageservice"><code>MauiTokenStorageService</code></a>, while the browser hosts get
+          <a href="group-15-common-ui-framework.html#servertokenstorageservice"><code>ServerTokenStorageService</code></a> and
+          <a href="group-15-common-ui-framework.html#wasmtokenstorageservice"><code>WasmTokenStorageService</code></a> from G15. OAuth
+          provider availability (<a href="group-15-common-ui-framework.html#ioauthuisettings"><code>IOAuthUISettings</code></a>) and the
+          culture/theme plumbing also sit behind Common interfaces, described in
+          <a href="group-15-common-ui-framework.html">Group 15</a>.</p>
+          <p><strong>The landing page: a two-tier content model.</strong> <a href="#adchome"><code>ADCHome</code></a> is the conference landing page:
+          a live countdown, the keynote, a track grid, sponsor tiers, and venue/directions. It is authored
+          <strong>twice</strong>, once for the web hosts (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHome.razor.cs:12</code>,
+          shared by Server prerender and WASM interactive) and once for MAUI
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Pages/ADCHome.razor.cs:12</code>), because each host tree compiles the
+          component into its own render pipeline; the duplication is structural, not a design preference. Its
+          data splits into two tiers, and the page-local records model that split. <strong>Dynamic</strong> data (the
+          published event&#39;s name, dates, venue) is fetched from the public <code>events</code> API into
+          <a href="#adceventinfo"><code>ADCEventInfo</code></a>
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHome.razor.cs:163</code>), wrapped by the
+          <a href="#adccollectionresult"><code>ADCCollectionResult</code></a> envelope (<code>ADCHome.razor.cs:161</code>), with
+          <a href="#eventphase"><code>EventPhase</code></a> (<code>Upcoming</code>/<code>Live</code>/<code>Ended</code>, <code>ADCHome.razor.cs:28</code>) driving the countdown
+          state machine. <strong>Static</strong> data that changes once per conference year, the
+          <a href="#keynotespeakerinfo"><code>KeynoteSpeakerInfo</code></a> (<code>ADCHome.razor.cs:269</code>), the twelve-entry
+          <a href="#conferencetrackinfo"><code>ConferenceTrackInfo</code></a> grid (<code>ADCHome.razor.cs:270</code>), and the
+          <a href="#sponsorinfo"><code>SponsorInfo</code></a>/<a href="#sponsortierinfo"><code>SponsorTierInfo</code></a> lists (<code>ADCHome.razor.cs:271-272</code>),
+          is baked into the binary as <code>static readonly</code> arrays (<code>ADCHome.razor.cs:176,188,217</code>). The payoff is
+          resilience: keynote, tracks, and sponsors render immediately from memory even when the event-date API
+          is slow or cold, and a <code>catch (HttpRequestException)</code> falls back to hard-coded defaults
+          (<code>ADCHome.razor.cs:80-83</code>) rather than failing the page. <code>[Rubric §18, UI Architecture]</code> and
+          <code>[Rubric §19, State Management &amp; Data Flow]</code> are both at play: the page owns minimal state, separates
+          fetched from authored content, and degrades gracefully.</p>
+          <p><strong>Prerender safety and the two <code>ADCHome</code> copies.</strong> The web copy of <code>ADCHome</code> guards its initialization
+          with <code>if (!RendererInfo.IsInteractive)</code> (<code>ADCHome.razor.cs:53</code>): during SSR prerender it skips both the
+          backend fetch and the ticking countdown timer, because an un-timed server-side call to a cold or
+          unreachable backend would otherwise block the prerender (and therefore the page load and the
+          post-login <code>NavigateTo(&quot;/&quot;)</code>) indefinitely. The static fallback renders immediately; the interactive
+          pass loads the real event and starts the one-second timer (<code>ADCHome.razor.cs:60-65</code>). The MAUI copy has
+          <strong>no</strong> such guard (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Pages/ADCHome.razor.cs:44-53</code>) because the
+          <code>BlazorWebView</code> is always interactive and never prerenders. This is a real, verifiable difference
+          between the two files, and the reason the &quot;one component, two hosts&quot; story is not literally one source
+          file here.</p>
+          <p><strong>Internationalization of the shell (ADR-027).</strong> The landing page is a small, honest case study in
+          where localization applies and where it deliberately does not. UI <strong>chrome</strong> (the fallback event
+          description, the hero date format, the &quot;Platinum Sponsors&quot; heading and its singular/plural word order)
+          resolves through the <code>IStringLocalizer</code> <code>L[...]</code> indexer keyed by resource strings, so it follows the
+          selected culture (<code>ADCHome.razor.cs:37,148,266</code>), matching the multi-locale en-US + es stance of
+          ADR-027 (see <a href="00-primer.html#6-the-34-category-architecture-evaluation-lens">primer §6&#39;s §27 note</a>).
+          Editorial <strong>content</strong>, the conference brand name &quot;Atlanta Cloud + AI Conference&quot;
+          (<code>ADCHome.razor.cs:35</code>), the postal venue address (<code>ADCHome.razor.cs:39</code>), and the keynote bio, track
+          catalog, and sponsor names (<code>ADCHome.razor.cs:174-243</code>), stays English and is annotated in source with
+          explicit <code>// i18n: allow</code> comments explaining the exemption (this is the same English-only content the
+          API would otherwise serve). <code>[Rubric §27, Internationalization &amp; Localization]</code> assesses externalized
+          strings and culture-aware formatting; this page shows the framework&#39;s rule in miniature: localize the
+          chrome, exempt the branded/editorial data on purpose, and mark the exemption in source.</p>
+          <p><strong>The MAUI host: bootstrap, WebView, and the back button.</strong> The MAUI side is a thin shell around the
+          shared components. Every platform entry point does nothing but call
+          <a href="#mauiprogram"><code>MauiProgram</code></a><code>.CreateMauiApp()</code>: <a href="#mainactivity"><code>MainActivity</code></a> launches the Android
+          activity (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:13</code>) and
+          <a href="#mainapplication"><code>MainApplication</code></a> forwards to <code>CreateMauiApp()</code>
+          (<code>.../Platforms/Android/MainApplication.cs:17</code>); <a href="#appdelegate"><code>AppDelegate</code></a>
+          (<code>.../Platforms/iOS/AppDelegate.cs:11</code>) and <a href="#program"><code>Program</code></a>
+          (<code>.../Platforms/iOS/Program.cs:10-11</code>) do the same on iOS; the WinUI <a href="#app"><code>App</code></a>
+          (<code>.../Platforms/Windows/App.xaml.cs:16</code>) on Windows. <code>MauiProgram.CreateMauiApp</code>
+          (<code>.../MMCA.ADC.UI/MauiProgram.cs:33</code>) builds the entire DI/configuration graph: because MAUI does not
+          auto-load <code>appsettings.json</code> from disk, it reads it from an <strong>embedded resource</strong>
+          (<code>MauiProgram.cs:42</code>), then registers MudBlazor, the shared UI (<code>AddUIShared</code>, <code>MauiProgram.cs:53</code>),
+          the <a href="#adchomepagecontent"><code>ADCHomePageContent</code></a> home content (<code>MauiProgram.cs:54</code>), the
+          conditionally-enabled module UIs (gated by
+          <a href="group-15-common-ui-framework.html#uimoduleconfiguration"><code>UIModuleConfiguration</code></a> so a build can ship a
+          subset of modules, <code>MauiProgram.cs:57-67</code>), and the MAUI flavors of the token, refresh, and form-factor
+          services (<a href="#mauitokenstorageservice"><code>MauiTokenStorageService</code></a> at <code>MauiProgram.cs:70</code>,
+          <a href="group-15-common-ui-framework.html#directapitokenrefresher"><code>DirectApiTokenRefresher</code></a> at
+          <code>MauiProgram.cs:71</code>, <a href="#formfactor"><code>FormFactor</code></a> at <code>MauiProgram.cs:76</code>). The cross-platform
+          <a href="#app"><code>App</code></a> (<code>.../MMCA.ADC.UI/App.xaml.cs:11</code>) creates a window hosting <a href="#mainpage"><code>MainPage</code></a>, and
+          <code>MainPage</code> (<code>.../MMCA.ADC.UI/MainPage.xaml.cs:13</code>) hosts the <code>BlazorWebView</code> and intercepts the
+          hardware/gesture back button (<code>OnBackButtonPressed</code>, <code>MainPage.xaml.cs:18</code>), forwarding it to the
+          WebView&#39;s own history via
+          <a href="group-15-common-ui-framework.html#mauibacknavigationbridge"><code>MauiBackNavigationBridge</code></a>
+          (<code>MainPage.xaml.cs:48</code>) and quitting the app only when there is nowhere left to go back to
+          (<code>MainPage.xaml.cs:49-52</code>). <code>[Rubric §25, Navigation, Routing &amp; IA]</code> shows up in that bridge: native
+          back must map onto in-app navigation, not OS app-switching, or the native experience feels broken.
+          <code>MainActivity</code>&#39;s <code>ConfigurationChanges</code> attribute (<code>MainActivity.cs:9-12</code>) is the other native
+          subtlety: it stops Android from destroying the activity (and with it the Blazor circuit and all
+          component state) on rotation or dark-mode toggle.</p>
+          <p><strong>Host security: platform-appropriate token handling.</strong> The three token-storage implementations are a
+          compact study in <strong>secret handling matched to the threat model</strong>. On the browser hosts the high-value
+          <em>refresh</em> token is never exposed to JavaScript; it stays in an HttpOnly cookie and is exchanged through
+          the same-origin proxy (see G15&#39;s <a href="group-15-common-ui-framework.html#servertokenstorageservice"><code>ServerTokenStorageService</code></a>
+          and <a href="group-15-common-ui-framework.html#wasmtokenstorageservice"><code>WasmTokenStorageService</code></a>). On MAUI,
+          which has no DOM and therefore no XSS surface, <a href="#mauitokenstorageservice"><code>MauiTokenStorageService</code></a>
+          stores both tokens in OS <strong>SecureStorage</strong>, the platform secure enclave (Android Keystore, iOS
+          Keychain, Windows DPAPI, <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Services/MauiTokenStorageService.cs:5-9</code>)
+          under fixed key names (<code>MauiTokenStorageService.cs:11-12</code>). <code>[Rubric §11, Security]</code> (server-side and
+          at-rest secret handling) and <code>[Rubric §26, Front-End Security]</code> (no token reachable from page JS) are
+          both directly embodied; the deeper design note is <code>MMCA.ADC/TokenStorageDesignNote.md</code>. One deliberate
+          development-only relaxation lives in <code>MauiProgram</code>: a <code>#if DEBUG</code> block installs a <code>SocketsHttpHandler</code>
+          that bypasses SSL certificate validation (<code>MauiProgram.cs:88-97</code>) so a MAUI device on the LAN can reach
+          the WebAPI over the ASP.NET dev cert; it is scoped to DEBUG and annotated inline, not a production path.
+          The Blazor host&#39;s Content-Security-Policy is provided by
+          <a href="group-15-common-ui-framework.html#blazorcsppolicyprovider"><code>BlazorCspPolicyProvider</code></a>, fed to the
+          framework&#39;s <a href="group-16-aspire-orchestration.html#securityheadersmiddleware"><code>SecurityHeadersMiddleware</code></a>
+          over the <a href="group-16-aspire-orchestration.html#icsppolicyprovider"><code>ICspPolicyProvider</code></a> seam (ADR-023).</p>
+          <p><strong>How it all fits at runtime.</strong> A request to the Blazor Web host renders the shared layout from
+          <a href="group-15-common-ui-framework.html"><code>MMCA.Common.UI</code></a>; the navbar is composed from each enabled module&#39;s
+          UI descriptor (Conference, Engagement, Identity, Notification), and <code>/</code> renders <a href="#adchome"><code>ADCHome</code></a>
+          through <a href="#adchomepagecontent"><code>ADCHomePageContent</code></a>. The page fetches the event for its countdown and
+          renders static content immediately; the interactive Server circuit or the WASM runtime takes over after
+          prerender, auth state flows through
+          <a href="group-15-common-ui-framework.html#jwtauthenticationstateprovider"><code>JwtAuthenticationStateProvider</code></a>
+          reading whichever <a href="group-15-common-ui-framework.html#itokenstorageservice"><code>ITokenStorageService</code></a> the
+          host registered, and outbound API calls carry the access token with proactive refresh. On MAUI the same
+          component tree runs inside a <code>BlazorWebView</code> with SecureStorage-backed tokens and the native
+          back-button bridge. In every case the application talks to the backend <strong>only through the YARP
+          Gateway</strong>: the same seam that makes the modules independently extractable (ADR-007 gRPC extraction,
+          ADR-008 service-extraction topology) also makes the UI host-agnostic. The client points at one origin,
+          and the Gateway routes to whichever service owns the endpoint. That is the unifying theme of this
+          chapter: <strong>thin hosts over shared components, talking to one gateway, with every platform difference
+          pushed behind a Common interface.</strong></p>
+          <h3 id="adceventinfo-eventphase-keynotespeakerinfo-conferencetrackinfo-sponsorinfo">ADCEventInfo, EventPhase, KeynoteSpeakerInfo, ConferenceTrackInfo, SponsorInfo</h3>
+          <blockquote>
+          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Pages/ADCHome.razor.cs</code> · Level 0 · enum + records (all <code>private</code> inner types of <a href="#adchome"><code>ADCHome</code></a>)</p>
+          </blockquote>
+          <p>These five Level-0 types are <strong>private inner types</strong> declared inside the <a href="#adchome"><code>ADCHome</code></a> landing-page
+          component. They structure the page&#39;s two content tiers: a small <strong>dynamic</strong> projection deserialized from
+          the public events API, and a set of <strong>static</strong> records baked into the binary for the annual conference
+          cycle (keynote bio, twelve tracks, sponsor list). Grouping them is appropriate, they are structurally
+          identical small carriers with no behavior, but each is cited individually below.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Type</th>
+          <th>File:Line</th>
+          <th>Kind</th>
+          <th>What it carries</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>EventPhase</code></td>
+          <td><code>…/Pages/ADCHome.razor.cs:28</code></td>
+          <td>enum (private)</td>
+          <td><code>Upcoming</code> / <code>Live</code> / <code>Ended</code>, the countdown state machine</td>
+          </tr>
+          <tr>
+          <td><code>ADCEventInfo</code></td>
+          <td><code>…/Pages/ADCHome.razor.cs:150</code></td>
+          <td>record (sealed, private)</td>
+          <td>API projection: <code>Id</code>, <code>Name</code>, <code>Description?</code>, <code>StartDate</code>, <code>EndDate</code>, <code>TimeZone</code>, <code>VenueAddress?</code>, <code>VenueMapUrl?</code></td>
+          </tr>
+          <tr>
+          <td><code>KeynoteSpeakerInfo</code></td>
+          <td><code>…/Pages/ADCHome.razor.cs:256</code></td>
+          <td>record (sealed, private)</td>
+          <td>Static keynote: <code>Name</code>, <code>Title</code>, <code>TalkTitle</code>, <code>BioParagraphs</code> (<code>string[]</code>)</td>
+          </tr>
+          <tr>
+          <td><code>ConferenceTrackInfo</code></td>
+          <td><code>…/Pages/ADCHome.razor.cs:257</code></td>
+          <td>record (sealed, private)</td>
+          <td>Static track: <code>Name</code>, <code>Icon</code> (MudBlazor icon constant), <code>Topics</code></td>
+          </tr>
+          <tr>
+          <td><code>SponsorInfo</code></td>
+          <td><code>…/Pages/ADCHome.razor.cs:259</code></td>
+          <td>record (sealed, private)</td>
+          <td>Static sponsor: <code>Name</code>, <code>LogoUrl</code>, <code>Url</code></td>
+          </tr>
+          </tbody></table></div>
+          <ul>
+          <li><strong>What they are</strong>: value-shaped data carriers for the landing page. <code>EventPhase</code> is the three-state
+          enum (<code>ADCHome.razor.cs:28-33</code>) that drives the countdown timer; <code>ADCEventInfo</code> (<code>:150-158</code>) is the
+          deserialization-only projection of one published event; the remaining three are immutable records that
+          model the hand-authored keynote, track, and sponsor content.</li>
+          <li><strong>Depends on</strong>: nothing first-party. <code>ADCEventInfo</code> is materialized from JSON via the BCL
+          (<code>System.Net.Http.Json</code> / <code>System.Text.Json</code>); the static records reference only <code>string</code>/<code>string[]</code>
+          and MudBlazor icon string constants (<code>Icons.Material.Filled.*</code>).</li>
+          <li><strong>Concept introduced, the page-local two-tier content model.</strong> <code>[Rubric §18, UI Architecture &amp; Component Design]</code> (assesses cohesive, well-bounded component design) and <code>[Rubric §19, State Management &amp; Data Flow]</code> (assesses where component data originates and how it flows): the page keeps
+          <strong>dynamic</strong> state (the event&#39;s dates/venue, fetched at load) separate from <strong>static</strong> state (the
+          keynote, tracks, sponsors, compiled into <code>private static readonly</code> arrays). Splitting the two means
+          the keynote section, track grid, and sponsor logos render immediately from in-memory data even while
+          the event-date API call is still in flight or has failed, the page degrades gracefully to its
+          fallback constants. Keeping all five types <code>private</code> to <code>ADCHome</code> is deliberate scoping: no other page
+          can accidentally couple to this projection; a page that needs event data fetches its own.<ul>
+          <li>This also touches <code>[Rubric §27, Internationalization &amp; Localization]</code>, but not the way an older
+          edition claimed. The page <strong>is</strong> localized (ADR-027, en-US + es): the UI chrome around this content
+          resolves through an <code>IStringLocalizer</code> (<code>L[...]</code>), e.g. <code>EventDescription =&gt; _event?.Description ?? L[&quot;Fallback.EventDescription&quot;]</code>
+          (<code>:37</code>) and the tier headings (see <a href="#sponsortierinfo"><code>SponsorTierInfo</code></a>). What is deliberately
+          <strong>not</strong> translated is the editorial content these static records carry (the keynote bio, the track
+          catalog, the sponsor names), the same English-only copy the API would serve for a regional
+          conference; each such literal carries an explicit <code>// i18n: allow</code> justification comment
+          (<code>ADCHome.razor.cs:161-162</code> for the static block, plus <code>:35</code> for the conference brand name and <code>:39</code>
+          for the postal venue address). So the split is &quot;externalize the chrome, keep the editorial body as
+          English constants&quot;, not a blanket single-locale stance (see
+          <a href="00-primer.html#6-the-34-category-architecture-evaluation-lens">primer §6&#39;s §27 note</a> and ADR-027).</li>
+          </ul>
+          </li>
+          <li><strong>Walkthrough</strong>,<ul>
+          <li><code>EventPhase</code> (<code>:28-33</code>): computed by <code>UpdateCountdown</code> (<code>:93-127</code>). <code>Upcoming</code> → render the
+          countdown and tick once per second; <code>Live</code> (now between start and end UTC) → &quot;happening now&quot;;
+          <code>Ended</code> → <code>_countdownTimer?.Change(-1, -1)</code> stops ticking after the final render (<code>:89</code>).</li>
+          <li><code>ADCEventInfo</code> (<code>:150-158</code>): pulled out of the API envelope (see
+          <a href="#adccollectionresult"><code>ADCCollectionResult</code></a>) in <code>LoadEventAsync</code> (<code>:55-76</code>). Every property has a
+          Razor-side fallback (e.g. <code>EventName =&gt; _event?.Name ?? &quot;Atlanta Cloud + AI Conference&quot;</code>, <code>:35</code>),
+          so a null/missing event still renders. <code>TimeZone</code> drives the IANA-zone conversion in
+          <code>UpdateCountdown</code> (<code>:99-113</code>), which falls back to treating local time as UTC if the zone id is
+          unknown (<code>catch (TimeZoneNotFoundException)</code>, <code>:109</code>).</li>
+          <li><code>KeynoteSpeakerInfo.BioParagraphs</code> (<code>:256</code>) is a <code>string[]</code> so the template can emit one <code>&lt;p&gt;</code> per
+          paragraph; the single instance is the <code>Keynote</code> constant (<code>:163-173</code>).</li>
+          <li><code>ConferenceTrackInfo.Icon</code> (<code>:257</code>) holds a MudBlazor <code>Icons.Material.*</code> constant passed to
+          <code>&lt;MudIcon&gt;</code>; the twelve-track array is the <code>Tracks</code> constant (<code>:175-201</code>).</li>
+          <li><code>SponsorInfo</code> (<code>:259</code>): the <code>SponsorTiers</code> array (<code>:204-230</code>, see
+          <a href="#sponsortierinfo"><code>SponsorTierInfo</code></a>) carries <code>[SuppressMessage(&quot;…&quot;,&quot;S1075…&quot;)]</code> (<code>:203</code>) because the
+          hard-coded sponsor logo/link URLs are intentional external constants, justified inline
+          (<code>[Rubric §15, Best Practices]</code>, suppressions are scoped and explained, not blanket-disabled).</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: content that changes at most once per conference year does not warrant a
+          CMS or database table; a recompile is the cheapest &quot;publish&quot;. The dynamic/static split is what keeps
+          the page resilient to a slow or unreachable API.</li>
+          <li><strong>Where they&#39;re used</strong>: <code>ADCHome.razor</code> / <code>ADCHome.razor.cs</code> only. An <strong>identical copy</strong> of all five
+          exists in <code>MMCA.ADC.UI.Web.Client/Pages/ADCHome.razor.cs</code> (the WebAssembly client), see the caveat.</li>
+          <li><strong>Caveats / not-in-source</strong>: these private types are <strong>duplicated verbatim</strong> in the WASM client&#39;s
+          own <code>ADCHome.razor.cs</code> (same names, same declaration order). A page code-behind cannot be shared as
+          one file across the Blazor-Server (MAUI host) and WebAssembly render pipelines because each compiles
+          it independently, so content and localization-key edits must be applied to <strong>both</strong> files in lockstep.</li>
+          </ul>
+          <h3 id="mainactivity">MainActivity</h3>
+          <blockquote>
+          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:13</code> · Level 0 · class</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the Android main activity for the MAUI host. Its entire purpose is the
+          <code>[Activity(…)]</code> attribute that declares which configuration changes the activity handles
+          <strong>in-process</strong>, so Android does not destroy and recreate it, and therefore does not tear down the
+          <code>BlazorWebView</code> and its live Blazor circuit, on rotation, dark-mode toggle, or density changes.</li>
+          <li><strong>Depends on</strong>: <code>MauiAppCompatActivity</code> (Microsoft.Maui). No first-party types.</li>
+          <li><strong>Concept introduced, Android <code>ConfigurationChanges</code> and Blazor-circuit preservation.</strong>
+          <code>[Rubric §18, UI Architecture]</code> and <code>[Rubric §22, Responsive &amp; Cross-Browser/Device]</code> (assesses
+          correct behavior across device orientations and form factors). By default Android destroys and
+          recreates the activity on a configuration change; for a <code>BlazorWebView</code> that destruction kills the
+          whole Blazor circuit and all component state. Listing
+          <code>ConfigurationChanges = ScreenSize | Orientation | UiMode | ScreenLayout | SmallestScreenSize | Density</code> (<code>MainActivity.cs:12</code>) tells Android the activity will handle those events itself (MAUI
+          routes them through <code>OnConfigurationChanged</code> transparently), so no recreation, and no lost circuit,
+          occurs.</li>
+          <li><strong>Walkthrough</strong>: the class body is empty (<code>:13-15</code>); <code>MauiAppCompatActivity</code> does all MAUI
+          initialization. The attribute is the whole behavioral surface: <code>Theme = &quot;@style/Maui.SplashTheme&quot;</code>,
+          <code>MainLauncher = true</code>, plus the <code>ConfigurationChanges</code> flags (<code>:9-12</code>).</li>
+          <li><strong>Why it&#39;s built this way</strong>: generated by the MAUI template; the developer-relevant insight is that
+          <strong>removing any flag</strong> silently regresses to activity-restart for that change, dropping the circuit,
+          a defect that only surfaces on a physical device when a user rotates or switches theme.</li>
+          <li><strong>Where it&#39;s used</strong>: the Android platform entry point; referenced by no other code.</li>
+          </ul>
+          <h3 id="adccollectionresult">ADCCollectionResult</h3>
+          <blockquote>
+          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Pages/ADCHome.razor.cs:148</code> · Level 1 · record (sealed, private)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the <strong>private API envelope</strong> the landing page deserializes the <code>events</code> response
+          into: <code>private sealed record ADCCollectionResult(List&lt;ADCEventInfo&gt;? Items)</code> (<code>ADCHome.razor.cs:148</code>).</li>
+          <li><strong>Depends on</strong>: <a href="#adceventinfo-eventphase-keynotespeakerinfo-conferencetrackinfo-sponsorinfo"><code>ADCEventInfo</code></a>
+          (Level 0), wrapping a list of it is what makes this Level 1. External: <code>System.Net.Http.Json</code> for
+          the <code>GetFromJsonAsync</code> round-trip.</li>
+          <li><strong>Concept introduced, the minimal client-side collection envelope.</strong> <code>[Rubric §9, API &amp; Contract Design]</code> (assesses stable, well-shaped contracts): the public API returns the standard
+          <code>{ &quot;items&quot;: [...] }</code> collection wrapper (the framework&#39;s
+          <a href="group-01-result-error-handling.html#collectionresultt"><code>CollectionResult&lt;T&gt;</code></a> shape), and rather
+          than referencing that framework type the page declares the <strong>smallest possible mirror</strong> that captures
+          only the one field it reads. The page is in <code>MMCA.ADC.UI</code>, which references shared UI projects but not
+          the full Application/Shared API contracts, so a one-line local record is the pragmatic, dependency-free
+          way to consume the envelope.</li>
+          <li><strong>Walkthrough</strong>: one positional property, <code>List&lt;ADCEventInfo&gt;? Items</code>. Consumed in <code>LoadEventAsync</code>:
+          <code>await client.GetFromJsonAsync&lt;ADCCollectionResult&gt;(&quot;events&quot;, ApiJsonOptions, _cts!.Token)</code> then
+          <code>result?.Items?.FirstOrDefault()</code> (<code>:60-61</code>), the page only ever needs the first published event.
+          Deserialization uses <code>JsonSerializerDefaults.Web</code> (<code>ApiJsonOptions</code>, <code>:14</code>) for camelCase matching.</li>
+          <li><strong>Why it&#39;s built this way</strong>: see &quot;Concept introduced&quot;. A local record avoids dragging the API
+          contract assemblies into the WebView UI for what is a single read; it also keeps the WASM-client copy
+          self-contained.</li>
+          <li><strong>Where it&#39;s used</strong>: <code>LoadEventAsync</code> in <code>ADCHome</code> only; duplicated in the WASM client&#39;s <code>ADCHome</code>.</li>
+          <li><strong>Caveats / not-in-source</strong>: in an earlier edition this was documented as a generic
+          <code>ADCCollectionResult&lt;T&gt;</code>; the <strong>current source is non-generic</strong> (<code>record ADCCollectionResult(List&lt;ADCEventInfo&gt;? Items)</code>),
+          hardwired to <code>ADCEventInfo</code>. Verified at <code>ADCHome.razor.cs:148</code>.</li>
+          </ul>
+          <h3 id="sponsortierinfo">SponsorTierInfo</h3>
+          <blockquote>
+          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Pages/ADCHome.razor.cs:258</code> · Level 1 · record (sealed, private)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a private record grouping sponsors into a named, colored tier:
+          <code>SponsorTierInfo(string Name, string Color, IReadOnlyList&lt;SponsorInfo&gt; Sponsors)</code> (<code>ADCHome.razor.cs:258</code>).</li>
+          <li><strong>Depends on</strong>: <a href="#adceventinfo-eventphase-keynotespeakerinfo-conferencetrackinfo-sponsorinfo"><code>SponsorInfo</code></a>
+          (Level 0), holding a list of it lifts this to Level 1.</li>
+          <li><strong>Concept introduced</strong>: none new; it is the one-level-up composite of the Level-0
+          landing-page family. Reuses the page-local static-content idea introduced by that family.</li>
+          <li><strong>Walkthrough</strong>: three positional members. The <code>SponsorTiers</code> static array (<code>:204-230</code>) builds four
+          tiers, <code>Platinum</code> (3 sponsors), <code>Gold</code>/<code>Silver</code> (empty), and <code>Swag</code> (1 partner), each with a hex
+          <code>Color</code> swatch used in the template. Two private helpers consume it: <code>GetTierIcon</code> (<code>:232-239</code>) maps a
+          tier name to a MudBlazor icon, and <code>GetTierHeading</code> (<code>:243-254</code>) builds the <strong>localized</strong> tier heading.
+          <code>GetTierHeading</code> selects a resource key from a <code>(IsPartnerTier, Singular)</code> tuple switch (<code>:245-251</code>),
+          the <code>Swag</code> tier reads as &quot;Partner&quot;, every other tier as &quot;Sponsor&quot;, and singular/plural is driven by
+          <code>tier.Sponsors.Count == 1</code>, then formats it via <code>L[&quot;Sponsors.TierHeadingFormat&quot;, L[&quot;Sponsors.Tier.&quot; + tier.Name], L[labelKey]]</code>
+          (<code>:253</code>) so both the tier name and the &quot;Sponsors&quot;/&quot;Patrocinadores&quot; word order come from <code>.resx</code>
+          (<code>[Rubric §27, Internationalization &amp; Localization]</code>, ADR-027).</li>
+          <li><strong>Why it&#39;s built this way</strong>: tiers are a presentation grouping over the flat <code>SponsorInfo</code>, kept as
+          static content for the same once-a-year-recompile reason as its siblings; <code>IReadOnlyList&lt;&gt;</code> makes the
+          composed list immutable, while the surrounding heading text is externalized so it can be translated.</li>
+          <li><strong>Where it&#39;s used</strong>: the <code>SponsorTiers</code> constant and the two tier helpers in <code>ADCHome</code>; duplicated in
+          the WASM client copy.</li>
+          </ul>
+          <h3 id="adchome">ADCHome</h3>
+          <blockquote>
+          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Pages/ADCHome.razor.cs:12</code> · Level 2 · class (<code>sealed partial</code>, Blazor component)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the ADC conference <strong>landing page</strong> component: it renders the countdown, keynote,
+          track grid, sponsor tiers, and venue/location, fetching the default published event from the API to
+          drive a live countdown timer.</li>
+          <li><strong>Depends on</strong>: its own Level-0/1 inner types
+          (<a href="#adceventinfo-eventphase-keynotespeakerinfo-conferencetrackinfo-sponsorinfo"><code>ADCEventInfo</code></a>,
+          <a href="#adceventinfo-eventphase-keynotespeakerinfo-conferencetrackinfo-sponsorinfo"><code>EventPhase</code></a>,
+          <a href="#adceventinfo-eventphase-keynotespeakerinfo-conferencetrackinfo-sponsorinfo"><code>KeynoteSpeakerInfo</code></a>,
+          <a href="#adceventinfo-eventphase-keynotespeakerinfo-conferencetrackinfo-sponsorinfo"><code>ConferenceTrackInfo</code></a>,
+          <a href="#adceventinfo-eventphase-keynotespeakerinfo-conferencetrackinfo-sponsorinfo"><code>SponsorInfo</code></a>,
+          <a href="#sponsortierinfo"><code>SponsorTierInfo</code></a>, <a href="#adccollectionresult"><code>ADCCollectionResult</code></a>). External:
+          <code>IHttpClientFactory</code>, <code>System.Threading.Timer</code>, MudBlazor, <code>Microsoft.AspNetCore.Components</code>, and an
+          <code>IStringLocalizer</code> (the <code>L[...]</code> indexer inherited from the shared localized page base).</li>
+          <li><strong>Concept introduced, the self-contained Blazor page with a disposable timer.</strong> <code>[Rubric §18, UI Architecture]</code> and <code>[Rubric §23, Front-End Performance &amp; Rendering]</code> (assesses render efficiency and
+          resource cleanup). The component implements <code>IDisposable</code> (<code>:12</code>) and manages two unmanaged-ish
+          resources: a <code>CancellationTokenSource</code> for the in-flight fetch and a <code>System.Threading.Timer</code> for the
+          per-second countdown. The fetch is cancellation-aware and swallows <code>OperationCanceledException</code> /
+          <code>HttpRequestException</code> to fall back to constants (<code>:63-70</code>); the timer ticks via
+          <code>InvokeAsync(StateHasChanged)</code> (<code>:84</code>) to marshal renders back onto the Blazor sync context, and
+          <strong>stops itself</strong> once <code>EventPhase.Ended</code> (<code>:86-90</code>). <code>Dispose</code> (<code>:138-145</code>) cancels and disposes the
+          CTS and stops+disposes the timer, the discipline that prevents a leaked timer from re-rendering a
+          disposed component.</li>
+          <li><strong>Walkthrough</strong>,<ul>
+          <li>Fields (<code>:14-26</code>): <code>ApiJsonOptions</code> (web defaults), <code>EventStartTime</code> (08:00 local), the injected
+          <code>HttpClientFactory</code>, plus mutable countdown state (<code>_cts</code>, <code>_countdownTimer</code>, <code>_timeRemaining</code>,
+          <code>_phase</code>, <code>_event</code>, <code>_isLoading</code>, <code>_disposed</code>).</li>
+          <li><code>OnInitializedAsync</code> (<code>:44-53</code>): creates the CTS, awaits <code>LoadEventAsync</code>, then starts the 1-second
+          timer <strong>only if</strong> the event hasn&#39;t already ended.</li>
+          <li><code>LoadEventAsync</code> (<code>:55-76</code>): resolves the named <code>&quot;APIClient&quot;</code> <code>HttpClient</code>, deserializes the
+          <code>events</code> endpoint into <a href="#adccollectionresult"><code>ADCCollectionResult</code></a>, takes the first item, and in a
+          <code>finally</code> clears <code>_isLoading</code> and recomputes the countdown.</li>
+          <li><code>UpdateCountdown</code> (<code>:93-127</code>): converts the event&#39;s local start/end to UTC via the configured IANA
+          zone (default <code>&quot;America/New_York&quot;</code>, <code>:99</code>; default date <code>2026-05-30</code>, <code>:95</code>), sets <code>_timeRemaining</code>,
+          and derives <code>_phase</code>.</li>
+          <li>Presentation helpers: <code>FormatEventDate</code> (<code>:129-136</code>) formats the hero date with
+          <code>CultureInfo.CurrentCulture</code> and a <strong>localized format resource</strong> <code>L[&quot;Hero.DateFormat&quot;]</code> (<code>:135</code>), so
+          the date layout and month names follow the selected language (ADR-027), this is deliberately culture-
+          <em>aware</em>, unlike the culture-invariant identifier parsing in
+          <a href="group-02-domain-building-blocks.html#domainhelper"><code>DomainHelper</code></a>. <code>MapSearchUrl</code> (<code>:41-42</code>) builds a
+          Google-Maps deep link from the (escaped) venue address.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: a landing page that must stay live (a ticking countdown) and resilient
+          (renders from constants when the API is slow/down) needs exactly this fetch-then-tick-then-dispose
+          shape; the per-component <code>IDisposable</code> is the correct lifetime hook for the timer and CTS.</li>
+          <li><strong>Where it&#39;s used</strong>: surfaced as the app&#39;s <code>/</code> route content via
+          <a href="#adchomepagecontent"><code>ADCHomePageContent</code></a>, which the framework&#39;s <code>Home.razor</code> renders through a
+          <code>&lt;DynamicComponent&gt;</code>. A structurally-identical <code>ADCHome</code> lives in <code>MMCA.ADC.UI.Web.Client</code> for the
+          browser/WASM render path.</li>
+          </ul>
+          <h3 id="mainpage">MainPage</h3>
+          <blockquote>
+          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MainPage.xaml.cs:13</code> · Level 2 · class (<code>partial</code>, MAUI <code>ContentPage</code>)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the MAUI shell page that hosts the <code>BlazorWebView</code> (defined in <code>MainPage.xaml</code>) and
+          bridges the <strong>platform back gesture</strong> (Android hardware back, iOS swipe) into the WebView&#39;s internal
+          Blazor history stack, exiting the app only when the WebView has nowhere left to go.</li>
+          <li><strong>Depends on</strong>: <a href="group-15-common-ui-framework.html#mauibacknavigationbridge"><code>MauiBackNavigationBridge</code></a>
+          (MMCA.Common.UI). External: <code>Microsoft.Maui.Controls.ContentPage</code>, <code>Microsoft.JSInterop.IJSRuntime</code>,
+          <code>BlazorWebView</code>, <code>TaskCompletionSource</code>.</li>
+          <li><strong>Concept introduced, back-gesture interception across the native/WebView boundary.</strong> <code>[Rubric §25, Navigation, Routing &amp; Information Architecture]</code> (assesses coherent navigation, including platform
+          back behavior) and <code>[Rubric §18, UI Architecture]</code>. Natively, the back gesture would pop the <em>native</em>
+          page stack and quit the app, ignoring the in-WebView Blazor route history. <code>OnBackButtonPressed</code>
+          (<code>:18-23</code>) <strong>consumes</strong> the gesture (<code>return true</code>) and dispatches <code>HandleBackAsync</code> off the UI
+          thread; that method asks <code>MauiBackNavigationBridge.HandleBackPressedAsync</code> whether the Blazor router is
+          at its root, and only quits the app (<code>Application.Current?.Quit()</code>) when <code>result.AtRoot</code> (<code>:48-52</code>).</li>
+          <li><strong>Walkthrough</strong>,<ul>
+          <li>ctor (<code>:15</code>): <code>InitializeComponent()</code> wires up the XAML-declared <code>blazorWebView</code>.</li>
+          <li><code>HandleBackAsync</code> (<code>:25-59</code>): because <code>BlazorWebView</code> only exposes the synchronous
+          <code>Action&lt;IServiceProvider&gt;</code> dispatch overload, it captures the renderer-scoped <code>IJSRuntime</code> through a
+          <code>TaskCompletionSource</code> (<code>CaptureJsRuntime</code>, <code>:61-62</code>) via <code>TryDispatchAsync</code>, then runs the async
+          interop <em>outside</em> the dispatch context. Any failure path, WebView not dispatched, no <code>IJSRuntime</code>,
+          or a thrown exception, falls through to <code>QuitApp</code> (<code>:64-68</code>, marshaled onto the main thread).</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: the <code>TaskCompletionSource</code> dance is the documented workaround for
+          <code>BlazorWebView</code>&#39;s synchronous-only dispatch surface; routing the back button through the shared
+          <a href="group-15-common-ui-framework.html#mauibacknavigationbridge"><code>MauiBackNavigationBridge</code></a> keeps the
+          back-navigation logic in MMCA.Common, reused by every MAUI consumer rather than reimplemented per app.</li>
+          <li><strong>Where it&#39;s used</strong>: instantiated as the window&#39;s root page by <a href="#app"><code>App</code></a>
+          (<code>new Window(new MainPage())</code>); it is the host for the entire Blazor UI on mobile/desktop.</li>
+          </ul>
+          <h3 id="adchomepagecontent">ADCHomePageContent</h3>
+          <blockquote>
+          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Pages/ADCHomePageContent.cs:8</code> · Level 3 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the ADC implementation of
+          <a href="group-15-common-ui-framework.html#ihomepagecontent"><code>IHomePageContent</code></a>: it tells the framework&#39;s
+          generic <code>Home.razor</code> shell which component to render at <code>/</code> and what page title to use.</li>
+          <li><strong>Depends on</strong>: <a href="group-15-common-ui-framework.html#ihomepagecontent"><code>IHomePageContent</code></a> (MMCA.Common.UI,
+          implements) and <a href="#adchome"><code>ADCHome</code></a> (the <code>ComponentType</code> it points to).</li>
+          <li><strong>Concept introduced, the host-supplied landing-page strategy.</strong> <code>[Rubric §18, UI Architecture]</code> and
+          <code>[Rubric §2, Design Patterns]</code> (assesses idiomatic patterns): MMCA.Common&#39;s <code>Home.razor</code> owns the
+          <code>/</code> route but is content-agnostic, it injects <code>IEnumerable&lt;IHomePageContent&gt;</code>, takes the first
+          registered provider (<code>Home.razor:29</code>), assigns <code>provider.ComponentType</code> (<code>Home.razor:32</code>), and renders
+          it through a <code>&lt;DynamicComponent&gt;</code> (<code>Home.razor:10</code>). This is the <strong>strategy / extension-point</strong>
+          pattern: the framework defines the slot, each consuming app fills it. ADC fills it by registering this
+          class.</li>
+          <li><strong>Walkthrough</strong>: two expression-bodied properties: <code>ComponentType =&gt; typeof(ADCHome)</code> (<code>:10</code>) and
+          <code>PageTitle =&gt; &quot;Atlanta Cloud + AI Conference&quot;</code> (<code>:12</code>, tagged <code>// i18n: allow</code> as the conference brand
+          name). No state, no behavior.</li>
+          <li><strong>Why it&#39;s built this way</strong>: it lets a single shared <code>Home.razor</code> serve every MMCA app while each app
+          contributes its own landing page without forking the framework component.</li>
+          <li><strong>Where it&#39;s used</strong>: registered as a singleton <code>IHomePageContent</code> in
+          <a href="#mauiprogram"><code>MauiProgram</code></a> (<code>builder.Services.AddSingleton&lt;IHomePageContent, ADCHomePageContent&gt;()</code>,
+          <code>MauiProgram.cs:54</code>); the Blazor-Web client registers its own equivalent. The framework&#39;s <code>Home.razor</code>
+          resolves and renders it.</li>
+          </ul>
+          <h3 id="app">App</h3>
+          <blockquote>
+          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/App.xaml.cs:7</code> · Level 3 · class (<code>partial</code>)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the MAUI application root: it creates the single window that hosts
+          <a href="#mainpage"><code>MainPage</code></a> (which in turn hosts the Blazor WebView).</li>
+          <li><strong>Depends on</strong>: <a href="#mainpage"><code>MainPage</code></a> (Level 2). External:
+          <code>Microsoft.Maui.Controls.Application</code>/<code>Window</code>.</li>
+          <li><strong>Concept introduced</strong>: none new; the MAUI <code>Application</code> bootstrap. <code>[Rubric §22, Responsive &amp; Cross-Browser/Device]</code> (one application class serving Android/iOS/macOS/Windows).</li>
+          <li><strong>Walkthrough</strong>: ctor calls <code>InitializeComponent()</code> (<code>:9</code>); <code>CreateWindow</code> returns
+          <code>new(new MainPage()) { Title = &quot;MMCA.ADC.UI&quot; }</code> (<code>:11</code>), the single window wrapping the shell
+          page.</li>
+          <li><strong>Why it&#39;s built this way</strong>: standard MAUI single-window app; all real UI lives inside the WebView on
+          <code>MainPage</code>, so <code>App</code> is intentionally thin.</li>
+          <li><strong>Where it&#39;s used</strong>: supplied to MAUI via <code>.UseMauiApp&lt;App&gt;()</code> in <a href="#mauiprogram"><code>MauiProgram</code></a>
+          (<code>MauiProgram.cs:37</code>); instantiated by the platform entry points.</li>
+          <li><strong>Caveats / not-in-source</strong>: the <code>_typemap</code> lists two <code>App</code> entries (Level 3 here, and a Level-5
+          <code>App</code> for the Windows platform <code>Platforms/Windows/App.xaml.cs</code>). This section is the cross-platform
+          Level-3 <code>App</code> at <code>App.xaml.cs:7</code>.</li>
+          </ul>
+          <h3 id="mauiprogram">MauiProgram</h3>
+          <blockquote>
+          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:27</code> · Level 4 · class (static)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the MAUI Blazor Hybrid composition root: it builds the <code>MauiApp</code>, loads configuration
+          from an embedded resource, registers MudBlazor + the shared UI services + the conditionally-enabled
+          module UIs, and wires the MAUI-specific auth/token and form-factor services.</li>
+          <li><strong>Depends on</strong>: <a href="#app"><code>App</code></a>, <a href="#adchomepagecontent"><code>ADCHomePageContent</code></a>,
+          <a href="group-15-common-ui-framework.html#ihomepagecontent"><code>IHomePageContent</code></a>,
+          <a href="group-15-common-ui-framework.html#uimoduleconfiguration"><code>UIModuleConfiguration</code></a>,
+          <a href="group-15-common-ui-framework.html#iformfactor"><code>IFormFactor</code></a>,
+          <a href="#formfactor"><code>FormFactor</code></a>,
+          <a href="#mauitokenstorageservice"><code>MauiTokenStorageService</code></a>,
+          <a href="group-15-common-ui-framework.html#itokenstorageservice"><code>ITokenStorageService</code></a>,
+          <a href="group-15-common-ui-framework.html#itokenrefresher"><code>ITokenRefresher</code></a>,
+          <a href="group-15-common-ui-framework.html#directapitokenrefresher"><code>DirectApiTokenRefresher</code></a>,
+          <a href="group-15-common-ui-framework.html#jwtauthenticationstateprovider"><code>JwtAuthenticationStateProvider</code></a>,
+          plus the module UI registrars <code>AddIdentityUI</code>/<code>AddConferenceUI</code>/<code>AddEngagementUI</code>/<code>AddNotificationUI</code>
+          and <code>AddUIShared</code> (MMCA.Common.UI). External: MAUI, MudBlazor, <code>Microsoft.Extensions.Configuration</code>.</li>
+          <li><strong>Concept introduced, the MAUI Blazor Hybrid host and conditional module composition.</strong> <code>[Rubric §18, UI Architecture]</code> and <code>[Rubric §3, Clean Architecture]</code> (composition at the edge): one <code>MauiProgram</code>
+          builds the shared DI graph that every native platform reuses (see the
+          <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer&#39;s write-once-render-everywhere note</a>).
+          Two host-specific mechanics stand out:<ul>
+          <li><strong>Embedded configuration</strong> (<code>:41-49</code>): MAUI does <strong>not</strong> auto-load <code>appsettings.json</code> from disk, so
+          config is read from the embedded resource <code>&quot;MMCA.ADC.UI.appsettings.json&quot;</code> via
+          <code>Assembly.GetManifestResourceStream</code> and added to <code>builder.Configuration</code>.</li>
+          <li><strong>Conditional module UI</strong> (<code>:57-67</code>): each module&#39;s UI is registered only when
+          <a href="group-15-common-ui-framework.html#uimoduleconfiguration"><code>UIModuleConfiguration.IsModuleEnabled</code></a>
+          returns true, the same shared binary can ship with a subset of modules enabled. <code>[Rubric §6, CQRS &amp; Event-Driven]</code> in spirit: module boundaries persist all the way out to the UI host.</li>
+          <li><code>[Rubric §11, Security]</code> / <code>[Rubric §17, DevOps &amp; Deployment]</code>: the <code>#if DEBUG</code> block (<code>:78-98</code>)
+          intentionally <strong>disables TLS validation</strong> for LAN dev, using a <code>SocketsHttpHandler</code> (managed TLS)
+          because Android&#39;s native SSL layer rejects the localhost dev cert before the .NET callback fires. It
+          is fenced to <code>DEBUG</code> and justified with a scoped <code>#pragma warning disable S4830, CA5359</code> (<code>:88</code>/<code>:97</code>),
+          a deliberate, documented dev-only exception, <strong>never</strong> compiled into release.</li>
+          </ul>
+          </li>
+          <li><strong>Walkthrough</strong>: <code>CreateMauiApp</code> (<code>:33-101</code>): <code>UseMauiApp&lt;App&gt;()</code> + fonts (<code>:36-38</code>) → embedded
+          config (<code>:41-49</code>) → <code>AddMauiBlazorWebView()</code> + <code>AddMudServices()</code> + <code>AddUIShared(configuration)</code> +
+          the <code>IHomePageContent</code> singleton (<code>:51-54</code>) → conditional module UIs (<code>:57-67</code>) → auth wiring
+          (<code>MauiTokenStorageService</code>, <code>DirectApiTokenRefresher</code>, <code>JwtAuthenticationStateProvider</code>,
+          <code>AddAuthorizationCore</code>, <code>:70-73</code>) → device <code>IFormFactor</code>/<code>FormFactor</code> (<code>:76</code>) → debug HTTP handler
+          (<code>:78-98</code>) → <code>builder.Build()</code> (<code>:100</code>).</li>
+          <li><strong>Why it&#39;s built this way</strong>: concentrating all host composition here keeps the platform entry points
+          (<code>AppDelegate</code>/<code>MainApplication</code>/<code>Program</code>) trivial; conditional registration plus shared UI libraries
+          is what makes one codebase render across web and every native platform.</li>
+          <li><strong>Where it&#39;s used</strong>: called by every MAUI platform entry point:
+          <a href="#appdelegate-mainapplication"><code>AppDelegate</code></a> (iOS/macOS), <a href="#appdelegate-mainapplication"><code>MainApplication</code></a>
+          (Android), and <a href="#program"><code>Program</code></a> (iOS UIKit <code>Main</code>).</li>
+          </ul>
+          <h3 id="appdelegate-mainapplication">AppDelegate, MainApplication</h3>
+          <p><a id="mainapplication"></a><a id="appdelegate"></a></p>
+          <blockquote>
+          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI</code> · Level 5 · classes (platform entry points)</p>
+          </blockquote>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Type</th>
+          <th>File:Line</th>
+          <th>Platform</th>
+          <th>Base class</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>AppDelegate</code></td>
+          <td><code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/iOS/AppDelegate.cs:9</code></td>
+          <td>iOS / macOS (Catalyst)</td>
+          <td><code>MauiUIApplicationDelegate</code></td>
+          </tr>
+          <tr>
+          <td><code>MainApplication</code></td>
+          <td><code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainApplication.cs:10</code></td>
+          <td>Android</td>
+          <td><code>MauiApplication</code></td>
+          </tr>
+          </tbody></table></div>
+          <ul>
+          <li><strong>What they are</strong>: the thin per-platform MAUI bootstrappers. Each overrides <code>CreateMauiApp()</code> to
+          return <a href="#mauiprogram"><code>MauiProgram.CreateMauiApp()</code></a> and otherwise just satisfies the platform&#39;s
+          application-object contract.</li>
+          <li><strong>Depends on</strong>: <a href="#mauiprogram"><code>MauiProgram</code></a> (Level 4). External: <code>Foundation</code>/<code>UIKit</code> (iOS),
+          <code>Android.App</code>/<code>Android.Runtime</code> (Android).</li>
+          <li><strong>Concept introduced</strong>: the <strong>cross-platform bootstrapper</strong> pattern: one <code>MauiProgram</code> builds the
+          shared DI/configuration graph; each platform supplies a minimal entry point that calls it.
+          <code>[Rubric §22, Responsive &amp; Cross-Browser/Device]</code> and <code>[Rubric §17, DevOps &amp; Deployment]</code> (multiple
+          platform targets from one shared codebase).</li>
+          <li><strong>Walkthrough</strong>,<ul>
+          <li><code>AppDelegate</code> (<code>AppDelegate.cs:9-12</code>): carries <code>[Register(&quot;AppDelegate&quot;)]</code> (the Objective-C runtime
+          registration) and overrides <code>CreateMauiApp() =&gt; MauiProgram.CreateMauiApp()</code>.</li>
+          <li><code>MainApplication</code> (<code>MainApplication.cs:10-18</code>): carries <code>[Application]</code>, declares the JNI ctor
+          <code>(IntPtr handle, JniHandleOwnership ownership)</code> required by the Android runtime, and overrides
+          <code>CreateMauiApp() =&gt; MauiProgram.CreateMauiApp()</code>.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: keeping platform code to a single delegating method means all real
+          composition lives once in <code>MauiProgram</code>; the platform classes are only the OS-mandated hooks.</li>
+          <li><strong>Where they&#39;re used</strong>: <code>AppDelegate</code> is named by <a href="#program"><code>Program</code></a>&#39;s <code>UIApplication.Main</code> on
+          iOS; <code>MainApplication</code> is instantiated by the Android runtime via its <code>[Application]</code> attribute.</li>
+          <li><strong>Caveats / not-in-source</strong>: the cross-platform <a href="#app"><code>App</code></a> (Level 3) and the Windows-platform
+          <code>App</code> (Level 5, <code>Platforms/Windows/App.xaml.cs</code>) are distinct from these two delegating entry points;
+          see <a href="#app"><code>App</code></a>. A parallel <code>AppDelegate</code>/<code>Program</code> pair also exists under <code>Platforms/MacCatalyst/</code>
+          with identical shape.</li>
+          </ul>
+          <h3 id="program">Program</h3>
+          <blockquote>
+          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/iOS/Program.cs:8</code> · Level 6 · class (static)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the iOS (UIKit) process entry point: its <code>Main</code> launches the UIKit application with
+          <a href="#appdelegate-mainapplication"><code>AppDelegate</code></a> as the delegate type.</li>
+          <li><strong>Depends on</strong>: <a href="#appdelegate-mainapplication"><code>AppDelegate</code></a> (Level 5). External: <code>UIKit</code>.</li>
+          <li><strong>Concept introduced</strong>: none new; the platform process entry point. <code>[Rubric §17, DevOps &amp; Deployment]</code> (multi-platform deployment readiness, Android, iOS, macOS, and Windows from one
+          codebase).</li>
+          <li><strong>Walkthrough</strong>: one static method:
+          <code>Main(string[] args) =&gt; UIApplication.Main(args, null, typeof(AppDelegate))</code> (<code>Program.cs:10-11</code>),
+          which hands control to UIKit, naming <a href="#appdelegate-mainapplication"><code>AppDelegate</code></a> as the app delegate
+          that then builds the MAUI app.</li>
+          <li><strong>Why it&#39;s built this way</strong>: on iOS the managed <code>Main</code> must explicitly start the UIKit loop; Android
+          has no analogous file because its process is launched via the <code>[Application]</code>-attributed
+          <a href="#appdelegate-mainapplication"><code>MainApplication</code></a>.</li>
+          <li><strong>Where it&#39;s used</strong>: the iOS app&#39;s startup; transitively reaches <a href="#mauiprogram"><code>MauiProgram</code></a> through
+          <code>AppDelegate</code>.</li>
+          </ul>
+          <h3 id="adceventinfo">ADCEventInfo</h3>
+          <blockquote>
+          <p>MMCA.ADC.UI.Web.Client · <code>MMCA.ADC.UI.Web.Client.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHome.razor.cs:163</code> · Level 0 · record</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a private, sealed record nested inside <a href="#adchome"><code>ADCHome</code></a> that models the single conference <em>event</em> the landing page fetches from the API to drive the countdown clock. It is a thin, client-only deserialization shape, not a domain entity.</li>
+          <li><strong>Depends on</strong>: only BCL types (<code>int</code>, <code>string</code>/<code>string?</code>, <code>DateOnly</code>). No first-party dependencies.</li>
+          <li><strong>Concept introduced, the page-local API response model.</strong> Rather than reference the Conference module&#39;s real <code>EventDTO</code> (which would drag a server-side contract assembly into the WASM client), <code>ADCHome</code> declares its <em>own</em> minimal record holding just the eight fields the countdown needs: <code>Id</code>, <code>Name</code>, <code>Description</code>, <code>StartDate</code>, <code>EndDate</code>, <code>TimeZone</code>, <code>VenueAddress</code>, <code>VenueMapUrl</code> (<code>ADCHome.razor.cs:163-171</code>). <code>[Rubric §9, API &amp; Contract Design]</code> (assesses how clients couple to server contracts): the client deserializes a deliberately loose, hand-rolled DTO via <code>System.Net.Http.Json</code>, accepting the small duplication so the WASM bundle takes no dependency on module DTO assemblies. <code>[Rubric §18, UI Architecture]</code>: keeping the model <code>private</code> inside the component co-locates the wire shape with its only consumer.</li>
+          <li><strong>Walkthrough</strong>: a positional record with all fields supplied by the JSON deserializer (<code>ADCHome.razor.cs:73</code>, <code>client.GetFromJsonAsync&lt;ADCCollectionResult&gt;(&quot;events&quot;, …)</code>). <code>Description</code>, <code>VenueAddress</code>, and <code>VenueMapUrl</code> are nullable because the API may omit them; the page substitutes fallbacks (<code>ADCHome.razor.cs:35-42</code>) when <code>_event</code> is null or a field is missing.</li>
+          <li><strong>Why it&#39;s built this way</strong>: the page must render a sensible countdown even when the backend is cold or unreachable (the prerender path skips the fetch entirely, <code>ADCHome.razor.cs:53-58</code>), so a forgiving optional-field shape with local defaults is more robust than reusing a strict server DTO.</li>
+          <li><strong>Where it&#39;s used</strong>: held as <code>ADCHome._event</code> and consumed by <code>UpdateCountdown</code>/<code>FormatEventDate</code> and the <code>EventName</code>/<code>VenueAddress</code>/etc. computed properties; carried inside <a href="#adccollectionresult"><code>ADCCollectionResult</code></a>.</li>
+          </ul>
+          <h3 id="conferencetrackinfo">ConferenceTrackInfo</h3>
+          <blockquote>
+          <p>MMCA.ADC.UI.Web.Client · <code>MMCA.ADC.UI.Web.Client.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHome.razor.cs:270</code> · Level 0 · record</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a private, sealed record describing one conference <em>track</em> (a themed grouping of session topics) for the landing page&#39;s tracks grid: a display <code>Name</code>, a MudBlazor icon glyph string <code>Icon</code>, and a comma-separated <code>Topics</code> string.</li>
+          <li><strong>Depends on</strong>: only <code>string</code>. The <code>Icon</code> values come from MudBlazor&#39;s <code>Icons.Material.Filled.*</code> constants (<code>ADCHome.razor.cs:190-213</code>), but the record itself stores them as plain strings.</li>
+          <li><strong>Concept introduced, static editorial content as typed records.</strong> The twelve tracks are a <code>static readonly ConferenceTrackInfo[]</code> literal (<code>ADCHome.razor.cs:188-214</code>), not data fetched from the API. <code>[Rubric §27, Internationalization &amp; Localization]</code> (assesses externalized/translatable strings): the surrounding component <em>does</em> localize its chrome through a string-localizer (see <a href="#adchome"><code>ADCHome</code></a>), but the track names and topic lists carry an explicit <code>// i18n: allow</code> marker (<code>ADCHome.razor.cs:173-175</code>) declaring them English-only editorial content the API would otherwise serve, a deliberate scoping decision rather than an oversight. <code>[Rubric §18, UI Architecture]</code>: modelling each track as a record (instead of parallel arrays) keeps the Razor <code>@foreach</code> strongly typed.</li>
+          <li><strong>Walkthrough</strong>: positional record <code>(string Name, string Icon, string Topics)</code>; instances are constructed in the <code>Tracks</code> array literal and iterated by the Razor markup to render track cards.</li>
+          <li><strong>Where it&#39;s used</strong>: <code>ADCHome.Tracks</code> only.</li>
+          </ul>
+          <h3 id="eventphase">EventPhase</h3>
+          <blockquote>
+          <p>MMCA.ADC.UI.Web.Client · <code>MMCA.ADC.UI.Web.Client.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHome.razor.cs:28</code> · Level 0 · enum</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a private enum nested in <a href="#adchome"><code>ADCHome</code></a> naming the three lifecycle states of the conference relative to <em>now</em>: <code>Upcoming</code>, <code>Live</code>, <code>Ended</code>.</li>
+          <li><strong>Depends on</strong>: nothing.</li>
+          <li><strong>Concept introduced, a tri-state derived from a time comparison.</strong> The page does not store a &quot;status&quot;; it <em>computes</em> the phase each tick from the event&#39;s start/end instants and the current UTC time (<code>UpdateCountdown</code>, <code>ADCHome.razor.cs:128-139</code>). <code>[Rubric §18, UI Architecture]</code>: an explicit enum makes the three render branches (count-down, &quot;happening now&quot;, &quot;thanks for attending&quot;) exhaustive and readable rather than juggling booleans.</li>
+          <li><strong>Walkthrough</strong>: <code>Upcoming</code> when <code>startUtc - now &gt; 0</code>; otherwise <code>Live</code> while <code>now &lt; endUtc</code>, else <code>Ended</code> (<code>ADCHome.razor.cs:131-139</code>). The phase also gates the timer lifecycle: the countdown <code>Timer</code> is never started if the event is already <code>Ended</code> (<code>ADCHome.razor.cs:62-65</code>) and self-stops once it transitions to <code>Ended</code> (<code>ADCHome.razor.cs:99-103</code>).</li>
+          <li><strong>Why it&#39;s built this way</strong>: deriving phase from time keeps the page correct without a server round-trip on every render and lets the timer shut itself down to stop needless re-renders after the conference.</li>
+          <li><strong>Where it&#39;s used</strong>: <code>ADCHome._phase</code>.</li>
+          </ul>
+          <h3 id="keynotespeakerinfo">KeynoteSpeakerInfo</h3>
+          <blockquote>
+          <p>MMCA.ADC.UI.Web.Client · <code>MMCA.ADC.UI.Web.Client.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHome.razor.cs:269</code> · Level 0 · record</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a private, sealed record holding the landing page&#39;s keynote speaker block: <code>Name</code>, <code>Title</code>, <code>TalkTitle</code>, and a <code>string[] BioParagraphs</code>.</li>
+          <li><strong>Depends on</strong>: only <code>string</code>/<code>string[]</code>.</li>
+          <li><strong>Concept introduced</strong>: the same &quot;static typed editorial content&quot; pattern as <a href="#conferencetrackinfo"><code>ConferenceTrackInfo</code></a>. The single keynote is a <code>static readonly KeynoteSpeakerInfo Keynote</code> literal (<code>ADCHome.razor.cs:176-186</code>) with the bio carried as an array of paragraphs so the markup can render each as its own <code>&lt;p&gt;</code>. <code>[Rubric §27, Internationalization &amp; Localization]</code>: inline English copy, carried under the block&#39;s <code>// i18n: allow</code> marker (<code>ADCHome.razor.cs:173-175</code>) while the chrome around it is localized.</li>
+          <li><strong>Walkthrough</strong>: positional record <code>(string Name, string Title, string TalkTitle, string[] BioParagraphs)</code>; one instance (&quot;Miguel Wood&quot;), iterated in markup.</li>
+          <li><strong>Where it&#39;s used</strong>: <code>ADCHome.Keynote</code>.</li>
+          </ul>
+          <h3 id="sponsorinfo">SponsorInfo</h3>
+          <blockquote>
+          <p>MMCA.ADC.UI.Web.Client · <code>MMCA.ADC.UI.Web.Client.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHome.razor.cs:272</code> · Level 0 · record</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a private, sealed record for one sponsor logo on the landing page: display <code>Name</code>, <code>LogoUrl</code>, and outbound <code>Url</code>.</li>
+          <li><strong>Depends on</strong>: only <code>string</code>.</li>
+          <li><strong>Concept introduced</strong>: the leaf of the sponsor hierarchy (<a href="#sponsortierinfo"><code>SponsorTierInfo</code></a> → <code>SponsorInfo</code>). The logo/link URLs are external constants pointing at <code>atlcloudconf.com</code>-hosted images and sponsor sites (<code>ADCHome.razor.cs:221-242</code>); because they are hard-coded URIs, the surrounding <code>SponsorTiers</code> array carries a <code>[SuppressMessage(&quot;Minor Code Smell&quot;, &quot;S1075:URIs should not be hardcoded&quot;, …)]</code> with a justification (<code>ADCHome.razor.cs:216</code>), a worked example of the analyzers-as-errors regime requiring an explicit, justified suppression rather than a silent ignore. <code>[Rubric §15, Best Practices &amp; Code Quality]</code>.</li>
+          <li><strong>Walkthrough</strong>: positional record <code>(string Name, string LogoUrl, string Url)</code>; instances live inside each <code>SponsorTierInfo.Sponsors</code> list (Platinum carries FCS Innovation Academy, Improving, and Assurant; Swag carries Frontend Queens; Gold and Silver are empty).</li>
+          <li><strong>Where it&#39;s used</strong>: nested inside <a href="#sponsortierinfo"><code>SponsorTierInfo</code></a><code>.Sponsors</code>.</li>
+          </ul>
+          <h3 id="adccollectionresult-1">ADCCollectionResult</h3>
+          <blockquote>
+          <p>MMCA.ADC.UI.Web.Client · <code>MMCA.ADC.UI.Web.Client.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHome.razor.cs:161</code> · Level 1 · record</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a private, sealed record that is the deserialization envelope for the <code>GET events</code> API response: a single <code>List&lt;ADCEventInfo&gt;? Items</code> property mirroring the server&#39;s paged-collection JSON shape.</li>
+          <li><strong>Depends on</strong>: <a href="#adceventinfo"><code>ADCEventInfo</code></a>; BCL <code>List&lt;T&gt;</code>.</li>
+          <li><strong>Concept introduced, the minimal envelope.</strong> The real server returns a fuller paged-collection payload (paging metadata and all); the client only needs the <code>Items</code> array, so it declares a one-property record that JSON binds the <code>items</code> field onto and ignores everything else. <code>[Rubric §9, API &amp; Contract Design]</code>: a forgiving, partial deserialization shape decouples the WASM client from the server&#39;s full contract, at the cost of not validating the rest of the payload.</li>
+          <li><strong>Walkthrough</strong>: bound by <code>client.GetFromJsonAsync&lt;ADCCollectionResult&gt;(&quot;events&quot;, ApiJsonOptions, …)</code> (<code>ADCHome.razor.cs:73</code>) using web-defaults <code>JsonSerializerOptions</code> (camelCase, <code>ADCHome.razor.cs:14</code>); the page then takes <code>result?.Items?.FirstOrDefault()</code> as the default event (<code>ADCHome.razor.cs:74</code>).</li>
+          <li><strong>Where it&#39;s used</strong>: <code>ADCHome.LoadEventAsync</code>.</li>
+          </ul>
+          <h3 id="formfactor">FormFactor</h3>
+          <blockquote>
+          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI.Services</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Services/FormFactor.cs:9</code> · Level 1 · class (sealed)</p>
+          </blockquote>
+          <p>Three <strong>structurally identical</strong> sealed classes, one per UI host, each implementing <a href="group-15-common-ui-framework.html#iformfactor"><code>IFormFactor</code></a> (the Common UI abstraction that lets shared components ask &quot;what device/host am I running on?&quot;). They share one section because the <em>contract</em> is identical; only the <em>answers</em> differ per platform. Every one is a two-line, stateless, expression-bodied class (<code>GetFormFactor()</code> on line 12, <code>GetPlatform()</code> on line 15 of each file).</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Type</th>
+          <th>File:Line</th>
+          <th>Notes (what differs)</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>FormFactor</code></td>
+          <td><code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Services/FormFactor.cs:9</code></td>
+          <td><strong>MAUI</strong> host (namespace <code>MMCA.ADC.UI.Services</code>). <code>GetFormFactor()</code> returns the real <code>DeviceInfo.Idiom</code> (Phone/Tablet/Desktop); <code>GetPlatform()</code> returns <code>DeviceInfo.Platform</code> + <code>&quot; - &quot;</code> + <code>VersionString</code> (e.g. <code>Android - 14</code>).</td>
+          </tr>
+          <tr>
+          <td><code>FormFactor</code></td>
+          <td><code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Services/FormFactor.cs:9</code></td>
+          <td><strong>Blazor WASM</strong> host (namespace <code>MMCA.ADC.UI.Web.Client.Services</code>). <code>GetFormFactor()</code> returns the literal <code>&quot;WebAssembly&quot;</code>; <code>GetPlatform()</code> returns <code>Environment.OSVersion</code>.</td>
+          </tr>
+          <tr>
+          <td><code>FormFactor</code></td>
+          <td><code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Services/FormFactor.cs:9</code></td>
+          <td><strong>Blazor Server</strong> host (namespace <code>MMCA.ADC.UI.Web.Services</code>). <code>GetFormFactor()</code> returns the literal <code>&quot;Web&quot;</code> (this code runs on the server during SSR prerender and interactive Server render); <code>GetPlatform()</code> returns <code>Environment.OSVersion</code>.</td>
+          </tr>
+          </tbody></table></div>
+          <ul>
+          <li><strong>What they are</strong>: per-host implementations of the same one-method-pair interface. <code>IFormFactor</code> is intentionally tiny (<code>GetFormFactor()</code>, <code>GetPlatform()</code>), and each host registers its own concrete class in DI.</li>
+          <li><strong>Depends on</strong>: <a href="group-15-common-ui-framework.html#iformfactor"><code>IFormFactor</code></a> (implements). The MAUI variant depends on MAUI&#39;s <code>Microsoft.Maui.Devices.DeviceInfo</code>; the two browser variants on BCL <code>Environment</code>.</li>
+          <li><strong>Concept introduced, host-specialized DI adapters (the strategy/adapter seam for &quot;write-once UI, render everywhere&quot;).</strong> This is the per-host concrete half of that pattern: the <em>same</em> shared Razor component asks <code>IFormFactor</code> what it is running on, and which of the three implementations answers is decided by which host project booted. <code>[Rubric §22, Responsive &amp; Cross-Browser/Device]</code> (assesses adapting one codebase across devices): the two browser classes hard-code the only thing they can truthfully be (<code>&quot;WebAssembly&quot;</code> in the browser runtime, <code>&quot;Web&quot;</code> on the server), while the MAUI class delegates to the OS device API to distinguish Phone/Tablet/Desktop. <code>[Rubric §1, SOLID, DIP]</code>: shared components depend on the abstraction, never on <code>DeviceInfo</code> directly, so they compile and run unchanged in the browser and on the server where <code>DeviceInfo</code> does not exist.</li>
+          <li><strong>Walkthrough</strong>: all three are expression-bodied two-liners with no state. The Server and WASM <code>GetPlatform()</code> return <code>Environment.OSVersion</code> (the <em>host process</em> OS string, not a true device idiom), hence the simpler, distinct answers from the MAUI variant.</li>
+          <li><strong>Why it&#39;s built this way</strong>: keeping device detection behind <code>IFormFactor</code> is what makes a single component library usable across Web (Server + WASM), Android, iOS, macOS, and Windows without per-platform <code>#if</code> branches inside the components.</li>
+          <li><strong>Where it&#39;s used</strong>: each variant is registered per host (MAUI&#39;s <a href="#mauiprogram"><code>MauiProgram</code></a>, the Web and WASM <code>Program</code>s) and injected into any shared component or diagnostic page that displays the running environment.</li>
+          </ul>
+          <h3 id="mauitokenstorageservice">MauiTokenStorageService</h3>
+          <blockquote>
+          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI.Services</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Services/MauiTokenStorageService.cs:9</code> · Level 1 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the MAUI host&#39;s implementation of <a href="group-15-common-ui-framework.html#itokenstorageservice"><code>ITokenStorageService</code></a>: it persists the JWT access and refresh tokens in the device&#39;s OS-backed secure store so they survive app restarts.</li>
+          <li><strong>Depends on</strong>: <a href="group-15-common-ui-framework.html#itokenstorageservice"><code>ITokenStorageService</code></a> (implements). External: MAUI <code>Microsoft.Maui.Storage.SecureStorage</code>.</li>
+          <li><strong>Concept introduced, platform-native secret storage as the token persistence adapter.</strong> <code>ITokenStorageService</code> is the platform-agnostic port for token persistence; each host supplies the <em>safe-for-its-platform</em> implementation (the interface&#39;s own doc-comment spells this out, <code>ITokenStorageService.cs:3-7</code>). On MAUI the safe mechanism is <code>SecureStorage</code>, which routes to the <strong>Android Keystore, iOS Keychain, and Windows DPAPI</strong> (<code>MauiTokenStorageService.cs:5-8</code>). <code>[Rubric §11, Security]</code> / <code>[Rubric §26, Front-End Security]</code> (both assess credential handling): persisting bearer tokens in an OS secure enclave, rather than plain preferences, protects them at rest on the device, and contrasts deliberately with the browser hosts, which keep nothing sensitive in JS-reachable storage.</li>
+          <li><strong>Walkthrough</strong>: two <code>const</code> key names (<code>&quot;auth_access_token&quot;</code>, <code>&quot;auth_refresh_token&quot;</code>, <code>:11-12</code>). <code>GetAccessTokenAsync</code>/<code>GetRefreshTokenAsync</code> await <code>SecureStorage.Default.GetAsync(key)</code> (<code>:14-24</code>). <code>SetTokensAsync</code> writes both via <code>SetAsync</code> (<code>:26-30</code>). <code>ClearTokensAsync</code> calls the synchronous <code>SecureStorage.Default.Remove(key)</code> for both keys and returns <code>Task.CompletedTask</code> (<code>:32-37</code>), since <code>Remove</code> has no async overload.</li>
+          <li><strong>Why it&#39;s built this way</strong>: MAUI is a long-lived installed app, so it <em>can</em> and should persist the refresh token across launches (unlike the browser, where the refresh token must stay in an HttpOnly cookie). The split implementations are why a single login flow works identically on phone and in a browser. See <code>TokenStorageDesignNote.md</code> for the cross-client storage rationale.</li>
+          <li><strong>Where it&#39;s used</strong>: registered as <code>ITokenStorageService</code> in the MAUI host&#39;s DI and consumed by the shared auth/HTTP plumbing (the bearer-token delegating handler and auth-state provider) in <code>MMCA.Common.UI</code>. The MAUI token <em>refresh</em> counterpart is <a href="group-15-common-ui-framework.html#directapitokenrefresher"><code>DirectApiTokenRefresher</code></a> (an <a href="group-15-common-ui-framework.html#itokenrefresher"><code>ITokenRefresher</code></a>).</li>
+          </ul>
+          <h3 id="sponsortierinfo-1">SponsorTierInfo</h3>
+          <blockquote>
+          <p>MMCA.ADC.UI.Web.Client · <code>MMCA.ADC.UI.Web.Client.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHome.razor.cs:271</code> · Level 1 · record</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a private, sealed record grouping sponsors by tier: a <code>Name</code> (Platinum/Gold/Silver/Swag), a <code>Color</code> hex string, and an <code>IReadOnlyList&lt;SponsorInfo&gt; Sponsors</code>.</li>
+          <li><strong>Depends on</strong>: <a href="#sponsorinfo"><code>SponsorInfo</code></a>; BCL <code>IReadOnlyList&lt;T&gt;</code>.</li>
+          <li><strong>Concept introduced</strong>: the parent of the two-level sponsor model. The four tiers are a <code>static readonly SponsorTierInfo[] SponsorTiers</code> literal (<code>ADCHome.razor.cs:217-243</code>); empty tiers (Gold, Silver) carry an empty list rather than being omitted, so the markup can still render the tier heading. Two small helpers decorate tiers for display: <code>GetTierIcon</code> maps each tier name to a MudBlazor icon (<code>ADCHome.razor.cs:245-252</code>), and <code>GetTierHeading</code> builds a <strong>localized</strong> <code>&quot;&lt;tier&gt; &lt;label&gt;&quot;</code> string, choosing singular/plural and Sponsor/Partner wording (&quot;Swag&quot; is a <em>Partner</em> tier) and formatting it through the string-localizer so word order follows the selected language (<code>ADCHome.razor.cs:256-267</code>, ADR-027). <code>[Rubric §18, UI Architecture]</code>: presentation logic kept as small pure static/instance helpers beside the data. <code>[Rubric §27, Internationalization]</code>: the tier <em>heading</em> is localized even though the sponsor names themselves are <code>i18n: allow</code> editorial content.</li>
+          <li><strong>Walkthrough</strong>: positional record <code>(string Name, string Color, IReadOnlyList&lt;SponsorInfo&gt; Sponsors)</code>; iterated by the markup to render one tier block per element.</li>
+          <li><strong>Where it&#39;s used</strong>: <code>ADCHome.SponsorTiers</code>, <code>GetTierIcon</code>, <code>GetTierHeading</code>.</li>
+          </ul>
+          <h3 id="adchome-1">ADCHome</h3>
+          <blockquote>
+          <p>MMCA.ADC.UI.Web.Client · <code>MMCA.ADC.UI.Web.Client.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHome.razor.cs:12</code> · Level 2 · class (sealed partial)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the ADC conference <strong>landing-page component</strong> (the code-behind of <code>ADCHome.razor</code>): a live countdown to the event plus static keynote, tracks, sponsors, and venue sections. It is the body that <a href="#adchomepagecontent"><code>ADCHomePageContent</code></a> wires into the shared <code>Home.razor</code> shell at the <code>/</code> route.</li>
+          <li><strong>Depends on</strong>: its nested records <a href="#adceventinfo"><code>ADCEventInfo</code></a>, <a href="#adccollectionresult"><code>ADCCollectionResult</code></a>, <a href="#keynotespeakerinfo"><code>KeynoteSpeakerInfo</code></a>, <a href="#conferencetrackinfo"><code>ConferenceTrackInfo</code></a>, <a href="#sponsortierinfo"><code>SponsorTierInfo</code></a>, <a href="#sponsorinfo"><code>SponsorInfo</code></a>, and the <a href="#eventphase"><code>EventPhase</code></a> enum. External: <code>Microsoft.AspNetCore.Components</code> (<code>ComponentBase</code>, <code>[Inject]</code>, <code>RendererInfo</code>), <code>IHttpClientFactory</code>, MudBlazor <code>Icons</code>, <code>System.Net.Http.Json</code>, <code>System.Threading.Timer</code>, <code>TimeZoneInfo</code>, <code>IDisposable</code>, and an inherited string-localizer accessed as <code>L[...]</code>.</li>
+          <li><strong>Concept introduced, the prerender-safe, self-disposing interactive Blazor component.</strong> <code>[Rubric §23, Front-End Performance &amp; Rendering]</code> and <code>[Rubric §18, UI Architecture]</code>: this component is the unit&#39;s worked example of writing a Blazor page that behaves correctly across <strong>both</strong> render passes of the Server/WASM hybrid.<ul>
+          <li><strong>Prerender guard.</strong> <code>OnInitializedAsync</code> checks <code>RendererInfo.IsInteractive</code> (<code>:53</code>); during the SSR prerender pass it renders the <em>static fallback</em> (default name/date/countdown) and returns <strong>without</strong> the backend fetch or the timer. The inline comment (<code>:48-52</code>) is explicit about why: an un-timed server-side call to a cold/unreachable backend would block the prerender, and therefore the page load and the post-login <code>NavigateTo(&quot;/&quot;)</code>, indefinitely. The real event and the ticking clock only load on the interactive pass (<code>:60-65</code>).</li>
+          <li><strong>Resilient fetch.</strong> <code>LoadEventAsync</code> (<code>:68-89</code>) swallows <code>OperationCanceledException</code> (component disposed mid-load) and <code>HttpRequestException</code> (API down) and always runs <code>UpdateCountdown()</code> in <code>finally</code>, so the page degrades to fallback content instead of throwing. <code>[Rubric §29, Resilience &amp; Business Continuity]</code>.</li>
+          <li><strong>Self-stopping timer.</strong> A 1-second <code>Timer</code> (<code>:64</code>) ticks <code>OnTimerTick</code> (<code>:91-104</code>), which re-renders via <code>InvokeAsync(StateHasChanged)</code> (<code>:97</code>) and, once <code>EventPhase.Ended</code>, calls <code>_countdownTimer?.Change(-1, -1)</code> to stop firing (<code>:99-103</code>), no point re-rendering a finished countdown.</li>
+          <li><strong>Deterministic disposal.</strong> Implementing <code>IDisposable.Dispose</code> (<code>:151-158</code>) sets a <code>_disposed</code> flag, cancels and disposes the <code>CancellationTokenSource</code>, and stops/disposes the timer, preventing callbacks from firing into a torn-down component. <code>[Rubric §16, Maintainability]</code>.</li>
+          </ul>
+          </li>
+          <li><strong>Walkthrough</strong>: static <code>ApiJsonOptions</code> (web defaults, <code>:14</code>) and <code>EventStartTime</code> of 08:00 (<code>:15</code>); <code>[Inject] IHttpClientFactory</code> (<code>:17-18</code>); mutable state fields (<code>_cts</code>, <code>_countdownTimer</code>, <code>_timeRemaining</code>, <code>_phase</code>, <code>_event</code>, <code>_isLoading</code>, <code>_disposed</code>, <code>:20-26</code>). Computed display props supply fallbacks when <code>_event</code> is null: <code>EventName</code> and <code>VenueAddress</code> fall back to hard-coded <code>// i18n: allow</code> constants (brand name, postal address), while <code>EventDescription</code> falls back to a localized resource <code>L[&quot;Fallback.EventDescription&quot;]</code> (<code>:35-42</code>). <code>UpdateCountdown</code> (<code>:106-140</code>) converts the event&#39;s local start/end (in the event&#39;s IANA <code>TimeZone</code>, defaulting <code>America/New_York</code>, <code>:112</code>) to UTC via <code>TimeZoneInfo</code> (<code>:118-120</code>), computes <code>_timeRemaining</code>, and derives <code>_phase</code>; an unknown time-zone id falls back to treating local as UTC (<code>:122-126</code>). <code>FormatEventDate</code> (<code>:142-149</code>) renders the date with a <strong>localized</strong> format resource <code>L[&quot;Hero.DateFormat&quot;]</code> and <code>CultureInfo.CurrentCulture</code>, so the date layout and month names follow the selected language (<code>:148</code>, ADR-027), the opposite of a culture-invariant format. The <code>HttpClientFactory.CreateClient(&quot;APIClient&quot;)</code> named client (<code>:72</code>) is the gateway-routed client; <code>GET events</code> returns the published events.</li>
+          <li><strong>Why it&#39;s built this way</strong>: a public-facing landing page must render instantly and never hang or error even when the backend is cold, so every external dependency (fetch, timer, time-zone lookup) has a graceful fallback, and the expensive bits run only on the interactive pass. The UI chrome is localized (en-US + es, ADR-027) via <code>L[...]</code>; only brand/address/editorial content is left untranslated behind <code>// i18n: allow</code> markers.</li>
+          <li><strong>Where it&#39;s used</strong>: referenced as the <code>ComponentType</code> of <a href="#adchomepagecontent"><code>ADCHomePageContent</code></a>, which the shared <code>Home.razor</code> renders via <code>DynamicComponent</code> at <code>/</code>.</li>
+          <li><strong>Caveats / not-in-source</strong>: the <code>.razor</code> markup that consumes these fields/records is the sibling <code>ADCHome.razor</code> file (not in this unit); this section documents only the code-behind <code>partial</code>. The <code>L</code> string-localizer is an inherited member of the shared localized component base in <code>MMCA.Common.UI</code> (not declared in this file).</li>
+          </ul>
+          <h3 id="adchomepagecontent-1">ADCHomePageContent</h3>
+          <blockquote>
+          <p>MMCA.ADC.UI.Web.Client · <code>MMCA.ADC.UI.Web.Client.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHomePageContent.cs:8</code> · Level 3 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the WASM client&#39;s tiny <code>IHomePageContent</code> descriptor: it tells the shared app shell <em>which</em> component to render as the home page (<a href="#adchome"><code>ADCHome</code></a>) and <em>what</em> tab title to show (&quot;Atlanta Cloud + AI Conference&quot;).</li>
+          <li><strong>Depends on</strong>: <a href="#adchome"><code>ADCHome</code></a> (its <code>ComponentType</code>); <a href="group-15-common-ui-framework.html#ihomepagecontent"><code>IHomePageContent</code></a> (implements, from <code>MMCA.Common.UI.Common.Interfaces</code>).</li>
+          <li><strong>Concept introduced, pluggable landing page via <code>DynamicComponent</code>.</strong> <code>MMCA.Common.UI</code>&#39;s shared <code>Home.razor</code> at the <code>/</code> route does not hard-code a body; it renders whatever <code>IHomePageContent.ComponentType</code> the consuming app registers, through <code>DynamicComponent</code> (the interface&#39;s doc-comment spells this out, <code>IHomePageContent.cs:3-7</code>). <code>[Rubric §18, UI Architecture]</code> / <code>[Rubric §2, Design Patterns]</code>: this is a strategy/extension seam, the framework owns the shell, the app supplies the content, so Store and ADC share one home-page chrome while each plugs in its own landing page. <code>[Rubric §3, Clean Architecture]</code>: the dependency points inward (the app implements a framework interface), never the reverse.</li>
+          <li><strong>Walkthrough</strong>: two expression-bodied read-only properties, <code>ComponentType =&gt; typeof(ADCHome)</code> (<code>:10</code>) and <code>PageTitle =&gt; &quot;Atlanta Cloud + AI Conference&quot;</code> (a <code>// i18n: allow</code> brand name, <code>:12</code>). No state, no logic.</li>
+          <li><strong>Why it&#39;s built this way</strong>: keeping the landing-page choice behind a one-implementation interface lets the same <code>MMCA.Common.UI</code> shell host different apps&#39; home pages without the framework knowing about <code>ADCHome</code>.</li>
+          <li><strong>Where it&#39;s used</strong>: registered as <code>IHomePageContent</code> in the WASM client&#39;s DI; resolved and rendered by the shared <code>Home.razor</code>/<code>DynamicComponent</code> at <code>/</code>.</li>
+          </ul>
+          <h3 id="app-1">App</h3>
+          <blockquote>
+          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI.WinUI</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Windows/App.xaml.cs:8</code> · Level 5 · class (partial)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the Windows-platform bootstrap for the MAUI app, the WinUI <code>Application</code> subclass that Windows instantiates first when the packaged desktop app launches. It is the platform-specific entry point that hands control to the shared MAUI startup.</li>
+          <li><strong>Depends on</strong>: MAUI&#39;s <code>Microsoft.Maui.MauiWinUIApplication</code> (base class) and <code>Microsoft.Maui.Hosting.MauiApp</code>; delegates to <a href="#mauiprogram"><code>MauiProgram</code></a> for the actual host build.</li>
+          <li><strong>Concept introduced, the per-platform MAUI head.</strong> A .NET MAUI app is one shared UI project with a thin, generated-plus-authored <em>head</em> per target OS (<code>Platforms/Windows</code>, <code>Platforms/Android</code>, <code>Platforms/iOS</code>, <code>Platforms/MacCatalyst</code>). On Windows the head is a WinUI 3 <code>Application</code>; the framework calls its constructor before anything else (the class comment calls it &quot;the logical equivalent of main() or WinMain()&quot;, <code>App.xaml.cs:11-13</code>). <code>[Rubric §22, Responsive &amp; Cross-Browser/Device]</code> (assesses one codebase spanning device targets): this file is the Windows seam of the same MAUI app that also renders as Android/iOS/macOS, all converging on the shared <code>MauiProgram</code> host.</li>
+          <li><strong>Walkthrough</strong>: two members. The constructor <code>App() =&gt; InitializeComponent();</code> (<code>:14</code>) runs the XAML-generated partial (<code>App.xaml</code>) to initialize the WinUI application resources. The override <code>CreateMauiApp() =&gt; MauiProgram.CreateMauiApp();</code> (<code>:16</code>) is where the platform head defers to the shared, cross-platform host builder that wires DI, MudBlazor, the <code>BlazorWebView</code>, and the ADC services (including the MAUI <a href="#formfactor"><code>FormFactor</code></a> and <a href="#mauitokenstorageservice"><code>MauiTokenStorageService</code></a>).</li>
+          <li><strong>Why it&#39;s built this way</strong>: MAUI mandates a platform <code>Application</code> subclass per head so each OS can supply its native lifecycle object while a single <code>CreateMauiApp()</code> keeps all real configuration in one shared place, no per-platform duplication of DI or component registration.</li>
+          <li><strong>Where it&#39;s used</strong>: instantiated by the Windows runtime as the app&#39;s <code>Application</code> object; it is the on-ramp to <a href="#mauiprogram"><code>MauiProgram</code></a> and, through it, the rest of the MAUI host.</li>
+          <li><strong>Caveats / not-in-source</strong>: the companion <code>App.xaml</code> resource dictionary and the Android/iOS/macOS platform heads are outside this unit; this section documents only the Windows <code>App.xaml.cs</code> partial.</li>
+          </ul>
+          <hr>
+          <p><a href="group-24-identity-module.html">⬅ ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a>  •  <a href="index.html">Index</a>  •  <a href="group-26-testing-infrastructure.html">Testing &amp; Quality Infrastructure ➡</a></p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

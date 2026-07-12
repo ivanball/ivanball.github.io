@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>9. Caching · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Caching in this codebase is small, deliberate, and woven into the CQRS pipeline rather than scattered across handlers. The whole subsystem is four…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/group-09-caching.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="9. Caching">
+  <meta property="og:description" content="Caching in this codebase is small, deliberate, and woven into the CQRS pipeline rather than scattered across handlers. The whole subsystem is four…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/group-09-caching.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/onboarding/index.html">Onboarding Guide</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">9. Caching</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>Guide contents</summary>
+        <nav class="doc-nav" aria-label="Onboarding Guide">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="00-dependency-manifest.html">Phase 1: Dependency Manifest &amp; Leveling</a></li>
+        <li><a href="00-group-taxonomy.html">Phase 1b - Functional Group Taxonomy</a></li>
+        <li><a href="00-inventory.html">Phase 0: Type Inventory</a></li>
+        <li><a href="00-primer.html">Primer, the concepts, stack, and conventions you need first</a></li>
+        <li><a href="group-01-result-error-handling.html">1. Result &amp; Error Handling</a></li>
+        <li><a href="group-02-domain-building-blocks.html">2. Domain Building Blocks (Entities, Value Objects, Aggregates)</a></li>
+        <li><a href="group-03-querying-specifications.html">3. Querying: Specifications, Filtering &amp; the Entity Query Service</a></li>
+        <li><a href="group-04-events-outbox.html">4. Domain &amp; Integration Events + Outbox Dual-Dispatch</a></li>
+        <li><a href="group-05-cqrs-pipeline.html">5. CQRS: Commands, Queries &amp; the Decorator Pipeline</a></li>
+        <li><a href="group-06-validation.html">6. Validation</a></li>
+        <li><a href="group-07-persistence-ef-core.html">7. Persistence &amp; EF Core</a></li>
+        <li><a href="group-08-auth.html">8. Authentication &amp; Authorization</a></li>
+        <li><a href="group-09-caching.html" aria-current="page">9. Caching</a></li>
+        <li><a href="group-10-notifications.html">10. Notifications (Push + In-App Inbox + Email)</a></li>
+        <li><a href="group-11-navigation-populators.html">11. Navigation Metadata &amp; Populators (EF-decoupled eager loading)</a></li>
+        <li><a href="group-12-api-hosting-mapping.html">12. API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</a></li>
+        <li><a href="group-13-grpc-contracts.html">13. gRPC &amp; Inter-Service Contracts</a></li>
+        <li><a href="group-14-module-system-composition.html">14. Module System, Composition &amp; Configuration</a></li>
+        <li><a href="group-15-common-ui-framework.html">15. Common UI Framework (MudBlazor components, theme, base pages)</a></li>
+        <li><a href="group-16-aspire-orchestration.html">16. Aspire Orchestration &amp; Service Defaults</a></li>
+        <li><a href="group-17-conference-domain.html">17. ADC Conference - Domain Model &amp; Module Contracts</a></li>
+        <li><a href="group-18-conference-application.html">18. ADC Conference - Application &amp; Use Cases</a></li>
+        <li><a href="group-19-conference-infrastructure.html">19. ADC Conference - Infrastructure &amp; Persistence</a></li>
+        <li><a href="group-20-conference-api-grpc.html">20. ADC Conference - API, gRPC Contracts &amp; Service Host</a></li>
+        <li><a href="group-21-conference-ui.html">21. ADC Conference - UI</a></li>
+        <li><a href="group-22-engagement-module.html">22. ADC Engagement Module (Session Bookmarks)</a></li>
+        <li><a href="group-23-engagement-live-layer.html">23. ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></li>
+        <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
+        <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
+        <li><a href="group-26-testing-infrastructure.html">26. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
+        <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
+        <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
+        <li><a href="devops-runbooks.html">Operational Scripts &amp; Runbooks</a></li>
+        <li><a href="devops-testing.html">Testing Architecture &amp; Solution Composition</a></li>
+        <li><a href="99-coverage-audit.html">Phase 4, Coverage Audit</a></li>
+        <li><a href="CONCEPT-MAPS.html">MMCA Concept &amp; Pattern Maps</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Onboarding guide</p>
+          <h1 id="9-caching">9. Caching</h1>
+          <p>Caching in this codebase is small, deliberate, and woven into the CQRS pipeline rather than scattered across handlers. The whole subsystem is four types: one interface that the Application layer depends on (<a href="#icacheservice"><code>ICacheService</code></a>), two Infrastructure adapters that implement it (<a href="#memorycacheservice"><code>MemoryCacheService</code></a> and <a href="#distributedcacheservice"><code>DistributedCacheService</code></a>), and a static TTL-policy factory (<a href="#cacheoptions"><code>CacheOptions</code></a>). No handler ever talks to Redis or <code>IMemoryCache</code> directly; the read-through and invalidate-on-write behaviour live in two pipeline decorators that you meet in the CQRS chapter. This chapter is the cache&#39;s own machinery, the contract, the two backends, and the policy, and how those plug into that pipeline.</p>
+          <p>The contract is a textbook <strong>Clean Architecture port/adapter split</strong> (primer §2; <code>[Rubric §3, Clean Architecture]</code>). <a href="#icacheservice"><code>ICacheService</code></a> is defined in <code>MMCA.Common.Application</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICacheService.cs:8</code>) and exposes exactly four operations: <code>GetAsync&lt;T&gt;</code> (returns <code>T?</code>, <code>null</code> on miss), <code>SetAsync&lt;T&gt;</code> with an optional <code>TimeSpan?</code> TTL, <code>RemoveAsync</code> for a single key, and <code>RemoveByPrefixAsync</code> for bulk eviction by key prefix. That last operation is the load-bearing one, it is what lets a write evict every cached read it could have invalidated in a single call, and it is why both backends had to be built rather than used off the shelf (<code>IMemoryCache</code> has no key enumeration; <code>IDistributedCache</code> has no prefix delete). The Application layer compiles against this interface only; the concrete backend is chosen at the composition root.</p>
+          <p>That selection happens in <code>AddCaching()</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:150-164</code>). It always calls <code>AddMemoryCache()</code>, then registers <a href="#icacheservice"><code>ICacheService</code></a> via <code>TryAddSingleton</code> with a factory that probes the container: if an <code>IDistributedCache</code> is registered <strong>and it is not the default <code>MemoryDistributedCache</code></strong> (i.e. a real distributed cache such as Redis, typically wired by Aspire), it builds a <a href="#distributedcacheservice"><code>DistributedCacheService</code></a> (passing along any <code>IConnectionMultiplexer</code> it can resolve); otherwise it falls back to a <a href="#memorycacheservice"><code>MemoryCacheService</code></a> over the registered <code>IMemoryCache</code>. So a single-host monolith caches in-process for free, and the same code transparently uses Redis once the distributed cache is present, no flag, no per-environment branch in application code. This is the same &quot;abstraction in Application, transport chosen at the edge&quot; pattern that the message bus and gRPC seams use, and it keeps the cache backend a deployment concern rather than a code concern (<code>[Rubric §7, Microservices Readiness]</code>, <code>[Rubric §12, Performance &amp; Scalability]</code>).</p>
+          <p><a href="#memorycacheservice"><code>MemoryCacheService</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/MemoryCacheService.cs:12</code>) is the in-process adapter. Its one interesting trick is a side <code>ConcurrentDictionary&lt;string, byte&gt;</code> key set, because <code>IMemoryCache</code> cannot enumerate its own keys, without that shadow index, <code>RemoveByPrefixAsync</code> would be impossible. The index is kept honest by registering a post-eviction callback on every <code>Set</code>, so a key that expires or is evicted under memory pressure removes itself from the set rather than leaking. <a href="#distributedcacheservice"><code>DistributedCacheService</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:15</code>) is the out-of-process adapter: it serialises values to UTF-8 JSON via <code>System.Text.Json</code> and stores them through <code>IDistributedCache</code>. Its prefix eviction is conditional on Redis, when an <code>IConnectionMultiplexer</code> is available it uses Redis <code>SCAN</code> (<code>server.KeysAsync(pattern: &quot;{prefix}*&quot;)</code>) and deletes the matches; when no multiplexer was injected (a non-Redis <code>IDistributedCache</code>), <code>RemoveByPrefixAsync</code> is a deliberate <strong>no-op</strong> rather than an error. That asymmetry is worth holding in mind: prefix invalidation is fully supported in-memory and on Redis, but silently does nothing on a hypothetical non-Redis distributed cache.</p>
+          <p><a href="#cacheoptions"><code>CacheOptions</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheOptions.cs:9</code>) centralises TTL policy so neither adapter nor any caller hand-builds expiry options. Its <code>DefaultExpiration</code> is a deliberately short <strong>30-second</strong> absolute window, and <code>Create(TimeSpan?)</code> returns either a caller-specified TTL or that default when the argument is <code>null</code>. The short default is a staleness guard, caching is opt-in and conservative by default; a query only earns a longer life when it explicitly declares one. Only <a href="#distributedcacheservice"><code>DistributedCacheService</code></a> routes through <code>CacheOptions</code> today; <a href="#memorycacheservice"><code>MemoryCacheService</code></a> builds its <code>MemoryCacheEntryOptions</code> inline, applying the caller&#39;s TTL when present and otherwise leaving expiry to the <code>IMemoryCache</code> defaults, so the 30-second floor is a distributed-cache policy, not a universal one.</p>
+          <p>Stepping back, these four types are only <strong>Tier 1</strong> of the framework&#39;s caching story, a deliberate split that ADR-026 (two-tier caching) records. Tier 1 is exactly this swappable <a href="#icacheservice"><code>ICacheService</code></a> substrate, chosen at startup by <code>AddCaching()</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:150</code>): a <a href="#distributedcacheservice"><code>DistributedCacheService</code></a> when Aspire registered Redis, otherwise a <a href="#memorycacheservice"><code>MemoryCacheService</code></a>, with prefix invalidation and the 30-second default TTL described above. Tier 2 is a separate <strong>HTTP output-cache edge</strong>: <code>MMCA.Common.API</code> always calls <code>app.UseOutputCache()</code> in its middleware pipeline (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:104</code>) but ships no policies, so each host opts in with its own <code>AddOutputCache(...)</code> (most declare a <code>NoCache</code> base; read-heavy public services such as ADC Conference and Store Catalog declare real cacheable policies) to serve anonymous and public reads without ever touching a handler. The two tiers differ in lifetime, keying, and eviction, and both are distinct again from the ADR-014 caching <strong>decorators</strong> covered below, which are only <em>consumers</em> of this Tier-1 substrate, not part of it. One honest caveat from ADR-026 sharpens the no-op note above: distributed prefix invalidation is conditional on an <code>IConnectionMultiplexer</code> being registered, and the deployed services wire the Redis distributed cache without one, so today the 30-second TTL, not prefix eviction, is the real staleness backstop even on Redis.</p>
+          <p>The behaviour that makes any of this fire lives in the CQRS decorator pipeline (<code>Logging → Caching → Transactional → handler</code>, taught in <a href="group-05-cqrs-pipeline.html">Group 5, CQRS Pipeline</a>), and it is entirely opt-in via two marker interfaces. On the <strong>read</strong> path, <a href="group-05-cqrs-pipeline.html#cachingquerydecoratortquery-tresult"><code>CachingQueryDecorator&lt;TQuery, TResult&gt;</code></a> checks whether the query implements <a href="group-05-cqrs-pipeline.html#iquerycacheable"><code>IQueryCacheable</code></a>; if so it does a read-through against <code>GetAsync&lt;T&gt;(cacheable.CacheKey)</code>, returns the cached value on a hit, otherwise runs the inner handler and stores the result under <code>CacheKey</code> for <code>CacheDuration</code>, but only when the result is <strong>not</strong> a failed <a href="group-01-result-error-handling.html#result"><code>Result</code></a>, so error states are never cached. On the <strong>write</strong> path, <a href="group-05-cqrs-pipeline.html#cachingcommanddecoratortcommand-tresult"><code>CachingCommandDecorator&lt;TCommand, TResult&gt;</code></a> runs the inner handler first and then, only if the command implements <a href="group-05-cqrs-pipeline.html#icacheinvalidating"><code>ICacheInvalidating</code></a> <strong>and</strong> the result is not a failure, calls <code>RemoveByPrefixAsync(command.CachePrefix)</code> to evict every read the mutation could have staled. Failed commands deliberately skip invalidation, there is nothing to invalidate if the write did not persist. This is where <code>RemoveByPrefixAsync</code> pays off: a write under prefix <code>&quot;Catalog:Products&quot;</code> clears every paged/filtered read cached under that prefix in one operation.</p>
+          <p>Putting the runtime flow together: a query implementing <a href="group-05-cqrs-pipeline.html#iquerycacheable"><code>IQueryCacheable</code></a> hits the caching decorator, which asks the DI-resolved <a href="#icacheservice"><code>ICacheService</code></a>, in practice a <a href="#memorycacheservice"><code>MemoryCacheService</code></a> in the monolith or a <a href="#distributedcacheservice"><code>DistributedCacheService</code></a> backed by Redis in a multi-host deployment, for the value; a miss runs the handler and writes back through <code>SetAsync</code>, whose TTL is shaped by <a href="#cacheoptions"><code>CacheOptions</code></a> on the distributed path. Later, a command implementing <a href="group-05-cqrs-pipeline.html#icacheinvalidating"><code>ICacheInvalidating</code></a> succeeds and its decorator calls <code>RemoveByPrefixAsync</code>, dropping the now-stale reads. Because invalidation runs <strong>after</strong> the inner handler returns (and, for transactional commands, after the transaction has been committed by the inner <code>Transactional</code> decorator), eviction happens against committed state, not in-flight state.</p>
+          <p>A note on what the cache is, and is not, used for. This is a request-result read-through cache for query handlers, not a session store or a write-behind buffer; the cross-source consistency mechanism in this codebase is the <strong>outbox</strong> (ADR-003, ADR-006), not the cache. The conservative 30-second default and the failure-skipping rules mean the cache errs toward correctness over hit-rate, which is the right default for an opt-in cache layered onto a database-per-service system. Observability and the per-type test coverage for these four types live in their own chapters: the unit tests for <a href="#cacheoptions"><code>CacheOptions</code></a>, <a href="#distributedcacheservice"><code>DistributedCacheService</code></a>, and <a href="#memorycacheservice"><code>MemoryCacheService</code></a> (plus the two decorators) are catalogued in <a href="group-26-testing-infrastructure.html">Group 25, Testing Infrastructure</a>.</p>
+          <h3 id="cacheoptions">CacheOptions</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Caching</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/CacheOptions.cs:9</code> · Level 0 · class (static)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a static factory for <code>DistributedCacheEntryOptions</code> carrying a 30-second default TTL. It centralises the cache-expiry policy so the distributed-cache adapter never constructs entry-options inline.</li>
+          <li><strong>Depends on</strong>: <code>Microsoft.Extensions.Caching.Distributed.DistributedCacheEntryOptions</code> (BCL/ASP.NET). Indirectly fed by the per-query <a href="group-05-cqrs-pipeline.html#iquerycacheable">IQueryCacheable.CacheDuration</a>, which flows in as the <code>expiration</code> argument when a cacheable query&#39;s result is stored.</li>
+          <li><strong>Concept introduced, §12 Performance &amp; Scalability (TTL as a freshness/cost dial).</strong> §12 assesses whether the system bounds staleness and avoids unbounded growth. The deliberately short 30-second default (line 14–17) is the conservative knob: cached reads are served for at most 30s before falling through to the source, so a query that never declares its own duration cannot serve dangerously stale data. Callers that <em>can</em> tolerate longer staleness widen the window per query via <code>IQueryCacheable.CacheDuration</code>. <code>[Rubric §10, Cross-Cutting Concerns]</code>, TTL policy is one place, not scattered across handlers.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>DefaultExpiration</code> (line 14–17), a property returning a <em>fresh</em> <code>DistributedCacheEntryOptions</code> each access, with <code>AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30)</code>. It is a property, not a shared field, so two callers can never alias and mutate the same options instance.</li>
+          <li><code>Create(TimeSpan? expiration)</code> (line 24–27), expression-bodied: returns a new options object with the caller&#39;s <code>AbsoluteExpirationRelativeToNow</code> when <code>expiration</code> is non-null, else hands back <code>DefaultExpiration</code>. A null duration therefore means &quot;use the 30s default,&quot; matching the <code>TimeSpan?</code> optionality on <a href="#icacheservice">ICacheService.SetAsync</a>.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: a static factory (no instance, no shared mutable state) makes TTL policy a single, allocation-cheap decision point; the absolute-expiration choice (vs. sliding) means a cached entry&#39;s lifetime is bounded regardless of how often it is read, which is the safer default for read-through query caching.</li>
+          <li><strong>Where it&#39;s used</strong>: <a href="#distributedcacheservice">DistributedCacheService.SetAsync</a> calls <code>CacheOptions.Create(expiration)</code> to build the entry options for every write. Note: <a href="#memorycacheservice">MemoryCacheService</a> does <strong>not</strong> route through <code>CacheOptions</code>, it constructs <code>MemoryCacheEntryOptions</code> directly, so this factory governs the distributed path only.</li>
+          <li><strong>Caveats / not-in-source</strong>: the prior edition stated this was consumed by &quot;caching query-handler decorators.&quot; That is one level removed: the <a href="group-05-cqrs-pipeline.html#cachingquerydecoratortquery-tresult">CachingQueryDecorator&lt;TQuery, TResult&gt;</a> passes a <code>TimeSpan?</code> to <code>ICacheService.SetAsync</code>; only the distributed adapter forwards it here.</li>
+          </ul>
+          <hr>
+          <h3 id="icacheservice">ICacheService</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICacheService.cs:8</code> · Level 0 · interface</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the Application layer&#39;s cache port: get by key, set with an optional TTL, remove by exact key, and remove every key matching a prefix. It hides whether the backing store is Redis, a SQL distributed cache, or an in-process <code>IMemoryCache</code>.</li>
+          <li><strong>Depends on</strong>: BCL only at the interface level (<code>Task</code>, <code>CancellationToken</code>, <code>TimeSpan?</code>). Consumed by <a href="group-05-cqrs-pipeline.html#icacheinvalidating">ICacheInvalidating</a> (prefix eviction after mutations) and <a href="group-05-cqrs-pipeline.html#iquerycacheable">IQueryCacheable</a> (key-based read-through caching).</li>
+          <li><strong>Concept introduced, §3 Clean Architecture (dependency inversion for infrastructure).</strong> §3 assesses whether business code depends on abstractions while concrete technology lives at the edges. The Application layer <em>defines</em> the cache contract; the Infrastructure layer <em>implements</em> it (<a href="#distributedcacheservice">DistributedCacheService</a> / <a href="#memorycacheservice">MemoryCacheService</a>). Handlers and the caching decorators never see <code>StackExchange.Redis</code> or <code>Microsoft.Extensions.Caching</code>, they program against this interface, and the implementation is chosen by DI. <code>[Rubric §12, Performance &amp; Scalability]</code>, <code>RemoveByPrefixAsync</code> (line 40) is the member that makes <em>scoped</em> invalidation possible: a single mutation can evict a whole family of cached query results (e.g. all <code>Catalog:Products:*</code> pages) without enumerating individual keys.</li>
+          <li><strong>Walkthrough</strong>: members in declaration order:<ul>
+          <li><code>Task&lt;T?&gt; GetAsync&lt;T&gt;(string key, CancellationToken)</code> (line 15), returns <code>default</code>/<code>null</code> on a miss; the generic <code>T</code> is the deserialized value type.</li>
+          <li><code>Task SetAsync&lt;T&gt;(string key, T value, TimeSpan? expiration = null, CancellationToken)</code> (line 24), <code>expiration</code> is nullable with a default of <code>null</code>, meaning &quot;use the implementation&#39;s default TTL&quot; (the distributed adapter resolves this through <a href="#cacheoptions">CacheOptions</a>).</li>
+          <li><code>Task RemoveAsync(string key, CancellationToken)</code> (line 34), single-key eviction.</li>
+          <li><code>Task RemoveByPrefixAsync(string prefix, CancellationToken)</code> (line 40), bulk eviction of every key whose name starts with <code>prefix</code>; this is the operation <a href="group-05-cqrs-pipeline.html#cachingcommanddecoratortcommand-tresult">CachingCommandDecorator&lt;TCommand, TResult&gt;</a> invokes on a successful mutation.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: the optional <code>TimeSpan? expiration</code> parameter lets callers override the global TTL without a second overload, and <code>null</code> reads naturally as &quot;use the configured default.&quot; Keeping the port in Application (not Infrastructure) is what allows the CQRS decorators, which live in Application, to depend on caching without dragging a Redis reference into the business layers.</li>
+          <li><strong>Where it&#39;s used</strong>: both caching decorators take <code>ICacheService</code> by constructor injection: the query decorator calls <code>GetAsync</code>/<code>SetAsync</code>, the command decorator calls <code>RemoveByPrefixAsync</code>. Infrastructure&#39;s <code>AddCaching()</code> registers exactly one implementation behind this interface.</li>
+          <li><strong>Caveats / not-in-source</strong>: the prior edition cited the four members at lines 9/11/18/20; the current source declares them at lines 15/24/34/40 (XML-doc growth shifted the positions). The doc comment on the interface also references <code>CachingCommandDecorator</code> for invalidation, accurate, but the read-side caching is driven by <code>IQueryCacheable</code>, not a separate <code>IQueryCacheKeyProvider</code> (no such type exists in the current source).</li>
+          </ul>
+          <hr>
+          <h3 id="distributedcacheservice">DistributedCacheService</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Caching</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:15</code> · Level 1 · class (internal sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the out-of-process implementation of <a href="#icacheservice">ICacheService</a>, backed by ASP.NET Core&#39;s <code>IDistributedCache</code> (Redis or the SQL Server distributed cache). Values are serialized as UTF-8 JSON. When a Redis <code>IConnectionMultiplexer</code> is also available, prefix eviction is implemented via Redis <code>SCAN</code>; without it, prefix eviction is a no-op.</li>
+          <li><strong>Depends on</strong>: <code>Microsoft.Extensions.Caching.Distributed.IDistributedCache</code>, <code>StackExchange.Redis.IConnectionMultiplexer</code> (optional, NuGet), <code>System.Text.Json.JsonSerializer</code>, <code>System.Buffers.ArrayBufferWriter&lt;byte&gt;</code> / <code>Utf8JsonWriter</code> (BCL). Implements <a href="#icacheservice">ICacheService</a>; writes flow through <a href="#cacheoptions">CacheOptions</a>.</li>
+          <li><strong>Concept introduced, §12 Performance &amp; Scalability (the distributed-cache adapter) and §7 Microservices Readiness.</strong> §7 assesses whether shared state survives a module being split into its own process; a <em>distributed</em> cache is shared across instances and across extracted services, so when ADC scales out or pulls a module into a standalone host, cached reads remain coherent. The interesting design point is that <code>IDistributedCache</code> has <strong>no key-enumeration API</strong>: you cannot ask it &quot;give me all keys starting with X.&quot; This adapter therefore reaches <em>past</em> the <code>IDistributedCache</code> abstraction to the raw <code>IConnectionMultiplexer</code> to satisfy <code>RemoveByPrefixAsync</code> using Redis server-side <code>SCAN</code>. <code>[Rubric §10, Cross-Cutting Concerns]</code>, serialization and TTL policy are encapsulated here so callers stay ignorant of the wire format.</li>
+          <li><strong>Walkthrough</strong>: primary-constructor injection (line 15–17): <code>IDistributedCache cache</code> (required) and <code>IConnectionMultiplexer? connectionMultiplexer = null</code> (optional, present only when Redis is wired).<ul>
+          <li><code>GetAsync&lt;T&gt;</code> (line 20–25), fetches the raw <code>byte[]</code> via <code>cache.GetAsync</code>; returns <code>default</code> on a null (miss), else <code>Deserialize&lt;T&gt;</code>.</li>
+          <li><code>SetAsync&lt;T&gt;</code> (line 28–37), serializes the value to bytes, then writes via <code>cache.SetAsync(key, bytes, CacheOptions.Create(expiration), …)</code>, this is the single call site that turns the caller&#39;s optional <code>TimeSpan?</code> into a <code>DistributedCacheEntryOptions</code> through <a href="#cacheoptions">CacheOptions</a>.</li>
+          <li><code>RemoveAsync</code> (line 40–41), expression-bodied passthrough to <code>cache.RemoveAsync</code>.</li>
+          <li><code>RemoveByPrefixAsync</code> (line 44–60), <strong>the meat.</strong> If <code>connectionMultiplexer</code> is null it returns immediately (a no-op, a SQL-backed distributed cache cannot scan by prefix). Otherwise it takes the first Redis server, issues <code>server.KeysAsync(pattern: $&quot;{prefix}*&quot;)</code>, and <code>await foreach</code>-deletes each matched key through <code>db.KeyDeleteAsync</code>, honoring the <code>CancellationToken</code> via <code>WithCancellation</code>.</li>
+          <li><code>Serialize&lt;T&gt;</code> / <code>Deserialize&lt;T&gt;</code> (line 62–71), JSON helpers; <code>Serialize</code> writes into a pooled-style <code>ArrayBufferWriter&lt;byte&gt;</code> + <code>Utf8JsonWriter</code> and returns <code>WrittenSpan.ToArray()</code>. <code>Deserialize</code> uses the null-forgiving <code>!</code> because <code>JsonSerializer.Deserialize&lt;T&gt;</code> is nominally nullable.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: UTF-8 JSON keeps cached payloads engine-agnostic and human-inspectable. The optional multiplexer is the pragmatic compromise behind ADR-006 / ADR-008 thinking: the cache contract must work whether the deployment has Redis (full prefix eviction) or only a fallback distributed store (single-key operations only), so prefix eviction <em>degrades to a no-op</em> rather than throwing, invalidation that can&#39;t run simply lets entries expire by TTL instead. The class is <code>internal sealed</code>: it is only ever resolved through the <a href="#icacheservice">ICacheService</a> registration, never referenced by name outside Infrastructure.</li>
+          <li><strong>Where it&#39;s used</strong>: selected by <code>AddCaching()</code> in <code>MMCA.Common.Infrastructure/DependencyInjection.cs:154-161</code>: the factory registers this implementation <strong>only when</strong> a non-<code>MemoryDistributedCache</code> <code>IDistributedCache</code> is present in the container; otherwise it falls back to <a href="#memorycacheservice">MemoryCacheService</a>. Downstream, the <a href="group-05-cqrs-pipeline.html#cachingquerydecoratortquery-tresult">CachingQueryDecorator&lt;TQuery, TResult&gt;</a> and <a href="group-05-cqrs-pipeline.html#cachingcommanddecoratortcommand-tresult">CachingCommandDecorator&lt;TCommand, TResult&gt;</a> consume it through the interface.</li>
+          <li><strong>Caveats / not-in-source</strong>: <code>KeysAsync</code>/<code>SCAN</code> is O(keyspace) on the Redis side; the doc comment notes this is acceptable for the invalidation cadence but it is not a hot-path operation. The no-op prefix-eviction branch is silent, there is no log when a SQL-backed cache skips prefix invalidation, so staleness then bounds itself purely by TTL.</li>
+          </ul>
+          <hr>
+          <h3 id="memorycacheservice">MemoryCacheService</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Caching</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Caching/MemoryCacheService.cs:12</code> · Level 1 · class (internal sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the in-process implementation of <a href="#icacheservice">ICacheService</a>, backed by <code>IMemoryCache</code>. Because <code>IMemoryCache</code> exposes no way to enumerate its keys, this service maintains its own <code>ConcurrentDictionary&lt;string, byte&gt;</code> key-set so it can honor <code>RemoveByPrefixAsync</code>, the one capability the BCL memory cache lacks.</li>
+          <li><strong>Depends on</strong>: <code>Microsoft.Extensions.Caching.Memory.IMemoryCache</code> / <code>MemoryCacheEntryOptions</code> (BCL), <code>System.Collections.Concurrent.ConcurrentDictionary&lt;TKey,TValue&gt;</code> (BCL). Implements <a href="#icacheservice">ICacheService</a>.</li>
+          <li><strong>Concept introduced, §12 Performance &amp; Scalability (the single-instance fast path) and a side-table to back-fill a missing API.</strong> §12 assesses cheap reads; an in-process cache is the lowest-latency option but is <em>not shared</em> across instances, so it is correct only for a single-process monolith or for genuinely per-instance data. The teachable mechanic here is the <strong>shadow key-set</strong>: <code>IMemoryCache</code> is a black box with no key listing, so the service mirrors every live key into <code>_keys</code> and keeps that mirror honest using a <strong>post-eviction callback</strong>: when <code>IMemoryCache</code> drops an entry (TTL expiry, capacity pressure, or manual remove) the callback prunes <code>_keys</code>, preventing the dictionary from leaking keys for entries the cache has already discarded. <code>[Rubric §10, Cross-Cutting Concerns]</code>, it presents the identical <a href="#icacheservice">ICacheService</a> surface as the distributed adapter, so swapping backends changes nothing for callers.</li>
+          <li><strong>Walkthrough</strong>: primary-constructor injection (line 12): <code>IMemoryCache cache</code>.<ul>
+          <li><code>_keys</code> (line 19), <code>new ConcurrentDictionary&lt;string, byte&gt;(StringComparer.Ordinal)</code>; the <code>byte</code> value is unused (set-like usage), <code>Ordinal</code> comparison matches the prefix matching below and avoids culture-sensitive surprises.</li>
+          <li><code>GetAsync&lt;T&gt;</code> (line 22–30), <code>cache.TryGetValue(key, out T? value)</code>; wraps the synchronous result in <code>Task.FromResult</code> (no real async, <code>IMemoryCache</code> is in-memory).</li>
+          <li><code>SetAsync&lt;T&gt;</code> (line 33–54), builds <code>MemoryCacheEntryOptions</code>, sets <code>AbsoluteExpirationRelativeToNow</code> only when <code>expiration.HasValue</code> (note: <strong>no 30s default here</strong>, an unset TTL means the entry never auto-expires by time, unlike the distributed path&#39;s <a href="#cacheoptions">CacheOptions</a>), registers the post-eviction callback that removes the key from <code>_keys</code>, calls <code>cache.Set</code>, then <code>_keys.TryAdd(key, 0)</code>.</li>
+          <li><code>RemoveAsync</code> (line 57–63), removes from both <code>cache</code> and <code>_keys</code>.</li>
+          <li><code>RemoveByPrefixAsync</code> (line 66–75), iterates <code>_keys.Keys.Where(k =&gt; k.StartsWith(prefix, StringComparison.Ordinal))</code> and removes each from both stores; this is what lets the in-process backend satisfy the same prefix-eviction contract Redis gets from <code>SCAN</code>.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: keeping a parallel key index is the only way to give <code>IMemoryCache</code> a prefix-removal capability without replacing it; the eviction callback is what keeps that index from drifting (a naive key-set would accumulate phantom keys as entries expired). <code>internal sealed</code>, resolved only through the <a href="#icacheservice">ICacheService</a> port.</li>
+          <li><strong>Where it&#39;s used</strong>: the <strong>default / fallback</strong> registration in <code>AddCaching()</code> (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:163</code>): <code>AddCaching()</code> always calls <code>AddMemoryCache()</code>, and when no real distributed cache is configured this is the <code>ICacheService</code> the container hands out, so a host with no Redis behaves as a single-instance cached monolith. Consumed through the interface by both CQRS caching decorators.</li>
+          <li><strong>Caveats / not-in-source</strong>: <code>GetAsync&lt;T&gt;</code>&#39;s <code>TryGetValue(key, out T? value)</code> trusts the stored object is castable to <code>T</code>; a key reused with a different <code>T</code> would surface a cast issue rather than a clean miss (not guarded in source). Because the cache is per-process, two instances will hold independent, potentially divergent copies until each entry&#39;s TTL or an explicit eviction reconciles them, which is why the distributed adapter exists for scaled-out deployments.</li>
+          </ul>
+          <hr>
+          <p><a href="group-08-auth.html">⬅ Authentication &amp; Authorization</a>  •  <a href="index.html">Index</a>  •  <a href="group-10-notifications.html">Notifications (Push + In-App Inbox + Email) ➡</a></p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADR-041: Observability and Telemetry Strategy · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-07-10).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/041-observability-and-telemetry.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ADR-041: Observability and Telemetry Strategy">
+  <meta property="og:description" content="Accepted (2026-07-10).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/041-observability-and-telemetry.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">041 · Observability and Telemetry Strategy</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 45 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html" aria-current="page">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-041-observability-and-telemetry-strategy">ADR-041: Observability and Telemetry Strategy</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-07-10).</p>
+          <h2 id="context">Context</h2>
+          <p>The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
+          the same telemetry has to make sense whether a request stays in one process or crosses a gateway and
+          several service hosts. OpenTelemetry auto-instrumentation (ASP.NET Core, <code>HttpClient</code>, the .NET
+          runtime) gives generic HTTP and runtime signals for free, but it is blind to the two paths that carry
+          almost all of the framework&#39;s own work: the CQRS use-case pipeline (ADR-014) and the outbox
+          (ADR-003). &quot;How long is this command taking and how often does it fail&quot; and &quot;is the outbox
+          dead-lettering&quot; are not questions auto-instrumentation can answer.</p>
+          <p>Two cost forces pull the other way. A deployed fleet polls every relational outbox around the clock,
+          so idle poll spans would dominate Application Insights ingestion if exported, and full-fidelity
+          tracing is the single largest observability line item. The framework needs custom instrumentation
+          where auto-instrumentation is blind, plus knobs that cut telemetry cost without going dark. This
+          cross-cutting observability decision was implemented but named by no existing ADR; this record
+          captures it.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Standardize telemetry in the shared Aspire service defaults, add framework-specific instrumentation
+          for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.</p>
+          <ul>
+          <li><p><strong>One shared telemetry baseline on every host.</strong> <code>ConfigureOpenTelemetry</code>
+          (<code>Source/Hosting/MMCA.Common.Aspire/Extensions.cs:136</code>) wires OpenTelemetry logging with formatted
+          messages and scopes (<code>Extensions.cs:139</code>), metrics from ASP.NET Core, <code>HttpClient</code>, and the runtime
+          (<code>Extensions.cs:147</code>), and tracing from ASP.NET Core and <code>HttpClient</code> (<code>Extensions.cs:159</code>). It is
+          called from <code>AddServiceDefaults</code> (<code>Extensions.cs:36</code>), so a host opts in once and every project in
+          the Aspire model inherits the same pipeline.</p>
+          </li>
+          <li><p><strong>Custom RED metrics from the CQRS pipeline.</strong> A single meter <code>MMCA.Common.Cqrs</code>
+          (<code>Source/Core/MMCA.Common.Application/UseCases/Decorators/CqrsMetrics.cs:15</code>) publishes two duration
+          histograms: <code>cqrs.command.duration</code> (<code>CqrsMetrics.cs:20</code>) and <code>cqrs.query.duration</code>
+          (<code>CqrsMetrics.cs:26</code>), both in milliseconds. The logging decorators record them in a <code>finally</code> so
+          every path is measured: <code>CqrsMetrics.CommandDuration.Record(...)</code> tagged by <code>command</code> and <code>outcome</code>
+          (<code>Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingCommandDecorator.cs:58</code>) and the
+          query equivalent (<code>Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingQueryDecorator.cs:59</code>).
+          The <code>outcome</code> tag takes <code>completed</code>, <code>failed</code> (a <code>Result</code> failure), or <code>exception</code>
+          (<code>LoggingCommandDecorator.cs:30</code>, <code>:38</code>, <code>:52</code>), so count gives rate, the tag gives errors, and the
+          histogram gives duration. The Aspire host subscribes the meter by literal name
+          (<code>Extensions.cs:154</code>).</p>
+          </li>
+          <li><p><strong>An outbox dead-letter counter.</strong> The outbox processor owns a meter <code>MMCA.Common.Outbox</code>
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:59</code>) and a counter
+          <code>outbox.dead_letter.count</code> (<code>OutboxProcessor.cs:60</code>), incremented with an <code>event_type</code> tag whenever
+          a message is dead-lettered because its type cannot be resolved (<code>OutboxProcessor.cs:282</code>). The same
+          source emits outbox spans (<code>OutboxProcessor.cs:58</code>); both the meter and the trace source are
+          registered by literal name in the Aspire defaults (<code>Extensions.cs:153</code>, <code>Extensions.cs:158</code>).</p>
+          </li>
+          <li><p><strong>Correlation-ID middleware ties the request together.</strong> <code>CorrelationIdMiddleware</code>
+          (<code>Source/Presentation/MMCA.Common.API/Middleware/CorrelationIdMiddleware.cs:15</code>) uses the
+          <code>X-Correlation-ID</code> header (<code>CorrelationIdMiddleware.cs:18</code>), reading it from the request or falling
+          back to the current W3C trace id and then to <code>HttpContext.TraceIdentifier</code>
+          (<code>CorrelationIdMiddleware.cs:32</code>), sets it on the scoped <code>ICorrelationContext</code>
+          (<code>CorrelationIdMiddleware.cs:36</code>), and echoes it on the response
+          (<code>CorrelationIdMiddleware.cs:37</code>). The CQRS logging decorators stamp that same id into every log
+          scope (<code>LoggingCommandDecorator.cs:23</code>, <code>:25</code>), so logs, the correlation id, and the trace id line
+          up for one request.</p>
+          </li>
+          <li><p><strong>Head-based sampling as a cost knob, off by default.</strong> <code>Telemetry:TracesSampleRatio</code>
+          (<code>Extensions.cs:174</code>, parsed by <code>TryGetTraceSampleRatio</code> at <code>Extensions.cs:189</code>) is unset by
+          default, so a host samples everything and behavior does not change. A deployed host sets a ratio in
+          the open interval (0,1) to keep that fraction of traces; the value wraps a <code>TraceIdRatioBasedSampler</code>
+          in a <code>ParentBasedSampler</code> (<code>Extensions.cs:175</code>) so a sampled-in request keeps its whole trace across
+          service boundaries. A key that is absent, unparseable, or outside (0,1) falls back to sample-all
+          (<code>Extensions.cs:193</code>), so a typo can never silently drop all telemetry.</p>
+          </li>
+          <li><p><strong>Outbox poll spans are filtered out of export.</strong> <code>OutboxPollFilterProcessor</code>
+          (<code>Source/Hosting/MMCA.Common.Aspire/Telemetry/OutboxPollFilterProcessor.cs:15</code>), registered before
+          the exporters (<code>Extensions.cs:167</code>), clears the <code>Recorded</code> flag on the recurring <code>OutboxPoll</code> span
+          and its children (<code>OutboxPollFilterProcessor.cs:42</code>). The poll query runs inside that span
+          (<code>OutboxProcessor.cs:212</code>, named at <code>OutboxProcessor.cs:53</code>), so steady-state polling does not flood
+          Application Insights. Real outbox work is untouched: each per-message <code>OutboxProcess</code> span is started
+          under an explicit parent context restored from the message&#39;s stored trace and span ids
+          (<code>OutboxProcessor.cs:327</code>), so it is never a child of the poll span.</p>
+          </li>
+          <li><p><strong>Dual exporters, either or both.</strong> <code>AddOpenTelemetryExporters</code> enables OTLP when
+          <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is present (<code>Extensions.cs:307</code>, the Aspire dashboard sets it) and
+          Azure Monitor via <code>UseAzureMonitor</code> when <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> is present
+          (<code>Extensions.cs:315</code>, set by the cloud deployment). Both can be active at once
+          (<code>Extensions.cs:302</code>), so local development ships to the Aspire dashboard and production ships to
+          workspace-based Application Insights with no code change.</p>
+          </li>
+          </ul>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Instrument only where auto-instrumentation is blind.</strong> The CQRS RED histograms and the outbox
+          dead-letter counter cover the two framework-owned hot paths; everything else (HTTP, runtime) rides
+          the free auto-instrumentation, so the custom surface stays small.</li>
+          <li><strong>RED at the decorator, not in every handler.</strong> The CQRS pipeline already wraps every handler in a
+          logging decorator (ADR-014), so recording duration and outcome there makes metrics a byproduct of a
+          seam that exists, with no per-handler discipline (the invariant-over-discipline posture, ADR-015).</li>
+          <li><strong>A single correlation id with a W3C fallback.</strong> Whether or not a client supplies
+          <code>X-Correlation-ID</code>, one id stitches the logs of a request together and matches the trace, which is
+          what an operator needs first when a distributed call goes wrong.</li>
+          <li><strong>Cost knobs default to safe.</strong> Sampling and poll-span filtering are the levers a FinOps owner
+          reaches for (COST.md), and both fail toward keeping data: sampling is off unless configured, an
+          out-of-range ratio is ignored, and only idle poll spans are dropped.</li>
+          <li><strong><code>ParentBased</code> keeps distributed traces coherent.</strong> An extracted-service deployment (ADR-008) needs
+          a sampled-in request to stay sampled end to end; a per-hop random sampler would shred cross-service
+          traces.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Custom instrumentation carries a maintenance cost.</strong> The Aspire package has no reference to
+          Application or Infrastructure by design, so the meter and activity-source names are duplicated as
+          literals (<code>Extensions.cs:151</code>, and the sync notes at <code>CqrsMetrics.cs:8</code> and
+          <code>OutboxPollFilterProcessor.cs:17</code>). A rename on one side silently stops export until the literal is
+          updated. That is the price of the decoupled package graph.</li>
+          <li><strong>Sampling trades trace completeness for cost.</strong> A sampled-out trace is simply gone; deep debugging
+          of a specific request can miss it. Metrics and logs are unaffected (sampling is trace-only), so RED
+          rates and error counts stay whole even at a low ratio.</li>
+          <li><strong>Poll-span filtering hides steady-state outbox activity.</strong> The dead-letter counter and per-message
+          <code>OutboxProcess</code> spans remain, but &quot;is the poller alive and looping&quot; cannot be answered from traces
+          alone, by design (that signal is metrics and the dead-letter counter, not spans).</li>
+          <li><strong>Cross-service trace continuity depends on stored ids and the parent decision.</strong> A linked
+          <code>OutboxProcess</code> trace only reconnects when the producer captured the trace and span ids on the
+          message; <code>ParentBased</code> sampling that dropped the originating trace also drops the linked span.</li>
+          <li><strong>Exporters and sampling are opt-in per host.</strong> A host that sets neither exporter variable emits to
+          nothing, and a misconfigured ratio fails toward sample-all (higher cost) rather than toward silence:
+          the intended bias, but it means a cost surprise is possible where a data gap is not.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p>ADR-003 (the outbox whose dead-letter counter and poll-span filtering this defines), ADR-014 (the
+          CQRS decorator pipeline that emits the RED histograms as a byproduct of its logging decorators),
+          ADR-009 (resilience and recovery objectives, configured alongside telemetry in the same
+          <code>AddServiceDefaults</code>; observability is the diagnostic layer under that posture), ADR-025 (startup
+          warm-up and readiness gating, whose health-check endpoints are the operational-signal sibling of these
+          telemetry signals in the same Aspire defaults), and COST.md (the FinOps companion that records
+          span-filtering and sampling as cost levers).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/041-observability-and-telemetry.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

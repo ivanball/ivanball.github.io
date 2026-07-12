@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADR-008: Extraction of the Modular Monolith into Per-Module Services + Gateway · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted.">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/008-service-extraction-topology.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ADR-008: Extraction of the Modular Monolith into Per-Module Services + Gateway">
+  <meta property="og:description" content="Accepted.">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/008-service-extraction-topology.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 45 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html" aria-current="page">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-008-extraction-of-the-modular-monolith-into-per-module-services--gateway">ADR-008: Extraction of the Modular Monolith into Per-Module Services + Gateway</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted.</p>
+          <h2 id="context">Context</h2>
+          <p>ADC began as a modular monolith: one <code>MMCA.ADC.WebAPI</code> host loaded every module (Identity, Conference,
+          Engagement, Notification) in-process via the <code>ModuleLoader</code>, sharing one database and dispatching
+          domain/integration events in-process. The modular structure — per-module Domain/Application/
+          Infrastructure/API/Shared, with strict module isolation enforced by the architecture tests — was always
+          maintained, but everything deployed and scaled as a single unit.</p>
+          <p>Two forces pushed past that:</p>
+          <ul>
+          <li><strong>Uneven scale + cost.</strong> Traffic is lopsided — the public Conference read paths spike around the event
+          while Identity/Engagement/Notification stay flat (the 2026 conference peaked at ~67 concurrent, almost
+          all on the Conference surface). Scaling one monolith means scaling everything.</li>
+          <li><strong>Fault &amp; deploy isolation.</strong> A bad deploy or a runaway path in one module took the others down with
+          it, and every change redeployed the whole surface.</li>
+          </ul>
+          <p>The modular boundaries were already clean enough to split along; the question was how to extract
+          <strong>without rewriting business logic</strong> or losing the ability to reason about — and revert — the system.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Extract <strong>one service host per module</strong> — <code>MMCA.ADC.{Identity,Conference,Engagement,Notification}.Service</code>
+          — and front them with a single <strong>YARP reverse-proxy Gateway</strong> (<code>MMCA.ADC.Gateway</code>, pinned to
+          <code>https://localhost:6001</code>). Delete the combined <code>MMCA.ADC.WebAPI</code> host.</p>
+          <ul>
+          <li><strong>Each service is the monolith with one module enabled.</strong> The hosts still run <code>ModuleLoader</code>, just with
+          <code>Modules:{Module}:Enabled=true</code> for their own module; disabled peers are satisfied by <code>Disabled*</code> stubs.
+          The Domain/Application/Shared code is identical whether it runs in-process or extracted.</li>
+          <li><strong>The Gateway is the only client entry point.</strong> It owns the route→service map (<code>/Auth</code>, <code>/Events</code>,
+          <code>/Bookmarks</code>, <code>/hubs</code>, <code>/.well-known</code>, …); clients (Blazor/MAUI) never address a service directly. It
+          has no DbContext or controllers: security-headers middleware (ADR-023), CORS, static files, a
+          <code>/privacy</code> minimal-API endpoint, and the route forwarders (ADC; Store&#39;s Gateway is the same minus the
+          static files).</li>
+          <li><strong>Cross-service communication uses edge transports:</strong> synchronous calls over gRPC contracts (ADR-007);
+          asynchronous flows over the outbox → MassTransit broker (ADR-003, ADR-006). Token validation is
+          federated via JWKS through the Gateway (ADR-004). Each service owns its own database (ADR-006).</li>
+          <li><strong>Transport stays at the edge, enforced.</strong> <code>MicroserviceExtractionTests</code> in the architecture suite
+          forbid gRPC / MassTransit / Protobuf dependencies in any Domain, Application, or Shared assembly, so the
+          core stays host-agnostic and the split stays reversible.</li>
+          </ul>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>No business-logic rewrite.</strong> Because a service is just the monolith with one module enabled,
+          extraction was a hosting/wiring change, not a domain change — and the module-isolation tests already
+          guaranteed modules didn&#39;t reach into each other&#39;s internals.</li>
+          <li><strong>One entry point.</strong> A single Gateway keeps client config trivial (one pinned URL the MAUI app bakes
+          in), centralizes CORS and auth-forwarding, and lets the internal services run cleartext h2c without
+          exposing that to clients.</li>
+          <li><strong>Per-module split (not coarser or finer).</strong> The module already was the consistency and ownership
+          boundary; one service per module maps deploy/scale units onto boundaries the team already reasons about.</li>
+          <li><strong>Reversible by construction.</strong> Transport at the edge + the <code>ModuleLoader</code> mean a service can be
+          re-collapsed into a combined host (or peers co-hosted) by changing configuration, not code — useful
+          insurance for a small team adopting microservices.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Operational complexity.</strong> Four deployables plus a Gateway, service discovery, a broker, and
+          per-service databases — versus one process. Mitigated locally by Aspire orchestration and in prod by
+          Bicep / Azure Container Apps.</li>
+          <li><strong>Distributed-systems semantics.</strong> Cross-service consistency is eventual (outbox + integration events);
+          there are no cross-service transactions or cross-database FKs (ADR-006). Bidirectional gRPC pairs
+          (Conference ↔ Engagement) need deliberate startup handling (ADR-007).</li>
+          <li><strong>Transport constraints leak into hosting.</strong> The REST services run <code>Http2</code>-only on cleartext for h2c
+          gRPC, while Notification runs <code>Http1AndHttp2</code> for its SignalR WebSocket upgrade — a per-host Kestrel
+          nuance that didn&#39;t exist in the monolith.</li>
+          <li><strong>Duplicated host wiring.</strong> Each service repeats the same pipeline setup; shared concerns live in
+          <code>MMCA.Common.API</code> / <code>ServiceDefaults</code> to limit the drift.</li>
+          </ul>
+          <h2 id="applicability">Applicability</h2>
+          <p>This ADR is framed around ADC (the first repo extracted), but the same topology is now the framework&#39;s
+          <strong>standard extraction shape</strong>, not an ADC-only choice. MMCA.Store followed it: one service host per
+          module (<code>MMCA.Store.{Catalog,Identity,Sales}.Service</code>) behind a single <code>MMCA.Store.Gateway</code> (also
+          pinned to <code>https://localhost:6001</code>), with its combined <code>MMCA.Store.WebAPI</code> host likewise deleted.
+          Store&#39;s cross-service topology differs in transport detail (see ADR-012 — both apps now run Profile A),
+          but the extraction shape is identical.</p>
+          <h2 id="related">Related</h2>
+          <p>ADR-003 (outbox dual dispatch), ADR-004 (cross-service token validation via JWKS), ADR-006 (database
+          per service), and ADR-007 (gRPC cross-service calls) are the facet decisions that sit under this extraction.</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/008-service-extraction-topology.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

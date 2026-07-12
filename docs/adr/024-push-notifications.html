@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADR-024: Two-Channel User Notifications (Transient SignalR Push + Durable Inbox) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-06-27).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/024-push-notifications.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ADR-024: Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)">
+  <meta property="og:description" content="Accepted (2026-06-27).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/024-push-notifications.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 45 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html" aria-current="page">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-024-two-channel-user-notifications-transient-signalr-push--durable-inbox">ADR-024: Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-06-27).</p>
+          <h2 id="context">Context</h2>
+          <p>The framework needs to deliver user-facing notifications (an organizer broadcasting a schedule change,
+          a per-user alert). Two delivery models each fail on their own. A pure real-time push over a WebSocket
+          reaches only users who are connected at that instant: anyone offline, on a flaky network, or who simply
+          has the app closed never sees it. A pure stored inbox is reliable but not live: the user only learns of
+          the notification the next time they poll or reload. A correct notification feature needs both at once,
+          and it must stay inert in deployments that do not use it (the monolith, a service with no UI) without
+          the calling code branching on whether notifications are wired. Separately, &quot;who should receive this&quot;
+          is domain-specific (all attendees of an event, the assignees of a ticket) and cannot live in the
+          framework.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Deliver notifications over two channels from one application use case, with the transport and the
+          recipient policy both behind abstractions.</p>
+          <ul>
+          <li><strong>A durable per-user inbox plus a transient real-time push, written in that order.</strong>
+          <code>SendPushNotificationHandler</code> (<code>MMCA.Common.Application</code>) resolves recipients, creates a
+          <code>PushNotification</code> aggregate (<code>MMCA.Common.Domain.Notifications.PushNotifications</code>, the audit record of
+          what was sent), persists one <code>UserNotification</code> inbox row per recipient
+          (<code>MMCA.Common.Domain.Notifications.UserNotifications</code>, carrying <code>IsRead</code> / <code>ReadOn</code> with an idempotent
+          <code>MarkAsRead</code>), and only then dispatches the live push. The inbox is the durable source of truth;
+          the push is the best-effort live layer over it.</li>
+          <li><strong>Transient delivery is an abstraction with a no-op default.</strong> <code>IPushNotificationSender</code>
+          (<code>MMCA.Common.Application</code>) is registered by default as <code>NullPushNotificationSender</code> (no-op), so a host
+          that never calls the opt-in does nothing on send. <code>AddPushNotifications(configuration)</code>
+          (<code>MMCA.Common.Infrastructure</code>) swaps in <code>SignalRPushNotificationSender</code>, which fans messages out
+          through <code>IHubContext&lt;NotificationHub&gt;</code> to a user, a batched list of users (100 per batch), or all
+          clients. The hub (<code>NotificationHub</code>) is <code>[Authorize]</code> and is mapped with <code>MapNotificationHub()</code>
+          (<code>MMCA.Common.API</code>); the Blazor client wraps it in <code>NotificationHubService</code> (<code>MMCA.Common.UI</code>).</li>
+          <li><strong>Recipient selection is the consumer&#39;s policy.</strong> <code>INotificationRecipientProvider</code>
+          (<code>MMCA.Common.Application</code>) defaults to <code>NullNotificationRecipientProvider</code> (returns no recipients);
+          each app registers its own provider that knows its domain&#39;s audience. The framework ships the delivery
+          machinery, not the address book.</li>
+          <li><strong>Delivery failure is non-fatal.</strong> If the live push throws, the handler records <code>MarkAsFailed</code> on the
+          <code>PushNotification</code> and returns success: the inbox row is already committed, so the recipient still gets
+          the notification on next load. A send is never rolled back because the WebSocket fan-out failed.</li>
+          <li><strong>Horizontal scale-out is configuration, not code.</strong> When a Redis connection string is present,
+          <code>AddPushNotifications</code> adds a Redis backplane to SignalR (<code>AddStackExchangeRedis</code>) so a push reaches a
+          user whose WebSocket is pinned to a different replica. The feature is gated by
+          <code>PushNotificationSettings.Enabled</code> (config section <code>&quot;PushNotifications&quot;</code>).</li>
+          </ul>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Each channel covers the other&#39;s failure mode.</strong> The inbox guarantees eventual delivery to offline
+          users; the push gives connected users immediacy. Persisting the inbox before pushing means a crash
+          between the two leaves the notification recoverable, never lost.</li>
+          <li><strong>Null-default abstraction keeps it transport-at-the-edge.</strong> Defaulting <code>IPushNotificationSender</code> and
+          <code>INotificationRecipientProvider</code> to no-ops means application code calls the same handler whether or not
+          a host wires SignalR, matching the framework&#39;s &quot;depend on abstractions, choose transport at the edge&quot;
+          invariant (the same shape as the <code>IMessageBus</code> in-process/broker split).</li>
+          <li><strong>Best-effort live layer.</strong> Treating the push as advisory (record the failure, keep the commit) avoids
+          coupling a business action&#39;s success to a transport that is inherently lossy; the inbox is the contract.</li>
+          <li><strong>Recipients belong to the app.</strong> Audience rules are domain logic; a framework provider would either be
+          wrong or force every consumer into one model.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Fan-out write amplification.</strong> One <code>UserNotification</code> row is written per recipient, so a broadcast to
+          a large audience is a large insert. This is fine for the current per-event / per-tenant audiences but
+          would need a different shape (or a pull model) for very large broadcast lists.</li>
+          <li><strong>Silent no-op by default.</strong> Because <code>NullPushNotificationSender</code> is the default, a host that forgets
+          <code>AddPushNotifications</code> sends nothing live and shows no error. The behavior is intentional (inert until
+          opted in) but is a discoverability foot-gun.</li>
+          <li><strong>WebSocket auth is a special case.</strong> SignalR cannot send an <code>Authorization</code> header on the connection
+          upgrade, so the hub authenticates from the <code>access_token</code> query string on <code>/hubs</code> (ADR-004), a path
+          that has to be kept exempt from other edge controls.</li>
+          <li><strong>Read state is per-user, not on the aggregate.</strong> <code>IsRead</code>/<code>ReadOn</code> live on each <code>UserNotification</code>,
+          not on the <code>PushNotification</code>, so &quot;how many recipients have read this&quot; is a query across the inbox
+          rows rather than a property of the sent notification.</li>
+          <li><strong>Backplane is a deployment dependency for multi-replica correctness.</strong> Without Redis, a push only
+          reaches users connected to the same replica that handled the send; the inbox masks this for correctness
+          but not for immediacy.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p>ADR-003 (the outbox dual-dispatch path, which is distinct: that carries service-to-service integration
+          events, this carries user-facing notifications), ADR-004 (the <code>/hubs</code> <code>access_token</code> query-string auth
+          the hub relies on), ADR-008 (extraction: ADC runs a dedicated <code>MMCA.ADC.Notification.Service</code> built on
+          these seams), ADR-012 (that Notification service is now a mixed-endpoint host: its default endpoint
+          stays Profile-B <code>Http1AndHttp2</code> for the SignalR WebSocket/HTTP/1.1 path, and since 2026-07-09 it also
+          serves an inbound <code>Http2</code>-only h2c gRPC edge on a dedicated named endpoint per ADR-039), ADR-022 (the
+          browser-edge auth context the UI client runs in).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/024-push-notifications.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

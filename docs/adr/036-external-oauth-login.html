@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADR-036: External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-07-02, migration attribution corrected 2026-07-06).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/036-external-oauth-login.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ADR-036: External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange">
+  <meta property="og:description" content="Accepted (2026-07-02, migration attribution corrected 2026-07-06).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/036-external-oauth-login.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 45 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html" aria-current="page">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-036-external-oauth-login-federated-googlegithub-with-local-jwt-exchange">ADR-036: External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-07-02, migration attribution corrected 2026-07-06).</p>
+          <h2 id="context">Context</h2>
+          <p>The framework&#39;s Identity story so far is entirely first-party: a user registers with an email and
+          password, the credentials are hashed (ADR-032), and Identity mints its own RS256 JWT pair. Every auth
+          ADR to date sits inside that first-party boundary: ADR-004 validates Identity&#39;s own tokens across
+          extracted services, ADR-020 layers permissions over the token&#39;s role, ADR-022 carries the same token
+          in browser cookies, ADR-029 throttles the anonymous credential surface, ADR-032 hashes the password,
+          and ADR-033 checks resource ownership from a token claim. None of them lets a <strong>third-party identity
+          provider</strong> vouch for the user. The word &quot;federated&quot; already appears in the ADR set (ADR-007 / ADR-008),
+          but it means service-to-service JWKS trust between our own hosts, not a Google or GitHub account
+          signing a person in.</p>
+          <p>We wanted social sign-in (Google, GitHub) without giving up the invariant that the rest of the system
+          depends on: <strong>inside the app, a user is always our local <code>User</code> carrying our own JWT.</strong> External
+          identity should be an <em>entry path</em> that terminates in the same local token pair every other flow
+          produces, not a parallel identity system that downstream services would have to learn to validate. It
+          also had to be optional: most hosts, tests, and local dev runs have no OAuth secrets and must keep the
+          JWT-only pipeline untouched, the same inert-until-configured posture as <code>AddPermissions</code> (ADR-020).</p>
+          <h2 id="decision">Decision</h2>
+          <p>Add an opt-in external-login path that federates Google/GitHub sign-in at the edge and immediately
+          <strong>exchanges the external identity for the app&#39;s own local JWT pair</strong>, linking the external account to
+          a local <code>User</code>.</p>
+          <ul>
+          <li><strong>Scheme registration is config-gated per provider.</strong> <code>AddExternalAuthProviders</code> reads the <code>OAuth</code>
+          section and enables Google and/or GitHub only when that provider&#39;s <code>OAuth:&lt;Provider&gt;:ClientId</code> is
+          present; with neither configured it returns without touching the pipeline, so <code>AddCommonAuthentication</code>&#39;s
+          JWT-only default is left exactly as it was. <code>AddAuthentication()</code> is called with no argument so it
+          appends schemes rather than resetting the JWT bearer default. A configured <code>ClientId</code> with a missing
+          <code>ClientSecret</code> fails fast at startup. This is the same signal the UI&#39;s <code>ConfigurationOAuthUISettings</code>
+          uses to light up the Google/GitHub buttons (<code>GoogleEnabled</code> / <code>GitHubEnabled</code>).</li>
+          <li><strong>A short-lived cookie carries the external principal, nothing more.</strong> The provider callback signs
+          into a dedicated <code>ExternalLogin</code> cookie scheme (<code>mmca_external_login</code>, HttpOnly, SameSite=Lax, a
+          10-minute lifetime). It exists only to hand the external claims from the provider callback to the
+          controller; it is never the app session. GitHub is asked for the <code>user:email</code> scope because its
+          default scope omits the email the exchange needs.</li>
+          <li><strong><code>OAuthControllerBase.CompleteAsync</code> performs the exchange.</strong> The challenge endpoints redirect to
+          the provider and back to <code>CompleteAsync</code>, which authenticates the <code>ExternalLogin</code> cookie, extracts
+          <code>(provider, providerKey, email, firstName, lastName)</code> from the standard claims, and calls
+          <code>IAuthenticationService.ExternalLoginAsync</code>. On success it signs the external cookie out immediately,
+          so the external principal lives no longer than the exchange.</li>
+          <li><strong>Tokens never ride the redirect URL.</strong> <code>CompleteAsync</code> mints a single-use opaque code, stashes the
+          minted token pair server-side in the cache under a short TTL, and redirects to the UI carrying only
+          that code. The UI calls <code>ExchangeAsync</code> (<code>POST</code>) out of band to swap the code for the tokens; the
+          code is burned on first use, and a missing, replayed, or expired code yields HTTP 400. Access and
+          refresh tokens therefore never land in the address bar, browser history, the <code>Referer</code> header, or
+          upstream access logs.</li>
+          <li><strong>The exchange resolves to a local <code>User</code>, three ways.</strong> <code>ExternalLoginAsync</code> (app-level) first
+          looks the user up by <code>LoginProvider</code> + <code>ProviderKey</code>. Missing, it looks up by email and, if a local
+          or other-provider account already owns that email, <strong>links</strong> the external provider to it
+          (<code>User.LinkExternalProvider</code>) rather than rejecting the sign-in. Only when no account owns the email
+          does it <strong>create</strong> a new <code>Attendee</code> via <code>User.CreateExternal</code> (an external user has empty password
+          hash/salt and carries <code>LoginProvider</code> / <code>ProviderKey</code>). Either way it rotates the refresh token,
+          saves, and mints the access token, so the caller receives the same <code>AuthenticationResponse</code> shape as
+          a local login.</li>
+          <li><strong>The linkage is two nullable columns and a filtered unique index.</strong> <code>User.LoginProvider</code>
+          (<code>varchar(50)</code>) and <code>User.ProviderKey</code> (<code>varchar(256)</code>) are null for local accounts;
+          <code>IsExternalLogin</code> is derived from <code>LoginProvider is not null</code>. In ADC&#39;s per-service Identity database
+          both columns and a unique index over the pair (filtered to non-null rows) are created by the Identity
+          <code>InitialCreate</code> migration
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20260606053130_InitialCreate.cs:63</code>,
+          index at <code>20260606053130_InitialCreate.cs:100</code>), so two external identities cannot map to the same
+          local account while local (null,null) accounts are unconstrained. (The earlier standalone
+          <code>AddExternalLoginProviderFields</code> migration survives only in the frozen combined single-DB archive
+          under <code>MMCA.ADC.Migrations.SqlServer/</code> and is never applied to the per-service database.)
+          <code>User.Anonymize</code> clears both fields on erasure (ADR-005).</li>
+          <li><strong>New external users re-use the local registration side-effect.</strong> A brand-new external <code>User</code>
+          publishes the same post-commit <code>UserRegistered</code> integration event the local <code>RegisterAsync</code> path
+          publishes, so Conference runs the BR-207 speaker email-match auto-link asynchronously. The first
+          token does not yet carry <code>speaker_id</code>; it is picked up on the next refresh (the same eventual
+          consistency the local path accepts).</li>
+          </ul>
+          <p>The default lives in the framework but the behavior is app-supplied: the <code>IAuthenticationService</code>
+          interface member <code>ExternalLoginAsync</code> has a default implementation that returns an
+          <code>Auth.ExternalLoginNotSupported</code> failure, so a host that never wires the flow degrades safely rather
+          than silently succeeding.</p>
+          <p>Adoption is <strong>ADC only</strong>, and partial adoption is by design (ADR-018 / ADR-020 model the same &quot;shipped
+          in the framework, adopted by one app&quot; shape). ADC&#39;s Identity module supplies a sealed <code>OAuthController</code>
+          subclass carrying the class-level <code>[ApiController]</code> / <code>[Route(&quot;auth/oauth&quot;)]</code> / <code>[ApiVersion(&quot;1.0&quot;)]</code>
+          attributes (not reliably inherited), its <code>AuthenticationService</code> overrides <code>ExternalLoginAsync</code>, its
+          Identity service host calls <code>AddExternalAuthProviders</code>, and the AppHost passes the UI&#39;s HTTPS endpoint
+          to the Identity service as <code>OAuth__UIBaseUrl</code> so the post-exchange redirect lands on the UI host.
+          <strong>MMCA.Store does not adopt external login:</strong> it registers no OAuth schemes, defines no <code>OAuthController</code>,
+          adds no provider fields to its <code>User</code>, and leaves <code>ExternalLoginAsync</code> at the not-supported default. Its
+          Identity story stays local-credential + RS256 only.</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Terminate federation at the edge, keep one internal identity.</strong> Exchanging the external principal
+          for a local JWT the moment the callback returns means every downstream concern (JWKS validation,
+          permissions, ownership, session cookies) sees the token it already understands. External identity
+          never leaks past the controller, so the rest of the system needs no changes.</li>
+          <li><strong>Code-in-cache beats tokens-in-URL.</strong> A redirect is a <code>GET</code> that the browser records and proxies
+          log; putting the tokens behind a single-use, short-TTL, server-side code keeps credentials out of
+          every place a URL is written down, at the cost of one extra out-of-band <code>POST</code>.</li>
+          <li><strong>Link-by-email, do not fork the account.</strong> Matching an incoming external email to an existing
+          account and attaching the provider (rather than minting a second <code>User</code>) keeps a person&#39;s bookmarks,
+          notifications, and speaker link on one identity regardless of how they signed in.</li>
+          <li><strong>Inert until configured mirrors the framework&#39;s other opt-ins.</strong> Gating each provider on its
+          <code>ClientId</code> and defaulting <code>ExternalLoginAsync</code> to a not-supported failure means a host with no OAuth
+          secrets (most tests, local dev, and Store) behaves exactly as before, the same posture as ADR-020.</li>
+          <li><strong>The app owns account creation, the framework owns the handshake.</strong> The OAuth handshake, cookie,
+          and code exchange are generic and live in the framework; the <code>User</code> factory surface, default role,
+          and claim set are app-specific and stay in the subclass, so the flow composes with each app&#39;s
+          existing registration rules instead of duplicating them.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Opt-in per app, and easy to half-wire.</strong> The flow needs four cooperating pieces (scheme
+          registration, the controller subclass, the service override, and the <code>OAuth__UIBaseUrl</code> redirect
+          target). A host that registers schemes but forgets the controller, or configures a <code>ClientId</code>
+          without the matching UI flags, gets a broken or invisible button, the same audit-the-inventory
+          caveat as ADR-020. Adopting it also requires the migration that adds the provider columns.</li>
+          <li><strong>Email trust is inherited from the provider.</strong> Link-by-email assumes the provider returns a
+          verified email; a provider that returns an unverified address would let an external sign-in attach
+          to an existing account. GitHub&#39;s <code>user:email</code> scope and Google&#39;s verified email are the mitigation,
+          not a check the framework performs.</li>
+          <li><strong>Not exactly-once account creation across the redirect.</strong> The exchange commits the <code>User</code> before
+          the UI redeems the code; an abandoned redemption still creates (or links) the account. That is the
+          intended tradeoff (the identity is real once the provider vouched for it), but it means a completed
+          challenge can leave a local account whose token pair was never collected.</li>
+          <li><strong>A second credential shape on <code>User</code>.</strong> External accounts carry empty password hash/salt and rely
+          on <code>LoginProvider</code> / <code>ProviderKey</code>; code that assumes every <code>User</code> has a usable password must check
+          <code>IsExternalLogin</code> first.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p>ADR-004 (the RS256/JWKS token this flow exchanges the external identity <em>for</em>, and validates
+          everywhere after), ADR-022 (the browser cookies that carry the resulting session), ADR-029 (the
+          brute-force protection on the first-party credential surface this flow sits beside), ADR-032 (the
+          password hashing external accounts deliberately skip), ADR-020 (the inert-until-configured opt-in
+          posture this mirrors), ADR-005 (<code>User.Anonymize</code> clears the provider fields on erasure).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/036-external-oauth-login.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Operational Scripts &amp; Runbooks · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="This chapter covers every operational script and runbook in MMCA.ADC: the one-time Azure bootstrap, the database-per-service cutover story (how the…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/devops-runbooks.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Operational Scripts &amp; Runbooks">
+  <meta property="og:description" content="This chapter covers every operational script and runbook in MMCA.ADC: the one-time Azure bootstrap, the database-per-service cutover story (how the…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/devops-runbooks.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/onboarding/index.html">Onboarding Guide</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">Operational Scripts &amp; Runbooks</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>Guide contents</summary>
+        <nav class="doc-nav" aria-label="Onboarding Guide">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="00-dependency-manifest.html">Phase 1: Dependency Manifest &amp; Leveling</a></li>
+        <li><a href="00-group-taxonomy.html">Phase 1b - Functional Group Taxonomy</a></li>
+        <li><a href="00-inventory.html">Phase 0: Type Inventory</a></li>
+        <li><a href="00-primer.html">Primer, the concepts, stack, and conventions you need first</a></li>
+        <li><a href="group-01-result-error-handling.html">1. Result &amp; Error Handling</a></li>
+        <li><a href="group-02-domain-building-blocks.html">2. Domain Building Blocks (Entities, Value Objects, Aggregates)</a></li>
+        <li><a href="group-03-querying-specifications.html">3. Querying: Specifications, Filtering &amp; the Entity Query Service</a></li>
+        <li><a href="group-04-events-outbox.html">4. Domain &amp; Integration Events + Outbox Dual-Dispatch</a></li>
+        <li><a href="group-05-cqrs-pipeline.html">5. CQRS: Commands, Queries &amp; the Decorator Pipeline</a></li>
+        <li><a href="group-06-validation.html">6. Validation</a></li>
+        <li><a href="group-07-persistence-ef-core.html">7. Persistence &amp; EF Core</a></li>
+        <li><a href="group-08-auth.html">8. Authentication &amp; Authorization</a></li>
+        <li><a href="group-09-caching.html">9. Caching</a></li>
+        <li><a href="group-10-notifications.html">10. Notifications (Push + In-App Inbox + Email)</a></li>
+        <li><a href="group-11-navigation-populators.html">11. Navigation Metadata &amp; Populators (EF-decoupled eager loading)</a></li>
+        <li><a href="group-12-api-hosting-mapping.html">12. API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</a></li>
+        <li><a href="group-13-grpc-contracts.html">13. gRPC &amp; Inter-Service Contracts</a></li>
+        <li><a href="group-14-module-system-composition.html">14. Module System, Composition &amp; Configuration</a></li>
+        <li><a href="group-15-common-ui-framework.html">15. Common UI Framework (MudBlazor components, theme, base pages)</a></li>
+        <li><a href="group-16-aspire-orchestration.html">16. Aspire Orchestration &amp; Service Defaults</a></li>
+        <li><a href="group-17-conference-domain.html">17. ADC Conference - Domain Model &amp; Module Contracts</a></li>
+        <li><a href="group-18-conference-application.html">18. ADC Conference - Application &amp; Use Cases</a></li>
+        <li><a href="group-19-conference-infrastructure.html">19. ADC Conference - Infrastructure &amp; Persistence</a></li>
+        <li><a href="group-20-conference-api-grpc.html">20. ADC Conference - API, gRPC Contracts &amp; Service Host</a></li>
+        <li><a href="group-21-conference-ui.html">21. ADC Conference - UI</a></li>
+        <li><a href="group-22-engagement-module.html">22. ADC Engagement Module (Session Bookmarks)</a></li>
+        <li><a href="group-23-engagement-live-layer.html">23. ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></li>
+        <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
+        <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
+        <li><a href="group-26-testing-infrastructure.html">26. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
+        <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
+        <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
+        <li><a href="devops-runbooks.html" aria-current="page">Operational Scripts &amp; Runbooks</a></li>
+        <li><a href="devops-testing.html">Testing Architecture &amp; Solution Composition</a></li>
+        <li><a href="99-coverage-audit.html">Phase 4, Coverage Audit</a></li>
+        <li><a href="CONCEPT-MAPS.html">MMCA Concept &amp; Pattern Maps</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Onboarding guide</p>
+          <h1 id="operational-scripts--runbooks">Operational Scripts &amp; Runbooks</h1>
+          <p>This chapter covers every operational script and runbook in <code>MMCA.ADC</code>: the one-time Azure
+          bootstrap, the database-per-service cutover story (how the legacy <code>AtlDevCon</code> monolith DB was
+          split into four per-service databases), the disaster-recovery posture, the post-cutover archive
+          downgrade, and the Play Store asset pipeline. For each artifact you will learn what it does, when
+          an operator runs it, a step-by-step walkthrough with line cites, and why each gate or design choice
+          exists. Architecture rubric categories are tagged inline; cross-links reach the IaC and CI/CD
+          chapters and the ADRs that recorded the underlying decisions.</p>
+          <blockquote>
+          <p><strong>Architectural context.</strong> The database-per-service split (ADR-006) and the resilience/recovery
+          posture (ADR-009) are the two decisions that make this chapter necessary. Read both ADRs before
+          running any of these scripts against production.</p>
+          </blockquote>
+          <hr>
+          <h2 id="azure-setupsh-one-time-azure-bootstrap">azure-setup.sh, One-time Azure bootstrap</h2>
+          <p><strong>File:</strong> <code>MMCA.ADC/scripts/azure-setup.sh</code></p>
+          <p><strong>What it is.</strong> A bash script that creates every Azure identity and OIDC credential the GitHub
+          Actions deploy pipeline needs. It is idempotent: every step checks for existing state before
+          creating anything (<code>azure-setup.sh:12</code>, &quot;Idempotent: safe to re-run&quot;).</p>
+          <p><strong>When to run.</strong> Once per environment: when standing up a fresh Azure deployment for the first
+          time, or when rebuilding after a disaster recovery scenario where the identity objects were lost.
+          Never run it as part of a regular deploy; <code>deploy.yml</code> consumes the outputs but never re-runs
+          this script.</p>
+          <p>[Rubric §11, Security] assesses whether secrets are managed safely and whether OIDC / managed
+          identities replace long-lived credentials. This script is the bootstrap for that posture: it
+          creates a User-Assigned Managed Identity (UAMI) and federated GitHub OIDC credentials so the
+          pipeline never holds a client secret.</p>
+          <p>[Rubric §17, DevOps &amp; Deployment] assesses whether the provisioning and deployment pipeline is
+          automated, repeatable, and documented. The bootstrap being a single idempotent script that also
+          prints its own post-run checklist (<code>azure-setup.sh:143–177</code>) is the embodiment of that principle.</p>
+          <h3 id="walkthrough">Walkthrough</h3>
+          <p><strong>Configuration block (<code>azure-setup.sh:26–35</code>).</strong> Hard-codes the target subscription
+          (<code>4513b073-3a04-4f5c-b272-bbcc329b2d49</code>), tenant (<code>QiMata Technologies</code>), resource group
+          (<code>acc-rg</code>), location (<code>eastus2</code>), UAMI name (<code>mmca-adc-github-deploy</code>), and GitHub coordinates
+          (<code>ivanball/ADC</code>, <code>main</code>, environment <code>production</code>). Edit these before running in a different
+          environment.</p>
+          <p><strong>Why UAMI instead of an App Registration (<code>azure-setup.sh:6–10</code>).</strong> AAD App Registration
+          creation is blocked in the QiMata tenant for non-admin users (<code>Graph Authorization_RequestDenied</code>). UAMIs are ARM resources, RG-level Contributor plus role-assignment
+          rights is sufficient to create them. The choice is forced by tenant policy, not preference.</p>
+          <p><strong>Resource group (<code>azure-setup.sh:43–47</code>).</strong> <code>az group create</code> is a no-op when the group already
+          exists. The comment (<code>azure-setup.sh:40–42</code>) explicitly notes that <code>acc-rg</code> is shared with other
+          production resources and that <code>mode=Complete</code> is therefore forbidden, destroying unrelated
+          resources with a Complete-mode Bicep deploy would be catastrophic.</p>
+          <p><strong>UAMI creation and ID retrieval (<code>azure-setup.sh:49–65</code>).</strong> Creates the identity and then
+          immediately queries both <code>clientId</code> and <code>principalId</code>. The <code>clientId</code> goes into the GitHub secret
+          <code>AZURE_CLIENT_ID</code>; the <code>principalId</code> is used for role-assignment lookups.</p>
+          <p><strong><code>assign_role</code> function and the az-cli 2.84.x workaround (<code>azure-setup.sh:73–100</code>).</strong> Azure CLI
+          2.84.x returns a spurious <code>MissingSubscription</code> error on <code>az role assignment create</code> even when the
+          write succeeds (see the MEMORY note <code>feedback_azure_cli_role_bug.md</code>). The function therefore hits
+          the ARM REST API directly with <code>az rest PUT</code>. It also checks for an existing assignment first
+          (<code>az rest GET</code> + JMESPath filter) to be idempotent.</p>
+          <p><strong>Role assignments (<code>azure-setup.sh:103–105</code>).</strong> Two roles are granted to the UAMI on the RG
+          scope:</p>
+          <ul>
+          <li><code>Contributor</code> (GUID <code>b24988ac-…</code>), deploys ARM/Bicep, manages Container Apps, SQL, etc.</li>
+          <li><code>AcrPush</code> (GUID <code>8311e382-…</code>), pushes container images; the ACR admin password is disabled, so
+          the UAMI&#39;s <code>AcrPush</code> is the only image-push path.</li>
+          </ul>
+          <p><strong>Federated credentials (<code>azure-setup.sh:112–138</code>).</strong> Two OIDC federated credentials are
+          created on the UAMI, using <code>create_or_replace_fic</code> which skips creation if the credential already
+          exists:</p>
+          <ul>
+          <li><code>github-env-production</code>, subject <code>repo:ivanball/ADC:environment:production</code>. The deploy job
+          uses <code>environment: production</code>, which produces this subject.</li>
+          <li><code>github-ref-main</code>, subject <code>repo:ivanball/ADC:ref:refs/heads/main</code>. A fallback for workflow
+          runs not bound to an environment.</li>
+          </ul>
+          <p><strong>Post-run checklist (<code>azure-setup.sh:143–177</code>).</strong> The script prints everything the operator must
+          do manually: create the GitHub environment, add six required secrets (<code>AZURE_CLIENT_ID</code>,
+          <code>AZURE_TENANT_ID</code>, <code>AZURE_SUBSCRIPTION_ID</code>, <code>SQL_ADMIN_PASSWORD</code>, <code>JWT_RSA_PRIVATE_KEY_PEM</code>,
+          <code>JWT_RSA_PUBLIC_KEY_PEM</code>), one required variable (<code>AZURE_RESOURCE_GROUP</code>), and a list of optional
+          secrets for SMTP, OAuth, and the Anthropic API.</p>
+          <hr>
+          <h2 id="the-database-per-service-cutover-story">The database-per-service cutover story</h2>
+          <p>Before the cutover scripts make sense, the story behind them does.</p>
+          <p><strong>Before ADR-006.</strong> All four modules (<code>Identity</code>, <code>Conference</code>, <code>Engagement</code>, <code>Notification</code>)
+          pointed at a single shared SQL database called <code>AtlDevCon</code>. This caused an outbox race: every
+          service&#39;s <code>OutboxProcessor</code> polled the same <code>dbo.OutboxMessages</code> table and could claim another
+          service&#39;s rows, producing duplicate dispatch (the precise defect documented in ADR-006 and the
+          <code>project_outbox_race_shared_db.md</code> memory note, fixed 2026-06-07).</p>
+          <p><strong>The ADR-006 decision.</strong> Adopt database-per-service. Each service owns <code>ADC_Identity</code>,
+          <code>ADC_Conference</code>, <code>ADC_Engagement</code>, or <code>ADC_Notification</code>, locally on the Aspire SQL container,
+          in Azure as four Basic-tier databases on the same SQL server. The legacy <code>AtlDevCon</code> database is
+          retained <strong>read-only</strong> as an archive and rollback path and is never deleted. Cross-service
+          references become scalar IDs (no cross-database foreign keys); <code>CrossDataSourceDegradeConvention</code>
+          removes FK constraints at the EF level; consistency flows through the outbox and broker (ADR-003).</p>
+          <p>[Rubric §8, Data Architecture] assesses data modeling quality, isolation, and whether services
+          own their own schema. The per-service database design directly addresses this: each service has its
+          own schema, its own migrations project, and its own <code>dbo.OutboxMessages</code>, no service ever sees
+          another&#39;s rows.</p>
+          <p><strong>The three-commit rollout plan.</strong> The Azure cutover was structured as three commits to prevent
+          data loss:</p>
+          <ol>
+          <li><strong>Commit 1</strong>, <code>main.bicep</code> provisions the four <code>ADC_*</code> databases (empty). Services still read
+          <code>AtlDevCon</code>.</li>
+          <li><strong>Run <code>cutover-per-service-dbs.yml</code></strong> (one-time, manual), migrates the four empty databases,
+          copies <code>AtlDevCon</code> data into them, verifies row counts. <code>AtlDevCon</code> is never written.</li>
+          <li><strong>Commit 2</strong>, Container App env vars flip to the per-service connection strings. Services now
+          read and write their own databases.</li>
+          <li><strong>Commit 3</strong>, downgrade <code>AtlDevCon</code> from S0 to Basic tier (archive), as described in the
+          post-cutover runbook below.</li>
+          </ol>
+          <h3 id="cutover-per-service-dbsyml-the-orchestrating-workflow">cutover-per-service-dbs.yml, the orchestrating workflow</h3>
+          <p><strong>File:</strong> <code>MMCA.ADC/.github/workflows/cutover-per-service-dbs.yml</code></p>
+          <p><strong>What it is.</strong> A manually-triggered (<code>workflow_dispatch</code>) GitHub Actions workflow that runs the
+          entire cutover sequence safely against production Azure SQL.</p>
+          <p><strong>When to run.</strong> Exactly once per environment, between Commit 1 (databases provisioned) and
+          Commit 2 (app flip). Never again, the <code>copy-atldevcon-to-per-service-dbs.azure.ps1</code> script skips
+          tables that already have rows, so accidental re-runs after Commit 2 would silently skip seeded
+          data.</p>
+          <p><strong>Confirmation gate (<code>cutover-per-service-dbs.yml:49–53</code>).</strong> The <code>confirm</code> input must be typed as
+          exactly the string <code>&quot;cutover&quot;</code>. Any other value aborts immediately. This is a typo-prevention
+          guard for a destructive (irreversible-at-scale) one-time operation.</p>
+          <p><strong>Concurrency lock (<code>cutover-per-service-dbs.yml:37–39</code>).</strong> Uses <code>group: prod-azure</code> with
+          <code>cancel-in-progress: false</code>, the same concurrency group as <code>deploy.yml</code>. A simultaneous <code>push</code> to
+          <code>main</code> cannot interleave a new container revision mid-copy, because the cutover workflow holds the
+          lock and <code>cancel-in-progress: false</code> prevents it from being preempted.</p>
+          <p><strong>GATE 1, apps still point at <code>AtlDevCon</code> (<code>cutover-per-service-dbs.yml:71–81</code>).</strong> Checks
+          whether <code>adc-prod-identity</code> already carries <code>DataSources__Identity__SQLServerConnectionString</code>. If
+          it does, Commit 2 has already been deployed and the seeded <code>ADC_*</code> tables are non-empty; a copy
+          would silently skip everything. The step aborts with a clear error message.</p>
+          <p><strong>SQL server discovery (<code>cutover-per-service-dbs.yml:83–92</code>).</strong> Queries by name prefix
+          (<code>adc-prod-sql-*</code>) rather than hard-coding the suffix token, so the FQDN is always resolved from
+          the live Azure state.</p>
+          <p><strong>Optional traffic freeze (<code>cutover-per-service-dbs.yml:99–101</code>).</strong> When <code>freeze_traffic: true</code>,
+          the step disables the Gateway&#39;s Container App ingress (<code>az containerapp ingress disable</code>). This
+          eliminates the write-drift window (new rows written to <code>AtlDevCon</code> after the copy starts but
+          before the flip). Recommended for production cutovers. The re-enable step (<code>cutover-per-service-dbs.yml:164–171</code>) runs
+          under <code>if: ${{ always() &amp;&amp; inputs.freeze_traffic }}</code> so the Gateway is never left offline even if a
+          later step fails.</p>
+          <p><strong>GATE 2, outbox drained (<code>cutover-per-service-dbs.yml:105–117</code>).</strong> Counts unprocessed rows in
+          <code>AtlDevCon.dbo.OutboxMessages WHERE ProcessedOn IS NULL</code>. A non-zero count aborts. This is
+          critical: unprocessed outbox rows represent integration events that have not yet been published to
+          the broker. Copying them after the flip is complex (the commented-out section in the SQL script
+          shows how). Draining first means the copy script can safely omit <code>OutboxMessages</code> entirely.</p>
+          <p><strong>Migration generation (<code>cutover-per-service-dbs.yml:119–135</code>).</strong> Runs <code>dotnet ef migrations script --idempotent</code> for each of the four per-module migration projects
+          (<code>Source/Hosting/MMCA.ADC.Migrations.SqlServer.{Identity,Conference,Engagement,Notification}</code>).
+          No database connection is opened during script generation, the design-time factory in each
+          migration project is self-contained.</p>
+          <p><strong>Migration application (<code>cutover-per-service-dbs.yml:137–145</code>).</strong> Applies each generated script
+          to its target database via <code>sqlcmd</code>. The <code>--idempotent</code> flag means re-running is safe: applied
+          migrations are skipped.</p>
+          <p><strong>Data copy (<code>cutover-per-service-dbs.yml:152–161</code>).</strong> Calls
+          <code>copy-atldevcon-to-per-service-dbs.azure.ps1</code> with <code>-VerifyCounts</code>, which fails the step if any
+          target has fewer rows than its source. <code>AtlDevCon</code> is read-only throughout.</p>
+          <hr>
+          <h2 id="copy-atldevcon-to-per-service-dbsazureps1-azure-data-copy">copy-atldevcon-to-per-service-dbs.azure.ps1, Azure data copy</h2>
+          <p><strong>File:</strong> <code>MMCA.ADC/scripts/copy-atldevcon-to-per-service-dbs.azure.ps1</code></p>
+          <p><strong>What it is.</strong> A PowerShell script that streams rows from <code>AtlDevCon</code> into the four per-service
+          Azure SQL databases using <code>SqlBulkCopy</code>. It is the Azure-compatible counterpart to the local SQL
+          script (below), Azure SQL Database does not support the three-part cross-database names
+          (<code>AtlDevCon.schema.Table</code>) that <code>sqlcmd</code> needs, so the PowerShell approach opens a separate
+          connection per database and streams data row-by-row.</p>
+          <p><strong>When to run.</strong> Invoked by <code>cutover-per-service-dbs.yml</code>. Can also be run from a developer
+          machine (the <code>dev-machine use</code> block in the doc comment, lines 60–67, explains the temporary
+          firewall rule needed for that).</p>
+          <p>[Rubric §17, DevOps &amp; Deployment] assesses automation. Running this script from the CI workflow
+          rather than a manual SSMS session means the copy is reproducible, version-controlled, and audited
+          in the Actions run log.</p>
+          <h3 id="walkthrough-1">Walkthrough</h3>
+          <p><strong>Table list (<code>copy-atldevcon-to-per-service-dbs.azure.ps1:86–109</code>).</strong> An ordered array of
+          <code>{Db, Schema, Table}</code> hashes in FK-safe order, roots before children, parent tables before join
+          tables. The order mirrors <code>migrate-atldevcon-to-per-service-dbs.sql</code> exactly (comment on line 84).
+          <code>OutboxMessages</code> is deliberately absent (line 85, &quot;intentionally absent&quot;).</p>
+          <p><strong>Skip-if-non-empty guard (<code>copy-atldevcon-to-per-service-dbs.azure.ps1:171–176</code>).</strong> Before
+          touching any table, a <code>COUNT(*)</code> query checks whether the target already has rows. If it does, the
+          table is skipped with a <code>SKIP</code> log line. This is the idempotency mechanism: re-running after a
+          partial failure copies only the missing tables. The flip side, straggler rows written to
+          <code>AtlDevCon</code> after the copy, is explicitly called out as NOT handled automatically (doc comment
+          lines 30–36).</p>
+          <p><strong>Copyable-column resolution (<code>copy-atldevcon-to-per-service-dbs.azure.ps1:127–147</code>).</strong> Queries
+          <code>sys.columns</code> on the <em>source</em> connection, excluding computed columns (<code>is_computed = 0</code>) and
+          <code>timestamp</code>/<code>rowversion</code> columns (<code>TYPE_NAME &lt;&gt; &#39;timestamp&#39;</code>). Targets mint fresh <code>RowVersion</code>
+          values. Critically, the script uses <strong>name-based column mappings</strong> (<code>foreach ($c in $columns) { [void]$bulk.ColumnMappings.Add($c, $c) }</code>, line 197), not ordinal mappings, because the excluded
+          <code>rowversion</code> column would shift ordinals and produce wrong-column inserts.</p>
+          <p><strong><code>KeepIdentity</code> + RESEED (<code>copy-atldevcon-to-per-service-dbs.azure.ps1:192, 206–209</code>).</strong> The
+          <code>SqlBulkCopy</code> options include <code>KeepIdentity</code> so numeric primary keys are preserved verbatim. After
+          the copy, <code>DBCC CHECKIDENT ... RESEED</code> re-synchronizes the identity seed so the next <code>INSERT</code> does
+          not collide with copied IDs.</p>
+          <p><strong><code>QUOTED_IDENTIFIER ON</code> (<code>copy-atldevcon-to-per-service-dbs.azure.ps1:18</code>, doc comment, line
+          18).</strong> <code>Microsoft.Data.SqlClient</code> sessions default <code>QUOTED_IDENTIFIER ON</code>. This is required for
+          inserts into tables that have filtered indexes (which use <code>WHERE</code> clauses that reference quoted
+          identifiers). The equivalent <code>sqlcmd -I</code> flag is passed by the local PowerShell wrapper below.</p>
+          <p><strong><code>-VerifyCounts</code> flag (<code>copy-atldevcon-to-per-service-dbs.azure.ps1:226–259</code>).</strong> When set,
+          re-opens both source and target connections after the copy and compares row counts per table. Any
+          target with <em>fewer</em> rows than its source causes the script to exit non-zero, failing the CI step.
+          Targets with <em>more</em> rows (e.g. seeded admin rows) are flagged for investigation but do not fail.</p>
+          <hr>
+          <h2 id="migrate-atldevcon-to-per-service-dbsps1-local-data-copy-wrapper">migrate-atldevcon-to-per-service-dbs.ps1, local data copy wrapper</h2>
+          <p><strong>File:</strong> <code>MMCA.ADC/scripts/migrate-atldevcon-to-per-service-dbs.ps1</code></p>
+          <p><strong>What it is.</strong> A thin PowerShell wrapper that invokes the companion SQL script via <code>sqlcmd</code>
+          against the local Aspire SQL container. Unlike the Azure script, this one uses three-part
+          cross-database names, supported by SQL Server on the Aspire container, not by Azure SQL Database.</p>
+          <p><strong>When to run.</strong> Once per local environment, after the first <code>dotnet run --project Source/Hosting/MMCA.ADC.AppHost</code> has let every service create, migrate, and seed its own database.
+          Run it when you are first standing up a local development environment from the legacy <code>AtlDevCon</code>
+          data (e.g. restoring a production snapshot locally for debugging).</p>
+          <h3 id="walkthrough-2">Walkthrough</h3>
+          <p><strong>Parameters (<code>migrate-atldevcon-to-per-service-dbs.ps1:18–22</code>).</strong> <code>-Server</code> (default
+          <code>localhost,1433</code>) and <code>-Password</code> (mandatory SA password). Get the dynamic port from the Aspire
+          dashboard&#39;s <code>sql</code> resource connection string.</p>
+          <p><strong><code>sqlcmd</code> invocation (<code>migrate-atldevcon-to-per-service-dbs.ps1:27</code>).</strong> Key flags: <code>-C</code> (trust
+          server cert on the self-signed Aspire container cert), <code>-b</code> (exit non-zero on error), <code>-I</code>
+          (enable <code>QUOTED_IDENTIFIER ON</code>, required for the filtered indexes on the target tables), <code>-i $scriptPath</code> (the SQL file). A non-zero exit code is re-thrown as a PowerShell exception.</p>
+          <hr>
+          <h2 id="migrate-atldevcon-to-per-service-dbssql-local-sql-copy-script">migrate-atldevcon-to-per-service-dbs.sql, local SQL copy script</h2>
+          <p><strong>File:</strong> <code>MMCA.ADC/scripts/migrate-atldevcon-to-per-service-dbs.sql</code></p>
+          <p><strong>What it is.</strong> The T-SQL script that performs the actual per-row copy from <code>AtlDevCon</code> into the
+          four per-service databases using three-part names. Safe to run against the local Aspire SQL
+          container; not safe against Azure SQL Database (three-part names are not supported there, use
+          <code>copy-atldevcon-to-per-service-dbs.azure.ps1</code> instead).</p>
+          <p><strong>When to run.</strong> Invoked by <code>migrate-atldevcon-to-per-service-dbs.ps1</code>. Never run directly in
+          production.</p>
+          <p>[Rubric §8, Data Architecture] assesses migration hygiene and whether the database split is
+          tractable. This script is the local proof that the split is mechanical and auditable, not a manual
+          SSMS drag-and-drop.</p>
+          <h3 id="walkthrough-3">Walkthrough</h3>
+          <p><strong>Session settings (<code>migrate-atldevcon-to-per-service-dbs.sql:19–23</code>).</strong> <code>SET XACT_ABORT ON</code>
+          ensures that any error rolls back the current statement&#39;s implicit transaction. <code>SET QUOTED_IDENTIFIER ON</code> and <code>SET ANSI_NULLS ON</code> are required by the filtered indexes on the target
+          tables.</p>
+          <p><strong>Source-exists guard (<code>migrate-atldevcon-to-per-service-dbs.sql:25–29</code>).</strong> <code>IF DB_ID(N&#39;AtlDevCon&#39;) IS NULL</code>, exits cleanly with a message if the source database does not exist on this instance (e.g.
+          a fresh local machine that never had the legacy DB).</p>
+          <p><strong>Table sequence (<code>migrate-atldevcon-to-per-service-dbs.sql:32–56</code>).</strong> An in-memory table variable
+          holds the ordered list (<code>Seq</code>, <code>TargetDb</code>, <code>SchemaName</code>, <code>TableName</code>) in FK-safe sequence,
+          roots first (Event, User), leaf joins last (SessionCategoryItem, EventQuestionAnswer). The
+          sequence numbers leave gaps between modules (10-series, 20-34 series, 40-series, 50-51) for easy
+          insertion.</p>
+          <p><strong>Column introspection (<code>migrate-atldevcon-to-per-service-dbs.sql:81–110</code>).</strong> Dynamic SQL builds
+          the column list at runtime from <code>AtlDevCon.sys.columns</code>, excluding computed columns and
+          <code>timestamp</code> types. The same column set (aliased <code>s.</code>) forms the <code>SELECT</code> list; the primary-key
+          columns drive the <code>WHERE NOT EXISTS</code> idempotency predicate.</p>
+          <p><strong>Per-row idempotency (<code>migrate-atldevcon-to-per-service-dbs.sql:123–124</code>).</strong> The insert is
+          <code>INSERT INTO &lt;target&gt; (...) SELECT ... FROM &lt;source&gt; AS s WHERE NOT EXISTS (SELECT 1 FROM &lt;target&gt; AS t WHERE &lt;pk match&gt;)</code>. Re-running the script copies only rows whose primary key is absent from
+          the target, so seeded rows (e.g. the admin account) are not duplicated, and a partial run can
+          be safely resumed.</p>
+          <p><strong><code>IDENTITY_INSERT ON/OFF</code> (<code>migrate-atldevcon-to-per-service-dbs.sql:118–127</code>).</strong> Enabled for
+          tables that have identity columns (<code>sys.identity_columns</code>), preserving source PKs verbatim. Note:
+          the Azure bulk-copy script handles identity reseeding explicitly; the SQL script does not (the
+          next insert on the local container will land at the highest existing ID + 1 automatically via
+          <code>DBCC CHECKIDENT</code>).</p>
+          <p><strong><code>OutboxMessages</code>, deliberately omitted (<code>migrate-atldevcon-to-per-service-dbs.sql:14–17</code>).</strong> The
+          commented-out block at lines 149–156 shows how to route unprocessed rows by event namespace if
+          you must preserve them, but the normal path is to drain the outbox on the old branch first and
+          not copy it at all.</p>
+          <hr>
+          <h2 id="infradisaster-recoverymd-dr-runbook">infra/DISASTER-RECOVERY.md, DR runbook</h2>
+          <p><strong>File:</strong> <code>MMCA.ADC/infra/DISASTER-RECOVERY.md</code></p>
+          <p><strong>What it is.</strong> The authoritative disaster-recovery runbook for the ADC production environment.
+          Mandated by ADR-009: every consuming app must declare RTO/RPO per failure scenario, document the
+          backup/restore mechanism, accept single-region risk in writing, and record restore drills in a
+          drill-result table.</p>
+          <p><strong>When to consult.</strong> On any data-loss event, corruption, failed deployment, or region outage.
+          Also consult it when changing backup/retention settings to understand what the targets are, and
+          periodically to schedule the next restore drill.</p>
+          <p>Cross-link: see <a href="#">tier-0N IaC chapter</a> for how <code>infra/main.bicep</code> provisions the LTR policies
+          and alerts, and <a href="#">tier-0N CI/CD chapter</a> for the deploy rollback mechanism.</p>
+          <p>[Rubric §29, Resilience &amp; Business Continuity] assesses whether the system has documented RTO/RPO
+          targets and a drilled restore procedure. The DR file directly addresses this rubric item,
+          including the explicit acknowledgment that the next restore drill (<code>DISASTER-RECOVERY.md:131</code>) has
+          not yet been executed (TD-10).</p>
+          <p>[Rubric §13, Observability] assesses alerting and monitoring. The three App Insights metric alerts
+          defined in <code>main.bicep</code> and documented in <code>DISASTER-RECOVERY.md:46–57</code> are the alerting posture:
+          failed requests &gt; 10, avg response time &gt; 3000 ms, dependency failures &gt; 10, each evaluated over
+          a 15-minute window.</p>
+          <p>[Rubric §11, Security] assesses credential hardening. The managed-identity section
+          (<code>DISASTER-RECOVERY.md:60–85</code>) documents the out-of-band bootstrap for the <code>adc-prod-apps-identity</code>
+          UAMI and the Key Vault RBAC grants. The ACR admin user is disabled; no plaintext secrets exist in
+          Container App environment variables.</p>
+          <h3 id="recovery-objectives">Recovery objectives</h3>
+          <p>The DR file targets three failure scenarios (<code>DISASTER-RECOVERY.md:11–14</code>):</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Scenario</th>
+          <th>RPO</th>
+          <th>RTO</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Accidental data loss / bad migration (within 7-day PITR window)</td>
+          <td>≤ ~10 min</td>
+          <td>≤ 2 h</td>
+          </tr>
+          <tr>
+          <td>Single service DB corruption</td>
+          <td>≤ ~10 min</td>
+          <td>≤ 1 h (PITR restore-as-new, swap name)</td>
+          </tr>
+          <tr>
+          <td>Full region loss</td>
+          <td>≤ 1 h (geo-redundant backup replication lag)</td>
+          <td>≤ 4 h (geo-restore + redeploy)</td>
+          </tr>
+          </tbody></table></div>
+          <p>These are deliberately modest: ADC is a regional, non-24×7 conference app. Sub-hour multi-region
+          failover is explicitly not a goal (<code>DISASTER-RECOVERY.md:17–18</code>).</p>
+          <h3 id="accepted-single-region-risks">Accepted single-region risks</h3>
+          <p><code>DISASTER-RECOVERY.md:20–32</code> lists three knowingly-accepted SPOFs:</p>
+          <ul>
+          <li>One Azure SQL server (mitigated by geo-redundant PITR + LTR + <code>AtlDevCon</code> archive).</li>
+          <li>One Container Apps environment, all apps <code>minReplicas: 1</code>. A zonal outage drops the app until
+          Azure reschedules. Conference-day scale-up (applied only when warranted, the 2026 ADC load of
+          ~67 peak concurrent did not warrant it) is the documented mitigation.</li>
+          <li>One Service Bus namespace (Standard) and one ACR.</li>
+          </ul>
+          <h3 id="backup-posture">Backup posture</h3>
+          <p>Two tiers (<code>DISASTER-RECOVERY.md:35–42</code>):</p>
+          <ul>
+          <li><strong>PITR</strong>: 7-day point-in-time restore on geo-redundant storage. Covers the &quot;undo the last bad
+          change&quot; case with an RPO of minutes.</li>
+          <li><strong>LTR</strong>: long-term retention on all four live per-service databases: weekly P4W, monthly P12M,
+          yearly P1Y (week 1). Declared via the <code>serviceDatabaseLtr</code> resource in <code>infra/main.bicep</code>.
+          <code>AtlDevCon</code> is excluded (static archive, never written after cutover).</li>
+          </ul>
+          <h3 id="recovery-procedures">Recovery procedures</h3>
+          <p><strong>Single database PITR restore (<code>DISASTER-RECOVERY.md:90–93</code>).</strong> Restore to a new name, validate,
+          then rename or repoint via a redeploy. Example given for <code>ADC_Conference</code>.</p>
+          <p><strong>LTR restore (<code>DISASTER-RECOVERY.md:95–100</code>).</strong> List available backups with <code>az sql db ltr-backup list</code>, then restore with <code>az sql db ltr-backup restore</code>.</p>
+          <p><strong>Full region loss (<code>DISASTER-RECOVERY.md:102–105</code>).</strong> The deploy pipeline is region-parameterized
+          (<code>sqlLocation</code> + RG location), so recovery is: create a new RG in a healthy region → geo-restore
+          each <code>ADC_*</code> database there → re-run <code>deploy.yml</code> pointed at the new RG. The <code>AtlDevCon</code> archive
+          is the last-resort source of record.</p>
+          <p><strong>Deploy rollback (<code>DISASTER-RECOVERY.md:107–113</code>).</strong> <code>deploy.yml</code>&#39;s post-deploy smoke gate
+          (Gateway <code>/health</code> + <code>/.well-known/jwks.json</code> + UI root, with retries) auto-reverts every
+          container app to its previous revision via <code>az containerapp revision copy</code> if the new revision
+          does not serve. Manual rollback example is also given.</p>
+          <h3 id="restore-drill-requirement">Restore drill requirement</h3>
+          <p><code>DISASTER-RECOVERY.md:118–131</code> provides a <code>sqlcmd</code>-based drill script that restores a throwaway
+          copy of <code>AtlDevCon</code>, verifies table and row counts, then deletes it. The drill-result table (line
+          129) currently reads &quot;not yet drilled (TD-10)&quot;, per ADR-009, a recorded drill is required before
+          the next release.</p>
+          <hr>
+          <h2 id="infrapost-cutover-atldevcon-downgrademd-archive-downgrade-runbook">infra/POST-CUTOVER-atldevcon-downgrade.md, archive downgrade runbook</h2>
+          <p><strong>File:</strong> <code>MMCA.ADC/infra/POST-CUTOVER-atldevcon-downgrade.md</code></p>
+          <p><strong>What it is.</strong> A step-by-step runbook for the third and final commit of the database-per-service
+          rollout: downgrading <code>AtlDevCon</code> from S0 to Basic tier in <code>main.bicep</code>. This is a cost-reduction
+          step that must be taken only after the per-service databases have been proven in production.</p>
+          <p><strong>When to run.</strong> After the per-service databases (<code>ADC_*</code>) have been running and verified for at
+          least 24 hours, <code>AtlDevCon</code> has had no new writes, and the outbox is fully drained.</p>
+          <p>[Rubric §31, Cost/FinOps] assesses whether cost is actively managed and right-sized. Downgrading
+          a now-idle database from S0 (10 DTU, ~$15/month) to Basic (5 DTU, ~$5/month) once it becomes a
+          static archive is the operationalization of that principle.</p>
+          <p>[Rubric §8, Data Architecture] assesses data lifecycle and migration hygiene. Keeping <code>AtlDevCon</code>
+          in the Bicep declaration under a <code>// RETAINED, archived legacy database, data preserved. NEVER delete.</code> comment (shown in the runbook, line 42) prevents out-of-band drift: the Bicep resource
+          is always the source of truth about the database&#39;s existence and configuration.</p>
+          <h3 id="walkthrough-4">Walkthrough</h3>
+          <p><strong>Prerequisites (<code>POST-CUTOVER-atldevcon-downgrade.md:15–32</code>).</strong> Three checks:</p>
+          <ol>
+          <li>Confirm the flip is live and healthy, all four <code>adc-prod-*</code> apps serve from their <code>ADC_*</code>
+          databases, <code>AtlDevCon</code> has had no writes for ≥24h, outbox is empty (<code>ProcessedOn IS NULL = 0</code>).</li>
+          <li>Confirm <code>AtlDevCon</code> fits in the 2 GB Basic cap using <code>az sql db list-usages</code>. At ~76 users /
+          50 sessions / 53 speakers, it is far under the limit.</li>
+          <li>Export a permanent <code>.bacpac</code> archive before downgrading. Basic tier retains PITR for only 7 days
+          (vs 35 days for S0), so a one-off export to blob storage is the last-resort point-in-time
+          snapshot (<code>POST-CUTOVER-atldevcon-downgrade.md:24–31</code>).</li>
+          </ol>
+          <p><strong>The Bicep change (<code>POST-CUTOVER-atldevcon-downgrade.md:33–53</code>).</strong> Replace <code>sku</code> and <code>maxSizeBytes</code>
+          only on the <code>AtlDevCon</code> resource. The resource stays in <code>main.bicep</code>, Incremental mode would
+          not delete it if removed, but keeping it declared prevents out-of-band drift. The change is
+          <code>name: &#39;Basic&#39;, tier: &#39;Basic&#39;, capacity: 5</code> with <code>maxSizeBytes: 2147483648</code> (2 GB cap).</p>
+          <p><strong>Why Commit 3 is separate (<code>POST-CUTOVER-atldevcon-downgrade.md:8–9</code>).</strong> If <code>main.bicep</code> carried
+          the Basic SKU when Commit 2 deployed (the app flip), <code>AtlDevCon</code> would be downgraded before the
+          new databases were proven. Separating the commits eliminates that risk.</p>
+          <p><strong>Deploy via the normal pipeline.</strong> Merge the Bicep change and let <code>deploy.yml</code> apply it
+          (<code>POST-CUTOVER-atldevcon-downgrade.md:55</code>). No special workflow or manual <code>az sql db update</code>
+          command is needed, Incremental mode changes only the SKU, data is untouched.</p>
+          <p><strong>Verification (<code>POST-CUTOVER-atldevcon-downgrade.md:57–59</code>).</strong> <code>az sql db show</code> confirms <code>sku.name = Basic</code> and <code>maxSizeBytes = 2147483648</code>. A spot row-count query against <code>AtlDevCon</code> confirms data
+          is preserved.</p>
+          <p><strong>Rollback (<code>POST-CUTOVER-atldevcon-downgrade.md:61–62</code>).</strong> Revert the Commit 3 change and
+          redeploy to return <code>AtlDevCon</code> to S0. Rolling back the downgrade is entirely independent of
+          rolling back the app flip (Commit 2); they can be reverted separately.</p>
+          <hr>
+          <h2 id="play-store-captureps1-android-screenshot-capture">play-store-capture.ps1, Android screenshot capture</h2>
+          <p><strong>File:</strong> <code>MMCA.ADC/scripts/play-store-capture.ps1</code></p>
+          <p><strong>What it is.</strong> A PowerShell 7 script that captures a screenshot from an attached Android device
+          or emulator via <code>adb screencap</code> and saves it as a deterministic-filename PNG under
+          <code>store-assets/play-store/raw/</code>.</p>
+          <p><strong>When to run.</strong> When preparing or refreshing Google Play Store screenshots. Run once per slot
+          (e.g. <code>01-home</code>, <code>02-sessions</code>) on a device or emulator that is showing the correct screen. Eight
+          slots are defined in the companion compose script&#39;s lineup.</p>
+          <p>[Rubric §30, Compliance/Privacy] assesses whether the app store presence is maintained. These
+          scripts are the mechanism for maintaining Play Store assets, without them, the screenshots drift
+          from the current UI.</p>
+          <h3 id="walkthrough-5">Walkthrough</h3>
+          <p><strong>Slug-based filenames (<code>play-store-capture.ps1:47–48</code>).</strong> Raw captures are saved as <code>&lt;slug&gt;.png</code>
+          in a directory structure under <code>store-assets/play-store/raw/</code>. Deterministic names mean the
+          compose script can look them up by slug key without a manifest file.</p>
+          <p><strong><code>-List</code> switch (<code>play-store-capture.ps1:53–65</code>).</strong> Lists already-captured slots with file size
+          and timestamp, a quick sanity check before a composing session.</p>
+          <p><strong><code>adb</code> resolution (<code>play-store-capture.ps1:67–76</code>).</strong> Prefers <code>adb</code> on <code>PATH</code>; falls back to the
+          well-known SDK path (<code>C:\Program Files (x86)\Android\android-sdk\platform-tools\adb.exe</code>).</p>
+          <p><strong><code>exec-out</code> not <code>shell screencap</code> (<code>play-store-capture.ps1:110</code>).</strong> Uses <code>adb exec-out</code> to stream
+          the PNG binary directly into the output file. Plain <code>adb shell screencap</code> on Windows applies CRLF
+          translation to the binary stream, corrupting the PNG.</p>
+          <p><strong>Dimension read from IHDR (<code>play-store-capture.ps1:128–146</code>).</strong> Reads the PNG IHDR chunk to print
+          the captured resolution. If width &gt; height (landscape), a warning is emitted, Play Store phone
+          screenshots must be portrait.</p>
+          <hr>
+          <h2 id="play-store-composeps1-play-store-screenshot-compositor">play-store-compose.ps1, Play Store screenshot compositor</h2>
+          <p><strong>File:</strong> <code>MMCA.ADC/scripts/play-store-compose.ps1</code></p>
+          <p><strong>What it is.</strong> A PowerShell 7 script that reads raw captures from <code>store-assets/play-store/raw/</code>,
+          wraps each into a 1080×1920 branded canvas, overlays a caption and subtitle from a hard-coded
+          lineup, and writes the finished PNG to <code>store-assets/play-store/screenshots/</code>. The composed images
+          satisfy Play Console&#39;s aspect-ratio requirement (Pixel emulators capture at 1080×2400, 9:20, which
+          Play Console rejects as too tall; the script guarantees a compliant 1080×1920 / 9:16 result).</p>
+          <p><strong>When to run.</strong> After <code>play-store-capture.ps1</code> has captured all needed slots. Run with no <code>-Slug</code>
+          to compose the full set, or <code>-Slug &lt;slug&gt;</code> to recompose one slot. Run with <code>-NoCaption</code> for a
+          plain brand-framed variant (e.g. for the feature graphic or tablet screenshots).</p>
+          <p>[Rubric §30, Compliance/Privacy] assesses app store compliance. Play Console has strict
+          aspect-ratio rules for phone screenshots; this script enforces compliance mechanically rather than
+          relying on manual cropping.</p>
+          <h3 id="walkthrough-6">Walkthrough</h3>
+          <p><strong>Lineup (<code>play-store-compose.ps1:52–61</code>).</strong> Eight slots are defined inline with slug, caption
+          (large bold white text), and subtitle (smaller cyan text). The comment on line 51 notes that the
+          lineup must be kept in sync with <code>store-assets/play-store/README.md</code>.</p>
+          <p><strong>Brand colors (<code>play-store-compose.ps1:69–71</code>).</strong> Three colors: <code>brandTeal</code> (<code>#0D7377</code>),
+          <code>brandCyan</code> (<code>#14FFEC</code>), <code>brandTealDark</code> (<code>#094F52</code>). The canvas uses a vertical <code>LinearGradientBrush</code>
+          from teal to dark teal for depth.</p>
+          <p><strong><code>System.Drawing.Common</code> assembly (<code>play-store-compose.ps1:40–43</code>).</strong> The script loads
+          <code>System.Drawing.Common</code> (PowerShell 7 path) with a fallback to the desktop-FX alias on
+          Windows PowerShell 5.1.</p>
+          <p><strong>Fit-inside scaling (<code>play-store-compose.ps1:134–136</code>).</strong> Each raw capture is scaled to fit inside
+          the available image area (<code>imageMaxW × imageMaxH</code>, computed from the canvas minus caption area and
+          footer) preserving aspect ratio, then centered horizontally and vertically. Captures taller than
+          9:16 (e.g. 9:20 Pixel emulator) are letterboxed on the teal background.</p>
+          <p><strong>Soft shadow and cyan border (<code>play-store-compose.ps1:141–152</code>).</strong> A 10-px-offset 30%-opacity
+          black rectangle produces a drop shadow. A 2-px cyan (<code>brandCyan</code>) rectangle borders the screenshot
+          so it pops against the teal background.</p>
+          <p><strong>Output (<code>play-store-compose.ps1:175</code>).</strong> Each composed PNG is saved as
+          <code>store-assets/play-store/screenshots/&lt;slug&gt;.png</code>. Upload these directly to Play Console → Main
+          store listing → Phone screenshots.</p>
+          <hr>
+          <h2 id="the-database-per-service-cutover-in-full-context">The database-per-service cutover in full context</h2>
+          <p>The five database-related artifacts above form a single coherent story:</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Step</th>
+          <th>Who runs it</th>
+          <th>Artifact</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><strong>Local dev setup</strong>, copy legacy data into fresh per-service databases on the Aspire container</td>
+          <td>Developer</td>
+          <td><code>migrate-atldevcon-to-per-service-dbs.ps1</code> → <code>.sql</code></td>
+          </tr>
+          <tr>
+          <td><strong>Production one-time cutover</strong>, gate, freeze, migrate, copy, verify</td>
+          <td>GitHub Actions (manual trigger)</td>
+          <td><code>cutover-per-service-dbs.yml</code> → <code>copy-atldevcon-to-per-service-dbs.azure.ps1</code></td>
+          </tr>
+          <tr>
+          <td><strong>Post-cutover archive downgrade</strong>, lower <code>AtlDevCon</code> to Basic tier</td>
+          <td>Developer (Bicep PR + normal deploy)</td>
+          <td><code>POST-CUTOVER-atldevcon-downgrade.md</code></td>
+          </tr>
+          <tr>
+          <td><strong>Disaster recovery</strong>, restore a database, roll back a deploy</td>
+          <td>On-call operator</td>
+          <td><code>DISASTER-RECOVERY.md</code></td>
+          </tr>
+          </tbody></table></div>
+          <p>The <code>AtlDevCon</code> database is the thread that runs through all of them: it is the source of data
+          truth during the copy, the rollback path after the flip, and the last-resort archive in a
+          full-region DR scenario. That is why it is retained in <code>main.bicep</code> under a <code>// NEVER delete</code>
+          comment and why the DR runbook uses it as the drill target.</p>
+          <p>Cross-links:</p>
+          <ul>
+          <li>IaC chapter, <code>infra/main.bicep</code> provisions the four <code>ADC_*</code> databases, the LTR policies, the
+          App Insights alerts, and the Service Bus namespace.</li>
+          <li>CI/CD chapter, <code>deploy.yml</code> applies per-module idempotent migration scripts and runs the
+          post-deploy smoke gate; <code>cutover-per-service-dbs.yml</code> is a sibling workflow in the same
+          <code>prod-azure</code> concurrency group.</li>
+          <li><span class="doc-deadlink" title="Reference outside the published set">ADR-006</span>, the decision to adopt database-per-service,
+          the trade-offs, and the <code>CrossDataSourceDegradeConvention</code> that removes cross-database FKs.</li>
+          <li><span class="doc-deadlink" title="Reference outside the published set">ADR-009</span>, the resilience and recovery
+          objectives framework, including the requirement that <code>DISASTER-RECOVERY.md</code> exists and that the
+          drill-result table is filled.</li>
+          <li><span class="doc-deadlink" title="Reference outside the published set">ADR-003</span>, the outbox pattern that the cutover workflow
+          gates on (drain first) and that the per-service databases each own independently.</li>
+          </ul>
+          <hr>
+          <h2 id="rubric-tag-summary">Rubric tag summary</h2>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Tag</th>
+          <th>Artifact(s)</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>§8 Data Architecture</td>
+          <td>ADR-006, the SQL/PS copy scripts, POST-CUTOVER downgrade runbook</td>
+          </tr>
+          <tr>
+          <td>§11 Security</td>
+          <td><code>azure-setup.sh</code> (UAMI / OIDC), <code>DISASTER-RECOVERY.md</code> (managed identity, Key Vault)</td>
+          </tr>
+          <tr>
+          <td>§13 Observability</td>
+          <td><code>DISASTER-RECOVERY.md</code> (App Insights metric alerts)</td>
+          </tr>
+          <tr>
+          <td>§17 DevOps &amp; Deployment</td>
+          <td><code>azure-setup.sh</code>, <code>cutover-per-service-dbs.yml</code>, copy scripts</td>
+          </tr>
+          <tr>
+          <td>§29 Resilience &amp; Business Continuity</td>
+          <td><code>DISASTER-RECOVERY.md</code> (RTO/RPO, PITR, LTR, restore runbook, drill requirement)</td>
+          </tr>
+          <tr>
+          <td>§30 Compliance/Privacy</td>
+          <td><code>play-store-capture.ps1</code>, <code>play-store-compose.ps1</code></td>
+          </tr>
+          <tr>
+          <td>§31 Cost/FinOps</td>
+          <td><code>POST-CUTOVER-atldevcon-downgrade.md</code> (S0 → Basic downgrade)</td>
+          </tr>
+          </tbody></table></div>
+          <hr>
+          <h2 id="not-determinable-from-source">Not determinable from source</h2>
+          <ul>
+          <li><strong>Drill-result table</strong> (<code>DISASTER-RECOVERY.md:129</code>), the table currently records &quot;not yet
+          drilled (TD-10)&quot;. The restore procedure is fully specified but has not been executed. The next
+          operator to run it should fill in the date, source, and result.</li>
+          <li><strong><code>ALERT_EMAIL</code> variable</strong>: <code>DISASTER-RECOVERY.md:55</code> references a repository Actions variable
+          <code>ALERT_EMAIL</code> that routes alert notifications to an inbox. Whether this variable is currently set
+          in the <code>ivanball/ADC</code> repository is not determinable from the file alone; check the repo
+          Settings → Variables screen.</li>
+          <li><strong><code>store-assets/play-store/README.md</code></strong>: referenced by both play-store scripts as the canonical
+          lineup source. The content of that file was not read as part of this chapter; the lineup in
+          <code>play-store-compose.ps1:52–61</code> is ground truth for what is documented here.</li>
+          <li><strong>Commit 2 status</strong>: whether the production container app flip (Commit 2 of the three-commit
+          rollout) has already been deployed cannot be determined from the scripts alone; the
+          <code>cutover-per-service-dbs.yml</code> GATE 1 check resolves this at runtime by inspecting live Azure
+          state.</li>
+          </ul>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

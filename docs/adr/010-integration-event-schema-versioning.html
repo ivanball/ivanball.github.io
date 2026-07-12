@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADR-010: Integration-Event Schema Versioning &amp; Upcaster Policy · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ADR-010: Integration-Event Schema Versioning &amp; Upcaster Policy">
+  <meta property="og:description" content="Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 45 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html" aria-current="page">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-010-integration-event-schema-versioning--upcaster-policy">ADR-010: Integration-Event Schema Versioning &amp; Upcaster Policy</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-06-19). Updated 2026-06-27 (Helpdesk enforcement gap closed; all three consumers now gate the convention).</p>
+          <h2 id="context">Context</h2>
+          <p>Integration events cross service boundaries (Identity → Conference, Conference ↔ Engagement, …) and
+          are resolved by consumers solely by their type string: the outbox serializes the event to JSON keyed
+          by <code>EventType</code> (<code>OutboxMessage.FromDomainEvent</code>), and the MassTransit broker path binds by .NET message
+          type. Events carried only <code>MessageId</code> (idempotency) and <code>DateOccurred</code> (when the business action
+          happened) — <strong>no version signal</strong>. With database-per-service (ADR-006) and async integration over the
+          outbox (ADR-003), a producer that reshapes an event&#39;s payload can silently break every consumer: there
+          is nothing on the wire that says &quot;this is a different shape than you expect,&quot; and no agreed rule for how
+          a shape may evolve. Rubric §6 flags this as the one substantive CQRS/event gap.</p>
+          <h2 id="decision">Decision</h2>
+          <ol>
+          <li><strong>Every integration event carries an explicit <code>SchemaVersion</code>.</strong> <code>BaseIntegrationEvent</code> exposes
+          <code>public virtual int SchemaVersion =&gt; 1;</code>. It is serialized with the payload (System.Text.Json on the
+          outbox path, MassTransit on the broker path), so a consumer always sees the producer&#39;s declared
+          version. A fitness function asserts every concrete <code>IIntegrationEvent</code> declares an
+          <code>int SchemaVersion</code>, so a new event cannot ship without one. The rule body
+          (<code>ArchitectureRules.IntegrationEventsDeclareSchemaVersion</code>) lives once in the shared
+          <code>MMCA.Common.Testing.Architecture</code> package and is surfaced through <code>EventConventionTestsBase</code>,
+          alongside two companion rules: every integration event inherits <code>BaseIntegrationEvent</code> and resides
+          in a Shared-layer <code>*.IntegrationEvents</code> namespace.</li>
+          <li><strong>Additive, optional changes keep the same version.</strong> Adding a nullable/optional field, or a field
+          with a safe default, is backward-compatible — consumers ignore unknown fields (System.Text.Json
+          default) and old payloads deserialize with the default. No version bump required.</li>
+          <li><strong>Breaking changes require a new type + an upcaster, never a silent reshape.</strong> Renaming, removing,
+          or retyping a field is breaking. The producer introduces a NEW event type (e.g. <code>UserRegisteredV2</code>,
+          <code>SchemaVersion =&gt; 2</code>) and publishes it; consumers register an <strong>upcaster</strong> that maps the old
+          type/version to the new shape before their handler runs. The old type is retired only after all
+          consumers have drained it (the broker binds by type, so a rename is a parallel-publish/drain
+          migration, not an in-place edit).</li>
+          <li><strong>Rollout follows the framework&#39;s lockstep policy.</strong> Adding <code>SchemaVersion</code> is a non-breaking
+          <code>[C→A]</code> change (virtual default → existing events stay version 1 with no edits); it ships in a Common
+          release and is swept into all consumers in one pass.</li>
+          </ol>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>A signal, enforced.</strong> A version field plus a build-gating convention test turns &quot;remember the
+          contract&quot; into something the tooling checks — the same invariant-over-discipline approach as the layer
+          rules, the MassTransit-v8 pin, and ADR-009&#39;s resilience gate.</li>
+          <li><strong>Non-breaking by construction.</strong> A <code>virtual</code> get-only default (<code>=&gt; 1</code>) means no existing event
+          changes and no outbox row migrates: System.Text.Json tolerates the missing field on old payloads and
+          the type supplies the default; new rows simply gain <code>&quot;schemaVersion&quot;:1</code>.</li>
+          <li><strong>New-type-for-breaking-change</strong> is the only safe option when transport binds by type (MassTransit)
+          and consumers are independently deployed — an in-place reshape has no compatibility window.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><code>SchemaVersion</code> is a <strong>signal, not a mechanism</strong>: by itself it does not stop a consumer breaking on a
+          real reshape. The load-bearing half is the discipline (new type + upcaster); the framework does not
+          yet ship an upcaster registration seam — building one is follow-up work, and until then the policy is
+          enforced by convention + review, not by an upcaster pipeline.</li>
+          <li>The convention test is <strong>vacuous in MMCA.Common today</strong> (the framework ships no concrete integration
+          event): <code>EventVersioningConventionTests</code> runs the shared base against <code>CommonArchitectureMap</code> but has
+          nothing to check. Real enforcement lives in the consumer repos: all three now subclass
+          <code>EventConventionTestsBase</code> and run the identical rules against their own event assemblies:
+          <code>EventConventionTests</code> in <code>MMCA.ADC.Architecture.Tests</code> (ADC&#39;s three events) and
+          <code>MMCA.Store.Architecture.Tests</code> (Store&#39;s one), and a matching <code>EventConventionTests</code> in
+          <code>MMCA.Helpdesk.Architecture.Tests</code> (<code>ArchitectureTests.cs</code>) that gates the seed&#39;s
+          <code>TicketOpenedIntegrationEvent</code>. The earlier Helpdesk gap (the rule was once subclassed only in ADC and
+          Store) is <strong>closed</strong>: every concrete integration event across all three consumers is now enforced.</li>
+          <li>A get-only <code>SchemaVersion</code> is informational on the wire (it round-trips out, not back in) — intentional
+          (version is a property of the type, not per-instance data), but it means you read it off the concrete
+          type/JSON, not by mutating it.</li>
+          </ul>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/010-integration-event-schema-versioning.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADR-020: Permission-Based Authorization Layered over Roles · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-06-25, amended 2026-07-10).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/020-permission-based-authorization.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ADR-020: Permission-Based Authorization Layered over Roles">
+  <meta property="og:description" content="Accepted (2026-06-25, amended 2026-07-10).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/020-permission-based-authorization.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">020 · Permission-Based Authorization Layered over Roles</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 45 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html" aria-current="page">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-020-permission-based-authorization-layered-over-roles">ADR-020: Permission-Based Authorization Layered over Roles</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-06-25, amended 2026-07-10).</p>
+          <h2 id="context">Context</h2>
+          <p>Authorization started as pure role-based access control (RBAC). Endpoints declared the role they
+          required with <code>[Authorize(Policy = ...)]</code> against named policies: <code>RequireOrganizer</code>, <code>RequireAttendee</code>,
+          and <code>RequireAdmin</code> each call <code>RequireRole(...)</code>, while <code>RequireAuthenticated</code> calls
+          <code>RequireAuthenticatedUser()</code>. That couples every role-guarded endpoint to a role <em>name</em>, and it has two
+          concrete failure modes:</p>
+          <ul>
+          <li><strong>Reshaping who-can-do-what means editing endpoints.</strong> Splitting a coarse role into a narrower one
+          (for example, a content editor who may curate the session catalog but not manage events, rooms, or
+          the organizer session-selection workflow) forces either touching every affected <code>[Authorize]</code>
+          attribute or granting the new role more than it should have.</li>
+          <li><strong>The capability a route needs is implicit.</strong> &quot;Requires Organizer&quot; does not say <em>which</em> capability
+          the route exercises, so the same capability guarded in several places drifts.</li>
+          </ul>
+          <p>We wanted endpoints to depend on <strong>capabilities</strong> (fine-grained permissions) rather than role names,
+          with the role-to-capability mapping declared in one place, without discarding the existing role
+          policies or forcing every consumer to adopt the new model.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Add a <strong>permission (capability) layer over RBAC</strong>, opt-in and backward-compatible.</p>
+          <ul>
+          <li><strong>A central registry maps roles to permissions.</strong> <code>IPermissionRegistry</code> / <code>PermissionRegistry</code>
+          (<code>MMCA.Common.Shared.Auth</code>) answer &quot;does any of these roles grant this permission?&quot; from an
+          immutable <code>FrozenDictionary</code> snapshot. It is the single place that knows which roles confer which
+          capabilities, so endpoints stay decoupled from role names (role keys compared case-insensitively,
+          permission values ordinally).</li>
+          <li><strong>Modules declare grants additively.</strong> <code>AddPermissions(builder =&gt; builder.Grant(role, ...))</code>
+          (<code>MMCA.Common.API</code>) accumulates grants into one shared <code>PermissionRegistryBuilder</code>; grants from
+          different modules union, so each module declares only the permissions it owns. The registry is
+          built lazily on first resolve, after every module has contributed.</li>
+          <li><strong>Endpoints require a capability, not a role.</strong> <code>[HasPermission(&quot;conference:sessions:manage&quot;)]</code>
+          (a <code>HasPermissionAttribute : AuthorizeAttribute</code>) names the capability. It maps to an on-demand
+          authorization policy named <code>perm:{permission}</code>: <code>PermissionPolicyProvider</code> materializes that policy
+          (<code>RequireAuthenticatedUser()</code> + a <code>PermissionRequirement</code>) the first time it is requested, so there
+          is no per-permission named-policy registration. Every non-<code>perm:</code> policy name falls through to
+          <code>DefaultAuthorizationPolicyProvider</code>, leaving the named role policies untouched.</li>
+          <li><strong>Two grant sources.</strong> <code>PermissionAuthorizationHandler</code> succeeds when the principal carries the
+          permission directly (an explicit <code>AuthClaimTypes.Permission</code> claim, <code>&quot;permission&quot;</code>) <strong>or</strong> holds a
+          role the registry grants it (roles gathered from <code>ClaimTypes.Role</code>, <code>&quot;role&quot;</code>, or <code>&quot;roles&quot;</code> so it
+          works whether or not inbound-claim mapping is on). Baking permissions into the token is therefore
+          optional: role-derived resolution is the default.</li>
+          <li><strong>Inert until adopted.</strong> <code>AddAuthorizationPolicies()</code> always wires the handler, the policy provider,
+          and an empty shared registry, so any host that configures authentication gets the mechanism for
+          free, but it grants nothing beyond explicit claims until a host calls <code>AddPermissions(...)</code>. The
+          existing role policies keep working unchanged.</li>
+          </ul>
+          <p>Adoption is asymmetric and that is intentional: ADC&#39;s Conference module defines seven capabilities
+          (including a curation subset granted to a new <code>RoleNames.ContentEditor</code>), its Engagement module
+          defines <code>engagement:live:manage</code> (granted to <code>Organizer</code> and <code>Admin</code>, gating the conference-day
+          live-poll management endpoints) and its Identity module defines <code>identity:users:read</code>; MMCA.Store
+          has not adopted it and still authorizes by role policy only. The registry, handler, policy provider,
+          and the ADC grant tables (Conference and Engagement) are all covered by tests.</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Capabilities decouple endpoints from roles.</strong> A route says what it <em>does</em>
+          (<code>conference:sessions:manage</code>), and who may do it is a registry decision, so adding <code>ContentEditor</code>
+          with a strict subset of the organizer&#39;s capabilities is a grant change, not an endpoint sweep. That
+          subset is exactly the distinction role checks cannot express cleanly and is what makes the
+          indirection earn its keep.</li>
+          <li><strong>One place to read and change policy.</strong> Grants live in module registration, not scattered across
+          controllers; the registry is immutable and thread-safe once built.</li>
+          <li><strong>Additive and safe to ignore.</strong> Per-module union means no module needs to know another&#39;s
+          permissions, and the empty-registry default plus the fallback provider make the feature a no-op for
+          consumers that never opt in, satisfying the framework&#39;s non-breaking <code>[C-&gt;A]</code> rollout rule
+          (ADR-016).</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>It is still RBAC, not ABAC.</strong> The model resolves role to permission; it does not evaluate
+          resource or attribute conditions. Per-resource ownership (&quot;a customer may read only their own
+          data&quot;) stays a separate concern (<code>OwnerOrAdminFilter</code>), and a route needing both composes the two.</li>
+          <li><strong>Another indirection to keep honest.</strong> A capability check is only as good as its grant; a missing
+          or wrong <code>Grant(...)</code> silently denies or over-permits. The registry tests are the mitigation, but
+          the mapping is declared in code and is not enforced by a fitness rule.</li>
+          <li><strong>Opt-in per endpoint.</strong> A route that should check a capability but still uses a role policy gets
+          none of the benefit, the same audit-the-inventory caveat as ADR-005 (<code>IAnonymizable</code>) and ADR-017
+          (<code>[Idempotent]</code>).</li>
+          <li><strong>Grants must be registered before the host is built.</strong> The registry is built once on first
+          resolve; an <code>AddPermissions(...)</code> call after it has been materialized is not seen. Permission
+          strings are also stringly-typed, mitigated by exposing them as constants (for example
+          <code>ConferencePermissions</code>).</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p>ADR-004 (the authenticated principal and claims this keys on, including the optional <code>permission</code>
+          claim), ADR-008 (each extracted service authorizes independently, so the registry is wired per
+          service host), ADR-013 / ADR-014 (capability checks at the edge keep the handlers thin).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/020-permission-based-authorization.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

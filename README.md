@@ -28,15 +28,40 @@ writing.html      Article cards (summary + "Read on Medium")
 speaking.html     Speaking & community
 contact.html      Contact (email, LinkedIn, GitHub)
 404.html
+docs/             Reference library (generated: see below)
+  index.html          Reference-library hub
+  adr/                Every Architecture Decision Record, rendered
+  onboarding/         The full onboarding guide, rendered
 assets/
   css/styles.css  Single stylesheet (light + dark, responsive)
-  js/main.js      Theme toggle, mobile nav, email de-obfuscation, footer year
+  css/docs.css    Reference-library prose + layout (layers on styles.css)
+  js/main.js      Theme toggle, mobile nav, email de-obfuscation, footer year, doc sidebar
   js/writing.js   Renders article cards from data
+  js/mermaid.min.js  Vendored; lazy-loaded only on pages with diagrams
   data/articles.js  window.ARTICLES = [...]  (the single edit point for the Writing page)
   data/talks.js     window.TALKS = [...]
   img/ files/
+tools/            build-docs.mjs generator (Node; not served)
 sitemap.xml  robots.txt  .nojekyll
 ```
+
+## Reference library (`docs/`)
+
+The pages under `docs/` are **generated** from the MMCA source repositories, not hand-edited:
+
+- ADRs from `../MMCA.Common/ADRs/*.md`
+- The onboarding guide from `../Docs/Onboarding/*.md` (underscore-prefixed working files are skipped)
+
+`tools/build-docs.mjs` renders each Markdown file into a page wrapped in the site shell
+(header/footer/theme), with a collection sidebar, breadcrumb, cross-link rewriting (`.md` → `.html`),
+GitHub-compatible heading anchors, and diagram rendering. Regenerate after the source docs change:
+
+```bash
+cd tools && npm install && npm run build
+```
+
+The generated HTML is committed (readers need no runtime JS to read a doc); `tools/node_modules`
+is not. Do not hand-edit files under `docs/` — re-run the generator instead.
 
 ## Editing content
 

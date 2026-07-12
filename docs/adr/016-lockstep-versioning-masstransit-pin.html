@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADR-016: Lockstep Package Versioning and the MassTransit-v8 Pin · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/016-lockstep-versioning-masstransit-pin.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ADR-016: Lockstep Package Versioning and the MassTransit-v8 Pin">
+  <meta property="og:description" content="Accepted">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/016-lockstep-versioning-masstransit-pin.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 45 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html" aria-current="page">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-016-lockstep-package-versioning-and-the-masstransit-v8-pin">ADR-016: Lockstep Package Versioning and the MassTransit-v8 Pin</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted</p>
+          <h2 id="context">Context</h2>
+          <p>MMCA.Common publishes fourteen NuGet packages consumed by three downstream repos — the two
+          production apps (Store, ADC) and the reference seed Helpdesk (which defaults to local-source mode but
+          declares the same fourteen <code>MMCA.Common.*</code> package versions in its own <code>Directory.Packages.props</code>).
+          Two related governance questions had no recorded answer:</p>
+          <ol>
+          <li><strong>How do the packages version and roll out?</strong> Independent per-package versions invite a
+          combinatorial compatibility matrix (&quot;which <code>.Domain</code> works with which <code>.Infrastructure</code>?&quot;), and a
+          phased / opt-in rollout across consumers invites long-lived version skew between the apps and the
+          framework.</li>
+          <li><strong>Can dependencies float?</strong> A routine &quot;update all NuGet packages&quot; sweep repeatedly pulled
+          <code>MassTransit</code> to v9, which requires a commercial license (<code>MT_LICENSE</code>) and crashes every
+          broker-enabled service at startup.</li>
+          </ol>
+          <h2 id="decision">Decision</h2>
+          <ol>
+          <li><strong>Version the fourteen packages in lockstep.</strong> All packages share one version (MinVer, derived from
+          a single <code>vX.Y.Z</code> git tag); a release tags all fourteen at the same version. SemVer and the
+          breaking-change policy live in <code>VERSIONING.md</code>.</li>
+          <li><strong>Sweep every consumer in one pass, with no phased rollout.</strong> A framework change ships and all
+          consumers bump every <code>MMCA.Common.*</code> entry in their <code>Directory.Packages.props</code> together.
+          The two production apps (Store, ADC) now <strong>commit NuGet lock files</strong> (<code>RestorePackagesWithLockFile</code>,
+          R7/TD-01), so each one&#39;s sweep is a version bump <strong>plus a restore that regenerates its lock files</strong>
+          (the same <code>audit=all</code> / <code>--force-evaluate</code> mechanics Common already uses); Helpdesk, which defaults
+          to local-source mode, keeps no lock files. Framework-to-app (<code>[C-&gt;A]</code>) changes are designed to be
+          non-breaking so the one-pass sweep is safe.</li>
+          <li><strong>Pin MassTransit to v8 by policy, enforced by a fitness function.</strong> <code>DependencyVersionTests</code> parses
+          <code>Directory.Packages.props</code> and fails the build if the MassTransit major reaches 9 (ADR-015). The pin
+          is asserted only in MMCA.Common, where the version is actually declared; Store, ADC, and Helpdesk
+          inherit it transitively through <code>MMCA.Common.Infrastructure</code> and deliberately do <strong>not</strong> subclass the
+          test (the default rule would fail parsing a pin they do not declare).</li>
+          </ol>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>One version, one compatibility story.</strong> Lockstep removes the N-package matrix: &quot;everything on
+          <code>vX.Y.Z</code>&quot; is the only supported combination, which is the right trade for a small team.</li>
+          <li><strong>No skew.</strong> Sweeping all consumers at once keeps the framework and both apps converged rather than
+          drifting across releases.</li>
+          <li><strong>The pin is a build gate, not a comment.</strong> A floating-version sweep would otherwise silently
+          reintroduce the licensed v9 and break startup; a fitness function is the only thing that reliably
+          stops it (which is exactly the invariant-over-discipline posture of ADR-015).</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li>A consumer cannot adopt a single package in isolation: it takes the whole set at the new version.</li>
+          <li>Lockstep will bump a package whose code did not change (acceptable: the version means &quot;compatible
+          with this set,&quot; not &quot;this package changed&quot;).</li>
+          <li>The v8 pin forgoes MassTransit v9 features until a licensing decision is made; bumping it is a
+          deliberate, multi-step change, not a one-line version edit.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p>ADR-015 (the fitness function that enforces the pin), ADR-003 / ADR-006 (MassTransit is the broker
+          transport behind the outbox and database-per-service flows).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/016-lockstep-versioning-masstransit-pin.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

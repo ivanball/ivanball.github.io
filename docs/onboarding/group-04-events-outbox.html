@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>4. Domain &amp; Integration Events + Outbox Dual-Dispatch · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="What this chapter covers. This group is the codebase&#39;s event spine: how an aggregate says &quot;something happened,&quot; how that fact is persisted so it cannot…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/group-04-events-outbox.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="4. Domain &amp; Integration Events + Outbox Dual-Dispatch">
+  <meta property="og:description" content="What this chapter covers. This group is the codebase&#39;s event spine: how an aggregate says &quot;something happened,&quot; how that fact is persisted so it cannot…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/group-04-events-outbox.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/onboarding/index.html">Onboarding Guide</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">4. Domain &amp; Integration Events + Outbox Dual-Dispatch</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>Guide contents</summary>
+        <nav class="doc-nav" aria-label="Onboarding Guide">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="00-dependency-manifest.html">Phase 1: Dependency Manifest &amp; Leveling</a></li>
+        <li><a href="00-group-taxonomy.html">Phase 1b - Functional Group Taxonomy</a></li>
+        <li><a href="00-inventory.html">Phase 0: Type Inventory</a></li>
+        <li><a href="00-primer.html">Primer, the concepts, stack, and conventions you need first</a></li>
+        <li><a href="group-01-result-error-handling.html">1. Result &amp; Error Handling</a></li>
+        <li><a href="group-02-domain-building-blocks.html">2. Domain Building Blocks (Entities, Value Objects, Aggregates)</a></li>
+        <li><a href="group-03-querying-specifications.html">3. Querying: Specifications, Filtering &amp; the Entity Query Service</a></li>
+        <li><a href="group-04-events-outbox.html" aria-current="page">4. Domain &amp; Integration Events + Outbox Dual-Dispatch</a></li>
+        <li><a href="group-05-cqrs-pipeline.html">5. CQRS: Commands, Queries &amp; the Decorator Pipeline</a></li>
+        <li><a href="group-06-validation.html">6. Validation</a></li>
+        <li><a href="group-07-persistence-ef-core.html">7. Persistence &amp; EF Core</a></li>
+        <li><a href="group-08-auth.html">8. Authentication &amp; Authorization</a></li>
+        <li><a href="group-09-caching.html">9. Caching</a></li>
+        <li><a href="group-10-notifications.html">10. Notifications (Push + In-App Inbox + Email)</a></li>
+        <li><a href="group-11-navigation-populators.html">11. Navigation Metadata &amp; Populators (EF-decoupled eager loading)</a></li>
+        <li><a href="group-12-api-hosting-mapping.html">12. API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</a></li>
+        <li><a href="group-13-grpc-contracts.html">13. gRPC &amp; Inter-Service Contracts</a></li>
+        <li><a href="group-14-module-system-composition.html">14. Module System, Composition &amp; Configuration</a></li>
+        <li><a href="group-15-common-ui-framework.html">15. Common UI Framework (MudBlazor components, theme, base pages)</a></li>
+        <li><a href="group-16-aspire-orchestration.html">16. Aspire Orchestration &amp; Service Defaults</a></li>
+        <li><a href="group-17-conference-domain.html">17. ADC Conference - Domain Model &amp; Module Contracts</a></li>
+        <li><a href="group-18-conference-application.html">18. ADC Conference - Application &amp; Use Cases</a></li>
+        <li><a href="group-19-conference-infrastructure.html">19. ADC Conference - Infrastructure &amp; Persistence</a></li>
+        <li><a href="group-20-conference-api-grpc.html">20. ADC Conference - API, gRPC Contracts &amp; Service Host</a></li>
+        <li><a href="group-21-conference-ui.html">21. ADC Conference - UI</a></li>
+        <li><a href="group-22-engagement-module.html">22. ADC Engagement Module (Session Bookmarks)</a></li>
+        <li><a href="group-23-engagement-live-layer.html">23. ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></li>
+        <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
+        <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
+        <li><a href="group-26-testing-infrastructure.html">26. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
+        <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
+        <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
+        <li><a href="devops-runbooks.html">Operational Scripts &amp; Runbooks</a></li>
+        <li><a href="devops-testing.html">Testing Architecture &amp; Solution Composition</a></li>
+        <li><a href="99-coverage-audit.html">Phase 4, Coverage Audit</a></li>
+        <li><a href="CONCEPT-MAPS.html">MMCA Concept &amp; Pattern Maps</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Onboarding guide</p>
+          <h1 id="4-domain--integration-events--outbox-dual-dispatch">4. Domain &amp; Integration Events + Outbox Dual-Dispatch</h1>
+          <p><strong>What this chapter covers.</strong> This group is the codebase&#39;s <em>event spine</em>: how an aggregate says
+          &quot;something happened,&quot; how that fact is persisted so it cannot be lost, and how it eventually reaches
+          every interested handler, whether that handler lives in the same process or in an extracted
+          microservice across a broker. Two questions drive the whole design. <em>How do we publish events
+          reliably when persistence and dispatch are separate steps that can each fail independently?</em> And <em>how
+          do we keep application code identical whether the module ships inside the monolith or as its own
+          service?</em> The answer to the first is the <strong>transactional outbox with dual dispatch</strong> (ADR-003); the
+          answer to the second is a <strong>transport-agnostic message bus</strong> plus a consumer-side <strong>inbox</strong> (ADR-006,
+          ADR-008, ADR-021). The types here implement both, top to bottom: the event contracts, the in-process
+          dispatcher, the outbox tables and their background drainers, and the swappable in-process/broker
+          buses.</p>
+          <p>If you have not yet met the <strong>Result pattern</strong>, <strong>aggregate roots and domain events</strong>, or the
+          <strong>database-per-service</strong> rule, skim <span class="doc-deadlink" title="Reference outside the published set">primer §2</span>
+          first, this chapter builds directly on them.</p>
+          <h2 id="the-two-kinds-of-event">The two kinds of event</h2>
+          <p>Everything starts with two marker interfaces in the Domain layer. <a href="#idomainevent"><code>IDomainEvent</code></a> is
+          the base contract: a <code>DateOccurred</code> timestamp (when the <em>business</em> action happened, not when it was
+          dispatched, <code>IDomainEvent.cs:10</code>) and a <code>MessageId</code> GUID used for consumer-side deduplication
+          (<code>IDomainEvent.cs:13</code>). <a href="#iintegrationevent"><code>IIntegrationEvent</code></a> <em>extends</em> <code>IDomainEvent</code> and adds no
+          members (<code>IIntegrationEvent.cs:15</code>), it is a pure role marker. The distinction is semantic and
+          load-bearing: a <strong>domain event</strong> is <em>intra-module</em> (raised and handled inside one bounded context,
+          <code>OrderPaid</code> consumed by the Sales module that raised it); an <strong>integration event</strong> is <em>inter-module</em>
+          (one module publishes, others react). Because integration events <em>are</em> domain events, they flow
+          through the exact same outbox machinery, the system never needs a second delivery pipeline.</p>
+          <p>The base records supply the defaults. <a href="#basedomainevent"><code>BaseDomainEvent</code></a> stamps <code>DateOccurred</code> at
+          construction (<code>BaseDomainEvent.cs:20</code>) and mints a fresh <code>MessageId</code> (<code>BaseDomainEvent.cs:27</code>), both
+          <code>init</code> so a deserialized event keeps the values it was created with.
+          <a href="#baseintegrationevent"><code>BaseIntegrationEvent</code></a> adds a <code>virtual SchemaVersion</code> defaulting to <code>1</code>
+          (<code>BaseIntegrationEvent.cs:22</code>): additive field changes keep the version, but a breaking change (a
+          renamed, removed, or retyped field) requires a NEW event type plus a consumer-side upcaster, never a
+          silent reshape of an existing contract (ADR-010). <a href="#entitychangedeventtidentifiertype"><code>EntityChangedEvent&lt;TIdentifierType&gt;</code></a>
+          is a reusable CRUD-lifecycle event carrying a <a href="group-02-domain-building-blocks.html#domainentitystate"><code>DomainEntityState</code></a>
+          (Added/Updated/Deleted) and the affected <code>EntityId</code> (<code>EntityChangedEvent.cs:24-27</code>), so entities do
+          not each hand-roll three near-identical event records. This split, markers and base records in
+          <code>Domain</code>, all dispatch and persistence machinery in <code>Application</code>/<code>Infrastructure</code>, is textbook
+          <code>[Rubric §3, Clean Architecture]</code> (the domain declares <em>what</em> an event is; outer layers decide <em>how</em>
+          it travels) and <code>[Rubric §6, CQRS &amp; Event-Driven]</code> (an explicit, first-class event model rather than
+          implicit side effects). The <code>SchemaVersion</code> convention is the <code>[Rubric §9, API &amp; Contract Design]</code>
+          angle: an event on the wire is a versioned contract like any API surface.</p>
+          <h2 id="raising-and-capturing-where-the-outbox-is-written">Raising and capturing: where the outbox is written</h2>
+          <p>Aggregates raise events by calling <code>AddDomainEvent()</code> (see
+          <a href="group-02-domain-building-blocks.html#auditableaggregaterootentitytidentifiertype"><code>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code></a>
+          in G02), which simply buffers them on the entity. Nothing is dispatched yet, the events ride along
+          until the next save. The actual capture happens in EF Core&#39;s save pipeline, in
+          <a href="group-07-persistence-ef-core.html#domaineventsavechangesinterceptor"><code>DomainEventSaveChangesInterceptor</code></a>
+          (G07). On <code>SavingChanges</code> it scans the change tracker for aggregate roots with buffered events, calls
+          <a href="#outboxmessage"><code>OutboxMessage.FromDomainEvent(...)</code></a> on each (serializing the event to JSON,
+          capturing its assembly-qualified type name and the current W3C trace/span IDs, <code>OutboxMessage.cs:59-73</code>),
+          and <code>Add</code>s those <a href="#outboxmessage"><code>OutboxMessage</code></a> rows to the <em>same</em> <code>DbContext</code>, so the outbox row
+          and the aggregate change land in <strong>one atomic transaction</strong>
+          (<code>DomainEventSaveChangesInterceptor.cs:79-108</code>). This is the single most important guarantee in the
+          chapter: if the business data committed, the event is durably recorded; if the transaction rolled
+          back, neither exists. There is no window where they disagree. <code>[Rubric §8, Data Architecture]</code>
+          (transactional integrity) and <code>[Rubric §6]</code> both hinge on this atomicity. Crucially, the rows go to
+          the same physical database as the aggregate, every relational source owns its own <code>OutboxMessages</code>
+          table, never a shared one (ADR-006; see <span class="doc-deadlink" title="Reference outside the published set">primer on database-per-service</span>).</p>
+          <h2 id="dual-dispatch-the-happy-path-and-the-safety-net">Dual dispatch: the happy path and the safety net</h2>
+          <p>Right after the transaction commits (<code>SavedChanges</code>), the interceptor dispatches the captured events
+          <strong>in-process</strong> through <a href="#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a>, then marks the outbox rows
+          <code>ProcessedOn</code> (<code>DomainEventSaveChangesInterceptor.cs:114-143</code>). That mark is <em>not</em> a second nested
+          <code>SaveChanges</code>: it goes through <a href="#outboxfinalizer"><code>OutboxFinalizer</code></a>, which stamps every row in the
+          batch with a single set-based <code>ExecuteUpdate</code> and then re-syncs the change tracker so a later save
+          does not re-issue the statement (<code>OutboxFinalizer.cs:21-48</code>), keeping the hottest write path (every
+          event-raising command) free of an extra full save. That is <em>dispatch #1</em>, the low-latency happy path.
+          Dispatch #2 is the background <a href="#outboxprocessor"><code>OutboxProcessor</code></a>: a <code>BackgroundService</code> that drains
+          still-unprocessed outbox rows and delivers them too. Why both? Because the steps between <em>commit</em> and
+          <em>mark-processed</em> can be interrupted, the process can crash, or in-process dispatch can throw. If that
+          happens, the row stays unprocessed (and the interceptor signals the processor on the failure path,
+          <code>DomainEventSaveChangesInterceptor.cs:133-136</code>) and the background processor catches it on its next
+          cycle. This is the <strong>dual-dispatch</strong> strategy of ADR-003: at-least-once delivery (<code>[Rubric §6]</code>,
+          <code>[Rubric §29, Resilience &amp; Business Continuity]</code>). The unavoidable cost is that the <em>same</em> event may
+          be delivered twice (in-process <em>and</em> by the processor, if the mark-processed step lost the race), so
+          <strong>handlers must be idempotent</strong>. That is not a wart; it is the documented contract (ADR-003) and a
+          healthy discipline regardless.</p>
+          <p>The dispatcher itself (<a href="#domaineventdispatcher"><code>DomainEventDispatcher</code></a>) is a small
+          performance-conscious piece of machinery. For each event it resolves every registered
+          <a href="#idomaineventhandlerin-tdomainevent"><code>IDomainEventHandler&lt;in TDomainEvent&gt;</code></a> and, if the event is
+          also an integration event, every
+          <a href="#iintegrationeventhandlerin-tintegrationevent"><code>IIntegrationEventHandler&lt;in TIntegrationEvent&gt;</code></a>
+          (<code>DomainEventDispatcher.cs:35-45</code>), invoking each through a <strong>compiled expression-tree delegate cached
+          per (event type, handler interface)</strong> so the generic <code>HandleAsync</code> call avoids reflection and boxing at
+          runtime (<code>DomainEventDispatcher.cs:26-28,76-96</code>), relevant to <code>[Rubric §12, Performance &amp; Scalability]</code>. Handlers that perform side effects (email, downstream writes) should derive from
+          <a href="#safedomaineventhandlertdomainevent"><code>SafeDomainEventHandler&lt;TDomainEvent&gt;</code></a>, which catches and logs
+          handler exceptions (<code>SafeDomainEventHandler.cs:18-32</code>) so a failed side effect never rolls back the
+          primary business transaction, the outbox retry is the recovery mechanism instead.</p>
+          <h2 id="how-the-processor-schedules-itself-signal--smart-wait">How the processor schedules itself: signal + smart wait</h2>
+          <p>The <a href="#outboxprocessor"><code>OutboxProcessor</code></a> is the most intricate type in the group, and most of its
+          complexity is about <strong>not</strong> wasting work. It never blindly polls on a fixed clock. Each cycle it
+          drains every relational source&#39;s outbox once and returns an <a href="#outboxcycleresult"><code>OutboxCycleResult</code></a>
+          describing what it found (<code>OutboxProcessor.cs:162-193</code>), then waits on <a href="#ioutboxsignal"><code>IOutboxSignal</code></a>
+          for whichever comes first: a <strong>signal</strong> (a writer called <code>Signal()</code> after persisting a row,
+          <a href="#outboxsignal"><code>OutboxSignal</code></a> is a <code>SemaphoreSlim(0)</code> wrapper, <code>OutboxSignal.cs:9-41</code>), the moment
+          the earliest pending-but-not-yet-eligible row <em>becomes</em> eligible (the <strong>smart wait</strong>), or a fallback
+          <code>PollingIntervalSeconds</code> (<code>OutboxProcessor.cs:100-137</code>). Rows are only eligible <code>ProcessingDelaySeconds</code>
+          (default 5s, <code>OutboxSettings.cs:40</code>) after creation; that delay is deliberate: it gives the in-process
+          happy path time to mark the row processed before the processor would re-deliver it, bounding the
+          duplicate-delivery window. The smart wait means that even when the fallback interval is set high in
+          production (e.g. 300s, to cut idle DB chatter and telemetry cost), an event still goes out about 5s
+          after it was written.</p>
+          <p>Delivery failures split into two very different outcomes, worth keeping straight. A <em>transient</em> failure
+          (a handler or broker publish throwing) increments the row&#39;s <code>RetryCount</code> and records <code>LastError</code>
+          (<code>OutboxProcessor.cs:303-309</code>); the poll query only ever selects rows with <code>RetryCount &lt; MaxRetries</code>
+          (5 by default, <code>OutboxProcessor.cs:221</code>, <code>OutboxSettings.cs:21</code>), so once a row exhausts its retries it
+          simply stops being fetched, stalling unprocessed with its last error for investigation, it is neither
+          deleted nor marked processed. The <em>other</em> outcome is a genuine <strong>dead-letter</strong>: a row whose stored
+          <code>EventType</code> can no longer be resolved to a CLR type (deserialize returns null) is marked processed
+          immediately, tagged with a <code>LastError</code>, and counted on the <code>outbox.dead_letter.count</code> OpenTelemetry
+          counter (<code>OutboxProcessor.cs:277-284,60-63</code>), so an undeliverable payload cannot block the queue behind
+          it. This is dense <code>[Rubric §13, Observability &amp; Operability]</code> and <code>[Rubric §31, Cost/FinOps]</code> territory:
+          the poll query runs inside a named <code>OutboxPoll</code> activity that
+          <a href="group-16-aspire-orchestration.html#outboxpollfilterprocessor"><code>OutboxPollFilterProcessor</code></a> (G16)
+          suppresses from telemetry export (<code>OutboxProcessor.cs:206-226</code>), so a fleet of idle services polling
+          around the clock does not flood Application Insights. A sibling
+          <a href="#outboxcleanupservice"><code>OutboxCleanupService</code></a> purges processed rows older than <code>RetentionDays</code>
+          (default 7, <code>OutboxCleanupService.cs:76-114</code>, <code>OutboxSettings.cs:65</code>), keeping the table bounded and,
+          because payloads may contain personal data, supporting the privacy posture of ADR-005.</p>
+          <h2 id="the-pluggable-transport-in-process-vs-broker">The pluggable transport: in-process vs. broker</h2>
+          <p>Here is the seam that makes a module extractable without rewriting its handlers. Application code that
+          wants to publish an integration event depends on <a href="#imessagebus"><code>IMessageBus</code></a> (defined in
+          <code>Application</code>, so it never sees MassTransit) or on the higher-level <a href="#ieventbus"><code>IEventBus</code></a> /
+          <a href="#iintegrationeventpublisher"><code>IIntegrationEventPublisher</code></a>. Infrastructure supplies two
+          interchangeable implementations of each, selected by configuration:</p>
+          <ul>
+          <li><strong>Monolith mode.</strong> <a href="#inprocesseventbus"><code>InProcessEventBus</code></a> writes the event to the outbox,
+          dispatches it in-process, and marks it processed through the same <a href="#outboxfinalizer"><code>OutboxFinalizer</code></a>
+          path as the interceptor (<code>InProcessEventBus.cs:55-78</code>). <a href="#inprocessmessagebus"><code>InProcessMessageBus</code></a>
+          just hands the event straight to the dispatcher (<code>InProcessMessageBus.cs:20-34</code>), it is what the
+          <code>OutboxProcessor</code> calls when draining an integration-event row in monolith mode.</li>
+          <li><strong>Broker mode.</strong> <a href="#brokereventbus"><code>BrokerEventBus</code></a> writes the event to the outbox and <strong>signals
+          the processor but does not dispatch in-process</strong> (<code>BrokerEventBus.cs:37-62</code>), because the consumers
+          live in other processes, an in-process dispatch would be wrong. The <code>OutboxProcessor</code> then drains the
+          row and publishes it through <a href="#brokermessagebus"><code>BrokerMessageBus</code></a>, which hands it to MassTransit
+          using the event&#39;s runtime type (<code>BrokerMessageBus.cs:24-34</code>) to RabbitMQ (dev) / Azure Service Bus
+          (prod). MassTransit propagates the trace context across the broker hop, so distributed traces stay
+          connected.</li>
+          </ul>
+          <p>The selection between these is a pure DI swap, no application or domain code changes. That is the whole
+          point of <code>[Rubric §7, Microservices Readiness]</code>: transport choices live at the edges, and the
+          NetArchTest extraction rules forbid <code>Application</code>/<code>Domain</code>/<code>Shared</code> from referencing MassTransit at all
+          (see ADR-007/008). Note the deliberate division of labor: the <strong><code>*EventBus</code></strong> types own <em>outbox
+          persistence</em> (write + signal); the <strong><code>*MessageBus</code></strong> types own <em>delivery only</em> and are invoked by the
+          processor when draining already-persisted rows. The thin
+          <a href="#integrationeventpublisher"><code>IntegrationEventPublisher</code></a> adapter exists to preserve the older
+          <code>IIntegrationEventPublisher</code> contract over whichever <code>IEventBus</code> is registered
+          (<code>IntegrationEventPublisher.cs:12-17</code>).</p>
+          <h2 id="consuming-from-the-broker-the-inbox-and-the-generic-consumer">Consuming from the broker: the inbox and the generic consumer</h2>
+          <p>On the receiving side of a broker hop, application code keeps writing plain
+          <code>IIntegrationEventHandler&lt;TEvent&gt;</code> implementations, there is no MassTransit-specific consumer class to
+          author per event. The generic <a href="#integrationeventconsumertevent"><code>IntegrationEventConsumer&lt;TEvent&gt;</code></a> is
+          the single adapter that bridges MassTransit&#39;s <code>IConsumer&lt;TEvent&gt;</code> to all the registered in-process
+          handlers (<code>IntegrationEventConsumer.cs:33-79</code>), registered per event type via
+          <a href="#integrationeventconsumerextensions"><code>IntegrationEventConsumerExtensions</code></a>&#39;s
+          <code>RegisterIntegrationEventConsumer&lt;TEvent&gt;()</code> (<code>IntegrationEventConsumerExtensions.cs:22-27</code>). Because
+          broker delivery is <em>also</em> at-least-once, the consumer guards against duplicates with the <strong>inbox</strong>
+          (ADR-021): <a href="#iinboxstore"><code>IInboxStore</code></a>&#39;s <code>AlreadyProcessedAsync</code> is checked before invoking handlers
+          and <code>MarkProcessedAsync</code> is written <em>after</em> they succeed (recording the event&#39;s <code>MessageId</code> in an
+          <a href="#inboxmessage"><code>InboxMessage</code></a> row, <code>IntegrationEventConsumer.cs:42-78</code>). When the inbox is disabled
+          the no-op <a href="#noopinboxstore"><code>NoOpInboxStore</code></a> is registered so behavior is unchanged
+          (<code>NoOpInboxStore.cs:7-14</code>); when enabled, <a href="#efinboxstore"><code>EfInboxStore</code></a> persists dedup records to the
+          consumer service&#39;s own database, relying on a unique index on <code>MessageId</code> to shrug off a concurrent
+          duplicate insert (<code>EfInboxStore.cs:34-56</code>). Recording happens <em>after</em> handlers succeed so that a
+          handler failure leaves the message un-recorded and eligible for MassTransit&#39;s retry/dead-letter policy.
+          The outbox is the <em>producer-side</em> idempotency mechanism; the inbox is its <em>consumer-side</em> mirror,
+          together they make the cross-service event flow exactly-once-effective on top of at-least-once transport
+          (<code>[Rubric §6]</code>, <code>[Rubric §29]</code>).</p>
+          <h2 id="putting-it-together-one-events-life">Putting it together, one event&#39;s life</h2>
+          <p>To see the whole spine at once, follow a single integration event from a Sales handler to a Catalog
+          handler in <strong>broker mode</strong>. (1) Something has already happened in Sales (a command mutated an aggregate,
+          whose domain events were captured to the outbox and dispatched in-process by the interceptor); one of
+          those in-process handlers, or the command handler itself, publishes an <code>OrderPaidIntegrationEvent</code>
+          through <a href="#ieventbus"><code>IEventBus</code></a>. (2) In broker mode the registered <code>IEventBus</code> is
+          <a href="#brokereventbus"><code>BrokerEventBus</code></a>: it serializes the event into an <a href="#outboxmessage"><code>OutboxMessage</code></a>,
+          saves that row, and calls <code>Signal()</code>, deliberately <em>not</em> dispatching in-process. (3) The signal wakes
+          the <a href="#outboxprocessor"><code>OutboxProcessor</code></a> immediately (otherwise the smart wait or fallback interval
+          would). (4) Once the row is eligible (after <code>ProcessingDelaySeconds</code>), the processor reads it,
+          deserializes it, sees it is an <a href="#iintegrationevent"><code>IIntegrationEvent</code></a>, and publishes it through
+          <a href="#imessagebus"><code>IMessageBus</code></a> to <a href="#brokermessagebus"><code>BrokerMessageBus</code></a> to MassTransit to the broker,
+          then marks the row processed. (5) In the Catalog service,
+          <a href="#integrationeventconsumertevent"><code>IntegrationEventConsumer&lt;OrderPaidIntegrationEvent&gt;</code></a> receives it,
+          asks the <a href="#iinboxstore"><code>IInboxStore</code></a> whether that <code>MessageId</code> was already handled, runs every
+          <code>IIntegrationEventHandler&lt;OrderPaidIntegrationEvent&gt;</code>, and records the <code>MessageId</code> so a redelivery is
+          skipped. (6) Back on the producer, <a href="#outboxcleanupservice"><code>OutboxCleanupService</code></a> eventually purges the
+          processed row. In monolith mode steps 3 to 5 collapse into the in-process dispatcher (the registered
+          <code>IEventBus</code> is <a href="#inprocesseventbus"><code>InProcessEventBus</code></a>, which writes, dispatches, and finalizes in one
+          call), but the <em>contracts the application code touches never change</em>, which is exactly the property that
+          lets a module graduate to its own service without a rewrite (ADR-008). For the mechanics of <em>why</em> each
+          design choice was made, ADR-003 (dual dispatch), ADR-006 (per-service outbox), ADR-010 (event
+          versioning), ADR-021 (consumer inbox), and ADR-007/008 (transport at the edge) are the primary
+          references.</p>
+          <h3 id="idomainevent">IDomainEvent</h3>
+          <blockquote>
+          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IDomainEvent.cs:7</code> · Level 0 · interface</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the marker contract for <strong>domain events</strong>: something meaningful happened inside an
+          aggregate boundary, to be dispatched after successful persistence.</li>
+          <li><strong>Depends on</strong>: nothing first-party (BCL <code>DateTime</code>/<code>Guid</code> only).</li>
+          <li><strong>Concept introduced, domain events + idempotency keys.</strong> <code>[Rubric §6, CQRS &amp; Event-Driven]</code>
+          (assesses reliable events; idempotent consumers; events carrying enough context) and <code>[Rubric §4, DDD]</code> (aggregates raise events on state change). An aggregate doesn&#39;t call other modules directly;
+          it <em>records</em> that something happened (e.g. &quot;SessionScored&quot;) as an <code>IDomainEvent</code>, and the framework
+          dispatches it after the data is safely saved, the basis of the <strong>Outbox pattern</strong> (ADR-003).</li>
+          <li><strong>Walkthrough</strong>: two properties: <code>DateOccurred</code> (<code>IDomainEvent.cs:10</code>) is <em>when the action happened</em>
+          (not when dispatched), and <code>MessageId</code> (a <code>Guid</code>, line 13) is a unique per-instance id used for
+          <strong>consumer-side idempotency</strong> (inbox dedup), so a redelivered event is processed once. That
+          <code>MessageId</code> is what makes consumers safe under at-least-once delivery; it is minted at event creation
+          by <a href="#basedomainevent"><code>BaseDomainEvent</code></a>, survives outbox serialization, travels through the broker,
+          and lands in an <a href="#inboxmessage"><code>InboxMessage</code></a> as the dedup key (ADR-021).</li>
+          <li><strong>Why it&#39;s built this way</strong>: a minimal marker keeps the domain free of dispatch mechanics; the two
+          fields are exactly what the outbox/inbox machinery needs (ordering by occurrence, dedup by id).</li>
+          <li><strong>Where it&#39;s used</strong>: implemented by concrete domain events in each module; raised by
+          <a href="group-02-domain-building-blocks.html#auditableaggregaterootentitytidentifiertype"><code>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code></a>,
+          captured from aggregates during <code>SaveChangesAsync</code>, serialized to <a href="#outboxmessage"><code>OutboxMessage</code></a>,
+          and dispatched by <a href="#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a> + the
+          <a href="#outboxprocessor"><code>OutboxProcessor</code></a>.</li>
+          </ul>
+          <h3 id="iinboxstore">IInboxStore</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Inbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/IInboxStore.cs:9</code> · Level 0 · interface</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the consumer-side idempotency port: it lets a broker consumer detect and skip an
+          integration event that this service has already processed, guarding against at-least-once
+          redelivery.</li>
+          <li><strong>Depends on</strong>: nothing first-party (BCL <code>Guid</code>/<code>Task</code>). Conceptually keyed by
+          <a href="#idomainevent"><code>IDomainEvent</code></a>&#39;s <code>MessageId</code>; backed by <a href="#inboxmessage"><code>InboxMessage</code></a> rows in the
+          EF implementation.</li>
+          <li><strong>Concept introduced, the consumer-side Inbox (ADR-021).</strong> <code>[Rubric §6, CQRS &amp; Event-Driven]</code>
+          (idempotent consumers) and <code>[Rubric §29, Resilience &amp; Business Continuity]</code> (assesses tolerance of
+          duplicate/redelivered messages). The <em>inbox</em> is the consumer-side complement to the <em>outbox</em>. Every
+          reliable broker guarantees <strong>at-least-once</strong> delivery, so the same message can arrive more than once
+          after a transient failure. The inbox records the message ids it has successfully processed; on
+          redelivery <code>AlreadyProcessedAsync</code> returns <code>true</code> and the consumer discards the duplicate without
+          re-running side effects. The default registration is a <strong>no-op</strong> (<a href="#noopinboxstore"><code>NoOpInboxStore</code></a>);
+          the EF-backed <a href="#efinboxstore"><code>EfInboxStore</code></a> is registered only when <code>MessageBus:EnableInbox=true</code>
+          (the doc comment, <code>IInboxStore.cs:6-7</code>, states this).</li>
+          <li><strong>Walkthrough</strong>: two async members: <code>AlreadyProcessedAsync(Guid messageId, ...)</code> (<code>IInboxStore.cs:12</code>),
+          a keyed lookup by the event&#39;s <code>MessageId</code>; and <code>MarkProcessedAsync(Guid messageId, string eventType, ...)</code> (line 15), which records the processed id (and the type name, for diagnostics).</li>
+          <li><strong>Why it&#39;s built this way</strong>: the port lets the no-op and EF-backed implementations be swapped by
+          configuration (<code>MessageBus:EnableInbox</code>) without touching consumer code, a §6/§10
+          dependency-inversion win; <strong>ADR-021</strong> records this opt-in inbox as the broker-consume sibling of
+          ADR-003&#39;s outbox (producer side) and ADR-017&#39;s HTTP-edge idempotency, deduping broker redeliveries
+          by <code>MessageId</code> in the consumer&#39;s own database with a unique index as the race guard. See
+          <a href="#noopinboxstore"><code>NoOpInboxStore</code></a> for the Null-Object default.</li>
+          <li><strong>Where it&#39;s used</strong>: consumed by <a href="#integrationeventconsumertevent"><code>IntegrationEventConsumer&lt;TEvent&gt;</code></a>
+          (the broker consumer base, this group); implemented by <a href="#efinboxstore"><code>EfInboxStore</code></a> (Level 8) and
+          <a href="#noopinboxstore"><code>NoOpInboxStore</code></a> (Level 1).</li>
+          </ul>
+          <h3 id="inboxmessage">InboxMessage</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Inbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/InboxMessage.cs:8</code> · Level 0 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a deduplication record: &quot;this service already processed the integration event with
+          this <code>MessageId</code>.&quot; It is an EF entity that lives in the consumer service&#39;s <em>own</em> database (mirroring
+          the outbox).</li>
+          <li><strong>Depends on</strong>: nothing first-party (BCL only). Its <code>MessageId</code> carries
+          <a href="#idomainevent"><code>IDomainEvent</code></a>&#39;s id semantics, and it is read/written through
+          <a href="#iinboxstore"><code>IInboxStore</code></a>.</li>
+          <li><strong>Concept introduced, the inbox row (idempotency table).</strong> <code>[Rubric §6, CQRS &amp; Event-Driven]</code>
+          (idempotent consumers) and <code>[Rubric §8, Data Architecture]</code> (deliberate dedup table per service).
+          Before processing an integration event, <a href="#integrationeventconsumertevent"><code>IntegrationEventConsumer&lt;TEvent&gt;</code></a>
+          asks <a href="#iinboxstore"><code>IInboxStore.AlreadyProcessedAsync</code></a>; after a successful handle it calls
+          <code>MarkProcessedAsync</code>, which inserts one of these rows. Because the table lives in the consumer&#39;s own
+          DB, the dedup respects the database-per-service boundary (ADR-006).</li>
+          <li><strong>Walkthrough</strong>: four <code>init</code>-only properties (<code>InboxMessage.cs:11-20</code>): <code>Id</code> (surrogate <code>Guid</code> PK,
+          defaulted to <code>Guid.NewGuid()</code>, line 11) is the EF key; <code>MessageId</code> (<code>required</code>, line 14) is the
+          event&#39;s own id, the <strong>deduplication key</strong>, carrying a unique index in the EF config; <code>EventType</code>
+          (<code>required</code>, line 17) is retained for diagnostics; <code>ProcessedOn</code> (line 20) is the UTC timestamp
+          stamped at mark time.</li>
+          <li><strong>Why it&#39;s built this way</strong>: separating <code>Id</code> (PK for EF internals) from <code>MessageId</code> (the business
+          dedup key with the unique index) follows the same surrogate-key convention the codebase uses
+          elsewhere; storing it as a plain entity lets the same EF stack purge it (see
+          <a href="#outboxcleanupservice"><code>OutboxCleanupService</code></a>). <strong>ADR-021</strong> governs this mechanism: the unique
+          index on <code>MessageId</code> is the concurrency guard a racing duplicate delivery trips, and the row lives in
+          the consumer&#39;s own database (ADR-006).</li>
+          <li><strong>Where it&#39;s used</strong>: written/read by <a href="#efinboxstore"><code>EfInboxStore</code></a>; purged by
+          <a href="#outboxcleanupservice"><code>OutboxCleanupService</code></a> when the inbox is enabled; an EF configuration class
+          applies its unique index.</li>
+          <li><strong>Caveats / not-in-source</strong>: the source has <strong>no</strong> first-party reference (it is a plain POCO), so
+          the links to <code>IInboxStore</code>/<code>IDomainEvent</code> above are conceptual, not compile dependencies.</li>
+          </ul>
+          <h3 id="ioutboxsignal">IOutboxSignal</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/IOutboxSignal.cs:8</code> · Level 0 · interface</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a wake-up signal between the producer (the code that commits outbox rows) and the
+          <a href="#outboxprocessor"><code>OutboxProcessor</code></a> background service, so the processor wakes the instant new rows
+          are written instead of sleeping out a fixed polling interval.</li>
+          <li><strong>Depends on</strong>: nothing first-party (BCL <code>TimeSpan</code>/<code>Task</code>). Implemented by
+          <a href="#outboxsignal"><code>OutboxSignal</code></a> (a <code>SemaphoreSlim</code>).</li>
+          <li><strong>Concept introduced, event-driven wake vs. fixed polling.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code> (assesses latency under load), <code>[Rubric §29, Resilience]</code>, and <code>[Rubric §31, Cost Efficiency / FinOps]</code> (assesses idle resource burn). Without a signal, the processor would poll the
+          DB on a fixed schedule, up to 300s in production (ADR-003). Instead, the producer calls <code>Signal()</code>
+          immediately after committing outbox entries; the processor is parked on <code>WaitAsync(timeout, ct)</code> and
+          returns at once. This collapses dispatch latency from &quot;up to the polling interval&quot; to near-zero in
+          the common case, while the timeout remains a safety net <strong>and</strong> keeps idle DB chatter (and its
+          telemetry cost) low.</li>
+          <li><strong>Walkthrough</strong>: <code>Signal()</code> (<code>IOutboxSignal.cs:11</code>) is synchronous and unblocks any waiter; it is
+          safe to call from the same thread that just finished <code>SaveChangesAsync</code>. <code>WaitAsync(TimeSpan timeout, CancellationToken ct)</code> (line 20) is what the processor loop awaits at the top of every cycle,
+          returning when either signalled or the timeout elapses.</li>
+          <li><strong>Why it&#39;s built this way</strong>: keeping it an interface lets tests inject a controllable signal to
+          drive the processor deterministically without real timers (a §14 testability seam).</li>
+          <li><strong>Where it&#39;s used</strong>: <code>Signal()</code> is called by <a href="#brokereventbus"><code>BrokerEventBus</code></a>/<a href="#inprocesseventbus"><code>InProcessEventBus</code></a>
+          after writing an outbox row and by the <code>SaveChanges</code> event-capture path; <code>WaitAsync</code> is awaited by
+          the <a href="#outboxprocessor"><code>OutboxProcessor</code></a> loop, with the wait duration computed from
+          <a href="#outboxcycleresult"><code>OutboxCycleResult</code></a>.</li>
+          </ul>
+          <h3 id="outboxcycleresult">OutboxCycleResult</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxCycleResult.cs:19</code> · Level 0 · record struct (internal, readonly)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the outcome of one outbox processing cycle, used by the
+          <a href="#outboxprocessor"><code>OutboxProcessor</code></a> to decide how long to wait before the next cycle.</li>
+          <li><strong>Depends on</strong>: nothing first-party (BCL <code>bool</code>/<code>DateTime?</code>). Consumed by the processor, which
+          feeds the computed wait to <a href="#ioutboxsignal"><code>IOutboxSignal.WaitAsync</code></a>.</li>
+          <li><strong>Concept introduced, the smart-wait input.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code>,
+          <code>[Rubric §29, Resilience]</code>, <code>[Rubric §31, Cost Efficiency]</code>. Two fields drive two distinct wait
+          policies (the XML doc, <code>OutboxCycleResult.cs:7-18</code>, spells both out): <code>HasMoreEligibleWork</code> triggers
+          an <strong>immediate re-poll</strong>, it is set only when a <em>full</em> batch of eligible rows was fetched <strong>and</strong> at
+          least one made progress (dispatched or dead-lettered), so more eligible rows are likely waiting; the
+          <em>progress</em> requirement is what stops a batch wholly stuck in a permanent error from hot-spinning the
+          loop. <code>EarliestPendingOccurredOn</code> enables <strong>time-precise wake-up</strong>: if the oldest not-yet-eligible
+          message becomes eligible in 47 seconds, the processor sleeps exactly 47 seconds instead of the full
+          fallback interval; <code>null</code> means nothing is pending, so the full interval applies.</li>
+          <li><strong>Walkthrough</strong>: declared as a <code>readonly record struct</code> (line 19) with two positional members:
+          <code>HasMoreEligibleWork</code> (<code>bool</code>) and <code>EarliestPendingOccurredOn</code> (<code>DateTime?</code>). The value-type, no-heap
+          shape means the tight background loop allocates nothing per cycle.</li>
+          <li><strong>Why it&#39;s built this way</strong>: a record struct avoids per-cycle allocation in a long-running loop;
+          <code>internal</code> visibility keeps the outbox processing contract private to the Infrastructure layer (it is
+          not part of any public API).</li>
+          <li><strong>Where it&#39;s used</strong>: returned by <code>OutboxProcessor.ProcessSourceAsync</code>/<code>ProcessPendingMessagesAsync</code>
+          and consumed by <code>ExecuteAsync</code> to call <a href="#ioutboxsignal"><code>IOutboxSignal.WaitAsync</code></a> with the right
+          duration (see <a href="#outboxprocessor"><code>OutboxProcessor</code></a>).</li>
+          </ul>
+          <h3 id="iintegrationevent">IIntegrationEvent</h3>
+          <blockquote>
+          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IIntegrationEvent.cs:15</code> · Level 1 · interface</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a marker interface distinguishing <strong>integration events</strong> (cross-module/cross-service)
+          from plain domain events (intra-module).</li>
+          <li><strong>Depends on</strong>: <a href="#idomainevent"><code>IDomainEvent</code></a> (Level 0), it <em>extends</em> it.</li>
+          <li><strong>Concept introduced, domain vs. integration events.</strong> <code>[Rubric §6, CQRS &amp; Event-Driven]</code>
+          (reliable events across module boundaries) and <code>[Rubric §7, Microservices Readiness]</code> (loose
+          coupling via events). The doc comment (<code>IIntegrationEvent.cs:8-13</code>) draws the line: <em>domain events</em>
+          are handled inside the same bounded context (same process, handled by
+          <a href="#idomaineventhandlerin-tdomainevent"><code>IDomainEventHandler&lt;in TDomainEvent&gt;</code></a>); <em>integration events</em>
+          are facts that other modules, possibly in other processes, need to react to, handled by
+          <a href="#iintegrationeventhandlerin-tintegrationevent"><code>IIntegrationEventHandler&lt;in TIntegrationEvent&gt;</code></a> and
+          transported through <a href="#imessagebus"><code>IMessageBus</code></a>. Because it still extends <code>IDomainEvent</code>, an
+          integration event flows through the <strong>same outbox pipeline</strong> (at-least-once); the marker just tells
+          the <a href="#outboxprocessor"><code>OutboxProcessor</code></a> to route it through <code>IMessageBus.PublishAsync</code> rather than
+          the in-process dispatcher. The interface is empty
+          (<code>public interface IIntegrationEvent : IDomainEvent;</code>, line 15), membership itself is the marker.</li>
+          <li><strong>Why it&#39;s built this way</strong>: making integration events a <em>subtype</em> of domain events means one
+          outbox mechanism serves both, and the routing decision is a single <code>is IIntegrationEvent</code> check in
+          the processor (<code>OutboxProcessor.cs:290</code>), no parallel pipeline.</li>
+          <li><strong>Where it&#39;s used</strong>: implemented by integration events across modules (e.g. Engagement&#39;s bookmark/
+          feedback events); routed by the <a href="#outboxprocessor"><code>OutboxProcessor</code></a> to <a href="#imessagebus"><code>IMessageBus</code></a>,
+          published by <a href="#inprocesseventbus"><code>InProcessEventBus</code></a>/<a href="#brokereventbus"><code>BrokerEventBus</code></a>, and
+          consumed via <a href="#integrationeventconsumertevent"><code>IntegrationEventConsumer&lt;TEvent&gt;</code></a>.</li>
+          </ul>
+          <h3 id="noopinboxstore">NoOpInboxStore</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Inbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/NoOpInboxStore.cs:7</code> · Level 1 · class (internal sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the default <a href="#iinboxstore"><code>IInboxStore</code></a> used when the inbox is disabled: it never
+          dedups and records nothing, so consumer behavior is exactly as it was before the inbox feature
+          existed.</li>
+          <li><strong>Depends on</strong>: <a href="#iinboxstore"><code>IInboxStore</code></a> (the port it implements); BCL <code>Task</code>/<code>Guid</code> only.</li>
+          <li><strong>Concept reinforced, the Null Object pattern.</strong> <code>[Rubric §2, Design Patterns]</code> (assesses idiomatic
+          use of patterns) and <code>[Rubric §10, Cross-Cutting Concerns]</code>. <code>AlreadyProcessedAsync</code> always returns
+          <code>false</code> (<code>NoOpInboxStore.cs:9-10</code>) and <code>MarkProcessedAsync</code> does nothing (<code>NoOpInboxStore.cs:12-13</code>).
+          The consumer pipeline is written against <a href="#iinboxstore"><code>IInboxStore</code></a> and runs identically whether
+          or not dedup is enabled: the Null Object removes a runtime <code>if (inbox enabled)</code> branch from every
+          consumer.</li>
+          <li><strong>Why it&#39;s built this way</strong>: opt-in dedup keeps the monolith simple, in-process dispatch never
+          redelivers, so a single-process or broker-less deployment needs no inbox and pays nothing for the
+          default (<strong>ADR-021</strong>). It is the registration unless <code>MessageBus:EnableInbox=true</code> swaps in
+          <a href="#efinboxstore"><code>EfInboxStore</code></a>.</li>
+          <li><strong>Where it&#39;s used</strong>: registered in DI as the default <code>IInboxStore</code>; consumed by
+          <a href="#integrationeventconsumertevent"><code>IntegrationEventConsumer&lt;TEvent&gt;</code></a>.</li>
+          </ul>
+          <h3 id="outboxmessage">OutboxMessage</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxMessage.cs:14</code> · Level 1 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a row in an <code>OutboxMessages</code> table: a JSON-serialized domain event persisted <strong>in
+          the same DB transaction as its aggregate</strong>, ready for reliable async dispatch.</li>
+          <li><strong>Depends on</strong>: <a href="#idomainevent"><code>IDomainEvent</code></a> (Level 0); BCL <code>System.Text.Json</code>,
+          <code>System.Diagnostics.Activity</code> (trace capture), and <code>System.Collections.Concurrent</code> (the type cache).</li>
+          <li><strong>Concept introduced, the Transactional Outbox pattern.</strong> <code>[Rubric §6, CQRS &amp; Event-Driven]</code>
+          (reliable at-least-once delivery), <code>[Rubric §8, Data Architecture]</code> (event written in the same
+          transaction as the aggregate), and <code>[Rubric §29, Resilience &amp; Business Continuity]</code> (the delivery
+          guarantee survives a crash). ADR-003 is the governing decision. The problem it solves: if you save an
+          aggregate and <em>then</em> publish an event, a crash between the two loses the event. The fix: write the
+          event to an <code>OutboxMessages</code> row in the <strong>same database transaction</strong> as the aggregate change; the
+          <a href="#outboxprocessor"><code>OutboxProcessor</code></a> then reads unprocessed rows and dispatches them, re-dispatching
+          after a crash (at-least-once). Each service owns its own outbox table (ADR-006), so there is no
+          cross-service race.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li>Static <code>SerializerOptions</code> (<code>OutboxMessage.cs:16-19</code>), a <code>JsonSerializerOptions</code> with
+          <code>ReferenceHandler.IgnoreCycles</code>, so an event referencing a cyclic entity graph still serializes;
+          the same instance is reused on the read side so payloads round-trip symmetrically.</li>
+          <li>Static <code>EventTypeCache</code> (<code>OutboxMessage.cs:25</code>): a <code>ConcurrentDictionary&lt;string, Type?&gt;</code> keyed by
+          assembly-qualified name (<code>StringComparer.Ordinal</code>) that memoizes the <code>Type.GetType</code> reflection
+          lookup <code>DeserializeEvent</code> would otherwise run on <strong>every</strong> row; the XML doc (lines 21-24) notes an
+          unresolvable name caches as <code>null</code> so a poison payload&#39;s resolution is not retried on each poll.</li>
+          <li><strong>Fields</strong> (<code>OutboxMessage.cs:28-52</code>): <code>Id</code> (<code>Guid</code>, auto <code>Guid.NewGuid()</code>, line 28); <code>EventType</code>
+          (<code>required</code>, the assembly-qualified type name for deserialization, line 31); <code>Payload</code> (<code>required</code>,
+          the JSON string, line 34); <code>OccurredOn</code> (the business timestamp from <code>IDomainEvent.DateOccurred</code>,
+          line 37); <code>ProcessedOn?</code> (a <em>settable</em> <code>DateTime?</code>, null until dispatched, line 40); <code>RetryCount</code>
+          (settable, bumped on failure, line 43); <code>LastError?</code> (settable, last failure message, line 46);
+          <code>TraceId?</code>/<code>SpanId?</code> (W3C trace context captured at write time, lines 49-52). Note the deliberate
+          mix of <code>init</code> (immutable identity/payload/trace) and <code>set</code> (mutable processing state the processor
+          updates).</li>
+          <li><strong><code>FromDomainEvent(IDomainEvent)</code></strong> (<code>OutboxMessage.cs:59-73</code>): the static factory. It null-guards
+          the event (line 61), captures <code>Activity.Current</code> (line 64) for trace propagation, and serializes
+          using the <em>runtime</em> type so <code>type.AssemblyQualifiedName</code> survives the JSON round-trip (line 67
+          falls back to <code>FullName</code>/<code>Name</code> if the AQN is null).</li>
+          <li><strong><code>DeserializeEvent()</code></strong> (<code>OutboxMessage.cs:79-88</code>): re-inflates the event, resolving the CLR type
+          through <code>EventTypeCache.GetOrAdd(EventType, static ... =&gt; Type.GetType(...))</code> (line 81); returns
+          <code>null</code> (rather than throwing) if the type can no longer be resolved (lines 82-83, e.g. after a
+          rename) so the processor can dead-letter it instead of crashing, then deserializes with the shared
+          <code>SerializerOptions</code> (line 87).</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: persisting events in the same transaction (not after) is the only way
+          to guarantee no event is lost. JSON keeps rows human-readable for debugging; the assembly-qualified
+          name enables polymorphic deserialization; the per-name type cache keeps the hot poll path off
+          reflection; <code>TraceId</code>/<code>SpanId</code> let traces span the async outbox hop.</li>
+          <li><strong>Where it&#39;s used</strong>: written by the <code>SaveChanges</code> event-capture in
+          <a href="group-07-persistence-ef-core.html#domaineventsavechangesinterceptor"><code>DomainEventSaveChangesInterceptor</code></a>
+          and by <a href="#inprocesseventbus"><code>InProcessEventBus</code></a>/<a href="#brokereventbus"><code>BrokerEventBus</code></a>; read and
+          dispatched by the <a href="#outboxprocessor"><code>OutboxProcessor</code></a>; marked processed by
+          <a href="#outboxfinalizer"><code>OutboxFinalizer</code></a>; purged by <a href="#outboxcleanupservice"><code>OutboxCleanupService</code></a>.</li>
+          <li><strong>Caveats / not-in-source</strong>: a type-rename migration requires keeping the old <code>EventType</code> resolvable
+          (or a data migration); an assembly rename makes <code>Type.GetType(EventType)</code> return null, the null caches
+          in <code>EventTypeCache</code>, and the row dead-letters on the next cycle.</li>
+          </ul>
+          <h3 id="outboxsignal">OutboxSignal</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxSignal.cs:9</code> · Level 1 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the <code>SemaphoreSlim</code>-based <a href="#ioutboxsignal"><code>IOutboxSignal</code></a> that wakes the
+          <a href="#outboxprocessor"><code>OutboxProcessor</code></a> the instant new outbox entries are written.</li>
+          <li><strong>Depends on</strong>: <a href="#ioutboxsignal"><code>IOutboxSignal</code></a> (the port it implements); BCL <code>SemaphoreSlim</code>/
+          <code>TimeSpan</code>.</li>
+          <li><strong>Concept reinforced, event-driven wake.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code> (event-driven
+          wake beats poll-only latency), introduced at <a href="#ioutboxsignal"><code>IOutboxSignal</code></a>.</li>
+          <li><strong>Walkthrough</strong>: a <code>SemaphoreSlim(0)</code> field (line 11). <code>Signal()</code> (lines 14-24) calls
+          <code>_semaphore.Release()</code>, catching and swallowing the defensive <code>SemaphoreFullException</code> (lines 20-23)
+          so repeated signals never throw; multiple rapid signals are harmless because the processor drains
+          <em>all</em> pending rows in one batch and then re-waits (the XML doc, lines 3-8, says so). <code>WaitAsync</code>
+          (lines 27-37) awaits <code>_semaphore.WaitAsync(timeout, ct)</code> and re-throws only on real shutdown
+          cancellation (lines 33-36). It implements <code>IDisposable</code> (line 40) to release the semaphore.</li>
+          <li><strong>Why it&#39;s built this way</strong>: a counting semaphore is the lightest primitive that both blocks the
+          processor loop and is releasable from the commit path; swallowing <code>SemaphoreFullException</code> makes
+          signalling idempotent against bursts.</li>
+          <li><strong>Where it&#39;s used</strong>: registered in DI (by <code>AddInfrastructure</code>); <code>Signal()</code> is called by
+          <a href="#brokereventbus"><code>BrokerEventBus</code></a>/<a href="#inprocesseventbus"><code>InProcessEventBus</code></a> and the <code>SaveChanges</code>
+          event-capture path after writing outbox rows; <code>WaitAsync</code> is awaited by the
+          <a href="#outboxprocessor"><code>OutboxProcessor</code></a> loop.</li>
+          </ul>
+          <h3 id="outboxfinalizer">OutboxFinalizer</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxFinalizer.cs:12</code> · Level 6 · class (internal static)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the helper that marks a batch of just-dispatched <a href="#outboxmessage"><code>OutboxMessage</code></a>
+          rows processed with a <strong>single set-based SQL <code>UPDATE</code></strong>, then re-syncs the EF change tracker so a
+          later save does not re-issue the same statement. It is the finalize step on the low-latency happy
+          path, not the background processor&#39;s path.</li>
+          <li><strong>Depends on</strong>: <a href="#outboxmessage"><code>OutboxMessage</code></a> (this group),
+          <a href="group-07-persistence-ef-core.html#applicationdbcontext"><code>ApplicationDbContext</code></a> (G07); BCL EF Core
+          (<code>ExecuteUpdateAsync</code>) and <code>TimeProvider.System</code>.</li>
+          <li><strong>Concept introduced, set-based finalize off the hot write path.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code> (assesses keeping the hottest write path cheap) and <code>[Rubric §8, Data Architecture]</code>
+          (efficient set-based mutation). Every event-raising command reaches this the moment its transaction
+          commits and its events are dispatched in-process. The naive approach, setting <code>ProcessedOn</code> on each
+          tracked entity and calling <code>SaveChanges</code> again, would run a second full save (change detection, audit
+          stamping, the interceptor pipeline) on the busiest write path in the system. Instead the doc comment
+          (<code>OutboxFinalizer.cs:6-11</code>) states the design: one asynchronous <code>ExecuteUpdate</code> statement that
+          bypasses the change tracker and the <code>SaveChanges</code> interceptor entirely.</li>
+          <li><strong>Walkthrough</strong>: <code>MarkProcessedAsync(ApplicationDbContext, IReadOnlyList&lt;OutboxMessage&gt;, CancellationToken)</code> (<code>OutboxFinalizer.cs:21-48</code>) short-circuits on an empty batch (lines 26-27);
+          computes <code>now</code> once from <code>TimeProvider.System.GetUtcNow().UtcDateTime</code> (line 29); collects the row ids
+          (line 30); issues <strong>one</strong> <code>ExecuteUpdateAsync</code> that <code>SetProperty(m =&gt; m.ProcessedOn, now)</code> over
+          <code>Where(m =&gt; ids.Contains(m.Id))</code> (lines 32-35). Because <code>ExecuteUpdate</code> does not touch tracked
+          instances, it then loops the entries and, for each, sets the tracked <code>ProcessedOn</code>, writes the
+          property&#39;s <code>OriginalValue</code>, and clears <code>IsModified</code> (lines 41-47). The ordering is load-bearing and
+          the inline comment (lines 37-40) explains why: clearing <code>IsModified</code> reverts the current value to the
+          original, so the original must already hold the new value first.</li>
+          <li><strong>Why it&#39;s built this way</strong>: <code>ExecuteUpdate</code> is a single round-trip that never materializes entities;
+          re-syncing the tracker afterwards keeps a later <code>SaveChanges</code> from queueing a redundant <code>UPDATE</code> for
+          rows that are already processed. This is the concrete implementation of ADR-003&#39;s <em>dispatch #1</em> (the
+          in-process happy path) staying cheap, the durability net is the background
+          <a href="#outboxprocessor"><code>OutboxProcessor</code></a>, which does <em>not</em> use this helper.</li>
+          <li><strong>Where it&#39;s used</strong>: called by the
+          <a href="group-07-persistence-ef-core.html#domaineventsavechangesinterceptor"><code>DomainEventSaveChangesInterceptor</code></a>
+          (G07) right after commit, and by <a href="#inprocesseventbus"><code>InProcessEventBus</code></a> after writing and
+          dispatching an integration-event row.</li>
+          </ul>
+          <h3 id="efinboxstore">EfInboxStore</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Inbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Inbox/EfInboxStore.cs:18</code> · Level 8 · class (sealed partial)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the EF-backed inbox: it records processed message ids in the consumer&#39;s own
+          database so a redelivered broker message is skipped (consumer-side dedup).</li>
+          <li><strong>Depends on</strong>: <a href="group-07-persistence-ef-core.html#idbcontextfactory"><code>IDbContextFactory</code></a>,
+          <a href="group-07-persistence-ef-core.html#idatasourceresolver"><code>IDataSourceResolver</code></a>,
+          <a href="group-14-module-system-composition.html#outboxsettings"><code>OutboxSettings</code></a> (to find the publish-target
+          source), <code>ILogger</code>; the <a href="#inboxmessage"><code>InboxMessage</code></a> entity; resolves an
+          <a href="group-07-persistence-ef-core.html#applicationdbcontext"><code>ApplicationDbContext</code></a>.</li>
+          <li><strong>Concept reinforced, at-least-once-with-dedup, and why handlers must still be idempotent.</strong>
+          <code>[Rubric §6, CQRS &amp; Event-Driven]</code> (idempotent consumers) and <code>[Rubric §29, Resilience]</code>.
+          <code>AlreadyProcessedAsync</code> (<code>EfInboxStore.cs:25-31</code>) issues an <code>AnyAsync</code> for an
+          <a href="#inboxmessage"><code>InboxMessage</code></a> with the given <code>MessageId</code>. <code>MarkProcessedAsync</code>
+          (<code>EfInboxStore.cs:34-56</code>) inserts one <em>after</em> handlers succeed, catching the <code>DbUpdateException</code>
+          thrown by the unique index when a concurrent duplicate delivery already inserted the same id (lines
+          50-55, treated as already-processed and logged at Debug via <code>LogConcurrentDuplicate</code>, lines 64-65).
+          <code>ResolveContext</code> (<code>EfInboxStore.cs:58-62</code>) routes to the configured outbox data source via
+          <a href="group-07-persistence-ef-core.html#idatasourceresolver"><code>IDataSourceResolver</code></a>. The class comment
+          (<code>EfInboxStore.cs:11-17</code>) is explicit: because the inbox row is written <em>after</em> the handler commits, a
+          crash in between reprocesses once, so handlers <strong>must still be idempotent</strong>. This is the consumer-side
+          complement to the producer-side <a href="#outboxprocessor"><code>OutboxProcessor</code></a>.</li>
+          <li><strong>Why it&#39;s built this way</strong>: dedup-by-<code>MessageId</code> (the <a href="#idomainevent"><code>IDomainEvent.MessageId</code></a>
+          introduced at Level 0) makes redelivery safe without distributed locks; storing the row in the
+          consumer&#39;s <em>own</em> DB keeps it within the database-per-service boundary (ADR-006). Relying on the unique
+          index (and swallowing its violation) avoids a read-then-write race between concurrent deliveries.
+          <strong>ADR-021</strong> is the governing decision: this opt-in inbox is the broker-consume sibling of ADR-003&#39;s
+          outbox and ADR-017&#39;s HTTP-edge idempotency, activated by <code>MessageBus:EnableInbox</code> and marking
+          processed only after all handlers succeed (a throwing handler leaves the message redeliverable).</li>
+          <li><strong>Where it&#39;s used</strong>: registered in place of <a href="#noopinboxstore"><code>NoOpInboxStore</code></a> when
+          <code>MessageBus:EnableInbox=true</code>; called by the <a href="#integrationeventconsumertevent"><code>IntegrationEventConsumer&lt;TEvent&gt;</code></a>
+          pipeline around handler invocation; its rows are purged by <a href="#outboxcleanupservice"><code>OutboxCleanupService</code></a>.</li>
+          </ul>
+          <h3 id="outboxcleanupservice">OutboxCleanupService</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxCleanupService.cs:32</code> · Level 8 · class (sealed partial, <code>BackgroundService</code>)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the periodic sweeper that purges <strong>processed</strong> outbox rows (and, when enabled,
+          inbox rows) older than the retention window from every relational source the host owns.</li>
+          <li><strong>Depends on</strong>: <code>IServiceScopeFactory</code>,
+          <a href="group-14-module-system-composition.html#outboxsettings"><code>OutboxSettings</code></a>,
+          <a href="group-14-module-system-composition.html#messagebussettings"><code>MessageBusSettings</code></a> (via <code>IOptions&lt;&gt;</code>),
+          <a href="group-07-persistence-ef-core.html#ientitydatasourceregistry"><code>IEntityDataSourceRegistry</code></a>,
+          <a href="group-07-persistence-ef-core.html#idatasourceresolver"><code>IDataSourceResolver</code></a>,
+          <a href="group-07-persistence-ef-core.html#idbcontextfactory"><code>IDbContextFactory</code></a>, and an optional
+          <code>TimeProvider</code>; the <a href="#outboxmessage"><code>OutboxMessage</code></a>/<a href="#inboxmessage"><code>InboxMessage</code></a> entities.</li>
+          <li><strong>Concept reinforced, retention as a privacy + storage control (plus a clock seam).</strong> <code>[Rubric §30, Compliance, Privacy &amp; Data Governance]</code> (assesses bounded retention of data that may contain PII),
+          <code>[Rubric §8, Data Architecture]</code>, and <code>[Rubric §14, Testability]</code>. The
+          <a href="#outboxprocessor"><code>OutboxProcessor</code></a> only ever <em>sets</em> <code>ProcessedOn</code>; without this sweep the outbox,
+          which stores serialized event payloads that may contain personal data, grows unbounded (the doc cites
+          ADR-003 / ADR-005). The constructor takes an optional <code>TimeProvider? timeProvider = null</code>
+          (<code>OutboxCleanupService.cs:39</code>) stored as <code>_timeProvider</code>, defaulting to <code>TimeProvider.System</code> (line
+          43); the doc comment (lines 30-31) states its purpose, it is a clock abstraction so tests can drive
+          the hour-scale sweep loop deterministically instead of waiting real hours.</li>
+          <li><strong>Walkthrough</strong>: <code>ExecuteAsync</code> (<code>OutboxCleanupService.cs:46-74</code>) returns immediately when
+          <code>RetentionDays &lt;= 0</code> (lines 48-52, the off switch), then loops, deliberately awaiting
+          <code>_timeProvider.Delay(interval, ...)</code> (line 62) <strong>before</strong> each <code>PurgeAsync</code> (line 63) so cleanup never
+          competes with startup or migrations (the comment, lines 56-57). <code>PurgeAsync</code>
+          (<code>OutboxCleanupService.cs:76-114</code>) computes the cutoff from <code>_timeProvider.GetUtcNow()</code> minus
+          <code>RetentionDays</code> (line 78), then per source deletes processed rows older than the cutoff via
+          <code>ExecuteDeleteAsync</code>, a set-based SQL <code>DELETE</code> with no entity materialization (lines 89-92), and
+          purges the inbox too when <code>MessageBusSettings.EnableInbox</code> is set (lines 99-102, delegating to
+          <code>PurgeInboxAsync</code>, lines 116-131). A single unreachable database does not stop the others (lines
+          108-112). <code>GetRelationalSources</code> (lines 138-149) computes the same source set the processor drains.</li>
+          <li><strong>Why it&#39;s built this way</strong>: bounded retention keeps both storage cost (§31) and PII exposure (§30)
+          in check; doing it as a <code>DELETE</code> (not load-then-remove) is the efficient path, and per-source
+          error isolation keeps one bad DB from blocking the sweep. ADR-021 has the inbox reuse this same
+          retention sweep (gated on <code>EnableInbox</code>) rather than adding a second housekeeping service.</li>
+          <li><strong>Where it&#39;s used</strong>: registered as a hosted service alongside the <a href="#outboxprocessor"><code>OutboxProcessor</code></a>
+          in <code>AddInfrastructure</code>.</li>
+          </ul>
+          <h3 id="outboxprocessor">OutboxProcessor</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:37</code> · Level 8 · class (sealed partial, <code>BackgroundService</code>)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the background service that drains every outbox table the host owns and dispatches
+          the <a href="#outboxmessage"><code>OutboxMessage</code></a>s, the engine of at-least-once delivery (ADR-003).</li>
+          <li><strong>Depends on</strong>: <code>IServiceScopeFactory</code>,
+          <a href="group-14-module-system-composition.html#outboxsettings"><code>OutboxSettings</code></a> (via <code>IOptions&lt;&gt;</code>),
+          <a href="#ioutboxsignal"><code>IOutboxSignal</code></a>,
+          <a href="group-07-persistence-ef-core.html#ientitydatasourceregistry"><code>IEntityDataSourceRegistry</code></a>,
+          <a href="group-07-persistence-ef-core.html#idatasourceresolver"><code>IDataSourceResolver</code></a>; per scope
+          <a href="group-07-persistence-ef-core.html#idbcontextfactory"><code>IDbContextFactory</code></a>,
+          <a href="#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a>, and <a href="#imessagebus"><code>IMessageBus</code></a>; the
+          <a href="#outboxmessage"><code>OutboxMessage</code></a> entity.</li>
+          <li><strong>Concept introduced, the outbox drain loop: smart wait, per-source draining, dead-lettering, and
+          trace continuity.</strong> <code>[Rubric §6, CQRS &amp; Event-Driven]</code> (reliable delivery), <code>[Rubric §29, Resilience]</code>, <code>[Rubric §13, Observability &amp; Operability]</code> (traces + dead-letter metric), and
+          <code>[Rubric §31, Cost Efficiency]</code> (idle-poll suppression). The loop (<code>ExecuteAsync</code>,
+          <code>OutboxProcessor.cs:66-110</code>): after a 5s startup delay (line 69) it bails out entirely if the host
+          owns no relational sources (lines 71-75), then repeatedly processes all sources and <strong>waits</strong> for
+          whichever of (a) an <a href="#ioutboxsignal"><code>IOutboxSignal</code></a> (a new entry was written), (b) the moment the
+          earliest pending message becomes eligible, the <strong>smart wait</strong> computed by <code>ComputeWaitTime</code>
+          (<code>OutboxProcessor.cs:119-137</code>, floored at 1s via <code>MinimumWait</code>, capped at the polling interval), or
+          (c) the fallback interval, comes first. This is why production can set a 300s poll interval without
+          adding latency: real messages wake it via signal or smart-wait, and the slow fallback only cuts idle
+          DB chatter and telemetry cost. <code>GetOutboxSources</code> (<code>OutboxProcessor.cs:144-155</code>) enumerates every
+          relational source backing a registered entity plus the configured publish target (Cosmos has no
+          outbox), so a host only ever touches <em>its own</em> databases, never racing another service for its rows
+          (ADR-006, the fix recorded in the outbox-race memory). <code>ProcessSourceAsync</code>
+          (<code>OutboxProcessor.cs:195-256</code>) fetches a batch ordered by <code>OccurredOn</code> (eligible rows sort before
+          pending ones, so a full batch can&#39;t starve eligible work), splits the eligible prefix (older than the
+          <code>ProcessingDelaySeconds</code> cutoff) from the pending remainder, dispatches the eligible ones, then saves
+          with the <strong>base</strong> <code>DbContext.SaveChangesAsync</code> (line 249, bypassing audit stamping and re-dispatch).
+          The poll query runs inside an explicit <code>OutboxPoll</code> activity (<code>OutboxProcessor.cs:212</code>; the name
+          constant <code>PollActivityName</code> is at line 53) that the Aspire
+          <a href="group-16-aspire-orchestration.html#outboxpollfilterprocessor"><code>OutboxPollFilterProcessor</code></a> suppresses
+          from telemetry, the string is deliberately duplicated there because Aspire has no project reference
+          (the comment at lines 47-52 says so). <code>DispatchMessagesAsync</code> (<code>OutboxProcessor.cs:263-313</code>):
+          deserialize the event; if the type can&#39;t be resolved, <strong>dead-letter</strong> it (mark processed, bump the
+          <code>outbox.dead_letter.count</code> counter, line 282; the <code>DeadLetterCounter</code> is defined at lines 60-63);
+          route an <a href="#iintegrationevent"><code>IIntegrationEvent</code></a> via <a href="#imessagebus"><code>IMessageBus</code></a> (in-process or
+          broker, the <code>is IIntegrationEvent</code> check at line 290) and a pure domain event via
+          <a href="#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a>; on failure bump <code>RetryCount</code> (capped by
+          <code>MaxRetries</code> in the fetch filter, line 221) and record <code>LastError</code>. Each dispatch restarts the
+          original request&#39;s trace via <code>StartOutboxActivity</code> (<code>OutboxProcessor.cs:320-342</code>) so traces span the
+          async hop.</li>
+          <li><strong>Why it&#39;s built this way</strong>: ADR-003: the outbox is the durability guarantee behind every
+          integration event; the smart-wait + per-source design (ADR-006) plus the telemetry suppression are
+          the cost/latency optimizations recorded in the outbox-cost-optimization memory. Dead-lettering
+          unresolvable types stops one poison message from blocking the queue; the <em>progress</em> requirement on
+          re-poll (see <a href="#outboxcycleresult"><code>OutboxCycleResult</code></a>) prevents a fully-failing batch from
+          hot-spinning.</li>
+          <li><strong>Where it&#39;s used</strong>: registered as a hosted service in every service host; the producer side is the
+          two <code>IEventBus</code> implementations (<a href="#inprocesseventbus"><code>InProcessEventBus</code></a> /
+          <a href="#brokereventbus"><code>BrokerEventBus</code></a>) plus the <code>SaveChanges</code> event-capture in
+          <a href="group-07-persistence-ef-core.html#domaineventsavechangesinterceptor"><code>DomainEventSaveChangesInterceptor</code></a>;
+          its companion sweeper is <a href="#outboxcleanupservice"><code>OutboxCleanupService</code></a>.</li>
+          </ul>
+          <h3 id="basedomainevent">BaseDomainEvent</h3>
+          <blockquote>
+          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.DomainEvents</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseDomainEvent.cs:18</code> · Level 1 · record class (abstract)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the abstract base record for all domain events, supplying default values for both
+          <a href="#idomainevent"><code>IDomainEvent</code></a> properties so a concrete event type is a one-liner.</li>
+          <li><strong>Depends on</strong>: <a href="#idomainevent"><code>IDomainEvent</code></a> (Level 0).</li>
+          <li><strong>Concept introduced, record semantics for domain events.</strong> <code>[Rubric §6, CQRS &amp; Event-Driven]</code>
+          assesses whether events carry enough context and whether consumers can stay idempotent. Declaring
+          the base as a <code>record class</code> (line 18) gives <strong>structural equality</strong>, useful for deduplication and
+          for value-based assertions in tests. Two properties are initialised inline at construction:
+          <code>DateOccurred = DateTime.UtcNow</code> (line 20) captures <em>when the business action happened</em> (not when
+          the event is dispatched, the doc comment draws this distinction explicitly), and
+          <code>MessageId = Guid.NewGuid()</code> (line 27) mints a unique per-instance id at construction time. Because
+          <code>MessageId</code> is serialized with the payload, it survives the outbox → broker → consumer round-trip,
+          making consumer-side deduplication via the inbox table reliable.</li>
+          <li><strong>Walkthrough</strong>: two <code>init</code> properties with inline defaults; <code>abstract</code> so consumers must declare a
+          concrete event type. Concrete events add whatever domain-specific payload they carry (entity id,
+          state change, etc.) as additional positional or <code>init</code> properties on the derived record.</li>
+          <li><strong>Why it&#39;s built this way</strong>: inline defaults mean a concrete event record needs zero boilerplate:
+          <code>public sealed record SessionCreated(SessionIdentifierType SessionId) : BaseDomainEvent;</code> is the
+          complete type. Minting <code>MessageId</code> at construction (not at serialization) keeps the id stable even
+          if the event is serialized more than once. This is the consumer-idempotency half of the at-least-once
+          story in <code>ADRs/003-outbox-dual-dispatch.md</code>. The creation-time default on <code>DateOccurred</code> is now
+          documented as a deliberate domain-modelling choice rather than an oversight (the <code>&lt;remarks&gt;</code> block,
+          lines 10-16): a domain event&#39;s occurrence instant is by definition the moment the aggregate raises
+          it, so stamping it at construction is the correct event-sourcing / audit semantic, and it is
+          intentionally distinct from infrastructure timestamps that must be deterministically testable
+          (audit fields, notification read-time), which are stamped from an injected <code>TimeProvider</code>. This is a
+          comment/rationale addition only; the runtime behavior is unchanged.</li>
+          <li><strong>Where it&#39;s used</strong>: base of every domain event across both apps (e.g. <code>CategoryItemChanged</code>,
+          <code>UserDeleted</code>); subclassed by <a href="#baseintegrationevent"><code>BaseIntegrationEvent</code></a> and
+          <a href="#entitychangedeventtidentifiertype"><code>EntityChangedEvent&lt;TIdentifierType&gt;</code></a>; captured into an
+          <a href="#outboxmessage"><code>OutboxMessage</code></a> row and routed by <a href="#domaineventdispatcher"><code>DomainEventDispatcher</code></a>.</li>
+          </ul>
+          <h3 id="idomaineventdispatcher">IDomainEventDispatcher</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IDomainEventDispatcher.cs:8</code> · Level 1 · interface</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the dispatch port for in-process domain-event delivery. A single method,
+          <code>DispatchAsync(IEnumerable&lt;IDomainEvent&gt;, CancellationToken)</code> (line 16), takes a batch of events and
+          routes each to its registered handlers after an aggregate persists changes (doc comment, lines 5-6).</li>
+          <li><strong>Depends on</strong>: <a href="#idomainevent"><code>IDomainEvent</code></a> (Level 0).</li>
+          <li><strong>Concept introduced, the dispatcher/handler split for domain events.</strong> <code>[Rubric §6, CQRS &amp; Event-Driven]</code> assesses whether events are dispatched <em>after</em> persistence rather than from inside
+          aggregates, and whether handlers are discoverable. The dispatcher is the port half of the pair; the
+          handler half is <a href="#idomaineventhandlerin-tdomainevent"><code>IDomainEventHandler&lt;in TDomainEvent&gt;</code></a>.
+          <code>[Rubric §1, SOLID]</code>: the dispatcher depends only on the abstract handler contract (DIP), so adding
+          a reaction never edits the dispatcher.</li>
+          <li><strong>Walkthrough</strong>: a one-method port; the only implementation is
+          <a href="#domaineventdispatcher"><code>DomainEventDispatcher</code></a> (Level 3), which fans each event out to every
+          registered <code>IDomainEventHandler&lt;T&gt;</code> and, for integration events, additionally to every
+          <a href="#iintegrationeventhandlerin-tintegrationevent"><code>IIntegrationEventHandler&lt;in TIntegrationEvent&gt;</code></a>.</li>
+          <li><strong>Why it&#39;s built this way</strong>: keeping the contract in <code>Application</code> (a port) and the implementation
+          in the same layer but a separate file follows Clean Architecture&#39;s ports/adapters split; the outbox
+          (<code>ADRs/003-outbox-dual-dispatch.md</code>) re-uses the <em>same</em> dispatcher both for the synchronous
+          in-process copy and for re-dispatch of persisted events.</li>
+          <li><strong>Where it&#39;s used</strong>: <code>ApplicationDbContext.SaveChangesAsync</code> collects domain events from aggregates,
+          serializes them to <a href="#outboxmessage"><code>OutboxMessage</code></a> rows, then calls <code>DispatchAsync</code> for the
+          immediate in-process reactions that don&#39;t need outbox durability; the background
+          <a href="#outboxprocessor"><code>OutboxProcessor</code></a> uses the same dispatcher to re-dispatch persisted events.</li>
+          </ul>
+          <h3 id="idomaineventhandlerin-tdomainevent">IDomainEventHandler&lt;in TDomainEvent&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IDomainEventHandler.cs:10</code> · Level 1 · interface</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the handler contract a domain-event reaction implements, with a single
+          <code>HandleAsync(TDomainEvent, CancellationToken)</code> (line 19).</li>
+          <li><strong>Depends on</strong>: <a href="#idomainevent"><code>IDomainEvent</code></a> (Level 0).</li>
+          <li><strong>Concept</strong>: the handler half of the dispatcher/handler split introduced by
+          <a href="#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a>. <code>IDomainEventHandler&lt;in TDomainEvent&gt;</code> is
+          <strong>contravariant</strong> on <code>TDomainEvent</code> (the <code>in</code> keyword, line 10), constrained
+          <code>where TDomainEvent : IDomainEvent</code> (line 11); contravariance means a handler written against a
+          base event type can be used where a handler for a more derived event is required. Per the doc
+          comment (lines 5-7), handlers are <strong>auto-discovered by Scrutor assembly scanning</strong> and resolved from
+          DI during dispatch (the framework wires this through <code>ScanModuleApplicationServices&lt;T&gt;</code>).
+          <code>[Rubric §6, CQRS &amp; Event-Driven]</code>.</li>
+          <li><strong>Walkthrough</strong>: a one-method port. Handlers that must succeed atomically with the primary
+          transaction (e.g. a read model in the same DB) implement it directly and let exceptions propagate;
+          side-effect handlers extend <a href="#safedomaineventhandlertdomainevent"><code>SafeDomainEventHandler&lt;TDomainEvent&gt;</code></a>
+          instead so a failure logs-and-continues rather than rolling back the save.</li>
+          <li><strong>Where it&#39;s used</strong>: resolved and invoked by <a href="#domaineventdispatcher"><code>DomainEventDispatcher</code></a>
+          (Level 3) for every dispatched event; the dispatcher closes this open generic over the concrete
+          event type to find the right handlers.</li>
+          </ul>
+          <h3 id="baseintegrationevent">BaseIntegrationEvent</h3>
+          <blockquote>
+          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.DomainEvents</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseIntegrationEvent.cs:11</code> · Level 2 · record class (abstract)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the abstract base for <strong>integration events</strong> (events meant to cross module/service
+          boundaries). It inherits <a href="#basedomainevent"><code>BaseDomainEvent</code></a> for outbox-pipeline compatibility and
+          implements <a href="#iintegrationevent"><code>IIntegrationEvent</code></a> so the dispatcher routes it to integration-event
+          handlers.</li>
+          <li><strong>Depends on</strong>: <a href="#basedomainevent"><code>BaseDomainEvent</code></a> (Level 1),
+          <a href="#iintegrationevent"><code>IIntegrationEvent</code></a> (Level 1).</li>
+          <li><strong>Concept introduced, explicit integration-event schema versioning (ADR-010).</strong> This base now
+          carries a single member beyond what it inherits: <code>public virtual int SchemaVersion =&gt; 1;</code> (line 22).
+          <code>[Rubric §9, API &amp; Contract Design]</code> assesses whether contracts evolve without silently breaking
+          consumers; an integration event <em>is</em> a wire contract once it crosses a service boundary. The version
+          is serialized with the payload, so a consumer has an explicit signal to branch or upcast on. The
+          doc comment (lines 13-22) states the discipline precisely: additive/optional field changes keep the
+          same version; a <strong>breaking</strong> change (renamed, removed, or retyped field) requires a <em>new</em> event type
+          (e.g. <code>FooV2</code>) plus a consumer-side upcaster, never a silent reshape of an existing type. Concrete
+          events bump it by overriding (<code>public override int SchemaVersion =&gt; 2;</code>). <code>[Rubric §6, CQRS &amp; Event-Driven]</code>: the dual inheritance is the routing mechanism, <code>BaseDomainEvent</code> supplies
+          <code>DateOccurred</code>/<code>MessageId</code> so the outbox and inbox dedup machinery (which operates on <code>IDomainEvent</code>)
+          treat integration events uniformly, while the <code>IIntegrationEvent</code> marker is what makes
+          <a href="#domaineventdispatcher"><code>DomainEventDispatcher</code></a> additionally fan the event out to
+          <code>IIntegrationEventHandler&lt;T&gt;</code>.</li>
+          <li><strong>Why it&#39;s built this way</strong>: declaring <code>SchemaVersion</code> <strong>virtual with a default</strong> keeps <em>adding</em>
+          the member a non-breaking change: every pre-existing event implicitly stays <code>v1</code> without edits. See
+          <code>ADRs/010-integration-event-schema-versioning.md</code> for the upcaster policy and
+          <code>ADRs/003-outbox-dual-dispatch.md</code> for why integration events ride the same outbox.</li>
+          <li><strong>Where it&#39;s used</strong>: base of all cross-module events in MMCA.ADC (e.g. <code>SpeakerLinkedToUser</code>,
+          <code>SpeakerUnlinkedFromUser</code>, <code>UserRegistered</code>).</li>
+          <li><strong>Caveats / not-in-source</strong>: the prior tier edition documented this as a bare one-liner record with
+          no members; that is stale. As of the current source the <code>SchemaVersion</code> property (ADR-010) is part
+          of the base.</li>
+          </ul>
+          <h3 id="entitychangedeventtidentifiertype">EntityChangedEvent&lt;TIdentifierType&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.DomainEvents</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/EntityChangedEvent.cs:24</code> · Level 2 · record (abstract)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the <strong>standardized CRUD lifecycle event base</strong>. Instead of separate <code>Created</code>,
+          <code>Updated</code>, and <code>Deleted</code> events per entity, one event type carries the <code>State</code>
+          (<a href="group-02-domain-building-blocks.html#domainentitystate"><code>DomainEntityState</code></a>) and the affected
+          <code>EntityId</code>. Handlers filter on <code>State</code> to decide which transitions they care about.</li>
+          <li><strong>Depends on</strong>: <a href="#basedomainevent"><code>BaseDomainEvent</code></a> (Level 1),
+          <a href="group-02-domain-building-blocks.html#domainentitystate"><code>DomainEntityState</code></a> (Level 0).</li>
+          <li><strong>Concept introduced, consolidated lifecycle events.</strong> <code>[Rubric §6, CQRS &amp; Event-Driven]</code> (one
+          event type per entity avoids a proliferation of near-identical event classes while still carrying
+          enough context to act on). The doc comment (lines 9-19) draws the boundary clearly: derive <strong>one</strong>
+          record per entity and raise it with <code>DomainEntityState.Added</code> from factory methods,
+          <code>DomainEntityState.Updated</code> from mutation methods, and <code>DomainEntityState.Deleted</code> from <code>Delete()</code>;
+          reserve a <em>named</em> event (e.g. <code>OrderPaid</code>, <code>ShoppingCartCheckedOut</code>), inheriting
+          <a href="#basedomainevent"><code>BaseDomainEvent</code></a> directly, for business state-machine transitions with unique
+          payloads. <code>[Rubric §16, Maintainability]</code> assesses change-amplification cost: collapsing three CRUD
+          events into one keeps the event surface small.</li>
+          <li><strong>Walkthrough</strong>: a primary-constructor record (line 24) with two positional parameters, <code>State</code>
+          (<code>DomainEntityState</code>, line 25) and <code>EntityId</code> (<code>TIdentifierType</code>, line 26).
+          <code>where TIdentifierType : notnull</code> (line 27) prevents a nullable id. The <code>abstract</code> modifier forces
+          consumers to derive a concrete record (e.g. <code>CategoryChanged : EntityChangedEvent&lt;ConferenceCategoryIdentifierType&gt;</code>)
+          which may add extra payload.</li>
+          <li><strong>Where it&#39;s used</strong>: base of ADC&#39;s generic CRUD events such as <code>CategoryChanged</code>, <code>EventChanged</code>,
+          <code>QuestionChanged</code>, <code>SessionChanged</code>, <code>SpeakerChanged</code>.</li>
+          </ul>
+          <h3 id="ieventbus">IEventBus</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IEventBus.cs:11</code> · Level 2 · interface</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: an abstraction for publishing <a href="#iintegrationevent"><code>IIntegrationEvent</code></a>s to all
+          registered handlers. Two <code>PublishAsync</code> overloads (lines 18, 25): a single event and a batch.</li>
+          <li><strong>Depends on</strong>: <a href="#iintegrationevent"><code>IIntegrationEvent</code></a> (Level 1).</li>
+          <li><strong>Concept introduced, integration events vs. domain events.</strong> <code>[Rubric §6, CQRS &amp; Event-Driven]</code>
+          assesses reliable events, at-least-once delivery, and idempotent consumers. A <strong>domain event</strong> is
+          raised <em>inside</em> an aggregate, captured by <code>SaveChangesAsync</code>, and dispatched within the same
+          transaction; an <strong>integration event</strong> is an <em>intentional signal to other bounded contexts</em> and may
+          cross a service boundary. <code>IEventBus</code> is where that distinction is enforced, callers publish an
+          <code>IIntegrationEvent</code> and the infrastructure decides how to route it. The doc comment (lines 5-10) is
+          precise: the <em>default</em> implementation dispatches in-process through the outbox for at-least-once
+          delivery via <a href="#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a>, while alternative implementations
+          (Azure Service Bus, RabbitMQ) can be substituted via DI.</li>
+          <li><strong>Where it&#39;s used</strong>: implemented by <code>IntegrationEventPublisher</code> (Level 3); closely related to
+          <a href="#iintegrationeventpublisher"><code>IIntegrationEventPublisher</code></a> (the explicit, unit-of-work-aware publish
+          port) and to the transport-agnostic <a href="#imessagebus"><code>IMessageBus</code></a>.</li>
+          </ul>
+          <h3 id="iintegrationeventhandlerin-tintegrationevent">IIntegrationEventHandler&lt;in TIntegrationEvent&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IIntegrationEventHandler.cs:15</code> · Level 2 · interface</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the handler contract for <em>receiving</em> integration events. One method:
+          <code>Task HandleAsync(TIntegrationEvent integrationEvent, CancellationToken cancellationToken)</code> (line 24).</li>
+          <li><strong>Depends on</strong>: <a href="#iintegrationevent"><code>IIntegrationEvent</code></a> (Level 1).</li>
+          <li><strong>Concept</strong>: mirrors <a href="#idomaineventhandlerin-tdomainevent"><code>IDomainEventHandler&lt;in TDomainEvent&gt;</code></a>
+          (Level 1) but for cross-module notifications: the doc comment (lines 5-12) contrasts the two, a
+          domain-event handler reacts to <em>intra-module</em> events, whereas an integration-event handler reacts to
+          <em>cross-module</em> notifications (e.g. a Sales module handling <code>UserRegistered</code> from Identity). It is
+          contravariant (<code>in</code>, line 15), constrained <code>where TIntegrationEvent : IIntegrationEvent</code> (line 16).
+          Per the comment, implementations are auto-discovered by Scrutor (registered <strong>singleton</strong>; a handler
+          that needs scoped services creates its own DI scope internally) and dispatched by
+          <a href="#domaineventdispatcher"><code>DomainEventDispatcher</code></a>. <code>[Rubric §6, CQRS &amp; Event-Driven]</code>.</li>
+          <li><strong>Where it&#39;s used</strong>: implemented by ADC handlers such as <code>UserRegisteredHandler</code> in the Conference
+          module; consumed by <a href="#domaineventdispatcher"><code>DomainEventDispatcher</code></a> (Level 3) and by the broker
+          consumer on the extracted-service path.</li>
+          </ul>
+          <h3 id="iintegrationeventpublisher">IIntegrationEventPublisher</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IIntegrationEventPublisher.cs:15</code> · Level 2 · interface</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the <strong>explicit publish</strong> port for integration events. One overload:
+          <code>PublishAsync(IIntegrationEvent, CancellationToken)</code> (line 24).</li>
+          <li><strong>Depends on</strong>: <a href="#iintegrationevent"><code>IIntegrationEvent</code></a> (Level 1).</li>
+          <li><strong>Concept</strong>: the explicit counterpart to aggregate-raised domain events. The doc comment (lines
+          5-13) contrasts the two paths: domain events are raised by aggregate roots via <code>AddDomainEvent()</code>
+          and dispatched automatically during <code>SaveChangesAsync</code>; integration events can be published
+          <em>explicitly</em> from command handlers, domain-event handlers, or application services. The key
+          guarantee (lines 17-23): the event is persisted to the <strong>outbox in the current unit-of-work
+          transaction</strong> and dispatched in-process only after successful persistence, so a publish and the
+          state change that motivated it commit or roll back together. <code>[Rubric §6, CQRS &amp; Event-Driven]</code>
+          (transactional publish, no &quot;save-then-publish-and-hope&quot; dual-write gap, see
+          <code>ADRs/003-outbox-dual-dispatch.md</code>).</li>
+          <li><strong>Where it&#39;s used</strong>: injected into domain-event handlers that must signal another bounded context
+          without an aggregate raising the event (e.g. an ADC <code>SpeakerDeletedHandler</code> publishing
+          <code>SpeakerUnlinkedFromUser</code>); implemented by <code>IntegrationEventPublisher</code> (Level 3).</li>
+          </ul>
+          <h3 id="imessagebus">IMessageBus</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Messaging</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Messaging/IMessageBus.cs:28</code> · Level 2 · interface</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the <strong>transport-agnostic</strong> abstraction for publishing integration events across
+          module or service boundaries. Two <code>PublishAsync</code> overloads (lines 35, 42): single event and batch.</li>
+          <li><strong>Depends on</strong>: <a href="#iintegrationevent"><code>IIntegrationEvent</code></a> (Level 1).</li>
+          <li><strong>Concept introduced, a transport-agnostic message bus for microservices readiness.</strong>
+          <code>[Rubric §7, Microservices Readiness]</code> assesses whether the transport is a swappable seam and
+          whether business layers stay free of transport coupling. The doc comment (lines 5-27) enumerates
+          both implementations explicitly: <a href="#inprocessmessagebus"><code>InProcessMessageBus</code></a> dispatches
+          synchronously through the existing <a href="#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a> path
+          (modular-monolith mode), and <code>BrokerMessageBus</code> publishes via MassTransit to an external broker
+          (RabbitMQ in dev, Azure Service Bus in prod) for the extracted-service mode, with the outbox
+          semantics preserved because <a href="#outboxprocessor"><code>OutboxProcessor</code></a> drains
+          <a href="#outboxmessage"><code>OutboxMessage</code></a> rows through this bus instead of dispatching in-process. The
+          comment is explicit that application code should depend on <code>IMessageBus</code> rather than on <code>IEventBus</code>
+          or a transport-specific client. <code>[Rubric §29, Resilience &amp; Business Continuity]</code>: outbox + broker
+          together give at-least-once delivery with retry.</li>
+          <li><strong>Why it&#39;s built this way</strong>: transport belongs at the edge (<code>ADRs/007-grpc-extraction.md</code>,
+          <code>ADRs/008-service-extraction-topology.md</code>). The <em>same</em> application code that called
+          <code>IMessageBus.PublishAsync</code> in the monolith keeps working when the module is extracted and
+          <code>BrokerMessageBus</code> is swapped in, only config (<code>MessageBus:Provider</code>) changes. <code>Application</code>,
+          <code>Domain</code>, and <code>Shared</code> must never reference <code>MassTransit</code> directly; <code>MicroserviceExtractionTests</code>
+          (NetArchTest) enforces that, and the <strong>MassTransit v8 pin</strong> is enforced separately by
+          <code>DependencyVersionTests</code> (v9 needs a commercial licence; see the primer §3/§4).</li>
+          <li><strong>Where it&#39;s used</strong>: implemented by <a href="#inprocessmessagebus"><code>InProcessMessageBus</code></a> and
+          <code>BrokerMessageBus</code> (both Level 3); drained through at runtime by
+          <a href="#outboxprocessor"><code>OutboxProcessor</code></a>.</li>
+          </ul>
+          <h3 id="safedomaineventhandlertdomainevent">SafeDomainEventHandler&lt;TDomainEvent&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.DomainEvents</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/DomainEvents/SafeDomainEventHandler.cs:14</code> · Level 2 · class (abstract)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a base class for domain-event handlers whose failures should <strong>not</strong> roll back the
+          primary transaction. It wraps an abstract <code>HandleSafelyAsync</code> in a <code>try/catch</code> that logs the error
+          but does not propagate it.</li>
+          <li><strong>Depends on</strong>: <a href="#basedomainevent"><code>BaseDomainEvent</code></a> (Level 1),
+          <a href="#idomaineventhandlerin-tdomainevent"><code>IDomainEventHandler&lt;TDomainEvent&gt;</code></a> (Level 1),
+          <code>Microsoft.Extensions.Logging.ILogger</code> (external).</li>
+          <li><strong>Concept introduced, safe side-effect handlers and at-least-once delivery discipline.</strong>
+          <code>[Rubric §6, CQRS &amp; Event-Driven]</code> (at-least-once delivery: the outbox guarantees retry, so a safe
+          handler lets the processor re-dispatch on failure without re-running the primary operation).
+          <code>[Rubric §29, Resilience &amp; Business Continuity]</code> (graceful degradation of side-effects). An
+          aggregate&#39;s <code>SaveChangesAsync</code> dispatches domain events in-process <em>after</em> the data is safely
+          persisted. If a side-effect handler (&quot;send welcome email when a user registers&quot;) throws, the entire
+          save should <em>not</em> roll back, the primary state change is already committed; only the side effect
+          failed. <code>SafeDomainEventHandler</code> catches non-cancellation exceptions, logs them with &quot;The outbox
+          processor will retry&quot; (lines 26-31), and returns gracefully. Handlers that <em>must</em> succeed atomically
+          with the primary transaction (e.g. a read model in the same DB) should instead implement
+          <a href="#idomaineventhandlerin-tdomainevent"><code>IDomainEventHandler&lt;in TDomainEvent&gt;</code></a> directly and let
+          exceptions propagate.</li>
+          <li><strong>Walkthrough</strong>: primary constructor takes an <code>ILogger</code> (line 14), constrained
+          <code>where TDomainEvent : BaseDomainEvent</code> (line 15). <code>HandleAsync</code> (line 18) awaits
+          <code>HandleSafelyAsync</code> inside <code>catch (Exception ex) when (ex is not OperationCanceledException)</code>
+          (line 24), cancellation is the one exception that <em>should</em> propagate. <code>HandleSafelyAsync</code> (line 38)
+          is the abstract method concrete subclasses implement.</li>
+          <li><strong>Why it&#39;s built this way</strong>: it codifies the at-least-once contract of
+          <code>ADRs/003-outbox-dual-dispatch.md</code> at the handler level: swallow-and-log instead of fail-the-save,
+          because the durable retry path already exists in the outbox.</li>
+          <li><strong>Where it&#39;s used</strong>: base class for ADC&#39;s side-effect handlers across Conference/Engagement/Identity.</li>
+          </ul>
+          <h3 id="domaineventdispatcher">DomainEventDispatcher</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/DomainEventDispatcher.cs:16</code> · Level 3 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the in-process implementation of <a href="#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a>:
+          it dispatches each event to all registered <code>IDomainEventHandler&lt;T&gt;</code> instances and, if the event also
+          implements <a href="#iintegrationevent"><code>IIntegrationEvent</code></a>, to all registered
+          <a href="#iintegrationeventhandlerin-tintegrationevent"><code>IIntegrationEventHandler&lt;T&gt;</code></a> instances. It uses
+          <strong>compiled expression-tree delegates cached per event type</strong> to eliminate per-dispatch reflection.</li>
+          <li><strong>Depends on</strong>: <a href="#idomainevent"><code>IDomainEvent</code></a>,
+          <a href="#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a>,
+          <a href="#idomaineventhandlerin-tdomainevent"><code>IDomainEventHandler&lt;in TDomainEvent&gt;</code></a>,
+          <a href="#iintegrationevent"><code>IIntegrationEvent</code></a>,
+          <a href="#iintegrationeventhandlerin-tintegrationevent"><code>IIntegrationEventHandler&lt;in TIntegrationEvent&gt;</code></a>;
+          externals <code>IServiceProvider</code>, <code>System.Linq.Expressions</code>, <code>ILogger&lt;T&gt;</code>.</li>
+          <li><strong>Concept introduced, compiled expression-tree delegates for handler dispatch.</strong>
+          <code>[Rubric §12, Performance &amp; Scalability]</code> (avoids reflection overhead on the hot
+          post-<code>SaveChanges</code> path) and <code>[Rubric §6, CQRS &amp; Event-Driven]</code> (events fan out to all registered
+          handlers reliably). The problem: <code>IServiceProvider.GetServices(closedHandlerType)</code> (line 48) returns
+          <code>object</code> instances, so calling <code>HandleAsync</code> on them would otherwise require reflection on every
+          dispatch. The solution: on first encounter of a <code>(eventType, handlerInterfaceType)</code> pair,
+          <code>BuildInvoker</code> (line 74) uses <code>Expression.Lambda</code> to compile a
+          <code>Func&lt;object, object, CancellationToken, Task&gt;</code> that casts the <code>object</code> arguments to their concrete
+          types and calls <code>HandleAsync</code> directly (lines 82-93). Subsequent dispatches of the same event type
+          reuse the cached delegate, zero reflection.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>_serviceProvider</code> (line 18), null-checked in the field initializer.</li>
+          <li><code>CompiledDelegates</code> (line 25), <code>ConcurrentDictionary&lt;(Type EventType, Type HandlerInterface), Func&lt;…&gt;&gt;</code>, <strong>static</strong> so the warmed cache is shared process-wide and thread-safe.</li>
+          <li><code>DispatchAsync</code> (line 28), null-guards the batch, then per event: always dispatches to
+          <code>IDomainEventHandler&lt;&gt;</code> (line 37), and dispatches to <code>IIntegrationEventHandler&lt;&gt;</code> only when the
+          event is also an <code>IIntegrationEvent</code> (lines 40-41).</li>
+          <li><code>DispatchToHandlersAsync</code> (line 45), closes the open handler type over the event type, resolves
+          all handlers, fetches/builds the cached invoker (<code>GetOrAdd</code>, line 49), and awaits each; a <code>null</code>
+          resolved handler is logged as a likely DI misconfiguration and skipped (lines 55-59).</li>
+          <li><code>BuildInvoker</code> (line 74), finds <code>HandleAsync</code> on the closed handler type, builds
+          <code>((IHandler&lt;TEvent&gt;)handler).HandleAsync((TEvent)event, ct)</code> as an expression, and <code>Compile()</code>s it.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: at-least-once domain-event delivery
+          (<code>ADRs/003-outbox-dual-dispatch.md</code>) requires the dispatcher to run after each <code>SaveChangesAsync</code>;
+          with many events per request on a busy session, reflection cost compounds, so the expression-tree
+          cache makes dispatch near zero-cost after warm-up. Routing domain and integration events through one
+          dispatcher (rather than two) keeps the in-process path uniform.</li>
+          <li><strong>Where it&#39;s used</strong>: registered as the <code>IDomainEventDispatcher</code> implementation; called by
+          <code>ApplicationDbContext.SaveChangesAsync</code> after the outbox rows are written, and by the background
+          <a href="#outboxprocessor"><code>OutboxProcessor</code></a> when re-dispatching persisted events; the in-process bus
+          (<a href="#inprocessmessagebus"><code>InProcessMessageBus</code></a>) routes integration-event publishes through it too.</li>
+          </ul>
+          <h3 id="brokermessagebus">BrokerMessageBus</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/BrokerMessageBus.cs:24</code> · Level 3 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the <a href="#imessagebus"><code>IMessageBus</code></a> implementation backed by MassTransit (RabbitMQ
+          locally, Azure Service Bus in production). Publishes integration events to the broker for
+          cross-process / cross-service delivery; used by extracted microservices in place of
+          <a href="#inprocessmessagebus"><code>InProcessMessageBus</code></a>.</li>
+          <li><strong>Depends on</strong>: <a href="#iintegrationevent"><code>IIntegrationEvent</code></a>, <a href="#imessagebus"><code>IMessageBus</code></a>;
+          externally MassTransit&#39;s <code>IPublishEndpoint</code> (primer §3, &quot;Messaging&quot;).</li>
+          <li><strong>Concept introduced, MassTransit as the transport-agnostic broker, kept at the edge.</strong>
+          <code>[Rubric §7, Microservices Readiness]</code> assesses whether a module can be lifted out of the monolith
+          without rewriting application code; <code>[Rubric §6, CQRS &amp; Event-Driven]</code> assesses at-least-once
+          delivery of integration events. The <a href="#imessagebus"><code>IMessageBus</code></a> interface is defined up in
+          <code>MMCA.Common.Application</code>, a deliberate architectural constraint: <strong><code>Application</code>, <code>Domain</code>, and
+          <code>Shared</code> must never reference MassTransit directly</strong> (fitness-tested by <code>MicroserviceExtractionTests</code>,
+          see primer §4). <code>BrokerMessageBus</code> is the <em>only</em> place MassTransit crosses into first-party code,
+          and it lives in Infrastructure, the outermost layer that is allowed to know the transport.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>PublishAsync(IIntegrationEvent, …)</code> (line 27): null-guards, then calls
+          <code>publishEndpoint.Publish(integrationEvent, integrationEvent.GetType(), cancellationToken)</code>. The
+          <strong>runtime type</strong> (not the <code>IIntegrationEvent</code> base interface) is passed explicitly (line 33) so
+          MassTransit routes by the concrete event class, consumers bind to the concrete type, never to
+          the base interface, so publishing as <code>IIntegrationEvent</code> would reach nobody.</li>
+          <li><code>PublishAsync(IEnumerable&lt;IIntegrationEvent&gt;, …)</code> (line 37): iterates and awaits each single
+          publish in turn (line 41–44).</li>
+          <li>The doc comment (lines 18–22) records that MassTransit automatically propagates the ambient
+          <code>System.Diagnostics.Activity</code> as <code>traceparent</code>/<code>tracestate</code> message headers, so distributed
+          tracing continues across the broker hop, <code>[Rubric §13, Observability &amp; Operability]</code>.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: this bus does <strong>not</strong> itself write to the outbox. Transactional-outbox
+          semantics are preserved by the <a href="#outboxprocessor"><code>OutboxProcessor</code></a>: events are persisted to
+          <a href="#outboxmessage"><code>OutboxMessage</code></a> in the <em>same DB transaction</em> as the aggregate change, then the
+          processor drains them by calling this bus (ADR-003). Keeping <code>BrokerMessageBus</code> a thin publish
+          adapter, with no outbox knowledge, is what lets the same outbox machinery serve both monolith and
+          broker modes (ADRs 007/008).</li>
+          <li><strong>Where it&#39;s used</strong>: registered when <code>MessageBus:Provider</code> selects RabbitMQ or Azure Service Bus
+          (see <a href="group-14-module-system-composition.html#messagebussettings"><code>MessageBusSettings</code></a>); selected by
+          <code>AddBrokerMessaging()</code> in each service host&#39;s <code>Program.cs</code>. Driven by the
+          <a href="#outboxprocessor"><code>OutboxProcessor</code></a> in broker mode.</li>
+          </ul>
+          <h3 id="inprocessmessagebus">InProcessMessageBus</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/InProcessMessageBus.cs:20</code> · Level 3 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the <a href="#imessagebus"><code>IMessageBus</code></a> implementation for the modular-monolith /
+          integration-test case: dispatches integration events synchronously through the in-process
+          <a href="#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a>. This is the default registration when no broker
+          is configured.</li>
+          <li><strong>Depends on</strong>: <a href="#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a>,
+          <a href="#iintegrationevent"><code>IIntegrationEvent</code></a>, <a href="#imessagebus"><code>IMessageBus</code></a>.</li>
+          <li><strong>Concept reinforced, same interface, different transport.</strong> <code>[Rubric §7, Microservices Readiness]</code>, application code injects <a href="#imessagebus"><code>IMessageBus</code></a> and never learns whether the
+          events leave the process. Swapping the registration from this class to
+          <a href="#brokermessagebus"><code>BrokerMessageBus</code></a> is the entire &quot;go distributed&quot; change for the publish path.</li>
+          <li><strong>Walkthrough</strong>: both overloads (lines 23, 30) null-guard then forward straight to
+          <code>domainEventDispatcher.DispatchAsync([integrationEvent], …)</code> / <code>DispatchAsync(integrationEvents, …)</code>.
+          No outbox write happens here: the doc comment (lines 12–18) is explicit that this bus is meant to be
+          invoked by the <a href="#outboxprocessor"><code>OutboxProcessor</code></a> when draining <em>already-persisted</em> entries, or
+          by paths that have already taken responsibility for outbox persistence, it is the in-process
+          counterpart of <a href="#brokermessagebus"><code>BrokerMessageBus</code></a>, not a &quot;persist + dispatch&quot; bus. Code wanting
+          the persist-and-dispatch semantics uses <a href="#ieventbus"><code>IEventBus</code></a> /
+          <a href="#iintegrationeventpublisher"><code>IIntegrationEventPublisher</code></a> instead.</li>
+          <li><strong>Why it&#39;s built this way</strong>: keeping the monolith path a single synchronous dispatcher call means
+          integration tests need no broker container, and the common (monolith) deployment pays no broker
+          latency. The outbox still provides the at-least-once safety net via the
+          <a href="#outboxprocessor"><code>OutboxProcessor</code></a>.</li>
+          <li><strong>Where it&#39;s used</strong>: registered when <code>MessageBus:Provider</code> is absent / <code>InProcess</code> (see
+          <a href="group-14-module-system-composition.html#messagebussettings"><code>MessageBusSettings</code></a>); the default in
+          integration-test <code>WebApplicationFactory</code> configs. Swapped for <a href="#brokermessagebus"><code>BrokerMessageBus</code></a>
+          in deployed service hosts.</li>
+          </ul>
+          <h3 id="integrationeventconsumertevent">IntegrationEventConsumer&lt;TEvent&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventConsumer.cs:26</code> · Level 3 · class (sealed, partial)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a single generic MassTransit <code>IConsumer&lt;TEvent&gt;</code> that bridges broker-delivered
+          messages to the existing <a href="#iintegrationeventhandlerin-tintegrationevent"><code>IIntegrationEventHandler&lt;in TIntegrationEvent&gt;</code></a>
+          contract, resolving every registered handler from the per-message DI scope and adding
+          <strong>consumer-side inbox idempotency</strong> via <a href="#iinboxstore"><code>IInboxStore</code></a>.</li>
+          <li><strong>Depends on</strong>: <a href="#iinboxstore"><code>IInboxStore</code></a>,
+          <a href="#iintegrationeventhandlerin-tintegrationevent"><code>IIntegrationEventHandler&lt;in TIntegrationEvent&gt;</code></a>,
+          <a href="#iintegrationevent"><code>IIntegrationEvent</code></a>; externally MassTransit&#39;s <code>IConsumer&lt;T&gt;</code>/<code>ConsumeContext&lt;T&gt;</code>
+          and <code>ILogger&lt;T&gt;</code> (with source-generated <code>[LoggerMessage]</code> logging).</li>
+          <li><strong>Concept introduced, the consumer-side inbox for broker idempotency.</strong> <code>[Rubric §29, Resilience, Reliability &amp; Business Continuity]</code> assesses at-least-once delivery paired with <em>idempotent
+          consumers</em>; <code>[Rubric §6, CQRS &amp; Event-Driven]</code> assesses idempotent integration-event handling.
+          MassTransit guarantees at-least-<em>once</em> delivery, the same message can arrive twice after a consumer
+          crash or broker redelivery. The inbox makes that safe: <code>inbox.AlreadyProcessedAsync(MessageId, …)</code>
+          (line 42) checks whether this event&#39;s <code>MessageId</code> (the idempotency key carried by
+          <a href="#idomainevent"><code>IDomainEvent</code></a>) was already recorded, and if so logs at Debug and returns (acking
+          the message) without re-running handlers. After all handlers succeed,
+          <code>inbox.MarkProcessedAsync(MessageId, …)</code> (line 78) records it. Recording <em>after</em> success is the key
+          ordering: a handler failure rethrows before the mark, leaving the message un-recorded and eligible
+          for redelivery.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li>Idempotency short-circuit (line 42–46): duplicate → <code>LogDuplicateSkipped</code> (line 44) → return (ack,
+          do not dead-letter).</li>
+          <li>Handler loop (line 50–66): invokes each resolved <code>IIntegrationEventHandler&lt;TEvent&gt;</code> in turn; on any
+          non-<code>OperationCanceledException</code> it logs <code>LogHandlerFailure</code> (line 63) naming the failing handler,
+          then <strong>rethrows</strong> so MassTransit&#39;s <code>UseMessageRetry</code> policy (exponential backoff,
+          <code>MessageBusSettings.RetryLimit</code> attempts, configured in <code>ConfigureBrokerTransport</code>) fires before
+          dead-lettering.</li>
+          <li>No-handler case (line 68–74): if zero handlers were registered for the event in this process, logs
+          <code>LogNoHandlers</code> at Information and returns normally, the broker acks (no retry storm) but the
+          misconfigured service host is still visible in telemetry.</li>
+          <li>Mark-processed (line 78): records the <code>MessageId</code> only on the success path.</li>
+          <li>Three <code>[LoggerMessage]</code> partials (lines 81–88) are the source-generated, allocation-free log
+          methods, <code>[Rubric §13, Observability &amp; Operability]</code>.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: application code keeps writing plain
+          <a href="#iintegrationeventhandlerin-tintegrationevent"><code>IIntegrationEventHandler&lt;in TIntegrationEvent&gt;</code></a>
+          implementations (auto-discovered as singletons by <code>ScanModuleApplicationServices</code>); there is <strong>no
+          per-event MassTransit consumer class to author</strong>. This one universal adapter is registered once per
+          event type via <a href="#integrationeventconsumerextensions"><code>IntegrationEventConsumerExtensions</code></a>, which
+          keeps the MassTransit dependency out of the handlers and out of the Application layer (ADR-003 for
+          the inbox/outbox guarantee; ADRs 007/008 for the extraction seam).</li>
+          <li><strong>Where it&#39;s used</strong>: registered in each broker-mode service host&#39;s MassTransit configuration for
+          every integration event the service consumes (e.g. Conference consuming <code>UserRegistered</code>; Identity
+          consuming <code>SpeakerLinkedToUser</code> / <code>SpeakerUnlinkedFromUser</code>).</li>
+          </ul>
+          <h3 id="integrationeventpublisher">IntegrationEventPublisher</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventPublisher.cs:12</code> · Level 3 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: implements <a href="#iintegrationeventpublisher"><code>IIntegrationEventPublisher</code></a> by delegating
+          straight to <a href="#ieventbus"><code>IEventBus</code></a>. A thin adapter preserving the older single-event publish
+          contract for callers that inject <code>IIntegrationEventPublisher</code> rather than <a href="#ieventbus"><code>IEventBus</code></a>.</li>
+          <li><strong>Depends on</strong>: <a href="#ieventbus"><code>IEventBus</code></a>, <a href="#iintegrationevent"><code>IIntegrationEvent</code></a>,
+          <a href="#iintegrationeventpublisher"><code>IIntegrationEventPublisher</code></a>.</li>
+          <li><strong>Concept reinforced, adapter for contract backward-compatibility.</strong> <code>[Rubric §1, SOLID]</code>
+          (Liskov / interface-segregation: the adapter lets the narrower <code>IIntegrationEventPublisher</code> contract
+          be satisfied by the same outbox-backed <a href="#ieventbus"><code>IEventBus</code></a> implementation). The single method
+          <code>PublishAsync</code> (line 15–16) is one expression-bodied delegation; the doc comment recommends new code
+          inject <a href="#ieventbus"><code>IEventBus</code></a> directly.</li>
+          <li><strong>Where it&#39;s used</strong>: handlers that publish an individual integration event inject
+          <code>IIntegrationEventPublisher</code> (e.g. ADC&#39;s <code>SpeakerDeletedHandler</code> publishing <code>SpeakerUnlinkedFromUser</code>),
+          ultimately routing through whichever <a href="#ieventbus"><code>IEventBus</code></a> is registered (in-process or broker).</li>
+          </ul>
+          <h3 id="integrationeventconsumerextensions">IntegrationEventConsumerExtensions</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventConsumerExtensions.cs:11</code> · Level 4 · class (static)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a C# <code>extension(IBusRegistrationConfigurator)</code> that adds a fluent
+          <code>RegisterIntegrationEventConsumer&lt;TEvent&gt;()</code> method, hiding the MassTransit consumer-registration
+          plumbing behind one clean call.</li>
+          <li><strong>Depends on</strong>: <a href="#iintegrationevent"><code>IIntegrationEvent</code></a>,
+          <a href="#integrationeventconsumertevent"><code>IntegrationEventConsumer&lt;TEvent&gt;</code></a>; externally MassTransit&#39;s
+          <code>IBusRegistrationConfigurator</code>.</li>
+          <li><strong>Concept reinforced, C# 14 <code>extension(T)</code> members for registration sugar (primer §4), and keeping
+          MassTransit at the edge.</strong> <code>[Rubric §7, Microservices Readiness]</code>, the host registers a consumer
+          with <code>config.RegisterIntegrationEventConsumer&lt;TEvent&gt;()</code> and never spells out the
+          <code>IntegrationEventConsumer&lt;T&gt;</code> MassTransit type, so the registration call site stays decoupled from the
+          concrete consumer; <code>[Rubric §6, CQRS &amp; Event-Driven]</code> (one registration per consumed event type wires
+          the at-least-once, idempotent delivery path).</li>
+          <li><strong>Walkthrough</strong>: the <code>extension(IBusRegistrationConfigurator x)</code> block (line 13) adds
+          <code>RegisterIntegrationEventConsumer&lt;TEvent&gt;()</code> (line 22): it calls
+          <code>x.AddConsumer&lt;IntegrationEventConsumer&lt;TEvent&gt;&gt;()</code> (line 25) and returns the configurator for
+          chaining. The <code>where TEvent : class, IIntegrationEvent</code> constraint (line 23) keeps registration
+          limited to real integration events.</li>
+          <li><strong>Why it&#39;s built this way</strong>: each service host&#39;s <code>Program.cs</code> calls this once per integration event
+          type it consumes. Hiding <code>AddConsumer</code> keeps the host from coupling to the concrete consumer type;
+          <code>MicroserviceExtractionTests</code> (primer §4) enforces that Application/Domain never reference MassTransit
+          directly, so the seam stays clean (ADRs 007/008).</li>
+          <li><strong>Where it&#39;s used</strong>: in each broker-mode service&#39;s <code>Program.cs</code> configure-consumers callback (e.g.
+          <code>config.RegisterIntegrationEventConsumer&lt;SpeakerLinkedToUser&gt;()</code>).</li>
+          </ul>
+          <h3 id="brokereventbus-inprocesseventbus">BrokerEventBus, InProcessEventBus</h3>
+          <p><a id="brokereventbus"></a><a id="inprocesseventbus"></a></p>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Services</code> · Level 8 · class (sealed)</p>
+          </blockquote>
+          <p>These two <a href="#ieventbus"><code>IEventBus</code></a> implementations are the publish entry point that integration-event
+          producers (link handlers, <code>AuthenticationService</code>, republish handlers) call via
+          <a href="#iintegrationeventpublisher"><code>IIntegrationEventPublisher</code></a>. They are <strong>structurally parallel</strong>, both
+          persist an <a href="#outboxmessage"><code>OutboxMessage</code></a> to the outbox-owning data source in the <em>same</em> save, and
+          differ <strong>only</strong> in what they do <em>after</em> persisting.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Type</th>
+          <th>File:Line</th>
+          <th>Mode (what differs after the outbox write)</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>InProcessEventBus</code></td>
+          <td><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/InProcessEventBus.cs:23</code></td>
+          <td>monolith, write outbox → <strong>dispatch in-process</strong> via <a href="#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a> → mark row processed</td>
+          </tr>
+          <tr>
+          <td><code>BrokerEventBus</code></td>
+          <td><code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/BrokerEventBus.cs:30</code></td>
+          <td>microservice, write outbox → <strong>signal</strong> the <a href="#outboxprocessor"><code>OutboxProcessor</code></a> → return (no in-process dispatch)</td>
+          </tr>
+          </tbody></table></div>
+          <ul>
+          <li><strong>What they are</strong>: the concrete <a href="#ieventbus"><code>IEventBus</code></a> for the two deployment shapes. Whichever
+          one is registered, callers see the identical interface, so producing code never changes when a module
+          moves from monolith to extracted service.</li>
+          <li><strong>Depends on</strong>: both take <a href="group-07-persistence-ef-core.html#idbcontextfactory"><code>IDbContextFactory</code></a>,
+          <a href="group-07-persistence-ef-core.html#idatasourceresolver"><code>IDataSourceResolver</code></a>, and
+          <code>IOptions&lt;</code><a href="group-14-module-system-composition.html#outboxsettings"><code>OutboxSettings</code></a><code>&gt;</code>;
+          <code>InProcessEventBus</code> additionally takes <a href="#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a>,
+          <code>BrokerEventBus</code> additionally takes <a href="#ioutboxsignal"><code>IOutboxSignal</code></a>. Both produce
+          <a href="#outboxmessage"><code>OutboxMessage</code></a> rows and depend on <a href="#iintegrationevent"><code>IIntegrationEvent</code></a>.</li>
+          <li><strong>Concept introduced, the outbox dual-dispatch seam (ADR-003) and the in-process/broker switch
+          (ADRs 007/008).</strong> <code>[Rubric §6, CQRS &amp; Event-Driven]</code> (transactional outbox = atomic write +
+          publish), <code>[Rubric §7, Microservices Readiness]</code> (one interface, two transports), <code>[Rubric §8, Data Architecture]</code> (the outbox is the cross-source consistency mechanism in database-per-service,
+          ADR-006). Both implementations resolve the outbox target the same way
+          (<code>dataSourceResolver.ResolveLogical(OutboxSettings.DataSource, .DatabaseName)</code>, <code>InProcess</code> line 34 /
+          <code>Broker</code> line 41), fetch the context for that source, and act on <code>context.SupportsOutbox</code>:<ul>
+          <li><code>InProcessEventBus.PublishAsync</code> (lines 30–51): when the source supports the outbox it adds an
+          <a href="#outboxmessage"><code>OutboxMessage</code></a> (line 39–40), saves it (line 41), <strong>immediately dispatches the
+          event in-process</strong> via <a href="#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a> (line 43), then stamps
+          <code>outboxEntry.ProcessedOn = DateTime.UtcNow</code> and saves again (lines 45–46). So the happy path is
+          fast and the <a href="#outboxprocessor"><code>OutboxProcessor</code></a> is only a retry safety net if that in-process
+          dispatch failed (leaving the row un-processed). When the source has no outbox (e.g. Cosmos), it
+          falls back to a plain in-process dispatch (line 50).</li>
+          <li><code>BrokerEventBus.PublishAsync</code> (lines 37–60): writes the <a href="#outboxmessage"><code>OutboxMessage</code></a> (line
+          53–54), saves it (line 55), and <strong>signals</strong> the processor (<code>outboxSignal.Signal()</code>, line 59) so the
+          broker publish doesn&#39;t wait for the next poll cycle, but it does <strong>not</strong> dispatch, because in
+          broker mode the consumers live in <em>other processes</em>; the <a href="#outboxprocessor"><code>OutboxProcessor</code></a>&#39;s
+          broker-publish path (via <a href="#brokermessagebus"><code>BrokerMessageBus</code></a>) is the only correct delivery
+          channel. If the configured outbox source lacks outbox support it <strong>throws
+          <code>InvalidOperationException</code></strong> (lines 44–51) naming the offending <code>Outbox:DataSource</code> /
+          <code>Outbox:DatabaseName</code> rather than silently dropping events, broker mode is incompatible with a
+          non-outbox source.</li>
+          <li>Both batch overloads (<code>InProcess</code> line 54 / <code>Broker</code> line 63) iterate and await each single publish.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: ADR-003: persisting the <a href="#outboxmessage"><code>OutboxMessage</code></a> in the same
+          transaction as the aggregate change makes delivery atomic with the business write (no &quot;save then
+          publish and hope&quot; dual-write bug). Offering both a synchronous in-process path and a broker path
+          behind one <a href="#ieventbus"><code>IEventBus</code></a> is exactly what lets a module move from monolith to extracted
+          service without touching any publishing code, <code>AddBrokerMessaging</code> simply swaps the registration,
+          config-driven by <code>MessageBus:Provider</code> (see
+          <a href="group-14-module-system-composition.html#messagebussettings"><code>MessageBusSettings</code></a>).</li>
+          <li><strong>Where they&#39;re used</strong>: <a href="#iintegrationeventpublisher"><code>IIntegrationEventPublisher</code></a> and direct
+          <a href="#ieventbus"><code>IEventBus</code></a> injections resolve one of these; called by ADC&#39;s link handlers,
+          <code>UserRegisteredHandler</code>&#39;s republish, and <code>AuthenticationService</code>.</li>
+          </ul>
+          <hr>
+          <p><a href="group-03-querying-specifications.html">⬅ Querying: Specifications, Filtering &amp; the Entity Query Service</a>  •  <a href="index.html">Index</a>  •  <a href="group-05-cqrs-pipeline.html">CQRS: Commands, Queries &amp; the Decorator Pipeline ➡</a></p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

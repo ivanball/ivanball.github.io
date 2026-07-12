@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADR-037: Field-Level Encryption at Rest (AES-256-GCM EF Converter) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-07-06).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/037-field-level-encryption-at-rest.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ADR-037: Field-Level Encryption at Rest (AES-256-GCM EF Converter)">
+  <meta property="og:description" content="Accepted (2026-07-06).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/037-field-level-encryption-at-rest.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 45 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html" aria-current="page">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-037-field-level-encryption-at-rest-aes-256-gcm-ef-converter">ADR-037: Field-Level Encryption at Rest (AES-256-GCM EF Converter)</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-07-06).</p>
+          <h2 id="context">Context</h2>
+          <p>Transparent database encryption (TDE) protects the data files as a whole, but it decrypts
+          transparently for anyone who can query the database, so a leaked backup restored on a compromised
+          host, or a row read by an over-privileged connection, still yields plaintext. Some columns hold data
+          sensitive enough to warrant a second layer: the value should be ciphertext the moment it leaves the
+          application, so that only a holder of the application key (not merely a database reader) can recover
+          it.</p>
+          <p>This is a distinct control from the two sensitive-data mechanisms the framework already records.
+          Password hashing (ADR-032) is deliberately <strong>one-way</strong>: a credential is stored so it can be verified,
+          never recovered. Erasure (ADR-005) <strong>removes or anonymizes</strong> personal data on a data-subject request.
+          Neither covers the case of a field that must stay <strong>retrievable in plaintext to the application</strong> yet
+          be <strong>unreadable in the database itself</strong>: an at-rest, reversible, column-level confidentiality control.
+          ADR-005 already names this converter as the mechanism for erasure fields &quot;that must remain retrievable&quot;
+          (<code>ADRs/005-soft-delete-vs-erasure.md:17</code>), and <code>SECURITY.md:25</code> lists it in the security model, so the
+          capability is referenced across the docs but was never recorded as a decision.</p>
+          <p>The framework ships the plumbing for this, an EF Core value converter that encrypts and decrypts string
+          columns transparently, and it is covered by unit tests. It is <strong>not yet adopted</strong>: no entity
+          configuration in any of the four repositories wires it, so zero production columns are encrypted today.
+          This ADR records the decision and the seam while being explicit about that posture, the same
+          &quot;shipped in the framework, tested, but latent until the first adoption&quot; honesty ADR-018 records for
+          polyglot persistence.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Provide a single framework-owned EF Core value converter that transparently encrypts string columns at
+          rest with authenticated encryption, applied per property in an entity configuration.</p>
+          <ol>
+          <li><p><strong>A sealed EF value converter.</strong> <code>EncryptedStringConverter</code>
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Encryption/EncryptedStringConverter.cs:28</code>) is a
+          <code>ValueConverter&lt;string, string&gt;</code> in the <code>MMCA.Common.Infrastructure.Persistence.Encryption</code> namespace
+          (<code>EncryptedStringConverter.cs:5</code>). It encrypts on write and decrypts on read, so application and domain
+          code keep an ordinary <code>string</code> property and never see ciphertext. It is applied per property:
+          <code>builder.Property(e =&gt; e.Email).HasConversion(new EncryptedStringConverter(encryptionKey))</code>
+          (<code>EncryptedStringConverter.cs:12</code>, <code>:15</code>).</p>
+          </li>
+          <li><p><strong>AES-256-GCM authenticated encryption.</strong> Both directions use <code>AesGcm</code>
+          (<code>EncryptedStringConverter.cs:70</code>, <code>:99</code>), which provides confidentiality <strong>and</strong> integrity. The key
+          must be exactly 32 bytes (256 bits): the constructor null-checks it
+          (<code>ArgumentNullException.ThrowIfNull</code>, <code>EncryptedStringConverter.cs:45</code>) and throws <code>ArgumentException</code>
+          on any other length (<code>EncryptedStringConverter.cs:46</code>, <code>:48</code>). <code>GenerateKey()</code> produces a
+          cryptographically random 32-byte key via <code>RandomNumberGenerator.GetBytes(32)</code>
+          (<code>EncryptedStringConverter.cs:58</code>). The nonce and tag sizes are fixed constants: <code>NonceSize = 12</code>
+          (96 bits, NIST recommended, <code>EncryptedStringConverter.cs:31</code>) and <code>TagSize = 16</code>
+          (128 bits, <code>EncryptedStringConverter.cs:34</code>).</p>
+          </li>
+          <li><p><strong>Self-describing storage layout, Base64 in a string column.</strong> Encrypt writes UTF-8 plaintext bytes
+          (<code>EncryptedStringConverter.cs:65</code>), draws a fresh random nonce (<code>EncryptedStringConverter.cs:66</code>),
+          runs <code>AesGcm.Encrypt</code> (<code>EncryptedStringConverter.cs:71</code>), then concatenates
+          <code>[nonce (12)] [ciphertext (N)] [tag (16)]</code> (<code>EncryptedStringConverter.cs:73</code>, <code>:74</code>) and Base64-encodes
+          the result (<code>EncryptedStringConverter.cs:79</code>). Decrypt reverses it: <code>FromBase64String</code>
+          (<code>EncryptedStringConverter.cs:87</code>), a length guard that throws <code>CryptographicException</code> when the input
+          is shorter than nonce plus tag (<code>EncryptedStringConverter.cs:89</code>, <code>:90</code>), spans that slice out the
+          nonce, ciphertext, and tag (<code>EncryptedStringConverter.cs:92</code>, <code>:94</code>, <code>:95</code>), <code>AesGcm.Decrypt</code> which
+          validates the tag while decrypting (<code>EncryptedStringConverter.cs:100</code>), and a UTF-8 decode
+          (<code>EncryptedStringConverter.cs:102</code>). The layout is transparent to application code.</p>
+          </li>
+          <li><p><strong>Ciphertext is non-deterministic.</strong> A fresh random nonce per encryption
+          (<code>EncryptedStringConverter.cs:66</code>) means the same plaintext encrypts to different ciphertext on every
+          write (proven at <code>Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/EncryptedStringConverterTests.cs:38</code>,
+          and distinct plaintexts differ at <code>EncryptedStringConverterTests.cs:24</code>). The consequence is deliberate:
+          an encrypted column cannot be equality-filtered, index-seeked, sorted, or joined on in the database.</p>
+          </li>
+          <li><p><strong>Empty and null values pass through unencrypted.</strong> Both directions short-circuit on a null-or-empty
+          string (<code>EncryptedStringConverter.cs:62</code>, <code>:84</code>), so a NULL or empty column stays as-is rather than
+          becoming ciphertext (tests at <code>EncryptedStringConverterTests.cs:82</code> and <code>:95</code>).</p>
+          </li>
+          <li><p><strong>Key management is the consumer&#39;s responsibility, supplied as a constructor argument.</strong> The converter
+          takes a raw <code>byte[]</code> key on construction (<code>EncryptedStringConverter.cs:40</code>); there is no DI
+          registration, no options type, and no key-provider abstraction in the Infrastructure layer (a grep of
+          <code>MMCA.Common.Infrastructure</code> for encryption options or a key-provider interface finds only the converter
+          itself). The adopting entity configuration passes the key in. The XML documentation directs consumers to
+          store that key in Azure Key Vault, user-secrets, or environment variables, never hardcoded
+          (<code>EncryptedStringConverter.cs:19</code>, <code>:20</code>, <code>:21</code>).</p>
+          </li>
+          <li><p><strong>Unit-tested but not yet adopted.</strong> <code>EncryptedStringConverterTests</code>
+          (<code>Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/EncryptedStringConverterTests.cs:6</code>) covers a
+          plaintext round-trip (<code>EncryptedStringConverterTests.cs:10</code>), a Unicode round-trip
+          (<code>EncryptedStringConverterTests.cs:129</code>), non-deterministic output (<code>EncryptedStringConverterTests.cs:24</code>,
+          <code>:38</code>), the 32-byte key generation (<code>EncryptedStringConverterTests.cs:52</code>, <code>:61</code>), the invalid-length and
+          null-key guards (<code>EncryptedStringConverterTests.cs:71</code>, <code>:123</code>), the empty-string passthrough
+          (<code>EncryptedStringConverterTests.cs:82</code>, <code>:95</code>), and the too-short-ciphertext <code>CryptographicException</code>
+          (<code>EncryptedStringConverterTests.cs:108</code>). Adoption, however, is zero: a ripgrep across all four
+          repositories (<code>MMCA.Common</code>, <code>MMCA.Store</code>, <code>MMCA.ADC</code>, <code>MMCA.Helpdesk</code>) finds
+          <code>new EncryptedStringConverter(</code> only in the converter&#39;s own XML-doc example
+          (<code>EncryptedStringConverter.cs:15</code>) and in that test file. No <code>*Configuration.cs</code> in any repo calls
+          <code>.HasConversion(new EncryptedStringConverter(...))</code>, and Store, ADC, and Helpdesk contain no reference to
+          the type at all. The encrypt/decrypt path is exercised by tests, not by any live column.</p>
+          </li>
+          </ol>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Authenticated, not merely confidential.</strong> AES-GCM binds a 128-bit tag to the ciphertext
+          (<code>EncryptedStringConverter.cs:34</code>, <code>:71</code>), so a tampered or truncated value fails to decrypt via the tag
+          check in <code>AesGcm.Decrypt</code> (<code>EncryptedStringConverter.cs:100</code>) rather than silently returning corrupted
+          plaintext, and a value too short to even hold a nonce and tag is rejected up front
+          (<code>EncryptedStringConverter.cs:89</code>). At-rest integrity comes for free with confidentiality.</li>
+          <li><strong>One framework-owned primitive.</strong> As with password hashing (ADR-032), the algorithm, key size, nonce
+          size, and storage layout are decided once in a single shared type, so a future hardening is one edit that
+          every eventual adopter inherits rather than per-app crypto scattered across modules.</li>
+          <li><strong>Non-determinism is the right confidentiality default.</strong> A random nonce per write
+          (<code>EncryptedStringConverter.cs:66</code>) defeats equality and frequency analysis over the ciphertext, which a
+          deterministic scheme would leak; the cost is queryability, which is the correct trade for a genuinely
+          sensitive column that the application reads by primary key rather than by the encrypted value.</li>
+          <li><strong>Transparent at the EF boundary.</strong> Because the conversion lives on the property mapping
+          (<code>EncryptedStringConverter.cs:12</code>), entities keep <code>string</code> properties and no handler, DTO, or domain code
+          changes when a column becomes encrypted.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Latent today, proven by tests rather than production.</strong> The plumbing is complete and unit-tested, but
+          no entity configuration wires it, so the encrypt/decrypt round-trip, the tag-validated integrity path, and
+          the key-length guard are exercised only by <code>EncryptedStringConverterTests</code> and not by any deployed column.
+          ADR-005 names this converter as the mechanism for erasure fields that must remain retrievable
+          (<code>ADRs/005-soft-delete-vs-erasure.md:17</code>), but that pairing is available, not yet applied. This is the same
+          shipped-but-unadopted posture ADR-018 records for polyglot persistence.</li>
+          <li><strong>Encrypted columns are not queryable.</strong> The random nonce (<code>EncryptedStringConverter.cs:66</code>) makes
+          ciphertext non-deterministic, so there is no equality filter, index seek, sort, or join on an encrypted
+          column. A field that must be both encrypted and looked up needs a separate deterministic scheme or a blind
+          index, neither of which this converter provides.</li>
+          <li><strong>Key management is entirely the consumer&#39;s, with no rotation story.</strong> The converter takes a raw key
+          (<code>EncryptedStringConverter.cs:40</code>) and the stored layout is nonce plus ciphertext plus tag only, carrying
+          no key identifier or version (<code>EncryptedStringConverter.cs:73</code>). Rotating the key therefore requires bulk
+          re-encryption, there is no built-in decrypt-with-old / encrypt-with-new path, and losing the key makes the
+          data permanently unrecoverable. Envelope encryption and key versioning are out of scope for this converter.</li>
+          <li><strong>Per-property wiring, not a global switch.</strong> Encryption is opted into one <code>HasConversion</code> call at a time
+          in each entity configuration (<code>EncryptedStringConverter.cs:12</code>), so a column that should be encrypted but is
+          never wired silently stays plaintext, the same audit-the-inventory caveat as ADR-005.</li>
+          <li><strong>Storage and CPU overhead.</strong> Every value grows by 28 bytes (12-byte nonce plus 16-byte tag,
+          <code>EncryptedStringConverter.cs:31</code>, <code>:34</code>) before Base64 inflation, and every read and write performs an
+          AES-GCM operation.</li>
+          <li><strong>Test coverage stops at the too-short guard.</strong> Integrity rests on AES-GCM&#39;s tag (a property of the
+          primitive), and the only malformed-input regression test is the short-ciphertext case
+          (<code>EncryptedStringConverterTests.cs:108</code>); there is no explicit bit-flip-tamper or wrong-key test, so a
+          refactor that weakened tag validation would not be caught by the current suite.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p>ADR-005 (soft-delete vs erasure: the other sensitive-data control, which names this converter as the
+          mechanism for erasure fields that must stay retrievable, <code>ADRs/005-soft-delete-vs-erasure.md:17</code>), ADR-032
+          (password hashing: the one-way credential counterpart in the same Infrastructure layer, which already calls
+          this converter &quot;the at-rest counterpart to hashing credentials&quot;), ADR-018 (polyglot persistence: the
+          shipped, tested, but unadopted precedent this record mirrors). This ADR backs the one-line &quot;Field encryption&quot;
+          entry in the security model (<code>SECURITY.md:25</code>), which stays as the reader-facing pointer.</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/037-field-level-encryption-at-rest.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

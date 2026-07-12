@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADR-035: Optimistic Concurrency via RowVersion Round-Trip · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-07-02).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ADR-035: Optimistic Concurrency via RowVersion Round-Trip">
+  <meta property="og:description" content="Accepted (2026-07-02).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">035 · Optimistic Concurrency via RowVersion Round-Trip</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 45 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html" aria-current="page">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-035-optimistic-concurrency-via-rowversion-round-trip">ADR-035: Optimistic Concurrency via RowVersion Round-Trip</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-07-02).</p>
+          <h2 id="context">Context</h2>
+          <p>Every mutable aggregate in the framework is edited through a load-modify-save handler: the update use
+          case fetches the tracked entity, applies the request, and calls <code>SaveChangesAsync</code>. With one shared
+          context per engine (ADR-006) and no concurrency token, two editors who both read the same row and
+          save in turn silently overwrite each other. The second write wins, the first editor&#39;s change
+          vanishes, and nothing surfaces the collision. That last-write-wins default is fine for a single-user
+          admin tool and wrong for a multi-actor system where an organizer and a speaker can both be editing
+          the same session.</p>
+          <p>This is a <strong>different concern</strong> from the two idempotency mechanisms the framework already records.
+          ADR-017 (request idempotency) dedups a client retrying the <strong>same</strong> request, and ADR-021 (consumer
+          inbox) dedups the broker redelivering the <strong>same</strong> integration event. Both answer &quot;I saw this one
+          action more than once.&quot; Optimistic concurrency answers the opposite question: &quot;two <strong>distinct</strong>
+          actions targeted the same row, which one is stale?&quot; We wanted a first-class, framework-wide mechanism
+          that turns a conflicting concurrent edit into a <code>409 Conflict</code> the caller can react to, rather than a
+          silent overwrite, and that a new mutable request cannot forget to opt into.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Give every auditable entity a database-managed <code>RowVersion</code> concurrency token, round-trip it through
+          the client on updates, and stamp the client&#39;s last-seen value as EF&#39;s original value so a stale
+          update fails as a conflict.</p>
+          <ul>
+          <li><strong>A <code>RowVersion</code> token on the audit base.</strong> <code>AuditableBaseEntity&lt;TId&gt;</code> carries a <code>byte[] RowVersion</code>
+          property with a private setter, so every aggregate root and child entity inherits it. EF configures
+          it on <strong>every</strong> non-owned <code>IAuditableEntity</code> in <code>ConfigureConcurrencyTokens</code>: SQL Server maps it to
+          a server-generated <code>rowversion</code> (<code>IsRowVersion</code>), other relational providers map it as a plain
+          application-managed token (<code>IsConcurrencyToken</code>). EF then includes the token in every UPDATE/DELETE
+          <code>WHERE</code> clause and raises <code>DbUpdateConcurrencyException</code> when it matches no row.</li>
+          <li><strong><code>IConcurrencyAware</code> round-trips the token through the client.</strong> Read DTOs expose the current
+          <code>RowVersion</code> so a client can echo it back, and each <code>*UpdateRequest</code> implements <code>IConcurrencyAware</code>
+          to carry the client&#39;s last-observed value. A null or empty <code>RowVersion</code> (creation, or a legacy
+          client that never read one) skips the check by design.</li>
+          <li><strong><code>SetOriginalRowVersion</code> is the persistence seam.</strong> <code>IWriteRepository.SetOriginalRowVersion</code>
+          applies the client-supplied token as the tracked entity&#39;s <strong>original</strong> <code>RowVersion</code> value; the
+          <code>EFRepository</code> implementation writes it to <code>Entry(entity).Property(nameof(RowVersion)).OriginalValue</code>
+          and no-ops when the value is null or empty. The update handler calls it right after loading the
+          entity (before applying the request), so EF compares the client&#39;s token against the row&#39;s current
+          token inside the UPDATE statement, atomically, with no read-then-check race.</li>
+          <li><strong>A conflict maps to <code>409 Conflict</code> at the edge.</strong> <code>DbUpdateConcurrencyException</code> is a
+          <code>DbUpdateException</code>, and <code>DbUpdateExceptionHandler</code> translates any <code>DbUpdateException</code> into a
+          <code>409 Conflict</code> RFC 9457 ProblemDetails, with a generic detail message so the database schema is not
+          leaked (the full exception is logged, not returned). This is the same edge that already returns 409
+          for unique-constraint and foreign-key violations. (The parallel <code>Result</code>-based path,
+          <code>ErrorType.Conflict</code>, maps to 409 through <code>ErrorHttpMapping</code> for handlers that model a conflict as a
+          <code>Result</code> rather than let the exception propagate.)</li>
+          <li><strong>A fitness function enforces the opt-in build-wide.</strong> <code>ArchitectureRules.UpdateRequestsAreConcurrencyAware</code>
+          scans module Application assemblies for types whose simple name ends in <code>UpdateRequest</code> and flags any
+          that do not implement <code>IConcurrencyAware</code>. <code>ConcurrencyConventionTestsBase</code> exposes it as a single
+          <code>[Fact]</code>, and <strong>both</strong> consumers subclass it (<code>MMCA.ADC.Architecture.Tests</code> and
+          <code>MMCA.Store.Architecture.Tests</code> each supply their own <code>IArchitectureMap</code>). A module with no mutable
+          aggregate is legitimately vacuous.</li>
+          <li><strong>Adopted per database via an <code>AddRowVersionToAllEntities</code> migration.</strong> Each consumer added the
+          <code>RowVersion</code> column to every table in one migration (<code>AddRowVersionToAllEntities</code> in both ADC and
+          Store), typed <code>rowversion</code> with an empty-byte default, so existing rows get a token on first write.</li>
+          </ul>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Database-managed token over a hand-maintained version field.</strong> A SQL Server <code>rowversion</code>
+          auto-increments on the server on every write; no domain code sets or reads it (the setter is
+          private, populated by EF). The token stays invisible to the aggregate&#39;s behavior, so concurrency is
+          a persistence concern, not a domain one.</li>
+          <li><strong>Round-trip over a server-side reload.</strong> Reloading and re-saving on the server hides the collision
+          (both writes succeed against the freshest row). Forcing the client to echo the token it last read
+          is what makes a competing edit a real conflict instead of a silent overwrite.</li>
+          <li><strong>One seam over a per-handler compare.</strong> <code>SetOriginalRowVersion</code> plus EF&#39;s <code>WHERE</code>-clause check does
+          the comparison in the database, atomically with the UPDATE. A hand-rolled &quot;read the current token,
+          compare, then save&quot; would reintroduce the exact race it is meant to close.</li>
+          <li><strong>Invariant over discipline (ADR-015).</strong> The <code>*UpdateRequest</code> naming convention is enforced
+          mechanically in both consumers, so a newly added mutable request cannot ship without the token by an
+          author simply forgetting. This is the same posture the framework prefers elsewhere.</li>
+          <li><strong>Reuse the existing 409 edge.</strong> <code>DbUpdateExceptionHandler</code> already funnels every <code>DbUpdateException</code>
+          to 409, so concurrency conflicts inherit the same translation, logging, and schema-safe message as
+          constraint violations with no new middleware.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Opt-in at the caller, not just the type.</strong> A null or empty <code>RowVersion</code> skips the check, so a
+          client that never echoes the token still gets last-write-wins. The fitness function guarantees the
+          request <strong>type</strong> carries the field; it cannot guarantee a given caller populates it.</li>
+          <li><strong>The 409 is coarse.</strong> <code>DbUpdateExceptionHandler</code> maps all <code>DbUpdateException</code>s to one 409 with a
+          generic message, so from the status and body alone a client cannot tell a concurrency conflict from
+          a unique-constraint or foreign-key violation. That is deliberate (no schema leak), but it means
+          retry logic treats the three the same.</li>
+          <li><strong>Cross-engine asymmetry.</strong> SQL Server gets a server-generated <code>rowversion</code>; SQLite and other
+          relational providers get an application-managed <code>IsConcurrencyToken</code> over the same <code>byte[]</code> (EF
+          sends the value on INSERT rather than expecting the database to generate it). Cosmos has its own
+          ETag concurrency mechanism that is not routed through this property.</li>
+          <li><strong>Enforcement is bound to a naming convention.</strong> The rule keys on the <code>UpdateRequest</code> suffix. A
+          mutable request that does not follow that suffix is outside the rule&#39;s scope.</li>
+          <li><strong>Adoption is a per-database migration.</strong> <code>AddRowVersionToAllEntities</code> adds the column to every
+          existing table; a new database, or a table added later, must carry the column for the token to
+          exist there.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p>ADR-017 (HTTP request idempotency, which dedups retries of the <strong>same</strong> request, the mirror-image
+          concern to two <strong>distinct</strong> edits racing here), ADR-021 (consumer-side inbox, which dedups broker
+          redeliveries of the <strong>same</strong> event, likewise distinct from concurrency), ADR-006 (the one-shared-
+          context-per-engine model over which the <code>RowVersion</code> token is configured uniformly), ADR-015 (the
+          fitness-function-over-discipline enforcement this reuses), ADR-005 (soft-delete and audit fields live
+          on the same <code>AuditableBaseEntity</code> base that carries <code>RowVersion</code>).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/035-optimistic-concurrency.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

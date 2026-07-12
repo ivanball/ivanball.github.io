@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>1. Result &amp; Error Handling · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="This is the first capability chapter, and it is deliberately first because the pattern it teaches underpins almost every other one in the guide. Before…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/group-01-result-error-handling.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="1. Result &amp; Error Handling">
+  <meta property="og:description" content="This is the first capability chapter, and it is deliberately first because the pattern it teaches underpins almost every other one in the guide. Before…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/group-01-result-error-handling.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/onboarding/index.html">Onboarding Guide</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">1. Result &amp; Error Handling</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>Guide contents</summary>
+        <nav class="doc-nav" aria-label="Onboarding Guide">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="00-dependency-manifest.html">Phase 1: Dependency Manifest &amp; Leveling</a></li>
+        <li><a href="00-group-taxonomy.html">Phase 1b - Functional Group Taxonomy</a></li>
+        <li><a href="00-inventory.html">Phase 0: Type Inventory</a></li>
+        <li><a href="00-primer.html">Primer, the concepts, stack, and conventions you need first</a></li>
+        <li><a href="group-01-result-error-handling.html" aria-current="page">1. Result &amp; Error Handling</a></li>
+        <li><a href="group-02-domain-building-blocks.html">2. Domain Building Blocks (Entities, Value Objects, Aggregates)</a></li>
+        <li><a href="group-03-querying-specifications.html">3. Querying: Specifications, Filtering &amp; the Entity Query Service</a></li>
+        <li><a href="group-04-events-outbox.html">4. Domain &amp; Integration Events + Outbox Dual-Dispatch</a></li>
+        <li><a href="group-05-cqrs-pipeline.html">5. CQRS: Commands, Queries &amp; the Decorator Pipeline</a></li>
+        <li><a href="group-06-validation.html">6. Validation</a></li>
+        <li><a href="group-07-persistence-ef-core.html">7. Persistence &amp; EF Core</a></li>
+        <li><a href="group-08-auth.html">8. Authentication &amp; Authorization</a></li>
+        <li><a href="group-09-caching.html">9. Caching</a></li>
+        <li><a href="group-10-notifications.html">10. Notifications (Push + In-App Inbox + Email)</a></li>
+        <li><a href="group-11-navigation-populators.html">11. Navigation Metadata &amp; Populators (EF-decoupled eager loading)</a></li>
+        <li><a href="group-12-api-hosting-mapping.html">12. API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</a></li>
+        <li><a href="group-13-grpc-contracts.html">13. gRPC &amp; Inter-Service Contracts</a></li>
+        <li><a href="group-14-module-system-composition.html">14. Module System, Composition &amp; Configuration</a></li>
+        <li><a href="group-15-common-ui-framework.html">15. Common UI Framework (MudBlazor components, theme, base pages)</a></li>
+        <li><a href="group-16-aspire-orchestration.html">16. Aspire Orchestration &amp; Service Defaults</a></li>
+        <li><a href="group-17-conference-domain.html">17. ADC Conference - Domain Model &amp; Module Contracts</a></li>
+        <li><a href="group-18-conference-application.html">18. ADC Conference - Application &amp; Use Cases</a></li>
+        <li><a href="group-19-conference-infrastructure.html">19. ADC Conference - Infrastructure &amp; Persistence</a></li>
+        <li><a href="group-20-conference-api-grpc.html">20. ADC Conference - API, gRPC Contracts &amp; Service Host</a></li>
+        <li><a href="group-21-conference-ui.html">21. ADC Conference - UI</a></li>
+        <li><a href="group-22-engagement-module.html">22. ADC Engagement Module (Session Bookmarks)</a></li>
+        <li><a href="group-23-engagement-live-layer.html">23. ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></li>
+        <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
+        <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
+        <li><a href="group-26-testing-infrastructure.html">26. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
+        <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
+        <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
+        <li><a href="devops-runbooks.html">Operational Scripts &amp; Runbooks</a></li>
+        <li><a href="devops-testing.html">Testing Architecture &amp; Solution Composition</a></li>
+        <li><a href="99-coverage-audit.html">Phase 4, Coverage Audit</a></li>
+        <li><a href="CONCEPT-MAPS.html">MMCA Concept &amp; Pattern Maps</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Onboarding guide</p>
+          <h1 id="1-result--error-handling">1. Result &amp; Error Handling</h1>
+          <p>This is the first capability chapter, and it is deliberately first because the pattern it teaches
+          underpins almost every other one in the guide. Before you read a command handler, a domain factory,
+          a controller action, or a gRPC call in any later chapter, you need the <strong>Result pattern</strong> in your
+          head: in this codebase, an operation that can fail in an <em>expected</em> way does <strong>not</strong> throw, it
+          <strong>returns</strong> a value that is either a success or a structured failure. The types in this chapter are
+          that value, the error it carries, the classification that drives HTTP status codes, the collection
+          envelopes that paged reads come back in, the JSON converter that lets a result survive a round trip
+          through the distributed cache, and the two narrow exception types reserved for the cases where
+          returning a value is genuinely impossible. (The primer introduces the idea in
+          <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">§2</a>; this chapter is where it becomes
+          concrete.) This is <strong>ADR-013</strong> (the Result pattern): expected failures are transport-agnostic
+          <code>Result</code>/<code>ErrorType</code> values, only the edge maps them to HTTP/gRPC, and exceptions are reserved for the
+          genuinely exceptional.</p>
+          <p><strong>Why a return value instead of an exception.</strong> Exceptions are expensive (stack capture and
+          unwinding), they are invisible in a method&#39;s signature, and they conflate <em>programmer errors</em> with
+          <em>business outcomes</em>. &quot;This order ID doesn&#39;t exist&quot; and &quot;this email is already taken&quot; are not
+          exceptional, they are routine, expected branches of normal control flow. Modeling them as data lets
+          the compiler see them (a method that returns <a href="#result"><code>Result&lt;T&gt;</code></a> advertises that it can fail), lets
+          them be collected into a list, passed through a pipeline, inspected, and mapped to an HTTP response
+          <strong>without</strong> any <code>try/catch</code>. That decision is the single most pervasive idiom in the two repos:
+          practically every entity factory method, every CQRS command and query handler, every controller
+          action, and every service method returns <a href="#result"><code>Result</code></a> or <a href="#result"><code>Result&lt;T&gt;</code></a>. This touches
+          <code>[Rubric §2, Design Patterns]</code> (which assesses whether patterns are idiomatic and solve real problems
+          rather than being &quot;pattern theater&quot;, here Result is the genuine, codebase-wide error-flow mechanism)
+          and <code>[Rubric §9, API &amp; Contract Design]</code> (which assesses consistent, standardized error responses,
+          because every failure flows through the same envelope, every endpoint produces the same error shape).</p>
+          <p><strong>The three-layer split.</strong> The pattern is intentionally factored into three small, dependency-free
+          pieces that each do one job, all living in <code>MMCA.Common.Shared</code>, the innermost layer that even the
+          Blazor WebAssembly UI can reference without dragging in EF Core or ASP.NET:</p>
+          <ul>
+          <li><a href="#errortype"><code>ErrorType</code></a> (Level 0) is the <strong>classification axis</strong>, an eight-value enum
+          (<code>Validation</code>, <code>Invariant</code>, <code>NotFound</code>, <code>Conflict</code>, <code>Unauthorized</code>, <code>Forbidden</code>,
+          <code>UnprocessableEntity</code>, <code>Failure</code>) where each member&#39;s doc comment names the HTTP status it maps to
+          (<code>Validation</code>/<code>Invariant</code>/<code>Failure</code> to 400, <code>NotFound</code> to 404, <code>Conflict</code> to 409, <code>Unauthorized</code>
+          to 401, <code>Forbidden</code> to 403, <code>UnprocessableEntity</code> to 422;
+          <code>MMCA.Common.Shared/Abstractions/ErrorType.cs:8-33</code>). Note that this HTTP-shaped concept lives in
+          the domain core as a <em>pure enum</em> with no reference to ASP.NET, <code>[Rubric §3, Clean Architecture]</code>
+          (dependencies point inward; the inner layers stay framework-free), with the actual
+          <code>ErrorType -&gt; status</code> translation deferred to the API layer.</li>
+          <li><a href="#error"><code>Error</code></a> (Level 1) is the <strong>carrier</strong>, an immutable positional <code>record</code>
+          (<code>MMCA.Common.Shared/Abstractions/Error.cs:15</code>) with a machine-readable <code>Code</code> (e.g.
+          <code>&quot;Order.NotFound&quot;</code>, for programmatic branching), a human-readable <code>Message</code> (for clients), an
+          <code>ErrorType</code>, and optional <code>Source</code>/<code>Target</code> context. Eight factory methods (one per <code>ErrorType</code>,
+          <code>Error.cs:37-101</code>) each hard-code the correct type, so a caller can never accidentally pair
+          <code>Error.NotFoundError(...)</code> with the wrong classification; three pre-built static singletons
+          (<code>Error.NotFound</code>, <code>Error.AlreadyDeleted</code>, <code>Error.InvalidEntityField</code>, <code>Error.cs:23-29</code>) cover the
+          ubiquitous cases without re-allocating, and <code>WithSource</code>/<code>WithTarget</code> (<code>Error.cs:106,112</code>) enrich an
+          error via <code>with</code>-expression copies.</li>
+          <li><a href="#result"><code>Result</code></a> (Level 2) is the <strong>outcome envelope</strong>
+          (<code>MMCA.Common.Shared/Abstractions/Result.cs:18</code>), either a success (no errors) or a failure carrying
+          one or more <code>Error</code>s. The generic <a href="#result"><code>Result&lt;T&gt;</code></a> (same file, <code>Result.cs:119</code>) adds a <code>Value</code>
+          on the success path and the functional combinators that make the pattern ergonomic.</li>
+          </ul>
+          <p><strong>The railway, in one picture.</strong> &quot;Railway-oriented programming&quot; is the mental model: imagine two
+          parallel tracks, a success track and a failure track. An operation that takes the current result as
+          input is skipped if the result is already a failure (the train stays on the failure track), and runs
+          only if it is a success, where it may stay on the success track or switch to failure. Control flows
+          forward without nested <code>if (result.IsFailure)</code> checks. The generic <code>Result&lt;T&gt;</code> exposes exactly three
+          combinators for this, deliberately kept minimal because they cover the three real shapes:
+          <code>Match(onSuccess, onFailure)</code> (<code>Result.cs:141</code>) terminates the railway by collapsing both tracks to a
+          single value (exactly one branch runs); <code>Map(mapper)</code> (<code>Result.cs:157</code>) transforms the success value
+          while propagating errors untouched; and <code>BindAsync(binder)</code> (<code>Result.cs:170</code>) is the <strong>monadic bind</strong>
+          for async continuations, it short-circuits on failure (returning the original errors without calling
+          <code>binder</code>) and otherwise awaits the next operation, which itself returns a <code>Result</code>. The non-generic
+          base also offers <code>Result.Combine(params ReadOnlySpan&lt;Result&gt;)</code> (<code>Result.cs:87</code>), the
+          <strong>aggregate-all-failures</strong> combinator that runs several invariant checks and returns <em>all</em> their
+          errors at once rather than failing on the first, this is the workhorse of domain factory methods
+          (<code>Result.Combine(CheckName(name), CheckDate(date), ...)</code>), and its <code>ReadOnlySpan</code> parameter avoids a
+          heap allocation in the common case.</p>
+          <p><strong>A note on construction discipline.</strong> You cannot <code>new</code> a <code>Result&lt;T&gt;</code> directly, its constructors are
+          <code>internal</code> (<code>Result.cs:126,130</code>), so the only way to produce one is through the static factory methods
+          on the base <a href="#result"><code>Result</code></a> class (<code>Success</code>, <code>Failure</code>, <code>Result.cs:43-78</code>). This is what
+          guarantees the invariant the rest of the codebase relies on: a result is <em>always</em> either a clean
+          success or a non-empty failure, never a half-built object (the success path is even served by a single
+          cached immutable instance, <code>Result.cs:20,43</code>, so the common case allocates nothing). Likewise,
+          <a href="#error"><code>Error</code></a>&#39;s factory methods are the canonical construction path because they fix the
+          <code>Code -&gt; ErrorType</code> pairing at the call site.</p>
+          <p><strong>Making a result survive a round trip.</strong> That same construction discipline creates a problem the
+          moment a result must be <em>serialized</em>: because <a href="#result"><code>Result&lt;T&gt;</code></a>&#39;s constructors are <code>internal</code> and
+          its properties are get-only, System.Text.Json&#39;s default reflection-based deserializer cannot rehydrate
+          one from JSON. That matters because the CQRS query-caching decorator
+          (<a href="group-05-cqrs-pipeline.html">Chapter 5</a>/<a href="group-09-caching.html">Chapter 9</a>) serializes cached handler
+          results to Redis and reads them back later. <a href="#resultjsonconverterfactory"><code>ResultJsonConverterFactory</code></a>
+          (Level 2) is the fix: a <code>JsonConverterFactory</code> attached to both <code>Result</code> and <code>Result&lt;T&gt;</code> via
+          <code>[JsonConverter(...)]</code> (<code>Result.cs:17,118</code>) whose <code>CanConvert</code> matches the non-generic <code>Result</code> and any
+          closed <code>Result&lt;T&gt;</code> (<code>MMCA.Common.Shared/Serialization/ResultJsonConverterFactory.cs:21-23</code>) and whose
+          <code>CreateConverter</code> hands back the right per-type converter (<code>ResultJsonConverterFactory.cs:26-33</code>). It
+          writes a compact <code>{&quot;value&quot;: ..., &quot;errors&quot;: [...]}</code> shape and, crucially, reconstructs the object
+          <em>through the public factory methods</em> (<code>Result.Success</code>/<code>Result.Failure</code>,
+          <code>ResultJsonConverterFactory.cs:49,77</code>), so a round-tripped result still obeys the same
+          success-or-non-empty-failure invariant a freshly built one does. <a href="#resultconverter"><code>ResultConverter</code></a>
+          (Level 2, <code>ResultJsonConverterFactory.cs:35</code>) is the concrete <code>JsonConverter&lt;Result&gt;</code> for the
+          non-generic case (a generic <code>ResultConverter&lt;T&gt;</code> sibling handles the typed case), and both lean on one
+          small private helper, the <a href="#propertyreader"><code>PropertyReader</code></a> (Level 0) delegate
+          (<code>ResultJsonConverterFactory.cs:95</code>), a <code>ref Utf8JsonReader</code> callback that the shared <code>ReadObject</code>
+          walker invokes once per JSON property so the value- and error-reading logic is written once and reused
+          by both converters. This is quiet <code>[Rubric §12, Performance &amp; Scalability]</code> plumbing: without it the
+          distributed result cache could not exist, and with it the cache stores nothing but the framework&#39;s own
+          canonical wire shape.</p>
+          <p><strong>How a failure becomes an HTTP response (the end-to-end flow).</strong> Follow a typical write through the
+          layers. A domain factory or aggregate method validates its inputs and returns
+          <code>Result.Combine(...)</code>; a command handler in the application layer chains follow-on work with
+          <code>BindAsync</code>/<code>Map</code>, so any failure short-circuits the rest of the slice; the controller receives the
+          <code>Result&lt;T&gt;</code> and, on failure, hands it to <code>ApiControllerBase.HandleFailure</code>
+          (<a href="group-12-api-hosting-mapping.html#apicontrollerbase"><code>ApiControllerBase</code></a> in the API chapter), which
+          reads the <strong>first</strong> error&#39;s <a href="#errortype"><code>ErrorType</code></a> and maps it, via
+          <a href="group-12-api-hosting-mapping.html#errorhttpmapping"><code>ErrorHttpMapping</code></a>&#39;s <code>FrozenDictionary</code>, to the
+          right status code, then renders an <strong>RFC 9457 Problem Details</strong> body. The same <code>Result</code> failure can
+          also cross a service boundary: on the gRPC seam,
+          <a href="group-13-grpc-contracts.html#resultgrpcextensions"><code>ResultGrpcExtensions</code></a> turns a failure into an
+          <code>RpcException</code> carrying the errors over the wire (ADR-007), and the typed client turns it back into a
+          <code>Result</code> on the far side, so a remote call looks like a local one to application code. Because the
+          whole journey is driven by the same eight-member enum, the HTTP and gRPC error shapes are uniform
+          across every endpoint and every extracted service, there is one source of truth for &quot;what does a
+          not-found look like.&quot;</p>
+          <p><strong>The two exceptions, and why they exist anyway.</strong> A return-value pattern still needs a fallback for
+          the places where you genuinely cannot return one. <a href="#domainexception"><code>DomainException</code></a> (Level 0,
+          <code>MMCA.Common.Shared/Exceptions/DomainException.cs:9</code>) is the abstract base for domain-layer
+          exceptions, and <a href="#domaininvariantviolationexception"><code>DomainInvariantViolationException</code></a>
+          (Level 1, <code>MMCA.Common.Shared/Exceptions/DomainInvariantViolationException.cs:9</code>) is its one concrete
+          subclass. The doc comments are emphatic that these are a <em>last resort</em>: prefer <code>Result</code> with
+          <code>Error.Invariant</code> for normal business-rule violations, and reserve the exception for contexts where
+          the <code>Result</code> pattern is structurally unavailable, most notably inside aggregate constructors invoked
+          by <strong>EF Core materialization</strong> (<code>DomainInvariantViolationException.cs:4-7</code>), where the call stack is
+          framework-owned and there is no <code>Result</code> channel to return through. When one of these does escape, the
+          API layer&#39;s <code>DomainExceptionHandler</code> middleware
+          (<a href="group-12-api-hosting-mapping.html#domainexceptionhandler"><code>DomainExceptionHandler</code></a>) catches it and
+          converts it to the same Problem Details shape (<code>DomainException.cs:6-7</code>), so even the exceptional path
+          lands on a consistent contract. This is the considered version of <code>[Rubric §2, Design Patterns]</code>:
+          exceptions are for the truly exceptional (programming errors, corrupted persistent state), not for
+          control flow.</p>
+          <p><strong>Paged and collection reads ride the same rails.</strong> The read side needs an envelope too. A query that
+          returns a list wraps it in <a href="#collectionresultt"><code>CollectionResult&lt;T&gt;</code></a> (Level 0), a thin
+          <code>[DataContract]</code> record (<code>MMCA.Common.Shared/Abstractions/PaginationMetadata.cs:64</code>) with a single
+          required <code>Items</code> property whose constructor normalizes any <code>IReadOnlyCollection&lt;T&gt;</code> into a list
+          (<code>PaginationMetadata.cs:74-78</code>). When the read is paged,
+          <a href="#pagedcollectionresultt"><code>PagedCollectionResult&lt;T&gt;</code></a> (Level 1, <code>PaginationMetadata.cs:91</code>) extends
+          that base with one extra required property, <a href="#paginationmetadata"><code>PaginationMetadata</code></a> (Level 0,
+          <code>PaginationMetadata.cs:12</code>), the server-side paging state (<code>TotalItemCount</code>, <code>PageSize</code>,
+          <code>CurrentPage</code>) plus computed, non-serialized derivations (<code>TotalPageCount</code>, <code>FirstRowOnPage</code>,
+          <code>LastRowOnPage</code>, <code>PaginationMetadata.cs:45-55</code>, each marked <code>[IgnoreDataMember]</code>). The
+          <code>[DataMember(Order = ...)]</code> annotations fix a deterministic wire order so <code>PaginationMetadata</code> always
+          serializes after <code>Items</code> (<code>PaginationMetadata.cs:81,110</code>). These envelopes are not part of the
+          success/failure machinery themselves, a paged query handler returns
+          <code>Result&lt;PagedCollectionResult&lt;T&gt;&gt;</code>, composing the two ideas, but they belong in this chapter because
+          they are the canonical <em>shapes</em> that successful reads return, the read-side counterpart to the
+          <code>Result</code> that every write returns. This touches <code>[Rubric §9, API &amp; Contract Design]</code> (stable,
+          right-sized response contracts) and <code>[Rubric §12, Performance &amp; Scalability]</code> (paging large result
+          sets so a query never pulls an unbounded list).</p>
+          <p><strong>Where this leads.</strong> With these eleven types you have the full error-and-result vocabulary the rest
+          of the guide assumes. You will see <a href="#result"><code>Result</code></a> returned by the domain building blocks of
+          <a href="group-02-domain-building-blocks.html">Chapter 2</a> (factory methods that refuse to construct an invalid
+          entity), threaded through the CQRS decorator pipeline of
+          <a href="group-05-cqrs-pipeline.html">Chapter 5</a> (where a <code>Result.Failure</code> deliberately commits the transaction
+          but skips cache invalidation), cached across a Redis round trip by that same pipeline
+          (<a href="group-09-caching.html">Chapter 9</a>), and unwrapped at the edges by the API and gRPC layers
+          (<a href="group-12-api-hosting-mapping.html">Chapter 12</a>, <a href="group-13-grpc-contracts.html">Chapter 13</a>). Read this
+          chapter&#39;s type sections next; everything after them takes the railway for granted.</p>
+          <h3 id="collectionresultt">CollectionResult&lt;T&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Abstractions</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/PaginationMetadata.cs:64</code> · Level 0 · record</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a thin envelope wrapping a collection of items for API responses; the base type for the paged variant.</li>
+          <li><strong>Depends on</strong>: nothing first-party. (Lives in the same file as <a href="#paginationmetadata"><code>PaginationMetadata</code></a> and <a href="#pagedcollectionresultt"><code>PagedCollectionResult&lt;T&gt;</code></a>.)</li>
+          <li><strong>Concept introduced, the collection envelope.</strong> Returning a <em>named wrapper</em> (<code>{ items: [...] }</code>) instead of a bare JSON array is a small but deliberate <code>[Rubric §9, API &amp; Contract Design]</code> choice (§9 assesses consistent, evolvable response contracts): a wrapper leaves room to add metadata, like pagination, without a breaking change to the response shape, which a top-level array would force.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li>One property: <code>required ICollection&lt;T&gt; Items { get; init; }</code> (<code>PaginationMetadata.cs:82</code>). The <code>required</code> keyword forces callers to set it (so <code>Items</code> is never null); both constructors are marked <code>[SetsRequiredMembers]</code> (lines 67, 73) to satisfy that requirement when constructed directly.</li>
+          <li>The data constructor (lines 74-78) null-checks input via <code>ArgumentNullException.ThrowIfNull</code> and normalizes to a <code>List&lt;T&gt;</code>, reusing the list if the input already is one, a small allocation optimization for the common case.</li>
+          <li><code>[DataContract]</code> on the type and <code>[DataMember(Order = 1)]</code> on <code>Items</code> (lines 63, 81) pin the wire shape, matching <a href="#paginationmetadata"><code>PaginationMetadata</code></a>&#39;s serialization discipline.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: <code>required</code> + <code>init</code> gives &quot;set once, never null&quot; semantics without a hand-written constructor guard for the common path, while the explicit <code>[DataContract]</code> keeps the serialized shape stable.</li>
+          <li><strong>Where it&#39;s used</strong>: base of <a href="#pagedcollectionresultt"><code>PagedCollectionResult&lt;T&gt;</code></a> (Level 1); returned by non-paged collection endpoints across both apps.</li>
+          </ul>
+          <h3 id="domainexception">DomainException</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Exceptions</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Exceptions/DomainException.cs:9</code> · Level 0 · class (abstract)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the abstract base for domain-layer exceptions.</li>
+          <li><strong>Depends on</strong>: <code>System.Exception</code> (BCL) only.</li>
+          <li><strong>Concept introduced, exceptions reserved for the truly exceptional.</strong> <code>[Rubric §2, Design Patterns]</code> (§2 assesses whether patterns are idiomatic and solve real problems; a classic red flag is <em>exceptions used for control flow where a Result is the convention</em>). The doc comment (<code>DomainException.cs:3-8</code>) is explicit: prefer the <a href="#result"><code>Result</code></a> pattern for <em>expected</em> error paths; reserve exceptions for programming errors / corrupted state. So this type exists, but it is the <strong>exception</strong> (pun intended) to the rule, its concrete subclasses are caught by <code>DomainExceptionHandler</code> middleware (API layer) and converted to RFC 9457 Problem Details responses.</li>
+          <li><strong>Walkthrough</strong>: three <code>protected</code> constructors (parameterless, message, message+inner, <code>DomainException.cs:12-23</code>), the standard exception constructor set. <code>abstract</code> so you must derive a specific exception rather than throwing the base directly.</li>
+          <li><strong>Why it&#39;s built this way</strong>: a single domain-exception root lets the middleware catch &quot;domain exceptions&quot; as a <em>category</em> and map them consistently, while the Result pattern handles the common case. It keeps the abstraction pure: <code>DomainException</code> lives in <code>Shared</code> with no HTTP coupling; the status mapping happens later in the API layer.</li>
+          <li><strong>Where it&#39;s used</strong>: base of <a href="#domaininvariantviolationexception"><code>DomainInvariantViolationException</code></a> (Level 1); caught by <code>DomainExceptionHandler</code> API middleware.</li>
+          </ul>
+          <h3 id="errortype">ErrorType</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Abstractions</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ErrorType.cs:8</code> · Level 0 · enum</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: an enum that classifies every domain error into one of eight categories, each of which maps to an HTTP status code at the API boundary.</li>
+          <li><strong>Depends on</strong>: nothing first-party (BCL only). It is the seed of the Result-pattern family: <a href="#error"><code>Error</code></a> (Level 1) carries an <code>ErrorType</code>, and <a href="#result"><code>Result</code></a> (Level 2) carries <code>Error</code>s.</li>
+          <li><strong>Concept introduced, the Result pattern.</strong> <code>[Rubric §2, Design Patterns]</code> (§2 assesses whether patterns are idiomatic and solve real problems, not &quot;pattern theater&quot;; here the <strong>Result</strong> pattern is the codebase&#39;s canonical error-flow mechanism). Instead of throwing exceptions for <em>expected</em> failures (validation, not-found, conflict), operations return a <a href="#result"><code>Result</code></a> that is either success or a failure carrying one or more <a href="#error"><code>Error</code></a>s. <code>ErrorType</code> is the classification axis of that pattern. This also touches <code>[Rubric §9, API &amp; Contract Design]</code> (assesses consistent, standardized error responses): the enum&#39;s doc comment (<code>ErrorType.cs:4-7</code>) states the <strong>first</strong> error in a result determines the response status, and <code>ApiControllerBase</code> maps each <code>ErrorType</code> to a status code via a <code>FrozenDictionary</code>, so error shapes are uniform across every endpoint. And <code>[Rubric §3, Clean Architecture]</code> (dependencies point inward; the domain is framework-free): note this HTTP-shaped concept lives in <code>Shared</code> as a <em>pure enum</em> with <strong>no</strong> reference to ASP.NET, the HTTP mapping happens later, in the API layer. The Result pattern is the single most pervasive idiom in the codebase (see <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a>).</li>
+          <li><strong>Walkthrough</strong>: eight members, each documented with its target status (<code>ErrorType.cs:11-32</code>): <code>Validation</code> (400), <code>Invariant</code> (400, a broken business rule), <code>NotFound</code> (404), <code>Conflict</code> (409, e.g. duplicate or already-deleted), <code>Unauthorized</code> (401), <code>Forbidden</code> (403), <code>UnprocessableEntity</code> (422, e.g. an attempt to change an immutable field), and <code>Failure</code> (400, the catch-all). The values are not given explicit numbers, ordinal order is irrelevant because the HTTP mapping is keyed by name, not by integer value.</li>
+          <li><strong>Why it&#39;s built this way</strong>: separating <em>classification</em> (this enum) from <em>carrier</em> (<a href="#error"><code>Error</code></a>) from <em>outcome</em> (<a href="#result"><code>Result</code></a>) keeps each piece tiny and lets the same eight categories drive both domain logic and HTTP translation from one source of truth.</li>
+          <li><strong>Where it&#39;s used</strong>: pervasively: <a href="#error"><code>Error</code></a>&#39;s factory methods each hard-code the correct <code>ErrorType</code>; <code>ApiControllerBase.HandleFailure</code> (API layer) switches on it; <code>ErrorHttpMapping</code> holds the <code>ErrorType → status</code> table.</li>
+          <li><strong>Caveats / not-in-source</strong>: the exact <code>ErrorType → status</code> table lives in <code>ApiControllerBase</code> / <code>ErrorHttpMapping</code> (a higher tier, group G12); only the <em>intent</em> is documented here.</li>
+          </ul>
+          <h3 id="paginationmetadata">PaginationMetadata</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Abstractions</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/PaginationMetadata.cs:12</code> · Level 0 · record (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: an immutable record carrying server-side pagination state (total items, page size, current page) with three derived, non-serialized convenience properties.</li>
+          <li><strong>Depends on</strong>: nothing first-party. (Lives in the same file as <a href="#collectionresultt"><code>CollectionResult&lt;T&gt;</code></a> and <a href="#pagedcollectionresultt"><code>PagedCollectionResult&lt;T&gt;</code></a>.)</li>
+          <li><strong>Concept introduced, server-side pagination + the <code>[DataContract]</code> serialization contract.</strong> <code>[Rubric §9, API &amp; Contract Design]</code> (uniform pagination/filtering conventions) and <code>[Rubric §12, Performance &amp; Scalability]</code> (assesses query efficiency and <strong>paginating large result sets</strong> rather than returning whole tables). Carrying explicit pagination metadata is what lets the API page at the database and tell the client how to navigate.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li>Two constructors: a parameterless one delegating to the main ctor with zeros (<code>PaginationMetadata.cs:15-16</code>), and the main ctor (lines 22-31) which guards every argument with <code>ArgumentOutOfRangeException.ThrowIfNegative</code>, invalid pagination can&#39;t be represented.</li>
+          <li>Three stored values: <code>TotalItemCount</code>, <code>PageSize</code>, <code>CurrentPage</code>, all <code>init</code> and tagged <code>[DataMember(Order = …)]</code> (lines 34-43) for deterministic serialization order.</li>
+          <li>Three computed properties tagged <code>[IgnoreDataMember]</code> so they&#39;re <em>not</em> serialized (they&#39;re derivable): <code>TotalPageCount</code> (ceiling division, line 47), <code>FirstRowOnPage</code> (line 51), and <code>LastRowOnPage</code> (clamped to the total, line 55). Note the <code>(long)</code> casts in the row math, a deliberate guard against <code>int</code> overflow on large datasets.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: <code>[DataContract]</code>/<code>[DataMember]</code>/<code>[IgnoreDataMember]</code> make the wire shape explicit and stable (only the three core values travel; the rest are recomputed client-side), which is exactly the &quot;stable, evolvable contract&quot; §9 asks for. Validation in the constructor means an invalid instance is unconstructable, a recurring theme (compare value-object factories in group G02).</li>
+          <li><strong>Where it&#39;s used</strong>: embedded in <a href="#pagedcollectionresultt"><code>PagedCollectionResult&lt;T&gt;</code></a> (Level 1) and returned by paged query endpoints throughout both apps.</li>
+          </ul>
+          <h3 id="propertyreader">PropertyReader</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Serialization</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Serialization/ResultJsonConverterFactory.cs:95</code> · Level 0 · delegate</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a small private delegate that <a href="#resultjsonconverterfactory"><code>ResultJsonConverterFactory</code></a> uses internally to hand each property of a <code>Result</code> JSON payload to a per-converter callback while one shared object-walker drives the reader.</li>
+          <li><strong>Depends on</strong>: <code>System.Text.Json.Utf8JsonReader</code> (BCL, passed by <code>ref</code>).</li>
+          <li><strong>Concept, a <code>ref struct</code>-friendly callback shape.</strong> <code>[Rubric §15, Best Practices &amp; Code Quality]</code> (assesses DRY, no duplicated parsing loop). The two nested converters (<a href="#resultconverter"><code>ResultConverter</code></a> and its generic sibling) differ only in <em>which</em> JSON properties they care about, so the property loop is factored out into <code>ReadObject</code>, and this delegate is how <code>ReadObject</code> calls back into each converter. Because <code>Utf8JsonReader</code> is a <code>ref struct</code> (it cannot be captured by an ordinary <code>Func&lt;&gt;</code>), the delegate takes the reader by <code>ref</code> (<code>ResultJsonConverterFactory.cs:95</code>) so the callback advances the same reader instance.</li>
+          <li><strong>Walkthrough</strong>: a one-line declaration (<code>ResultJsonConverterFactory.cs:95</code>): <code>void (ref Utf8JsonReader reader, string propertyName)</code>. <code>ReadObject</code> (line 98) positions the reader on each property value and then invokes a <code>PropertyReader</code> once per property (line 117).</li>
+          <li><strong>Why it&#39;s built this way</strong>: keeping the token-stream bookkeeping (StartObject check, EndObject termination, truncation guards) in one <code>ReadObject</code> method and passing the &quot;what to do with this property&quot; logic as a delegate avoids copy-pasting the JSON walk into both converters.</li>
+          <li><strong>Where it&#39;s used</strong>: consumed only inside <a href="#resultjsonconverterfactory"><code>ResultJsonConverterFactory</code></a>; <code>ResultConverter.Read</code> (line 41) and <code>ResultConverter&lt;T&gt;.Read</code> (line 67) each pass a lambda of this shape.</li>
+          <li><strong>Caveats / not-in-source</strong>: it is <code>private</code>, so it is not part of any public API; it exists purely to support the converter factory.</li>
+          </ul>
+          <h3 id="domaininvariantviolationexception">DomainInvariantViolationException</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Exceptions</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Exceptions/DomainInvariantViolationException.cs:9</code> · Level 1 · class</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the concrete exception thrown when a domain invariant is violated in a context where the <a href="#result"><code>Result</code></a> pattern cannot be used (e.g. inside aggregate constructors called by EF Core materialization, where the call stack is framework-owned and returning a <code>Result</code> is impossible).</li>
+          <li><strong>Depends on</strong>: <a href="#domainexception"><code>DomainException</code></a> (Level 0).</li>
+          <li><strong>Concept</strong>: this is the safety valve the doc comment (<code>DomainInvariantViolationException.cs:3-8</code>) spells out explicitly: &quot;prefer returning <code>Result</code> with <code>Error.Invariant</code> for normal business rule violations&quot;. <code>[Rubric §2, Design Patterns]</code> (§2 flags exceptions used as control flow; this type is the sanctioned last resort, not the default path). <code>DomainExceptionHandler</code> middleware (API layer, group G12) catches any <a href="#domainexception"><code>DomainException</code></a> and maps it to HTTP 400 + ProblemDetails.</li>
+          <li><strong>Walkthrough</strong>: three standard <strong><code>public</code></strong> constructors delegating to <a href="#domainexception"><code>DomainException</code></a> (<code>DomainInvariantViolationException.cs:12-24</code>): parameterless, message, and message+inner. The class is <code>public</code> and <strong>not <code>sealed</code></strong>, consumers can subclass it if they need more specific exception types.</li>
+          <li><strong>Where it&#39;s used</strong>: thrown inside aggregate factory methods or invariant-check helpers (group G02) where a broken invariant indicates corrupted persistent state rather than a recoverable user error.</li>
+          <li><strong>Caveats / not-in-source</strong>: earlier editions of this guide tagged the class <code>sealed</code> and its constructors <code>protected</code>; the current source (lines 9, 12-24) shows neither, the class is a non-sealed <code>public</code> type with three <code>public</code> constructors. Trust the source.</li>
+          </ul>
+          <h3 id="error">Error</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Abstractions</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Error.cs:15</code> · Level 1 · record</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the immutable error value carried by <a href="#result"><code>Result</code></a>. Every error has a machine-readable <code>Code</code>, a human-readable <code>Message</code>, an <a href="#errortype"><code>ErrorType</code></a> that maps to an HTTP status code, and optional <code>Source</code> / <code>Target</code> metadata.</li>
+          <li><strong>Depends on</strong>: <a href="#errortype"><code>ErrorType</code></a> (Level 0).</li>
+          <li><strong>Concept introduced, the Error carrier.</strong> <code>[Rubric §2, Design Patterns]</code> (assesses idiomatic patterns that solve real problems): an <code>Error</code> is a <strong>value</strong>, not an exception. It can be created, stored in a list, passed through a pipeline, and inspected without stack-unwinding cost. <code>[Rubric §9, API &amp; Contract Design]</code> (assesses consistent, standardized error responses): the combination of <code>Code</code> (machine-readable, for programmatic branching) + <code>Message</code> (human-readable, for clients) + <a href="#errortype"><code>ErrorType</code></a> (HTTP status selector) gives every API endpoint a uniform error shape without any controller having to decide how to format errors.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li>The type is a positional <code>record</code> (<code>Error.cs:15-20</code>): <code>Code</code>, <code>Message</code>, <code>Type</code>, <code>Source?</code>, <code>Target?</code>. Records give value equality, two <code>Error</code> instances with the same fields are equal.</li>
+          <li>Three <strong>pre-built <code>static readonly</code> singletons</strong> (<code>Error.cs:23-29</code>) for the most common cases: <code>Error.NotFound</code>, <code>Error.AlreadyDeleted</code>, <code>Error.InvalidEntityField</code>. These avoid repeated <code>new Error(...)</code> call sites for the ubiquitous cases.</li>
+          <li><strong>Eight factory methods</strong>, one per <a href="#errortype"><code>ErrorType</code></a> (<code>Error.cs:37-101</code>): <code>Validation</code>, <code>Invariant</code>, <code>NotFoundError</code>, <code>Conflict</code>, <code>Unauthorized</code>, <code>Forbidden</code>, <code>UnprocessableEntity</code>, <code>Failure</code>. Each constructs an <code>Error</code> with the correct <code>ErrorType</code> pre-set, callers can&#39;t accidentally mismatch the factory and the type. The naming convention is deliberate: <code>Validation(code, message)</code> reads naturally at the call site. (Note the one renamed factory: the <code>NotFound</code> <em>static field</em> and the <code>NotFoundError</code> <em>factory method</em> differ because C# forbids a method and field sharing a name.)</li>
+          <li>Two <strong><code>with</code>-expression helpers</strong> (<code>Error.cs:106-113</code>): <code>WithSource(string)</code> and <code>WithTarget(string)</code> return a new record copy with one field replaced, useful for enriching a library-level error with caller context without mutating it. Records make this a one-liner: <code>this with { Source = source }</code>.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: keeping <code>Error</code> as an immutable value (not an exception) aligns with the Result pattern&#39;s goal: represent <em>expected</em> failures as data, not as control flow. Pre-built singletons avoid allocations on hot paths. Factory methods enforce the <code>Code → ErrorType</code> pairing at the source so no mapping table is needed elsewhere.</li>
+          <li><strong>Where it&#39;s used</strong>: every command/query handler returns <a href="#result"><code>Result&lt;T&gt;</code></a> carrying zero or more <code>Error</code> values; <code>ApiControllerBase.HandleFailure</code> inspects the first error&#39;s <code>Type</code> to pick the HTTP status (the <code>ErrorType → status</code> mapping lives there, not here); <code>ValidationFailureExtensions</code> (group G06) converts FluentValidation failures to <code>Error.Validation(...)</code> instances. Also serialized on the wire by <a href="#resultjsonconverterfactory"><code>ResultJsonConverterFactory</code></a> as the <code>errors</code> array.</li>
+          </ul>
+          <h3 id="pagedcollectionresultt">PagedCollectionResult&lt;T&gt;</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Abstractions</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/PaginationMetadata.cs:91</code> · Level 1 · record (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a <a href="#collectionresultt"><code>CollectionResult&lt;T&gt;</code></a> augmented with a <a href="#paginationmetadata"><code>PaginationMetadata</code></a> property, the standard shape for paged API responses.</li>
+          <li><strong>Depends on</strong>: <a href="#collectionresultt"><code>CollectionResult&lt;T&gt;</code></a> (Level 0), <a href="#paginationmetadata"><code>PaginationMetadata</code></a> (Level 0).</li>
+          <li><strong>Concept</strong>: same envelope pattern as <a href="#collectionresultt"><code>CollectionResult&lt;T&gt;</code></a> but extended with pagination metadata in a single, orthogonal step. <code>[Rubric §12, Performance &amp; Scalability]</code> (paging large result sets) and <code>[Rubric §9, API &amp; Contract Design]</code> (stable, evolvable contract). The <code>sealed record</code> inherits <code>CollectionResult&lt;T&gt;</code> and adds one required <code>PaginationMetadata</code> property; the <code>[DataContract]</code> / <code>[DataMember(Order = 2)]</code> on it (lines 90, 110-111) ensures pagination state serializes <em>after</em> <code>Items</code> in a deterministic wire order.</li>
+          <li><strong>Walkthrough</strong>: two constructors mirroring the base: a parameterless one producing an empty result with default metadata (lines 95-96) and a data constructor (lines 102-107) that calls <code>base(items)</code> and null-checks <code>paginationMetadata</code> via <code>ArgumentNullException.ThrowIfNull</code>. Both are <code>[SetsRequiredMembers]</code> (lines 94, 101). The <code>required</code> modifier on <code>PaginationMetadata</code> (line 111) forces it to be set at construction so it&#39;s never null at runtime.</li>
+          <li><strong>Where it&#39;s used</strong>: returned by every paged query handler (e.g. <code>GetCategories</code>, <code>GetSessions</code> in ADC); the entity query service (group G03) always wraps its paged results in this type.</li>
+          </ul>
+          <h3 id="result">Result</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Abstractions</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/Result.cs:18</code> · Level 2 · class</p>
+          </blockquote>
+          <ul>
+          <li><p><strong>What it is</strong>: the non-generic <strong>railway-oriented result type</strong>: either a success (no errors) or a failure carrying one or more <a href="#error"><code>Error</code></a> instances. The non-generic form is used for void-equivalent operations (invariant checks, deletes, commands with no return value). The generic <code>Result&lt;T&gt;</code> (same file, line 119) carries a value on success.</p>
+          </li>
+          <li><p><strong>Depends on</strong>: <a href="#error"><code>Error</code></a> (Level 1); <a href="#resultjsonconverterfactory"><code>ResultJsonConverterFactory</code></a> (attached to both <code>Result</code> and <code>Result&lt;T&gt;</code> via <code>[JsonConverter]</code>, <code>Result.cs:17,118</code>); <code>System.Collections.Generic</code> (BCL).</p>
+          </li>
+          <li><p><strong>Concept introduced, railway-oriented programming and <code>Result</code> combinators.</strong> <code>[Rubric §2, Design Patterns]</code> (assesses idiomatic, problem-solving patterns; the Result pattern is the codebase&#39;s canonical error-flow mechanism, not an exception crutch). <code>[Rubric §9, API &amp; Contract Design]</code> (consistent, structured error shapes at every endpoint). <code>[Rubric §12, Performance &amp; Scalability]</code> shows up in the deliberate allocation-avoidance choices called out below.</p>
+          <p>The <strong>railway metaphor</strong>: picture two tracks, a success track and a failure track. Each operation takes the current result as input. If it is already a failure the operation is skipped; if it is a success the operation runs and may produce a new success <em>or</em> switch to the failure track. Control flows forward without <code>try/catch</code> nesting. <a href="#errortype"><code>ErrorType</code></a> (Level 0) classifies the failure; <a href="#error"><code>Error</code></a> (Level 1) carries the coded message; <code>Result</code> is the <em>outcome envelope</em>. Together they are the three-layer split introduced with <a href="#errortype"><code>ErrorType</code></a>.</p>
+          <p>The non-generic <code>Result</code>:</p>
+          <ul>
+          <li>A shared success instance <code>CachedSuccess</code> (line 20) and an empty <code>NoErrors</code> array (line 21) back the two cheapest paths. Errors live in a <strong>lazily-allocated</strong> <code>List&lt;Error&gt;? _errors</code> (line 25): as the field comment notes (lines 23-24), the success path (the overwhelming majority of results created per request) never pays for a list allocation.</li>
+          <li><code>Errors</code> exposes the list as <code>IReadOnlyList&lt;Error&gt;</code>, falling back to the shared <code>NoErrors</code> array when the field is null (line 28); <code>IsSuccess</code> is <code>_errors is null || _errors.Count == 0</code> (line 31) and <code>IsFailure</code> is its negation (line 34).</li>
+          <li><strong><code>Result.Success()</code></strong> (line 43) returns the shared <code>CachedSuccess</code> singleton (success results carry no per-instance state); <strong><code>Result.Success&lt;T&gt;(value)</code></strong> (line 49) wraps a value in a new <code>Result&lt;T&gt;</code>.</li>
+          <li><strong><code>Result.Failure(Error)</code></strong> (line 70) and <strong><code>Result.Failure(IEnumerable&lt;Error&gt;)</code></strong> (line 60), plus their <code>&lt;T&gt;</code> overloads (lines 55, 77), are the failure factories.</li>
+          <li><strong><code>Result.Combine(params ReadOnlySpan&lt;Result&gt; results)</code></strong> (line 87), the <strong>aggregate-all-failures</strong> combinator: runs every check, collects <em>all</em> errors into one failure, and returns success only when <em>all</em> inputs succeed. The <code>ReadOnlySpan&lt;Result&gt;</code> parameter avoids a heap allocation at the common call site, and the <code>allErrors</code> list is lazily allocated only when a failure is actually seen (line 100). The guard at lines 89-91 throws <code>ArgumentException</code> for an empty span (combining nothing is a logic bug). Called constantly in entity factory methods: <code>Result.Combine(CheckName(name), CheckDate(date), …)</code>.</li>
+          </ul>
+          <p>The generic <code>Result&lt;T&gt;</code> (line 119):</p>
+          <ul>
+          <li><code>sealed class</code> inheriting <code>Result</code>, adds <code>T? Value</code> (line 122), <code>null</code> when <code>IsFailure</code>.</li>
+          <li>Two <code>internal</code> constructors (lines 126, 130) so only the base-class factory methods can produce instances, consumers can never directly <code>new Result&lt;Order&gt;(…)</code>.</li>
+          <li><strong><code>Match&lt;TResult&gt;(onSuccess, onFailure)</code></strong> (line 141), exhaustive pattern match; exactly one branch runs (both delegates null-checked, lines 143-144). Avoids <code>if (result.IsFailure)</code> everywhere: <code>return result.Match(v =&gt; Ok(v), errs =&gt; Failure(errs))</code>.</li>
+          <li><strong><code>Map&lt;TOut&gt;(mapper)</code></strong> (line 157), transforms the success value, propagating errors unchanged. Allows pipelining: <code>result.Map(order =&gt; order.ToDto())</code> stays on the success track without an <code>if</code> check.</li>
+          <li><strong><code>BindAsync&lt;TOut&gt;(binder)</code></strong> (line 170), <strong>monadic bind</strong> for async continuations. If the current result is a failure it short-circuits and returns the original errors without calling <code>binder</code>; otherwise it awaits the next async operation (which itself returns <code>Result&lt;TOut&gt;</code>), with <code>ConfigureAwait(false)</code>. This is the core of async railway chains: <code>await result.BindAsync(order =&gt; PlaceOrderAsync(order))</code>.</li>
+          </ul>
+          </li>
+          <li><p><strong>Why it&#39;s built this way</strong>: see <a href="#errortype"><code>ErrorType</code></a> for the broader rationale. The three-method combinator set (<code>Match</code>/<code>Map</code>/<code>BindAsync</code>) was deliberately kept minimal: they cover the three real usage shapes (terminate, transform, chain). <code>Combine</code> solves the aggregate-validation problem cleanly without forcing callers to interleave checks. Keeping the value-bearing constructors <code>internal</code> channels every construction through the static factories, so the success/failure invariant (a <code>Result&lt;T&gt;</code> with a value is never also a failure) holds by construction. The shared <code>CachedSuccess</code>/<code>NoErrors</code> instances and the lazily-allocated error list keep the overwhelmingly-common success path allocation-free.</p>
+          </li>
+          <li><p><strong>Where it&#39;s used</strong>: pervasively: every entity factory method (group G02), every command/query handler (group G05), every controller action (group G12), and every UI service method in both apps returns <code>Result</code> or <code>Result&lt;T&gt;</code>. It is made round-trippable over the wire and through the distributed cache by <a href="#resultjsonconverterfactory"><code>ResultJsonConverterFactory</code></a>. Rubric categories <code>§2</code>, <code>§4</code>, <code>§9</code> all touch it across higher groups.</p>
+          </li>
+          </ul>
+          <h3 id="resultconverter">ResultConverter</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Serialization</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Serialization/ResultJsonConverterFactory.cs:35</code> · Level 2 · class (private sealed, nested)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the private nested <code>System.Text.Json</code> converter for the non-generic <a href="#result"><code>Result</code></a>. A structurally identical generic sibling, <code>ResultConverter&lt;T&gt;</code> (<code>ResultJsonConverterFactory.cs:60</code>), handles <a href="#result"><code>Result&lt;T&gt;</code></a> and additionally round-trips the success <code>Value</code>.</li>
+          <li><strong>Depends on</strong>: <a href="#result"><code>Result</code></a>, <a href="#error"><code>Error</code></a>, the outer <a href="#resultjsonconverterfactory"><code>ResultJsonConverterFactory</code></a> (which owns, creates, and supplies the shared helpers), <a href="#propertyreader"><code>PropertyReader</code></a>; BCL <code>System.Text.Json</code>.</li>
+          <li><strong>Concept introduced, custom JSON round-tripping of factory-constructed types.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code> (the distributed query cache serializes cached handler results to Redis, so <code>Result</code> must be reconstructable) and <code>[Rubric §9, API &amp; Contract Design]</code> (a stable, compact wire shape for results). Because <code>Result</code>/<code>Result&lt;T&gt;</code> keep <code>internal</code> constructors and get-only properties (see <a href="#result"><code>Result</code></a>), default reflection-based deserialization cannot rebuild them; this converter reads the compact <code>{&quot;value&quot;: ..., &quot;errors&quot;: [...]}</code> shape and reconstructs through the <strong>public factory methods</strong>, preserving the success/failure invariant that direct field-setting would bypass.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>Read</code> (line 37): declares <code>List&lt;Error&gt;? errors</code>, then calls the shared <code>ReadObject</code> with a <a href="#propertyreader"><code>PropertyReader</code></a> lambda that deserializes the <code>errors</code> array on a case-insensitive property match (line 43) and skips every other property (line 46). It returns <code>Result.Failure(errors)</code> when any errors were present, else <code>Result.Success()</code> (line 49).</li>
+          <li><code>Write</code> (line 52): opens a JSON object and delegates to the shared <code>WriteErrors</code> helper (line 55), which emits the <code>errors</code> array only for a failure (lines 123-129).</li>
+          <li>The generic <code>ResultConverter&lt;T&gt;</code> (line 60) mirrors this but also handles the <code>value</code> property: <code>Read</code> (line 62) captures <code>value</code> and reconstructs via <code>Result.Success(value!)</code> / <code>Result.Failure&lt;T&gt;(errors)</code> (line 77); <code>Write</code> (line 80) writes <code>value</code> only when the result <code>IsSuccess</code> (lines 84-88).</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: reconstructing through <code>Result.Failure</code>/<code>Result.Success</code> rather than setting fields keeps a deserialized result honest (a value only on success, errors only on failure). Writing <code>value</code> only on success and <code>errors</code> only on failure keeps the payload minimal. Nesting the converter privately inside the factory keeps it an implementation detail no consumer needs to reference.</li>
+          <li><strong>Where it&#39;s used</strong>: instantiated by <a href="#resultjsonconverterfactory"><code>ResultJsonConverterFactory.CreateConverter</code></a> (lines 28-32); never referenced directly by application code.</li>
+          </ul>
+          <h3 id="resultjsonconverterfactory">ResultJsonConverterFactory</h3>
+          <blockquote>
+          <p>MMCA.Common.Shared · <code>MMCA.Common.Shared.Serialization</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Serialization/ResultJsonConverterFactory.cs:15</code> · Level 2 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a <code>JsonConverterFactory</code> that produces the correct converter for <a href="#result"><code>Result</code></a> or any closed <a href="#result"><code>Result&lt;T&gt;</code></a>; it is wired onto both types by the <code>[JsonConverter(typeof(ResultJsonConverterFactory))]</code> attribute (<code>Result.cs:17,118</code>).</li>
+          <li><strong>Depends on</strong>: <a href="#result"><code>Result</code></a>, <a href="#resultconverter"><code>ResultConverter</code></a> (and its generic sibling), <a href="#propertyreader"><code>PropertyReader</code></a>; BCL <code>System.Text.Json</code> (<code>JsonConverterFactory</code>, <code>Utf8JsonReader</code>, <code>Activator</code>).</li>
+          <li><strong>Concept introduced, the STJ converter-factory for an open generic.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code> and <code>[Rubric §9, API &amp; Contract Design]</code>. The doc comment (<code>ResultJsonConverterFactory.cs:7-14</code>) states the rationale plainly: the Result types deliberately keep internal constructors and get-only properties, so a single factory keyed on the open generic makes every <code>Result&lt;AnyT&gt;</code> round-trippable (as required by the Redis-backed distributed query cache) without registering one converter per <code>T</code>.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li>Two private constants <code>ValuePropertyName = &quot;value&quot;</code> and <code>ErrorsPropertyName = &quot;errors&quot;</code> (lines 17-18) define the wire shape used by both converters.</li>
+          <li><code>CanConvert</code> (line 21): returns true for <code>typeof(Result)</code> or any generic type whose definition is <code>Result&lt;&gt;</code>.</li>
+          <li><code>CreateConverter</code> (line 26): returns a <a href="#resultconverter"><code>ResultConverter</code></a> for the non-generic case (line 29); otherwise it reflects the value type and constructs <code>ResultConverter&lt;T&gt;</code> via <code>Activator.CreateInstance(typeof(ResultConverter&lt;&gt;).MakeGenericType(valueType))</code> (lines 31-32).</li>
+          <li><code>ReadObject</code> (line 98): the shared object-walker that drives a <a href="#propertyreader"><code>PropertyReader</code></a>. It requires a <code>StartObject</code> token (lines 102-103), returns on <code>EndObject</code> (lines 107-108), positions the reader on each property value, and throws <code>JsonException</code> on a malformed or truncated payload (lines 110-120).</li>
+          <li><code>WriteErrors</code> (line 123): the shared writer that emits the <code>errors</code> array only when the result is a failure.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: one factory keyed on the open generic covers <code>Result&lt;AnyT&gt;</code> with no per-<code>T</code> registration; centralizing the token bookkeeping in <code>ReadObject</code>/<code>WriteErrors</code> and the callback shape in <a href="#propertyreader"><code>PropertyReader</code></a> keeps the two concrete converters tiny and identical in structure.</li>
+          <li><strong>Where it&#39;s used</strong>: attached to <a href="#result"><code>Result</code></a> and <a href="#result"><code>Result&lt;T&gt;</code></a> via the type-level <code>[JsonConverter]</code> attribute; <code>System.Text.Json</code> invokes it automatically wherever a <code>Result</code> is (de)serialized, most notably on the distributed-cache serialization path.</li>
+          </ul>
+          <hr>
+          <p><a href="index.html">⬅ Index</a>  •  <a href="index.html">Index</a>  •  <a href="group-02-domain-building-blocks.html">Domain Building Blocks (Entities, Value Objects, Aggregates) ➡</a></p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

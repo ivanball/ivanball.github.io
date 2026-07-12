@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Primer, the concepts, stack, and conventions you need first · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="This chapter teaches the cross-cutting things once, so the per-type chapters can stay focused. Read it before the group chapters (start with group-01).…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/00-primer.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Primer, the concepts, stack, and conventions you need first">
+  <meta property="og:description" content="This chapter teaches the cross-cutting things once, so the per-type chapters can stay focused. Read it before the group chapters (start with group-01).…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/00-primer.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/onboarding/index.html">Onboarding Guide</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">Primer, the concepts, stack, and conventions you need first</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>Guide contents</summary>
+        <nav class="doc-nav" aria-label="Onboarding Guide">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="00-dependency-manifest.html">Phase 1: Dependency Manifest &amp; Leveling</a></li>
+        <li><a href="00-group-taxonomy.html">Phase 1b - Functional Group Taxonomy</a></li>
+        <li><a href="00-inventory.html">Phase 0: Type Inventory</a></li>
+        <li><a href="00-primer.html" aria-current="page">Primer, the concepts, stack, and conventions you need first</a></li>
+        <li><a href="group-01-result-error-handling.html">1. Result &amp; Error Handling</a></li>
+        <li><a href="group-02-domain-building-blocks.html">2. Domain Building Blocks (Entities, Value Objects, Aggregates)</a></li>
+        <li><a href="group-03-querying-specifications.html">3. Querying: Specifications, Filtering &amp; the Entity Query Service</a></li>
+        <li><a href="group-04-events-outbox.html">4. Domain &amp; Integration Events + Outbox Dual-Dispatch</a></li>
+        <li><a href="group-05-cqrs-pipeline.html">5. CQRS: Commands, Queries &amp; the Decorator Pipeline</a></li>
+        <li><a href="group-06-validation.html">6. Validation</a></li>
+        <li><a href="group-07-persistence-ef-core.html">7. Persistence &amp; EF Core</a></li>
+        <li><a href="group-08-auth.html">8. Authentication &amp; Authorization</a></li>
+        <li><a href="group-09-caching.html">9. Caching</a></li>
+        <li><a href="group-10-notifications.html">10. Notifications (Push + In-App Inbox + Email)</a></li>
+        <li><a href="group-11-navigation-populators.html">11. Navigation Metadata &amp; Populators (EF-decoupled eager loading)</a></li>
+        <li><a href="group-12-api-hosting-mapping.html">12. API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</a></li>
+        <li><a href="group-13-grpc-contracts.html">13. gRPC &amp; Inter-Service Contracts</a></li>
+        <li><a href="group-14-module-system-composition.html">14. Module System, Composition &amp; Configuration</a></li>
+        <li><a href="group-15-common-ui-framework.html">15. Common UI Framework (MudBlazor components, theme, base pages)</a></li>
+        <li><a href="group-16-aspire-orchestration.html">16. Aspire Orchestration &amp; Service Defaults</a></li>
+        <li><a href="group-17-conference-domain.html">17. ADC Conference - Domain Model &amp; Module Contracts</a></li>
+        <li><a href="group-18-conference-application.html">18. ADC Conference - Application &amp; Use Cases</a></li>
+        <li><a href="group-19-conference-infrastructure.html">19. ADC Conference - Infrastructure &amp; Persistence</a></li>
+        <li><a href="group-20-conference-api-grpc.html">20. ADC Conference - API, gRPC Contracts &amp; Service Host</a></li>
+        <li><a href="group-21-conference-ui.html">21. ADC Conference - UI</a></li>
+        <li><a href="group-22-engagement-module.html">22. ADC Engagement Module (Session Bookmarks)</a></li>
+        <li><a href="group-23-engagement-live-layer.html">23. ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></li>
+        <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
+        <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
+        <li><a href="group-26-testing-infrastructure.html">26. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
+        <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
+        <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
+        <li><a href="devops-runbooks.html">Operational Scripts &amp; Runbooks</a></li>
+        <li><a href="devops-testing.html">Testing Architecture &amp; Solution Composition</a></li>
+        <li><a href="99-coverage-audit.html">Phase 4, Coverage Audit</a></li>
+        <li><a href="CONCEPT-MAPS.html">MMCA Concept &amp; Pattern Maps</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Onboarding guide</p>
+          <h1 id="primer-the-concepts-stack-and-conventions-you-need-first">Primer, the concepts, stack, and conventions you need first</h1>
+          <p>This chapter teaches the cross-cutting things <strong>once</strong>, so the per-type chapters can stay focused.
+          Read it before the group chapters (start with <a href="group-01-result-error-handling.html"><code>group-01</code></a>).
+          Everything here is either an architectural style the codebase commits to,
+          an external dependency (BCL/NuGet, &quot;external Level 0&quot;), a build/language convention, or the
+          architecture-evaluation lens the guide tags against. Later sections cross-reference back here.</p>
+          <hr>
+          <h2 id="1-the-big-picture">1. The big picture</h2>
+          <p>Two codebases are in scope:</p>
+          <ul>
+          <li><strong><code>MMCA.Common</code></strong>: a <strong>framework</strong>, published as <strong>fourteen NuGet packages</strong> to GitHub Packages
+          (four core: <code>.Shared</code>, <code>.Domain</code>, <code>.Application</code>, <code>.Infrastructure</code>; four presentation: <code>.API</code>,
+          <code>.Grpc</code>, <code>.UI</code>, <code>.UI.Web</code>; two Aspire: <code>.Aspire</code>, <code>.Aspire.Hosting</code>; four testing: <code>.Testing</code>, <code>.Testing.E2E</code>,
+          <code>.Testing.UI</code>, <code>.Testing.Architecture</code>). It is <em>not</em> a runnable app; it ships the base classes and
+          infrastructure for building modular monoliths with DDD + Clean Architecture + CQRS, plus the seams
+          to extract a module into its own microservice later. The fourteen packages release <strong>in lockstep</strong>
+          (one version tags all fourteen).</li>
+          <li><strong><code>MMCA.ADC</code></strong>: the <strong>Atlanta Developers Conference</strong> application, a consumer of those packages.
+          It has modules (Conference, Engagement, Identity, Notification), a Blazor UI, a YARP gateway, and
+          Azure infrastructure.</li>
+          </ul>
+          <p><code>MMCA.ADC</code> depends on <code>MMCA.Common</code>; <code>MMCA.Common</code> depends on neither. That is why the Common
+          framework groups come first in this guide and the ADC business-module groups build on them, and
+          within every group, the per-type sections run in ascending dependency <strong>Level</strong>.</p>
+          <h3 id="the-layered-dependency-flow-clean-architecture">The layered dependency flow (Clean Architecture)</h3>
+          <p><code>MMCA.Common</code>&#39;s own layering, enforced top-to-bottom (<code>MMCA.Common/CLAUDE.md</code>, &quot;Architecture&quot;):</p>
+          <pre class="doc-pre"><code>API / Grpc        (presentation / transport)
+               ↓
+          Infrastructure    (EF Core, caching, JWT, JWKS, outbox, message bus, SignalR)
+               ↓
+          Application       (CQRS handlers, decorators, module system, IMessageBus)
+               ↓
+          Domain            (entities, aggregates, domain events, specifications)
+               ↓
+          Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
+          <p>Each layer references only layers <strong>below</strong> it, the <strong>dependency rule</strong> of Clean Architecture: source
+          dependencies point inward, toward the domain, and the domain depends on nothing framework-specific.
+          Two deliberate exceptions: <strong><code>UI</code></strong> and <strong><code>Grpc</code></strong> depend on <strong><code>Shared</code> only</strong>, <code>UI</code> for Blazor
+          WebAssembly compatibility, <code>Grpc</code> because it is pure transport that must not couple to business
+          layers.</p>
+          <p><code>MMCA.ADC</code> repeats the same layering <em>per module</em>: each of Conference/Engagement/Identity has
+          <code>.Shared</code>, <code>.Domain</code>, <code>.Application</code>, <code>.Infrastructure</code>, <code>.API</code>, and <code>.UI</code> projects following the
+          same inward rule.</p>
+          <hr>
+          <h2 id="2-architectural-styles-this-codebase-commits-to">2. Architectural styles this codebase commits to</h2>
+          <p>These are the recurring ideas. Each is taught fully at its first concrete appearance in a group
+          chapter; here is the orientation so the vocabulary is familiar.</p>
+          <ul>
+          <li><p><strong>Domain-Driven Design (DDD).</strong> The model mirrors the business. <strong>Aggregates</strong> (a root entity plus
+          the children it owns) enforce invariants inside their boundary; references <em>between</em> aggregates are
+          by ID, not object graph. <strong>Value objects</strong> (Money, Address, Email) model concepts with no identity
+          and are immutable. <strong>Domain events</strong> announce meaningful state changes. <strong>Factory methods return
+          <code>Result&lt;T&gt;</code></strong> so an invalid entity cannot be constructed. First concrete code:
+          <a href="group-02-domain-building-blocks.html"><code>group-02</code></a> (<code>ValueObject</code>, <code>IBaseEntity&lt;T&gt;</code>) and
+          <a href="group-04-events-outbox.html"><code>group-04</code></a> (<code>IDomainEvent</code>).</p>
+          </li>
+          <li><p><strong>Clean Architecture.</strong> See §1. The domain layer is free of EF/ASP.NET/serialization attributes;
+          the application layer defines <strong>ports</strong> (interfaces) that infrastructure implements as <strong>adapters</strong>.</p>
+          </li>
+          <li><p><strong>CQRS (Command/Query Responsibility Segregation).</strong> Writes (<strong>commands</strong>, which mutate and return
+          a <code>Result</code>) are separated from reads (<strong>queries</strong>, side-effect-free). Both flow through a
+          <strong>dispatcher</strong> with a <strong>decorator pipeline</strong>: <code>Logging → Caching → Transactional → handler</code>.
+          Cross-cutting concerns live in the pipeline, not in each handler. First concrete code: the
+          <code>ICommandHandler</code>/<code>IQueryHandler</code> contracts and their decorators in
+          <a href="group-05-cqrs-pipeline.html"><code>group-05</code></a>.</p>
+          </li>
+          <li><p><strong>Vertical Slice Architecture.</strong> Within a module, a feature is a cohesive slice (command/query +
+          handler + validator + DTO + mapper together), not scattered across horizontal <code>Services/</code>,
+          <code>Repositories/</code>, <code>Validators/</code> folders. Adding a feature means adding a slice.</p>
+          </li>
+          <li><p><strong>Modular Monolith → extractable services.</strong> Modules implement a common <code>IModule</code> contract and are
+          discovered and registered in <strong>dependency (topological) order</strong> by a module loader. Each module can
+          later run as its own service host behind a <strong>YARP gateway</strong> without a rewrite, because application
+          code talks to abstractions (<code>IMessageBus</code>, typed gRPC clients) and the transport choice lives at the
+          edges. (ADRs 007 &quot;gRPC extraction&quot;, 008 &quot;service-extraction topology&quot;.)</p>
+          </li>
+          <li><p><strong>Write-once UI, render everywhere (Blazor + .NET MAUI Hybrid).</strong> A UI page is authored <strong>once</strong> as
+          a Razor component in a per-module <strong>Razor Class Library</strong> (<code>MMCA.ADC.{Module}.UI</code>, e.g.
+          <code>Conference.UI</code>&#39;s <code>EventList.razor</code>/<code>EventDetail.razor</code>). Both the <strong>web</strong> host
+          (<code>MMCA.ADC.UI.Web</code> / <code>.Web.Client</code>, Blazor Server + WebAssembly) and the <strong>.NET MAUI</strong> host
+          (<code>MMCA.ADC.UI</code>) <code>ProjectReference</code> the <em>same</em> UI libraries, so one page renders across <strong>Web,
+          Android, iOS, macOS, and Windows</strong> with no per-platform reimplementation, MAUI hosts the shared
+          components in a <code>BlazorWebView</code> (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MainPage.xaml:9</code>, wired by
+          <code>AddMauiBlazorWebView()</code> in <code>MauiProgram.cs:51</code>). The only platform-specific code is tiny entry
+          points (<code>App</code>/<code>AppDelegate</code>/<code>MainApplication</code>, <code>MauiProgram</code>). First concrete code: the MAUI
+          bootstraps and host shells in <a href="group-25-adc-host-composition.html"><code>group-25</code></a>; the supported
+          device/browser matrix is in <code>MMCA.ADC/CLAUDE.md</code>.</p>
+          </li>
+          <li><p><strong>Event-driven integration + the Outbox pattern.</strong> When an aggregate changes, its domain events are
+          serialized into an <code>OutboxMessage</code> row <strong>in the same transaction</strong> as the data, then a background
+          processor delivers them at-least-once. This avoids the &quot;save then publish and hope&quot; dual-write bug.
+          (ADR-003 &quot;outbox dual-dispatch&quot;.)</p>
+          </li>
+          <li><p><strong>Database-per-service.</strong> Each module/service owns its own SQL database and its own outbox table;
+          there is one concrete <code>SQLServerDbContext</code> class but <strong>one instance per database</strong>. Cross-source
+          relationships auto-degrade (the FK is dropped, navigation flows through batch loaders), and the
+          outbox is the cross-source consistency mechanism. (ADR-006.)</p>
+          </li>
+          <li><p><strong>Engine-agnostic entities, the storage provider is a one-token choice (ADR-018).</strong> A
+          domain entity carries <em>no</em> persistence-engine choice; it is a plain class. What decides whether it
+          is stored in <strong>SQL Server, Cosmos DB, or SQLite</strong> is a single <code>[UseDataSource(&lt;engine&gt;)]</code> attribute on
+          its <code>Infrastructure/Persistence/EntityConfiguration/{Entity}Configuration</code> class, carried for you by
+          one of three thin <strong>engine shim</strong> base classes (<code>EntityTypeConfigurationSQLServer&lt;TEntity, TId&gt;</code>,
+          <code>…Cosmos&lt;…&gt;</code>, <code>…Sqlite&lt;…&gt;</code>). All three derive from a single engine-aware
+          <code>EntityTypeConfiguration&lt;TEntity, TId&gt;</code> base (which reads the attribute and applies the matching
+          table/container/schema/key conventions) over <code>EntityTypeConfigurationBase&lt;TEntity, TId&gt;</code>,
+          <a href="group-07-persistence-ef-core.html"><code>group-07</code></a>. So <strong>swapping just that base (or attribute) re-points the
+          same entity to a different engine</strong> with no configuration-body edits and zero change to the domain,
+          application layer, or entity, the engine is resolved up front by the <code>EntityDataSourceRegistry</code>, the
+          right <code>DbContext</code> is built per data source, cross-source relationships auto-degrade, and a cross-source
+          filter goes through <code>CrossSourceSpecification</code> (so even a &quot;published-event&quot; predicate stays
+          translatable). First concrete code: the configuration hierarchy in
+          <a href="group-07-persistence-ef-core.html"><code>group-07</code></a>; this is the per-entity half of database-per-service
+          (ADR-006) plus the polyglot story (ADR-018).
+          <em>Adoption note (verified by source):</em> this is a real, <strong>tested</strong> capability with a <strong>staged first
+          adoption</strong>. Today <strong>all current production entity configs use the <code>…SQLServer</code> base</strong> (ADC runs SQL
+          Server only, 4 SQL databases), but the ADR-018 work shipped the full polyglot machinery (unified base,
+          cross-source spec + fitness rule, Cosmos-index skip, SQLite <code>EnsureCreated</code>, Cosmos/SQLite Aspire
+          helpers, portability tests) and ADC Conference&#39;s <code>Session</code>→Cosmos / <code>Room</code>→SQLite move is the
+          staged-but-not-yet-deployed first use. Treat Cosmos/SQLite as supported, exercised seams, see the
+          coverage audit&#39;s seam inventory.</p>
+          </li>
+          <li><p><strong>The Result pattern.</strong> Expected error paths use a <code>Result</code>/<code>Result&lt;T&gt;</code> return value carrying
+          <code>Error</code>s, <strong>not</strong> exceptions. This is the single most pervasive idiom in the codebase, taught in
+          full in <a href="group-01-result-error-handling.html"><code>group-01</code></a> (<code>ErrorType</code>, <code>Error</code>, <code>Result</code>).</p>
+          </li>
+          <li><p><strong>Soft-delete + audit fields.</strong> Entities are never hard-deleted; an <code>IsDeleted</code> flag plus EF global
+          query filters exclude them. <code>CreatedOn/By</code> and <code>LastModifiedOn/By</code> are stamped centrally in
+          <code>SaveChangesAsync</code>. For genuine erasure (GDPR/CCPA) there is a separate anonymize path. (ADR-005.)</p>
+          </li>
+          <li><p><strong>Strongly-typed identifier aliases.</strong> Each entity&#39;s ID type is a solution-wide
+          <code>global using XIdentifierType = int;</code> (or <code>= System.Guid;</code>) alias, linked into every project via
+          <code>Directory.Build.props</code>. Code says <code>EventIdentifierType</code>, not bare <code>int</code>, so the ID type can change
+          in one place. (The identifier-alias mechanism is covered with the entity contracts in
+          <a href="group-02-domain-building-blocks.html"><code>group-02</code></a>.)</p>
+          </li>
+          </ul>
+          <h3 id="the-decision-records-adrs-this-guide-tags">The decision records (ADRs) this guide tags</h3>
+          <p>The <em>why</em> behind these patterns lives in <strong>thirty-four accepted ADRs</strong>, version-controlled in
+          <code>MMCA.Common/ADRs/</code> (<code>ADRs/README.md</code> is the canonical index with one-line summaries). Group chapters
+          tag the relevant one inline (e.g. &quot;ADR-003&quot;); the full set, for orientation:</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>ADR</th>
+          <th>Decision (one line)</th>
+          <th>First/most relevant chapter</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>001</td>
+          <td>Manual DTO mapping (Mapperly), not reflection-based AutoMapper</td>
+          <td><a href="group-12-api-hosting-mapping.html">g12</a></td>
+          </tr>
+          <tr>
+          <td>002</td>
+          <td><code>INavigationPopulator&lt;T&gt;</code> for cross-container/cross-source eager loading</td>
+          <td><a href="group-11-navigation-populators.html">g11</a></td>
+          </tr>
+          <tr>
+          <td>003</td>
+          <td>Outbox + in-process dispatch + background processor (at-least-once)</td>
+          <td><a href="group-04-events-outbox.html">g04</a></td>
+          </tr>
+          <tr>
+          <td>004</td>
+          <td>JWKS discovery + fallback for cross-service token validation</td>
+          <td><a href="group-08-auth.html">g08</a></td>
+          </tr>
+          <tr>
+          <td>005</td>
+          <td>Soft-delete for lifecycle; <code>IAnonymizable</code> + outbox purge for GDPR/CCPA erasure</td>
+          <td><a href="group-02-domain-building-blocks.html">g02</a>/<a href="group-24-identity-module.html">g24</a></td>
+          </tr>
+          <tr>
+          <td>006</td>
+          <td>Database-per-service: each owns its DB + outbox; one <code>SQLServerDbContext</code> class, one instance per DB</td>
+          <td><a href="group-07-persistence-ef-core.html">g07</a></td>
+          </tr>
+          <tr>
+          <td>007</td>
+          <td><code>*.Contracts</code> + typed gRPC clients + <code>Result</code>-over-the-wire for synchronous inter-service calls</td>
+          <td><a href="group-13-grpc-contracts.html">g13</a></td>
+          </tr>
+          <tr>
+          <td>008</td>
+          <td>One service host per module behind a YARP gateway; transport at the edge keeps extraction reversible</td>
+          <td><a href="group-16-aspire-orchestration.html">g16</a>/<a href="group-25-adc-host-composition.html">g25</a></td>
+          </tr>
+          <tr>
+          <td>009</td>
+          <td>Standard resilience handler on every outbound client; declared RTO/RPO + drilled restore</td>
+          <td><a href="group-13-grpc-contracts.html">g13</a>/<a href="devops-runbooks.html">devops-runbooks</a></td>
+          </tr>
+          <tr>
+          <td>010</td>
+          <td>Every integration event carries a <code>SchemaVersion</code>; breaking changes use a new type + upcaster</td>
+          <td><a href="group-04-events-outbox.html">g04</a></td>
+          </tr>
+          <tr>
+          <td>011</td>
+          <td><del>en-US-only i18n is a deliberate non-goal</del> <strong>superseded by ADR-027</strong> (multi-locale en-US + es)</td>
+          <td><a href="group-15-common-ui-framework.html">g15</a></td>
+          </tr>
+          <tr>
+          <td>012</td>
+          <td>gRPC host transport: <code>Http2</code>-only h2c + gateway-routed JWKS (ADC) vs <code>Http1AndHttp2</code> + ALPN (Store)</td>
+          <td><a href="group-16-aspire-orchestration.html">g16</a>/<a href="group-20-conference-api-grpc.html">g20</a></td>
+          </tr>
+          <tr>
+          <td>013</td>
+          <td>Expected failures are <code>Result</code>/<code>ErrorType</code> values; only the edge maps to HTTP/gRPC</td>
+          <td><a href="group-01-result-error-handling.html">g01</a></td>
+          </tr>
+          <tr>
+          <td>014</td>
+          <td>CQRS decorator chain: FeatureGate → Logging → Caching → Validating → Transactional → Handler</td>
+          <td><a href="group-05-cqrs-pipeline.html">g05</a></td>
+          </tr>
+          <tr>
+          <td>015</td>
+          <td>Architecture fitness functions: compile-time layer guard + shared NetArchTest rule library</td>
+          <td><a href="group-26-testing-infrastructure.html">g26</a></td>
+          </tr>
+          <tr>
+          <td>016</td>
+          <td>Lockstep versioning of all fourteen packages; MassTransit pinned to v8 (build-gated)</td>
+          <td><a href="devops-cicd.html">devops-cicd</a></td>
+          </tr>
+          <tr>
+          <td>017</td>
+          <td><code>[Idempotent]</code> action filter dedups client retries via an <code>Idempotency-Key</code> header (24h replay)</td>
+          <td><a href="group-12-api-hosting-mapping.html">g12</a></td>
+          </tr>
+          <tr>
+          <td>018</td>
+          <td>Polyglot persistence: three engines (SQL Server / Cosmos / SQLite) behind one entity model, engine via <code>[UseDataSource]</code></td>
+          <td><a href="group-07-persistence-ef-core.html">g07</a>/<a href="group-03-querying-specifications.html">g03</a></td>
+          </tr>
+          <tr>
+          <td>019</td>
+          <td>Layered rate limiting: an always-on global limiter caps only authenticated callers; anonymous/infra traffic is exempted, with output cache + login-protection for the other layers</td>
+          <td><a href="group-08-auth.html">g08</a>/<a href="group-12-api-hosting-mapping.html">g12</a></td>
+          </tr>
+          <tr>
+          <td>020</td>
+          <td>Permission-based authorization: <code>[HasPermission(...)]</code> over an <code>IPermissionRegistry</code>, opt-in atop RBAC</td>
+          <td><a href="group-08-auth.html">g08</a></td>
+          </tr>
+          <tr>
+          <td>021</td>
+          <td>Consumer-side inbox idempotency: <code>EfInboxStore</code> dedups broker redeliveries by <code>MessageId</code></td>
+          <td><a href="group-04-events-outbox.html">g04</a></td>
+          </tr>
+          <tr>
+          <td>022</td>
+          <td>Browser session-cookie auth: HttpOnly cookies + a non-validating SSR scheme so <code>[Authorize]</code> passes on prerender</td>
+          <td><a href="group-08-auth.html">g08</a></td>
+          </tr>
+          <tr>
+          <td>023</td>
+          <td>Security-response headers + pluggable CSP (<code>ICspPolicyProvider</code>); the baseline CSP omits <code>script-src</code>/<code>style-src</code> so it cannot break Blazor</td>
+          <td><a href="group-16-aspire-orchestration.html">g16</a>/<a href="group-25-adc-host-composition.html">g25</a></td>
+          </tr>
+          <tr>
+          <td>024</td>
+          <td>Two-channel notifications: a durable <code>UserNotification</code> inbox <strong>and</strong> a transient SignalR push, behind <code>IPushNotificationSender</code></td>
+          <td><a href="group-10-notifications.html">g10</a></td>
+          </tr>
+          <tr>
+          <td>025</td>
+          <td>Startup warm-up + readiness gating: <code>WarmupHostedService</code> + a <code>ready</code>-tagged <code>WarmupReadinessGate</code> hold <code>/health/ready</code> until warm</td>
+          <td><a href="group-16-aspire-orchestration.html">g16</a></td>
+          </tr>
+          <tr>
+          <td>026</td>
+          <td>Two-tier caching: a swappable <code>ICacheService</code> substrate (Memory/Redis) + an HTTP output-cache edge tier</td>
+          <td><a href="group-09-caching.html">g09</a></td>
+          </tr>
+          <tr>
+          <td>027</td>
+          <td>Multi-locale i18n (supersedes 011): en-US + es via <code>.resx</code>/<code>IStringLocalizer</code>; backend errors localized at the edge by <code>Error.Code</code></td>
+          <td><a href="group-12-api-hosting-mapping.html">g12</a>/<a href="group-15-common-ui-framework.html">g15</a></td>
+          </tr>
+          <tr>
+          <td>028</td>
+          <td>Day/Dark theme: <code>ThemeService</code> binds <code>MudThemeProvider</code>&#39;s <code>IsDarkMode</code>, persisting cookie/localStorage/<code>PreferredTheme</code></td>
+          <td><a href="group-15-common-ui-framework.html">g15</a></td>
+          </tr>
+          <tr>
+          <td>029</td>
+          <td>Auth brute-force protection: <code>ILoginProtectionService</code> throttles the anonymous surface (email-keyed lockout + per-IP registration cap)</td>
+          <td><a href="group-08-auth.html">g08</a></td>
+          </tr>
+          <tr>
+          <td>030</td>
+          <td>Startup sole-migrator: each service self-applies its EF migrations at boot (<code>DatabaseInitStrategy=Migrate</code>), no <code>sqlcmd</code> backstop</td>
+          <td><a href="group-07-persistence-ef-core.html">g07</a>/<a href="group-12-api-hosting-mapping.html">g12</a></td>
+          </tr>
+          <tr>
+          <td>031</td>
+          <td>Feature-flag management: <code>[FeatureGate]</code> (404) + the <code>IFeatureGated</code> decorator for one config-driven flag name</td>
+          <td><a href="group-12-api-hosting-mapping.html">g12</a>/<a href="group-05-cqrs-pipeline.html">g05</a></td>
+          </tr>
+          <tr>
+          <td>032</td>
+          <td>Password hashing: PBKDF2-HMAC-SHA512 (600k iters) with by-salt-length migration of legacy records</td>
+          <td><a href="group-08-auth.html">g08</a></td>
+          </tr>
+          <tr>
+          <td>033</td>
+          <td>Resource-ownership authorization: <code>OwnerOrAdminFilter</code>/<code>OwnershipHelper</code> row-scope a single resource beside RBAC</td>
+          <td><a href="group-08-auth.html">g08</a></td>
+          </tr>
+          <tr>
+          <td>034</td>
+          <td>Generic entity controllers + dynamic query contract (<code>EntityControllerBase</code>; <code>fields</code>/filter/sort/paging)</td>
+          <td><a href="group-12-api-hosting-mapping.html">g12</a>/<a href="group-03-querying-specifications.html">g03</a></td>
+          </tr>
+          <tr>
+          <td>035</td>
+          <td>Optimistic concurrency: a <code>RowVersion</code> token round-trips through <code>IConcurrencyAware</code> DTOs; a stale write maps to HTTP 409</td>
+          <td><a href="group-07-persistence-ef-core.html">g07</a>/<a href="group-12-api-hosting-mapping.html">g12</a></td>
+          </tr>
+          <tr>
+          <td>036</td>
+          <td>External OAuth login (Google/GitHub): <code>OAuthControllerBase</code> swaps a single-use 2-minute code for the local JWT pair (tokens never ride the redirect URL)</td>
+          <td><a href="group-08-auth.html">g08</a>/<a href="group-12-api-hosting-mapping.html">g12</a></td>
+          </tr>
+          <tr>
+          <td>037</td>
+          <td>Field-level encryption at rest: <code>EncryptedStringConverter</code> (AES-256-GCM), shipped + tested but <strong>unadopted</strong> (no entity config wires it yet)</td>
+          <td><a href="group-07-persistence-ef-core.html">g07</a></td>
+          </tr>
+          <tr>
+          <td>038</td>
+          <td>Supply-chain provenance: SBOM release gate + committed lock files + transitive vuln audit + <code>packageSourceMapping</code></td>
+          <td><a href="devops-cicd.html">devops-cicd</a></td>
+          </tr>
+          <tr>
+          <td>039</td>
+          <td>Live channel push: hub <code>JoinChannel</code>/<code>LeaveChannel</code> groups + <code>ILiveChannelPublisher</code> publish ephemeral events over the one notification WebSocket</td>
+          <td><a href="group-10-notifications.html">g10</a>/<a href="group-15-common-ui-framework.html">g15</a>/<a href="group-23-engagement-live-layer.html">g23</a></td>
+          </tr>
+          <tr>
+          <td>040</td>
+          <td>Authenticated output caching for public reads: <code>PublicEndpointOutputCachePolicy</code> stops a Bearer header from bypassing the output cache on <code>[AllowAnonymous]</code>, user-independent GETs</td>
+          <td><a href="group-12-api-hosting-mapping.html">g12</a></td>
+          </tr>
+          <tr>
+          <td>041</td>
+          <td>Observability strategy: shared OTel baseline + CQRS RED histograms + outbox dead-letter counter + correlation middleware, with head-sampling and poll-span-filter cost knobs</td>
+          <td><a href="group-16-aspire-orchestration.html">g16</a>/<a href="devops-aspire.html">devops-aspire</a></td>
+          </tr>
+          </tbody></table></div>
+          <p>ADRs 011–041 were authored after this guide&#39;s first build; their patterns were already documented here,
+          and the chapters now cross-reference the ADR numbers. The most recent framework additions are the
+          <strong>hub-channel live push</strong> (ADR-039, the transport under the ADC Engagement live layer taught in
+          <a href="group-23-engagement-live-layer.html">g23</a>) and <strong>authenticated output caching</strong> (ADR-040), both released in
+          the v1.108.0-v1.110.0 train; the canonical index for the full set is <code>MMCA.Common/ADRs/README.md</code>.</p>
+          <hr>
+          <h2 id="3-the-external-stack-bcl--nuget-external-level-0">3. The external stack (BCL / NuGet, &quot;external Level 0&quot;)</h2>
+          <p><a id="3-the-external-stack-bcl--nuget--external-level-0"></a></p>
+          <p>These are <em>not</em> first-party and get no per-type sections. Versions are from
+          <code>MMCA.Common/Directory.Packages.props</code> and <code>MMCA.ADC/Directory.Packages.props</code> (Central Package
+          Management, see §4). What each is and why it&#39;s here:</p>
+          <p><strong>Web / API</strong></p>
+          <ul>
+          <li><strong>ASP.NET Core 10</strong> (minimal hosting, MVC controllers), the API surface.</li>
+          <li><strong>Asp.Versioning.Mvc 10</strong>: API versioning for controllers.</li>
+          <li><strong>Microsoft.AspNetCore.Authentication.JwtBearer 10</strong>: validates JWT bearer tokens.</li>
+          <li><strong>Yarp.ReverseProxy 2.3.0</strong> (ADC), the <strong>gateway</strong> that fronts the extracted module services; with
+          <code>Microsoft.Extensions.ServiceDiscovery.Yarp</code> it routes to services by name.</li>
+          </ul>
+          <p><strong>Application / mapping / validation</strong></p>
+          <ul>
+          <li><strong>FluentValidation 12</strong>: request/command validators, run by a pipeline decorator.</li>
+          <li><strong>Riok.Mapperly 4.3.1</strong>: a <em>source-generated</em>, compile-time object mapper (no runtime reflection).
+          Note ADR-001 chose manual DTO mapping over reflection-based AutoMapper; Mapperly is the
+          compile-time, allocation-free way to keep mapping explicit and fast.</li>
+          <li><strong>Scrutor 7</strong>: assembly scanning and <strong>decorator registration</strong> (<code>TryDecorate</code>) for DI; this is how
+          the CQRS decorator pipeline is wired.</li>
+          <li><strong>Microsoft.FeatureManagement 4.5</strong>: feature flags (e.g. <code>Notification.PushNotifications</code>).</li>
+          <li><strong>System.Linq.Dynamic.Core</strong>: dynamic <code>OrderBy</code>/filtering for query endpoints.</li>
+          </ul>
+          <p><strong>Persistence</strong></p>
+          <ul>
+          <li><strong>EF Core 10</strong> with providers <strong>SqlServer</strong>, <strong>Cosmos</strong>, and <strong>Sqlite</strong>: the ORM. Sqlite is used
+          for fast integration tests; Cosmos is a supported document source. EF concepts you must know:
+          <code>DbContext</code> (unit of work + change tracker), entity configurations (<code>IEntityTypeConfiguration&lt;T&gt;</code>),
+          migrations (versioned schema deltas), global query filters (the soft-delete mechanism), and
+          interceptors (<code>SaveChanges</code> hooks for audit + domain-event capture).</li>
+          <li><strong>StackExchange.Redis</strong> / SignalR Redis backplane, distributed cache and SignalR scale-out.</li>
+          </ul>
+          <p><strong>Messaging</strong></p>
+          <ul>
+          <li><strong>MassTransit 8.5.5</strong> (RabbitMQ + Azure Service Bus transports), the broker abstraction behind
+          <code>IMessageBus</code>&#39;s broker implementation. <strong>Pinned to v8 by policy</strong>: v9 requires a commercial license
+          and crashes broker-enabled hosts at startup; a build-time test fails if the major reaches 9
+          (<code>Directory.Packages.props:39-48</code>, and see §4).</li>
+          </ul>
+          <p><strong>Transport (service extraction)</strong></p>
+          <ul>
+          <li><strong>Grpc.AspNetCore / Grpc.Net.ClientFactory / Grpc.Tools / Google.Protobuf</strong>: gRPC server + client<ul>
+          <li><code>.proto</code> compilation, for synchronous inter-service calls between extracted modules (ADR-007).</li>
+          </ul>
+          </li>
+          </ul>
+          <p><strong>UI</strong></p>
+          <ul>
+          <li><strong>MudBlazor 9.5.0</strong>: the Blazor <strong>component library</strong> and design system (grids, dialogs, forms,
+          theme). Used by both <code>MMCA.Common.UI</code> and the ADC UIs.</li>
+          <li><strong>Microsoft.AspNetCore.Components.</strong>*: Blazor (Server + WebAssembly) runtime and authorization.</li>
+          <li><strong>Polly 8</strong> (via <code>Microsoft.Extensions.Http.Resilience</code>), retry/timeout/circuit-breaker resilience
+          on outbound HTTP/gRPC clients.</li>
+          </ul>
+          <p><strong>Hosting / observability (.NET Aspire)</strong></p>
+          <ul>
+          <li><strong>Aspire.Hosting 13.4.2</strong> (+ RabbitMQ, Azure CosmosDB integrations), local <strong>orchestration</strong>: the
+          AppHost spins up every service, database, broker, and a dashboard with one command.</li>
+          <li><strong>OpenTelemetry</strong> (Api/Exporter/Instrumentation) + <strong>Azure.Monitor.OpenTelemetry.AspNetCore</strong>,
+          structured logs, distributed traces, and metrics, exported to Azure Application Insights.</li>
+          <li><strong>Microsoft.Extensions.ServiceDiscovery</strong>: resolves service names to endpoints (local and cloud).</li>
+          <li><strong>AspNetCore.HealthChecks.</strong>*: Redis/RabbitMQ health probes.</li>
+          </ul>
+          <p><strong>Auth / crypto</strong></p>
+          <ul>
+          <li><strong>System.IdentityModel.Tokens.Jwt 8</strong>: JWT creation/validation; JWKS key publishing for
+          cross-service token validation (ADR-004 &quot;authentication dual-fetch&quot;).</li>
+          </ul>
+          <p><strong>Versioning / build</strong></p>
+          <ul>
+          <li><strong>MinVer 7</strong>: derives the package version from the git tag (<code>vX.Y.Z</code>), so releases are tag-driven.</li>
+          </ul>
+          <p><strong>Analyzers (all at <em>error</em> severity, see §4)</strong></p>
+          <ul>
+          <li><strong>Meziantou.Analyzer</strong>, <strong>SonarAnalyzer.CSharp</strong>, <strong>StyleCop.Analyzers</strong>, <strong>Roslynator.Analyzers</strong>,
+          <strong>Microsoft.VisualStudio.Threading.Analyzers</strong>.</li>
+          </ul>
+          <p><strong>Testing</strong></p>
+          <ul>
+          <li><strong>xunit.v3 3.2</strong>: the test framework (xUnit <strong>v3</strong>, not v2).</li>
+          <li><strong>Microsoft Testing Platform (MTP)</strong>: the test <em>runner</em> (<code>global.json</code> sets
+          <code>&quot;runner&quot;: &quot;Microsoft.Testing.Platform&quot;</code>), <strong>not</strong> VSTest. This changes how you run a single test
+          (see §6).</li>
+          <li><strong>bUnit 2</strong>: Blazor component testing (the v2 line is the one compatible with xUnit v3 / MTP).</li>
+          <li><strong>Microsoft.Playwright 1.60</strong> + <strong>Deque.AxeCore.Playwright</strong>: browser E2E and <strong>axe-core</strong>
+          accessibility (WCAG 2.1 AA) scanning.</li>
+          <li><strong>NetArchTest.eNhancedEdition</strong>: <strong>architecture fitness tests</strong> (assert layer/purity rules against
+          compiled assemblies).</li>
+          <li><strong>Moq 4</strong> (mocking), <strong>AwesomeAssertions 9</strong> (fluent assertions, a FluentAssertions-compatible
+          fork), <strong>coverlet</strong> (coverage).</li>
+          </ul>
+          <hr>
+          <h2 id="4-c-build-and-code-style-conventions">4. C#, build, and code-style conventions</h2>
+          <ul>
+          <li><strong>.NET 10.0</strong>, <strong><code>LangVersion: preview</code></strong>: required because the codebase uses <strong>C# extension
+          types</strong> (<code>extension(T)</code> syntax, see below).</li>
+          <li><strong>Central Package Management (CPM).</strong> All NuGet versions live in each repo&#39;s
+          <code>Directory.Packages.props</code> (<code>ManagePackageVersionsCentrally = true</code>); individual <code>.csproj</code> files
+          reference packages by name only. To change a version, edit the props file. <code>[Rubric §15, §32]</code></li>
+          <li><strong>NuGet lock files + pinned, audited sources.</strong> <code>MMCA.Common</code> commits lock files and pins
+          <code>packageSourceMapping</code> to nuget.org, so it builds/tests with no GitHub token. CI runs
+          <code>dotnet list package --vulnerable</code> and fails on any vulnerable package. The <strong>MassTransit v8 pin</strong>
+          is enforced by a build-time test (<code>DependencyVersionTests</code>), a blanket &quot;update all packages&quot; that
+          reintroduces v9 will fail the build by design. <code>[Rubric §32, Dependency &amp; Supply-Chain]</code></li>
+          <li><strong><code>TreatWarningsAsErrors</code> globally</strong>, and <strong>five analyzers at <em>error</em> severity.</strong> The code must be
+          warning-free to compile. <code>[Rubric §15, Best Practices &amp; Code Quality]</code></li>
+          <li><strong><code>.editorconfig</code> enforces style at error severity</strong> (<code>MMCA.Common/.editorconfig</code>): file-scoped
+          namespaces (<code>csharp_style_namespace_declarations = file_scoped:error</code>, line 94), braces always
+          required, <code>var</code> only when the type is apparent (lines 97–99), expression-bodied members preferred
+          (lines 102–109), all accessibility modifiers required, no <code>this.</code> qualification, <code>readonly</code> where
+          possible, private fields <code>_camelCase</code>, constants <code>PascalCase</code>, interfaces begin with <code>I</code> (error,
+          line 204). Test files relax method-naming and complexity rules via a <code>[Tests/**/*.cs]</code> section.</li>
+          </ul>
+          <h3 id="c-extensiont-types-read-this-once">C# <code>extension(T)</code> types, read this once</h3>
+          <p><a id="c-extensiont-types--read-this-once"></a></p>
+          <p>C# 14 (preview) <strong>extension members</strong> let a static class add members to a type via an <code>extension</code>
+          block:</p>
+          <pre class="doc-pre"><code class="language-csharp">public static class DomainHelper
+          {
+              extension(string? id)                 // receiver: the &quot;this&quot; value
+              {
+                  public TIdentifier Parse&lt;TIdentifier&gt;() { ... }   // usable as someString.Parse&lt;int&gt;()
+              }
+          }</code></pre>
+          <p>The codebase uses this heavily for <strong>DI registration</strong>, every <code>DependencyInjection.cs</code> adds methods
+          like <code>AddApplication()</code> directly onto <code>IServiceCollection</code> through an <code>extension(IServiceCollection)</code>
+          block. You&#39;ll first meet the syntax in <a href="group-02-domain-building-blocks.html"><code>group-02</code></a>
+          (<code>DomainHelper</code>, <code>EntityTypeExtensions</code>). (A practical note for the leveling: references written <em>inside</em> an extension block belong
+          to the enclosing static class, that&#39;s how this guide attributes their dependencies.)</p>
+          <h3 id="architecture-enforcement-is-doubled-fitness-functions-rubric-34-3">Architecture enforcement is doubled (fitness functions) <code>[Rubric §34, §3]</code></h3>
+          <p><a id="architecture-enforcement-is-doubled-fitness-functions"></a></p>
+          <p>The layer rules are not just convention, they are enforced <strong>twice</strong>:</p>
+          <ol>
+          <li><strong>Compile-time</strong>, <code>Source/Build/MMCA.Common.LayerEnforcement.targets</code>, imported for every
+          <code>MMCA.Common.*</code> project, inspects <code>ProjectReference</code>s before build and <strong>fails</strong> with a descriptive
+          error if a layer references a forbidden upstream layer.</li>
+          <li><strong>Runtime (test)</strong>, <code>Tests/Architecture/MMCA.Common.Architecture.Tests</code> (NetArchTest) asserts the
+          same rules against compiled assemblies: layer flow, <strong>domain purity</strong>, and <strong>microservice
+          extraction</strong> rules (e.g. <em>Application/Domain/Shared must never reference MassTransit directly</em>,
+          depend on <code>IMessageBus</code> instead). The rule bodies themselves now live once in the shipped
+          <strong><code>MMCA.Common.Testing.Architecture</code></strong> package (the 13th package): a reusable rule library +
+          abstract <code>*TestsBase</code> classes that each repo&#39;s arch-test project subclasses, supplying only a
+          repo-specific <code>IArchitectureMap</code>, so both <code>MMCA.Common</code> and <code>MMCA.ADC</code> enforce one rule set.</li>
+          </ol>
+          <p>When you move a type between packages, expect <em>both</em> gates to react. This is the codebase&#39;s
+          &quot;executable governance&quot;, covered fully in the architecture-tests chapter.</p>
+          <hr>
+          <h2 id="5-the-solution--test-layout">5. The solution / test layout</h2>
+          <ul>
+          <li><strong><code>*.slnx</code></strong>: the human solution (XML format). <code>*.slnf</code>, a <strong>solution filter</strong> used in CI to build
+          a subset fast (<code>MMCA.Store.CI.slnf</code>, <code>MMCA.ADC.CI.slnf</code>).</li>
+          <li><strong>Microsoft Testing Platform</strong>, not VSTest. To run one test class/method you target the test
+          project and pass an MTP filter after <code>--</code>:<pre class="doc-pre"><code class="language-bash">dotnet test --project Tests/&lt;path&gt;/&lt;Name&gt;.Tests.csproj -- -method &quot;*Pattern*&quot;
+          #                                                          -- -class  &quot;*FooTests*&quot;</code></pre>
+          Every test project must contain ≥1 test or MTP exits 8 (CI uses <code>--minimum-expected-tests 1</code>).</li>
+          <li>Some UI test projects (<code>MMCA.Common.UI.Gallery</code>, <code>MMCA.Common.UI.E2E.Tests</code>) are <strong>deliberately
+          excluded</strong> from the <code>.slnx</code> so the unit-test run stays fast; they run in a dedicated CI job and are
+          built by csproj path.</li>
+          </ul>
+          <hr>
+          <h2 id="6-the-34-category-architecture-evaluation-lens">6. The 34-category architecture-evaluation lens</h2>
+          <p>This codebase is also scored against a <strong>34-category rubric</strong> (<code>Architecture/ArchitectureEvaluationCriteria.md</code>).
+          This guide <strong>weaves the rubric in</strong> so you learn the system <em>and</em> the lens it&#39;s judged by at the same
+          time. Each type section tags the categories it genuinely touches as <strong><code>[Rubric §N, Name]</code></strong>, with a
+          one-line &quot;what §N assesses&quot; and &quot;how this code embodies (or under-uses) it&quot;. The first occurrence of a
+          category teaches it; later ones cross-reference back. <strong>The guide explains categories; it does not
+          score them</strong>, the filled scorecards live in <code>Architecture/ArchitectureEvaluation-MMCA.Common.md</code>,
+          <code>Architecture/ArchitectureEvaluation-MMCA.ADC.md</code>, and the repo&#39;s <code>ArchitectureScorecard.md</code>.</p>
+          <h3 id="two-axes-so-a-tag-can-say-mature-but-mediocre-or-vice-versa">Two axes (so a tag can say &quot;mature but mediocre&quot; or vice-versa)</h3>
+          <ul>
+          <li><strong>Maturity (0–4)</strong>: <em>process</em>: how consistently/automatically the pattern is governed
+          (ad-hoc → enforced by CI).</li>
+          <li><strong>Implementation (0–10)</strong>: <em>substance</em>: how good the implementation is right now, against the
+          category&#39;s criteria and red flags.</li>
+          </ul>
+          <h3 id="the-categories-in-three-parts-quick-index-full-criteria-in-the-rubric-file">The categories, in three parts (quick index, full criteria in the rubric file)</h3>
+          <p><strong>Part A, Application / Backend (§1–17):</strong> §1 SOLID · §2 Design Patterns · §3 Clean Architecture ·
+          §4 Domain-Driven Design · §5 Vertical Slice · §6 CQRS &amp; Event-Driven · §7 Microservices Readiness ·
+          §8 Data Architecture · §9 API &amp; Contract Design · §10 Cross-Cutting Concerns · §11 Security ·
+          §12 Performance &amp; Scalability · §13 Observability &amp; Operability · §14 Testability &amp; Test Strategy ·
+          §15 Best Practices &amp; Code Quality · §16 Maintainability &amp; Evolvability · §17 DevOps &amp; Deployment.</p>
+          <p><strong>Part B, Front-End / UI (§18–28):</strong> §18 UI Architecture &amp; Component Design · §19 State Management &amp;
+          Data Flow · §20 Design System, Theming &amp; Consistency · §21 Accessibility (a11y) · §22 Responsive &amp;
+          Cross-Browser/Device · §23 Front-End Performance &amp; Rendering · §24 Forms, Validation &amp; UX Safety ·
+          §25 Navigation, Routing &amp; Information Architecture · §26 Front-End Security · §27 Internationalization
+          &amp; Localization · §28 Front-End Testing &amp; Quality.</p>
+          <p><strong>Part C, Operational, Governance &amp; Cross-Cutting (§29–34):</strong> §29 Resilience, Reliability &amp; Business
+          Continuity · §30 Compliance, Privacy &amp; Data Governance · §31 Cost Efficiency / FinOps · §32 Dependency
+          &amp; Supply-Chain · §33 Developer Experience &amp; Inner Loop · §34 Architecture Governance &amp; Documentation.</p>
+          <p>Some categories live most naturally in the DevOps/test chapters (§13–14, §17, §28, §29–34) and are
+          explained there. The coverage audit will include a matrix proving every one of the 34 is explained at
+          least once against real code or a real artifact.</p>
+          <p><strong>A note on §27, Internationalization &amp; Localization.</strong> <code>[Rubric §27, Internationalization &amp; Localization]</code> assesses externalized strings and culture-aware formatting. The original single-locale
+          stance (ADR-011) has been <strong>superseded by ADR-027</strong>: the framework now ships <strong>two locales, en-US
+          (default) and Spanish (es)</strong>. UI strings resolve through <code>IStringLocalizer&lt;T&gt;</code> over co-located <code>.resx</code>
+          files (the marker <a href="group-15-common-ui-framework.html#sharedresource"><code>SharedResource</code></a> anchors the shared
+          set), and <strong>backend <code>Result</code> errors are localized server-side at the edge</strong> keyed by the existing
+          <code>Error.Code</code> by <a href="group-12-api-hosting-mapping.html#errorlocalizer"><code>ErrorLocalizer</code></a> over per-module
+          <a href="group-12-api-hosting-mapping.html#errorresources"><code>ErrorResources</code></a> (English <code>Message</code> is the fallback;
+          <code>Code</code>/<code>Type</code> stay machine markers). One <strong>culture cookie is the source of truth</strong> across SSR / Blazor
+          Server / WASM, forwarded to services as <code>Accept-Language</code> by
+          <a href="group-15-common-ui-framework.html#culturedelegatinghandler"><code>CultureDelegatingHandler</code></a> and persisted to
+          <code>User.PreferredCulture</code>; the supported set is the allowlist
+          <a href="group-12-api-hosting-mapping.html#supportedcultures"><code>SupportedCultures</code></a>. Where culture <em>would</em> introduce
+          bugs the code is still deliberately <strong>culture-invariant</strong>: identifier parsing uses
+          <code>CultureInfo.InvariantCulture</code> (<a href="group-02-domain-building-blocks.html#domainhelper"><code>DomainHelper</code></a>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Extensions/DomainHelper.cs:43-47</code>). Culture-aware date/number
+          formatting is currently guarded only by an advisory analyzer suggestion (<code>MA0076</code>); a fitness-rule gate is
+          noted as follow-up in ADR-027.</p>
+          <p><strong>A note on §20, theming (day/dark).</strong> Beyond the design tokens, <strong>ADR-028</strong> adds a day/dark mode:
+          <a href="group-15-common-ui-framework.html#themeservice"><code>ThemeService</code></a> binds <code>MudThemeProvider</code>&#39;s
+          <code>@bind-IsDarkMode</code> to the already-defined <code>MMCATheme.PaletteDark</code>, persists the choice to cookie +
+          localStorage + <code>User.PreferredTheme</code>, and defaults to the OS <code>prefers-color-scheme</code>, reusing ADR-027&#39;s
+          cookie/profile persistence. Honest gap: the no-flash SSR bootstrap is <strong>not yet wired for theme</strong>, so a
+          first-paint flash is possible (stated, not yet remediated).</p>
+          <hr>
+          <p>You&#39;re ready for <a href="group-01-result-error-handling.html"><code>group-01</code>, Result &amp; Error Handling</a>.</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>
