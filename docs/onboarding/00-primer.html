@@ -94,7 +94,8 @@
         <li><a href="group-23-engagement-live-layer.html">23. ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></li>
         <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
         <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
-        <li><a href="group-26-testing-infrastructure.html">26. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="group-26-device-capability-layer.html">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></li>
+        <li><a href="group-27-testing-infrastructure.html">27. Testing &amp; Quality Infrastructure</a></li>
         <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
         <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
         <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
@@ -246,7 +247,8 @@
           </li>
           </ul>
           <h3 id="the-decision-records-adrs-this-guide-tags">The decision records (ADRs) this guide tags</h3>
-          <p>The <em>why</em> behind these patterns lives in <strong>thirty-four accepted ADRs</strong>, version-controlled in
+          <p>The <em>why</em> behind these patterns lives in <strong>forty-eight accepted ADRs</strong> (001-048; <code>FACTS.md</code> /
+          <code>ADRs/README.md</code> own the count), version-controlled in
           <code>MMCA.Common/ADRs/</code> (<code>ADRs/README.md</code> is the canonical index with one-line summaries). Group chapters
           tag the relevant one inline (e.g. &quot;ADR-003&quot;); the full set, for orientation:</p>
           <div class="table-wrap"><table>
@@ -330,11 +332,11 @@
           <tr>
           <td>015</td>
           <td>Architecture fitness functions: compile-time layer guard + shared NetArchTest rule library</td>
-          <td><a href="group-26-testing-infrastructure.html">g26</a></td>
+          <td><a href="group-27-testing-infrastructure.html">g27</a></td>
           </tr>
           <tr>
           <td>016</td>
-          <td>Lockstep versioning of all fourteen packages; MassTransit pinned to v8 (build-gated)</td>
+          <td>Lockstep versioning of all fifteen packages; MassTransit pinned to v8 (build-gated)</td>
           <td><a href="devops-cicd.html">devops-cicd</a></td>
           </tr>
           <tr>
@@ -462,12 +464,49 @@
           <td>Observability strategy: shared OTel baseline + CQRS RED histograms + outbox dead-letter counter + correlation middleware, with head-sampling and poll-span-filter cost knobs</td>
           <td><a href="group-16-aspire-orchestration.html">g16</a>/<a href="devops-aspire.html">devops-aspire</a></td>
           </tr>
+          <tr>
+          <td>042</td>
+          <td>Device capability abstraction (MAUI Blazor Hybrid): per-capability contracts + TryAdd null/browser fallbacks + MAUI-native overrides, <code>IDeepLinkDispatcher</code>; <code>MMCA.Common.UI.Maui</code> is the fifteenth package</td>
+          <td><a href="group-26-device-capability-layer.html">g26</a></td>
+          </tr>
+          <tr>
+          <td>043</td>
+          <td>Mobile deep links + app association + native OAuth callback: allow-listed custom-scheme redirect of the single-use code; <code>assetlinks.json</code>/AASA served by the UI.Web host</td>
+          <td><a href="group-12-api-hosting-mapping.html">g12</a>/<a href="group-26-device-capability-layer.html">g26</a></td>
+          </tr>
+          <tr>
+          <td>044</td>
+          <td>Native push delivery (third channel, amends 024): <code>INativePushSender</code>/<code>IPushDeviceRegistrar</code> (Azure Notification Hubs, Null defaults) reach backgrounded/killed apps; non-fatal after the inbox+SignalR legs</td>
+          <td><a href="group-10-notifications.html">g10</a>/<a href="group-07-persistence-ef-core.html">g07</a></td>
+          </tr>
+          <tr>
+          <td>045</td>
+          <td>Managed file storage + avatars: <code>IFileStorageService</code> (Azure Blob/Null) + <code>IImageProcessor</code> (crop, strip metadata, re-encode); 2 MB in, 256x256 JPEG out, <code>[Pii]</code> URL nulled on anonymize</td>
+          <td><a href="group-07-persistence-ef-core.html">g07</a>/<a href="group-24-identity-module.html">g24</a></td>
+          </tr>
+          <tr>
+          <td>046</td>
+          <td>HTTP API versioning: one <code>AddCommonApiVersioning</code> (header <code>api-version</code>, default 1.0); <code>ServiceInfoControllerBase</code> v1.0-deprecated + v2.0 exemplar, fitness-asserted per repo</td>
+          <td><a href="group-12-api-hosting-mapping.html">g12</a>/<a href="group-20-conference-api-grpc.html">g20</a></td>
+          </tr>
+          <tr>
+          <td>047</td>
+          <td>Soft-deleted-user session revocation: <code>SoftDeletedUserMiddleware</code> 401s an authenticated caller whose <code>User.IsDeleted</code>, via a 30s-cached <code>ISoftDeletedUserValidator</code>, bounding the stateless-JWT revocation window</td>
+          <td><a href="group-12-api-hosting-mapping.html">g12</a></td>
+          </tr>
+          <tr>
+          <td>048</td>
+          <td>Primitive identifier type aliases: entity IDs are primitives behind per-module <code>global using {Entity}IdentifierType</code>, chosen over strongly-typed ID structs (readability + zero EF/serializer friction)</td>
+          <td><a href="group-02-domain-building-blocks.html">g02</a>/<a href="group-14-module-system-composition.html">g14</a></td>
+          </tr>
           </tbody></table></div>
-          <p>ADRs 011–041 were authored after this guide&#39;s first build; their patterns were already documented here,
+          <p>ADRs 011–048 were authored after this guide&#39;s first build; their patterns were already documented here,
           and the chapters now cross-reference the ADR numbers. The most recent framework additions are the
-          <strong>hub-channel live push</strong> (ADR-039, the transport under the ADC Engagement live layer taught in
-          <a href="group-23-engagement-live-layer.html">g23</a>) and <strong>authenticated output caching</strong> (ADR-040), both released in
-          the v1.108.0-v1.110.0 train; the canonical index for the full set is <code>MMCA.Common/ADRs/README.md</code>.</p>
+          <strong>device capability abstraction layer</strong> (ADR-042/043/044/045: per-capability contracts with MAUI-native,
+          browser, and inert-fallback adapters, mobile deep links, native OS push, managed file storage + user
+          avatars), taught in the new <a href="group-26-device-capability-layer.html">g26</a> chapter and cross-referenced in
+          g07/g10/g12/g24, all released in the v1.112.0-v1.116.0 train; the canonical index for the full set is
+          <code>MMCA.Common/ADRs/README.md</code>.</p>
           <hr>
           <h2 id="3-the-external-stack-bcl--nuget-external-level-0">3. The external stack (BCL / NuGet, &quot;external Level 0&quot;)</h2>
           <p><a id="3-the-external-stack-bcl--nuget--external-level-0"></a></p>

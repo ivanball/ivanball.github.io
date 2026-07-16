@@ -94,7 +94,8 @@
         <li><a href="group-23-engagement-live-layer.html">23. ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></li>
         <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
         <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
-        <li><a href="group-26-testing-infrastructure.html">26. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="group-26-device-capability-layer.html">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></li>
+        <li><a href="group-27-testing-infrastructure.html">27. Testing &amp; Quality Infrastructure</a></li>
         <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
         <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
         <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
@@ -196,7 +197,7 @@
           the seeder&#39;s own remarks (<code>ConferenceModuleDbSeeder.cs:14-21</code>): the public-browse E2E tests need at
           least one session and one speaker row to exist deterministically, while production&#39;s real sessions and
           speakers arrive through the Sessionize import, not the seeder. This is the seam that the
-          <code>ConferenceModuleDbSeederTests</code> in <a href="group-26-testing-infrastructure.html">Group 25</a> exercise.</p>
+          <code>ConferenceModuleDbSeederTests</code> in <a href="group-27-testing-infrastructure.html">Group 25</a> exercise.</p>
           <h2 id="the-sessionize-adapter">The Sessionize adapter</h2>
           <p><a href="group-19-conference-infrastructure.html#sessionizeservice"><code>SessionizeService</code></a> is a deliberately thin
           HTTP client (the whole class is ~25 lines): given a Sessionize event code, it <code>GET</code>s the platform&#39;s
@@ -262,7 +263,6 @@
           seeder, and services without a hard-coded type list, the same scanning seam every module assembly
           provides.</p>
           <h3 id="aiscoreresponse-anthropiccontentblock-anthropicmessage">AiScoreResponse, AnthropicContentBlock, AnthropicMessage</h3>
-          <p><a id="anthropicmessage"></a><a id="anthropiccontentblock"></a><a id="aiscoreresponse"></a></p>
           <blockquote>
           <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure.Services</code> · Level 0 · record (sealed, private)</p>
           </blockquote>
@@ -301,7 +301,6 @@
           </ul>
           <hr>
           <h3 id="assemblyreference-classreference">AssemblyReference, ClassReference</h3>
-          <p><a id="assemblyreference"></a><a id="classreference"></a></p>
           <blockquote>
           <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/AssemblyReference.cs:5</code> · Level 0 · class (static) + class</p>
           </blockquote>
@@ -335,7 +334,6 @@
           </ul>
           <hr>
           <h3 id="anthropicrequest-anthropicresponse">AnthropicRequest, AnthropicResponse</h3>
-          <p><a id="anthropicrequest"></a><a id="anthropicresponse"></a></p>
           <blockquote>
           <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure.Services</code> · Level 1 · record (sealed, private)</p>
           </blockquote>
@@ -427,7 +425,6 @@
           <li><strong>Caveats / not-in-source</strong>: <strong>this abstract class is never inherited or instantiated anywhere in the ADC source or tests</strong> (verified: the only reference to the symbol is its own declaration). At runtime the <em>concrete</em> context is the sealed <a href="group-07-persistence-ef-core.html#applicationdbcontext"><code>SQLServerDbContext</code></a> from MMCA.Common, which also derives from <code>ApplicationDbContext</code> and resolves entities by scanning <code>IEntityTypeConfiguration</code> types, not via these <code>DbSet</code>s (ADR-006 mandates one concrete context class, per database). So <code>ModuleApplicationDbContext</code> functions as a <strong>declarative manifest / documentation of the Conference bounded context&#39;s table surface</strong> rather than a live runtime context; its sibling files in Identity and Engagement Infrastructure play the identical role. Do not assume these <code>DbSet</code>s drive the actual EF model, the configuration classes and <code>SQLServerDbContext</code> do.</li>
           </ul>
           <h3 id="conference-ef-entity-configurations">Conference EF entity configurations</h3>
-          <p><a id="categoryitemconfiguration"></a><a id="conferencecategoryconfiguration"></a><a id="eventconfiguration"></a><a id="eventquestionanswerconfiguration"></a><a id="eventspeakerconfiguration"></a><a id="questionconfiguration"></a><a id="roomconfiguration"></a><a id="sessionaiscoreconfiguration"></a><a id="sessioncategoryitemconfiguration"></a><a id="sessionconfiguration"></a><a id="sessionquestionanswerconfiguration"></a><a id="sessionspeakerconfiguration"></a><a id="speakercategoryitemconfiguration"></a><a id="speakerconfiguration"></a><a id="speakerquestionanswerconfiguration"></a></p>
           <blockquote>
           <p>15 <code>internal sealed</code> classes in <code>MMCA.ADC.Conference.Infrastructure</code>, namespace
           <code>MMCA.ADC.Conference.Infrastructure.Persistence.EntityConfiguration</code>, all Level 7, each extending

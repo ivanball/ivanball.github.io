@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ADR-043: Mobile Deep Links, App Association, and the Native OAuth Callback · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-10). The framework leg (the OAuth custom-scheme allowlist) is implemented; the per-app association files and platform intent filters…">
+  <meta name="description" content="Accepted (2026-07-15). The framework leg is fully implemented in MMCA.Common: the OAuth custom-scheme returnUrl allowlist in CompleteAsync, the…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="article">
   <meta property="og:title" content="ADR-043: Mobile Deep Links, App Association, and the Native OAuth Callback">
-  <meta property="og:description" content="Accepted (2026-07-10). The framework leg (the OAuth custom-scheme allowlist) is implemented; the per-app association files and platform intent filters…">
+  <meta property="og:description" content="Accepted (2026-07-15). The framework leg is fully implemented in MMCA.Common: the OAuth custom-scheme returnUrl allowlist in CompleteAsync, the…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 45 ADRs</summary>
+        <summary>All 48 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -110,6 +110,9 @@
         <li><a href="043-mobile-deep-links-and-native-oauth-callback.html" aria-current="page">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
         <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
         <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
           </ol>
         </nav>
       </details>
@@ -118,8 +121,26 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-043-mobile-deep-links-app-association-and-the-native-oauth-callback">ADR-043: Mobile Deep Links, App Association, and the Native OAuth Callback</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-10). The framework leg (the OAuth custom-scheme allowlist) is implemented; the
-          per-app association files and platform intent filters land with each consumer&#39;s deep-link wave.</p>
+          <p>Accepted (2026-07-15). The framework leg is fully implemented in MMCA.Common: the OAuth
+          custom-scheme returnUrl allowlist in <code>CompleteAsync</code>, the app-association endpoint helper
+          <code>MapAppAssociationEndpoints</code>
+          (<code>Source/Presentation/MMCA.Common.API/Startup/AppAssociationEndpointExtensions.cs:35</code>, with
+          <code>AppAssociationOptions</code> alongside), and the MAUI <code>MauiExternalAuthBroker</code>
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/MauiExternalAuthBroker.cs:19</code>). The ADC
+          consumer&#39;s deep-link wave has shipped: <code>MMCA.ADC.UI.Web</code> serves the two well-known association
+          documents through the shared helper
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:162</code>), the Identity service allow-lists the
+          <code>atldevcon</code> scheme (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:37</code>), and
+          the native heads register the callback: iOS carries both the custom-scheme URL type
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/iOS/Info.plist:16</code>) and the associated-domains
+          entitlement (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/iOS/Entitlements.plist:11</code>), while
+          Android registers the custom-scheme <code>WebAuthenticatorCallbackActivity</code>
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/WebAuthenticatorCallbackActivity.cs:14</code>).
+          Android&#39;s AutoVerify https App Links intent filter is not yet in
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/AndroidManifest.xml</code> (which today carries
+          only package-visibility queries), so the Android https app-link leg is still outstanding. MMCA.Store
+          has not adopted the wave: no association endpoints, allowlist config, or platform callback
+          registrations exist there yet.</p>
           <h2 id="context">Context</h2>
           <p>Three mobile flows all need a URL to leave the web world and land inside the MAUI app:</p>
           <ol>

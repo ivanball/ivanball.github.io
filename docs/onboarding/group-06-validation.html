@@ -94,7 +94,8 @@
         <li><a href="group-23-engagement-live-layer.html">23. ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></li>
         <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
         <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
-        <li><a href="group-26-testing-infrastructure.html">26. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="group-26-device-capability-layer.html">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></li>
+        <li><a href="group-27-testing-infrastructure.html">27. Testing &amp; Quality Infrastructure</a></li>
         <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
         <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
         <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
@@ -193,7 +194,6 @@
           primitives. There is no separate ADR for validation; it is governed implicitly by the CQRS decorator
           ADRs and the layering rules the architecture fitness tests enforce (primer §4).</p>
           <h3 id="requiredstringrulest-optionalstringrulest-emailrulest-positiveintrulest-positivedecimalrulest-nonnegativeintrulest-passwordrulest-strongpasswordrulest">RequiredStringRules&lt;T&gt;, OptionalStringRules&lt;T&gt;, EmailRules&lt;T&gt;, PositiveIntRules&lt;T&gt;, PositiveDecimalRules&lt;T&gt;, NonNegativeIntRules&lt;T&gt;, PasswordRules&lt;T&gt;, StrongPasswordRules&lt;T&gt;</h3>
-          <p><a id="requiredstringrulest"></a><a id="optionalstringrulest"></a><a id="emailrulest"></a><a id="positiveintrulest"></a><a id="positivedecimalrulest"></a><a id="nonnegativeintrulest"></a><a id="passwordrulest"></a><a id="strongpasswordrulest"></a></p>
           <blockquote>
           <p>MMCA.Common.Application · <code>MMCA.Common.Application.Validation</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Validation/CommonValidationRules.cs</code> · Level 0 · classes (<code>AbstractValidator&lt;T&gt;</code> subclasses)</p>
           </blockquote>
@@ -347,7 +347,6 @@
           resolves and runs all <code>IValidator&lt;TCommand&gt;</code> instances, including this one, before the handler.</li>
           </ul>
           <h3 id="addressline1rulest-addressline2rulest-cityrulest-staterulest-zipcoderulest-countryrulest">AddressLine1Rules&lt;T&gt;, AddressLine2Rules&lt;T&gt;, CityRules&lt;T&gt;, StateRules&lt;T&gt;, ZipCodeRules&lt;T&gt;, CountryRules&lt;T&gt;</h3>
-          <p><a id="addressline1rulest"></a><a id="addressline2rulest"></a><a id="cityrulest"></a><a id="staterulest"></a><a id="zipcoderulest"></a><a id="countryrulest"></a></p>
           <blockquote>
           <p>MMCA.Common.Application · <code>MMCA.Common.Application.Validation</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Validation/AddressValidationRules.cs</code> · Level 4 · classes (sealed, <code>AbstractValidator&lt;T&gt;</code>)</p>
           </blockquote>
@@ -440,7 +439,7 @@
           own; its entire body (<code>AddressValidationRules.cs:14-22</code>) is six <code>Include(new XRules&lt;Address&gt;(p =&gt; p.Field))</code>
           calls binding each rule set to the corresponding <code>Address</code> property. <code>[Rubric §15, Best Practices]</code>
           (no copy-paste validation; each field&#39;s rules are isolated and independently testable, see
-          <code>AddressValidationRulesTests</code> in <a href="group-26-testing-infrastructure.html#addressvalidationrulestests">group-25</a>).
+          <code>AddressValidationRulesTests</code> in <a href="group-27-testing-infrastructure.html#addressvalidationrulestests">group-25</a>).
           <code>[Rubric §24, Forms, Validation &amp; UX Safety]</code>: this lives in <code>MMCA.Common.Application</code> so both ADC
           and Store reuse one framework-level address validator rather than each authoring its own.</li>
           <li><strong>Caveats / not-in-source</strong>: the prior tier-05 edition described the six rule sets as &quot;derived from

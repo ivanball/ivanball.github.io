@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ADR-016: Lockstep Package Versioning and the MassTransit-v8 Pin · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted">
+  <meta name="description" content="Accepted (2026-07-15).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/016-lockstep-versioning-masstransit-pin.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="article">
   <meta property="og:title" content="ADR-016: Lockstep Package Versioning and the MassTransit-v8 Pin">
-  <meta property="og:description" content="Accepted">
+  <meta property="og:description" content="Accepted (2026-07-15).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/016-lockstep-versioning-masstransit-pin.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 45 ADRs</summary>
+        <summary>All 48 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -110,6 +110,9 @@
         <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
         <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
         <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
           </ol>
         </nav>
       </details>
@@ -118,11 +121,12 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-016-lockstep-package-versioning-and-the-masstransit-v8-pin">ADR-016: Lockstep Package Versioning and the MassTransit-v8 Pin</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted</p>
+          <p>Accepted (2026-07-15).</p>
           <h2 id="context">Context</h2>
-          <p>MMCA.Common publishes fourteen NuGet packages consumed by three downstream repos — the two
+          <p>MMCA.Common publishes its <code>MMCA.Common.*</code> NuGet package set (see <code>../FACTS.md</code> for the authoritative
+          list and count) consumed by three downstream repos: the two
           production apps (Store, ADC) and the reference seed Helpdesk (which defaults to local-source mode but
-          declares the same fourteen <code>MMCA.Common.*</code> package versions in its own <code>Directory.Packages.props</code>).
+          declares the same <code>MMCA.Common.*</code> package versions in its own <code>Directory.Packages.props</code>).
           Two related governance questions had no recorded answer:</p>
           <ol>
           <li><strong>How do the packages version and roll out?</strong> Independent per-package versions invite a
@@ -135,8 +139,9 @@
           </ol>
           <h2 id="decision">Decision</h2>
           <ol>
-          <li><strong>Version the fourteen packages in lockstep.</strong> All packages share one version (MinVer, derived from
-          a single <code>vX.Y.Z</code> git tag); a release tags all fourteen at the same version. SemVer and the
+          <li><strong>Version the whole <code>MMCA.Common.*</code> package set in lockstep.</strong> All packages share one version (MinVer, derived from
+          a single <code>vX.Y.Z</code> git tag); a release tags every package (see <code>../FACTS.md</code> for the authoritative list and count)
+          at the same version. SemVer and the
           breaking-change policy live in <code>VERSIONING.md</code>.</li>
           <li><strong>Sweep every consumer in one pass, with no phased rollout.</strong> A framework change ships and all
           consumers bump every <code>MMCA.Common.*</code> entry in their <code>Directory.Packages.props</code> together.

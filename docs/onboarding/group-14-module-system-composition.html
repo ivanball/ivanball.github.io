@@ -94,7 +94,8 @@
         <li><a href="group-23-engagement-live-layer.html">23. ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></li>
         <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
         <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
-        <li><a href="group-26-testing-infrastructure.html">26. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="group-26-device-capability-layer.html">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></li>
+        <li><a href="group-27-testing-infrastructure.html">27. Testing &amp; Quality Infrastructure</a></li>
         <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
         <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
         <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
@@ -113,42 +114,44 @@
           assemblies into a running host. It answers three questions a new host author asks: <em>how does the
           process discover and assemble its modules?</em>, <em>in what order does DI get built so decorators wrap the
           right handlers?</em>, and <em>where do the dozens of <code>appsettings.json</code> knobs land as typed objects?</em> The
-          cast is small but load-bearing: the <a href="group-14-module-system-composition.html#imodule"><code>IModule</code></a> contract
-          and its <a href="group-14-module-system-composition.html#imoduleseeder"><code>IModuleSeeder</code></a> sidekick; the
-          <a href="group-14-module-system-composition.html#moduleloader"><code>ModuleLoader</code></a> that discovers and Kahn-sorts
-          them; the two <code>extension(IServiceCollection)</code>
-          <a href="group-14-module-system-composition.html#dependencyinjection"><code>DependencyInjection</code></a> composition roots
-          (Application and Infrastructure); the <code>AssemblyReference</code>/<code>ClassReference</code> assembly anchors that
-          Scrutor and the architecture tests pin to; the two data-source attributes
-          (<a href="group-14-module-system-composition.html#usedatasourceattribute"><code>UseDataSourceAttribute</code></a>,
-          <a href="group-14-module-system-composition.html#usedatabaseattribute"><code>UseDatabaseAttribute</code></a>); and the whole
-          <strong>Settings</strong> family, <code>ApplicationSettings</code>/<code>ModulesSettings</code>/<code>ModuleSettings</code> in Application, and the
-          Infrastructure bindings (<code>ConnectionStringSettings</code>, <code>DataSourcesSettings</code>, <code>MessageBusSettings</code>,
-          <code>OutboxSettings</code>, the JWT/JWKS group, <code>SmtpSettings</code>, <code>PushNotificationSettings</code>). The detailed
+          cast is small but load-bearing: the <a href="#imodule"><code>IModule</code></a> contract and its
+          <a href="#imoduleseeder"><code>IModuleSeeder</code></a> sidekick; the <a href="#moduleloader"><code>ModuleLoader</code></a> that discovers and
+          Kahn-sorts them; the two <code>extension(IServiceCollection)</code> <a href="#dependencyinjection"><code>DependencyInjection</code></a>
+          composition roots (Application and Infrastructure); the <a href="#assemblyreference"><code>AssemblyReference</code></a> /
+          <a href="#classreference"><code>ClassReference</code></a> assembly anchors that Scrutor and the architecture tests pin to;
+          the two data-source attributes (<a href="#usedatasourceattribute"><code>UseDataSourceAttribute</code></a>,
+          <a href="#usedatabaseattribute"><code>UseDatabaseAttribute</code></a>); and the whole <strong>Settings</strong> family,
+          <a href="#applicationsettings"><code>ApplicationSettings</code></a> / <a href="#modulessettings"><code>ModulesSettings</code></a> /
+          <a href="#modulesettings"><code>ModuleSettings</code></a> in Application, and the Infrastructure bindings
+          (<a href="#connectionstringsettings"><code>ConnectionStringSettings</code></a>, <a href="#datasourcessettings"><code>DataSourcesSettings</code></a>,
+          <a href="#messagebussettings"><code>MessageBusSettings</code></a>, <a href="#outboxsettings"><code>OutboxSettings</code></a>, the JWT/JWKS group,
+          <a href="#smtpsettings"><code>SmtpSettings</code></a>, <a href="#pushnotificationsettings"><code>PushNotificationSettings</code></a>). The detailed
           per-type sections follow; this overview shows how they fit together at runtime.</p>
           <p><code>[Rubric §7, Microservices Readiness]</code> (assesses whether modules can be enabled, disabled, and
           deployed independently with minimal coupling) is the lens this whole chapter is built around, the
-          module system is <em>the</em> seam that lets MMCA.ADC run as either a single monolith host or four separate
-          service processes from the <strong>same module code</strong>, configuration-switched. <code>[Rubric §10, Cross-Cutting Concerns]</code> and <code>[Rubric §3, Clean Architecture]</code> also run throughout: composition is where the
-          inward-pointing dependency rule gets physically realized (Infrastructure references Application
-          references Domain references Shared), and where cross-cutting concerns are registered once for every
-          module rather than per-feature. The two ADRs that explain <em>why</em> this shape exists are
+          module system is <em>the</em> boundary that lets MMCA.ADC run as either a single monolith host or four
+          separate service processes from the <strong>same module code</strong>, configuration-switched. <code>[Rubric §10, Cross-Cutting Concerns]</code> and <code>[Rubric §3, Clean Architecture]</code> also run throughout: composition is
+          where the inward-pointing dependency rule gets physically realized (Infrastructure references
+          Application references Domain references Shared), and where cross-cutting concerns are registered once
+          for every module rather than per-feature. The two ADRs that explain <em>why</em> this shape exists are
           ADR-008 (service-extraction topology) and ADR-006 (database-per-service).</p>
-          <h2 id="the-module-contract-and-the-seam-it-creates">The module contract and the seam it creates</h2>
+          <h2 id="the-module-contract-and-the-boundary-it-creates">The module contract and the boundary it creates</h2>
           <p>A <strong>module</strong> is the unit of cohesion above a feature slice, Conference, Engagement, Identity,
-          Notification. Each one implements <a href="group-14-module-system-composition.html#imodule"><code>IModule</code></a>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/IModule.cs:7</code>): a display <code>Name</code>, an optional
-          <code>Dependencies</code> list of other module names, a <code>RequiresDependencies</code> flag, and one <code>Register(services, configuration, applicationSettings)</code> method that wires <em>all</em> of that module&#39;s services. The interface
-          ships three default-implemented members (<code>Dependencies =&gt; []</code>, <code>RequiresDependencies =&gt; false</code>,
-          <code>RegisterDisabledStubs</code> is an empty body), so a minimal module only implements <code>Name</code> and <code>Register</code>.
-          ADC&#39;s modules are deliberately thin, <code>ConferenceModule</code>
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/ConferenceModule.cs:14</code>) is barely a dozen
-          lines: its <code>Register</code> just forwards to an <code>AddConferenceModule(applicationSettings)</code> extension method,
-          and its <code>RegisterDisabledStubs</code> registers a <code>DisabledSessionBookmarkValidationService</code> so a host that
-          <em>disables</em> Conference still has the cross-module contract type resolvable in DI.</p>
-          <p>That last detail is the crux of the extraction seam. <code>RegisterDisabledStubs</code> plus <code>RequiresDependencies</code>
-          is what makes the same module code boot in two topologies. When Conference runs in its own service the
-          Engagement module is <em>disabled</em> in that host&#39;s config, yet Conference&#39;s
+          Notification. Each one implements <a href="#imodule"><code>IModule</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/IModule.cs:7</code>): a display <code>Name</code>
+          (<code>IModule.cs:12</code>), an optional <code>Dependencies</code> list of other module names (<code>IModule.cs:17</code>), a
+          <code>RequiresDependencies</code> flag (<code>IModule.cs:23</code>), and one <code>Register(services, configuration, applicationSettings)</code> method (<code>IModule.cs:28</code>) that wires <em>all</em> of that module&#39;s services. The
+          interface ships three default-implemented members (<code>Dependencies =&gt; []</code>, <code>RequiresDependencies =&gt; false</code>, and an empty-bodied <code>RegisterDisabledStubs</code> at <code>IModule.cs:34</code>), so a minimal module only
+          implements <code>Name</code> and <code>Register</code>. ADC&#39;s modules are deliberately thin, <code>ConferenceModule</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/ConferenceModule.cs:15</code>) is barely more
+          than a dozen lines: its <code>Register</code> just forwards to an <code>AddConferenceModule(applicationSettings)</code>
+          extension method (<code>ConferenceModule.cs:28-29</code>), and its <code>RegisterDisabledStubs</code>
+          (<code>ConferenceModule.cs:21-25</code>) registers a <code>DisabledSessionBookmarkValidationService</code> and a
+          <code>DisabledEventLiveValidationService</code> so a host that <em>disables</em> Conference still has those cross-module
+          contract types resolvable in DI.</p>
+          <p>That last detail is the crux of the extraction boundary. <code>RegisterDisabledStubs</code> plus
+          <code>RequiresDependencies</code> is what makes the same module code boot in two topologies. When Conference runs
+          in its own service the Engagement module is <em>disabled</em> in that host&#39;s config, yet Conference&#39;s
           <code>GetSessionBookmarkCountHandler</code> still needs Engagement&#39;s <code>IBookmarkCountService</code>, so the disabled
           Engagement module contributes a stub, and the host then <em>replaces</em> that stub with a typed gRPC client
           pointed at the real Engagement process. Application code never learns which path it got; the transport
@@ -156,139 +159,164 @@
           this is a clean strategy/null-object pairing (real service vs. disabled stub vs. remote client) rather
           than scattered <code>if (moduleEnabled)</code> checks.</p>
           <h2 id="discovery-and-kahn-ordered-registration">Discovery and Kahn-ordered registration</h2>
-          <p><a href="group-14-module-system-composition.html#moduleloader"><code>ModuleLoader</code></a>
+          <p><a href="#moduleloader"><code>ModuleLoader</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:15</code>) is the engine. Its
           <code>DiscoverAndRegister</code> method scans every loaded assembly via <code>AppDomain.CurrentDomain.GetAssemblies()</code>
-          (guarding each <code>GetTypes()</code> call against <code>ReflectionTypeLoadException</code> so one broken assembly doesn&#39;t
-          abort the scan, lines 60-73), instantiates every concrete <code>IModule</code> and <code>IModuleSeeder</code> it finds, then
-          runs <strong>Kahn&#39;s topological sort</strong> (lines 193-243) over the modules&#39; declared <code>Dependencies</code>. Kahn&#39;s
-          algorithm is BFS over a dependency graph: compute each module&#39;s in-degree (count of unprocessed
-          dependencies), seed a queue with the zero-in-degree modules, and as each is emitted decrement its
-          dependents&#39; in-degrees, enqueuing any that reach zero. If fewer modules come out than went in, the
-          remainder form a cycle and the loader throws with the offending names (lines 235-240). The payoff is an
-          ordering where a module&#39;s DI registrations always exist <em>before</em> any dependent registers, which
-          matters because the CQRS decorator pipeline (next section) wraps handlers that must already be in the
-          container.</p>
+          (guarding each <code>GetTypes()</code> call against <code>ReflectionTypeLoadException</code> so one broken assembly does not
+          abort the scan, <code>ModuleLoader.cs:60-73</code>), instantiates every concrete <a href="#imodule"><code>IModule</code></a> and
+          <a href="#imoduleseeder"><code>IModuleSeeder</code></a> it finds (<code>ModuleLoader.cs:75-83</code>), then runs <strong>Kahn&#39;s topological
+          sort</strong> (<code>ModuleLoader.cs:193-243</code>) over the modules&#39; declared <code>Dependencies</code>. Kahn&#39;s algorithm is BFS
+          over a dependency graph: compute each module&#39;s in-degree (count of unprocessed dependencies), seed a
+          queue with the zero-in-degree modules, and as each is emitted decrement its dependents&#39; in-degrees,
+          enqueuing any that reach zero. If fewer modules come out than went in, the remainder form a cycle and
+          the loader throws with the offending names (<code>ModuleLoader.cs:235-240</code>). The payoff is an ordering where
+          a module&#39;s DI registrations always exist <em>before</em> any dependent registers, which matters because the
+          CQRS decorator pipeline (next section) wraps handlers that must already be in the container.</p>
           <p>For each sorted module the loader checks
-          <a href="group-14-module-system-composition.html#modulessettings"><code>ModulesSettings.IsModuleEnabled</code></a>; a disabled
-          module gets <code>RegisterDisabledStubs</code> called and is recorded in <code>DisabledModuleNames</code>, while an enabled
-          one runs <code>ValidateModuleDependencies</code> then <code>RegisterEnabledModule</code>. Registration is also where
-          <strong>per-module configuration</strong> is loaded by convention: before calling <code>module.Register(...)</code> the loader
-          adds <code>modules.{name}.json</code> (and <code>modules.{name}.{environment}.json</code> when an environment name is passed)
-          to the configuration builder (lines 154-161), so a module can ship its own config file. Dependency
-          validation (lines 108-141) is microservice-aware: a dependency that is disabled in-process but listed
-          in that consumer&#39;s <code>ModuleSettings.RemoteDependencies</code> is treated as <em>satisfied remotely</em> (the host
-          will wire a gRPC client), and only a <code>RequiresDependencies = true</code> module with a genuinely unsatisfied
-          dependency throws. Every step emits a structured <code>[LoggerMessage]</code>-generated log (lines 245-261), so
-          the startup log tells you exactly which modules loaded, in what order, and how long each took.</p>
-          <p>A subtlety worth correcting against the source: the loader is <strong>not</strong> called from inside
+          <a href="#modulessettings"><code>ModulesSettings.IsModuleEnabled</code></a> (<code>ModuleLoader.cs:90</code>); a disabled module gets
+          <code>RegisterDisabledStubs</code> called and is recorded in <code>DisabledModuleNames</code>
+          (<code>ModuleLoader.cs:92-95</code>), while an enabled one runs <code>ValidateModuleDependencies</code> then
+          <code>RegisterEnabledModule</code> (<code>ModuleLoader.cs:98-99</code>). Registration is also where <strong>per-module
+          configuration</strong> is loaded by convention: before calling <code>module.Register(...)</code> the loader adds
+          <code>modules.{name}.json</code> (and <code>modules.{name}.{environment}.json</code> when an environment name is passed) to
+          the configuration builder (<code>ModuleLoader.cs:154-161</code>), so a module can ship its own config file.
+          Dependency validation (<code>ModuleLoader.cs:108-141</code>) is microservice-aware: a dependency that is disabled
+          in-process but listed in that consumer&#39;s <a href="#modulesettings"><code>ModuleSettings</code></a> <code>RemoteDependencies</code> is
+          treated as <em>satisfied remotely</em> (the host will wire a gRPC client), and only a <code>RequiresDependencies = true</code> module with a genuinely unsatisfied dependency throws (<code>ModuleLoader.cs:122-130</code>). Every step
+          emits a structured <code>[LoggerMessage]</code>-generated log (<code>ModuleLoader.cs:245-261</code>), so the startup log
+          tells you exactly which modules loaded, in what order, and how long each took.</p>
+          <p>A subtlety worth stating against the source: the loader is <strong>not</strong> called from inside
           <code>AddApplication()</code>. Each host&#39;s <code>Program.cs</code> constructs a <code>ModuleLoader</code>, calls <code>DiscoverAndRegister</code>
           directly, then registers the loader instance itself as a singleton, see
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:188-194</code>. After discovery the loader
-          also drives startup data via <code>SeedAllAsync</code> (lines 177-183), which invokes each enabled module&#39;s
-          <a href="group-14-module-system-composition.html#imoduleseeder"><code>IModuleSeeder.SeedAsync</code></a> in registration order
-          (this is how Identity seeds its default admin user). <code>IModuleSeeder</code> is a tiny two-member interface,
-          <code>ModuleName</code> (matched case-insensitively to an <code>IModule.Name</code>) and <code>SeedAsync(serviceProvider, cancellationToken)</code>, deliberately separate from <code>IModule</code> so seeding runs <em>after</em> the whole container
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:239-244</code>. After discovery the loader
+          also drives startup data via <code>SeedAllAsync</code> (<code>ModuleLoader.cs:177-183</code>), which invokes each enabled
+          module&#39;s <a href="#imoduleseeder"><code>IModuleSeeder.SeedAsync</code></a> in registration order (this is how Identity seeds
+          its default admin user). <code>IModuleSeeder</code> is a tiny two-member interface, <code>ModuleName</code> (matched
+          case-insensitively to an <a href="#imodule"><code>IModule</code></a> <code>Name</code>) and <code>SeedAsync(serviceProvider, cancellationToken)</code>, deliberately separate from <code>IModule</code> so seeding runs <em>after</em> the whole container
           is built and a real <code>IServiceProvider</code> exists.</p>
           <h2 id="the-two-composition-roots-and-the-ordering-they-enforce">The two composition roots and the ordering they enforce</h2>
-          <p>Service registration itself lives in two static <code>DependencyInjection</code> classes, each using a C#
-          <code>extension(IServiceCollection services)</code> block (see
-          <a href="00-primer.html#4-c-build-and-code-style-conventions">primer §4</a> for the <code>extension(T)</code> syntax). The
+          <p>Service registration itself lives in two static <a href="#dependencyinjection"><code>DependencyInjection</code></a> classes,
+          each using a C# <code>extension(IServiceCollection services)</code> block (see
+          <span class="doc-deadlink" title="Reference outside the published set">primer §4</span> for the <code>extension(T)</code> syntax). The
           <strong>Application</strong> root
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:21</code>) exposes <code>AddApplication()</code>
           (core services: the domain-event dispatcher, navigation-metadata provider, query pipeline, and the
-          common validators), <code>ScanModuleApplicationServices&lt;TMarker&gt;()</code> (the Scrutor convention scan that a
-          module&#39;s <code>AddXModule</code> calls to register its event handlers, DTO/request mappers, command/query
-          handlers, and FluentValidation validators by assembly), and <code>AddApplicationDecorators()</code>. The
-          <strong>Infrastructure</strong> root
+          common validators, <code>DependencyInjection.cs:29-43</code>), <code>ScanModuleApplicationServices&lt;TMarker&gt;()</code> (the
+          Scrutor convention scan that a module&#39;s <code>AddXModule</code> calls to register its event handlers, DTO/request
+          mappers, command/query handlers, and FluentValidation validators by assembly,
+          <code>DependencyInjection.cs:115-179</code>), and <code>AddApplicationDecorators()</code>. The <strong>Infrastructure</strong> root
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:38</code>) exposes
-          <code>AddInfrastructure(configuration)</code>, which binds nearly every settings type in this chapter, registers
-          the persistence stack (the data-source resolver/registry, the DbContext factories, repositories, unit
-          of work), caching, auth, and the outbox hosted services, plus the optional <code>AddBrokerMessaging</code>,
-          <code>AddPushNotifications</code>, and the typed-client helpers (<code>AddTypedServiceClient&lt;T&gt;</code>) that swap in-process
-          abstractions for cross-process transports.</p>
-          <p>The <strong>order</strong> of these calls is a hard contract, not a style choice, and it is the reason
-          <code>AddApplicationDecorators()</code> must come <em>last</em>. The framework&#39;s documented sequence is
-          <code>AddApplication()</code> → one <code>ScanModuleApplicationServices&lt;...&gt;()</code> per module →
-          <code>AddApplicationDecorators()</code> → <code>AddInfrastructure(configuration)</code> → <code>AddAPI(...)</code>. Decorators are
-          registered with <strong>Scrutor&#39;s <code>TryDecorate</code></strong>, which wraps <em>existing</em> registrations, so the concrete
-          handlers from every module must already be in the container, or there is nothing to wrap. <code>[Rubric §6, CQRS &amp; Event-Driven]</code> and <code>[Rubric §1, SOLID]</code> (open/closed) live here: cross-cutting behavior is added
-          by wrapping, not by editing handlers. <code>AddApplicationDecorators</code> also encodes the <strong>execution order</strong>
-          via <code>TryDecorate</code>&#39;s reverse-registration rule (<code>DependencyInjection.cs:89-106</code>), registered
-          innermost-first, the command pipeline ends up
+          <code>AddInfrastructure(configuration)</code> (<code>DependencyInjection.cs:48</code>), which binds nearly every settings
+          type in this chapter, registers the persistence stack (the data-source resolver/registry, the
+          DbContext factories, repositories, unit of work), caching, auth, and the outbox hosted services, plus
+          the optional <code>AddBrokerMessaging</code> (<code>DependencyInjection.cs:372</code>), <code>AddPushNotifications</code>
+          (<code>DependencyInjection.cs:253</code>), and the typed-client helper
+          <code>AddTypedServiceClient&lt;TInterface, TImplementation&gt;(serviceName)</code> (<code>DependencyInjection.cs:441</code>) that
+          swaps an in-process abstraction for a cross-process transport.</p>
+          <p>The <strong>order</strong> of these calls is a hard contract in exactly one respect, and it is the reason
+          <code>AddApplicationDecorators()</code> must come <em>last</em>. Decorators are registered with <strong>Scrutor&#39;s
+          <code>TryDecorate</code></strong>, which wraps <em>existing</em> registrations (<code>DependencyInjection.cs:94-103</code>), so the
+          concrete handlers from every module must already be in the container, or there is nothing to wrap.
+          Beyond that, the relative position of <code>AddInfrastructure</code> and <code>AddAPI</code> is not load-bearing. <code>[Rubric §6, CQRS &amp; Event-Driven]</code> and <code>[Rubric §1, SOLID]</code> (open/closed) live here: cross-cutting behavior is
+          added by wrapping, not by editing handlers. <code>AddApplicationDecorators</code> also encodes the <strong>execution
+          order</strong> via <code>TryDecorate</code>&#39;s reverse-registration rule (registered innermost-first,
+          <code>DependencyInjection.cs:94-103</code>), so the command pipeline ends up
           <code>FeatureGate → Logging → Caching → Validating → Transactional → handler</code>, and queries
           <code>FeatureGate → Logging → Caching → handler</code>. The decorator types themselves
           (e.g. <a href="group-05-cqrs-pipeline.html#featuregatecommanddecoratortcommand-tresult"><code>FeatureGateCommandDecorator&lt;TCommand, TResult&gt;</code></a>,
           <a href="group-05-cqrs-pipeline.html#loggingcommanddecoratortcommand-tresult"><code>LoggingCommandDecorator&lt;TCommand, TResult&gt;</code></a>)
-          are documented in the CQRS-pipeline chapter; this chapter only owns the <em>wiring</em> of them.</p>
+          are documented in the CQRS-pipeline chapter; this chapter only owns the <em>wiring</em> of them. An optional
+          profiling pair is registered separately by an opt-in <code>AddApplicationProfiling()</code>
+          (<code>DependencyInjection.cs:186-192</code>), not by <code>AddApplicationDecorators()</code>.</p>
           <h2 id="assembly-anchors">Assembly anchors</h2>
           <p>Several pieces of machinery need a <code>Type</code> whose <code>Assembly</code> identifies a layer: Scrutor&#39;s
           <code>FromAssemblyOf&lt;T&gt;()</code> scans, FluentValidation&#39;s <code>AddValidatorsFromAssemblyContaining&lt;T&gt;()</code>, and
-          NetArchTest&#39;s per-package anchor. That is what the <code>AssemblyReference</code>/<code>ClassReference</code> pairs are, one
-          per layer (Domain, Application, Infrastructure), each a trivial <code>static class AssemblyReference</code> holding
-          <code>Assembly</code>/<code>AssemblyName</code> statics plus a non-static <code>class ClassReference {}</code> used where a generic
-          constraint forbids a static type. <code>AddApplication</code> scans the common validators via
-          <code>AddValidatorsFromAssemblyContaining&lt;ClassReference&gt;()</code>, and <code>AddInfrastructure</code> Scrutor-scans entity
-          configurations via <code>FromAssemblyOf&lt;ClassReference&gt;()</code>. They are deliberately behavior-free; their whole
-          job is to <em>name an assembly</em> for the scanning and governance tooling.</p>
+          NetArchTest&#39;s per-package anchor. That is what the <a href="#assemblyreference"><code>AssemblyReference</code></a> /
+          <a href="#classreference"><code>ClassReference</code></a> pairs are, one per layer (Domain, Application, Infrastructure),
+          each a trivial <code>static class AssemblyReference</code> holding <code>Assembly</code> / <code>AssemblyName</code> statics
+          (<code>AssemblyReference.cs:7-8</code>) plus a non-static <code>class ClassReference</code> (<code>AssemblyReference.cs:11</code>) used
+          where a generic constraint forbids a static type. <code>AddApplication</code> scans the common validators via
+          <code>AddValidatorsFromAssemblyContaining&lt;ClassReference&gt;()</code>
+          (<code>MMCA.Common.Application/DependencyInjection.cs:40</code>), and <code>AddInfrastructure</code> Scrutor-scans entity
+          configurations via <code>FromAssemblyOf&lt;ClassReference&gt;()</code>
+          (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:106-110</code>). They are deliberately behavior-free;
+          their whole job is to <em>name an assembly</em> for the scanning and governance tooling.</p>
           <h2 id="configuration-binding-the-settings-family">Configuration binding, the Settings family</h2>
           <p>Everything a host operator tunes arrives as a strongly-typed settings object bound from an
           <code>appsettings.json</code> section, each carrying a <code>static readonly string SectionName</code> so the section name
           lives next to the shape it binds. The pattern in <code>AddInfrastructure</code> is uniform:
-          <code>services.AddOptions&lt;T&gt;().Bind(configuration.GetSection(T.SectionName)).ValidateDataAnnotations().ValidateOnStart()</code>,
-          so misconfiguration <strong>fails fast at startup</strong>, not lazily on first use. <code>[Rubric §13, Observability &amp; Operability]</code> and <code>[Rubric §15, Best Practices]</code> apply: <code>ValidateOnStart</code> plus DataAnnotations
-          ranges (e.g. <code>OutboxSettings.BatchSize</code> is <code>[Range(1, 1000)]</code>) turn config typos into immediate,
-          descriptive boot failures.</p>
-          <p>The Application-layer settings drive composition itself: <code>ApplicationSettings</code>
-          (<code>UseMiniProfiler</code>, <code>MaxPageSize</code>, <code>DatabaseInitStrategy</code>) is passed by value into every
-          <code>IModule.Register</code>, and it is fronted by the <code>IApplicationSettings</code> interface so consumers depend on the
-          abstraction. <code>ModulesSettings</code> <em>is</em> a <code>Dictionary&lt;string, ModuleSettings&gt;</code> (section <code>&quot;Modules&quot;</code>) whose
-          <code>IsModuleEnabled</code> / <code>IsDependencyRemote</code> helpers the loader queries; <code>ModuleSettings</code> carries the
-          per-module <code>Enabled</code> flag (default <code>true</code>) and the <code>RemoteDependencies</code> list that flips a dependency
-          from &quot;in-process&quot; to &quot;satisfied by an extracted service&quot;. The Infrastructure settings cover the rest of
-          the platform: <code>ConnectionStringSettings</code> (the <code>Default</code> source, only <code>SQLServerConnectionString</code> is
-          <code>[Required]</code>); <code>DataSourcesSettings</code>/<code>DataSourceEntrySettings</code> (the named logical→physical source map
-          for database-per-service, note <code>DataSourcesSettings</code> is built <em>directly</em> from a <code>Get&lt;Dictionary&lt;...&gt;&gt;</code>
-          rather than the options pipeline at <code>DependencyInjection.cs:68-70</code>, because a root-level dictionary
-          section doesn&#39;t bind through <code>AddOptions</code>, and its constructor rejects a reserved <code>&quot;Default&quot;</code> key);
-          <code>MessageBusSettings</code> with its <code>MessageBusProvider</code> enum (<code>InProcess</code>/<code>RabbitMq</code>/<code>AzureServiceBus</code>) that
-          <code>AddBrokerMessaging</code> switches on; <code>OutboxSettings</code> (batch size, polling/processing intervals, retention)
-          consumed by the <a href="group-04-events-outbox.html#outboxprocessor"><code>OutboxProcessor</code></a>; the JWT/JWKS group
-          (<code>JwtSettings</code>/<code>IJwtSettings</code> with its algorithm-aware <code>IValidatableObject.Validate</code>, the
-          <code>JwtSigningAlgorithm</code> enum, and <code>JwksSettings</code>) backing token signing and cross-service validation
-          (ADR-004); and <code>SmtpSettings</code>/<code>PushNotificationSettings</code> for the email and SignalR-push pipelines.</p>
+          <code>services.AddOptions&lt;T&gt;().Bind(configuration.GetSection(T.SectionName)).ValidateDataAnnotations().ValidateOnStart()</code>
+          (e.g. <code>ConnectionStringSettings</code> at
+          <code>MMCA.Common.Infrastructure/DependencyInjection.cs:60-63</code>), so misconfiguration <strong>fails fast at
+          startup</strong>, not lazily on first use. <code>[Rubric §13, Observability &amp; Operability]</code> and <code>[Rubric §15, Best Practices]</code> apply: <code>ValidateOnStart</code> plus DataAnnotations ranges (e.g.
+          <a href="#outboxsettings"><code>OutboxSettings</code></a> <code>BatchSize</code> is <code>[Range(1, 1000)]</code>, <code>OutboxSettings.cs:16-17</code>) turn
+          config typos into immediate, descriptive boot failures.</p>
+          <p>The Application-layer settings drive composition itself: <a href="#applicationsettings"><code>ApplicationSettings</code></a>
+          (<code>UseMiniProfiler</code>, <code>MaxPageSize</code> default 500, <code>DatabaseInitStrategy</code> default <code>&quot;Migrate&quot;</code>,
+          <code>ApplicationSettings.cs:12-18</code>) is passed by value into every <code>IModule.Register</code>, and it is fronted by
+          the <code>IApplicationSettings</code> interface so consumers depend on the abstraction (registered as a singleton
+          over <code>IOptions&lt;ApplicationSettings&gt;</code> at <code>MMCA.Common.Application/DependencyInjection.cs:31</code>).
+          <a href="#modulessettings"><code>ModulesSettings</code></a> <em>is</em> a <code>Dictionary&lt;string, ModuleSettings&gt;</code> (section <code>&quot;Modules&quot;</code>,
+          <code>ModulesSettings.cs:7</code>) whose <code>IsModuleEnabled</code> / <code>IsDependencyRemote</code> helpers
+          (<code>ModulesSettings.cs:18-32</code>) the loader queries; <a href="#modulesettings"><code>ModuleSettings</code></a> carries the
+          per-module <code>Enabled</code> flag (default <code>true</code>, <code>ModuleSettings.cs:9</code>) and the <code>RemoteDependencies</code> list
+          (<code>ModuleSettings.cs:38</code>) that flips a dependency from &quot;in-process&quot; to &quot;satisfied by an extracted
+          service&quot;. The Infrastructure settings cover the rest of the platform:
+          <a href="#connectionstringsettings"><code>ConnectionStringSettings</code></a> (the <code>Default</code> source, only
+          <code>SQLServerConnectionString</code> is <code>[Required]</code>, <code>ConnectionStringSettings.cs:24-25</code>);
+          <a href="#datasourcessettings"><code>DataSourcesSettings</code></a> / <a href="#datasourceentrysettings"><code>DataSourceEntrySettings</code></a>
+          (the named logical to physical source map for database-per-service, note <code>DataSourcesSettings</code> is built
+          <em>directly</em> from a <code>Get&lt;Dictionary&lt;...&gt;&gt;</code> rather than the options pipeline at
+          <code>MMCA.Common.Infrastructure/DependencyInjection.cs:68-70</code>, because a root-level dictionary section does
+          not bind through <code>AddOptions</code>, and its constructor rejects a reserved <code>&quot;Default&quot;</code> key at
+          <code>DataSourcesSettings.cs:34-39</code>); <a href="#messagebussettings"><code>MessageBusSettings</code></a> with its
+          <a href="#messagebusprovider"><code>MessageBusProvider</code></a> enum (<code>InProcess</code> / <code>RabbitMq</code> / <code>AzureServiceBus</code>,
+          <code>MessageBusSettings.cs:68-84</code>) that <code>AddBrokerMessaging</code> switches on; <a href="#outboxsettings"><code>OutboxSettings</code></a>
+          (batch size, polling/processing intervals, retention) consumed by the
+          <a href="group-04-events-outbox.html#outboxprocessor"><code>OutboxProcessor</code></a>; the JWT/JWKS group
+          (<a href="#jwtsettings"><code>JwtSettings</code></a> / <a href="#ijwtsettings"><code>IJwtSettings</code></a> with its algorithm-aware
+          <code>IValidatableObject.Validate</code>, <code>JwtSettings.cs:16</code>, the <a href="#jwtsigningalgorithm"><code>JwtSigningAlgorithm</code></a>
+          enum, and <a href="#jwkssettings"><code>JwksSettings</code></a>) backing token signing and cross-service validation (ADR-004);
+          and <a href="#smtpsettings"><code>SmtpSettings</code></a> / <a href="#pushnotificationsettings"><code>PushNotificationSettings</code></a> for the
+          email and SignalR-push pipelines.</p>
           <h2 id="the-two-routing-attributes">The two routing attributes</h2>
           <p>Two attributes, both in <code>MMCA.Common.Infrastructure</code>, both <code>Inherited = true</code> so they ride down a
           configuration class hierarchy, encode <em>where an entity is stored</em> declaratively, the per-entity half of
           the database-per-service strategy (ADR-006).
-          <a href="group-14-module-system-composition.html#usedatasourceattribute"><code>UseDataSourceAttribute</code></a> names the
-          <strong>engine</strong> (<a href="group-07-persistence-ef-core.html#datasource"><code>DataSource</code></a>: SQL Server / Cosmos / SQLite) and
-          is carried by the provider-specific configuration base classes, so choosing a base class chooses the
-          engine with no change to the entity (see <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a>).
-          <a href="group-14-module-system-composition.html#usedatabaseattribute"><code>UseDatabaseAttribute</code></a> names the <strong>logical
-          database</strong> <em>on</em> that engine; its documented resolution order is the attribute value → the module name
-          derived from the entity&#39;s namespace (the segment before <code>Domain</code>) → <code>&quot;Default&quot;</code>. The persistence
-          runtime (<a href="group-07-persistence-ef-core.html#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a>,
+          <a href="#usedatasourceattribute"><code>UseDataSourceAttribute</code></a> (<code>UseDataSourceAttribute.cs:12-17</code>) names the
+          <strong>engine</strong> (<a href="group-07-persistence-ef-core.html#datasource"><code>DataSource</code></a>: SQL Server / Cosmos / SQLite)
+          and is carried by the provider-specific configuration base classes, so choosing a base class chooses
+          the engine with no change to the entity (see
+          <span class="doc-deadlink" title="Reference outside the published set">primer §2</span>).
+          <a href="#usedatabaseattribute"><code>UseDatabaseAttribute</code></a> (<code>UseDatabaseAttribute.cs:22-26</code>) names the <strong>logical
+          database</strong> <em>on</em> that engine; its documented resolution order (<code>UseDatabaseAttribute.cs:9-14</code>) is the
+          attribute value, then the module name derived from the entity&#39;s namespace (the segment before
+          <code>Domain</code>), then <code>&quot;Default&quot;</code>. The persistence runtime
+          (<a href="group-07-persistence-ef-core.html#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a>,
           <a href="group-07-persistence-ef-core.html#datasourceresolver"><code>DataSourceResolver</code></a>,
           <a href="group-07-persistence-ef-core.html#dbcontextfactory"><code>DbContextFactory</code></a>) reads these attributes up front
           to map each entity to a physical source; those types are documented in the persistence chapter, but the
           <em>markers</em> that feed them live here because they are part of how a module declares its composition.</p>
           <h2 id="end-to-end-one-hosts-boot">End-to-end: one host&#39;s boot</h2>
           <p>Reading <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs</code> top to bottom shows the whole
-          chapter cooperating. The host binds and validates <code>ApplicationSettings</code>
-          (<code>Program.cs:107-113</code>), calls <code>AddApplication()</code> then <code>AddInfrastructure(configuration)</code>
-          (<code>:173-174</code>), binds <code>ModulesSettings</code> and calls <code>AddAPI(modulesSettings)</code> (<code>:177-186</code>), then constructs
-          a <code>ModuleLoader</code> and calls <code>DiscoverAndRegister(services, configuration, applicationSettings, modulesSettings, environmentName)</code> (<code>:188-194</code>). Because this is the <em>Conference</em> service, only the
-          Conference module is <code>Enabled</code> in its config, every other discovered module takes the
+          chapter cooperating. The host binds and validates <a href="#applicationsettings"><code>ApplicationSettings</code></a>
+          (<code>Program.cs:118-124</code>), calls <code>AddApplication()</code> then <code>AddInfrastructure(builder.Configuration)</code>
+          (<code>Program.cs:220-221</code>), binds <a href="#modulessettings"><code>ModulesSettings</code></a> and calls <code>AddAPI(modulesSettings)</code>
+          (<code>Program.cs:224-233</code>), then constructs a <a href="#moduleloader"><code>ModuleLoader</code></a> and calls
+          <code>DiscoverAndRegister(services, configuration, applicationSettings, modulesSettings, environmentName)</code>
+          before registering the loader as a singleton (<code>Program.cs:239-244</code>). Because this is the <em>Conference</em>
+          service, only the Conference module is <code>Enabled</code> in its config, every other discovered module takes the
           <code>RegisterDisabledStubs</code> path. The host then patches the cross-process edges: it replaces the disabled
-          Engagement stub with a real gRPC client (<code>AddEngagementBookmarkCountClient()</code>, <code>:204</code>) and calls
-          <code>AddBrokerMessaging(configuration, ...)</code> (<code>:221-222</code>) so <code>MessageBusSettings.Provider</code> decides whether
+          Engagement stub with a real gRPC client (<code>AddEngagementBookmarkCountClient()</code>, <code>Program.cs:254</code>) and
+          calls <code>AddBrokerMessaging(builder.Configuration, ...)</code> (<code>Program.cs:271-272</code>) so
+          <a href="#messagebussettings"><code>MessageBusSettings</code></a> <code>Provider</code> decides whether
           <a href="group-04-events-outbox.html#imessagebus"><code>IMessageBus</code></a> stays the in-process implementation or becomes
-          the MassTransit-backed broker. Only then comes <code>AddApplicationDecorators()</code> (<code>:224</code>), last, so the
-          decorators wrap the now-registered Conference handlers. Finally <code>app.Services.InitializeDatabaseAsync(...)</code>
-          (<code>:245</code>) applies migrations and runs the module seeders the loader collected. The exact same module
-          assemblies, dropped into the monolith host with all four modules <code>Enabled</code>, would Kahn-sort into one
-          in-process graph with no gRPC clients, which is precisely the reversibility ADR-008 is after.</p>
+          the MassTransit-backed broker. Only then comes <code>AddApplicationDecorators()</code> (<code>Program.cs:274</code>), last,
+          so the decorators wrap the now-registered Conference handlers. Finally
+          <code>app.Services.InitializeDatabaseAsync(applicationSettings, moduleLoader)</code> (<code>Program.cs:295</code>) applies
+          migrations and runs the module seeders the loader collected. The exact same module assemblies, dropped
+          into a monolith host with all four modules <code>Enabled</code>, would Kahn-sort into one in-process graph with no
+          gRPC clients, which is precisely the reversibility ADR-008 is after.</p>
           <h3 id="assemblyreference">AssemblyReference</h3>
           <blockquote>
           <p>MMCA.Common.Application · <code>MMCA.Common.Application</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/AssemblyReference.cs:5</code> · Level 0 · class (static)</p>
@@ -318,9 +346,9 @@
           </li>
           <li><p><strong>Depends on</strong>: <code>System.Reflection.Assembly</code> (BCL) only. No first-party dependencies, that purity is why it sits at Level 0.</p>
           </li>
-          <li><p><strong>Concept introduced, assembly-marker types for convention scanning.</strong> <code>[Rubric §2, Design Patterns]</code> assesses whether recurring problems are solved with recognised patterns; the marker (or &quot;anchor&quot;) type is the idiomatic way to hand an <code>Assembly</code> to a scanner without coupling to an incidental concrete class. <code>[Rubric §1, SOLID]</code> (DIP): registration code depends on a deliberate token, not on <code>typeof(SomeRandomHandler).Assembly</code>, so renaming or moving any real type never breaks the scan. The same anchor is also consumed by the architecture-fitness maps (<code>CommonArchitectureMap</code>/<code>AdcArchitectureMap</code>, <a href="group-26-testing-infrastructure.html">group-25</a>), one anchor type per package pins that package&#39;s assembly via <code>typeof(...AssemblyReference).Assembly</code> (this replaced the old <code>PackageAssemblies</code> test helper, now removed).</p>
+          <li><p><strong>Concept introduced, assembly-marker types for convention scanning.</strong> <code>[Rubric §2, Design Patterns]</code> assesses whether recurring problems are solved with recognised patterns; the marker (or &quot;anchor&quot;) type is the idiomatic way to hand an <code>Assembly</code> to a scanner without coupling to an incidental concrete class. <code>[Rubric §1, SOLID]</code> (DIP): registration code depends on a deliberate token, not on <code>typeof(SomeRandomHandler).Assembly</code>, so renaming or moving any real type never breaks the scan. The same anchor is also consumed by the architecture-fitness maps (<code>CommonArchitectureMap</code>/<code>AdcArchitectureMap</code>, <a href="group-27-testing-infrastructure.html">group-25</a>), one anchor type per package pins that package&#39;s assembly via <code>typeof(...AssemblyReference).Assembly</code> (this replaced the old <code>PackageAssemblies</code> test helper, now removed).</p>
           </li>
-          <li><p><strong>Walkthrough</strong>: two <code>public static readonly</code> fields resolved once at type-initialization: <code>Assembly</code> (<code>AssemblyReference.cs:7</code> in both copies) via <code>typeof(AssemblyReference).Assembly</code>, and <code>AssemblyName</code> (line 8) via <code>Assembly.GetName().Name</code> with a <code>?? string.Empty</code> null-coalescing fallback so the field is never null even if the runtime returns no simple name.</p>
+          <li><p><strong>Walkthrough</strong>: two <code>public static readonly</code> fields resolved once at type-initialization: <code>Assembly</code> via <code>typeof(AssemblyReference).Assembly</code>, and <code>AssemblyName</code> via <code>Assembly.GetName().Name</code> with a <code>?? string.Empty</code> null-coalescing fallback so the field is never null even if the runtime returns no simple name. The two copies differ only by the Domain copy&#39;s XML doc pushing the lines down: <code>Assembly</code>/<code>AssemblyName</code> sit at <code>MMCA.Common/Source/Core/MMCA.Common.Application/AssemblyReference.cs:7</code>/<code>:8</code> in the Application copy and at <code>MMCA.Common/Source/Core/MMCA.Common.Domain/AssemblyReference.cs:10</code>/<code>:11</code> in the Domain copy.</p>
           </li>
           <li><p><strong>Why it&#39;s built this way</strong>: a purpose-built anchor decouples scanning from any business type; the pattern repeats in every package so each assembly is self-describing without cross-layer references (see the per-module copies in <a href="group-22-engagement-module.html#assemblyreference"><code>group-22</code></a> and <a href="group-24-identity-module.html#assemblyreference"><code>group-23</code></a>).</p>
           </li>
@@ -380,7 +408,7 @@
           </li>
           <li><p><strong>Walkthrough</strong>: three <code>{ get; init; }</code> members (lines 10, 13, 23). <code>init</code>-only accessors mean the binder sets them once at startup and the object is immutable thereafter (safe to share as a singleton). The XML doc on <code>DatabaseInitStrategy</code> (lines 15–23) enumerates the three accepted string values and their intent.</p>
           </li>
-          <li><p><strong>Why it&#39;s built this way</strong>: separating the interface (Application layer) from the concrete class lets higher layers inject the abstraction while only the composition root knows the implementation, the dependency-inversion shape the primer describes for ports/adapters (<a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a>).</p>
+          <li><p><strong>Why it&#39;s built this way</strong>: separating the interface (Application layer) from the concrete class lets higher layers inject the abstraction while only the composition root knows the implementation, the dependency-inversion shape the primer describes for ports/adapters (<span class="doc-deadlink" title="Reference outside the published set">primer §2</span>).</p>
           </li>
           <li><p><strong>Where it&#39;s used</strong>: the root <a href="#dependencyinjection"><code>AddApplication()</code></a> registers it via <code>TryAddSingleton&lt;IApplicationSettings&gt;(sp =&gt; sp.GetRequiredService&lt;IOptions&lt;ApplicationSettings&gt;&gt;().Value)</code> (<code>DependencyInjection.cs:31</code>); consumed by the query pipeline (<code>MaxPageSize</code> clamping), the startup database-initialization path (<code>DatabaseInitStrategy</code>), and the profiling-decorator registration (<code>UseMiniProfiler</code>).</p>
           </li>
@@ -412,7 +440,7 @@
           </li>
           <li><p><strong>Depends on</strong>: BCL only (<code>List&lt;string&gt;</code>, options binding). <code>[Rubric §7, Microservices Readiness]</code>.</p>
           </li>
-          <li><p><strong>Concept introduced, the module-extraction seam expressed as configuration.</strong> <code>[Rubric §7, Microservices Readiness]</code> assesses whether a module can be lifted into its own service without rewriting application code. ADR-008 (&quot;service-extraction topology&quot;) is the <em>why</em>: when, say, Catalog is extracted, the host sets <code>&quot;Catalog&quot;: { &quot;Enabled&quot;: false }</code> and any module that still depends on it adds <code>&quot;RemoteDependencies&quot;: [ &quot;Catalog&quot; ]</code>. <a href="#moduleloader"><code>ModuleLoader</code></a> then skips the strict <code>RequiresDependencies</code> check for that name and lets the disabled module&#39;s <code>RegisterDisabledStubs</code> put the contract type in DI; the host afterwards <code>Replace</code>s the stub with a real gRPC client adapter (the XML doc, lines 14–35, walks through exactly this with a Catalog/Sales example). So extraction becomes a config + wiring change, not a code change.</p>
+          <li><p><strong>Concept introduced, the module-extraction seam expressed as configuration.</strong> <code>[Rubric §7, Microservices Readiness]</code> assesses whether a module can be lifted into its own service without rewriting application code. ADR-008 (&quot;service-extraction topology&quot;) is the <em>why</em>: when, say, Catalog is extracted, the host sets <code>&quot;Catalog&quot;: { &quot;Enabled&quot;: false }</code> and any module that still depends on it adds <code>&quot;RemoteDependencies&quot;: [ &quot;Catalog&quot; ]</code>. <a href="#moduleloader"><code>ModuleLoader</code></a> then skips the strict <code>RequiresDependencies</code> check for that name and lets the disabled module&#39;s <code>RegisterDisabledStubs</code> put the contract type in DI; the host afterwards <code>Replace</code>s the stub with a real gRPC client adapter (the XML doc, lines 11–36, walks through exactly this with a Catalog/Sales example). So extraction becomes a config + wiring change, not a code change.</p>
           </li>
           <li><p><strong>Walkthrough</strong>: <code>bool Enabled { get; init; } = true</code> (line 9), <code>init</code>-only, so it can&#39;t be mutated after binding. <code>List&lt;string&gt; RemoteDependencies { get; set; } = []</code> (line 38), note this one is <code>set</code>, not <code>init</code>, because ASP.NET Core&#39;s <code>IConfiguration</code> binder needs a settable collection to populate; the resulting <code>CA2227</code> (&quot;collection properties should be read-only&quot;) analyzer warning is suppressed with an inline <code>#pragma</code> (lines 37–39) and an explanatory comment, an acknowledged, documented trade-off rather than an oversight.</p>
           </li>
@@ -523,7 +551,7 @@
                     → ConcreteHandler        (the actual business logic)</code></pre>
           <p>Queries get the lighter three-deep chain <code>FeatureGate → Logging → Caching → ConcreteHandler</code> (lines 101–103), no validation or transaction, because queries don&#39;t mutate. This file is the one place where the register-order/execute-order inversion must be kept in mind, and the doc comment does so explicitly. The ordering is not arbitrary (the XML doc&#39;s &quot;design rationale&quot;, lines 73–86): feature gating is outermost so disabled features cost nothing; validation sits <em>outside</em> the transaction so malformed commands never open one; cache invalidation sits <em>outside</em> validation so cache is only cleared after a valid, committed mutation; on a business <code>Result.IsFailure</code> the transaction still commits (nothing mutated) but cache invalidation is skipped; on an exception the transaction rolls back and propagates.</p>
           </li>
-          <li><p><strong>Concept introduced, <code>ScanModuleApplicationServices&lt;TAssemblyMarker&gt;()</code>, the convention scanner.</strong> <code>[Rubric §14, Testability]</code> (handler registration is exercisable in isolation via a real host) and <code>[Rubric §5, Vertical Slice]</code> (one call wires a whole module&#39;s slice types). Lines 115–179 run <strong>seven Scrutor passes</strong> over the one marker assembly, each with the correct lifetime: domain event handlers (<code>IDomainEventHandler&lt;&gt;</code>, <strong>singleton</strong>: they create their own scopes), integration event handlers (<code>IIntegrationEventHandler&lt;&gt;</code>, <strong>singleton</strong>), DTO mappers (<code>IEntityDTOMapper&lt;,,&gt;</code>, <strong>scoped</strong>, registered <code>AsSelfWithInterfaces</code>), request mappers (<code>IEntityRequestMapper&lt;,,&gt;</code>, <strong>scoped</strong>), command handlers (<code>ICommandHandler&lt;,&gt;</code>, <strong>scoped</strong>), query handlers (<code>IQueryHandler&lt;,&gt;</code>, <strong>scoped</strong>), and FluentValidation validators (<code>AddValidatorsFromAssemblyContaining&lt;TAssemblyMarker&gt;</code>). After the passes, a reflection loop (lines 162–176) finds every command implementing <code>ICommandWithRequest&lt;TRequest&gt;</code> and <code>TryAdd</code>s a <code>CommandRequestValidator&lt;TCommand, TRequest&gt;</code> so a command that embeds its own request DTO gets a bridging validator for free (<code>TryAdd</code> so an explicit <code>IValidator&lt;TCommand&gt;</code> always wins).</p>
+          <li><p><strong>Concept introduced, <code>ScanModuleApplicationServices&lt;TAssemblyMarker&gt;()</code>, the convention scanner.</strong> <code>[Rubric §14, Testability]</code> (handler registration is exercisable in isolation via a real host) and <code>[Rubric §5, Vertical Slice]</code> (one call wires a whole module&#39;s slice types). Lines 115–179 run <strong>seven Scrutor passes</strong> over the one marker assembly, each with the correct lifetime: domain event handlers (<code>IDomainEventHandler&lt;&gt;</code>, <strong>singleton</strong>: they create their own scopes), integration event handlers (<code>IIntegrationEventHandler&lt;&gt;</code>, <strong>singleton</strong>), DTO mappers (<code>IEntityDTOMapper&lt;,,&gt;</code>, <strong>scoped</strong>, registered <code>AsSelfWithInterfaces</code>), request mappers (<code>IEntityRequestMapper&lt;,,&gt;</code>, <strong>scoped</strong>), command handlers (<code>ICommandHandler&lt;,&gt;</code>, <strong>scoped</strong>), query handlers (<code>IQueryHandler&lt;,&gt;</code>, <strong>scoped</strong>), and FluentValidation validators (<code>AddValidatorsFromAssemblyContaining&lt;TAssemblyMarker&gt;</code>). After the passes, a reflection loop (lines 162–176) finds every command implementing <code>ICommandWithRequest&lt;TRequest&gt;</code> and <code>TryAddTransient</code>s a <code>CommandRequestValidator&lt;TCommand, TRequest&gt;</code> (line 175) so a command that embeds its own request DTO gets a bridging validator for free (<code>TryAdd*</code> so an explicit <code>IValidator&lt;TCommand&gt;</code> registered by the earlier <code>AddValidatorsFromAssemblyContaining</code> pass always wins).</p>
           </li>
           <li><p><strong>Walkthrough</strong></p>
           <ul>
@@ -533,7 +561,7 @@
           <li><code>AddApplicationProfiling()</code> (line 186): optional, <code>TryDecorate</code>s <code>ProfilingCommandDecorator&lt;,&gt;</code>/<code>ProfilingQueryDecorator&lt;,&gt;</code> on top, used when <code>IApplicationSettings.UseMiniProfiler</code> is on.</li>
           </ul>
           </li>
-          <li><p><strong>Why it&#39;s built this way</strong>: <code>[Rubric §3, Clean Architecture]</code>: registration lives in a static <code>DependencyInjection.cs</code> at the composition root, so domain and Application types never reference the container. The pervasive <code>TryAdd*</code> / <code>TryDecorate</code> pattern lets a consuming app override any framework default simply by registering its own implementation first. The <code>extension(IServiceCollection services)</code> block (line 23) is the C# 14 preview extension-member syntax the framework uses for all DI registration, see <a href="00-primer.html#c-extensiont-types--read-this-once">primer §4</a>.</p>
+          <li><p><strong>Why it&#39;s built this way</strong>: <code>[Rubric §3, Clean Architecture]</code>: registration lives in a static <code>DependencyInjection.cs</code> at the composition root, so domain and Application types never reference the container. The pervasive <code>TryAdd*</code> / <code>TryDecorate</code> pattern lets a consuming app override any framework default simply by registering its own implementation first. The <code>extension(IServiceCollection services)</code> block (line 23) is the C# 14 preview extension-member syntax the framework uses for all DI registration, see <span class="doc-deadlink" title="Reference outside the published set">primer §4</span>.</p>
           </li>
           <li><p><strong>Where it&#39;s used</strong>: called from every consuming host (<code>MMCA.ADC.*.Service/Program.cs</code>, the Gateway, test fixtures) following the canonical sequence in MMCA.Common <code>CLAUDE.md</code>: <code>AddApplication()</code> → one <code>ScanModuleApplicationServices&lt;…ClassReference&gt;()</code> per module → <code>AddApplicationDecorators()</code> (last) → Infrastructure → API. Module-level <code>DependencyInjection</code> classes (e.g. the ADC Conference/Engagement/Identity composition roots) are the callers of <code>ScanModuleApplicationServices&lt;ClassReference&gt;()</code>.</p>
           </li>
@@ -545,39 +573,18 @@
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/AssemblyReference.cs:5</code> · Level 0 · class (static)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: a tiny static class exposing the <code>MMCA.Common.Infrastructure</code> assembly and its
-          simple name, so other code can say <em>&quot;scan / anchor against the assembly that contains this type&quot;</em>
-          without hard-coding an incidental class name.</li>
-          <li><strong>Depends on</strong>: <code>System.Reflection</code> (BCL) only. No first-party dependencies.</li>
-          <li><strong>Concept introduced, assembly-marker types for convention scanning.</strong> <code>[Rubric §2, Design Patterns]</code> assesses whether recurring structural needs are met with a deliberate, named pattern
-          rather than ad-hoc code; here a purpose-built anchor type is that pattern. <code>[Rubric §1, SOLID]</code>
-          (DIP, via DI registration) is touched because Scrutor scans and the architecture tests need a
-          <em>stable</em> token to drive open-generic registration. Rather than <code>typeof(SomeRandomClass).Assembly</code>,
-          a dedicated <code>AssemblyReference</code> makes the intent explicit and refactor-safe, the marker can never
-          be accidentally moved to another assembly the way an arbitrary domain class might. This same
-          two-type pattern (a static <code>AssemblyReference</code> + an instantiable <a href="#classreference"><code>ClassReference</code></a>)
-          appears in <em>every</em> package, Domain, Application, API, each describing its own assembly without a
-          cross-layer reference.</li>
-          <li><strong>Walkthrough</strong>: two <code>public static readonly</code> fields:<ul>
-          <li><code>Assembly</code> (<code>AssemblyReference.cs:7</code>), <code>typeof(AssemblyReference).Assembly</code>, resolved once at
-          type initialization. This is the handle Scrutor&#39;s <code>FromAssembly(...)</code> and EF model-builder scans
-          consume.</li>
-          <li><code>AssemblyName</code> (<code>AssemblyReference.cs:8</code>), <code>Assembly.GetName().Name ?? string.Empty</code>, the
-          assembly&#39;s simple name with a null-coalescing fallback so the field is never null.</li>
-          </ul>
+          <li><p><strong>What it is</strong>: the Infrastructure layer&#39;s copy of the assembly-marker anchor, a tiny static class that exposes the assembly it lives in plus that assembly&#39;s simple name. The marker concept is taught once under the Application/Domain copies in <a href="#assemblyreference"><code>AssemblyReference</code></a> earlier in this chapter; this entry is the Infrastructure-layer instance and differs only in namespace.</p>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: a dedicated anchor decouples scanning from any incidental type; if a
-          domain/infra class is renamed or relocated the scan target is unaffected. The static <code>readonly</code>
-          fields are computed once and shared process-wide. The pattern is duplicated per package so each
-          assembly is self-describing without taking a dependency on another layer&#39;s marker.</li>
-          <li><strong>Where it&#39;s used</strong>: Infrastructure DI (<a href="#dependencyinjection"><code>DependencyInjection</code></a>) and Scrutor
-          scanner calls that enumerate Infrastructure types; the architecture-fitness maps
-          (<code>CommonArchitectureMap</code>/<code>AdcArchitectureMap</code>) pin one anchor type per package against this handle
-          (the successor to the removed <code>PackageAssemblies</code> test helper). Note that within
-          <a href="#dependencyinjection"><code>DependencyInjection</code></a> the EF-configuration scan actually anchors on
-          <a href="#classreference"><code>ClassReference</code></a> (<code>FromAssemblyOf&lt;ClassReference&gt;()</code>), not on this static handle,
-          Scrutor&#39;s <code>FromAssemblyOf&lt;T&gt;</code> needs a <em>type</em>, and a static class cannot be a generic type argument
-          (see <code>ClassReference</code>).</li>
+          <li><p><strong>Depends on</strong>: <code>System.Reflection.Assembly</code> (BCL) only. No first-party dependencies, which is why it sits at Level 0.</p>
+          </li>
+          <li><p><strong>Concept</strong>: assembly-marker types for convention scanning, introduced under the Application-layer <a href="#assemblyreference"><code>AssemblyReference</code></a>. <code>[Rubric §2, Design Patterns]</code> assesses whether recurring problems use recognised patterns; handing a scanner a deliberate anchor type rather than <code>typeof(SomeRandomHandler).Assembly</code> is the idiomatic form. <code>[Rubric §1, SOLID]</code> (DIP): registration code depends on a stable token, so moving or renaming a real Infrastructure type never breaks a scan.</p>
+          </li>
+          <li><p><strong>Walkthrough</strong>: two <code>public static readonly</code> fields resolved once at type-initialization (<code>AssemblyReference.cs:7-8</code>): <code>Assembly</code> via <code>typeof(AssemblyReference).Assembly</code>, and <code>AssemblyName</code> via <code>Assembly.GetName().Name</code> with a <code>?? string.Empty</code> fallback so the field is never null even when the runtime reports no simple name.</p>
+          </li>
+          <li><p><strong>Why it&#39;s built this way</strong>: a purpose-built anchor decouples scanning from any business type, and the same shape repeats in every package so each assembly is self-describing without cross-layer references.</p>
+          </li>
+          <li><p><strong>Where it&#39;s used</strong>: the Scrutor entity-configuration scan inside <a href="#dependencyinjection"><code>DependencyInjection.AddInfrastructure</code></a> uses <code>FromAssemblyOf&lt;ClassReference&gt;()</code> (the non-static companion, next); the NetArchTest architecture maps pin this assembly the same way.</p>
+          </li>
           </ul>
           <hr>
           <h3 id="classreference-1">ClassReference</h3>
@@ -585,25 +592,16 @@
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/AssemblyReference.cs:11</code> · Level 0 · class</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: an empty, non-static companion to <a href="#assemblyreference"><code>AssemblyReference</code></a>, used
-          wherever a <em>type parameter</em> (not a <code>typeof(...)</code> expression) needs an assembly anchor and a static
-          class won&#39;t compile in that slot.</li>
-          <li><strong>Depends on</strong>: nothing first-party; no members.</li>
-          <li><strong>Concept</strong>: the instantiable half of the assembly-marker pattern introduced under
-          <a href="#assemblyreference"><code>AssemblyReference</code></a>. C# static classes <strong>cannot</strong> be used as generic type
-          arguments, so APIs that take <code>&lt;TAssemblyMarker&gt;</code> / <code>FromAssemblyOf&lt;T&gt;()</code> need a concrete, non-static
-          reference type from the assembly. <code>ClassReference</code> fills exactly that slot. <code>[Rubric §33, Developer Experience]</code> (assesses how easy it is to wire the framework correctly): centralizing the anchor as a
-          single, obvious token means a consumer never has to hunt for &quot;some class that happens to live in
-          Infrastructure&quot; to drive a scan.</li>
-          <li><strong>Walkthrough</strong>: the entire body is <code>public class ClassReference { }</code> (<code>AssemblyReference.cs:11</code>).
-          No fields, no methods, it exists purely as a generic type argument.</li>
-          <li><strong>Why it&#39;s built this way</strong>: a separate non-static anchor sidesteps the static-class-can&#39;t-be-a-
-          type-argument limitation without weakening <code>AssemblyReference</code>&#39;s static-ness (which is correct for
-          the field-holder).</li>
-          <li><strong>Where it&#39;s used</strong>: in <a href="#dependencyinjection"><code>DependencyInjection.AddInfrastructure</code></a> Scrutor uses
-          <code>scan.FromAssemblyOf&lt;ClassReference&gt;()</code> (<code>DependencyInjection.cs:107</code>) to discover every
-          <code>IEntityTypeConfigurationBase&lt;,&gt;</code> in the Infrastructure assembly and register it as its implemented
-          interfaces with a scoped lifetime.</li>
+          <li><p><strong>What it is</strong>: the non-static companion to <a href="#assemblyreference"><code>AssemblyReference</code></a> in the Infrastructure layer, an empty, instantiable class used wherever a <em>generic type parameter</em> needs an assembly anchor and a static class will not satisfy the constraint.</p>
+          </li>
+          <li><p><strong>Depends on</strong>: nothing first-party; nothing from the BCL beyond <code>object</code>.</p>
+          </li>
+          <li><p><strong>Concept</strong>: the companion half of the marker pattern (see the Application-layer <a href="#classreference"><code>ClassReference</code></a>). C# static classes cannot be used as generic type arguments, so any registration helper constrained to an instantiable reference type is handed <code>ClassReference</code> instead. <code>[Rubric §33, Developer Experience]</code> assesses how conventional the inner loop is: one token stands in for &quot;this assembly&quot; everywhere.</p>
+          </li>
+          <li><p><strong>Walkthrough</strong>: a single-line body-less type declaration at <code>AssemblyReference.cs:11</code> (<code>public class ClassReference;</code>). No members.</p>
+          </li>
+          <li><p><strong>Where it&#39;s used</strong>: <a href="#dependencyinjection"><code>DependencyInjection.AddInfrastructure</code></a> calls <code>services.Scan(scan =&gt; scan.FromAssemblyOf&lt;ClassReference&gt;()...)</code> (<code>DependencyInjection.cs:107</code>) to discover every EF <code>IEntityTypeConfigurationBase&lt;,&gt;</code> in the Infrastructure assembly through this anchor.</p>
+          </li>
           </ul>
           <hr>
           <h3 id="usedatabaseattribute">UseDatabaseAttribute</h3>
@@ -611,55 +609,22 @@
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/UseDatabaseAttribute.cs:22</code> · Level 0 · class (sealed attribute)</p>
           </blockquote>
           <ul>
-          <li><p><strong>What it is</strong>: a declarative attribute placed on an EF entity-type-configuration class to name the
-          <strong>logical data source (database)</strong> that entity belongs to, e.g. <code>[UseDatabase(&quot;Conference&quot;)]</code>. It is
-          the per-entity knob that drives database-per-microservice routing.</p>
+          <li><p><strong>What it is</strong>: a declarative attribute placed on an entity type configuration class to name the <strong>logical data source (database)</strong> that entity targets. It is the &quot;which database&quot; half of the database-per-microservice routing story; the sibling <a href="#usedatasourceattribute"><code>UseDataSourceAttribute</code></a> is the &quot;which engine&quot; half.</p>
           </li>
-          <li><p><strong>Depends on</strong>: <code>System.Attribute</code> (BCL) only. Conceptually it overrides the namespace-derived
-          convention in <a href="group-07-persistence-ef-core.html#namespaceconventions"><code>NamespaceConventions</code></a>, and the
-          logical name it carries is resolved against the <code>DataSources</code> configuration section (see
-          <a href="#datasourcessettings"><code>DataSourcesSettings</code></a> / <a href="#datasourceentrysettings"><code>DataSourceEntrySettings</code></a>).</p>
+          <li><p><strong>Depends on</strong>: <code>System.Attribute</code> (BCL) only. Its resolved logical name is consumed downstream by the data-source machinery (<a href="group-07-persistence-ef-core.html#datasourceresolver"><code>DataSourceResolver</code></a>, <a href="group-07-persistence-ef-core.html#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a>) and mapped to a connection string through the <code>DataSources</code> configuration entries modelled by <a href="#datasourceentrysettings"><code>DataSourceEntrySettings</code></a> / <a href="#datasourcessettings"><code>DataSourcesSettings</code></a>.</p>
           </li>
-          <li><p><strong>Concept introduced, declarative, inherited database routing (the <em>which database</em> half of
-          database-per-service).</strong> <code>[Rubric §8, Data Architecture]</code> assesses how deliberately data ownership
-          and storage boundaries are modeled; this attribute is exactly that, it lets each module own a named
-          database while keeping the choice co-located with the entity&#39;s config. <code>[Rubric §7, Microservices Readiness]</code> (ADR-006) is touched because this is the seam that lets a module&#39;s tables live in their
-          own database without rewriting any application code. <strong>Read the doc comment carefully</strong>, it draws a
-          distinction that is easy to miss: <code>UseDatabaseAttribute</code> selects <em>which database on an engine</em>, while
-          <a href="#usedatasourceattribute"><code>UseDataSourceAttribute</code></a> selects <em>which engine</em> (SQL Server / Cosmos /
-          SQLite). The resolution order for an entity&#39;s logical name (doc comment, lines 9–14) is:</p>
-          <ol>
-          <li>This attribute on the concrete configuration class (inherited).</li>
-          <li>The module name derived from the entity namespace (the segment before <code>Domain</code>), via
-          <a href="group-07-persistence-ef-core.html#namespaceconventions"><code>NamespaceConventions</code></a>.</li>
-          <li><code>&quot;Default&quot;</code>, the top-level <code>ConnectionStrings</code> section.</li>
-          </ol>
-          <p>The crucial monolith-preserving property (doc comment lines 14–18): a logical name with <strong>no entry</strong>
-          in <code>DataSources</code>, or whose connection string <strong>equals</strong> the top-level one, collapses onto the
-          <code>Default</code> physical source. So a host that configures no <code>DataSources</code> section behaves exactly like a
-          single-database monolith, one context, one change tracker, FK constraints intact.</p>
+          <li><p><strong>Concept introduced, declarative database-per-service routing.</strong> <code>[Rubric §8, Data Architecture]</code> assesses how the model maps to physical stores; <code>[Rubric §7, Microservices Readiness]</code> assesses whether a module can be lifted out with its own database (ADR-006). The attribute&#39;s XML doc (<code>UseDatabaseAttribute.cs:9-14</code>) spells out the three-step resolution order for an entity&#39;s logical name: (1) this attribute on the concrete configuration class (inherited); (2) the module name derived from the entity namespace, the segment before <code>Domain</code>; (3) the literal <code>&quot;Default&quot;</code>, the top-level <code>ConnectionStrings</code> section. A logical name with no <code>DataSources</code> entry (or whose connection string equals the top-level one) collapses onto the <code>Default</code> physical source (<code>UseDatabaseAttribute.cs:15-17</code>), so a host that configures nothing behaves exactly like a single-database monolith. This &quot;convention with an explicit override&quot; shape is the load-bearing idea, most modules never apply the attribute and ride the namespace convention.</p>
           </li>
-          <li><p><strong>Walkthrough</strong></p>
+          <li><p><strong>Walkthrough</strong>:</p>
           <ul>
-          <li><code>[AttributeUsage(AttributeTargets.Class, Inherited = true, AllowMultiple = false)]</code> (line 21):
-          <code>Inherited = true</code> is the important flag, annotating a <em>base</em> configuration class propagates the
-          database assignment to every derived configuration, enabling module-wide database assignment from
-          one place. <code>AllowMultiple = false</code> rules out ambiguous double-assignment.</li>
-          <li>Primary-constructor parameter <code>name</code> → read-only <code>Name</code> property (lines 22, 25), holding the
-          logical database name string.</li>
+          <li><code>[AttributeUsage(AttributeTargets.Class, Inherited = true, AllowMultiple = false)]</code> (<code>UseDatabaseAttribute.cs:21</code>). <code>Inherited = true</code> is deliberate: annotating a per-module configuration base class propagates the database assignment to every derived configuration, so a module can pin all its entities to one database in a single place. <code>AllowMultiple = false</code> forbids an ambiguous second assignment.</li>
+          <li>Primary-constructor parameter <code>name</code> (<code>UseDatabaseAttribute.cs:22</code>), the logical name (for example <code>&quot;Conference&quot;</code>).</li>
+          <li><code>Name</code> get-only property (<code>UseDatabaseAttribute.cs:25</code>) initialized from that parameter, the value the resolver reads.</li>
           </ul>
           </li>
-          <li><p><strong>Why it&#39;s built this way</strong>: an attribute (rather than an interface or method override) keeps the
-          database choice <strong>declarative</strong> and physically next to the entity configuration it governs, which is
-          where a reader looks for storage decisions. See <code>ADRs/006-database-per-service.md</code> for why each
-          module/service owns its own database + outbox.</p>
+          <li><p><strong>Why it&#39;s built this way</strong>: an attribute keeps the database choice declarative and co-located with the entity configuration rather than buried in a registration method, and <code>Inherited = true</code> turns per-module assignment into one annotation instead of one per entity (ADR-006, database per microservice).</p>
           </li>
-          <li><p><strong>Where it&#39;s used</strong>: placed on entity-type-configuration classes in module Infrastructure projects;
-          read during the assembly scan that builds the entity→source map
-          (<a href="group-07-persistence-ef-core.html#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a>, with
-          <a href="group-07-persistence-ef-core.html#datasourceresolver"><code>DataSourceResolver</code></a> collapsing logical names
-          to physical ones). In production all 19 ADC entity configs resolve to SQL Server across four
-          databases (see the engine-agnostic note in <a href="00-primer.html">the primer</a>).</p>
+          <li><p><strong>Where it&#39;s used</strong>: applied on concrete EF entity type configuration classes in the modules; read up front by the eager <a href="group-07-persistence-ef-core.html#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a> so routing does not depend on a model having been built.</p>
           </li>
           </ul>
           <hr>
@@ -668,41 +633,23 @@
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/UseDataSourceAttribute.cs:13</code> · Level 1 · class (sealed attribute)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: a declarative attribute placed on an EF entity-type-configuration class to mark the
-          storage <strong>engine</strong> (the <a href="group-07-persistence-ef-core.html#datasource"><code>DataSource</code></a> value, SQL Server,
-          Cosmos, or SQLite) that entity targets. It is the engine-selection counterpart to
-          <a href="#usedatabaseattribute"><code>UseDatabaseAttribute</code></a>&#39;s database-selection.</li>
-          <li><strong>Depends on</strong>: <a href="group-07-persistence-ef-core.html#datasource"><code>DataSource</code></a> (the engine enum, in
-          <code>MMCA.Common.Application.Interfaces.Infrastructure</code>); <code>System.Attribute</code> (BCL). Read at model-build
-          time by <a href="group-07-persistence-ef-core.html#datasourceservice"><code>DataSourceService</code></a> to populate the
-          entity→data-source cache that <a href="group-07-persistence-ef-core.html#unitofwork"><code>UnitOfWork</code></a> uses to route
-          each entity to the correct context.</li>
-          <li><strong>Concept</strong>: <code>[Rubric §8, Data Architecture]</code> (deliberate multi-engine routing). This is the
-          per-entity expression of the <strong>engine-agnostic entities</strong> idea taught in
-          <a href="00-primer.html">the primer</a>: a domain entity carries no persistence-engine choice; the only thing that
-          decides SQL Server vs. Cosmos vs. SQLite is the base class its configuration inherits, and that base
-          class carries this <code>[UseDataSource(&lt;engine&gt;)]</code> marker. Swapping the base re-points the same entity to
-          a different engine with zero change to the domain or application layers. Without the attribute,
-          routing falls back to the <code>&quot;Default&quot;</code> source. The level difference from
-          <a href="#usedatabaseattribute"><code>UseDatabaseAttribute</code></a> (Level 1 vs. 0) is solely because this attribute
-          <em>references</em> the <code>DataSource</code> enum, whereas <code>UseDatabaseAttribute</code> carries only a string.</li>
-          <li><strong>Walkthrough</strong><ul>
-          <li><code>[AttributeUsage(AttributeTargets.Class, Inherited = true, AllowMultiple = false)]</code> (line 12):
-          <code>Inherited = true</code> is what makes the per-engine configuration base classes
-          (<code>EntityTypeConfigurationSQLServer/Cosmos/Sqlite</code>) work, the base declares
-          <code>[UseDataSource(DataSource.SQLServer)]</code> once and every derived entity config inherits it.</li>
-          <li>Primary-constructor parameter <code>dataSource</code> → read-only <code>DataSource</code> property (lines 13, 16).</li>
+          <li><p><strong>What it is</strong>: the companion attribute to <a href="#usedatabaseattribute"><code>UseDatabaseAttribute</code></a>. Where that one names the logical database, this one declares the <strong>database engine</strong> (<a href="group-07-persistence-ef-core.html#datasource"><code>DataSource</code></a>: <code>CosmosDB</code>, <code>Sqlite</code>, or SQL Server) an entity type configuration targets. It is Level 1 rather than Level 0 because, unlike the pure-BCL <code>UseDatabaseAttribute</code>, it references the first-party <code>DataSource</code> enum.</p>
+          </li>
+          <li><p><strong>Depends on</strong>: the <a href="group-07-persistence-ef-core.html#datasource"><code>DataSource</code></a> enum (from <code>MMCA.Common.Application.Interfaces.Infrastructure</code>, imported at <code>UseDataSourceAttribute.cs:1</code>) and <code>System.Attribute</code> (BCL).</p>
+          </li>
+          <li><p><strong>Concept</strong>: engine selection for the multi-engine persistence layer, the sibling of the logical-name routing introduced under <a href="#usedatabaseattribute"><code>UseDatabaseAttribute</code></a>. <code>[Rubric §8, Data Architecture]</code> again: the framework supports SQL Server, Cosmos, and SQLite simultaneously, and this attribute is how a configuration announces which engine&#39;s rules apply. In practice it is carried on the provider-specific configuration base classes (<code>EntityTypeConfigurationSQLServer/Cosmos/Sqlite</code>), so a concrete configuration inherits its engine, while <code>UseDatabaseAttribute</code> selects which database on that engine.</p>
+          </li>
+          <li><p><strong>Walkthrough</strong>:</p>
+          <ul>
+          <li><code>[AttributeUsage(AttributeTargets.Class, Inherited = true, AllowMultiple = false)]</code> (<code>UseDataSourceAttribute.cs:12</code>), same inheritance and single-use semantics as <code>UseDatabaseAttribute</code> so a provider base class propagates the engine to derived configurations.</li>
+          <li>Primary-constructor parameter <code>dataSource</code> (<code>UseDataSourceAttribute.cs:13</code>) of type <a href="group-07-persistence-ef-core.html#datasource"><code>DataSource</code></a>.</li>
+          <li><code>DataSource</code> get-only property (<code>UseDataSourceAttribute.cs:16</code>) exposing the chosen engine. The XML doc (<code>UseDataSourceAttribute.cs:5-9</code>) records that it is read by <a href="group-07-persistence-ef-core.html#datasourceservice"><code>DataSourceService</code></a> at model-building time to populate the entity-to-source cache that <a href="group-07-persistence-ef-core.html#unitofwork"><code>UnitOfWork</code></a> uses to route each entity to the correct <a href="group-07-persistence-ef-core.html#applicationdbcontext"><code>ApplicationDbContext</code></a>.</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: an attribute keeps the engine choice declarative and inheritable, so the
-          framework&#39;s three configuration base classes each tag their engine once and downstream module
-          authors never repeat it. Pairing engine (<code>UseDataSource</code>) with database (<code>UseDatabase</code>) gives a full
-          <code>DataSourceKey(Engine, Name)</code> per entity, which is the routing key in ADR-006.</li>
-          <li><strong>Where it&#39;s used</strong>: applied (via inheritance) to all entity-type-configuration classes in module
-          Infrastructure projects; read by
-          <a href="group-07-persistence-ef-core.html#datasourceservice"><code>DataSourceService</code></a> /
-          <a href="group-07-persistence-ef-core.html#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a> when building
-          the entity-to-source map. Exercised in MMCA.Common&#39;s own <code>UseDataSourceAttributeTests</code>.</li>
+          <li><p><strong>Why it&#39;s built this way</strong>: keeping the engine on an attribute (inherited from a provider base class) means an entity&#39;s engine and database are both declarative metadata the registry can scan up front, which is what lets routing happen without first building an EF model (ADR-006).</p>
+          </li>
+          <li><p><strong>Where it&#39;s used</strong>: on the per-engine <code>EntityTypeConfiguration*</code> base classes and, through inheritance, every concrete configuration under them; read by <a href="group-07-persistence-ef-core.html#datasourceservice"><code>DataSourceService</code></a> / <a href="group-07-persistence-ef-core.html#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a>.</p>
+          </li>
           </ul>
           <hr>
           <h3 id="dependencyinjection-1">DependencyInjection</h3>
@@ -710,166 +657,31 @@
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:38</code> · Level 9 · class (static, extension)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: the single composition root for the entire Infrastructure layer. Through a C#
-          <code>extension(IServiceCollection)</code> block it adds the methods a host calls to wire persistence
-          (DbContexts, unit-of-work, repositories), caching, auth/token services, settings bindings, the
-          outbox background services, push notifications, and the broker. Public surface:
-          <code>AddInfrastructure(IConfiguration)</code>, <code>AddCaching()</code>, <code>AddServices()</code>,
-          <code>AddEntityConfigurationAssembly(Assembly)</code>, <code>AddNotificationInfrastructure()</code>,
-          <code>AddPushNotifications(IConfiguration)</code>, <code>AddBrokerMessaging(IConfiguration, Action?)</code>, and
-          <code>AddTypedServiceClient&lt;TInterface, TImplementation&gt;(string)</code>.</li>
-          <li><strong>Depends on</strong>: nearly every lower-level Infrastructure type plus the settings types in this group.
-          Persistence:
-          <a href="group-07-persistence-ef-core.html#defaultentityconfigurationassemblyprovider"><code>DefaultEntityConfigurationAssemblyProvider</code></a>,
-          <a href="group-07-persistence-ef-core.html#datasourceresolver"><code>DataSourceResolver</code></a>,
-          <a href="group-07-persistence-ef-core.html#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a>,
-          <a href="group-07-persistence-ef-core.html#dbcontextfactory"><code>DbContextFactory</code></a>,
-          <a href="group-07-persistence-ef-core.html#physicaldbcontextfactory"><code>PhysicalDbContextFactory</code></a>,
-          <a href="group-07-persistence-ef-core.html#efqueryableexecutor"><code>EFQueryableExecutor</code></a>,
-          <a href="group-07-persistence-ef-core.html#efrepositorytentity-tidentifiertype"><code>EFRepository&lt;TEntity, TIdentifierType&gt;</code></a>,
-          <a href="group-07-persistence-ef-core.html#repositoryfactory"><code>RepositoryFactory</code></a>,
-          <a href="group-07-persistence-ef-core.html#unitofwork"><code>UnitOfWork</code></a>,
-          <a href="group-07-persistence-ef-core.html#auditsavechangesinterceptor"><code>AuditSaveChangesInterceptor</code></a>,
-          <a href="group-07-persistence-ef-core.html#domaineventsavechangesinterceptor"><code>DomainEventSaveChangesInterceptor</code></a>.
-          Caching:
-          <a href="group-09-caching.html#memorycacheservice"><code>MemoryCacheService</code></a> /
-          <a href="group-09-caching.html#distributedcacheservice"><code>DistributedCacheService</code></a> behind
-          <a href="group-09-caching.html#icacheservice"><code>ICacheService</code></a>.
-          Auth:
-          <a href="group-08-auth.html#tokenservice"><code>TokenService</code></a>,
-          <a href="group-08-auth.html#passwordhasher"><code>PasswordHasher</code></a>,
-          <a href="group-08-auth.html#rsajwksprovider"><code>RsaJwksProvider</code></a> /
-          <a href="group-08-auth.html#ijwksprovider"><code>IJwksProvider</code></a>,
-          <a href="group-08-auth.html#loginprotectionservice"><code>LoginProtectionService</code></a>,
-          <a href="group-08-auth.html#currentuserservice"><code>CurrentUserService</code></a>,
-          <a href="group-08-auth.html#claimbaseduseridprovider"><code>ClaimBasedUserIdProvider</code></a>.
-          Messaging &amp; outbox:
-          <a href="group-04-events-outbox.html#inprocessmessagebus"><code>InProcessMessageBus</code></a> /
-          <a href="group-04-events-outbox.html#brokermessagebus"><code>BrokerMessageBus</code></a>,
-          <a href="group-04-events-outbox.html#inprocesseventbus"><code>InProcessEventBus</code></a> /
-          <a href="group-04-events-outbox.html#brokereventbus"><code>BrokerEventBus</code></a>,
-          <a href="group-04-events-outbox.html#outboxprocessor"><code>OutboxProcessor</code></a>,
-          <a href="group-04-events-outbox.html#outboxcleanupservice"><code>OutboxCleanupService</code></a>,
-          <a href="group-04-events-outbox.html#efinboxstore"><code>EfInboxStore</code></a> /
-          <a href="group-04-events-outbox.html#noopinboxstore"><code>NoOpInboxStore</code></a>.
-          Notifications/HTTP:
-          <a href="group-10-notifications.html#smtpemailsender"><code>SmtpEmailSender</code></a>,
-          <a href="group-10-notifications.html#nullpushnotificationsender"><code>NullPushNotificationSender</code></a> /
-          <a href="group-10-notifications.html#signalrpushnotificationsender"><code>SignalRPushNotificationSender</code></a>,
-          <a href="group-12-api-hosting-mapping.html#correlationcontext"><code>CorrelationContext</code></a>,
-          <a href="group-12-api-hosting-mapping.html#jwtforwardingdelegatinghandler"><code>JwtForwardingDelegatingHandler</code></a>,
-          <a href="#classreference"><code>ClassReference</code></a> (Scrutor anchor). Settings in this group:
-          <a href="#connectionstringsettings"><code>ConnectionStringSettings</code></a>,
-          <a href="#datasourcessettings"><code>DataSourcesSettings</code></a>/<a href="#datasourceentrysettings"><code>DataSourceEntrySettings</code></a>,
-          <a href="#smtpsettings"><code>SmtpSettings</code></a>, <a href="#jwtsettings"><code>JwtSettings</code></a>,
-          <a href="#outboxsettings"><code>OutboxSettings</code></a>, <a href="#messagebussettings"><code>MessageBusSettings</code></a> +
-          <a href="#messagebusprovider"><code>MessageBusProvider</code></a>, <a href="#jwkssettings"><code>JwksSettings</code></a>,
-          <a href="#pushnotificationsettings"><code>PushNotificationSettings</code></a>. Externals: MassTransit v8 (pinned by
-          policy), StackExchange.Redis, <code>Microsoft.AspNetCore.SignalR</code>,
-          <code>Microsoft.Extensions.Http.Resilience</code> (Polly).</li>
-          <li><strong>Concept introduced, the mega-composition-root, options binding, and the <code>AddBrokerMessaging</code>
-          broker-select pattern.</strong> <code>[Rubric §3, Clean Architecture]</code> assesses whether wiring lives at the
-          outer edge rather than leaking into Domain/Application; here the composition root sits in
-          Infrastructure and the domain stays free of DI. <code>[Rubric §10, Cross-Cutting Concerns]</code> is touched
-          because this one file binds every options section and registers every cross-cutting service. The
-          pervasive use of <code>TryAdd*</code> (rather than plain <code>Add</code>) is the key idiom: defaults are registered only
-          if the host hasn&#39;t already supplied an alternative, so a service host can override any piece, the
-          one deliberate exception is the broker swap, which uses <code>Replace</code> (see below). The standard
-          options-binding shape recurs throughout:
-          <code>services.AddOptions&lt;TSettings&gt;().Bind(config.GetSection(TSettings.SectionName)).ValidateDataAnnotations().ValidateOnStart()</code>,
-          followed by a <code>TryAddSingleton&lt;ITSettings&gt;(sp =&gt; sp.GetRequiredService&lt;IOptions&lt;TSettings&gt;&gt;().Value)</code>
-          so consumers can depend on the plain settings <em>interface</em> without knowing about <code>IOptions&lt;T&gt;</code>. One
-          binding deliberately breaks that pattern:
-          <a href="#datasourcessettings"><code>DataSourcesSettings</code></a> is built directly from
-          <code>configuration.GetSection(...).Get&lt;Dictionary&lt;string, DataSourceEntrySettings&gt;&gt;()</code> (lines 68–70)
-          because a root-level <em>dictionary</em> section does not flow cleanly through the options pipeline.</li>
-          <li><strong><code>AddInfrastructure</code> walkthrough (lines 48–143)</strong>: the ordered registration that everything else
-          hangs off:<ul>
-          <li>Entity-config provider + data-source services first
-          (<a href="group-07-persistence-ef-core.html#defaultentityconfigurationassemblyprovider"><code>DefaultEntityConfigurationAssemblyProvider</code></a>,
-          <a href="group-07-persistence-ef-core.html#datasourceresolver"><code>DataSourceResolver</code></a>,
-          <a href="group-07-persistence-ef-core.html#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a>), routing
-          must exist before contexts are built (lines 50–72).</li>
-          <li>SaveChanges interceptors as <strong>singletons</strong> with a comment (lines 53–56) explaining they are
-          stateless, per-save state lives in a <code>ConditionalWeakTable</code> keyed by context, not in the
-          interceptor instance.</li>
-          <li>DbContext factories (lines 80–96) carry a load-bearing comment: the physical factory
-          (<a href="group-07-persistence-ef-core.html#physicaldbcontextfactory"><code>PhysicalDbContextFactory</code></a>) <strong>must
-          never</strong> be converted to EF context pooling, because each context instance carries per-source
-          constructor state (<code>PhysicalDataSource</code>) that pooling would silently reuse across databases, a
-          correctness bug, not just a perf choice. A scoped adapter satisfies EF&#39;s standard
-          <code>IDbContextFactory&lt;ApplicationDbContext&gt;</code> alongside the framework&#39;s own multi-DB factory.</li>
-          <li>The Scrutor scan (lines 106–110) anchored on <a href="#classreference"><code>ClassReference</code></a> registers every
-          <code>IEntityTypeConfigurationBase&lt;,&gt;</code> as its interfaces, scoped to match DbContext lifetime.</li>
-          <li>Outbox: <a href="group-04-events-outbox.html#outboxprocessor"><code>OutboxProcessor</code></a> and
-          <a href="group-04-events-outbox.html#outboxcleanupservice"><code>OutboxCleanupService</code></a> are added as hosted
-          services (lines 136–138), the at-least-once delivery engine of ADR-003.</li>
+          <li><p><strong>What it is</strong>: the single composition root for the entire Infrastructure layer. A static class whose body is one C# preview <code>extension(IServiceCollection services)</code> block (<code>DependencyInjection.cs:40</code>) adding the layer&#39;s registration methods directly onto <code>IServiceCollection</code>: <code>AddInfrastructure(IConfiguration)</code>, <code>AddCaching()</code>, <code>AddServices()</code>, <code>AddEntityConfigurationAssembly(Assembly)</code>, <code>AddNotificationInfrastructure()</code>, <code>AddPushNotifications(IConfiguration)</code>, <code>AddNativePushNotifications(IConfiguration)</code>, <code>AddAzureBlobFileStorage(IConfiguration)</code>, <code>AddBrokerMessaging(IConfiguration, Action?)</code>, and <code>AddTypedServiceClient&lt;TInterface, TImplementation&gt;(string)</code>.</p>
+          </li>
+          <li><p><strong>Depends on</strong>: nearly every Infrastructure type below it, wired by interface. Persistence: <a href="group-07-persistence-ef-core.html#dbcontextfactory"><code>DbContextFactory</code></a>, <a href="group-07-persistence-ef-core.html#physicaldbcontextfactory"><code>PhysicalDbContextFactory</code></a>, <a href="group-07-persistence-ef-core.html#datasourceservice"><code>DataSourceService</code></a>, <a href="group-07-persistence-ef-core.html#datasourceresolver"><code>DataSourceResolver</code></a>, <a href="group-07-persistence-ef-core.html#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a>, <a href="group-07-persistence-ef-core.html#defaultentityconfigurationassemblyprovider"><code>DefaultEntityConfigurationAssemblyProvider</code></a>, <a href="group-07-persistence-ef-core.html#efrepositorytentity-tidentifiertype"><code>EFRepository&lt;TEntity, TIdentifierType&gt;</code></a>, <a href="group-07-persistence-ef-core.html#repositoryfactory"><code>RepositoryFactory</code></a>, <a href="group-07-persistence-ef-core.html#unitofwork"><code>UnitOfWork</code></a>. Messaging/outbox: <a href="group-04-events-outbox.html#imessagebus"><code>IMessageBus</code></a>/<a href="group-04-events-outbox.html#inprocessmessagebus"><code>InProcessMessageBus</code></a>/<a href="group-04-events-outbox.html#brokermessagebus"><code>BrokerMessageBus</code></a>, <a href="group-04-events-outbox.html#ieventbus"><code>IEventBus</code></a>, <a href="group-04-events-outbox.html#outboxprocessor"><code>OutboxProcessor</code></a>, <a href="group-04-events-outbox.html#outboxcleanupservice"><code>OutboxCleanupService</code></a>, <a href="group-04-events-outbox.html#efinboxstore"><code>EfInboxStore</code></a>. Cross-cutting: <a href="group-09-caching.html#icacheservice"><code>ICacheService</code></a>, <a href="group-08-auth.html#ijwksprovider"><code>IJwksProvider</code></a>/<a href="group-08-auth.html#rsajwksprovider"><code>RsaJwksProvider</code></a>, <a href="group-08-auth.html#tokenservice"><code>TokenService</code></a>, <a href="group-12-api-hosting-mapping.html#jwtforwardingdelegatinghandler"><code>JwtForwardingDelegatingHandler</code></a>. Settings: <a href="#datasourcessettings"><code>DataSourcesSettings</code></a>, <a href="#messagebussettings"><code>MessageBusSettings</code></a>, <a href="#outboxsettings"><code>OutboxSettings</code></a>. Externals: MassTransit v8 (pinned by policy), StackExchange.Redis, <code>Microsoft.AspNetCore.SignalR</code>, <code>Microsoft.Azure.NotificationHubs</code>, <code>Azure.Storage.Blobs</code> / <code>Azure.Identity</code>, <code>Microsoft.Extensions.Http.Resilience</code>.</p>
+          </li>
+          <li><p><strong>Concept introduced, the mega-composition-root plus the swap-at-the-edge extraction pattern.</strong> <code>[Rubric §3, Clean Architecture]</code> assesses whether wiring lives at the edge rather than in the core: every concrete Infrastructure choice is registered here, not in Application or Domain. <code>[Rubric §10, Cross-Cutting]</code> and <code>[Rubric §7, Microservices Readiness]</code>: the method bodies are the framework&#39;s default posture, and each optional channel (broker, push, native push, blob storage) is a separate opt-in method a host layers on, so the same package runs as a monolith or as an extracted service without recompiling the core. The default everywhere is <code>TryAdd*</code> (<code>DependencyInjection.cs:50-141</code>, <code>173-209</code>), meaning a host can pre-register its own implementation and the framework will not clobber it; the one place the code intentionally uses <code>Replace</code> instead is the broker swap (below).</p>
+          </li>
+          <li><p><strong>Walkthrough</strong> (in registration order):</p>
+          <ul>
+          <li><strong><code>AddInfrastructure</code> (<code>DependencyInjection.cs:48-143</code>)</strong> is the entry point. It binds the settings sections through the options pipeline with <code>.ValidateDataAnnotations().ValidateOnStart()</code> (<code>ConnectionStringSettings</code>, <code>SmtpSettings</code>, <a href="#outboxsettings"><code>OutboxSettings</code></a>, <code>LoginProtectionSettings</code>, <a href="#messagebussettings"><code>MessageBusSettings</code></a>, <code>JwksSettings</code>), then registers the persistence stack, caching, and the two hosted outbox services (<a href="group-04-events-outbox.html#outboxprocessor"><code>OutboxProcessor</code></a> and <a href="group-04-events-outbox.html#outboxcleanupservice"><code>OutboxCleanupService</code></a> at <code>DependencyInjection.cs:137-138</code>).</li>
+          <li><strong>The named-data-sources note (<code>DependencyInjection.cs:66-70</code>)</strong> is load-bearing: <a href="#datasourcessettings"><code>DataSourcesSettings</code></a> is built directly from <code>configuration.GetSection(...).Get&lt;Dictionary&lt;...&gt;&gt;()</code> rather than through <code>AddOptions</code>, because a root-level dictionary section does not bind through the options pipeline. This is the kind of detail the source comment preserves.</li>
+          <li><strong>The physical-factory warning (<code>DependencyInjection.cs:80-86</code>)</strong>: <a href="group-07-persistence-ef-core.html#dbcontextfactory"><code>DbContextFactory</code></a> is scoped (one per request) and <a href="group-07-persistence-ef-core.html#physicaldbcontextfactory"><code>PhysicalDbContextFactory</code></a> is a singleton that must <strong>never</strong> be converted to EF context pooling, because each raw context carries per-source constructor state that pooling would silently reuse across databases.</li>
+          <li><strong>The Scrutor scan (<code>DependencyInjection.cs:106-110</code>)</strong> discovers every <code>IEntityTypeConfigurationBase&lt;,&gt;</code> in the Infrastructure assembly via <code>FromAssemblyOf&lt;ClassReference&gt;()</code> and registers each as its implemented interfaces, scoped to match the DbContext lifetime, closing the loop back to <a href="#classreference"><code>ClassReference</code></a>.</li>
+          <li><strong><code>AddCaching</code> (<code>DependencyInjection.cs:150-167</code>)</strong> is a Redis-or-memory probe resolved once as a singleton: if an <code>IDistributedCache</code> is registered and is not the no-op <code>MemoryDistributedCache</code>, it wraps the real distributed cache (and any <code>IConnectionMultiplexer</code>) in <code>DistributedCacheService</code>; otherwise it falls back to <code>MemoryCacheService</code>.</li>
+          <li><strong><code>AddServices</code> (<code>DependencyInjection.cs:173-212</code>)</strong> registers the small services and encodes a subtle lifetime lesson: <a href="group-08-auth.html#tokenservice"><code>TokenService</code></a> is a <strong>singleton</strong> (<code>DependencyInjection.cs:185</code>) with an eight-line comment explaining why (<code>DependencyInjection.cs:179-184</code>), a scoped lifetime disposed the RSA handle at end-of-request while IdentityModel&#39;s static <code>CryptoProviderCache</code> still held the cached signature provider wrapping it, throwing <code>ObjectDisposedException</code> on the next RS256 sign. <code>[Rubric §11, Security]</code> (correct signing-key lifecycle). It also sets the default <a href="group-04-events-outbox.html#imessagebus"><code>IMessageBus</code></a> to <a href="group-04-events-outbox.html#inprocessmessagebus"><code>InProcessMessageBus</code></a> (<code>DependencyInjection.cs:194</code>) and wires the inert no-op defaults for push, native push (ADR-044), and file storage (ADR-045) so hosts can register the opt-in methods unconditionally.</li>
+          <li><strong><code>AddBrokerMessaging</code> (<code>DependencyInjection.cs:372-421</code>)</strong> is the extraction pivot. It reads <a href="#messagebusprovider"><code>MessageBusSettings.Provider</code></a>: on <code>InProcess</code> it returns immediately (<code>DependencyInjection.cs:381-384</code>), leaving the in-process bus in place; otherwise it calls <code>AddMassTransit</code> and then <strong><code>Replace</code>s</strong> the scoped <a href="group-04-events-outbox.html#imessagebus"><code>IMessageBus</code></a> with <a href="group-04-events-outbox.html#brokermessagebus"><code>BrokerMessageBus</code></a> and <a href="group-04-events-outbox.html#ieventbus"><code>IEventBus</code></a> with <code>BrokerEventBus</code> (<code>DependencyInjection.cs:401-407</code>), the deliberate exception to the <code>TryAdd</code> rule, because the in-process bus must not run alongside the broker. It also chooses the consumer-side <a href="group-04-events-outbox.html#efinboxstore"><code>IInboxStore</code></a> implementation from <code>settings.EnableInbox</code> (<code>DependencyInjection.cs:411-418</code>).</li>
+          <li><strong>Transport wiring (<code>DependencyInjection.cs:473-548</code>)</strong> is factored into two private static helpers (<code>ResolveBrokerConnectionString</code>, <code>ConfigureBrokerTransport</code>) outside the extension block to keep <code>AddBrokerMessaging</code>&#39;s cyclomatic complexity below the analyzer threshold; both carry a justified <code>IDE0051</code> suppression (<code>DependencyInjection.cs:469-472</code>, <code>498-501</code>) documenting a Roslyn false positive where SDK 10.0.201+ cannot see references crossing the extension-block boundary. <code>[Rubric §29, Resilience &amp; Business Continuity]</code>: every receive endpoint gets an exponential-backoff <code>UseMessageRetry</code> policy (<code>DependencyInjection.cs:517-521</code>, <code>534-538</code>); <code>UseDelayedRedelivery</code> is intentionally not wired, with a comment explaining the Aspire RabbitMQ container lacks the delayed-message-exchange plugin (<code>DependencyInjection.cs:492-497</code>).</li>
+          <li><strong><code>AddTypedServiceClient</code> (<code>DependencyInjection.cs:441-456</code>)</strong> wires a typed <code>HttpClient</code> to Aspire service discovery (<code>http://{serviceName}</code>), attaches <a href="group-12-api-hosting-mapping.html#jwtforwardingdelegatinghandler"><code>JwtForwardingDelegatingHandler</code></a> so the inbound bearer token flows downstream, and adds the standard Polly resilience handler; the doc notes gRPC is preferred for service-to-service contracts.</li>
           </ul>
           </li>
-          <li><strong><code>AddBrokerMessaging</code> (lines 287–336), the extraction seam.</strong> <code>[Rubric §7, Microservices Readiness]</code> (transport swappable at the edge, ADR-007/008): the method reads
-          <a href="#messagebusprovider"><code>MessageBusProvider</code></a> off <a href="#messagebussettings"><code>MessageBusSettings</code></a> and:<ul>
-          <li><code>InProcess</code> → returns immediately, leaving the
-          <a href="group-04-events-outbox.html#inprocessmessagebus"><code>InProcessMessageBus</code></a> that <code>AddServices()</code>
-          registered (line 296–299).</li>
-          <li><code>RabbitMq</code> / <code>AzureServiceBus</code> → calls <code>AddMassTransit</code>, then <code>Replace</code>s the scoped <code>IMessageBus</code>
-          with <a href="group-04-events-outbox.html#brokermessagebus"><code>BrokerMessageBus</code></a> <strong>and</strong> <code>IEventBus</code> with
-          <a href="group-04-events-outbox.html#brokereventbus"><code>BrokerEventBus</code></a> (lines 314–322). This is the rare,
-          intentional use of <code>Replace</code> over <code>TryAdd</code>: the in-process bus must not run alongside the broker,
-          the broker-publish path becomes the <em>only</em> delivery channel (events go to the outbox, the processor
-          publishes them). Consumer-side idempotency is opt-in (lines 326–333):
-          <a href="group-04-events-outbox.html#efinboxstore"><code>EfInboxStore</code></a> when <code>EnableInbox</code>, else the no-op
-          <a href="group-04-events-outbox.html#noopinboxstore"><code>NoOpInboxStore</code></a>.</li>
-          <li>Transport selection (<code>UsingRabbitMq</code> vs. <code>UsingAzureServiceBus</code>) is extracted to the private
-          <code>ConfigureBrokerTransport</code> helper (line 417) purely to keep <code>AddBrokerMessaging</code>&#39;s cyclomatic
-          complexity below the analyzer threshold. <code>[Rubric §29, Resilience &amp; Business Continuity]</code>: every
-          receive endpoint gets <code>UseMessageRetry(r =&gt; r.Exponential(...))</code> (lines 432, 449) so a transient
-          handler failure is retried in-process before dead-lettering. The <code>&lt;remarks&gt;</code> (lines 407–411)
-          explains why <code>UseDelayedRedelivery</code> is deliberately <em>not</em> wired, the Aspire RabbitMQ container
-          doesn&#39;t ship the delayed-message-exchange plugin. Two <code>[SuppressMessage(&quot;…IDE0051…&quot;)]</code> attributes
-          (lines 384–387, 413–416) carry a thorough justification: the IDE0051 analyzer in SDK 10.0.201+
-          fails to see references that cross the boundary between a C# preview extension block and outer-scope
-          private members, so it false-positives &quot;unused private member&quot;, a precise note for the next reader.</li>
-          </ul>
+          <li><p><strong>Why it&#39;s built this way</strong>: the <code>extension(IServiceCollection)</code> syntax keeps every Infrastructure registration in one file without a proliferation of static helper classes, and pushing all concrete choices into one composition root at the layer edge is what keeps Application and Domain free of framework references (ADR-006 for the database-per-service wiring, ADR-007/ADR-008 for the broker/extraction path). See the DI-sequence note in <code>MMCA.Common/CLAUDE.md</code>: hosts call <code>AddApplicationDecorators()</code> last so Scrutor can decorate handlers already registered, but the relative position of <code>AddInfrastructure</code> is not otherwise ordering-sensitive.</p>
           </li>
-          <li><strong><code>AddCaching()</code> (lines 150–167)</strong>: a Redis/memory probe: if an <code>IDistributedCache</code> is registered
-          and is <strong>not</strong> the no-op <code>MemoryDistributedCache</code>, it wraps the real distributed cache in
-          <a href="group-09-caching.html#distributedcacheservice"><code>DistributedCacheService</code></a>; otherwise it falls back to
-          <a href="group-09-caching.html#memorycacheservice"><code>MemoryCacheService</code></a>. The decision is made once
-          (singleton factory) at first resolution.</li>
-          <li><strong><code>AddServices()</code> (lines 173–201)</strong>: registers the core scoped/singleton services and carries the
-          most important lifetime comment in the file (lines 179–185): <a href="group-08-auth.html#tokenservice"><code>TokenService</code></a>
-          is a <strong>singleton</strong> because it owns RSA handles (RS256) disposed in <code>IDisposable.Dispose</code>. A scoped
-          lifetime disposed the RSA at end-of-request while IdentityModel&#39;s static <code>CryptoProviderCache</code> still
-          held the cached <code>AsymmetricSignatureProvider</code> wrapping it, throwing <code>ObjectDisposedException</code> on the
-          next RS256 sign. <code>[Rubric §11, Security]</code>, correct signing-key lifecycle. It also sets the default
-          <a href="group-04-events-outbox.html#inprocessmessagebus"><code>InProcessMessageBus</code></a> /
-          <a href="group-04-events-outbox.html#inprocesseventbus"><code>InProcessEventBus</code></a> (to be replaced by
-          <code>AddBrokerMessaging</code> in a service host), <code>TimeProvider.System</code>, and the no-op
-          <a href="group-10-notifications.html#nullpushnotificationsender"><code>NullPushNotificationSender</code></a>.</li>
-          <li><strong><code>AddPushNotifications()</code> (lines 241–263)</strong>: binds <a href="#pushnotificationsettings"><code>PushNotificationSettings</code></a>,
-          adds SignalR with an optional Redis backplane (detected via <code>ConnectionStrings:redis</code>), and uses
-          <code>AddTransient</code> (not <code>TryAdd</code>) to <em>force-replace</em> the null sender with
-          <a href="group-10-notifications.html#signalrpushnotificationsender"><code>SignalRPushNotificationSender</code></a>.</li>
-          <li><strong><code>AddTypedServiceClient&lt;TInterface, TImplementation&gt;(string)</code> (lines 356–371)</strong>: wires an
-          <code>HttpClient</code> to Aspire service discovery (<code>http://{serviceName}</code>), attaches the
-          <a href="group-12-api-hosting-mapping.html#jwtforwardingdelegatinghandler"><code>JwtForwardingDelegatingHandler</code></a> for
-          bearer-token forwarding, and adds the standard Polly resilience handler. <code>[Rubric §29, Resilience &amp; Business Continuity]</code> (ADR-009): every outbound client gets the standard resilience pipeline by
-          construction. The doc comment notes gRPC is preferred for service-to-service contracts (ADR-007).</li>
-          <li><strong>Why it&#39;s built this way</strong>: <code>[Rubric §3, Clean Architecture]</code> (the composition root lives in
-          Infrastructure, not in business layers) and <code>[Rubric §1, SOLID]</code> (DIP, consumers depend on the
-          settings/service <em>interfaces</em>, the concretes are bound here). The <code>extension(IServiceCollection)</code>
-          syntax groups every Infrastructure DI method in one discoverable file without a proliferation of
-          static helper classes. <code>TryAdd*</code> as the default lets hosts override any default; <code>Replace</code> is used
-          only where two implementations must not coexist (the broker swap). See ADRs 003 (outbox), 006
-          (database-per-service), 007/008 (extraction), 009 (resilience).</li>
-          <li><strong>Where it&#39;s used</strong>: called from each service/host <code>Program.cs</code> <strong>after</strong>
-          <code>AddApplication().AddApplicationDecorators()</code>, per the DI-registration sequence in
-          <code>MMCA.Common/CLAUDE.md</code> (decorators must wrap already-registered handlers). <code>AddBrokerMessaging</code> is
-          called only by hosts that run as broker-backed services; the monolith leaves the in-process bus in
-          place.</li>
-          <li><strong>Caveats / not-in-source</strong>: the two <code>IDE0051</code> suppressions are SDK-version-specific (10.0.201+);
-          the comment explicitly says to remove them once Roslyn fixes cross-block reference tracking, so
-          don&#39;t treat them as permanent.</li>
+          <li><p><strong>Where it&#39;s used</strong>: called from each service host&#39;s <code>Program.cs</code> (the reference apps and the extracted <code>MMCA.ADC.*</code> service hosts) after <code>AddApplication()</code>; the optional methods (<code>AddBrokerMessaging</code>, <code>AddPushNotifications</code>, <code>AddNativePushNotifications</code>, <code>AddAzureBlobFileStorage</code>) are added by the specific hosts that need those channels.</p>
+          </li>
+          <li><p><strong>Caveats / not-in-source</strong>: the exact set of consuming <code>Program.cs</code> files is in the downstream apps (MMCA.ADC / MMCA.Store / MMCA.Helpdesk), not in this repository, so the precise call sites are Not determinable from source here.</p>
+          </li>
           </ul>
           <h3 id="datasourceentrysettings">DataSourceEntrySettings</h3>
           <blockquote>
@@ -906,6 +718,38 @@
           <li><strong>Where it&#39;s used</strong>: held by <a href="#datasourcessettings"><code>DataSourcesSettings.Sources</code></a>; read by
           <a href="group-07-persistence-ef-core.html#datasourceresolver"><code>DataSourceResolver</code></a> when collapsing logical
           names to physical <a href="group-07-persistence-ef-core.html#datasourcekey"><code>DataSourceKey</code></a>s.</li>
+          </ul>
+          <h3 id="filestoragesettings">FileStorageSettings</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Settings</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/FileStorageSettings.cs:10</code> · Level 0 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: blob file-storage configuration bound from the <code>FileStorage</code> section (ADR-045). It
+          carries two mutually-preferred auth paths (a managed-identity <code>ServiceUri</code> for production, a
+          <code>ConnectionString</code> for local development) plus the target container name.</li>
+          <li><strong>Depends on</strong>: <code>System.Uri</code> (BCL) only, no first-party dependency. Consumed by the
+          <code>AddAzureBlobFileStorage</code> extension, which decides between
+          <a href="group-07-persistence-ef-core.html#azureblobfilestorageservice"><code>AzureBlobFileStorageService</code></a> and the
+          no-op <a href="group-07-persistence-ef-core.html#nullfilestorageservice"><code>NullFileStorageService</code></a> behind the
+          <a href="group-07-persistence-ef-core.html#ifilestorageservice"><code>IFileStorageService</code></a> abstraction.</li>
+          <li><strong>Concept introduced, managed-identity-first storage configuration.</strong> <code>[Rubric §11, Security]</code>
+          (assesses secret handling and identity): production sets <code>ServiceUri</code> and authenticates via
+          <code>DefaultAzureCredential</code>, so no storage secret is committed to configuration at all; the
+          <code>ConnectionString</code> path exists only for local development (e.g. Azurite). <code>[Rubric §10, Cross-Cutting Concerns]</code> (centralized, feature-detected infrastructure): when <strong>neither</strong>
+          <code>ServiceUri</code> nor <code>ConnectionString</code> is set the section is treated as incomplete and
+          <code>AddAzureBlobFileStorage</code> leaves the unconfigured default in place rather than throwing, so a host
+          that never uploads files needs no <code>FileStorage</code> section.</li>
+          <li><strong>Walkthrough</strong>: <code>SectionName = &quot;FileStorage&quot;</code> (line 13). Three <code>init</code> properties: <code>ServiceUri</code>
+          (<code>Uri?</code>, line 16), the blob service endpoint (e.g. <code>https://myaccount.blob.core.windows.net</code>) used
+          with <code>DefaultAzureCredential</code>; <code>ConnectionString</code> (<code>string?</code>, line 19), the local-dev alternative;
+          and <code>ContainerName</code> (<code>string?</code>, line 22), the container all blobs live in (documented as required).</li>
+          <li><strong>Why it&#39;s built this way</strong>: sealed and <code>init</code>-only for immutability after binding. Preferring
+          <code>ServiceUri</code> + managed identity over a connection string keeps production credential-free, and the
+          nullable properties let the &quot;incomplete section leaves the default in place&quot; behaviour be a simple
+          null check at wiring time.</li>
+          <li><strong>Where it&#39;s used</strong>: read by <code>AddAzureBlobFileStorage</code> in Infrastructure DI; drives which
+          <a href="group-07-persistence-ef-core.html#ifilestorageservice"><code>IFileStorageService</code></a> implementation is
+          registered.</li>
           </ul>
           <h3 id="iconnectionstringsettings">IConnectionStringSettings</h3>
           <blockquote>
@@ -1029,13 +873,13 @@
           validation, mapping the microservice-extraction phase to a single configuration value.</li>
           <li><strong>Depends on</strong>: nothing first-party. Pairs with <a href="#jwkssettings"><code>JwksSettings</code></a> (RS256 enables the
           JWKS path) and is carried by <a href="#ijwtsettings"><code>IJwtSettings</code></a> / <a href="#jwtsettings"><code>JwtSettings</code></a>.</li>
-          <li><strong>Concept introduced, the symmetric→asymmetric signing migration switch.</strong>
+          <li><strong>Concept introduced, the symmetric to asymmetric signing migration switch.</strong>
           <code>[Rubric §11, Security]</code>, <code>[Rubric §7, Microservices Readiness]</code>. <code>HS256</code> (value <code>0</code>) is the
           default: a shared symmetric key (<code>JwtSettings.SecretForKey</code>) works fine when the issuer and every
           validator live in the same process or behind a single deployment boundary. <code>RS256</code> (value <code>1</code>) is
           the target for Phase 1+ extraction, the Identity service signs with its RSA private key, every
           other service validates with the public key fetched via JWKS (see <a href="#jwkssettings"><code>JwksSettings</code></a>).
-          The doc comment (lines 13-16) flags that switching <code>HS256 → RS256</code> invalidates all existing tokens
+          The doc comment (lines 11-16) flags that switching <code>HS256</code> to <code>RS256</code> invalidates all existing tokens
           (a hard cutover), plan a maintenance window.</li>
           <li><strong>Walkthrough</strong>: two members with explicit values: <code>HS256 = 0</code> (line 21), <code>RS256 = 1</code> (line 24).
           The numeric values are intentional so JSON/config binding works without string parsing.</li>
@@ -1058,14 +902,14 @@
           <a href="group-04-events-outbox.html#imessagebus"><code>IMessageBus</code></a> implementations
           (<a href="group-04-events-outbox.html#inprocessmessagebus"><code>InProcessMessageBus</code></a> /
           <a href="group-04-events-outbox.html#brokermessagebus"><code>BrokerMessageBus</code></a>).</li>
-          <li><strong>Concept introduced, the transport-selection seam.</strong>
+          <li><strong>Concept introduced, the transport-selection extension point.</strong>
           <code>[Rubric §7, Microservices Readiness]</code> (assesses whether transport is swappable without touching
           application code). The same <a href="group-04-events-outbox.html#imessagebus"><code>IMessageBus</code></a> abstraction is
-          backed by three implementations chosen by this enum: <code>InProcess</code> dispatches integration events
+          backed by implementations chosen by this enum: <code>InProcess</code> dispatches integration events
           directly in-process (no broker, no network, no serialization);
           <code>RabbitMq</code>/<code>AzureServiceBus</code> route through MassTransit so the <em>same</em> consumers run unchanged against
           either broker. Flipping this value moves the bus from in-process to a broker with no code change,
-          the extraction seam of ADRs 003/007/008. Recall the <strong>MassTransit v8 pin</strong> (primer §3): v9 needs a
+          the extraction extension point of ADRs 003/007/008. Recall the <strong>MassTransit v8 pin</strong> (primer §3): v9 needs a
           commercial license and crashes broker-enabled hosts at startup, so the broker providers are tied to
           the v8-pinned package.</li>
           <li><strong>Walkthrough</strong>: three members (<code>MessageBusSettings.cs:73-83</code>): <code>InProcess = 0</code> (default, safe for
@@ -1077,6 +921,40 @@
           <li><strong>Where it&#39;s used</strong>: <a href="#messagebussettings"><code>MessageBusSettings.Provider</code></a>; Infrastructure DI
           selects the matching <a href="group-04-events-outbox.html#imessagebus"><code>IMessageBus</code></a> implementation; the
           Aspire <code>WithBroker</code> extension sets <code>MessageBus__Provider</code> to <code>RabbitMq</code>/<code>AzureServiceBus</code>.</li>
+          </ul>
+          <h3 id="nativepushsettings">NativePushSettings</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Settings</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/NativePushSettings.cs:9</code> · Level 0 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: native (mobile) push delivery configuration bound from the <code>NativePush</code> section
+          (ADR-044). It carries an on/off toggle plus the Azure Notification Hubs connection string and hub
+          name.</li>
+          <li><strong>Depends on</strong>: nothing first-party (BCL strings only). Consumed by the native-push wiring, which
+          selects between
+          <a href="group-07-persistence-ef-core.html#azurenotificationhubnativepushsender"><code>AzureNotificationHubNativePushSender</code></a>
+          and the no-op <a href="group-07-persistence-ef-core.html#nullnativepushsender"><code>NullNativePushSender</code></a> behind
+          the <a href="group-07-persistence-ef-core.html#inativepushsender"><code>INativePushSender</code></a> abstraction; the
+          matching device-registrar is
+          <a href="group-07-persistence-ef-core.html#azurenotificationhubdeviceregistrar"><code>AzureNotificationHubDeviceRegistrar</code></a>.</li>
+          <li><strong>Concept introduced, inert-by-default feature-flagged infrastructure.</strong>
+          <code>[Rubric §10, Cross-Cutting Concerns]</code> (assesses centralized, configuration-driven infrastructure):
+          the pipeline ships with <code>Enabled</code> <code>false</code>, so a hub can be provisioned before the platform
+          credentials (FCM v1 service account, APNs auth key) are uploaded and only then switched on by
+          configuration alone, with no redeploy. <code>[Rubric §11, Security]</code>: the connection string is documented
+          as a full Listen+Send+Manage rule, so it belongs in a secret store rather than <code>appsettings.json</code>.</li>
+          <li><strong>Walkthrough</strong>: <code>SectionName = &quot;NativePush&quot;</code> (line 12). Three properties: <code>Enabled</code> (bool, line<ol start="15">
+          <li>gating whether native push is active; <code>ConnectionString</code> (<code>string?</code>, line 18), the Azure
+          Notification Hubs connection string; and <code>HubName</code> (<code>string?</code>, line 21), the notification hub name
+          within the namespace.</li>
+          </ol>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: sealed and <code>init</code>-only for immutability after binding. Defaulting
+          <code>Enabled</code> to <code>false</code> is what lets the pipeline ship inert and be turned on purely by configuration
+          once credentials are in place.</li>
+          <li><strong>Where it&#39;s used</strong>: read by the native-push registration in Infrastructure DI; drives which
+          <a href="group-07-persistence-ef-core.html#inativepushsender"><code>INativePushSender</code></a> implementation is
+          registered.</li>
           </ul>
           <h3 id="connectionstringsettings">ConnectionStringSettings</h3>
           <blockquote>
@@ -1098,8 +976,8 @@
           <li><strong>Walkthrough</strong>: <code>SectionName = &quot;ConnectionStrings&quot;</code> (line 12); five <code>init</code> properties matching
           <a href="#iconnectionstringsettings"><code>IConnectionStringSettings</code></a>. Note the lone non-empty default:
           <code>CosmosDatabaseName = &quot;AtlDevCon&quot;</code> (line 18), the ADC Cosmos database name. (Recall from primer §2
-          that the Cosmos path is a supported-but-largely-dormant engine seam; SQL Server is the only adopted
-          production engine.)</li>
+          that the Cosmos path is a supported-but-largely-dormant engine extension point; SQL Server is the only
+          adopted production engine.)</li>
           <li><strong>Why it&#39;s built this way</strong>: sealed and <code>init</code>-only for immutability after binding; only the truly
           required value is annotated so the optional engines stay optional.</li>
           <li><strong>Where it&#39;s used</strong>: bound in Infrastructure DI; consumed wherever
@@ -1155,7 +1033,7 @@
           HS256, and <code>RsaPrivateKeyPem</code> / <code>RsaPublicKeyPem</code> for RS256. The doc comment (lines 4-8) ties this
           to the extraction migration: switching deployments from HMAC to RSA is what lets the Identity service
           sign tokens that other services validate via JWKS without sharing a symmetric secret (ADR-004).</li>
-          <li><strong>Walkthrough</strong>: nine <code>get; init;</code> members (<code>IJwSettings.cs:16-49</code>): <code>SigningAlgorithm</code>,
+          <li><strong>Walkthrough</strong>: eight <code>get; init;</code> members (<code>IJwSettings.cs:16-49</code>): <code>SigningAlgorithm</code>,
           <code>SecretForKey</code>, the nullable <code>RsaPrivateKeyPem</code> / <code>RsaPublicKeyPem</code> (kept in user-secrets / Key
           Vault, never <code>appsettings.json</code>, per the doc comment on line 27), <code>Issuer</code>, <code>Audience</code>,
           <code>AccessTokenExpirationMinutes</code>, and <code>RefreshTokenExpirationDays</code>. The RSA public key&#39;s doc note
@@ -1216,14 +1094,23 @@
           implementing <a href="#ipushnotificationsettings"><code>IPushNotificationSettings</code></a>.</li>
           <li><strong>Depends on</strong>: <a href="#ipushnotificationsettings"><code>IPushNotificationSettings</code></a> (the contract it fills).</li>
           <li><strong>Concept introduced</strong>: same &quot;interface + bindable concrete + <code>SectionName</code>&quot; shape introduced at
-          <a href="#connectionstringsettings"><code>ConnectionStringSettings</code></a>; <code>[Rubric §10, Cross-Cutting Concerns]</code>.</li>
+          <a href="#connectionstringsettings"><code>ConnectionStringSettings</code></a>; <code>[Rubric §10, Cross-Cutting Concerns]</code>.
+          <code>[Rubric §26, Front-End Security]</code> is touched by the channel-key guard below: the hub validates the
+          client-supplied channel key against a regex before joining a SignalR group, so a client cannot
+          subscribe to an arbitrary group name.</li>
           <li><strong>Walkthrough</strong>: <code>SectionName = &quot;PushNotifications&quot;</code> (line 9); <code>Enabled</code> (bool, defaults <code>false</code>)
           and <code>HubPath</code> defaulting to <code>&quot;/hubs/notifications&quot;</code> (line 15), so the hub maps at a sensible path
-          even when no override is supplied.</li>
+          even when no override is supplied. It also adds <code>ChannelKeyPattern</code> (line 23, defaulting to
+          <code>^(event|session):[0-9]+$</code>), the regex a channel key must match before a client may join or leave a
+          channel via the notification hub. Per its doc comment it is declared <strong>on the concrete class only</strong>
+          (not on <a href="#ipushnotificationsettings"><code>IPushNotificationSettings</code></a>) so the interface stays unchanged
+          and existing implementers do not take a breaking change.</li>
           <li><strong>Why it&#39;s built this way</strong>: sealed <code>init</code> for immutability; the sensible <code>HubPath</code> default keeps
-          the section optional.</li>
+          the section optional, and putting the new <code>ChannelKeyPattern</code> only on the concrete type is a
+          deliberate non-breaking extension of the settings surface.</li>
           <li><strong>Where it&#39;s used</strong>: Infrastructure DI for SignalR;
-          <a href="group-10-notifications.html#signalrpushnotificationsender"><code>SignalRPushNotificationSender</code></a>.</li>
+          <a href="group-10-notifications.html#signalrpushnotificationsender"><code>SignalRPushNotificationSender</code></a> and the
+          <a href="group-10-notifications.html#notificationhub"><code>NotificationHub</code></a> group-join guard.</li>
           </ul>
           <h3 id="smtpsettings">SmtpSettings</h3>
           <blockquote>
@@ -1259,13 +1146,13 @@
           (<code>[Required]</code>, <code>IValidatableObject</code>).</li>
           <li><strong>Concept introduced, algorithm-aware options validation.</strong> <code>[Rubric §11, Security]</code> (assesses
           key management, algorithm selection, and validation correctness). <code>[Rubric §10, Cross-Cutting Concerns]</code> (centralized, validated config). Implementing <code>IValidatableObject.Validate</code> (line 51)
-          hooks into ASP.NET Core options validation: for HS256 it requires <code>SecretForKey</code> to be <strong>≥ 32
+          hooks into ASP.NET Core options validation: for HS256 it requires <code>SecretForKey</code> to be <strong>at least 32
           characters</strong> (lines 53-58), for RS256 it requires a non-empty <code>RsaPrivateKeyPem</code> (lines 60-65). This
           catches the silent-misconfiguration trap a flat <code>[Required]</code> cannot, a 2-character placeholder
           secret would otherwise be accepted. The HS256 error message (line 56) even names the fix (&quot;Replace
-          the placeholder value … via user-secrets or environment variables&quot;), documenting the secure practice
+          the placeholder value ... via user-secrets or environment variables&quot;), documenting the secure practice
           inline.</li>
-          <li><strong>Walkthrough</strong>: <code>SectionName = &quot;Jwt&quot;</code> (line 19); nine <code>init</code> properties (lines 22-45) with
+          <li><strong>Walkthrough</strong>: <code>SectionName = &quot;Jwt&quot;</code> (line 19); eight <code>init</code> properties (lines 22-45) with
           production-safe defaults (<code>SigningAlgorithm = HS256</code>, <code>AccessTokenExpirationMinutes = 15</code>,
           <code>RefreshTokenExpirationDays = 7</code>); <code>Issuer</code> and <code>Audience</code> are <code>[Required]</code> (lines 34, 38); <code>Validate</code>
           (lines 51-66) is the algorithm-conditional check.</li>
@@ -1280,40 +1167,76 @@
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Settings</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/OutboxSettings.cs:10</code> · Level 2 · class (sealed)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: configuration for the outbox background processing pipeline: batching, retries,
-          the smart-wait polling cadence, the duplicate-dispatch window, which data source receives
-          <code>IEventBus</code>-published events, and processed-row retention/cleanup.</li>
-          <li><strong>Depends on</strong>: <a href="group-07-persistence-ef-core.html#datasource"><code>DataSource</code></a> (the engine enum, same
-          assembly) and <a href="group-07-persistence-ef-core.html#datasourcekey"><code>DataSourceKey.DefaultName</code></a> (the
-          default logical name); <code>System.ComponentModel.DataAnnotations</code> (<code>[Range]</code>).</li>
-          <li><strong>Concept introduced, smart-wait outbox configuration.</strong> <code>[Rubric §6, CQRS &amp; Event-Driven]</code>
-          (at-least-once delivery, the outbox pattern of ADR-003). <code>[Rubric §29, Resilience &amp; Business Continuity]</code> (retry + bounded backoff). <code>[Rubric §31, Cost Efficiency/FinOps]</code>: the
-          <code>PollingIntervalSeconds</code> doc (lines 23-29) explains the cost rationale, with signal-based wakeup
-          and smart-wait, production sets this <strong>high</strong> (e.g. 300s) to cut idle SQL polling without adding
-          latency, because real messages are handled in ~5s regardless. <code>ProcessingDelaySeconds</code> (line 40,
-          default 5) is the key safety parameter: a message becomes eligible only this many seconds after
-          creation, which <strong>bounds the duplicate-dispatch window</strong>, the in-process <code>save → dispatch → mark processed</code> path must finish within this delay or the processor may re-dispatch the event. Handlers
-          must be idempotent regardless.</li>
-          <li><strong>Walkthrough</strong>: <code>SectionName = &quot;Outbox&quot;</code> (line 13). Eight <code>init</code> properties; <strong>six</strong> are
-          <code>[Range]</code>-validated, <code>BatchSize</code> (1-1000, default 50), <code>MaxRetries</code> (1-20, default 5),
-          <code>PollingIntervalSeconds</code> (1-3600, default 2), <code>ProcessingDelaySeconds</code> (0-600, default 5),
-          <code>RetentionDays</code> (0-3650, default 7), <code>CleanupIntervalHours</code> (1-168, default 6). The remaining two,
-          <code>DataSource</code> (default <a href="group-07-persistence-ef-core.html#datasource"><code>DataSource.SQLServer</code></a>, line 48)
-          and <code>DatabaseName</code> (default
-          <a href="group-07-persistence-ef-core.html#datasourcekey"><code>DataSourceKey.DefaultName</code></a>, line 57), are <em>not</em>
-          range-checked because they are enum/string source selectors. The <code>DatabaseName</code> default preserves
-          single-database behaviour: <code>IEventBus</code> events are written to the same database as the aggregate that
-          raised them. The doc on lines 54-55 stresses that the outbox <strong>processor</strong> is not limited to this
-          source, it drains the outbox table of <em>every</em> relational physical source in use.</li>
-          <li><strong>Why it&#39;s built this way</strong>: sealed <code>init</code> with generous <code>[Range]</code> bounds so the section is
-          optional yet validated; <code>RetentionDays = 0</code> is the documented escape hatch to keep processed rows
-          indefinitely (the pre-1.x behaviour).</li>
-          <li><strong>Where it&#39;s used</strong>: consumed by <code>OutboxProcessor</code>
-          (<a href="group-04-events-outbox.html#outboxprocessor">G04</a>) and <code>OutboxCleanupService</code>
-          (<a href="group-04-events-outbox.html#outboxcleanupservice">G04</a>).</li>
-          <li><strong>Caveats / not-in-source</strong>: the prior tier edition described this as &quot;eight <code>[Range]</code>-validated
-          properties&quot;; verified against source, only six carry <code>[Range]</code> (the <code>DataSource</code> enum and
-          <code>DatabaseName</code> string selectors do not). Corrected here.</li>
+          <li><p><strong>What it is</strong>: the options object bound from the <code>Outbox</code> configuration section that tunes the
+          outbox background processor and its cleanup companion. Every property has a default, so the whole
+          section is optional in <code>appsettings.json</code> and a host with no <code>Outbox</code> config still runs a working
+          outbox (<code>OutboxSettings.cs:6-9</code>, <code>13</code>).</p>
+          </li>
+          <li><p><strong>Depends on</strong>: <a href="group-07-persistence-ef-core.html#datasource"><code>DataSource</code></a> (Level 0, the engine
+          enum) and <a href="group-07-persistence-ef-core.html#datasourcekey"><code>DataSourceKey</code></a> (Level 1, for its
+          <code>DefaultName</code> constant), both imported through <code>MMCA.Common.Application.Interfaces.Infrastructure</code>
+          (<code>OutboxSettings.cs:2</code>). Externals: <code>System.ComponentModel.DataAnnotations</code> for the <code>[Range]</code>
+          attributes (<code>OutboxSettings.cs:1</code>).</p>
+          </li>
+          <li><p><strong>Concept introduced: options binding with a static <code>SectionName</code>.</strong> This is the first settings
+          class in this group, so note the convention: <code>public static readonly string SectionName = &quot;Outbox&quot;;</code>
+          (<code>OutboxSettings.cs:13</code>) is the single source of truth for the configuration section name, referenced
+          at registration time rather than duplicating the literal <code>&quot;Outbox&quot;</code> string at the bind call. The
+          properties are <code>init</code>-only, so once the options are materialized from configuration they are
+          immutable for the process lifetime.</p>
+          <p><code>[Rubric §6: CQRS &amp; Event-Driven]</code> assesses how reliably domain state changes turn into dispatched
+          events. This type is the knob set for the at-least-once outbox pattern (ADR-003): <code>MaxRetries</code>
+          (<code>OutboxSettings.cs:21</code>, default 5) caps failed-message retries, and <code>ProcessingDelaySeconds</code>
+          (<code>OutboxSettings.cs:40</code>, default 5) is the safety parameter that bounds the duplicate-dispatch
+          window. The in-process path (save the aggregate and its outbox row, then dispatch and mark the row
+          processed) must complete inside that delay or the background processor may re-dispatch the same
+          event, which is why handlers are required to be idempotent regardless (<code>OutboxSettings.cs:33-37</code>).</p>
+          <p><code>[Rubric §31: Cost/FinOps]</code> assesses cost-relevant defaults. <code>PollingIntervalSeconds</code>
+          (<code>OutboxSettings.cs:31</code>, default 2) is documented as a fallback, not a hot loop
+          (<code>OutboxSettings.cs:23-29</code>): with signal-based wakeup the processor wakes immediately on new entries
+          and otherwise smart-waits only until the earliest pending message becomes eligible, so deployed
+          environments set this high (for example 300) to cut idle SQL polling without adding latency for real
+          traffic.</p>
+          <p><code>[Rubric §8: Data Architecture]</code> assesses how deliberately data is partitioned and routed. The
+          <code>DataSource</code> / <code>DatabaseName</code> pair (<code>OutboxSettings.cs:48</code>, <code>57</code>) names where integration events
+          published via <code>IEventBus</code> are written, and its <code>DefaultName</code> default preserves single-database
+          behavior. It is a per-write target, not a global switch: the comment is explicit that the outbox
+          processor still drains every relational physical source the host uses (<code>OutboxSettings.cs:54-55</code>).</p>
+          </li>
+          <li><p><strong>Walkthrough</strong>: one static field then eight <code>init</code> properties, six of them <code>[Range]</code>-validated:</p>
+          <ul>
+          <li><code>SectionName</code> (<code>OutboxSettings.cs:13</code>): static readonly <code>&quot;Outbox&quot;</code>, the bind key.</li>
+          <li><code>BatchSize</code> (<code>OutboxSettings.cs:16-17</code>): <code>[Range(1, 1000)]</code>, default 50; messages processed per
+          polling cycle.</li>
+          <li><code>MaxRetries</code> (<code>OutboxSettings.cs:20-21</code>): <code>[Range(1, 20)]</code>, default 5; attempts before a message
+          is considered failed.</li>
+          <li><code>PollingIntervalSeconds</code> (<code>OutboxSettings.cs:30-31</code>): <code>[Range(1, 3600)]</code>, default 2; the fallback
+          interval / safety net described above.</li>
+          <li><code>ProcessingDelaySeconds</code> (<code>OutboxSettings.cs:39-40</code>): <code>[Range(0, 600)]</code>, default 5; eligibility
+          delay after message creation that bounds the duplicate-dispatch window.</li>
+          <li><code>DataSource</code> (<code>OutboxSettings.cs:48</code>): <code>DataSource</code> enum, default <code>DataSource.SQLServer</code>; the
+          engine of the outbox write target, which must be a relational provider (SQL Server or SQLite).</li>
+          <li><code>DatabaseName</code> (<code>OutboxSettings.cs:57</code>): string, default <code>DataSourceKey.DefaultName</code>; the logical
+          source name paired with <code>DataSource</code>.</li>
+          <li><code>RetentionDays</code> (<code>OutboxSettings.cs:64-65</code>): <code>[Range(0, 3650)]</code>, default 7; days a processed
+          message is kept before purge, with <code>0</code> disabling purging (rows kept indefinitely, the pre-1.x
+          behavior) per <code>OutboxSettings.cs:59-62</code>.</li>
+          <li><code>CleanupIntervalHours</code> (<code>OutboxSettings.cs:72-73</code>): <code>[Range(1, 168)]</code>, default 6; how often the
+          purge sweep runs, ignored when <code>RetentionDays</code> is <code>0</code>.</li>
+          </ul>
+          </li>
+          <li><p><strong>Why it&#39;s built this way</strong>: the defaults encode the framework&#39;s out-of-the-box posture (ADR-003
+          outbox, ADR-006 database-per-service): a monolith with no <code>Outbox</code> section gets a working
+          at-least-once processor writing to its single default database, while a multi-service deployment
+          overrides <code>PollingIntervalSeconds</code>, <code>DataSource</code>, and <code>DatabaseName</code> to tune cost and routing. The
+          <code>[Range]</code> guards give fail-fast validation at bind time rather than a bad value surfacing mid-cycle.</p>
+          </li>
+          <li><p><strong>Where it&#39;s used</strong>: consumed by the outbox background services
+          <a href="group-04-events-outbox.html#outboxprocessor"><code>OutboxProcessor</code></a> (drain and dispatch) and
+          <a href="group-04-events-outbox.html#outboxcleanupservice"><code>OutboxCleanupService</code></a> (retention purge), which
+          read these values to size batches, pace retries, choose the write target, and schedule cleanup over
+          the <a href="group-04-events-outbox.html#outboxmessage"><code>OutboxMessage</code></a> rows.</p>
+          </li>
           </ul>
           <hr>
           <p><a href="group-13-grpc-contracts.html">⬅ gRPC &amp; Inter-Service Contracts</a>  •  <a href="index.html">Index</a>  •  <a href="group-15-common-ui-framework.html">Common UI Framework (MudBlazor components, theme, base pages) ➡</a></p>

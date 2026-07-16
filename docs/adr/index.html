@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 45 ADRs</summary>
+        <summary>All 48 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html" aria-current="page">Overview</a></li>
@@ -110,6 +110,9 @@
         <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
         <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
         <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
           </ol>
         </nav>
       </details>
@@ -245,7 +248,7 @@
           <tr>
           <td><a href="024-push-notifications.html">024</a></td>
           <td>Two-channel user notifications</td>
-          <td>One application use case writes a durable per-user <code>UserNotification</code> inbox (read/unread) <em>and</em> fires a transient SignalR push; transport is behind <code>IPushNotificationSender</code> (no-op <code>Null</code> default, swapped by <code>AddPushNotifications</code> with an optional Redis backplane) and audience behind <code>INotificationRecipientProvider</code>. Push failure is non-fatal (the inbox is the source of truth). ADC runs a dedicated Notification service on these seams.</td>
+          <td>One application use case writes a durable per-user <code>UserNotification</code> inbox (read/unread) <em>and</em> fires a transient SignalR push; transport is behind <code>IPushNotificationSender</code> (no-op <code>Null</code> default, swapped by <code>AddPushNotifications</code> with an optional Redis backplane) and audience behind <code>INotificationRecipientProvider</code>. Push failure is non-fatal (the inbox is the source of truth). ADR-044 adds an optional third OS-level native-push leg after these two, and the hub also carries ADR-039&#39;s ephemeral live-channel events. ADC runs a dedicated Notification service on these abstractions.</td>
           </tr>
           <tr>
           <td><a href="025-startup-warmup-readiness.html">025</a></td>
@@ -265,7 +268,7 @@
           <tr>
           <td><a href="028-dark-theme-mode.html">028</a></td>
           <td>Day/Dark theme mode</td>
-          <td>Connects the already-defined <code>MMCATheme.PaletteDark</code> via <code>MudThemeProvider</code> <code>@bind-IsDarkMode</code>; a <code>ThemeService</code> persists the choice to cookie + localStorage + <code>User.PreferredTheme</code>, defaulting to the OS <code>prefers-color-scheme</code>; reuses ADR-027&#39;s cookie/profile persistence and ships the toggle in the shared <code>MainLayout</code> beside the culture switcher. The no-flash SSR bootstrap is not yet wired for theme (a first-paint flash is possible).</td>
+          <td>Connects the already-defined <code>MMCATheme.PaletteDark</code> via <code>MudThemeProvider</code> <code>@bind-IsDarkMode</code>, owned by the shared <code>MmcaThemeProviders</code> component that the shared <code>MainLayout</code> renders; a <code>ThemeService</code> persists the choice to cookie + localStorage + <code>User.PreferredTheme</code>, defaulting to the OS <code>prefers-color-scheme</code>; reuses ADR-027&#39;s cookie/profile persistence and ships the toggle in the shared <code>MainLayout</code> beside the culture switcher. The no-flash SSR bootstrap is not yet wired for theme (a first-paint flash is possible).</td>
           </tr>
           <tr>
           <td><a href="029-authentication-brute-force-protection.html">029</a></td>
@@ -340,7 +343,7 @@
           <tr>
           <td><a href="043-mobile-deep-links-and-native-oauth-callback.html">043</a></td>
           <td>Mobile deep links, app association, native OAuth callback</td>
-          <td><code>OAuth:AllowedReturnUrlSchemes</code> lets <code>OAuthControllerBase.CompleteAsync</code> redirect the single-use completion code (never tokens) to an allow-listed custom scheme (<code>atldevcon://oauth-complete</code>) so MAUI&#39;s <code>WebAuthenticator</code> can capture it; http(s) never matches (no open redirect), empty list = prior behavior, <code>OriginalString</code> echoed (native callback matching is exact). App association (assetlinks.json with the Play App Signing fingerprint + apple-app-site-association) is served by each app&#39;s UI.Web host, not the gateway; incoming URIs reuse the ADR-042 dispatcher because all heads share one route table.</td>
+          <td><code>OAuth:AllowedReturnUrlSchemes</code> lets <code>OAuthControllerBase.CompleteAsync</code> redirect the single-use completion code (never tokens) to an allow-listed custom scheme (<code>atldevcon://oauth-complete</code>) so MAUI&#39;s <code>WebAuthenticator</code> can capture it; http(s) never matches (no open redirect), empty list = prior behavior, <code>OriginalString</code> echoed (native callback matching is exact). App association (assetlinks.json with the Play App Signing fingerprint + apple-app-site-association) is served by each app&#39;s UI.Web host via <code>MapAppAssociationEndpoints</code>, not the gateway; incoming URIs reuse the ADR-042 dispatcher because all heads share one route table. Framework leg fully shipped (allowlist + association endpoints + <code>MauiExternalAuthBroker</code>); adopted by ADC, not yet by Store.</td>
           </tr>
           <tr>
           <td><a href="044-native-push-delivery.html">044</a></td>
@@ -351,6 +354,21 @@
           <td><a href="045-managed-file-storage-and-avatars.html">045</a></td>
           <td>Managed file storage + user avatars (BR-116a)</td>
           <td><code>IFileStorageService</code> (Null default; Azure Blob impl via <code>AddAzureBlobFileStorage</code> when the <code>FileStorage</code> section is complete - <code>ServiceUri</code> = DefaultAzureCredential, <code>ConnectionString</code> = Azurite) + <code>IImageProcessor</code>/<code>ImageSharpImageProcessor</code> (decode, auto-orient, exact-square crop, strip ALL metadata, re-encode JPEG - only pixels survive untrusted uploads) + <code>IMediaPickerService</code> UI capability (native pick/capture; web heads render InputFile instead). Avatar contract: 2 MB in, 256x256 JPEG out, <code>avatars/{userId}-{random8}.jpg</code> in a public-read container, <code>[Pii]</code> URL nulled + blob deleted on anonymize.</td>
+          </tr>
+          <tr>
+          <td><a href="046-http-api-versioning.html">046</a></td>
+          <td>HTTP API versioning strategy</td>
+          <td>One <code>AddCommonApiVersioning</code> call wires header-based versioning (<code>api-version</code> reader, default 1.0 assumed when unspecified, supported/deprecated versions reported on every response); <code>ServiceInfoControllerBase</code> ships a live v1.0-deprecated + v2.0 exemplar and the shared <code>ServiceInfoVersioningContractTestsBase</code> fitness contract asserts the headers per repo. Adopted by every extracted ADC/Store service host plus Helpdesk. The HTTP-contract axis, distinct from ADR-010&#39;s integration-event schema versioning.</td>
+          </tr>
+          <tr>
+          <td><a href="047-soft-deleted-user-session-revocation.html">047</a></td>
+          <td>Soft-deleted-user session revocation</td>
+          <td><code>SoftDeletedUserMiddleware</code> (BR-133, after authentication, before authorization) returns 401 for authenticated callers whose <code>User.IsDeleted</code>, via <code>ISoftDeletedUserValidator</code> behind a 30-second cached check; the validator is lazily resolved so hosts that do not register one (non-Identity services, Helpdesk) no-op. Bounds the stateless-JWT revocation window (ADR-004) to roughly the cache duration instead of the token lifetime.</td>
+          </tr>
+          <tr>
+          <td><a href="048-primitive-identifier-type-aliases.html">048</a></td>
+          <td>Primitive identifier type aliases</td>
+          <td>Entity IDs are primitives behind per-module <code>global using {Entity}IdentifierType = ...</code> aliases, linked solution-wide via <code>Directory.Build.props</code>, chosen over DDD strongly-typed ID structs: readable signatures with zero EF/serializer/OpenAPI friction, at the cost of no compile-time protection against swapping two same-typed IDs. Wrapper structs were considered and deferred (the empty <code>StronglyTypedIds</code> folders).</td>
           </tr>
           </tbody></table></div>
           <h2 id="writing-a-new-adr">Writing a new ADR</h2>

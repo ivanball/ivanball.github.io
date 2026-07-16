@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ADR-028: Day/Dark Theme Mode · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-06-27).">
+  <meta name="description" content="Accepted (2026-06-27; revised 2026-07-15).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/028-dark-theme-mode.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="article">
   <meta property="og:title" content="ADR-028: Day/Dark Theme Mode">
-  <meta property="og:description" content="Accepted (2026-06-27).">
+  <meta property="og:description" content="Accepted (2026-06-27; revised 2026-07-15).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/028-dark-theme-mode.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 45 ADRs</summary>
+        <summary>All 48 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -110,6 +110,9 @@
         <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
         <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
         <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
           </ol>
         </nav>
       </details>
@@ -118,7 +121,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-028-daydark-theme-mode">ADR-028: Day/Dark Theme Mode</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-27).</p>
+          <p>Accepted (2026-06-27; revised 2026-07-15).</p>
           <h2 id="context">Context</h2>
           <p><code>MMCATheme</code> (<code>MMCA.Common.UI/Theme/MMCATheme.cs</code>) has always defined a complete, brand-tuned <code>PaletteDark</code>
           alongside <code>PaletteLight</code>, but <code>MudThemeProvider</code> was hard-wired to light: no <code>@ref</code>, no <code>IsDarkMode</code>
@@ -130,9 +133,13 @@
           intended end state but is not yet wired for theme (see Decision 3).</p>
           <h2 id="decision">Decision</h2>
           <ol>
-          <li><p><strong>Bind the existing theme.</strong> <code>MainLayout</code> binds <code>MudThemeProvider</code> with <code>@bind-IsDarkMode</code> against the
-          already-complete <code>MMCATheme.Instance</code> (a two-way binding to the layout&#39;s <code>_isDarkMode</code> field; no <code>@ref</code>
-          is used). No new palette work.</p>
+          <li><p><strong>Bind the existing theme.</strong> The shared <code>MainLayout</code> renders a single <code>&lt;MmcaThemeProviders /&gt;</code>
+          component (<code>MMCA.Common.UI/Layout/MainLayout.razor:14</code>), which owns the four Mud providers plus the
+          Day/Dark lifecycle in one place. Inside that component <code>MudThemeProvider</code> is bound with
+          <code>@bind-IsDarkMode</code> against the already-complete <code>MMCATheme.Instance</code>
+          (<code>MMCA.Common.UI/Components/MmcaThemeProviders.razor:11</code>), a two-way binding to that component&#39;s own
+          <code>_isDarkMode</code> field (<code>MmcaThemeProviders.razor:17</code>); no <code>@ref</code> is used. The layout no longer holds the
+          provider markup or the <code>_isDarkMode</code> field itself. No new palette work.</p>
           </li>
           <li><p><strong>A <code>ThemeService</code> (<code>MMCA.Common.UI</code>) owns the preference</strong>, registered in <code>AddUIShared</code>. It holds the
           current mode, reads/writes a <strong>non-HttpOnly cookie + localStorage</strong>, and raises a change event so the

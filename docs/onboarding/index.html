@@ -94,7 +94,8 @@
         <li><a href="group-23-engagement-live-layer.html">23. ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></li>
         <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
         <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
-        <li><a href="group-26-testing-infrastructure.html">26. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="group-26-device-capability-layer.html">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></li>
+        <li><a href="group-27-testing-infrastructure.html">27. Testing &amp; Quality Infrastructure</a></li>
         <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
         <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
         <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
@@ -126,8 +127,8 @@
           <p>The guide has <strong>two organizing axes that work together</strong>.</p>
           <ol>
           <li><p><strong>Primary axis, functional grouping.</strong> Every type lives in exactly <strong>one</strong> functional group: the
-          capability or cross-cutting concern it most exists to serve. The 26 group chapters
-          (<code>group-01-*.md</code> … <code>group-26-*.md</code>) are sequenced roughly topologically, foundational,
+          capability or cross-cutting concern it most exists to serve. The 27 group chapters
+          (<code>group-01-*.md</code> … <code>group-27-*.md</code>) are sequenced roughly topologically, foundational,
           widely-depended-on concerns first (Result → domain blocks → querying → events → CQRS → …), then the
           ASP.NET/UI/Aspire edges, then the <code>MMCA.ADC</code> business modules that build on all of it, then the test
           infrastructure. The full assignment of every type to its group is
@@ -152,10 +153,10 @@
           <h3 id="how-the-inventory--leveling-were-computed">How the inventory &amp; leveling were computed</h3>
           <p>The type inventory and dependency graph are produced <strong>mechanically</strong> by a small Roslyn syntactic
           parser (<code>Tools/invtool/</code>), so the type list, namespaces, and <code>file:line</code> are exact and reproducible. Edges
-          are resolved by <strong>namespace-aware name matching</strong>; ~98% bind by namespace visibility, ~2% by a
-          globally-unique-name fallback, and 26 references are dropped as ambiguous. The functional grouping is
+          are resolved by <strong>namespace-aware name matching</strong>; ~97% bind by namespace visibility, the rest by a
+          globally-unique-name fallback (237 edges), and 26 references are dropped as ambiguous. The functional grouping is
           then applied mechanically (<code>Tools/invtool/classify.ps1</code> → <code>00-group-taxonomy.md</code>), so every one of the
-          <strong>2,287</strong> distinct type nodes maps to exactly one group with no silent drops. See the
+          <strong>2,497</strong> distinct type nodes maps to exactly one group with no silent drops. See the
           <a href="00-dependency-manifest.html#edge-resolution--accuracy">manifest&#39;s accuracy note</a> for residual caveats.</p>
           <hr>
           <h2 id="chapters">Chapters</h2>
@@ -173,7 +174,7 @@
           </tr>
           <tr>
           <td><a href="00-inventory.html"><code>00-inventory.md</code></a></td>
-          <td>Phase 0, every in-scope type (2,287 distinct), mechanically extracted, with <code>file:line</code></td>
+          <td>Phase 0, every in-scope type (2,497 distinct), mechanically extracted, with <code>file:line</code></td>
           </tr>
           <tr>
           <td><a href="00-dependency-manifest.html"><code>00-dependency-manifest.md</code></a></td>
@@ -233,14 +234,14 @@
           <tr>
           <td>7</td>
           <td><a href="group-07-persistence-ef-core.html">Persistence &amp; EF Core</a></td>
-          <td>70</td>
-          <td><code>SQLServerDbContext</code> over abstract <code>ApplicationDbContext</code>, interceptors, repositories, engine-aware entity config, data-source routing, conventions, factories</td>
+          <td>83</td>
+          <td><code>SQLServerDbContext</code> over abstract <code>ApplicationDbContext</code>, interceptors, repositories, engine-aware entity config, data-source routing, conventions, factories, managed file storage + image processing (ADR-045), native-push device registrar (ADR-044)</td>
           </tr>
           <tr>
           <td>8</td>
           <td><a href="group-08-auth.html">Authentication &amp; Authorization</a></td>
-          <td>54</td>
-          <td>JWT/JWKS dual-fetch, the shared <code>AuthenticationServiceBase&lt;TUser&gt;</code> login/refresh workflow (<code>IAuthUser</code>), current-user/claims, password hashing, cookie sessions, role policies + the permission-based authorization mechanism (registry, <code>[HasPermission]</code>), the <code>RoleValue</code> base</td>
+          <td>56</td>
+          <td>JWT/JWKS dual-fetch, the shared <code>AuthenticationServiceBase&lt;TUser&gt;</code> login/refresh workflow (<code>IAuthUser</code>), current-user/claims, password hashing, cookie sessions, role policies + the permission-based authorization mechanism (registry, <code>[HasPermission]</code>), the <code>RoleValue</code> base, the external-auth-broker contract (ADR-042/043)</td>
           </tr>
           <tr>
           <td>9</td>
@@ -251,8 +252,8 @@
           <tr>
           <td>10</td>
           <td><a href="group-10-notifications.html">Notifications (Push + In-App Inbox + Email)</a></td>
-          <td>45</td>
-          <td>Push (SignalR), in-app inbox, email, recipient providers, the ADR-039 hub-channel live publisher, ADC Notification module + its cross-service gRPC live-channel plumbing</td>
+          <td>53</td>
+          <td>Push (SignalR), in-app inbox, email, recipient providers, the ADR-039 hub-channel live publisher, ADR-044 native OS-level push (Azure Notification Hubs, shipped inert), ADC Notification module + its cross-service gRPC live-channel plumbing</td>
           </tr>
           <tr>
           <td>11</td>
@@ -263,8 +264,8 @@
           <tr>
           <td>12</td>
           <td><a href="group-12-api-hosting-mapping.html">API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</a></td>
-          <td>54</td>
-          <td>Controller bases (incl. OAuth + service-info), middleware, startup, model binders, JSON converters, feature mgmt, idempotency, mapping, edge error localization (i18n), authenticated output caching (ADR-040)</td>
+          <td>56</td>
+          <td>Controller bases (incl. OAuth + service-info + API versioning, ADR-046), middleware (incl. soft-deleted-user revocation, ADR-047), startup, model binders, JSON converters, feature mgmt, idempotency, mapping, edge error localization (i18n), authenticated output caching (ADR-040), app-association/deep-link endpoints (ADR-043)</td>
           </tr>
           <tr>
           <td>13</td>
@@ -275,13 +276,13 @@
           <tr>
           <td>14</td>
           <td><a href="group-14-module-system-composition.html">Module System, Composition &amp; Configuration</a></td>
-          <td>32</td>
+          <td>34</td>
           <td><code>IModule</code> + Kahn-ordered loader, DI composition roots, data-source attributes, options binding</td>
           </tr>
           <tr>
           <td>15</td>
           <td><a href="group-15-common-ui-framework.html">Common UI Framework</a></td>
-          <td>81</td>
+          <td>82</td>
           <td>Reusable MudBlazor building blocks: data-grid list page base, theme, common pages/services, i18n culture bootstrap + day/dark <code>ThemeService</code>, user-preference readers/writers, pseudo-localization gate, OAuth UI settings + token storage (Web/WASM), hub-channel subscriptions (ADR-039)</td>
           </tr>
           <tr>
@@ -293,14 +294,14 @@
           <tr>
           <td>17</td>
           <td><a href="group-17-conference-domain.html">ADC Conference, Domain Model &amp; Module Contracts</a></td>
-          <td>83</td>
+          <td>85</td>
           <td>Event/Session/Speaker/Category/Question aggregates + domain events + invariants + Shared contracts (incl. <code>ConferencePermissions</code>, the current/next-event selector + live-validation contracts)</td>
           </tr>
           <tr>
           <td>18</td>
           <td><a href="group-18-conference-application.html">ADC Conference, Application &amp; Use Cases</a></td>
-          <td>195</td>
-          <td>Conference CQRS handlers, validators, DTOs, specs, Sessionize import, decision-support analytics, event-filtering-by-role handlers</td>
+          <td>202</td>
+          <td>Conference CQRS handlers, validators, DTOs, specs, Sessionize import, decision-support analytics, event-filtering-by-role handlers, calendar (.ics) export slice (ADR-042)</td>
           </tr>
           <tr>
           <td>19</td>
@@ -311,43 +312,49 @@
           <tr>
           <td>20</td>
           <td><a href="group-20-conference-api-grpc.html">ADC Conference, API, gRPC Contracts &amp; Service Host</a></td>
-          <td>39</td>
+          <td>40</td>
           <td>REST controllers, <code>.Contracts</code> gRPC, the extractable service host, the gRPC adapters (incl. cross-service live-validation), localized error resources</td>
           </tr>
           <tr>
           <td>21</td>
           <td><a href="group-21-conference-ui.html">ADC Conference, UI</a></td>
-          <td>70</td>
-          <td>Conference Blazor pages + UI services</td>
+          <td>79</td>
+          <td>Conference Blazor pages + UI services, calendar/QR export UI, OfflineBanner, PresenterLayout on Common theme providers</td>
           </tr>
           <tr>
           <td>22</td>
           <td><a href="group-22-engagement-module.html">ADC Engagement Module (Session Bookmarks)</a></td>
-          <td>56</td>
-          <td>The async session-bookmarking slice of the Engagement bounded context: bookmark aggregate, use cases, persistence, API/contracts/service, feedback UI</td>
+          <td>67</td>
+          <td>The async session-bookmarking slice of the Engagement bounded context: bookmark aggregate, use cases, persistence, API/contracts/service, feedback UI, the cross-service user-engagement export slice (gRPC)</td>
           </tr>
           <tr>
           <td>23</td>
           <td><a href="group-23-engagement-live-layer.html">ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></td>
-          <td>89</td>
+          <td>92</td>
           <td>Event-wide live polls with voting + moderated per-session Q&amp;A with upvoting, over the ADR-039 hub-channel transport and the cross-service gRPC live-channel adapter (HappeningNow / SessionLive / PresenterView)</td>
           </tr>
           <tr>
           <td>24</td>
           <td><a href="group-24-identity-module.html">ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></td>
-          <td>66</td>
-          <td>The Identity bounded context end-to-end (incl. <code>IdentityPermissions</code>, user culture/theme preferences; <code>AuthenticationService</code> now extends Common&#39;s shared base)</td>
+          <td>78</td>
+          <td>The Identity bounded context end-to-end (incl. <code>IdentityPermissions</code>, user culture/theme preferences, the ADR-045 user-avatar photo slice end to end; <code>AuthenticationService</code> now extends Common&#39;s shared base)</td>
           </tr>
           <tr>
           <td>25</td>
           <td><a href="group-25-adc-host-composition.html">ADC Application Host, UI Shell &amp; Cross-Module Composition</a></td>
-          <td>30</td>
-          <td>Blazor Web/WASM/WinUI shells, host pages/services, security, app composition</td>
+          <td>34</td>
+          <td>Blazor Web/WASM/WinUI shells, host pages/services, security, app composition, device-capability DI wiring, one-time preference migrator</td>
           </tr>
           <tr>
           <td>26</td>
-          <td><a href="group-26-testing-infrastructure.html">Testing &amp; Quality Infrastructure</a></td>
-          <td>1124</td>
+          <td><a href="group-26-device-capability-layer.html">Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></td>
+          <td>87</td>
+          <td>Per-capability interface contracts (biometric, geolocation, speech, push registration, clipboard/share/haptics, external auth/links, connectivity/battery, deep links) + their MAUI-native, browser-JS-interop, and inert-fallback implementations, selected per host at DI composition time (ADR-042/043/044/045)</td>
+          </tr>
+          <tr>
+          <td>27</td>
+          <td><a href="group-27-testing-infrastructure.html">Testing &amp; Quality Infrastructure</a></td>
+          <td>1170</td>
           <td>All test projects + reusable Testing/Testing.E2E/Testing.UI/<strong>Testing.Architecture</strong> bases + architecture-fitness tests + Gallery + the BenchmarkDotNet perf-smoke suite</td>
           </tr>
           </tbody></table></div>
@@ -445,12 +452,13 @@
           </ul>
           <hr>
           <h2 id="the-companion-projects-context">The companion projects (context)</h2>
-          <pre class="doc-pre"><code>MMCA.Common , shared framework, published as 14 NuGet packages (DDD/Clean Arch/CQRS base classes)
+          <pre class="doc-pre"><code>MMCA.Common , shared framework, published as 15 NuGet packages (DDD/Clean Arch/CQRS base classes)
              ├── consumed by MMCA.ADC   (Atlanta Developers Conference app, the focus of this guide)
              └── consumed by MMCA.Store  (e-commerce app, out of scope here)</code></pre>
           <p>This guide covers <strong>MMCA.Common</strong> (the framework) and <strong>MMCA.ADC</strong> (one consumer). <code>MMCA.Store</code> is out
           of scope. The dependency arrow is why the Common framework groups (1–16) come before the ADC
-          business-module groups (17–25), and the test infrastructure (26) last.</p>
+          business-module groups (17–25); the late-added Common Device Capability layer (26, a framework concern
+          appended after the business modules) and the test infrastructure (27) come last.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>

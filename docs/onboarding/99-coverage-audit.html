@@ -94,7 +94,8 @@
         <li><a href="group-23-engagement-live-layer.html">23. ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></li>
         <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
         <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
-        <li><a href="group-26-testing-infrastructure.html">26. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="group-26-device-capability-layer.html">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></li>
+        <li><a href="group-27-testing-infrastructure.html">27. Testing &amp; Quality Infrastructure</a></li>
         <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
         <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
         <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
@@ -125,58 +126,58 @@
           </thead>
           <tbody><tr>
           <td><code>.cs</code> files scanned</td>
-          <td align="right">1,931</td>
+          <td align="right">2,134</td>
           <td><code>00-inventory.md</code></td>
           </tr>
           <tr>
           <td>, in-scope</td>
-          <td align="right">1,865</td>
+          <td align="right">2,066</td>
           <td></td>
           </tr>
           <tr>
           <td>, generated/excluded</td>
-          <td align="right">66</td>
+          <td align="right">68</td>
           <td>logged exception §2.1</td>
           </tr>
           <tr>
           <td>Type declaration rows (incl. partial-class fragments)</td>
-          <td align="right">2,406</td>
+          <td align="right">2,616</td>
           <td><code>00-inventory.md</code></td>
           </tr>
           <tr>
           <td><strong>Distinct type nodes (partials collapsed)</strong></td>
-          <td align="right"><strong>2,287</strong></td>
+          <td align="right"><strong>2,497</strong></td>
           <td>the master checklist</td>
           </tr>
           <tr>
           <td>→ mapped to a functional group</td>
-          <td align="right">2,287</td>
+          <td align="right">2,497</td>
           <td><code>classify.ps1</code> (0 unmapped)</td>
           </tr>
           <tr>
           <td>→ individually sectioned (named in a chapter)</td>
-          <td align="right">1,284</td>
+          <td align="right">1,465</td>
           <td><code>verify.ps1</code></td>
           </tr>
           <tr>
           <td>→ rolled up by project (G25 test classes)</td>
-          <td align="right">1,003</td>
+          <td align="right">1,032</td>
           <td>logged exception §2.2</td>
           </tr>
           <tr>
-          <td>Distinct <code>###</code> sections written across 26 chapters</td>
-          <td align="right">1,143</td>
-          <td>covering the 1,284 (sibling families share a section, §2.3)</td>
+          <td>Distinct <code>###</code> sections written across 27 chapters</td>
+          <td align="right">1,397</td>
+          <td>covering the 1,465 (sibling families share a section, §2.3)</td>
           </tr>
           <tr>
           <td>Chapter overviews written</td>
-          <td align="right">26</td>
+          <td align="right">27</td>
           <td>one per group</td>
           </tr>
           </tbody></table></div>
-          <p><strong>Cross-check result:</strong> <code>verify.ps1</code> confirms <strong>0</strong> of the 1,284 individually-sectioned types are
+          <p><strong>Cross-check result:</strong> <code>verify.ps1</code> confirms <strong>0</strong> of the 1,465 individually-sectioned types are
           missing from their group chapter, every one appears as a <code>###</code> heading or in a sibling-family
-          <code>File:Line</code> table. 2,287 = 1,284 individually-sectioned + 1,003 rolled-up. Nothing dropped, nothing
+          <code>File:Line</code> table. 2,497 = 1,465 individually-sectioned + 1,032 rolled-up. Nothing dropped, nothing
           double-counted (each type maps to exactly one group).</p>
           <blockquote>
           <p><strong>Regeneration note (re-verified against current source, polyglot-persistence update).</strong> This audit
@@ -439,28 +440,107 @@
           resolution: <strong>192</strong> globally-unique fallback, <strong>26</strong> dropped ambiguous.</li>
           </ul>
           </blockquote>
+          <blockquote>
+          <p><strong>Regeneration note (re-verified against current source, v1.116.0 full drift sweep + G27 chapter authored).</strong>
+          Regenerated at <strong>framework v1.116.0</strong> (MMCA.Common <code>09cf78e</code>, clean; MMCA.ADC <code>2632af6c</code>, clean; <code>FACTS.md</code>
+          is the source of truth for the version / <strong>15-package</strong> / <strong>48-ADR (001-048)</strong> figures, the fifteenth
+          package being <code>MMCA.Common.UI.Maui</code>, the one MAUI-TFM package, ADR-042). Net change since the v1.111.0 pass:
+          <strong>+210</strong> distinct nodes (2,287 -&gt; <strong>2,497</strong>), individually-sectioned 1,284 -&gt; <strong>1,465</strong>, rolled-up 1,003 -&gt;
+          <strong>1,032</strong>, <code>###</code> sections 1,143 -&gt; <strong>1,397</strong> across the now-<strong>27</strong> chapters (<code>verify.ps1</code>: 0 missing; rubric
+          34/34). The change is <strong>+210 added, 0 removed, several repo-to-repo moves, 0 confident type-level regroups</strong>,
+          clustered around the v1.106.0-v1.116.0 release train (ADRs 042-048). <strong>Data-quality caveat:</strong> an earlier
+          incomplete session had already regenerated the mechanical files (<code>out/</code>, <code>00-group-taxonomy.md</code>,
+          <code>00-inventory.md</code>, <code>00-dependency-manifest.md</code>, <code>_units/</code>, <code>_typemap.tsv</code>) to this 2,497/27-group state
+          without authoring the new chapter or touching the front-matter prose, so the exact prior <code>00-nodes.tsv</code>
+          snapshot no longer existed on disk; this delta was reconstructed from git history (<code>v1.111.0..HEAD</code> /
+          <code>f3aba4b9..HEAD</code>) cross-referenced against the fresh inventory, not a byte-exact file diff. The node totals
+          and classifier output are exact; the per-type added/moved attributions are git-derived.</p>
+          <ul>
+          <li><strong>New group created (governance event, user-approved 2026-07-16): G27, &quot;Device Capability Abstraction
+          Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)&quot;</strong>, chapter file <code>group-26-device-capability-layer.md</code>
+          (<strong>87</strong> types, 87 <code>###</code> sections). Per-capability interface contracts in <code>MMCA.Common.UI/Services/Capabilities/</code>
+          (biometric, geocoding/geolocation, speech, push registration, media/clipboard/screenshot, haptics, share,
+          external auth/links, local cache/notifications, connectivity/battery/accessibility, deep links) plus their
+          <strong>MAUI-native</strong> (<code>MMCA.Common.UI.Maui/Capabilities/</code>), <strong>browser-JS-interop</strong> (<code>.../Capabilities/Browser/</code>),
+          and <strong>inert-fallback</strong> (<code>.../Capabilities/Fallbacks/</code>) implementations, selected per host at DI composition
+          time (ADR-042/043/044/045). Why no existing group fit: G15 (the natural <code>MMCA.Common.UI.*</code> catch-all) is
+          generic MudBlazor building blocks/theme/base-pages, whereas this is a distinct one-contract-plus-three-adapters
+          concern spanning three assemblies (<code>MMCA.Common.UI</code>, <code>MMCA.Common.UI.Web</code>, <code>MMCA.Common.UI.Maui</code>) unified by
+          the platform-adapter pattern, not by MudBlazor. The classifier rules that carve G27 out ahead of the G15
+          catch-all (<code>Tools/invtool/classify.ps1</code>, the <code>MMCA.Common.UI.Services.Capabilities</code>/<code>MMCA.Common.UI.Maui</code>
+          prefix rules + the <code>IFormFactor</code>/<code>WasmFormFactor</code>/<code>WebFormFactor</code> O-overrides) were already present on disk;
+          this pass authored the chapter and reconciled the front matter to match. Approved with <strong>mid-list placement
+          directly after ADC Host Composition</strong> (chapter slot 26, ID G27 append-only); renumber fallout: the testing
+          chapter shifts to slot 27 (<code>group-27-testing-infrastructure.md</code>, its file name unchanged from the prior
+          append-only-ID artifact, so no part renames or link rewrites were needed).</li>
+          <li><strong>ADR-045 managed file storage / avatars (G07 +13, 70 -&gt; 83).</strong> <code>IFileStorageService</code>
+          (<code>MMCA.Common.Application/Interfaces/Infrastructure/IFileStorageService.cs:11</code>), <code>AzureBlobFileStorageService</code>
+          / <code>NullFileStorageService</code> (<code>MMCA.Common.Infrastructure/Services/</code>), <code>IImageProcessor</code> /
+          <code>ImageSharpImageProcessor</code> (decode, auto-orient, exact-square crop, strip metadata, re-encode JPEG),
+          <code>ImageContentSniffer</code> (moved in from ADC&#39;s <code>SetUserAvatar</code> slice), <code>FileStorageSettings</code>, plus ADR-044&#39;s
+          <code>INativePushSender</code> / <code>IPushDeviceRegistrar</code> + Azure/Null impls landing in the same infrastructure group.</li>
+          <li><strong>ADR-044 native push (G10 +8, 45 -&gt; 53), shipped inert.</strong> <code>AzureNotificationHubNativePushSender</code>
+          (<code>MMCA.Common.Infrastructure/Services/AzureNotificationHubNativePushSender.cs:14</code>), <code>DeviceInstallationRequest</code>
+          (<code>MMCA.Common.Shared/Notifications/PushNotifications/DeviceInstallationRequest.cs:12</code>), the OS-level FCM/APNs
+          third leg + <code>DevicesController</code> control plane. Honest security note captured while spot-checking: the class
+          XML-doc claims ownership &quot;is stamped server-side&quot; without qualification, but only <code>PUT</code>/<code>UpsertAsync</code> stamps
+          the caller&#39;s <code>UserId</code>; <code>DeleteAsync</code> (<code>DevicesController.cs:50-56</code>) is scoped only by the client-generated
+          (non-enumerable) <code>installationId</code> with no ownership check. The G10 overview now describes the code&#39;s actual
+          behavior, not the comment&#39;s overclaim (code wins, per the guide&#39;s ground rule).</li>
+          <li><strong>Other per-group adds:</strong> G08 +2 (external-auth-broker contract <code>IExternalAuthBroker</code> /
+          <code>UnavailableExternalAuthBroker</code>, ADR-042/043); G12 +2 (ADR-043 app-association/deep-link endpoints
+          <code>AppAssociationEndpointExtensions</code> / <code>AppAssociationOptions</code>, hoisted from ADC, plus the ADR-046 versioning
+          and ADR-047 soft-deleted-user-revocation surfaces cross-referenced); G14 +2, G15 +1 net (most new UI
+          capability surface was diverted to the G27 prefix rule ahead of the G15 catch-all, so net movement understates
+          churn); G17 +2, G18 +7 (<code>Sessions/UseCases/ExportCalendar</code> .ics slice, ADR-042), G20 +1 (<code>NowNextDTO</code> public
+          snapshot), G21 +9 (calendar/QR export UI, OfflineBanner, PresenterLayout onto Common theme providers), G22
+          +11 (<code>UserEngagementExportService</code> cross-service gRPC export slice), G26 +3, G23/Identity +12 (ADR-045 user
+          avatar end to end: <code>SetUserAvatar</code>/<code>GetUserAvatar</code>/<code>RemoveUserAvatar</code> use-case family), G24/Host +4
+          (device-capability DI wiring, <code>AppLockKeyMigration</code> one-time preference migrator), G25/Testing +46 (new
+          reusable <code>RouteAuthorizationTestsBase</code> + OpenAPI/ProblemDetails/ServiceInfo-versioning contract bases + the
+          shared <code>HttpTestDoubles</code> UI harness consolidated from 3 ADC copies, plus per-project growth across every
+          touched module).</li>
+          <li><strong>ADRs 042-048 are now cross-referenced</strong> where their patterns are taught: <strong>042</strong> (device-capability) in
+          the new G27 chapter + G08/G24; <strong>043</strong> (mobile deep links / app association / native OAuth callback) in
+          G12/G27; <strong>044</strong> (native push) in G07/G10; <strong>045</strong> (managed file storage + avatars) in G07/G23; <strong>046</strong>
+          (HTTP API versioning) in G12/G20/G25; <strong>047</strong> (soft-deleted-user session revocation) in G12; <strong>048</strong>
+          (primitive identifier type aliases) in G02/G14 where the alias convention is taught.</li>
+          <li><strong>Corrections made while re-verifying</strong> (adversarial spot-checks on the authored overviews): the G08 auth
+          overview&#39;s 7 <code>MMCA.Common.API</code> citations were pointing at <code>Source/Core/</code> instead of the real
+          <code>Source/Presentation/MMCA.Common.API</code> layer (corrected; the section parts had it right), and its
+          <code>TokenService</code> algorithm re-check citation was split to <code>:130</code> (the <code>ValidAlgorithms</code> pin passed into
+          <code>ValidateToken</code>) + <code>:139-140</code> (the post-return header re-check); the G10 DevicesController DELETE
+          overclaim above; a G10 <code>[ApiVersion]</code> citation range widened <code>:29-30</code> -&gt; <code>:28-30</code>.</li>
+          <li>Cycles <strong>16</strong> (unchanged this pass, re-verified via invtool). Edge resolution: <strong>8,596</strong> namespace-visible
+          (~97%), <strong>237</strong> globally-unique fallback, <strong>26</strong> dropped ambiguous. <strong>ADR-041 (observability)</strong> remains not
+          cross-referenced in the guide; its natural home is the devops-aspire chapter, outside this pass&#39;s scope
+          (still flagged, as at v1.111.0).</li>
+          </ul>
+          </blockquote>
           <hr>
           <h2 id="2-exceptions-log-every-deliberate-omission-with-reason">2. Exceptions log (every deliberate omission, with reason)</h2>
-          <h3 id="21-generated--scaffolded-code-not-sectioned-66-files">2.1 Generated / scaffolded code, not sectioned (66 files)</h3>
+          <h3 id="21-generated--scaffolded-code-not-sectioned-68-files">2.1 Generated / scaffolded code, not sectioned (68 files)</h3>
           <p>EF Core migrations (<code>/Migrations/</code>, <code>.Migrations.SqlServer</code>), <code>ModelSnapshot</code>, <code>*.Designer.cs</code>,
           <code>*.g.cs</code>, <code>GlobalUsings.g.cs</code>, and <code>AssemblyInfo.cs</code> are excluded by rule (<code>Tools/invtool</code> <code>IsGenerated</code>).
           The <strong>mechanisms</strong> that produce them are taught instead: the <code>DbContext</code>, the migration workflow, and
           the <code>.proto</code>/gRPC contracts (see <a href="group-07-persistence-ef-core.html">group-07</a>,
           <a href="group-13-grpc-contracts.html">group-13</a>, and <a href="devops-testing.html">devops-testing</a>). The full file list is
           in <a href="00-inventory.html#generated--excluded-artifacts-no-type-sections-written"><code>00-inventory.md</code></a>.</p>
-          <h3 id="22-per-fact-test-classes-rolled-up-by-project-1003-types">2.2 Per-<code>[Fact]</code> test classes, rolled up by project (1,003 types)</h3>
+          <h3 id="22-per-fact-test-classes-rolled-up-by-project-1032-types">2.2 Per-<code>[Fact]</code> test classes, rolled up by project (1,032 types)</h3>
           <p>Per the guide&#39;s TESTS note, individual test classes are <strong>not</strong> given per-type sections. The
-          <a href="group-26-testing-infrastructure.html">Testing chapter (group-26)</a> instead:</p>
+          <a href="group-27-testing-infrastructure.html">Testing chapter (group-27)</a> instead:</p>
           <ul>
-          <li>sections the <strong>reusable</strong> test infrastructure in full (the <strong>121</strong> types in <code>MMCA.Common.Testing</code>,
+          <li>sections the <strong>reusable</strong> test infrastructure in full (the <strong>138</strong> types in <code>MMCA.Common.Testing</code>,
           <code>.Testing.E2E</code>, <code>.Testing.UI</code>, the shared <strong><code>.Testing.Architecture</code></strong> rule library + bases, now
           including the six convention/fitness bases added since v1.93.0, the web-vitals collector, the
-          localization resx-parity base, the slice-cohesion base, the markup-snapshot helper, and
-          the per-repo architecture-fitness test classes plus the <code>Gallery</code> harness), and</li>
-          <li>rolls the remaining <strong>1,003</strong> per-suite test classes (including the new <code>MMCA.Common.Benchmarks</code>
+          localization resx-parity base, the slice-cohesion base, the markup-snapshot helper, the new
+          contract/route-authorization bases (<code>RouteAuthorizationTestsBase</code>, the OpenAPI/ProblemDetails/
+          ServiceInfo-versioning contract bases) and the shared <code>HttpTestDoubles</code> UI harness added since
+          v1.111.0, and the per-repo architecture-fitness test classes plus the <code>Gallery</code> harness), and</li>
+          <li>rolls the remaining <strong>1,032</strong> per-suite test classes (including the <code>MMCA.Common.Benchmarks</code>
           perf-smoke project) into a <strong>per-project table</strong> (purpose + style:
           unit / integration / fitness / E2E / component / performance-smoke).
-          Every one of the 1,003 remains individually listed with <code>file:line</code> in
+          Every one of the 1,032 remains individually listed with <code>file:line</code> in
           <a href="00-inventory.html"><code>00-inventory.md</code></a>. This is the only category of first-party type not given its own
           prose section.</li>
           </ul>
@@ -468,14 +548,14 @@
           <p>Near-identical families (per-entity <code>Add*/Remove*/Update*</code> commands, <code>*DTOMapper</code>, <code>*CreateRequest</code>,
           <code>*Validator</code>, per-type filter strategies, etc.) are taught in one <code>### A, B, C</code> section that explains
           the shared shape once. <strong>Every</strong> grouped type is still named and cited individually via the section&#39;s
-          <code>File:Line</code> table, so citation coverage is complete (this is what <code>verify.ps1</code> checks). The 1,284
-          individually-sectioned types are covered by 1,143 <code>###</code> sections; the 141-type difference is family grouping.</p>
+          <code>File:Line</code> table, so citation coverage is complete (this is what <code>verify.ps1</code> checks). The 1,465
+          individually-sectioned types are covered by 1,397 <code>###</code> sections; the 68-type difference is family grouping.</p>
           <hr>
           <h2 id="3-grouping--ordering-verification">3. Grouping &amp; ordering verification</h2>
           <ul>
-          <li><strong>Every type in exactly one group.</strong> <code>classify.ps1</code> assigns all 2,287 nodes via name-level overrides
+          <li><strong>Every type in exactly one group.</strong> <code>classify.ps1</code> assigns all 2,497 nodes via name-level overrides
           (for the grab-bag <code>MMCA.Common.*Interfaces*/Services</code> namespaces) + ordered namespace-prefix rules;
-          it reports <strong>0 unmapped</strong> and the per-group counts sum to 2,287. See
+          it reports <strong>0 unmapped</strong> and the per-group counts sum to 2,497. See
           <a href="00-group-taxonomy.html"><code>00-group-taxonomy.md</code></a>.</li>
           <li><strong>Within-group ascending Level.</strong> Each chapter&#39;s sections were authored from a pre-sorted, Level-
           ascending unit table, so no section precedes a same-group type it depends on (ties broken by name).</li>
@@ -483,13 +563,13 @@
           (re-verified for the three cycles new in this pass: the <code>NotificationHubService</code>/<code>ChannelSubscription</code>
           pair is wholly in <a href="group-15-common-ui-framework.html">group-15</a>, and the two new test SCCs around
           <code>CosmosConfigurationPortabilityTests</code>/<code>DatabaseInitializationExtensionsTests</code>/<code>FixedAssemblyProvider</code>/
-          <code>MultiSourceSqliteIntegrationTests</code> are wholly in <a href="group-26-testing-infrastructure.html">group-26</a>):
+          <code>MultiSourceSqliteIntegrationTests</code> are wholly in <a href="group-27-testing-infrastructure.html">group-26</a>):
           the <code>ApplicationDbContext ↔ AuditSaveChangesInterceptor ↔ DomainEventSaveChangesInterceptor ↔ DataSourceModelCacheKeyFactory</code> cycle is wholly in <a href="group-07-persistence-ef-core.html">group-07</a>; the
           Event/Session/Speaker/Category aggregate nav-cycles are wholly in
           <a href="group-17-conference-domain.html">group-17</a>; the <code>Address</code>/<code>Currency</code> value-object + converter pairs in
           <a href="group-02-domain-building-blocks.html">group-02</a> (plus polyglot-fitness and the new localization/markup
-          test cycles in <a href="group-26-testing-infrastructure.html">group-26</a>). Full list:
-          <a href="00-dependency-manifest.html#cycles-scc-size--1-14">manifest</a>.</li>
+          test cycles in <a href="group-27-testing-infrastructure.html">group-26</a>). Full list:
+          <a href="00-dependency-manifest.html#cycles-scc-size--1-16">manifest</a>.</li>
           <li><strong>Cross-group forward references are allowed and cross-linked.</strong> Because group order is functional
           (not a strict global topological sort), some sections reference a first-party type whose home group
           comes later. These are correct <strong>by construction</strong>: every cross-link target is resolved through
@@ -712,8 +792,8 @@
           <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a> and group-07), not yet as
           live production options.</li>
           <li><strong>Edge-resolution approximation.</strong> The dependency graph is a <em>syntactic</em> (namespace-aware) resolve,
-          not a full semantic compiler bind: ~98% of edges bind by namespace visibility, ~2% by a
-          globally-unique-name fallback (192 edges), and 26 references are dropped as ambiguous. This is accurate enough
+          not a full semantic compiler bind: ~97% of edges bind by namespace visibility, the rest by a
+          globally-unique-name fallback (237 edges), and 26 references are dropped as ambiguous. This is accurate enough
           for the leveling spine but is a documented approximation
           (<a href="00-dependency-manifest.html#edge-resolution--accuracy">manifest accuracy note</a>).</li>
           </ol>

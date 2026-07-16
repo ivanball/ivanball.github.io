@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADR-046: HTTP API Versioning Strategy · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-07-15).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/046-http-api-versioning.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ADR-046: HTTP API Versioning Strategy">
+  <meta property="og:description" content="Accepted (2026-07-15).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/046-http-api-versioning.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">046 · HTTP API Versioning Strategy</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 48 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html" aria-current="page">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-046-http-api-versioning-strategy">ADR-046: HTTP API Versioning Strategy</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-07-15).</p>
+          <h2 id="context">Context</h2>
+          <p>The framework&#39;s REST surface is served by controllers hosted in extracted service processes behind a
+          YARP gateway. As those services evolve, a response shape has to be able to change without breaking a
+          client still coded against the old shape. HTTP APIs need a versioning axis of their own: one that a
+          caller selects per request and that the service can advertise and deprecate over time. This is a
+          different concern from how asynchronous integration events evolve on the wire (ADR-010): that axis is
+          resolved by consumers from a <code>SchemaVersion</code> carried in the serialized event, never chosen by a
+          caller. The HTTP axis is request-time, client-selected, and reported back in response headers.</p>
+          <p>Without a shared decision, each host would wire <code>Asp.Versioning</code> differently (URL-segment vs. query
+          vs. header, different default-version behavior, inconsistent deprecation reporting), and there would
+          be no proof that the machinery actually works past a single version. A &quot;we support versioning&quot;
+          claim that only ever ships <code>v1.0</code> is untestable and erodes silently.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Standardize one header-based API-versioning setup in <code>MMCA.Common.API</code>, adopt it in every service
+          host through a single registration call, and keep it exercised by a shared fitness contract that
+          proves two live versions coexist.</p>
+          <ul>
+          <li><strong>One registration wires the whole policy.</strong> <code>AddCommonApiVersioning</code>
+          (<code>Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:76</code>) sets the
+          default version to <code>1.0</code>
+          (<code>WebApplicationBuilderExtensions.cs:80</code>), assumes it when a caller sends no version
+          (<code>AssumeDefaultVersionWhenUnspecified = true</code>, <code>WebApplicationBuilderExtensions.cs:81</code>), reports
+          the supported/deprecated versions on every response (<code>ReportApiVersions = true</code>,
+          <code>WebApplicationBuilderExtensions.cs:82</code>), and selects the version from an <code>api-version</code> request
+          header (<code>new HeaderApiVersionReader(&quot;api-version&quot;)</code>, <code>WebApplicationBuilderExtensions.cs:83</code>). The
+          reader is header-based deliberately: routes and query strings stay version-free, so a caller opts
+          into a newer shape by adding one header rather than changing the URL.</li>
+          <li><strong>The API explorer is wired for versioned OpenAPI.</strong> The same call chains <code>.AddMvc()</code> then
+          <code>.AddApiExplorer</code> (<code>WebApplicationBuilderExtensions.cs:84</code>), formatting version groups as <code>&#39;v&#39;VVV</code>
+          (<code>WebApplicationBuilderExtensions.cs:87</code>) and mirroring the default-version behavior for the
+          explorer (<code>WebApplicationBuilderExtensions.cs:89</code>). That group format feeds the <code>v1</code> OpenAPI
+          document <code>AddCommonOpenApi</code> registers (<code>WebApplicationBuilderExtensions.cs:166</code>), which
+          <code>MapCommonOpenApi</code> serves at <code>/openapi/v1.json</code> outside Production only
+          (<code>Source/Presentation/MMCA.Common.API/Startup/OpenApiEndpointExtensions.cs:28</code>,
+          <code>OpenApiEndpointExtensions.cs:30</code>).</li>
+          <li><strong>A shipped exemplar proves two versions coexist.</strong> <code>ServiceInfoControllerBase</code>
+          (<code>Source/Presentation/MMCA.Common.API/Controllers/ServiceInfoControllerBase.cs:30</code>) serves the same
+          <code>/ServiceInfo</code> route under two versions selected by the header: <code>GetV1</code> is mapped to <code>1.0</code>
+          (<code>[MapToApiVersion(&quot;1.0&quot;)]</code>, <code>ServiceInfoControllerBase.cs:40</code>) and returns the minimal
+          <code>ServiceInfoResponse</code> shape (<code>ServiceInfoControllerBase.cs:51</code>); <code>GetV2</code> is mapped to <code>2.0</code>
+          (<code>[MapToApiVersion(&quot;2.0&quot;)]</code>, <code>ServiceInfoControllerBase.cs:45</code>) and returns the evolved
+          <code>ServiceInfoV2Response</code>, a superset that also advertises the supported and deprecated version lists
+          (<code>ServiceInfoControllerBase.cs:54</code>). The base is anonymous and read-only.</li>
+          <li><strong>The class-level version attributes live on the per-service subclass.</strong> Class-level
+          routing/versioning attributes are not reliably inherited, so each host supplies a sealed subclass
+          carrying them. ADC&#39;s <code>ServiceInfoController</code> declares <code>[ApiVersion(&quot;1.0&quot;, Deprecated = true)]</code> and
+          <code>[ApiVersion(&quot;2.0&quot;)]</code> and sets the service name to <code>&quot;Conference&quot;</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/ServiceInfoController.cs:18</code>,
+          <code>ServiceInfoController.cs:19</code>, <code>ServiceInfoController.cs:23</code>); Store&#39;s mirror sets <code>&quot;Catalog&quot;</code>
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ServiceInfoController.cs:18</code>,
+          <code>ServiceInfoController.cs:23</code>). <code>1.0</code> is declared deprecated so the deprecation-reporting path is
+          live rather than theoretical.</li>
+          <li><strong>A shared fitness contract keeps the machinery exercised.</strong>
+          <code>ServiceInfoVersioningContractTestsBase&lt;TFixture&gt;</code>
+          (<code>Source/Hosting/MMCA.Common.Testing/ServiceInfoVersioningContractTestsBase.cs:19</code>) sends
+          <code>api-version: 1.0</code> and <code>2.0</code> over the real host and asserts the v1.0 minimal shape carries an
+          <code>api-deprecated-versions</code> header (<code>ServiceInfoVersioningContractTestsBase.cs:38</code>) while the v2.0
+          evolved shape carries <code>api-supported-versions</code> (<code>ServiceInfoVersioningContractTestsBase.cs:54</code>).
+          Because the controller ships in <code>MMCA.Common.API</code>, the whole test body is identical across repos:
+          each consumer&#39;s subclass supplies only its fixture (for example ADC&#39;s <code>ApiVersioningTests</code>,
+          <code>MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/ApiVersioningTests.cs:14</code>,
+          and Store&#39;s equivalent at
+          <code>MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/ApiVersioningTests.cs</code>).
+          This is the rubric SS9 fitness check: without a second working version, everything above would be
+          asserted rather than proven.</li>
+          <li><strong>Every REST host adopts it the same way.</strong> The extracted services call <code>AddCommonApiVersioning</code>
+          in their startup: ADC&#39;s Conference
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:134</code>) and Identity
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:126</code>) hosts, Store&#39;s Catalog host
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:94</code>), and the same call is made
+          by the other extracted hosts and by the monolith reference host
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:31</code>).</li>
+          </ul>
+          <p>Application controllers beyond <code>ServiceInfo</code> declare <code>[ApiVersion(&quot;1.0&quot;)]</code> today: the second version
+          exists on the discovery endpoint to keep the versioning path honest, not because any business
+          resource has yet needed to evolve its shape.</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Header selection keeps URLs stable.</strong> Routing stays version-free, so gateway route maps, client
+          URL builders, and OpenAPI paths do not fork per version; a caller opts into a newer shape with one
+          header.</li>
+          <li><strong>Assume-default keeps existing callers working.</strong> <code>AssumeDefaultVersionWhenUnspecified</code> means a
+          client that never sends the header keeps getting <code>1.0</code>, so introducing versioning was not a
+          breaking change for any existing caller.</li>
+          <li><strong>Report-and-deprecate makes evolution visible.</strong> <code>ReportApiVersions</code> plus a deprecated <code>1.0</code>
+          means a client can see, from response headers alone, which versions a service still supports and
+          which are on the way out, without reading a changelog.</li>
+          <li><strong>A living exemplar beats a claim.</strong> A single-version API cannot demonstrate that its versioning
+          works. Shipping <code>ServiceInfo</code> with a real, deprecated <code>1.0</code> alongside <code>2.0</code> gives the fitness
+          contract something concrete to assert, the same invariant-over-discipline posture the framework
+          prefers (ADR-015).</li>
+          <li><strong>Define once, adopt everywhere.</strong> Putting the whole policy behind <code>AddCommonApiVersioning</code> and the
+          exemplar behind <code>ServiceInfoControllerBase</code> means every host is versioned identically by one call
+          and one subclass, so the reader/default/reporting choices cannot drift apart between services.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>The class-level version attributes are not inherited.</strong> Each per-service subclass must repeat the
+          <code>[ApiVersion(...)]</code> and routing attributes (the same inheritance caveat ADR-034 and ADR-036 note
+          for controller convention attributes); the shared behavior lives in the base, but the attributes do
+          not.</li>
+          <li><strong>Adoption is per host.</strong> A new REST host that forgets <code>AddCommonApiVersioning</code> gets no versioning
+          and no reported versions, the same audit-the-inventory caveat other opt-in framework registrations
+          carry; the shared fitness contract only guards a host once its subclass is added.</li>
+          <li><strong>Header versioning is less discoverable than a URL segment.</strong> A version chosen by header does not
+          show up in a copied URL or a browser address bar, so the version in play is only visible to a
+          caller that reads request/response headers.</li>
+          <li><strong>The OpenAPI document is single-version and dev/CI only.</strong> <code>MapCommonOpenApi</code> serves one <code>v1</code>
+          document and is a no-op in Production (<code>OpenApiEndpointExtensions.cs:30</code>), so the machine-readable
+          contract does not yet enumerate the <code>2.0</code> discovery shape and is not a public production surface.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p>ADR-010 (integration-event schema versioning: the asynchronous, <code>SchemaVersion</code>-carried,
+          consumer-resolved axis this deliberately contrasts with; HTTP versioning here is request-time and
+          client-selected), ADR-015 (the fitness-function approach that
+          <code>ServiceInfoVersioningContractTestsBase</code> embodies, keeping the versioning machinery exercised rather
+          than asserted), ADR-034 and ADR-036 (controller-convention decisions that note the same class-level
+          <code>[ApiVersion]</code> non-inheritance handled by the per-service subclass).
+          &lt;/content&gt;</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/046-http-api-versioning.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

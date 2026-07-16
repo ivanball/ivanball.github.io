@@ -94,7 +94,8 @@
         <li><a href="group-23-engagement-live-layer.html">23. ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></li>
         <li><a href="group-24-identity-module.html">24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></li>
         <li><a href="group-25-adc-host-composition.html">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</a></li>
-        <li><a href="group-26-testing-infrastructure.html">26. Testing &amp; Quality Infrastructure</a></li>
+        <li><a href="group-26-device-capability-layer.html">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></li>
+        <li><a href="group-27-testing-infrastructure.html">27. Testing &amp; Quality Infrastructure</a></li>
         <li><a href="devops-aspire.html">Aspire Orchestration and Containers</a></li>
         <li><a href="devops-cicd.html">CI/CD and Operations</a></li>
         <li><a href="devops-iac.html">Infrastructure as Code, ADC Azure Deployment</a></li>
@@ -112,10 +113,10 @@
           <p>Generated mechanically by a Roslyn syntactic parse of every in-scope <code>.cs</code> file under
           <code>MMCA.Common/Source</code>, <code>MMCA.Common/Tests</code>, <code>MMCA.ADC/Source</code>, <code>MMCA.ADC/Tests</code>.</p>
           <ul>
-          <li>Files scanned: <strong>1931</strong> (in-scope <strong>1865</strong>, generated/excluded <strong>66</strong>)</li>
-          <li>Type declaration rows (including partial-class fragments): <strong>2406</strong></li>
-          <li>Distinct type nodes (partials collapsed): <strong>2287</strong></li>
-          <li><code>extension(T)</code> blocks: <strong>42</strong></li>
+          <li>Files scanned: <strong>2134</strong> (in-scope <strong>2066</strong>, generated/excluded <strong>68</strong>)</li>
+          <li>Type declaration rows (including partial-class fragments): <strong>2616</strong></li>
+          <li>Distinct type nodes (partials collapsed): <strong>2497</strong></li>
+          <li><code>extension(T)</code> blocks: <strong>46</strong></li>
           </ul>
           <h2 id="counts-by-kind">Counts by kind</h2>
           <div class="table-wrap"><table>
@@ -127,15 +128,15 @@
           </thead>
           <tbody><tr>
           <td>class</td>
-          <td>1827</td>
+          <td>1982</td>
           </tr>
           <tr>
           <td>record</td>
-          <td>414</td>
+          <td>440</td>
           </tr>
           <tr>
           <td>interface</td>
-          <td>135</td>
+          <td>164</td>
           </tr>
           <tr>
           <td>enum</td>
@@ -160,7 +161,7 @@
           </thead>
           <tbody><tr>
           <td>MMCA.ADC.Architecture.Tests</td>
-          <td>24</td>
+          <td>26</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Conference.API</td>
@@ -172,11 +173,11 @@
           </tr>
           <tr>
           <td>MMCA.ADC.Conference.Application</td>
-          <td>195</td>
+          <td>202</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>135</td>
+          <td>139</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Conference.Contracts</td>
@@ -204,11 +205,11 @@
           </tr>
           <tr>
           <td>MMCA.ADC.Conference.Service</td>
-          <td>2</td>
+          <td>3</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Conference.Shared</td>
-          <td>44</td>
+          <td>46</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Conference.Shared.Tests</td>
@@ -216,7 +217,7 @@
           </tr>
           <tr>
           <td>MMCA.ADC.Conference.UI</td>
-          <td>70</td>
+          <td>79</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Conference.UI.Tests</td>
@@ -228,7 +229,7 @@
           </tr>
           <tr>
           <td>MMCA.ADC.E2E.Tests</td>
-          <td>59</td>
+          <td>60</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Engagement.API</td>
@@ -240,7 +241,7 @@
           </tr>
           <tr>
           <td>MMCA.ADC.Engagement.Application</td>
-          <td>45</td>
+          <td>46</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Engagement.Application.Tests</td>
@@ -248,7 +249,7 @@
           </tr>
           <tr>
           <td>MMCA.ADC.Engagement.Contracts</td>
-          <td>2</td>
+          <td>3</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Engagement.Domain</td>
@@ -272,11 +273,11 @@
           </tr>
           <tr>
           <td>MMCA.ADC.Engagement.Service</td>
-          <td>1</td>
+          <td>2</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Engagement.Shared</td>
-          <td>28</td>
+          <td>33</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Engagement.Shared.Tests</td>
@@ -284,11 +285,11 @@
           </tr>
           <tr>
           <td>MMCA.ADC.Engagement.UI</td>
-          <td>31</td>
+          <td>37</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Engagement.UI.Tests</td>
-          <td>15</td>
+          <td>14</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Gateway.Tests</td>
@@ -304,11 +305,11 @@
           </tr>
           <tr>
           <td>MMCA.ADC.Identity.Application</td>
-          <td>25</td>
+          <td>31</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Identity.Application.Tests</td>
-          <td>19</td>
+          <td>20</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Identity.Contracts</td>
@@ -332,7 +333,7 @@
           </tr>
           <tr>
           <td>MMCA.ADC.Identity.IntegrationTests</td>
-          <td>26</td>
+          <td>28</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Identity.Service</td>
@@ -340,7 +341,7 @@
           </tr>
           <tr>
           <td>MMCA.ADC.Identity.Shared</td>
-          <td>8</td>
+          <td>14</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Identity.Shared.Tests</td>
@@ -352,7 +353,7 @@
           </tr>
           <tr>
           <td>MMCA.ADC.Identity.UI.Tests</td>
-          <td>9</td>
+          <td>6</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Notification.API</td>
@@ -360,11 +361,11 @@
           </tr>
           <tr>
           <td>MMCA.ADC.Notification.Application</td>
-          <td>2</td>
+          <td>3</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Notification.Contracts</td>
-          <td>2</td>
+          <td>3</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Notification.IntegrationTests</td>
@@ -372,39 +373,39 @@
           </tr>
           <tr>
           <td>MMCA.ADC.Notification.Service</td>
-          <td>1</td>
+          <td>2</td>
+          </tr>
+          <tr>
+          <td>MMCA.ADC.Notification.Shared</td>
+          <td>3</td>
           </tr>
           <tr>
           <td>MMCA.ADC.UI</td>
-          <td>19</td>
-          </tr>
-          <tr>
-          <td>MMCA.ADC.UI.Web</td>
-          <td>1</td>
+          <td>25</td>
           </tr>
           <tr>
           <td>MMCA.ADC.UI.Web.Client</td>
-          <td>10</td>
+          <td>9</td>
           </tr>
           <tr>
           <td>MMCA.Common.API</td>
-          <td>70</td>
+          <td>73</td>
           </tr>
           <tr>
           <td>MMCA.Common.API.Tests</td>
-          <td>63</td>
+          <td>65</td>
           </tr>
           <tr>
           <td>MMCA.Common.Application</td>
-          <td>134</td>
+          <td>139</td>
           </tr>
           <tr>
           <td>MMCA.Common.Application.Tests</td>
-          <td>146</td>
+          <td>147</td>
           </tr>
           <tr>
           <td>MMCA.Common.Architecture.Tests</td>
-          <td>20</td>
+          <td>22</td>
           </tr>
           <tr>
           <td>MMCA.Common.Aspire</td>
@@ -440,27 +441,27 @@
           </tr>
           <tr>
           <td>MMCA.Common.Infrastructure</td>
-          <td>115</td>
+          <td>125</td>
           </tr>
           <tr>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>155</td>
+          <td>157</td>
           </tr>
           <tr>
           <td>MMCA.Common.Shared</td>
-          <td>47</td>
+          <td>50</td>
           </tr>
           <tr>
           <td>MMCA.Common.Shared.Tests</td>
-          <td>21</td>
+          <td>22</td>
           </tr>
           <tr>
           <td>MMCA.Common.Testing</td>
-          <td>7</td>
+          <td>10</td>
           </tr>
           <tr>
           <td>MMCA.Common.Testing.Architecture</td>
-          <td>33</td>
+          <td>36</td>
           </tr>
           <tr>
           <td>MMCA.Common.Testing.E2E</td>
@@ -468,31 +469,35 @@
           </tr>
           <tr>
           <td>MMCA.Common.Testing.UI</td>
-          <td>8</td>
+          <td>15</td>
           </tr>
           <tr>
           <td>MMCA.Common.UI</td>
-          <td>78</td>
+          <td>141</td>
           </tr>
           <tr>
           <td>MMCA.Common.UI.E2E.Tests</td>
-          <td>9</td>
+          <td>11</td>
           </tr>
           <tr>
           <td>MMCA.Common.UI.Gallery</td>
           <td>8</td>
           </tr>
           <tr>
+          <td>MMCA.Common.UI.Maui</td>
+          <td>24</td>
+          </tr>
+          <tr>
           <td>MMCA.Common.UI.Tests</td>
-          <td>55</td>
+          <td>71</td>
           </tr>
           <tr>
           <td>MMCA.Common.UI.Web</td>
-          <td>3</td>
+          <td>4</td>
           </tr>
           <tr>
           <td>MMCA.Common.UI.Web.Tests</td>
-          <td>3</td>
+          <td>4</td>
           </tr>
           </tbody></table></div>
           <h2 id="full-inventory">Full inventory</h2>
@@ -574,7 +579,7 @@
           <td>class</td>
           <td>MMCA.ADC.Architecture.Tests</td>
           <td><code>MMCA.ADC.Architecture.Tests</code></td>
-          <td><code>MMCA.ADC.Architecture.Tests/FormsConventionTests.cs:10</code></td>
+          <td><code>MMCA.ADC.Architecture.Tests/FormsConventionTests.cs:14</code></td>
           </tr>
           <tr>
           <td><code>FrameworkVersionConsistencyTests</code></td>
@@ -668,11 +673,25 @@
           <td><code>MMCA.ADC.Architecture.Tests/SpecificationConventionTests.cs:8</code></td>
           </tr>
           <tr>
+          <td><code>StateManagementConventionTests</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Architecture.Tests</td>
+          <td><code>MMCA.ADC.Architecture.Tests</code></td>
+          <td><code>MMCA.ADC.Architecture.Tests/StateManagementConventionTests.cs:11</code></td>
+          </tr>
+          <tr>
           <td><code>TranslationCompletenessTests</code></td>
           <td>class</td>
           <td>MMCA.ADC.Architecture.Tests</td>
           <td><code>MMCA.ADC.Architecture.Tests</code></td>
           <td><code>MMCA.ADC.Architecture.Tests/TranslationCompletenessTests.cs:12</code></td>
+          </tr>
+          <tr>
+          <td><code>UIArchitectureConventionTests</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Architecture.Tests</td>
+          <td><code>MMCA.ADC.Architecture.Tests</code></td>
+          <td><code>MMCA.ADC.Architecture.Tests/UIArchitectureConventionTests.cs:12</code></td>
           </tr>
           <tr>
           <td><code>AssemblyReference</code></td>
@@ -791,7 +810,7 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.API</td>
           <td><code>MMCA.ADC.Conference.API.Controllers</code></td>
-          <td><code>MMCA.ADC.Conference.API/Controllers/EventsController.cs:39</code></td>
+          <td><code>MMCA.ADC.Conference.API/Controllers/EventsController.cs:42</code></td>
           </tr>
           <tr>
           <td><code>EventSpeakersController</code></td>
@@ -840,7 +859,7 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.API</td>
           <td><code>MMCA.ADC.Conference.API.Controllers</code></td>
-          <td><code>MMCA.ADC.Conference.API/Controllers/SessionsController.cs:39</code></td>
+          <td><code>MMCA.ADC.Conference.API/Controllers/SessionsController.cs:40</code></td>
           </tr>
           <tr>
           <td><code>SessionSelectionController</code></td>
@@ -938,7 +957,7 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.API.Tests</td>
           <td><code>MMCA.ADC.Conference.API.Tests.Controllers</code></td>
-          <td><code>MMCA.ADC.Conference.API.Tests/Controllers/EventsControllerTests.cs:22</code></td>
+          <td><code>MMCA.ADC.Conference.API.Tests/Controllers/EventsControllerTests.cs:25</code></td>
           </tr>
           <tr>
           <td><code>EventSpeakersControllerTests</code></td>
@@ -980,7 +999,7 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.API.Tests</td>
           <td><code>MMCA.ADC.Conference.API.Tests.Controllers</code></td>
-          <td><code>MMCA.ADC.Conference.API.Tests/Controllers/SessionsControllerTests.cs:23</code></td>
+          <td><code>MMCA.ADC.Conference.API.Tests/Controllers/SessionsControllerTests.cs:24</code></td>
           </tr>
           <tr>
           <td><code>SessionSpeakersControllerTests</code></td>
@@ -2033,6 +2052,41 @@
           <td><code>MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/IAiScoringService.cs:23</code></td>
           </tr>
           <tr>
+          <td><code>CalendarExportMapper</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td><code>MMCA.ADC.Conference.Application.Sessions.UseCases.ExportCalendar</code></td>
+          <td><code>MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/CalendarExportMapper.cs:13</code></td>
+          </tr>
+          <tr>
+          <td><code>ExportEventCalendarHandler</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td><code>MMCA.ADC.Conference.Application.Sessions.UseCases.ExportCalendar</code></td>
+          <td><code>MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/ExportEventCalendarHandler.cs:15</code></td>
+          </tr>
+          <tr>
+          <td><code>ExportEventCalendarQuery</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td><code>MMCA.ADC.Conference.Application.Sessions.UseCases.ExportCalendar</code></td>
+          <td><code>MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/ExportEventCalendarQuery.cs:5</code></td>
+          </tr>
+          <tr>
+          <td><code>ExportSessionCalendarHandler</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td><code>MMCA.ADC.Conference.Application.Sessions.UseCases.ExportCalendar</code></td>
+          <td><code>MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/ExportSessionCalendarHandler.cs:16</code></td>
+          </tr>
+          <tr>
+          <td><code>ExportSessionCalendarQuery</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td><code>MMCA.ADC.Conference.Application.Sessions.UseCases.ExportCalendar</code></td>
+          <td><code>MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/ExportSessionCalendarQuery.cs:5</code></td>
+          </tr>
+          <tr>
           <td><code>GetPublicSessionFilterHandler</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Application</td>
@@ -2045,6 +2099,20 @@
           <td>MMCA.ADC.Conference.Application</td>
           <td><code>MMCA.ADC.Conference.Application.Sessions.UseCases.GetPublicSessionFilter</code></td>
           <td><code>MMCA.ADC.Conference.Application/Sessions/UseCases/GetPublicSessionFilter/GetPublicSessionFilterQuery.cs:9</code></td>
+          </tr>
+          <tr>
+          <td><code>GetNowNextHandler</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td><code>MMCA.ADC.Conference.Application.Sessions.UseCases.NowNext</code></td>
+          <td><code>MMCA.ADC.Conference.Application/Sessions/UseCases/NowNext/GetNowNextHandler.cs:20</code></td>
+          </tr>
+          <tr>
+          <td><code>GetNowNextQuery</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td><code>MMCA.ADC.Conference.Application.Sessions.UseCases.NowNext</code></td>
+          <td><code>MMCA.ADC.Conference.Application/Sessions/UseCases/NowNext/GetNowNextQuery.cs:11</code></td>
           </tr>
           <tr>
           <td><code>RemoveSessionCategoryItemCommand</code></td>
@@ -3230,6 +3298,20 @@
           <td><code>MMCA.ADC.Conference.Application.Tests/Sessions/UseCases/DecisionSupport/SpeakerLocalityHelperTests.cs:8</code></td>
           </tr>
           <tr>
+          <td><code>CalendarExportMapperTests</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td><code>MMCA.ADC.Conference.Application.Tests.Sessions.UseCases.ExportCalendar</code></td>
+          <td><code>MMCA.ADC.Conference.Application.Tests/Sessions/UseCases/ExportCalendar/CalendarExportMapperTests.cs:14</code></td>
+          </tr>
+          <tr>
+          <td><code>ExportSessionCalendarHandlerTests</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td><code>MMCA.ADC.Conference.Application.Tests.Sessions.UseCases.ExportCalendar</code></td>
+          <td><code>MMCA.ADC.Conference.Application.Tests/Sessions/UseCases/ExportCalendar/ExportSessionCalendarHandlerTests.cs:16</code></td>
+          </tr>
+          <tr>
           <td><code>GetPublicSessionFilterHandlerTests</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
@@ -3242,6 +3324,20 @@
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td><code>MMCA.ADC.Conference.Application.Tests.Sessions.UseCases.GetPublicSessionFilter</code></td>
           <td><code>MMCA.ADC.Conference.Application.Tests/Sessions/UseCases/GetPublicSessionFilter/GetPublicSessionFilterHandlerTests.cs:17</code></td>
+          </tr>
+          <tr>
+          <td><code>FixedTimeProvider</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td><code>MMCA.ADC.Conference.Application.Tests.Sessions.UseCases.NowNext</code></td>
+          <td><code>MMCA.ADC.Conference.Application.Tests/Sessions/UseCases/NowNext/GetNowNextHandlerTests.cs:32</code></td>
+          </tr>
+          <tr>
+          <td><code>GetNowNextHandlerTests</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td><code>MMCA.ADC.Conference.Application.Tests.Sessions.UseCases.NowNext</code></td>
+          <td><code>MMCA.ADC.Conference.Application.Tests/Sessions/UseCases/NowNext/GetNowNextHandlerTests.cs:17</code></td>
           </tr>
           <tr>
           <td><code>AddSessionCategoryItemCommandValidatorTests</code></td>
@@ -4277,21 +4373,21 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.IntegrationTests</td>
           <td><code>MMCA.ADC.Conference.IntegrationTests.Contract</code></td>
-          <td><code>MMCA.ADC.Conference.IntegrationTests/Contract/ApiVersioningTests.cs:15</code></td>
+          <td><code>MMCA.ADC.Conference.IntegrationTests/Contract/ApiVersioningTests.cs:14</code></td>
           </tr>
           <tr>
           <td><code>OpenApiContractTests</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.IntegrationTests</td>
           <td><code>MMCA.ADC.Conference.IntegrationTests.Contract</code></td>
-          <td><code>MMCA.ADC.Conference.IntegrationTests/Contract/OpenApiContractTests.cs:16</code></td>
+          <td><code>MMCA.ADC.Conference.IntegrationTests/Contract/OpenApiContractTests.cs:14</code></td>
           </tr>
           <tr>
           <td><code>ProblemDetailsContractTests</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.IntegrationTests</td>
           <td><code>MMCA.ADC.Conference.IntegrationTests.Contract</code></td>
-          <td><code>MMCA.ADC.Conference.IntegrationTests/Contract/ProblemDetailsContractTests.cs:16</code></td>
+          <td><code>MMCA.ADC.Conference.IntegrationTests/Contract/ProblemDetailsContractTests.cs:18</code></td>
           </tr>
           <tr>
           <td><code>CrossServiceUserRegisteredTests</code></td>
@@ -4504,6 +4600,13 @@
           <td><code>MMCA.ADC.Conference.IntegrationTests/Speaker/SpeakerUpdateAuthTests.cs:7</code></td>
           </tr>
           <tr>
+          <td><code>SelfHttpOutputCacheWarmupTask</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Service</td>
+          <td><code>MMCA.ADC.Conference.Service</code></td>
+          <td><code>MMCA.ADC.Conference.Service/SelfHttpOutputCacheWarmupTask.cs:18</code></td>
+          </tr>
+          <tr>
           <td><code>EventLiveValidationGrpcService</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Service</td>
@@ -4649,6 +4752,20 @@
           <td>MMCA.ADC.Conference.Shared</td>
           <td><code>MMCA.ADC.Conference.Shared.Sessions</code></td>
           <td><code>MMCA.ADC.Conference.Shared/Sessions/ISessionBookmarkValidationService.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>NowNextDTO</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Conference.Shared</td>
+          <td><code>MMCA.ADC.Conference.Shared.Sessions</code></td>
+          <td><code>MMCA.ADC.Conference.Shared/Sessions/NowNextDTO.cs:14</code></td>
+          </tr>
+          <tr>
+          <td><code>NowNextSessionDTO</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Conference.Shared</td>
+          <td><code>MMCA.ADC.Conference.Shared.Sessions</code></td>
+          <td><code>MMCA.ADC.Conference.Shared/Sessions/NowNextDTO.cs:29</code></td>
           </tr>
           <tr>
           <td><code>SessionCategoryItemDTO</code></td>
@@ -5022,11 +5139,18 @@
           <td><code>MMCA.ADC.Conference.UI/Pages/Feedback/OrganizerSessionFeedback.razor.cs:15</code></td>
           </tr>
           <tr>
+          <td><code>CachedSessionPage</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td><code>MMCA.ADC.Conference.UI.Pages.Public</code></td>
+          <td><code>MMCA.ADC.Conference.UI/Pages/Public/PublicSessionList.razor.cs:346</code></td>
+          </tr>
+          <tr>
           <td><code>PublicEventDetail</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.UI</td>
           <td><code>MMCA.ADC.Conference.UI.Pages.Public</code></td>
-          <td><code>MMCA.ADC.Conference.UI/Pages/Public/PublicEventDetail.razor.cs:12</code></td>
+          <td><code>MMCA.ADC.Conference.UI/Pages/Public/PublicEventDetail.razor.cs:14</code></td>
           </tr>
           <tr>
           <td><code>PublicEventList</code></td>
@@ -5040,7 +5164,7 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.UI</td>
           <td><code>MMCA.ADC.Conference.UI.Pages.Public</code></td>
-          <td><code>MMCA.ADC.Conference.UI/Pages/Public/PublicSessionDetail.razor.cs:19</code></td>
+          <td><code>MMCA.ADC.Conference.UI/Pages/Public/PublicSessionDetail.razor.cs:20</code></td>
           </tr>
           <tr>
           <td><code>PublicSessionList</code></td>
@@ -5048,6 +5172,20 @@
           <td>MMCA.ADC.Conference.UI</td>
           <td><code>MMCA.ADC.Conference.UI.Pages.Public</code></td>
           <td><code>MMCA.ADC.Conference.UI/Pages/Public/PublicSessionList.razor.cs:26</code></td>
+          </tr>
+          <tr>
+          <td><code>PublicSessionListFilterBar</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td><code>MMCA.ADC.Conference.UI.Pages.Public</code></td>
+          <td><code>MMCA.ADC.Conference.UI/Pages/Public/PublicSessionListFilterBar.razor.cs:15</code></td>
+          </tr>
+          <tr>
+          <td><code>PublicSessionListView</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td><code>MMCA.ADC.Conference.UI.Pages.Public</code></td>
+          <td><code>MMCA.ADC.Conference.UI/Pages/Public/PublicSessionListView.razor.cs:20</code></td>
           </tr>
           <tr>
           <td><code>PublicSpeakerDetail</code></td>
@@ -5127,11 +5265,39 @@
           <td><code>MMCA.ADC.Conference.UI/Pages/Session/SessionList.razor.cs:18</code></td>
           </tr>
           <tr>
+          <td><code>SessionSelectionAiScores</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td><code>MMCA.ADC.Conference.UI.Pages.SessionSelection</code></td>
+          <td><code>MMCA.ADC.Conference.UI/Pages/SessionSelection/SessionSelectionAiScores.razor.cs:12</code></td>
+          </tr>
+          <tr>
           <td><code>SessionSelectionDashboard</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.UI</td>
           <td><code>MMCA.ADC.Conference.UI.Pages.SessionSelection</code></td>
-          <td><code>MMCA.ADC.Conference.UI/Pages/SessionSelection/SessionSelectionDashboard.razor.cs:15</code></td>
+          <td><code>MMCA.ADC.Conference.UI/Pages/SessionSelection/SessionSelectionDashboard.razor.cs:13</code></td>
+          </tr>
+          <tr>
+          <td><code>SessionSelectionDisplay</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td><code>MMCA.ADC.Conference.UI.Pages.SessionSelection</code></td>
+          <td><code>MMCA.ADC.Conference.UI/Pages/SessionSelection/SessionSelectionDisplay.cs:11</code></td>
+          </tr>
+          <tr>
+          <td><code>SessionSelectionSpeakerOverlap</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td><code>MMCA.ADC.Conference.UI.Pages.SessionSelection</code></td>
+          <td><code>MMCA.ADC.Conference.UI/Pages/SessionSelection/SessionSelectionSpeakerOverlap.razor.cs:11</code></td>
+          </tr>
+          <tr>
+          <td><code>SpeakerCategoryItemsPanel</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td><code>MMCA.ADC.Conference.UI.Pages.Speaker</code></td>
+          <td><code>MMCA.ADC.Conference.UI/Pages/Speaker/SpeakerCategoryItemsPanel.razor.cs:16</code></td>
           </tr>
           <tr>
           <td><code>SpeakerCreate</code></td>
@@ -5274,6 +5440,13 @@
           <td><code>MMCA.ADC.Conference.UI/Services/IOrganizerFeedbackUIService.cs:26</code></td>
           </tr>
           <tr>
+          <td><code>IPublicLinkBuilder</code></td>
+          <td>interface</td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td><code>MMCA.ADC.Conference.UI.Services</code></td>
+          <td><code>MMCA.ADC.Conference.UI/Services/IPublicLinkBuilder.cs:9</code></td>
+          </tr>
+          <tr>
           <td><code>IQuestionUIService</code></td>
           <td>interface</td>
           <td>MMCA.ADC.Conference.UI</td>
@@ -5342,6 +5515,13 @@
           <td>MMCA.ADC.Conference.UI</td>
           <td><code>MMCA.ADC.Conference.UI.Services</code></td>
           <td><code>MMCA.ADC.Conference.UI/Services/ISpeakerUIService.cs:9</code></td>
+          </tr>
+          <tr>
+          <td><code>NavigationPublicLinkBuilder</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td><code>MMCA.ADC.Conference.UI.Services</code></td>
+          <td><code>MMCA.ADC.Conference.UI/Services/NavigationPublicLinkBuilder.cs:10</code></td>
           </tr>
           <tr>
           <td><code>OrganizerEventFeedbackService</code></td>
@@ -5439,35 +5619,35 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.UI.Tests</td>
           <td><code>MMCA.ADC.Conference.UI.Tests</code></td>
-          <td><code>MMCA.ADC.Conference.UI.Tests/BunitTestBase.cs:11</code></td>
+          <td><code>MMCA.ADC.Conference.UI.Tests/BunitTestBase.cs:19</code></td>
           </tr>
           <tr>
           <td><code>ManagementRouteAuthorizationTests</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.UI.Tests</td>
           <td><code>MMCA.ADC.Conference.UI.Tests</code></td>
-          <td><code>MMCA.ADC.Conference.UI.Tests/ManagementRouteAuthorizationTests.cs:17</code></td>
+          <td><code>MMCA.ADC.Conference.UI.Tests/ManagementRouteAuthorizationTests.cs:19</code></td>
           </tr>
           <tr>
-          <td><code>CapturedRequest</code></td>
-          <td>record</td>
-          <td>MMCA.ADC.Conference.UI.Tests</td>
-          <td><code>MMCA.ADC.Conference.UI.Tests.Infrastructure</code></td>
-          <td><code>MMCA.ADC.Conference.UI.Tests/Infrastructure/HttpTestDoubles.cs:36</code></td>
-          </tr>
-          <tr>
-          <td><code>CapturingHttpMessageHandler</code></td>
+          <td><code>AddToCalendarButtonTests</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.UI.Tests</td>
-          <td><code>MMCA.ADC.Conference.UI.Tests.Infrastructure</code></td>
-          <td><code>MMCA.ADC.Conference.UI.Tests/Infrastructure/HttpTestDoubles.cs:13</code></td>
+          <td><code>MMCA.ADC.Conference.UI.Tests.Components</code></td>
+          <td><code>MMCA.ADC.Conference.UI.Tests/Components/AddToCalendarButtonTests.cs:21</code></td>
           </tr>
           <tr>
-          <td><code>HttpTestDoubles</code></td>
+          <td><code>QrCodeButtonTests</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.UI.Tests</td>
-          <td><code>MMCA.ADC.Conference.UI.Tests.Infrastructure</code></td>
-          <td><code>MMCA.ADC.Conference.UI.Tests/Infrastructure/HttpTestDoubles.cs:39</code></td>
+          <td><code>MMCA.ADC.Conference.UI.Tests.Components</code></td>
+          <td><code>MMCA.ADC.Conference.UI.Tests/Components/QrCodeButtonTests.cs:14</code></td>
+          </tr>
+          <tr>
+          <td><code>SharePageButtonTests</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.UI.Tests</td>
+          <td><code>MMCA.ADC.Conference.UI.Tests.Components</code></td>
+          <td><code>MMCA.ADC.Conference.UI.Tests/Components/SharePageButtonTests.cs:17</code></td>
           </tr>
           <tr>
           <td><code>EventCreateTests</code></td>
@@ -5502,7 +5682,7 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.UI.Tests</td>
           <td><code>MMCA.ADC.Conference.UI.Tests.Pages.Public</code></td>
-          <td><code>MMCA.ADC.Conference.UI.Tests/Pages/Public/PublicEventDetailTests.cs:12</code></td>
+          <td><code>MMCA.ADC.Conference.UI.Tests/Pages/Public/PublicEventDetailTests.cs:14</code></td>
           </tr>
           <tr>
           <td><code>PublicSessionDetailLiveButtonTests</code></td>
@@ -5516,7 +5696,7 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.UI.Tests</td>
           <td><code>MMCA.ADC.Conference.UI.Tests.Pages.Public</code></td>
-          <td><code>MMCA.ADC.Conference.UI.Tests/Pages/Public/PublicSessionDetailTests.cs:18</code></td>
+          <td><code>MMCA.ADC.Conference.UI.Tests/Pages/Public/PublicSessionDetailTests.cs:20</code></td>
           </tr>
           <tr>
           <td><code>PublicSessionListEventFilterTests</code></td>
@@ -5932,11 +6112,18 @@
           <td><code>MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:17</code></td>
           </tr>
           <tr>
+          <td><code>PseudoLocalizationTests</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.E2E.Tests</td>
+          <td><code>MMCA.ADC.E2E.Tests.Workflows</code></td>
+          <td><code>MMCA.ADC.E2E.Tests/Workflows/PseudoLocalizationTests.cs:34</code></td>
+          </tr>
+          <tr>
           <td><code>WebVitalsTests</code></td>
           <td>class</td>
           <td>MMCA.ADC.E2E.Tests</td>
           <td><code>MMCA.ADC.E2E.Tests.Workflows</code></td>
-          <td><code>MMCA.ADC.E2E.Tests/Workflows/WebVitalsTests.cs:18</code></td>
+          <td><code>MMCA.ADC.E2E.Tests/Workflows/WebVitalsTests.cs:23</code></td>
           </tr>
           <tr>
           <td><code>OrganizerCategoryManagementTests</code></td>
@@ -6132,7 +6319,7 @@
           <td>class</td>
           <td>MMCA.ADC.Engagement.API</td>
           <td><code>MMCA.ADC.Engagement.API</code></td>
-          <td><code>MMCA.ADC.Engagement.API/EngagementModule.cs:13</code></td>
+          <td><code>MMCA.ADC.Engagement.API/EngagementModule.cs:14</code></td>
           </tr>
           <tr>
           <td><code>BookmarksController</code></td>
@@ -6237,7 +6424,14 @@
           <td>class</td>
           <td>MMCA.ADC.Engagement.Application</td>
           <td><code>MMCA.ADC.Engagement.Application</code></td>
-          <td><code>MMCA.ADC.Engagement.Application/DependencyInjection.cs:25</code></td>
+          <td><code>MMCA.ADC.Engagement.Application/DependencyInjection.cs:27</code></td>
+          </tr>
+          <tr>
+          <td><code>UserEngagementExportService</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Application</td>
+          <td><code>MMCA.ADC.Engagement.Application.Exports</code></td>
+          <td><code>MMCA.ADC.Engagement.Application/Exports/UserEngagementExportService.cs:14</code></td>
           </tr>
           <tr>
           <td><code>LivePollDTOMapper</code></td>
@@ -6790,7 +6984,14 @@
           <td>class</td>
           <td>MMCA.ADC.Engagement.Contracts</td>
           <td><code>MMCA.ADC.Engagement.Contracts</code></td>
-          <td><code>MMCA.ADC.Engagement.Contracts/DependencyInjection.cs:14</code></td>
+          <td><code>MMCA.ADC.Engagement.Contracts/DependencyInjection.cs:16</code></td>
+          </tr>
+          <tr>
+          <td><code>UserEngagementExportServiceGrpcAdapter</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Contracts</td>
+          <td><code>MMCA.ADC.Engagement.Contracts</code></td>
+          <td><code>MMCA.ADC.Engagement.Contracts/UserEngagementExportServiceGrpcAdapter.cs:16</code></td>
           </tr>
           <tr>
           <td><code>AssemblyReference</code></td>
@@ -7077,7 +7278,7 @@
           <td>class</td>
           <td>MMCA.ADC.Engagement.IntegrationTests</td>
           <td><code>MMCA.ADC.Engagement.IntegrationTests.Contract</code></td>
-          <td><code>MMCA.ADC.Engagement.IntegrationTests/Contract/OpenApiContractTests.cs:17</code></td>
+          <td><code>MMCA.ADC.Engagement.IntegrationTests/Contract/OpenApiContractTests.cs:14</code></td>
           </tr>
           <tr>
           <td><code>ProblemDetailsContractTests</code></td>
@@ -7157,6 +7358,13 @@
           <td><code>MMCA.ADC.Engagement.Service/Grpc/BookmarkCountsGrpcService.cs:12</code></td>
           </tr>
           <tr>
+          <td><code>UserEngagementExportGrpcService</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Service</td>
+          <td><code>MMCA.ADC.Engagement.Service.Grpc</code></td>
+          <td><code>MMCA.ADC.Engagement.Service/Grpc/UserEngagementExportGrpcService.cs:16</code></td>
+          </tr>
+          <tr>
           <td><code>EngagementFeatures</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.Shared</td>
@@ -7169,6 +7377,41 @@
           <td>MMCA.ADC.Engagement.Shared</td>
           <td><code>MMCA.ADC.Engagement.Shared.Authorization</code></td>
           <td><code>MMCA.ADC.Engagement.Shared/Authorization/EngagementPermissions.cs:9</code></td>
+          </tr>
+          <tr>
+          <td><code>DisabledUserEngagementExportService</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Shared</td>
+          <td><code>MMCA.ADC.Engagement.Shared.Exports</code></td>
+          <td><code>MMCA.ADC.Engagement.Shared/Exports/DisabledUserEngagementExportService.cs:7</code></td>
+          </tr>
+          <tr>
+          <td><code>IUserEngagementExportService</code></td>
+          <td>interface</td>
+          <td>MMCA.ADC.Engagement.Shared</td>
+          <td><code>MMCA.ADC.Engagement.Shared.Exports</code></td>
+          <td><code>MMCA.ADC.Engagement.Shared/Exports/IUserEngagementExportService.cs:11</code></td>
+          </tr>
+          <tr>
+          <td><code>UserEngagementBookmarkExportDTO</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Engagement.Shared</td>
+          <td><code>MMCA.ADC.Engagement.Shared.Exports</code></td>
+          <td><code>MMCA.ADC.Engagement.Shared/Exports/UserEngagementBookmarkExportDTO.cs:7</code></td>
+          </tr>
+          <tr>
+          <td><code>UserEngagementExportDTO</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Engagement.Shared</td>
+          <td><code>MMCA.ADC.Engagement.Shared.Exports</code></td>
+          <td><code>MMCA.ADC.Engagement.Shared/Exports/UserEngagementExportDTO.cs:8</code></td>
+          </tr>
+          <tr>
+          <td><code>UserEngagementSubmittedQuestionExportDTO</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Engagement.Shared</td>
+          <td><code>MMCA.ADC.Engagement.Shared.Exports</code></td>
+          <td><code>MMCA.ADC.Engagement.Shared/Exports/UserEngagementSubmittedQuestionExportDTO.cs:7</code></td>
           </tr>
           <tr>
           <td><code>CastVoteRequest</code></td>
@@ -7420,21 +7663,21 @@
           <td>class</td>
           <td>MMCA.ADC.Engagement.UI</td>
           <td><code>MMCA.ADC.Engagement.UI.Pages.HappeningNow</code></td>
-          <td><code>MMCA.ADC.Engagement.UI/Pages/HappeningNow/HappeningNow.razor.cs:20</code></td>
+          <td><code>MMCA.ADC.Engagement.UI/Pages/HappeningNow/HappeningNow.razor.cs:21</code></td>
           </tr>
           <tr>
           <td><code>OptionState</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.UI</td>
           <td><code>MMCA.ADC.Engagement.UI.Pages.HappeningNow</code></td>
-          <td><code>MMCA.ADC.Engagement.UI/Pages/HappeningNow/HappeningNow.razor.cs:378</code></td>
+          <td><code>MMCA.ADC.Engagement.UI/Pages/HappeningNow/HappeningNow.razor.cs:383</code></td>
           </tr>
           <tr>
           <td><code>OptionState</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.UI</td>
           <td><code>MMCA.ADC.Engagement.UI.Pages.SessionLive</code></td>
-          <td><code>MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLive.razor.cs:597</code></td>
+          <td><code>MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLiveModerationPanel.razor.cs:233</code></td>
           </tr>
           <tr>
           <td><code>PresenterView</code></td>
@@ -7448,7 +7691,28 @@
           <td>class</td>
           <td>MMCA.ADC.Engagement.UI</td>
           <td><code>MMCA.ADC.Engagement.UI.Pages.SessionLive</code></td>
-          <td><code>MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLive.razor.cs:21</code></td>
+          <td><code>MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLive.razor.cs:23</code></td>
+          </tr>
+          <tr>
+          <td><code>SessionLiveModerationPanel</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.UI</td>
+          <td><code>MMCA.ADC.Engagement.UI.Pages.SessionLive</code></td>
+          <td><code>MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLiveModerationPanel.razor.cs:19</code></td>
+          </tr>
+          <tr>
+          <td><code>SessionLivePollPanel</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.UI</td>
+          <td><code>MMCA.ADC.Engagement.UI.Pages.SessionLive</code></td>
+          <td><code>MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLivePollPanel.razor.cs:17</code></td>
+          </tr>
+          <tr>
+          <td><code>SessionLiveQuestionPanel</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.UI</td>
+          <td><code>MMCA.ADC.Engagement.UI.Pages.SessionLive</code></td>
+          <td><code>MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLiveQuestionPanel.razor.cs:18</code></td>
           </tr>
           <tr>
           <td><code>BookmarkService</code></td>
@@ -7553,7 +7817,7 @@
           <td>class</td>
           <td>MMCA.ADC.Engagement.UI</td>
           <td><code>MMCA.ADC.Engagement.UI.Services</code></td>
-          <td><code>MMCA.ADC.Engagement.UI/Services/SessionBookmarkUIService.cs:13</code></td>
+          <td><code>MMCA.ADC.Engagement.UI/Services/SessionBookmarkUIService.cs:16</code></td>
           </tr>
           <tr>
           <td><code>SessionFeedbackService</code></td>
@@ -7591,25 +7855,25 @@
           <td><code>MMCA.ADC.Engagement.UI/Services/SessionQuestionUIService.cs:12</code></td>
           </tr>
           <tr>
-          <td><code>CapturedRequest</code></td>
+          <td><code>SessionReminder</code></td>
           <td>record</td>
-          <td>MMCA.ADC.Engagement.UI.Tests</td>
-          <td><code>MMCA.ADC.Engagement.UI.Tests.Infrastructure</code></td>
-          <td><code>MMCA.ADC.Engagement.UI.Tests/Infrastructure/HttpTestDoubles.cs:36</code></td>
+          <td>MMCA.ADC.Engagement.UI</td>
+          <td><code>MMCA.ADC.Engagement.UI.Services</code></td>
+          <td><code>MMCA.ADC.Engagement.UI/Services/SessionReminderPlanner.cs:13</code></td>
           </tr>
           <tr>
-          <td><code>CapturingHttpMessageHandler</code></td>
+          <td><code>SessionReminderCoordinator</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Tests</td>
-          <td><code>MMCA.ADC.Engagement.UI.Tests.Infrastructure</code></td>
-          <td><code>MMCA.ADC.Engagement.UI.Tests/Infrastructure/HttpTestDoubles.cs:13</code></td>
+          <td>MMCA.ADC.Engagement.UI</td>
+          <td><code>MMCA.ADC.Engagement.UI.Services</code></td>
+          <td><code>MMCA.ADC.Engagement.UI/Services/SessionReminderCoordinator.cs:16</code></td>
           </tr>
           <tr>
-          <td><code>HttpTestDoubles</code></td>
+          <td><code>SessionReminderPlanner</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.UI.Tests</td>
-          <td><code>MMCA.ADC.Engagement.UI.Tests.Infrastructure</code></td>
-          <td><code>MMCA.ADC.Engagement.UI.Tests/Infrastructure/HttpTestDoubles.cs:39</code></td>
+          <td>MMCA.ADC.Engagement.UI</td>
+          <td><code>MMCA.ADC.Engagement.UI.Services</code></td>
+          <td><code>MMCA.ADC.Engagement.UI/Services/SessionReminderPlanner.cs:29</code></td>
           </tr>
           <tr>
           <td><code>EventFeedbackTests</code></td>
@@ -7672,7 +7936,7 @@
           <td>class</td>
           <td>MMCA.ADC.Engagement.UI.Tests</td>
           <td><code>MMCA.ADC.Engagement.UI.Tests.Services</code></td>
-          <td><code>MMCA.ADC.Engagement.UI.Tests/Services/SessionBookmarkUIServiceTests.cs:14</code></td>
+          <td><code>MMCA.ADC.Engagement.UI.Tests/Services/SessionBookmarkUIServiceTests.cs:18</code></td>
           </tr>
           <tr>
           <td><code>SessionFeedbackServiceTests</code></td>
@@ -7694,6 +7958,20 @@
           <td>MMCA.ADC.Engagement.UI.Tests</td>
           <td><code>MMCA.ADC.Engagement.UI.Tests.Services</code></td>
           <td><code>MMCA.ADC.Engagement.UI.Tests/Services/SessionQuestionUIServiceTests.cs:14</code></td>
+          </tr>
+          <tr>
+          <td><code>SessionReminderCoordinatorTests</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.UI.Tests</td>
+          <td><code>MMCA.ADC.Engagement.UI.Tests.Services</code></td>
+          <td><code>MMCA.ADC.Engagement.UI.Tests/Services/SessionReminderCoordinatorTests.cs:16</code></td>
+          </tr>
+          <tr>
+          <td><code>SessionReminderPlannerTests</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.UI.Tests</td>
+          <td><code>MMCA.ADC.Engagement.UI.Tests.Services</code></td>
+          <td><code>MMCA.ADC.Engagement.UI.Tests/Services/SessionReminderPlannerTests.cs:11</code></td>
           </tr>
           <tr>
           <td><code>GatewayApplicationFactory</code></td>
@@ -7777,7 +8055,7 @@
           <td>class</td>
           <td>MMCA.ADC.Identity.API</td>
           <td><code>MMCA.ADC.Identity.API.Controllers</code></td>
-          <td><code>MMCA.ADC.Identity.API/Controllers/UsersController.cs:28</code></td>
+          <td><code>MMCA.ADC.Identity.API/Controllers/UsersController.cs:31</code></td>
           </tr>
           <tr>
           <td><code>IdentityErrorResources</code></td>
@@ -7826,7 +8104,7 @@
           <td>class</td>
           <td>MMCA.ADC.Identity.API.Tests</td>
           <td><code>MMCA.ADC.Identity.API.Tests.Controllers</code></td>
-          <td><code>MMCA.ADC.Identity.API.Tests/Controllers/UsersControllerTests.cs:17</code></td>
+          <td><code>MMCA.ADC.Identity.API.Tests/Controllers/UsersControllerTests.cs:20</code></td>
           </tr>
           <tr>
           <td><code>IdentityErrorResourcesTests</code></td>
@@ -7952,7 +8230,7 @@
           <td>class</td>
           <td>MMCA.ADC.Identity.Application</td>
           <td><code>MMCA.ADC.Identity.Application.Users.UseCases.ExportUserData</code></td>
-          <td><code>MMCA.ADC.Identity.Application/Users/UseCases/ExportUserData/ExportUserDataHandler.cs:14</code></td>
+          <td><code>MMCA.ADC.Identity.Application/Users/UseCases/ExportUserData/ExportUserDataHandler.cs:26</code></td>
           </tr>
           <tr>
           <td><code>ExportUserDataQuery</code></td>
@@ -7983,6 +8261,20 @@
           <td><code>MMCA.ADC.Identity.Application/Users/UseCases/GetPreferences/UserPreferencesResponse.cs:9</code></td>
           </tr>
           <tr>
+          <td><code>GetUserAvatarHandler</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Identity.Application</td>
+          <td><code>MMCA.ADC.Identity.Application.Users.UseCases.GetUserAvatar</code></td>
+          <td><code>MMCA.ADC.Identity.Application/Users/UseCases/GetUserAvatar/GetUserAvatarHandler.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>GetUserAvatarQuery</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Identity.Application</td>
+          <td><code>MMCA.ADC.Identity.Application.Users.UseCases.GetUserAvatar</code></td>
+          <td><code>MMCA.ADC.Identity.Application/Users/UseCases/GetUserAvatar/GetUserAvatarQuery.cs:5</code></td>
+          </tr>
+          <tr>
           <td><code>GetUsersHandler</code></td>
           <td>class</td>
           <td>MMCA.ADC.Identity.Application</td>
@@ -7995,6 +8287,34 @@
           <td>MMCA.ADC.Identity.Application</td>
           <td><code>MMCA.ADC.Identity.Application.Users.UseCases.GetUsers</code></td>
           <td><code>MMCA.ADC.Identity.Application/Users/UseCases/GetUsers/GetUsersQuery.cs:18</code></td>
+          </tr>
+          <tr>
+          <td><code>RemoveUserAvatarCommand</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Identity.Application</td>
+          <td><code>MMCA.ADC.Identity.Application.Users.UseCases.RemoveUserAvatar</code></td>
+          <td><code>MMCA.ADC.Identity.Application/Users/UseCases/RemoveUserAvatar/RemoveUserAvatarCommand.cs:8</code></td>
+          </tr>
+          <tr>
+          <td><code>RemoveUserAvatarHandler</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Identity.Application</td>
+          <td><code>MMCA.ADC.Identity.Application.Users.UseCases.RemoveUserAvatar</code></td>
+          <td><code>MMCA.ADC.Identity.Application/Users/UseCases/RemoveUserAvatar/RemoveUserAvatarHandler.cs:14</code></td>
+          </tr>
+          <tr>
+          <td><code>SetUserAvatarCommand</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Identity.Application</td>
+          <td><code>MMCA.ADC.Identity.Application.Users.UseCases.SetUserAvatar</code></td>
+          <td><code>MMCA.ADC.Identity.Application/Users/UseCases/SetUserAvatar/SetUserAvatarCommand.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>SetUserAvatarHandler</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Identity.Application</td>
+          <td><code>MMCA.ADC.Identity.Application.Users.UseCases.SetUserAvatar</code></td>
+          <td><code>MMCA.ADC.Identity.Application/Users/UseCases/SetUserAvatar/SetUserAvatarHandler.cs:16</code></td>
           </tr>
           <tr>
           <td><code>ChangePasswordRequestValidator</code></td>
@@ -8106,7 +8426,7 @@
           <td>class</td>
           <td>MMCA.ADC.Identity.Application.Tests</td>
           <td><code>MMCA.ADC.Identity.Application.Tests.Users.UseCases</code></td>
-          <td><code>MMCA.ADC.Identity.Application.Tests/Users/UseCases/ExportUserDataHandlerTests.cs:10</code></td>
+          <td><code>MMCA.ADC.Identity.Application.Tests/Users/UseCases/ExportUserDataHandlerTests.cs:13</code></td>
           </tr>
           <tr>
           <td><code>GetUserPreferencesHandlerTests</code></td>
@@ -8156,6 +8476,13 @@
           <td>MMCA.ADC.Identity.Application.Tests</td>
           <td><code>MMCA.ADC.Identity.Application.Tests.Users.UseCases</code></td>
           <td><code>MMCA.ADC.Identity.Application.Tests/Users/UseCases/GetUsersHandlerTests.cs:15</code></td>
+          </tr>
+          <tr>
+          <td><code>SetUserAvatarHandlerTests</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Identity.Application.Tests</td>
+          <td><code>MMCA.ADC.Identity.Application.Tests.Users.UseCases</code></td>
+          <td><code>MMCA.ADC.Identity.Application.Tests/Users/UseCases/SetUserAvatarHandlerTests.cs:16</code></td>
           </tr>
           <tr>
           <td><code>ChangePasswordRequestValidatorTests</code></td>
@@ -8473,6 +8800,20 @@
           <td><code>MMCA.ADC.Identity.IntegrationTests/Data/OutboxFidelityTests.cs:17</code></td>
           </tr>
           <tr>
+          <td><code>FakeUserEngagementExportService</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Identity.IntegrationTests</td>
+          <td><code>MMCA.ADC.Identity.IntegrationTests.Infrastructure</code></td>
+          <td><code>MMCA.ADC.Identity.IntegrationTests/Infrastructure/FakeUserEngagementExportService.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>FakeUserNotificationExportService</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Identity.IntegrationTests</td>
+          <td><code>MMCA.ADC.Identity.IntegrationTests.Infrastructure</code></td>
+          <td><code>MMCA.ADC.Identity.IntegrationTests/Infrastructure/FakeUserNotificationExportService.cs:10</code></td>
+          </tr>
+          <tr>
           <td><code>IdentityIntegrationTestBase</code></td>
           <td>class</td>
           <td>MMCA.ADC.Identity.IntegrationTests</td>
@@ -8498,7 +8839,7 @@
           <td>class</td>
           <td>MMCA.ADC.Identity.IntegrationTests</td>
           <td><code>MMCA.ADC.Identity.IntegrationTests.Infrastructure</code></td>
-          <td><code>MMCA.ADC.Identity.IntegrationTests/Infrastructure/IdentityTestWebApplicationFactory.cs:21</code></td>
+          <td><code>MMCA.ADC.Identity.IntegrationTests/Infrastructure/IdentityTestWebApplicationFactory.cs:30</code></td>
           </tr>
           <tr>
           <td><code>JwksEnabledIdentityFixture</code></td>
@@ -8564,11 +8905,53 @@
           <td><code>MMCA.ADC.Identity.Shared/Users/IAttendeeQueryService.cs:8</code></td>
           </tr>
           <tr>
+          <td><code>UserAvatarDTO</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Identity.Shared</td>
+          <td><code>MMCA.ADC.Identity.Shared.Users</code></td>
+          <td><code>MMCA.ADC.Identity.Shared/Users/UserAvatarDTO.cs:7</code></td>
+          </tr>
+          <tr>
+          <td><code>UserDataExportBookmarkDTO</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Identity.Shared</td>
+          <td><code>MMCA.ADC.Identity.Shared.Users</code></td>
+          <td><code>MMCA.ADC.Identity.Shared/Users/UserDataExportBookmarkDTO.cs:7</code></td>
+          </tr>
+          <tr>
           <td><code>UserDataExportDTO</code></td>
           <td>record</td>
           <td>MMCA.ADC.Identity.Shared</td>
           <td><code>MMCA.ADC.Identity.Shared.Users</code></td>
-          <td><code>MMCA.ADC.Identity.Shared/Users/UserDataExportDTO.cs:13</code></td>
+          <td><code>MMCA.ADC.Identity.Shared/Users/UserDataExportDTO.cs:16</code></td>
+          </tr>
+          <tr>
+          <td><code>UserDataExportEngagementSectionDTO</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Identity.Shared</td>
+          <td><code>MMCA.ADC.Identity.Shared.Users</code></td>
+          <td><code>MMCA.ADC.Identity.Shared/Users/UserDataExportEngagementSectionDTO.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>UserDataExportNotificationDTO</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Identity.Shared</td>
+          <td><code>MMCA.ADC.Identity.Shared.Users</code></td>
+          <td><code>MMCA.ADC.Identity.Shared/Users/UserDataExportNotificationDTO.cs:7</code></td>
+          </tr>
+          <tr>
+          <td><code>UserDataExportNotificationSectionDTO</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Identity.Shared</td>
+          <td><code>MMCA.ADC.Identity.Shared.Users</code></td>
+          <td><code>MMCA.ADC.Identity.Shared/Users/UserDataExportNotificationSectionDTO.cs:9</code></td>
+          </tr>
+          <tr>
+          <td><code>UserDataExportSubmittedQuestionDTO</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Identity.Shared</td>
+          <td><code>MMCA.ADC.Identity.Shared.Users</code></td>
+          <td><code>MMCA.ADC.Identity.Shared/Users/UserDataExportSubmittedQuestionDTO.cs:7</code></td>
           </tr>
           <tr>
           <td><code>UserDTO</code></td>
@@ -8638,7 +9021,7 @@
           <td>class</td>
           <td>MMCA.ADC.Identity.UI</td>
           <td><code>MMCA.ADC.Identity.UI.Pages.Profile</code></td>
-          <td><code>MMCA.ADC.Identity.UI/Pages/Profile/Profile.razor.cs:13</code></td>
+          <td><code>MMCA.ADC.Identity.UI/Pages/Profile/Profile.razor.cs:15</code></td>
           </tr>
           <tr>
           <td><code>UserList</code></td>
@@ -8666,35 +9049,14 @@
           <td>class</td>
           <td>MMCA.ADC.Identity.UI.Tests</td>
           <td><code>MMCA.ADC.Identity.UI.Tests</code></td>
-          <td><code>MMCA.ADC.Identity.UI.Tests/BunitTestBase.cs:12</code></td>
+          <td><code>MMCA.ADC.Identity.UI.Tests/BunitTestBase.cs:17</code></td>
           </tr>
           <tr>
           <td><code>IdentityRouteAuthorizationTests</code></td>
           <td>class</td>
           <td>MMCA.ADC.Identity.UI.Tests</td>
           <td><code>MMCA.ADC.Identity.UI.Tests</code></td>
-          <td><code>MMCA.ADC.Identity.UI.Tests/IdentityRouteAuthorizationTests.cs:15</code></td>
-          </tr>
-          <tr>
-          <td><code>CapturedRequest</code></td>
-          <td>record</td>
-          <td>MMCA.ADC.Identity.UI.Tests</td>
-          <td><code>MMCA.ADC.Identity.UI.Tests.Infrastructure</code></td>
-          <td><code>MMCA.ADC.Identity.UI.Tests/Infrastructure/HttpTestDoubles.cs:36</code></td>
-          </tr>
-          <tr>
-          <td><code>CapturingHttpMessageHandler</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Identity.UI.Tests</td>
-          <td><code>MMCA.ADC.Identity.UI.Tests.Infrastructure</code></td>
-          <td><code>MMCA.ADC.Identity.UI.Tests/Infrastructure/HttpTestDoubles.cs:13</code></td>
-          </tr>
-          <tr>
-          <td><code>HttpTestDoubles</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Identity.UI.Tests</td>
-          <td><code>MMCA.ADC.Identity.UI.Tests.Infrastructure</code></td>
-          <td><code>MMCA.ADC.Identity.UI.Tests/Infrastructure/HttpTestDoubles.cs:39</code></td>
+          <td><code>MMCA.ADC.Identity.UI.Tests/IdentityRouteAuthorizationTests.cs:16</code></td>
           </tr>
           <tr>
           <td><code>ProfileChangePasswordTests</code></td>
@@ -8736,7 +9098,7 @@
           <td>class</td>
           <td>MMCA.ADC.Notification.API</td>
           <td><code>MMCA.ADC.Notification.API</code></td>
-          <td><code>MMCA.ADC.Notification.API/NotificationModule.cs:14</code></td>
+          <td><code>MMCA.ADC.Notification.API/NotificationModule.cs:16</code></td>
           </tr>
           <tr>
           <td><code>AttendeeNotificationRecipientProvider</code></td>
@@ -8750,14 +9112,21 @@
           <td>class</td>
           <td>MMCA.ADC.Notification.Application</td>
           <td><code>MMCA.ADC.Notification.Application</code></td>
-          <td><code>MMCA.ADC.Notification.Application/DependencyInjection.cs:11</code></td>
+          <td><code>MMCA.ADC.Notification.Application/DependencyInjection.cs:12</code></td>
+          </tr>
+          <tr>
+          <td><code>UserNotificationExportService</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Notification.Application</td>
+          <td><code>MMCA.ADC.Notification.Application</code></td>
+          <td><code>MMCA.ADC.Notification.Application/UserNotificationExportService.cs:15</code></td>
           </tr>
           <tr>
           <td><code>DependencyInjection</code></td>
           <td>class</td>
           <td>MMCA.ADC.Notification.Contracts</td>
           <td><code>MMCA.ADC.Notification.Contracts</code></td>
-          <td><code>MMCA.ADC.Notification.Contracts/DependencyInjection.cs:14</code></td>
+          <td><code>MMCA.ADC.Notification.Contracts/DependencyInjection.cs:16</code></td>
           </tr>
           <tr>
           <td><code>LiveChannelPublisherGrpcAdapter</code></td>
@@ -8765,6 +9134,13 @@
           <td>MMCA.ADC.Notification.Contracts</td>
           <td><code>MMCA.ADC.Notification.Contracts</code></td>
           <td><code>MMCA.ADC.Notification.Contracts/LiveChannelPublisherGrpcAdapter.cs:20</code></td>
+          </tr>
+          <tr>
+          <td><code>UserNotificationExportServiceGrpcAdapter</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Notification.Contracts</td>
+          <td><code>MMCA.ADC.Notification.Contracts</code></td>
+          <td><code>MMCA.ADC.Notification.Contracts/UserNotificationExportServiceGrpcAdapter.cs:17</code></td>
           </tr>
           <tr>
           <td><code>FakeAttendeeQueryService</code></td>
@@ -8823,6 +9199,34 @@
           <td><code>MMCA.ADC.Notification.Service/Grpc/LiveChannelGrpcService.cs:19</code></td>
           </tr>
           <tr>
+          <td><code>UserNotificationExportGrpcService</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Notification.Service</td>
+          <td><code>MMCA.ADC.Notification.Service.Grpc</code></td>
+          <td><code>MMCA.ADC.Notification.Service/Grpc/UserNotificationExportGrpcService.cs:20</code></td>
+          </tr>
+          <tr>
+          <td><code>DisabledUserNotificationExportService</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Notification.Shared</td>
+          <td><code>MMCA.ADC.Notification.Shared.UserNotifications</code></td>
+          <td><code>MMCA.ADC.Notification.Shared/UserNotifications/DisabledUserNotificationExportService.cs:7</code></td>
+          </tr>
+          <tr>
+          <td><code>IUserNotificationExportService</code></td>
+          <td>interface</td>
+          <td>MMCA.ADC.Notification.Shared</td>
+          <td><code>MMCA.ADC.Notification.Shared.UserNotifications</code></td>
+          <td><code>MMCA.ADC.Notification.Shared/UserNotifications/IUserNotificationExportService.cs:11</code></td>
+          </tr>
+          <tr>
+          <td><code>UserNotificationExportItemDTO</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Notification.Shared</td>
+          <td><code>MMCA.ADC.Notification.Shared.UserNotifications</code></td>
+          <td><code>MMCA.ADC.Notification.Shared/UserNotifications/UserNotificationExportItemDTO.cs:7</code></td>
+          </tr>
+          <tr>
           <td><code>App</code></td>
           <td>class</td>
           <td>MMCA.ADC.UI</td>
@@ -8834,7 +9238,7 @@
           <td>class</td>
           <td>MMCA.ADC.UI</td>
           <td><code>MMCA.ADC.UI</code></td>
-          <td><code>MMCA.ADC.UI/Platforms/iOS/AppDelegate.cs:9</code></td>
+          <td><code>MMCA.ADC.UI/Platforms/iOS/AppDelegate.cs:17</code></td>
           </tr>
           <tr>
           <td><code>AppDelegate</code></td>
@@ -8844,11 +9248,18 @@
           <td><code>MMCA.ADC.UI/Platforms/MacCatalyst/AppDelegate.cs:9</code></td>
           </tr>
           <tr>
+          <td><code>DeviceUIModule</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.UI</td>
+          <td><code>MMCA.ADC.UI</code></td>
+          <td><code>MMCA.ADC.UI/DeviceUIModule.cs:18</code></td>
+          </tr>
+          <tr>
           <td><code>MainActivity</code></td>
           <td>class</td>
           <td>MMCA.ADC.UI</td>
           <td><code>MMCA.ADC.UI</code></td>
-          <td><code>MMCA.ADC.UI/Platforms/Android/MainActivity.cs:13</code></td>
+          <td><code>MMCA.ADC.UI/Platforms/Android/MainActivity.cs:28</code></td>
           </tr>
           <tr>
           <td><code>MainApplication</code></td>
@@ -8869,7 +9280,28 @@
           <td>class</td>
           <td>MMCA.ADC.UI</td>
           <td><code>MMCA.ADC.UI</code></td>
-          <td><code>MMCA.ADC.UI/MauiProgram.cs:27</code></td>
+          <td><code>MMCA.ADC.UI/MauiProgram.cs:29</code></td>
+          </tr>
+          <tr>
+          <td><code>NowNextSession</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.UI</td>
+          <td><code>MMCA.ADC.UI</code></td>
+          <td><code>MMCA.ADC.UI/Platforms/Android/NowNextWidgetProvider.cs:135</code></td>
+          </tr>
+          <tr>
+          <td><code>NowNextSnapshot</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.UI</td>
+          <td><code>MMCA.ADC.UI</code></td>
+          <td><code>MMCA.ADC.UI/Platforms/Android/NowNextWidgetProvider.cs:133</code></td>
+          </tr>
+          <tr>
+          <td><code>NowNextWidgetProvider</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.UI</td>
+          <td><code>MMCA.ADC.UI</code></td>
+          <td><code>MMCA.ADC.UI/Platforms/Android/NowNextWidgetProvider.cs:23</code></td>
           </tr>
           <tr>
           <td><code>Program</code></td>
@@ -8884,6 +9316,13 @@
           <td>MMCA.ADC.UI</td>
           <td><code>MMCA.ADC.UI</code></td>
           <td><code>MMCA.ADC.UI/Platforms/MacCatalyst/Program.cs:8</code></td>
+          </tr>
+          <tr>
+          <td><code>WebAuthenticatorCallbackActivity</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.UI</td>
+          <td><code>MMCA.ADC.UI</code></td>
+          <td><code>MMCA.ADC.UI/Platforms/Android/WebAuthenticatorCallbackActivity.cs:19</code></td>
           </tr>
           <tr>
           <td><code>ADCCollectionResult</code></td>
@@ -8949,11 +9388,18 @@
           <td><code>MMCA.ADC.UI/Pages/ADCHome.razor.cs:286</code></td>
           </tr>
           <tr>
-          <td><code>FormFactor</code></td>
+          <td><code>AppActionsInitializer</code></td>
           <td>class</td>
           <td>MMCA.ADC.UI</td>
           <td><code>MMCA.ADC.UI.Services</code></td>
-          <td><code>MMCA.ADC.UI/Services/FormFactor.cs:9</code></td>
+          <td><code>MMCA.ADC.UI/Services/AppActionsInitializer.cs:16</code></td>
+          </tr>
+          <tr>
+          <td><code>MauiPublicLinkBuilder</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.UI</td>
+          <td><code>MMCA.ADC.UI.Services</code></td>
+          <td><code>MMCA.ADC.UI/Services/MauiPublicLinkBuilder.cs:13</code></td>
           </tr>
           <tr>
           <td><code>MauiTokenStorageService</code></td>
@@ -8968,13 +9414,6 @@
           <td>MMCA.ADC.UI</td>
           <td><code>MMCA.ADC.UI.WinUI</code></td>
           <td><code>MMCA.ADC.UI/Platforms/Windows/App.xaml.cs:8</code></td>
-          </tr>
-          <tr>
-          <td><code>FormFactor</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.UI.Web</td>
-          <td><code>MMCA.ADC.UI.Web.Services</code></td>
-          <td><code>MMCA.ADC.UI.Web/Services/FormFactor.cs:9</code></td>
           </tr>
           <tr>
           <td><code>ADCCollectionResult</code></td>
@@ -9038,13 +9477,6 @@
           <td>MMCA.ADC.UI.Web.Client</td>
           <td><code>MMCA.ADC.UI.Web.Client.Pages</code></td>
           <td><code>MMCA.ADC.UI.Web.Client/Pages/ADCHome.razor.cs:317</code></td>
-          </tr>
-          <tr>
-          <td><code>FormFactor</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.UI.Web.Client</td>
-          <td><code>MMCA.ADC.UI.Web.Client.Services</code></td>
-          <td><code>MMCA.ADC.UI.Web.Client/Services/FormFactor.cs:9</code></td>
           </tr>
           <tr>
           <td><code>AssemblyReference</code></td>
@@ -9234,6 +9666,13 @@
           <td>MMCA.Common.API</td>
           <td><code>MMCA.Common.API.Controllers</code></td>
           <td><code>MMCA.Common.API/Controllers/ServiceInfoControllerBase.cs:54</code></td>
+          </tr>
+          <tr>
+          <td><code>DevicesController</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API</td>
+          <td><code>MMCA.Common.API.Controllers.Notifications</code></td>
+          <td><code>MMCA.Common.API/Controllers/Notifications/DevicesController.cs:25</code></td>
           </tr>
           <tr>
           <td><code>InboxController</code></td>
@@ -9481,6 +9920,20 @@
           <td><code>MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:11</code></td>
           </tr>
           <tr>
+          <td><code>AppAssociationEndpointExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API</td>
+          <td><code>MMCA.Common.API.Startup</code></td>
+          <td><code>MMCA.Common.API/Startup/AppAssociationEndpointExtensions.cs:15</code></td>
+          </tr>
+          <tr>
+          <td><code>AppAssociationOptions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API</td>
+          <td><code>MMCA.Common.API.Startup</code></td>
+          <td><code>MMCA.Common.API/Startup/AppAssociationOptions.cs:9</code></td>
+          </tr>
+          <tr>
           <td><code>DatabaseInitializationExtensions</code></td>
           <td>class</td>
           <td>MMCA.Common.API</td>
@@ -9660,7 +10113,7 @@
           <td>class</td>
           <td>MMCA.Common.API.Tests</td>
           <td><code>MMCA.Common.API.Tests.Controllers</code></td>
-          <td><code>MMCA.Common.API.Tests/Controllers/OAuthControllerBaseTests.cs:445</code></td>
+          <td><code>MMCA.Common.API.Tests/Controllers/OAuthControllerBaseTests.cs:628</code></td>
           </tr>
           <tr>
           <td><code>TestAggDTO</code></td>
@@ -9730,7 +10183,14 @@
           <td>class</td>
           <td>MMCA.Common.API.Tests</td>
           <td><code>MMCA.Common.API.Tests.Controllers</code></td>
-          <td><code>MMCA.Common.API.Tests/Controllers/OAuthControllerBaseTests.cs:452</code></td>
+          <td><code>MMCA.Common.API.Tests/Controllers/OAuthControllerBaseTests.cs:635</code></td>
+          </tr>
+          <tr>
+          <td><code>DevicesControllerTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.Tests</td>
+          <td><code>MMCA.Common.API.Tests.Controllers.Notifications</code></td>
+          <td><code>MMCA.Common.API.Tests/Controllers/Notifications/DevicesControllerTests.cs:17</code></td>
           </tr>
           <tr>
           <td><code>NotificationInboxControllerTests</code></td>
@@ -9920,6 +10380,13 @@
           <td>MMCA.Common.API.Tests</td>
           <td><code>MMCA.Common.API.Tests.SessionCookies</code></td>
           <td><code>MMCA.Common.API.Tests/SessionCookies/SessionCookieEndpointsTests.cs:145</code></td>
+          </tr>
+          <tr>
+          <td><code>AppAssociationEndpointTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.Tests</td>
+          <td><code>MMCA.Common.API.Tests.Startup</code></td>
+          <td><code>MMCA.Common.API.Tests/Startup/AppAssociationEndpointTests.cs:25</code></td>
           </tr>
           <tr>
           <td><code>DatabaseInitializationExtensionsTests</code></td>
@@ -10230,11 +10697,39 @@
           <td><code>MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:14</code></td>
           </tr>
           <tr>
+          <td><code>IFileStorageService</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.Application</td>
+          <td><code>MMCA.Common.Application.Interfaces.Infrastructure</code></td>
+          <td><code>MMCA.Common.Application/Interfaces/Infrastructure/IFileStorageService.cs:11</code></td>
+          </tr>
+          <tr>
+          <td><code>IImageProcessor</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.Application</td>
+          <td><code>MMCA.Common.Application.Interfaces.Infrastructure</code></td>
+          <td><code>MMCA.Common.Application/Interfaces/Infrastructure/IImageProcessor.cs:11</code></td>
+          </tr>
+          <tr>
           <td><code>ILiveChannelPublisher</code></td>
           <td>interface</td>
           <td>MMCA.Common.Application</td>
           <td><code>MMCA.Common.Application.Interfaces.Infrastructure</code></td>
           <td><code>MMCA.Common.Application/Interfaces/Infrastructure/ILiveChannelPublisher.cs:9</code></td>
+          </tr>
+          <tr>
+          <td><code>ImageContentSniffer</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Application</td>
+          <td><code>MMCA.Common.Application.Interfaces.Infrastructure</code></td>
+          <td><code>MMCA.Common.Application/Interfaces/Infrastructure/ImageContentSniffer.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>INativePushSender</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.Application</td>
+          <td><code>MMCA.Common.Application.Interfaces.Infrastructure</code></td>
+          <td><code>MMCA.Common.Application/Interfaces/Infrastructure/INativePushSender.cs:10</code></td>
           </tr>
           <tr>
           <td><code>INotificationRecipientProvider</code></td>
@@ -10249,6 +10744,13 @@
           <td>MMCA.Common.Application</td>
           <td><code>MMCA.Common.Application.Interfaces.Infrastructure</code></td>
           <td><code>MMCA.Common.Application/Interfaces/Infrastructure/IPasswordHasher.cs:6</code></td>
+          </tr>
+          <tr>
+          <td><code>IPushDeviceRegistrar</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.Application</td>
+          <td><code>MMCA.Common.Application.Interfaces.Infrastructure</code></td>
+          <td><code>MMCA.Common.Application/Interfaces/Infrastructure/IPushDeviceRegistrar.cs:11</code></td>
           </tr>
           <tr>
           <td><code>IPushNotificationSender</code></td>
@@ -10937,6 +11439,13 @@
           <td><code>MMCA.Common.Application.Tests/DomainEventDispatcherTests.cs:11</code></td>
           </tr>
           <tr>
+          <td><code>ImageContentSnifferTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Application.Tests</td>
+          <td><code>MMCA.Common.Application.Tests</code></td>
+          <td><code>MMCA.Common.Application.Tests/ImageContentSnifferTests.cs:12</code></td>
+          </tr>
+          <tr>
           <td><code>MultiHandlerEvent</code></td>
           <td>record</td>
           <td>MMCA.Common.Application.Tests</td>
@@ -11473,7 +11982,7 @@
           <td>record</td>
           <td>MMCA.Common.Application.Tests</td>
           <td><code>MMCA.Common.Application.Tests.Notifications</code></td>
-          <td><code>MMCA.Common.Application.Tests/Notifications/SendPushNotificationHandlerTests.cs:119</code></td>
+          <td><code>MMCA.Common.Application.Tests/Notifications/SendPushNotificationHandlerTests.cs:150</code></td>
           </tr>
           <tr>
           <td><code>MarkAllNotificationsReadHandlerTests</code></td>
@@ -12047,7 +12556,7 @@
           <td>class</td>
           <td>MMCA.Common.Architecture.Tests</td>
           <td><code>MMCA.Common.Architecture.Tests</code></td>
-          <td><code>MMCA.Common.Architecture.Tests/CommonArchitectureMap.cs:9</code></td>
+          <td><code>MMCA.Common.Architecture.Tests/CommonArchitectureMap.cs:15</code></td>
           </tr>
           <tr>
           <td><code>DataSubjectSample</code></td>
@@ -12174,6 +12683,20 @@
           <td>MMCA.Common.Architecture.Tests</td>
           <td><code>MMCA.Common.Architecture.Tests</code></td>
           <td><code>MMCA.Common.Architecture.Tests/SpecificationFitnessTests.cs:28</code></td>
+          </tr>
+          <tr>
+          <td><code>StateManagementConventionTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td><code>MMCA.Common.Architecture.Tests</code></td>
+          <td><code>MMCA.Common.Architecture.Tests/StateManagementConventionTests.cs:11</code></td>
+          </tr>
+          <tr>
+          <td><code>UIArchitectureConventionTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td><code>MMCA.Common.Architecture.Tests</code></td>
+          <td><code>MMCA.Common.Architecture.Tests/UIArchitectureConventionTests.cs:11</code></td>
           </tr>
           <tr>
           <td><code>Extensions</code></td>
@@ -13639,6 +14162,27 @@
           <td><code>MMCA.Common.Infrastructure/Persistence/ValueGenerators/CosmosIntIdValueGenerator.cs:16</code></td>
           </tr>
           <tr>
+          <td><code>AzureBlobFileStorageService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td><code>MMCA.Common.Infrastructure.Services</code></td>
+          <td><code>MMCA.Common.Infrastructure/Services/AzureBlobFileStorageService.cs:15</code></td>
+          </tr>
+          <tr>
+          <td><code>AzureNotificationHubDeviceRegistrar</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td><code>MMCA.Common.Infrastructure.Services</code></td>
+          <td><code>MMCA.Common.Infrastructure/Services/AzureNotificationHubDeviceRegistrar.cs:15</code></td>
+          </tr>
+          <tr>
+          <td><code>AzureNotificationHubNativePushSender</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td><code>MMCA.Common.Infrastructure.Services</code></td>
+          <td><code>MMCA.Common.Infrastructure/Services/AzureNotificationHubNativePushSender.cs:14</code></td>
+          </tr>
+          <tr>
           <td><code>BrokerEventBus</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure</td>
@@ -13681,6 +14225,13 @@
           <td><code>MMCA.Common.Infrastructure/Services/DataSourceService.cs:12</code></td>
           </tr>
           <tr>
+          <td><code>ImageSharpImageProcessor</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td><code>MMCA.Common.Infrastructure.Services</code></td>
+          <td><code>MMCA.Common.Infrastructure/Services/ImageSharpImageProcessor.cs:14</code></td>
+          </tr>
+          <tr>
           <td><code>InProcessEventBus</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure</td>
@@ -13716,11 +14267,39 @@
           <td><code>MMCA.Common.Infrastructure/Services/IntegrationEventPublisher.cs:12</code></td>
           </tr>
           <tr>
+          <td><code>NativePushPayloads</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td><code>MMCA.Common.Infrastructure.Services</code></td>
+          <td><code>MMCA.Common.Infrastructure/Services/NativePushPayloads.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>NullFileStorageService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td><code>MMCA.Common.Infrastructure.Services</code></td>
+          <td><code>MMCA.Common.Infrastructure/Services/NullFileStorageService.cs:11</code></td>
+          </tr>
+          <tr>
           <td><code>NullLiveChannelPublisher</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure</td>
           <td><code>MMCA.Common.Infrastructure.Services</code></td>
           <td><code>MMCA.Common.Infrastructure/Services/NullLiveChannelPublisher.cs:11</code></td>
+          </tr>
+          <tr>
+          <td><code>NullNativePushSender</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td><code>MMCA.Common.Infrastructure.Services</code></td>
+          <td><code>MMCA.Common.Infrastructure/Services/NullNativePushSender.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>NullPushDeviceRegistrar</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td><code>MMCA.Common.Infrastructure.Services</code></td>
+          <td><code>MMCA.Common.Infrastructure/Services/NullPushDeviceRegistrar.cs:12</code></td>
           </tr>
           <tr>
           <td><code>NullPushNotificationSender</code></td>
@@ -13786,6 +14365,13 @@
           <td><code>MMCA.Common.Infrastructure/Settings/DataSourcesSettings.cs:13</code></td>
           </tr>
           <tr>
+          <td><code>FileStorageSettings</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td><code>MMCA.Common.Infrastructure.Settings</code></td>
+          <td><code>MMCA.Common.Infrastructure/Settings/FileStorageSettings.cs:10</code></td>
+          </tr>
+          <tr>
           <td><code>IConnectionStringSettings</code></td>
           <td>interface</td>
           <td>MMCA.Common.Infrastructure</td>
@@ -13847,6 +14433,13 @@
           <td>MMCA.Common.Infrastructure</td>
           <td><code>MMCA.Common.Infrastructure.Settings</code></td>
           <td><code>MMCA.Common.Infrastructure/Settings/MessageBusSettings.cs:11</code></td>
+          </tr>
+          <tr>
+          <td><code>NativePushSettings</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td><code>MMCA.Common.Infrastructure.Settings</code></td>
+          <td><code>MMCA.Common.Infrastructure/Settings/NativePushSettings.cs:9</code></td>
           </tr>
           <tr>
           <td><code>OutboxSettings</code></td>
@@ -14878,6 +15471,13 @@
           <td><code>MMCA.Common.Infrastructure.Tests/Services/DataSourceServiceTests.cs:165</code></td>
           </tr>
           <tr>
+          <td><code>ImageSharpImageProcessorTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td><code>MMCA.Common.Infrastructure.Tests.Services</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Services/ImageSharpImageProcessorTests.cs:15</code></td>
+          </tr>
+          <tr>
           <td><code>InProcessEventBusOutboxTests</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
@@ -14932,6 +15532,13 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Services</code></td>
           <td><code>MMCA.Common.Infrastructure.Tests/Services/InProcessMessageBusTests.cs:24</code></td>
+          </tr>
+          <tr>
+          <td><code>NativePushPayloadsTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td><code>MMCA.Common.Infrastructure.Tests.Services</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Services/NativePushPayloadsTests.cs:12</code></td>
           </tr>
           <tr>
           <td><code>NullAssemblyProvider</code></td>
@@ -15312,6 +15919,20 @@
           <td><code>MMCA.Common.Shared/Auth/RoleValue.cs:25</code></td>
           </tr>
           <tr>
+          <td><code>IcsCalendarBuilder</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Shared</td>
+          <td><code>MMCA.Common.Shared.Calendars</code></td>
+          <td><code>MMCA.Common.Shared/Calendars/IcsCalendarBuilder.cs:12</code></td>
+          </tr>
+          <tr>
+          <td><code>IcsEvent</code></td>
+          <td>record</td>
+          <td>MMCA.Common.Shared</td>
+          <td><code>MMCA.Common.Shared.Calendars</code></td>
+          <td><code>MMCA.Common.Shared/Calendars/IcsEvent.cs:15</code></td>
+          </tr>
+          <tr>
           <td><code>BaseLookup&lt;TIdentifierType&gt;</code></td>
           <td>record</td>
           <td>MMCA.Common.Shared</td>
@@ -15366,6 +15987,13 @@
           <td>MMCA.Common.Shared</td>
           <td><code>MMCA.Common.Shared.Notifications</code></td>
           <td><code>MMCA.Common.Shared/Notifications/NotificationFeatures.cs:6</code></td>
+          </tr>
+          <tr>
+          <td><code>DeviceInstallationRequest</code></td>
+          <td>record</td>
+          <td>MMCA.Common.Shared</td>
+          <td><code>MMCA.Common.Shared.Notifications.PushNotifications</code></td>
+          <td><code>MMCA.Common.Shared/Notifications/PushNotifications/DeviceInstallationRequest.cs:12</code></td>
           </tr>
           <tr>
           <td><code>PushNotificationDTO</code></td>
@@ -15543,6 +16171,13 @@
           <td><code>MMCA.Common.Shared.Tests/Auth/PermissionRegistryTests.cs:6</code></td>
           </tr>
           <tr>
+          <td><code>IcsCalendarBuilderTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Shared.Tests</td>
+          <td><code>MMCA.Common.Shared.Tests.Calendars</code></td>
+          <td><code>MMCA.Common.Shared.Tests/Calendars/IcsCalendarBuilderTests.cs:12</code></td>
+          </tr>
+          <tr>
           <td><code>ConcreteDomainException</code></td>
           <td>class</td>
           <td>MMCA.Common.Shared.Tests</td>
@@ -15683,11 +16318,32 @@
           <td><code>MMCA.Common.Testing/JwtTokenGenerator.cs:29</code></td>
           </tr>
           <tr>
+          <td><code>OpenApiContractTestsBase&lt;TFixture&gt;</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Testing</td>
+          <td><code>MMCA.Common.Testing</code></td>
+          <td><code>MMCA.Common.Testing/OpenApiContractTestsBase.cs:21</code></td>
+          </tr>
+          <tr>
+          <td><code>ProblemDetailsContractTestsBase&lt;TFixture&gt;</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Testing</td>
+          <td><code>MMCA.Common.Testing</code></td>
+          <td><code>MMCA.Common.Testing/ProblemDetailsContractTestsBase.cs:21</code></td>
+          </tr>
+          <tr>
           <td><code>SecurityHeadersTestsBase</code></td>
           <td>class</td>
           <td>MMCA.Common.Testing</td>
           <td><code>MMCA.Common.Testing</code></td>
           <td><code>MMCA.Common.Testing/SecurityHeadersTestsBase.cs:16</code></td>
+          </tr>
+          <tr>
+          <td><code>ServiceInfoVersioningContractTestsBase&lt;TFixture&gt;</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Testing</td>
+          <td><code>MMCA.Common.Testing</code></td>
+          <td><code>MMCA.Common.Testing/ServiceInfoVersioningContractTestsBase.cs:19</code></td>
           </tr>
           <tr>
           <td><code>SqlServerIntegrationTestFixtureBase&lt;TEntryPoint&gt;</code></td>
@@ -16005,6 +16661,13 @@
           <td><code>MMCA.Common.Testing.Architecture/Bases/PiiConventionTestsBase.cs:7</code></td>
           </tr>
           <tr>
+          <td><code>RouteAuthorizationTestsBase</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Testing.Architecture</td>
+          <td><code>MMCA.Common.Testing.Architecture</code></td>
+          <td><code>MMCA.Common.Testing.Architecture/Bases/RouteAuthorizationTestsBase.cs:22</code></td>
+          </tr>
+          <tr>
           <td><code>RuleHelpers</code></td>
           <td>class</td>
           <td>MMCA.Common.Testing.Architecture</td>
@@ -16031,6 +16694,20 @@
           <td>MMCA.Common.Testing.Architecture</td>
           <td><code>MMCA.Common.Testing.Architecture</code></td>
           <td><code>MMCA.Common.Testing.Architecture/Bases/SpecificationConventionTestsBase.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>StateManagementConventionTestsBase</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Testing.Architecture</td>
+          <td><code>MMCA.Common.Testing.Architecture</code></td>
+          <td><code>MMCA.Common.Testing.Architecture/Bases/StateManagementConventionTestsBase.cs:17</code></td>
+          </tr>
+          <tr>
+          <td><code>UIArchitectureConventionTestsBase</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Testing.Architecture</td>
+          <td><code>MMCA.Common.Testing.Architecture</code></td>
+          <td><code>MMCA.Common.Testing.Architecture/Bases/UIArchitectureConventionTestsBase.cs:14</code></td>
           </tr>
           <tr>
           <td><code>AccessibilityViolationException</code></td>
@@ -16079,7 +16756,7 @@
           <td>class</td>
           <td>MMCA.Common.Testing.E2E</td>
           <td><code>MMCA.Common.Testing.E2E.Infrastructure</code></td>
-          <td><code>MMCA.Common.Testing.E2E/Infrastructure/PageExtensions.cs:13</code></td>
+          <td><code>MMCA.Common.Testing.E2E/Infrastructure/PageExtensions.cs:14</code></td>
           </tr>
           <tr>
           <td><code>PlaywrightFixture</code></td>
@@ -16194,6 +16871,34 @@
           <td><code>MMCA.Common.Testing.UI/Infrastructure/BunitInteractionExtensions.cs:12</code></td>
           </tr>
           <tr>
+          <td><code>CapturedRequest</code></td>
+          <td>record</td>
+          <td>MMCA.Common.Testing.UI</td>
+          <td><code>MMCA.Common.Testing.UI</code></td>
+          <td><code>MMCA.Common.Testing.UI/Infrastructure/CapturingHttpMessageHandler.cs:129</code></td>
+          </tr>
+          <tr>
+          <td><code>CapturingHttpMessageHandler</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Testing.UI</td>
+          <td><code>MMCA.Common.Testing.UI</code></td>
+          <td><code>MMCA.Common.Testing.UI/Infrastructure/CapturingHttpMessageHandler.cs:18</code></td>
+          </tr>
+          <tr>
+          <td><code>FreshApiClientFactory</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Testing.UI</td>
+          <td><code>MMCA.Common.Testing.UI</code></td>
+          <td><code>MMCA.Common.Testing.UI/Infrastructure/UiHttpServiceHarness.cs:75</code></td>
+          </tr>
+          <tr>
+          <td><code>HttpTestDoubles</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Testing.UI</td>
+          <td><code>MMCA.Common.Testing.UI</code></td>
+          <td><code>MMCA.Common.Testing.UI/Infrastructure/HttpTestDoubles.cs:12</code></td>
+          </tr>
+          <tr>
           <td><code>IsAuthenticatedAuthorizationService</code></td>
           <td>class</td>
           <td>MMCA.Common.Testing.UI</td>
@@ -16229,6 +16934,20 @@
           <td><code>MMCA.Common.Testing.UI/Infrastructure/BunitComponentTestBase.cs:97</code></td>
           </tr>
           <tr>
+          <td><code>Route</code></td>
+          <td>record</td>
+          <td>MMCA.Common.Testing.UI</td>
+          <td><code>MMCA.Common.Testing.UI</code></td>
+          <td><code>MMCA.Common.Testing.UI/Infrastructure/CapturingHttpMessageHandler.cs:110</code></td>
+          </tr>
+          <tr>
+          <td><code>StubTokenStorageService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Testing.UI</td>
+          <td><code>MMCA.Common.Testing.UI</code></td>
+          <td><code>MMCA.Common.Testing.UI/Infrastructure/StubTokenStorageService.cs:13</code></td>
+          </tr>
+          <tr>
           <td><code>TestPrincipal</code></td>
           <td>class</td>
           <td>MMCA.Common.Testing.UI</td>
@@ -16236,18 +16955,25 @@
           <td><code>MMCA.Common.Testing.UI/Infrastructure/TestPrincipal.cs:6</code></td>
           </tr>
           <tr>
+          <td><code>UiHttpServiceHarness</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Testing.UI</td>
+          <td><code>MMCA.Common.Testing.UI</code></td>
+          <td><code>MMCA.Common.Testing.UI/Infrastructure/UiHttpServiceHarness.cs:14</code></td>
+          </tr>
+          <tr>
           <td><code>DependencyInjection</code></td>
           <td>class</td>
           <td>MMCA.Common.UI</td>
           <td><code>MMCA.Common.UI</code></td>
-          <td><code>MMCA.Common.UI/DependencyInjection.cs:18</code></td>
+          <td><code>MMCA.Common.UI/DependencyInjection.cs:19</code></td>
           </tr>
           <tr>
           <td><code>UISharedAssemblyReference</code></td>
           <td>class</td>
           <td>MMCA.Common.UI</td>
           <td><code>MMCA.Common.UI</code></td>
-          <td><code>MMCA.Common.UI/DependencyInjection.cs:109</code></td>
+          <td><code>MMCA.Common.UI/DependencyInjection.cs:123</code></td>
           </tr>
           <tr>
           <td><code>BreakpointConstants</code></td>
@@ -16332,6 +17058,20 @@
           <td>MMCA.Common.UI</td>
           <td><code>MMCA.Common.UI.Common.Settings</code></td>
           <td><code>MMCA.Common.UI/Common/Settings/UIModuleConfiguration.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>MobileInfiniteScrollList&lt;TItem&gt;</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Components</code></td>
+          <td><code>MMCA.Common.UI/Components/MobileInfiniteScrollList.razor.cs:15</code></td>
+          </tr>
+          <tr>
+          <td><code>NotificationBell</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Components.Notifications</code></td>
+          <td><code>MMCA.Common.UI/Components/Notifications/NotificationBell.razor.cs:14</code></td>
           </tr>
           <tr>
           <td><code>MoneyExtensions</code></td>
@@ -16586,6 +17326,13 @@
           <td><code>MMCA.Common.UI/Services/ApiUserPreferenceWriter.cs:19</code></td>
           </tr>
           <tr>
+          <td><code>WasmFormFactor</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services</code></td>
+          <td><code>MMCA.Common.UI/Services/WasmFormFactor.cs:9</code></td>
+          </tr>
+          <tr>
           <td><code>AuthDelegatingHandler</code></td>
           <td>class</td>
           <td>MMCA.Common.UI</td>
@@ -16597,7 +17344,7 @@
           <td>class</td>
           <td>MMCA.Common.UI</td>
           <td><code>MMCA.Common.UI.Services.Auth</code></td>
-          <td><code>MMCA.Common.UI/Services/Auth/AuthUIService.cs:14</code></td>
+          <td><code>MMCA.Common.UI/Services/Auth/AuthUIService.cs:15</code></td>
           </tr>
           <tr>
           <td><code>ConfigurationOAuthUISettings</code></td>
@@ -16689,6 +17436,426 @@
           <td>MMCA.Common.UI</td>
           <td><code>MMCA.Common.UI.Services.Auth</code></td>
           <td><code>MMCA.Common.UI/Services/Auth/WasmTokenStorageService.cs:11</code></td>
+          </tr>
+          <tr>
+          <td><code>DeepLinkDispatcher</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/DeepLinkDispatcher.cs:9</code></td>
+          </tr>
+          <tr>
+          <td><code>DeepLinkRouteEventArgs</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/DeepLinkRouteEventArgs.cs:4</code></td>
+          </tr>
+          <tr>
+          <td><code>DependencyInjection</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:16</code></td>
+          </tr>
+          <tr>
+          <td><code>DevicePreferenceKeys</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/DevicePreferenceKeys.cs:7</code></td>
+          </tr>
+          <tr>
+          <td><code>GeoPoint</code></td>
+          <td>record</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/GeoPoint.cs:9</code></td>
+          </tr>
+          <tr>
+          <td><code>IAccessibilityAnnouncer</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/IAccessibilityAnnouncer.cs:9</code></td>
+          </tr>
+          <tr>
+          <td><code>IBatteryStatusService</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/IBatteryStatusService.cs:8</code></td>
+          </tr>
+          <tr>
+          <td><code>IBiometricAuthenticator</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/IBiometricAuthenticator.cs:9</code></td>
+          </tr>
+          <tr>
+          <td><code>IClipboardService</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/IClipboardService.cs:7</code></td>
+          </tr>
+          <tr>
+          <td><code>IConnectivityStatusService</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/IConnectivityStatusService.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>IDeepLinkDispatcher</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/IDeepLinkDispatcher.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>IDevicePreferences</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/IDevicePreferences.cs:11</code></td>
+          </tr>
+          <tr>
+          <td><code>IExternalAuthBroker</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/IExternalAuthBroker.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>IExternalLinkService</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/IExternalLinkService.cs:9</code></td>
+          </tr>
+          <tr>
+          <td><code>IGeocodingService</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/IGeocodingService.cs:9</code></td>
+          </tr>
+          <tr>
+          <td><code>IGeolocationService</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/IGeolocationService.cs:8</code></td>
+          </tr>
+          <tr>
+          <td><code>IHapticFeedbackService</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/IHapticFeedbackService.cs:8</code></td>
+          </tr>
+          <tr>
+          <td><code>ILocalCacheStore</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/ILocalCacheStore.cs:9</code></td>
+          </tr>
+          <tr>
+          <td><code>ILocalNotificationService</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/ILocalNotificationService.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>IMapNavigationService</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/IMapNavigationService.cs:8</code></td>
+          </tr>
+          <tr>
+          <td><code>IMediaPickerService</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/IMediaPickerService.cs:9</code></td>
+          </tr>
+          <tr>
+          <td><code>IPushDeviceTokenProvider</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/IPushDeviceTokenProvider.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>IPushRegistrationService</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/IPushRegistrationService.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>IScreenshotService</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/IScreenshotService.cs:8</code></td>
+          </tr>
+          <tr>
+          <td><code>IShareService</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/IShareService.cs:8</code></td>
+          </tr>
+          <tr>
+          <td><code>ISpeechToTextService</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/ISpeechToTextService.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>ITextToSpeechService</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/ITextToSpeechService.cs:9</code></td>
+          </tr>
+          <tr>
+          <td><code>LocalNotificationRequest</code></td>
+          <td>record</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/LocalNotificationRequest.cs:15</code></td>
+          </tr>
+          <tr>
+          <td><code>PickedMedia</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/IMediaPickerService.cs:29</code></td>
+          </tr>
+          <tr>
+          <td><code>PushDeviceToken</code></td>
+          <td>record</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/IPushDeviceTokenProvider.cs:19</code></td>
+          </tr>
+          <tr>
+          <td><code>BrowserAccessibilityAnnouncer</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Browser</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Browser/BrowserAccessibilityAnnouncer.cs:8</code></td>
+          </tr>
+          <tr>
+          <td><code>BrowserClipboardService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Browser</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Browser/BrowserClipboardService.cs:4</code></td>
+          </tr>
+          <tr>
+          <td><code>BrowserConnectivityStatusService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Browser</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Browser/BrowserConnectivityStatusService.cs:11</code></td>
+          </tr>
+          <tr>
+          <td><code>BrowserDevicePreferences</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Browser</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Browser/BrowserDevicePreferences.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>BrowserExternalLinkService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Browser</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Browser/BrowserExternalLinkService.cs:8</code></td>
+          </tr>
+          <tr>
+          <td><code>BrowserLocalCacheStore</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Browser</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Browser/BrowserLocalCacheStore.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>BrowserMapNavigationService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Browser</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Browser/BrowserMapNavigationService.cs:7</code></td>
+          </tr>
+          <tr>
+          <td><code>BrowserShareService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Browser</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Browser/BrowserShareService.cs:8</code></td>
+          </tr>
+          <tr>
+          <td><code>CapabilitiesJsModule</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Browser</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Browser/CapabilitiesJsModule.cs:12</code></td>
+          </tr>
+          <tr>
+          <td><code>AlwaysOnlineConnectivityStatusService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Fallbacks</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Fallbacks/AlwaysOnlineConnectivityStatusService.cs:7</code></td>
+          </tr>
+          <tr>
+          <td><code>InMemoryDevicePreferences</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Fallbacks</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Fallbacks/InMemoryDevicePreferences.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>NullAccessibilityAnnouncer</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Fallbacks</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Fallbacks/NullAccessibilityAnnouncer.cs:4</code></td>
+          </tr>
+          <tr>
+          <td><code>NullBatteryStatusService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Fallbacks</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Fallbacks/NullBatteryStatusService.cs:4</code></td>
+          </tr>
+          <tr>
+          <td><code>NullBiometricAuthenticator</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Fallbacks</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Fallbacks/NullBiometricAuthenticator.cs:4</code></td>
+          </tr>
+          <tr>
+          <td><code>NullClipboardService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Fallbacks</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Fallbacks/NullClipboardService.cs:4</code></td>
+          </tr>
+          <tr>
+          <td><code>NullExternalLinkService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Fallbacks</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Fallbacks/NullExternalLinkService.cs:7</code></td>
+          </tr>
+          <tr>
+          <td><code>NullGeocodingService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Fallbacks</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Fallbacks/NullGeocodingService.cs:4</code></td>
+          </tr>
+          <tr>
+          <td><code>NullGeolocationService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Fallbacks</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Fallbacks/NullGeolocationService.cs:4</code></td>
+          </tr>
+          <tr>
+          <td><code>NullHapticFeedbackService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Fallbacks</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Fallbacks/NullHapticFeedbackService.cs:4</code></td>
+          </tr>
+          <tr>
+          <td><code>NullLocalCacheStore</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Fallbacks</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Fallbacks/NullLocalCacheStore.cs:4</code></td>
+          </tr>
+          <tr>
+          <td><code>NullLocalNotificationService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Fallbacks</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Fallbacks/NullLocalNotificationService.cs:4</code></td>
+          </tr>
+          <tr>
+          <td><code>NullMapNavigationService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Fallbacks</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Fallbacks/NullMapNavigationService.cs:4</code></td>
+          </tr>
+          <tr>
+          <td><code>NullMediaPickerService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Fallbacks</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Fallbacks/NullMediaPickerService.cs:7</code></td>
+          </tr>
+          <tr>
+          <td><code>NullPushDeviceTokenProvider</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Fallbacks</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Fallbacks/NullPushDeviceTokenProvider.cs:9</code></td>
+          </tr>
+          <tr>
+          <td><code>NullPushRegistrationService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Fallbacks</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Fallbacks/NullPushRegistrationService.cs:7</code></td>
+          </tr>
+          <tr>
+          <td><code>NullScreenshotService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Fallbacks</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Fallbacks/NullScreenshotService.cs:4</code></td>
+          </tr>
+          <tr>
+          <td><code>NullShareService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Fallbacks</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Fallbacks/NullShareService.cs:4</code></td>
+          </tr>
+          <tr>
+          <td><code>NullSpeechToTextService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Fallbacks</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Fallbacks/NullSpeechToTextService.cs:6</code></td>
+          </tr>
+          <tr>
+          <td><code>NullTextToSpeechService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Fallbacks</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Fallbacks/NullTextToSpeechService.cs:4</code></td>
+          </tr>
+          <tr>
+          <td><code>UnavailableExternalAuthBroker</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI.Services.Capabilities.Fallbacks</code></td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/Fallbacks/UnavailableExternalAuthBroker.cs:7</code></td>
           </tr>
           <tr>
           <td><code>BackNavigationResult</code></td>
@@ -16789,6 +17956,13 @@
           <td><code>MMCA.Common.UI.E2E.Tests/ComponentsPageE2ETests.cs:10</code></td>
           </tr>
           <tr>
+          <td><code>DarkModeE2ETests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.E2E.Tests</td>
+          <td><code>MMCA.Common.UI.E2E.Tests</code></td>
+          <td><code>MMCA.Common.UI.E2E.Tests/DarkModeE2ETests.cs:16</code></td>
+          </tr>
+          <tr>
           <td><code>LoginPageE2ETests</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.E2E.Tests</td>
@@ -16822,6 +17996,13 @@
           <td>MMCA.Common.UI.E2E.Tests</td>
           <td><code>MMCA.Common.UI.E2E.Tests</code></td>
           <td><code>MMCA.Common.UI.E2E.Tests/RegisterPageE2ETests.cs:9</code></td>
+          </tr>
+          <tr>
+          <td><code>WebVitalsE2ETests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.E2E.Tests</td>
+          <td><code>MMCA.Common.UI.E2E.Tests</code></td>
+          <td><code>MMCA.Common.UI.E2E.Tests/WebVitalsE2ETests.cs:16</code></td>
           </tr>
           <tr>
           <td><code>GalleryAxeTestBase</code></td>
@@ -16901,11 +18082,179 @@
           <td><code>MMCA.Common.UI.Gallery/Stubs/StubPushNotificationUIService.cs:11</code></td>
           </tr>
           <tr>
+          <td><code>DependencyInjection</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui</code></td>
+          <td><code>MMCA.Common.UI.Maui/DependencyInjection.cs:15</code></td>
+          </tr>
+          <tr>
+          <td><code>DeviceCapabilitiesInitializer</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui</code></td>
+          <td><code>MMCA.Common.UI.Maui/DeviceCapabilitiesInitializer.cs:15</code></td>
+          </tr>
+          <tr>
+          <td><code>HostingDependencyInjection</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui</code></td>
+          <td><code>MMCA.Common.UI.Maui/HostingDependencyInjection.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>MauiAccessibilityAnnouncer</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Maui/Capabilities/MauiAccessibilityAnnouncer.cs:9</code></td>
+          </tr>
+          <tr>
+          <td><code>MauiBatteryStatusService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Maui/Capabilities/MauiBatteryStatusService.cs:9</code></td>
+          </tr>
+          <tr>
+          <td><code>MauiBiometricAuthenticator</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Maui/Capabilities/MauiBiometricAuthenticator.cs:13</code></td>
+          </tr>
+          <tr>
+          <td><code>MauiClipboardService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Maui/Capabilities/MauiClipboardService.cs:6</code></td>
+          </tr>
+          <tr>
+          <td><code>MauiConnectivityStatusService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Maui/Capabilities/MauiConnectivityStatusService.cs:11</code></td>
+          </tr>
+          <tr>
+          <td><code>MauiDevicePreferences</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Maui/Capabilities/MauiDevicePreferences.cs:12</code></td>
+          </tr>
+          <tr>
+          <td><code>MauiExternalAuthBroker</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Maui/Capabilities/MauiExternalAuthBroker.cs:19</code></td>
+          </tr>
+          <tr>
+          <td><code>MauiExternalLinkService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Maui/Capabilities/MauiExternalLinkService.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>MauiFormFactor</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Maui/Capabilities/MauiFormFactor.cs:12</code></td>
+          </tr>
+          <tr>
+          <td><code>MauiGeocodingService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Maui/Capabilities/MauiGeocodingService.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>MauiGeolocationService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Maui/Capabilities/MauiGeolocationService.cs:11</code></td>
+          </tr>
+          <tr>
+          <td><code>MauiHapticFeedbackService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Maui/Capabilities/MauiHapticFeedbackService.cs:11</code></td>
+          </tr>
+          <tr>
+          <td><code>MauiLocalCacheStore</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Maui/Capabilities/MauiLocalCacheStore.cs:11</code></td>
+          </tr>
+          <tr>
+          <td><code>MauiLocalNotificationService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Maui/Capabilities/MauiLocalNotificationService.cs:13</code></td>
+          </tr>
+          <tr>
+          <td><code>MauiMapNavigationService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Maui/Capabilities/MauiMapNavigationService.cs:11</code></td>
+          </tr>
+          <tr>
+          <td><code>MauiMediaPickerService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Maui/Capabilities/MauiMediaPickerService.cs:11</code></td>
+          </tr>
+          <tr>
+          <td><code>MauiPushRegistrationService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Maui/Capabilities/MauiPushRegistrationService.cs:15</code></td>
+          </tr>
+          <tr>
+          <td><code>MauiScreenshotService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Maui/Capabilities/MauiScreenshotService.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>MauiShareService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Maui/Capabilities/MauiShareService.cs:6</code></td>
+          </tr>
+          <tr>
+          <td><code>MauiSpeechToTextService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Maui/Capabilities/MauiSpeechToTextService.cs:14</code></td>
+          </tr>
+          <tr>
+          <td><code>MauiTextToSpeechService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Maui/Capabilities/MauiTextToSpeechService.cs:12</code></td>
+          </tr>
+          <tr>
           <td><code>BunitTestBase</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Tests</td>
           <td><code>MMCA.Common.UI.Tests</code></td>
-          <td><code>MMCA.Common.UI.Tests/Components/BunitTestBase.cs:13</code></td>
+          <td><code>MMCA.Common.UI.Tests/Components/BunitTestBase.cs:15</code></td>
           </tr>
           <tr>
           <td><code>DeleteConfirmationTests</code></td>
@@ -16920,6 +18269,13 @@
           <td>MMCA.Common.UI.Tests</td>
           <td><code>MMCA.Common.UI.Tests.Components</code></td>
           <td><code>MMCA.Common.UI.Tests/Components/EmptyStateTests.cs:6</code></td>
+          </tr>
+          <tr>
+          <td><code>MmcaThemeProvidersTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Tests</td>
+          <td><code>MMCA.Common.UI.Tests.Components</code></td>
+          <td><code>MMCA.Common.UI.Tests/Components/MmcaThemeProvidersTests.cs:19</code></td>
           </tr>
           <tr>
           <td><code>MobileCardListTests</code></td>
@@ -16978,6 +18334,62 @@
           <td><code>MMCA.Common.UI.Tests/Components/UnsavedChangesGuardTests.cs:8</code></td>
           </tr>
           <tr>
+          <td><code>BiometricGateTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Tests</td>
+          <td><code>MMCA.Common.UI.Tests.Components.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Tests/Components/Capabilities/BiometricGateTests.cs:19</code></td>
+          </tr>
+          <tr>
+          <td><code>DeepLinkListenerTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Tests</td>
+          <td><code>MMCA.Common.UI.Tests.Components.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Tests/Components/Capabilities/DeepLinkListenerTests.cs:14</code></td>
+          </tr>
+          <tr>
+          <td><code>ExternalLinkTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Tests</td>
+          <td><code>MMCA.Common.UI.Tests.Components.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Tests/Components/Capabilities/ExternalLinkTests.cs:15</code></td>
+          </tr>
+          <tr>
+          <td><code>FakeBiometricAuthenticator</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Tests</td>
+          <td><code>MMCA.Common.UI.Tests.Components.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Tests/Components/Capabilities/BiometricGateTests.cs:127</code></td>
+          </tr>
+          <tr>
+          <td><code>FakeConnectivityService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Tests</td>
+          <td><code>MMCA.Common.UI.Tests.Components.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Tests/Components/Capabilities/OfflineBannerTests.cs:56</code></td>
+          </tr>
+          <tr>
+          <td><code>FakeDevicePreferences</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Tests</td>
+          <td><code>MMCA.Common.UI.Tests.Components.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Tests/Components/Capabilities/BiometricGateTests.cs:143</code></td>
+          </tr>
+          <tr>
+          <td><code>FakeExternalLinkService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Tests</td>
+          <td><code>MMCA.Common.UI.Tests.Components.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Tests/Components/Capabilities/ExternalLinkTests.cs:63</code></td>
+          </tr>
+          <tr>
+          <td><code>OfflineBannerTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Tests</td>
+          <td><code>MMCA.Common.UI.Tests.Components.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Tests/Components/Capabilities/OfflineBannerTests.cs:15</code></td>
+          </tr>
+          <tr>
           <td><code>MoneyExtensionsTests</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Tests</td>
@@ -17020,6 +18432,20 @@
           <td><code>MMCA.Common.UI.Tests/Infrastructure/HttpTestDoubles.cs:11</code></td>
           </tr>
           <tr>
+          <td><code>CapturingHttpMessageHandlerTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Tests</td>
+          <td><code>MMCA.Common.UI.Tests.Infrastructure</code></td>
+          <td><code>MMCA.Common.UI.Tests/Infrastructure/CapturingHttpMessageHandlerTests.cs:16</code></td>
+          </tr>
+          <tr>
+          <td><code>SharedHttpTestDoublesTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Tests</td>
+          <td><code>MMCA.Common.UI.Tests.Infrastructure</code></td>
+          <td><code>MMCA.Common.UI.Tests/Infrastructure/SharedHttpTestDoublesTests.cs:15</code></td>
+          </tr>
+          <tr>
           <td><code>StubHttpClientFactory</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Tests</td>
@@ -17032,6 +18458,20 @@
           <td>MMCA.Common.UI.Tests</td>
           <td><code>MMCA.Common.UI.Tests.Infrastructure</code></td>
           <td><code>MMCA.Common.UI.Tests/Infrastructure/HttpTestDoubles.cs:22</code></td>
+          </tr>
+          <tr>
+          <td><code>StubTokenStorageServiceTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Tests</td>
+          <td><code>MMCA.Common.UI.Tests.Infrastructure</code></td>
+          <td><code>MMCA.Common.UI.Tests/Infrastructure/StubTokenStorageServiceTests.cs:13</code></td>
+          </tr>
+          <tr>
+          <td><code>UiHttpServiceHarnessTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Tests</td>
+          <td><code>MMCA.Common.UI.Tests.Infrastructure</code></td>
+          <td><code>MMCA.Common.UI.Tests/Infrastructure/UiHttpServiceHarnessTests.cs:13</code></td>
           </tr>
           <tr>
           <td><code>NavMenuTests</code></td>
@@ -17188,6 +18628,13 @@
           <td><code>MMCA.Common.UI.Tests/Services/ServiceExceptionHelperTests.cs:12</code></td>
           </tr>
           <tr>
+          <td><code>WasmFormFactorTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Tests</td>
+          <td><code>MMCA.Common.UI.Tests.Services</code></td>
+          <td><code>MMCA.Common.UI.Tests/Services/WasmFormFactorTests.cs:13</code></td>
+          </tr>
+          <tr>
           <td><code>WidgetDto</code></td>
           <td>record</td>
           <td>MMCA.Common.UI.Tests</td>
@@ -17251,6 +18698,20 @@
           <td><code>MMCA.Common.UI.Tests/Services/Auth/WasmTokenStorageServiceTests.cs:15</code></td>
           </tr>
           <tr>
+          <td><code>CapabilityFallbackTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Tests</td>
+          <td><code>MMCA.Common.UI.Tests.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Tests/Services/Capabilities/CapabilityFallbackTests.cs:12</code></td>
+          </tr>
+          <tr>
+          <td><code>DeepLinkDispatcherTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Tests</td>
+          <td><code>MMCA.Common.UI.Tests.Services.Capabilities</code></td>
+          <td><code>MMCA.Common.UI.Tests/Services/Capabilities/DeepLinkDispatcherTests.cs:11</code></td>
+          </tr>
+          <tr>
           <td><code>ReturnUrlProtectorTests</code></td>
           <td>class</td>
           <td>MMCA.Common.UI.Tests</td>
@@ -17311,7 +18772,7 @@
           <td>class</td>
           <td>MMCA.Common.UI.Web</td>
           <td><code>MMCA.Common.UI.Web</code></td>
-          <td><code>MMCA.Common.UI.Web/DependencyInjection.cs:13</code></td>
+          <td><code>MMCA.Common.UI.Web/DependencyInjection.cs:14</code></td>
           </tr>
           <tr>
           <td><code>BlazorCspPolicyProvider</code></td>
@@ -17326,6 +18787,13 @@
           <td>MMCA.Common.UI.Web</td>
           <td><code>MMCA.Common.UI.Web.Services</code></td>
           <td><code>MMCA.Common.UI.Web/Services/ServerTokenStorageService.cs:17</code></td>
+          </tr>
+          <tr>
+          <td><code>WebFormFactor</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Web</td>
+          <td><code>MMCA.Common.UI.Web.Services</code></td>
+          <td><code>MMCA.Common.UI.Web/Services/WebFormFactor.cs:12</code></td>
           </tr>
           <tr>
           <td><code>BlazorCspPolicyProviderTests</code></td>
@@ -17347,6 +18815,13 @@
           <td>MMCA.Common.UI.Web.Tests</td>
           <td><code>MMCA.Common.UI.Web.Tests.Services</code></td>
           <td><code>MMCA.Common.UI.Web.Tests/Services/ServerTokenStorageServiceTests.cs:19</code></td>
+          </tr>
+          <tr>
+          <td><code>WebFormFactorTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.UI.Web.Tests</td>
+          <td><code>MMCA.Common.UI.Web.Tests.Services</code></td>
+          <td><code>MMCA.Common.UI.Web.Tests/Services/WebFormFactorTests.cs:17</code></td>
           </tr>
           </tbody></table></div>
           <h2 id="extensiont-blocks"><code>extension(T)</code> blocks</h2>
@@ -17391,12 +18866,12 @@
           <tr>
           <td><code>IServiceCollection services</code></td>
           <td>MMCA.ADC.Engagement.Application</td>
-          <td><code>MMCA.ADC.Engagement.Application/DependencyInjection.cs:27</code></td>
+          <td><code>MMCA.ADC.Engagement.Application/DependencyInjection.cs:29</code></td>
           </tr>
           <tr>
           <td><code>IServiceCollection services</code></td>
           <td>MMCA.ADC.Engagement.Contracts</td>
-          <td><code>MMCA.ADC.Engagement.Contracts/DependencyInjection.cs:16</code></td>
+          <td><code>MMCA.ADC.Engagement.Contracts/DependencyInjection.cs:18</code></td>
           </tr>
           <tr>
           <td><code>IServiceCollection services</code></td>
@@ -17441,12 +18916,12 @@
           <tr>
           <td><code>IServiceCollection services</code></td>
           <td>MMCA.ADC.Notification.Application</td>
-          <td><code>MMCA.ADC.Notification.Application/DependencyInjection.cs:13</code></td>
+          <td><code>MMCA.ADC.Notification.Application/DependencyInjection.cs:14</code></td>
           </tr>
           <tr>
           <td><code>IServiceCollection services</code></td>
           <td>MMCA.ADC.Notification.Contracts</td>
-          <td><code>MMCA.ADC.Notification.Contracts/DependencyInjection.cs:16</code></td>
+          <td><code>MMCA.ADC.Notification.Contracts/DependencyInjection.cs:18</code></td>
           </tr>
           <tr>
           <td><code>IServiceCollection services</code></td>
@@ -17472,6 +18947,11 @@
           <td><code>AuthenticationBuilder builder</code></td>
           <td>MMCA.Common.API</td>
           <td><code>MMCA.Common.API/SessionCookies/SessionCookieAuthenticationHandler.cs:92</code></td>
+          </tr>
+          <tr>
+          <td><code>IEndpointRouteBuilder endpoints</code></td>
+          <td>MMCA.Common.API</td>
+          <td><code>MMCA.Common.API/Startup/AppAssociationEndpointExtensions.cs:26</code></td>
           </tr>
           <tr>
           <td><code>IEndpointRouteBuilder endpoints</code></td>
@@ -17551,7 +19031,7 @@
           <tr>
           <td><code>IServiceCollection services</code></td>
           <td>MMCA.Common.UI</td>
-          <td><code>MMCA.Common.UI/DependencyInjection.cs:20</code></td>
+          <td><code>MMCA.Common.UI/DependencyInjection.cs:21</code></td>
           </tr>
           <tr>
           <td><code>IApplicationBuilder app</code></td>
@@ -17565,12 +19045,27 @@
           </tr>
           <tr>
           <td><code>IServiceCollection services</code></td>
+          <td>MMCA.Common.UI</td>
+          <td><code>MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:18</code></td>
+          </tr>
+          <tr>
+          <td><code>IServiceCollection services</code></td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui/DependencyInjection.cs:17</code></td>
+          </tr>
+          <tr>
+          <td><code>MauiAppBuilder builder</code></td>
+          <td>MMCA.Common.UI.Maui</td>
+          <td><code>MMCA.Common.UI.Maui/HostingDependencyInjection.cs:12</code></td>
+          </tr>
+          <tr>
+          <td><code>IServiceCollection services</code></td>
           <td>MMCA.Common.UI.Web</td>
-          <td><code>MMCA.Common.UI.Web/DependencyInjection.cs:15</code></td>
+          <td><code>MMCA.Common.UI.Web/DependencyInjection.cs:16</code></td>
           </tr>
           </tbody></table></div>
           <h2 id="generated--excluded-artifacts-no-type-sections-written">Generated / excluded artifacts (no type sections written)</h2>
-          <p>66 files excluded as generated (EF migrations, snapshots, *.g.cs, AssemblyInfo).</p>
+          <p>68 files excluded as generated (EF migrations, snapshots, *.g.cs, AssemblyInfo).</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -17651,6 +19146,12 @@
           </tr>
           <tr>
           <td><code>MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20260627221640_AddUserPreferences.Designer.cs</code></td>
+          </tr>
+          <tr>
+          <td><code>MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20260711050203_AddUserAvatar.cs</code></td>
+          </tr>
+          <tr>
+          <td><code>MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20260711050203_AddUserAvatar.Designer.cs</code></td>
           </tr>
           <tr>
           <td><code>MMCA.ADC.Migrations.SqlServer.Identity/Migrations/SQLServerDbContextModelSnapshot.cs</code></td>

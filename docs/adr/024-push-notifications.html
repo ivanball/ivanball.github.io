@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ADR-024: Two-Channel User Notifications (Transient SignalR Push + Durable Inbox) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-06-27).">
+  <meta name="description" content="Accepted (2026-06-27, amended 2026-07-15).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/024-push-notifications.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="article">
   <meta property="og:title" content="ADR-024: Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)">
-  <meta property="og:description" content="Accepted (2026-06-27).">
+  <meta property="og:description" content="Accepted (2026-06-27, amended 2026-07-15).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/024-push-notifications.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 45 ADRs</summary>
+        <summary>All 48 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -110,6 +110,9 @@
         <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
         <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
         <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
           </ol>
         </nav>
       </details>
@@ -118,7 +121,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-024-two-channel-user-notifications-transient-signalr-push--durable-inbox">ADR-024: Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-27).</p>
+          <p>Accepted (2026-06-27, amended 2026-07-15).</p>
           <h2 id="context">Context</h2>
           <p>The framework needs to deliver user-facing notifications (an organizer broadcasting a schedule change,
           a per-user alert). Two delivery models each fail on their own. A pure real-time push over a WebSocket
@@ -146,7 +149,11 @@
           (<code>MMCA.Common.Infrastructure</code>) swaps in <code>SignalRPushNotificationSender</code>, which fans messages out
           through <code>IHubContext&lt;NotificationHub&gt;</code> to a user, a batched list of users (100 per batch), or all
           clients. The hub (<code>NotificationHub</code>) is <code>[Authorize]</code> and is mapped with <code>MapNotificationHub()</code>
-          (<code>MMCA.Common.API</code>); the Blazor client wraps it in <code>NotificationHubService</code> (<code>MMCA.Common.UI</code>).</li>
+          (<code>MMCA.Common.API</code>); the Blazor client wraps it in <code>NotificationHubService</code> (<code>MMCA.Common.UI</code>). The
+          hub is no longer notification-only: it also carries an ephemeral live-channel role, exposing
+          <code>JoinChannel</code> / <code>LeaveChannel</code> group management (<code>NotificationHub.cs:43-59</code>) and a <code>ReceiveChannelEvent</code>
+          push that backs <code>ILiveChannelPublisher</code> / <code>SignalRLiveChannelPublisher</code> for transient live-channel
+          events, a path distinct from the durable notification delivery this ADR governs.</li>
           <li><strong>Recipient selection is the consumer&#39;s policy.</strong> <code>INotificationRecipientProvider</code>
           (<code>MMCA.Common.Application</code>) defaults to <code>NullNotificationRecipientProvider</code> (returns no recipients);
           each app registers its own provider that knows its domain&#39;s audience. The framework ships the delivery
@@ -154,6 +161,15 @@
           <li><strong>Delivery failure is non-fatal.</strong> If the live push throws, the handler records <code>MarkAsFailed</code> on the
           <code>PushNotification</code> and returns success: the inbox row is already committed, so the recipient still gets
           the notification on next load. A send is never rolled back because the WebSocket fan-out failed.</li>
+          <li><strong>An optional third, native-push leg (ADR-044).</strong> After the inbox write and the SignalR push,
+          <code>SendPushNotificationHandler</code> also dispatches through <code>INativePushSender</code>
+          (<code>SendPushNotificationHandler.cs:88-105</code>), an OS-level native-push channel that reaches devices the
+          SignalR hub cannot (the app backgrounded or killed). It is best-effort by the same logic as the live
+          push (a throw is logged, never fatal, and the SignalR leg has already decided the audit status), and it
+          defaults to <code>NullNativePushSender</code> (<code>MMCA.Common.Infrastructure</code>, <code>DependencyInjection.cs:203</code>), so it
+          stays inert until a native hub is configured. The design of that channel is ADR-044&#39;s scope; this ADR
+          keeps its own on the inbox and SignalR channels, so the &quot;Two-Channel&quot; title names the durable and
+          transient channels this record governs, not a hard cap on the number of delivery legs.</li>
           <li><strong>Horizontal scale-out is configuration, not code.</strong> When a Redis connection string is present,
           <code>AddPushNotifications</code> adds a Redis backplane to SignalR (<code>AddStackExchangeRedis</code>) so a push reaches a
           user whose WebSocket is pinned to a different replica. The feature is gated by
@@ -198,7 +214,8 @@
           these seams), ADR-012 (that Notification service is now a mixed-endpoint host: its default endpoint
           stays Profile-B <code>Http1AndHttp2</code> for the SignalR WebSocket/HTTP/1.1 path, and since 2026-07-09 it also
           serves an inbound <code>Http2</code>-only h2c gRPC edge on a dedicated named endpoint per ADR-039), ADR-022 (the
-          browser-edge auth context the UI client runs in).</p>
+          browser-edge auth context the UI client runs in), ADR-044 (the optional OS-level native-push channel
+          <code>SendPushNotificationHandler</code> fires after the inbox and SignalR legs, defaulting to <code>NullNativePushSender</code>).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>

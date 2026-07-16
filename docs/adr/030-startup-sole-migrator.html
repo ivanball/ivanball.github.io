@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 45 ADRs</summary>
+        <summary>All 48 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -110,6 +110,9 @@
         <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
         <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
         <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
           </ol>
         </nav>
       </details>
@@ -140,13 +143,13 @@
           migration (no <code>sqlcmd</code> / <code>dotnet ef database update</code> apply in <code>deploy.yml</code>).</p>
           <ul>
           <li><strong>Set in prod for every service.</strong> <code>MMCA.Store/infra/main.bicep:704,804,892</code> (Identity/Catalog/Sales)
-          and <code>MMCA.ADC/infra/main.bicep:726,847,942,1058</code> (Identity/Conference/Engagement/Notification) all set
+          and <code>MMCA.ADC/infra/main.bicep:831,972,1067,1184</code> (Identity/Conference/Engagement/Notification) all set
           <code>DatabaseInitStrategy = &#39;Migrate&#39;</code>.</li>
           <li><strong>One applier per revision.</strong> Each service runs <code>minReplicas: 1</code>, so the startup <code>MigrateAsync</code> is not
           racing sibling replicas of the same revision.</li>
           <li><strong>No deploy-step backstop, on purpose.</strong> Both <code>deploy.yml</code> files carry an explicit comment that there
           is <em>no external <code>sqlcmd</code> migration backstop</em> and that each service is the <strong>sole migrator</strong>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:494</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:584</code>). The
+          (<code>MMCA.Store/.github/workflows/deploy.yml:642</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:658</code>). The
           <code>sqlcmd</code> that <em>is</em> installed in the pipeline is a connectivity/readiness probe, not a migration apply.</li>
           <li><strong>Build-time drift gate, not a runtime apply.</strong> CI runs
           <code>dotnet ef migrations has-pending-model-changes</code> (Store <code>deploy.yml:102</code>, ADC <code>deploy.yml:99</code>) so a

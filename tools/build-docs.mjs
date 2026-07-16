@@ -474,7 +474,7 @@ ${docFootHtml(col, doc)}
         </div>
         <div class="grid grid--2">
           <a class="card card--link" href="adr/index.html">
-            <span class="kicker" style="color:var(--accent)">${adr.docs.length} records</span>
+            <span class="kicker" style="color:var(--accent)">${adrFiles.length} records</span>
             <h2 style="margin:.35rem 0 .5rem">Architecture Decision Records</h2>
             <p class="mb-0">The context, decision, rationale, and trade-offs behind every cross-cutting pattern, from manual DTO mapping and the outbox to JWKS auth, caching, and supply-chain provenance. Numbered, dated, and cross-linked.</p>
             <div class="card-foot" style="margin-top:1rem"><span class="doc-cta">Browse the ADRs →</span></div>
@@ -482,7 +482,7 @@ ${docFootHtml(col, doc)}
           <a class="card card--link" href="onboarding/index.html">
             <span class="kicker" style="color:var(--accent)">${onbContent} documents</span>
             <h2 style="margin:.35rem 0 .5rem">Onboarding Guide</h2>
-            <p class="mb-0">A teaching guide for an engineer new to the codebase: a primer, a mechanically extracted type inventory, 26 group chapters walking every first-party type, five DevOps chapters, concept maps, and a coverage audit.</p>
+            <p class="mb-0">A teaching guide for an engineer new to the codebase: a primer, a mechanically extracted type inventory, ${onbFiles.filter((f) => /^group-\d/.test(f)).length} group chapters walking every first-party type, five DevOps chapters, concept maps, and a coverage audit.</p>
             <div class="card-foot" style="margin-top:1rem"><span class="doc-cta">Open the guide →</span></div>
           </a>
         </div>

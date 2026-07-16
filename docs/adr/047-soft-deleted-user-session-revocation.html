@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADR-047: Runtime Revocation of Soft-Deleted Users&#39; Active Sessions · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-07-15).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ADR-047: Runtime Revocation of Soft-Deleted Users&#39; Active Sessions">
+  <meta property="og:description" content="Accepted (2026-07-15).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 48 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html" aria-current="page">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-047-runtime-revocation-of-soft-deleted-users-active-sessions">ADR-047: Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-07-15).</p>
+          <h2 id="context">Context</h2>
+          <p>Soft-delete is the framework&#39;s default deletion model (ADR-005): <code>AuditableBaseEntity.Delete()</code> sets
+          <code>IsDeleted = true</code> and EF global query filters hide the row, but the record survives for audit,
+          referential integrity, and undelete. Deactivating a user account is therefore a soft-delete, not a
+          row removal.</p>
+          <p>Authentication is stateless JWT (ADR-004): Identity mints an access token, and every service
+          validates it by signature and expiry without a per-request lookup against the account store. That is
+          exactly what makes it scale, and it is also the problem here. A JWT is a bearer credential that stays
+          valid until it expires; nothing in signature validation asks &quot;is this account still active?&quot; So when
+          an administrator soft-deletes a user, that user&#39;s already-issued access token keeps passing
+          validation on every service until it expires on its own. The same gap applies to the SSR session
+          cookie that carries the JWT for fresh browser GETs (ADR-022): the cookie handler populates
+          <code>HttpContext.User</code> from a token the API already issued, so a deleted user&#39;s prerender path also stays
+          authenticated until the token lifetime runs out.</p>
+          <p>Closing that gap the textbook way (a token deny-list or a per-request account-status check) reintroduces
+          exactly the stateful, per-request store lookup that stateless JWT was chosen to avoid. We wanted the
+          deletion to take effect quickly without paying a database round trip on every authenticated request,
+          and without coupling every extracted service to the Identity database.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Add a shared-pipeline middleware, <code>SoftDeletedUserMiddleware</code>
+          (<code>Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:15</code>, BR-133), that
+          rejects an authenticated caller with HTTP 401 once the caller&#39;s account has been soft-deleted, backed
+          by a short cache so the account-status lookup is not paid on every request.</p>
+          <ul>
+          <li><strong>It runs after authentication, before authorization.</strong> <code>UseCommonMiddlewarePipeline</code> registers it
+          at <code>Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:102</code>, immediately after
+          <code>UseAuthentication</code> / <code>UseRateLimiter</code>
+          (<code>WebApplicationExtensions.cs:96,101</code>) and before <code>UseAuthorization</code>
+          (<code>WebApplicationExtensions.cs:103</code>), so <code>HttpContext.User</code> is already populated and the check gates
+          every downstream endpoint.</li>
+          <li><strong>Anonymous requests pass straight through.</strong> When <code>ICurrentUserService.UserId</code> is null the
+          middleware calls the next delegate and returns without any lookup
+          (<code>SoftDeletedUserMiddleware.cs:43-51</code>), so unauthenticated traffic pays nothing.</li>
+          <li><strong>The account-status check is an abstraction the Identity module implements.</strong>
+          <code>ISoftDeletedUserValidator</code>
+          (<code>Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ISoftDeletedUserValidator.cs:7</code>)
+          exposes a single <code>IsUserSoftDeletedAsync(userId, ...)</code> method
+          (<code>ISoftDeletedUserValidator.cs:15</code>). Both apps&#39; Identity modules implement it with one
+          filter-bypassing existence query,
+          <code>repository.ExistsAsync(u =&gt; u.Id == userId &amp;&amp; u.IsDeleted, ignoreQueryFilters: true, ...)</code>
+          (ADC: <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/SoftDeletedUserValidator.cs:10,21-24</code>;
+          Store: <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/SoftDeletedUserValidator.cs:10,21-24</code>),
+          registered scoped in each Identity module&#39;s DI
+          (<code>MMCA.ADC.Identity.Application/DependencyInjection.cs:33</code>,
+          <code>MMCA.Store.Identity.Application/DependencyInjection.cs:40</code>). The query bypasses the soft-delete
+          global query filter deliberately, because a plain read would hide the very row it needs to find.</li>
+          <li><strong>A 30-second cache amortizes the lookup.</strong> <code>CacheDuration</code> is
+          <code>TimeSpan.FromSeconds(30)</code> (<code>SoftDeletedUserMiddleware.cs:17</code>). The middleware reads
+          <code>user:deleted:{userId}</code> from <code>ICacheService</code> first (<code>SoftDeletedUserMiddleware.cs:63-66</code>): a cached
+          <code>true</code> short-circuits to 401 with no database call (<code>SoftDeletedUserMiddleware.cs:66-71</code>); a cache
+          miss runs the validator once, caches the boolean for 30 seconds, and 401s if deleted
+          (<code>SoftDeletedUserMiddleware.cs:73-84</code>); a cached <code>false</code> falls through to the next delegate
+          (<code>SoftDeletedUserMiddleware.cs:86</code>). So a given user costs at most one status query per 30-second
+          window per cache scope, not one per request.</li>
+          <li><strong>It no-ops in services that do not host Identity.</strong> The validator is resolved lazily via
+          <code>context.RequestServices.GetService&lt;ISoftDeletedUserValidator&gt;()</code>
+          (<code>SoftDeletedUserMiddleware.cs:53</code>) rather than as an <code>InvokeAsync</code> parameter. In an extracted
+          service that does not host Identity (for example Store&#39;s Catalog or Sales service), no
+          implementation is registered, so the middleware passes the request through
+          (<code>SoftDeletedUserMiddleware.cs:54-61</code>): Identity is the source of truth and already validated the
+          token upstream. Resolving it as a constructor/parameter dependency would instead 500 every request
+          in those services. MMCA.Helpdesk wires the same pipeline
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:96</code>) but hosts only a Tickets module and
+          registers no validator, so it takes the same no-op path.</li>
+          </ul>
+          <p><code>SoftDeletedUserMiddlewareTests</code>
+          (<code>MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Middleware/SoftDeletedUserMiddlewareTests.cs</code>)
+          covers the branches: anonymous pass-through, no-validator pass-through with no cache call, a live
+          non-deleted pass, a live deleted 401, a cached-deleted 401 with no database call, and a cached
+          non-deleted pass with no database call.</p>
+          <p>The effect is a <strong>bounded revocation window</strong>, not instant revocation: after an account is
+          soft-deleted, its still-valid tokens keep working only until the cached status expires (at most the
+          30-second cache lifetime once the account has been queried at least once in that window), instead of
+          until the token itself expires.</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Bounds the stateless-JWT revocation gap cheaply.</strong> Stateless JWT (ADR-004) has no built-in
+          revocation, so a deactivated account would otherwise stay usable for the full remaining token
+          lifetime. A 30-second cached check turns &quot;valid until the token expires&quot; into &quot;rejected within
+          about 30 seconds,&quot; which is the point of the middleware.</li>
+          <li><strong>The cache is what keeps it stateless-friendly.</strong> Checking account status on every request would
+          put a database read back in the hot path of every authenticated call, the cost stateless JWT was
+          meant to avoid. Caching the boolean for 30 seconds keeps the lookup rate at most once per user per
+          window, so the common case stays a cache hit.</li>
+          <li><strong>The validator abstraction keeps the middleware in the framework.</strong> The middleware lives in
+          <code>MMCA.Common.API</code> and depends only on <code>ISoftDeletedUserValidator</code>, so it needs no reference to any
+          app&#39;s <code>User</code> entity; each Identity module supplies the query against its own store.</li>
+          <li><strong>Lazy resolution is what makes it safe everywhere.</strong> One pipeline runs in Identity-hosting and
+          non-Identity hosts alike; resolving the validator lazily lets the same middleware gate real
+          requests where Identity lives and stay inert where it does not, without a per-host pipeline
+          variant.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Revocation is bounded, not immediate.</strong> A soft-deleted user whose status is cached as not-deleted
+          keeps passing until that cache entry expires (up to 30 seconds). Shrinking the window costs more
+          database lookups; lengthening it widens the exposure. 30 seconds is the chosen balance, and it is a
+          compile-time constant (<code>SoftDeletedUserMiddleware.cs:17</code>), not configurable per host today.</li>
+          <li><strong>The no-op posture trusts upstream validation.</strong> In a service with no validator registered, a
+          soft-deleted user&#39;s token is accepted for its full lifetime at that service, on the assumption that
+          Identity is the source of truth and the token was validated upstream. Only Identity-hosting hosts
+          actually enforce the revocation; extracted non-Identity services do not re-check.</li>
+          <li><strong>Cache-scope-dependent.</strong> The window is per cache scope: with a distributed cache the revocation
+          is shared across replicas, but with a per-instance memory cache each instance carries its own
+          30-second window, so the effective revocation lag is per replica.</li>
+          <li><strong>Enforcement depends on registration.</strong> An Identity-hosting service that fails to register
+          <code>ISoftDeletedUserValidator</code> silently degrades to the no-op path, the same audit-the-inventory
+          caveat other opt-in framework capabilities carry (ADR-005).</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p>ADR-005 (soft-delete is the deletion model whose still-authenticated tokens this middleware revokes;
+          deleting a user is a soft-delete, not a row removal), ADR-004 (the stateless RS256/JWKS validation
+          that has no built-in revocation, which this bounds without a per-request store lookup), ADR-022 (the
+          SSR session cookie carries the same JWT into the prerender path this middleware also gates).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/047-soft-deleted-user-session-revocation.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>
