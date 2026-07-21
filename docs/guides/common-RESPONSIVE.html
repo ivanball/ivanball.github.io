@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Responsive Design &amp; Cross-Browser Support (rubric §22) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="This document is the supported-device and browser matrix for the shared MMCA.Common.UI component library. It makes the responsive contract explicit…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/guides/common-RESPONSIVE.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Responsive Design &amp; Cross-Browser Support (rubric §22)">
+  <meta property="og:description" content="This document is the supported-device and browser matrix for the shared MMCA.Common.UI component library. It makes the responsive contract explicit…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/guides/common-RESPONSIVE.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/guides/index.html">Guides &amp; Specifications</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">Common · Responsive Design &amp; Cross-Browser Support (rubric §22)</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All guides</summary>
+        <nav class="doc-nav" aria-label="Guides &amp; Specifications">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="adc-ACCESSIBILITY-SCREENREADER-PASS.html">ADC · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="adc-IntegrationTestReworkPlan.html">ADC · Integration-Test Tier Rework Plan (RemediationBacklog #14)</a></li>
+        <li><a href="adc-NavigationFlow.html">ADC · Navigation Flow</a></li>
+        <li><a href="adc-specifications.html">ADC · Business Specifications</a></li>
+        <li><a href="common-ACCESSIBILITY.html">Common · Accessibility (rubric §21)</a></li>
+        <li><a href="common-COST.html">Common · Cost &amp; FinOps Notes (rubric §31)</a></li>
+        <li><a href="common-GETTING-STARTED.html">Common · Getting Started: Build a New App on MMCA.Common</a></li>
+        <li><a href="common-RESILIENCE.html">Common · Resilience &amp; Business Continuity (rubric §29)</a></li>
+        <li><a href="common-RESPONSIVE.html" aria-current="page">Common · Responsive Design &amp; Cross-Browser Support (rubric §22)</a></li>
+        <li><a href="common-VERSIONING.html">Common · Versioning &amp; Breaking-Change Policy</a></li>
+        <li><a href="store-ACCESSIBILITY-SCREENREADER-PASS.html">Store · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="store-BusinessWorkflows.html">Store · Business Workflow Analysis</a></li>
+        <li><a href="store-NavigationFlow.html">Store · Navigation Flow</a></li>
+        <li><a href="store-Specification.html">Store · Business Specification Document</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
+          <h1 id="responsive-design--cross-browser-support-rubric-22">Responsive Design &amp; Cross-Browser Support (rubric §22)</h1>
+          <p>This document is the <strong>supported-device and browser matrix</strong> for the shared <code>MMCA.Common.UI</code>
+          component library. It makes the responsive contract explicit (the rubric §22 note that it was
+          previously implicit) so consumers know which viewports, touch-target sizes, and browser engines
+          the framework targets and gates.</p>
+          <h2 id="breakpoints">Breakpoints</h2>
+          <p>The framework keeps C# viewport detection and CSS media queries aligned around one mobile
+          threshold.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Layer</th>
+          <th>Constant / query</th>
+          <th>Threshold</th>
+          <th>Purpose</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>C# (MudBlazor)</td>
+          <td><code>BreakpointConstants.IsMobileBreakpoint</code> (<code>Source/Presentation/MMCA.Common.UI/Common/BreakpointConstants.cs:16</code>)</td>
+          <td><code>Xs</code>/<code>Sm</code>, i.e. <code>&lt; 960px</code></td>
+          <td>Switches list pages between desktop data grids and mobile card layouts</td>
+          </tr>
+          <tr>
+          <td>CSS</td>
+          <td><code>@media (max-width: 1023.98px)</code> (<code>wwwroot/app.css</code>)</td>
+          <td><code>&lt;= 1023.98px</code></td>
+          <td>Mobile data-grid behaviors (column hiding, pager wrap, horizontal scroll), 48px touch targets, mobile snackbar z-index</td>
+          </tr>
+          <tr>
+          <td>CSS</td>
+          <td><code>@media (max-width: 599px)</code></td>
+          <td><code>&lt;= 599px</code></td>
+          <td>Cart drawer expands to full viewport width</td>
+          </tr>
+          <tr>
+          <td>CSS</td>
+          <td><code>@media (min-width: 1024px)</code></td>
+          <td><code>&gt;= 1024px</code></td>
+          <td>Desktop auth-page top margin</td>
+          </tr>
+          <tr>
+          <td>CSS</td>
+          <td><code>@media (min-width: 1920px)</code></td>
+          <td><code>&gt;= 1920px</code></td>
+          <td>Wide cart drawer</td>
+          </tr>
+          </tbody></table></div>
+          <blockquote>
+          <p>The C# <code>960px</code> mobile cutoff and the CSS <code>1023.98px</code> cutoff intentionally differ: <code>960px</code> is the
+          MudBlazor sidebar-collapse / grid-vs-card switch, while the <code>1023.98px</code> band carries the broader
+          &quot;small-screen polish&quot; rules (touch targets, pager wrap). Both are below the <code>1024px</code> desktop floor.</p>
+          </blockquote>
+          <h2 id="supported-devices">Supported devices</h2>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Class</th>
+          <th>Reference width</th>
+          <th>Layout</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Phone</td>
+          <td>360-599px</td>
+          <td>Card lists, full-width cart drawer, stacked forms, 48px touch targets</td>
+          </tr>
+          <tr>
+          <td>Tablet</td>
+          <td>600-959px</td>
+          <td>Card lists (still mobile per the 960px cutoff), wrapping pagers</td>
+          </tr>
+          <tr>
+          <td>Laptop / desktop</td>
+          <td>960px and up</td>
+          <td>Data grids, persistent sidebar, multi-column detail layouts</td>
+          </tr>
+          <tr>
+          <td>Large desktop</td>
+          <td>1920px and up</td>
+          <td>Wider cart drawer; content capped by <code>--mmca-content-max-width</code></td>
+          </tr>
+          </tbody></table></div>
+          <h2 id="touch-targets">Touch targets</h2>
+          <p>Interactive controls on mobile surfaces meet a <strong>48px minimum hit area</strong> (Material Design),
+          exceeding both WCAG 2.5.8 Target Size (Minimum, AA, 24px) and WCAG 2.5.5 Target Size (Enhanced,
+          AAA, 44px).</p>
+          <ul>
+          <li>The shared, opt-in <code>.mmca-touch-target</code> utility class (defined in <code>wwwroot/app.css</code>) guarantees a
+          48px box on any control that adds it. The mobile media query also enforces the 48px minimum on
+          icon buttons across the shared mobile surfaces (cart drawer, mobile cards, data-grid pager), so
+          the rule is a <strong>general affordance</strong> rather than scoped to one component.</li>
+          <li>Enforced by <code>ComponentsPageE2ETests.ComponentsPage_TouchTarget_MeetsMinimumSizeOnMobileViewport</code>
+          (a phone-viewport Playwright bounding-box assertion).</li>
+          </ul>
+          <h2 id="grid-density">Grid density</h2>
+          <p><code>DataGridListPageBase&lt;TDto&gt;</code> exposes a <code>DenseGrid</code> property and a <code>ToggleDensity()</code> method. Derived
+          list pages bind <code>Dense=&quot;@DenseGrid&quot;</code> on their <code>MudDataGrid</code> and surface a toggle. The chosen density
+          is persisted alongside paging/sort/filter state (URL query key <code>d</code>, in-memory state service, and
+          sessionStorage), so it survives navigation, refresh, and shareable links. Round-trip is covered by
+          <code>ListPageStateServiceTests</code> and <code>ListPageQueryStateServiceTests</code>.</p>
+          <h2 id="browser-matrix">Browser matrix</h2>
+          <p>The shared UI is tested against three Playwright engines in CI (<code>.github/workflows/ci.yml</code>,
+          <code>ui-e2e</code> job): a real-browser axe (WCAG 2.1 AA) + render smoke against the backend-less gallery host.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Engine</th>
+          <th>Represents</th>
+          <th>CI status</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Chromium</td>
+          <td>Chrome, Edge (Chromium)</td>
+          <td><strong>Required merge gate</strong></td>
+          </tr>
+          <tr>
+          <td>Firefox</td>
+          <td>Firefox</td>
+          <td><strong>Required merge gate</strong> (promoted from advisory 2026-07-12)</td>
+          </tr>
+          <tr>
+          <td>WebKit</td>
+          <td>Safari</td>
+          <td><strong>Required merge gate</strong> (promoted from advisory 2026-07-16)</td>
+          </tr>
+          </tbody></table></div>
+          <p>All three engines run on every CI pass and surface their results independently
+          (<code>fail-fast: false</code>); each was promoted to a blocking gate once observed reliably green
+          (Firefox on 2026-07-12, WebKit on 2026-07-16 after 11 consecutive green main runs).
+          The framework targets current evergreen versions of these browsers; no legacy/IE support.</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/guides/common-RESPONSIVE.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

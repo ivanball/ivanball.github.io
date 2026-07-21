@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Resilience &amp; Business Continuity (rubric §29) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="MMCA.Common is a library, so it cannot operate a deployment — restores, RTO/RPO, and SLO alerting are executed in the consumer apps&#39; IaC (e.g.…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/guides/common-RESILIENCE.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Resilience &amp; Business Continuity (rubric §29)">
+  <meta property="og:description" content="MMCA.Common is a library, so it cannot operate a deployment — restores, RTO/RPO, and SLO alerting are executed in the consumer apps&#39; IaC (e.g.…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/guides/common-RESILIENCE.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/guides/index.html">Guides &amp; Specifications</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">Common · Resilience &amp; Business Continuity (rubric §29)</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All guides</summary>
+        <nav class="doc-nav" aria-label="Guides &amp; Specifications">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="adc-ACCESSIBILITY-SCREENREADER-PASS.html">ADC · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="adc-IntegrationTestReworkPlan.html">ADC · Integration-Test Tier Rework Plan (RemediationBacklog #14)</a></li>
+        <li><a href="adc-NavigationFlow.html">ADC · Navigation Flow</a></li>
+        <li><a href="adc-specifications.html">ADC · Business Specifications</a></li>
+        <li><a href="common-ACCESSIBILITY.html">Common · Accessibility (rubric §21)</a></li>
+        <li><a href="common-COST.html">Common · Cost &amp; FinOps Notes (rubric §31)</a></li>
+        <li><a href="common-GETTING-STARTED.html">Common · Getting Started: Build a New App on MMCA.Common</a></li>
+        <li><a href="common-RESILIENCE.html" aria-current="page">Common · Resilience &amp; Business Continuity (rubric §29)</a></li>
+        <li><a href="common-RESPONSIVE.html">Common · Responsive Design &amp; Cross-Browser Support (rubric §22)</a></li>
+        <li><a href="common-VERSIONING.html">Common · Versioning &amp; Breaking-Change Policy</a></li>
+        <li><a href="store-ACCESSIBILITY-SCREENREADER-PASS.html">Store · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="store-BusinessWorkflows.html">Store · Business Workflow Analysis</a></li>
+        <li><a href="store-NavigationFlow.html">Store · Navigation Flow</a></li>
+        <li><a href="store-Specification.html">Store · Business Specification Document</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
+          <h1 id="resilience--business-continuity-rubric-29">Resilience &amp; Business Continuity (rubric §29)</h1>
+          <p>MMCA.Common is a library, so it cannot <em>operate</em> a deployment — restores, RTO/RPO, and SLO alerting
+          are executed in the consumer apps&#39; IaC (e.g. MMCA.ADC&#39;s <code>infra/DISASTER-RECOVERY.md</code>,
+          <code>scripts/dr-restore-drill.ps1</code>, <code>dr-drill.yml</code>, and the SLO metric-alerts in <code>infra/main.bicep</code>).
+          What the framework <em>can</em> do is (1) ship the failure-isolation and graceful-startup mechanisms, tested
+          centrally, (2) run a <strong>central, headless restore-drill smoke</strong> against an ephemeral database that
+          exercises the backup → catastrophic-loss → restore → verify cycle and records a baseline restore time,
+          so the recovery <em>procedure</em> itself is demonstrated in CI rather than only described, and (3) give
+          consumers a baseline SLO/error-budget template and a restore-drill runbook so the recovery story is
+          defined once and adopted, not reinvented per app. This complements
+          <a href="../adr/009-resilience-and-recovery-objectives.html"><code>ADRs/009-resilience-and-recovery-objectives.md</code></a>
+          (the <em>decision</em>); this file is the <em>operational reference</em>.</p>
+          <h2 id="what-the-framework-provides-and-verifies-in-repo">What the framework provides (and verifies in-repo)</h2>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Mechanism</th>
+          <th>Where</th>
+          <th>Test</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Standard Polly resilience handler (timeout + retry w/ backoff + circuit breaker) on <strong>every</strong> outbound <code>HttpClient</code> and typed gRPC client</td>
+          <td><code>Aspire/Extensions.cs</code> (<code>AddStandardResilienceHandler</code> via <code>ConfigureHttpClientDefaults</code>), <code>Grpc/DependencyInjection.cs</code>, <code>Infrastructure/DependencyInjection.cs</code></td>
+          <td><code>ResilienceCircuitBreakerFaultInjectionTests</code> (trips a breaker, asserts <code>BrokenCircuit</code> short-circuiting), <code>ResilienceHandlerTests</code></td>
+          </tr>
+          <tr>
+          <td>Graceful degradation: integration-event publish failure buffers for redelivery (at-least-once)</td>
+          <td><code>Infrastructure/Persistence/Outbox/OutboxProcessor.cs</code></td>
+          <td><code>OutboxProcessorTests.IntegrationEventPublishFailure_DegradesGracefully_BuffersForRedelivery</code></td>
+          </tr>
+          <tr>
+          <td>Broker retry (exponential) on RabbitMQ / Azure Service Bus</td>
+          <td><code>Infrastructure</code> (<code>ConfigureBrokerTransport</code>, <code>MessageBusSettings.RetryLimit/RetryMin/MaxIntervalSeconds</code>)</td>
+          <td>covered by messaging tests</td>
+          </tr>
+          <tr>
+          <td>Warm-up / readiness gate: holds <code>/health/ready</code> closed until startup warm-up runs, opens <strong>even on task failure</strong> (availability over warmth), pre-warms OIDC discovery to kill ACA cold-start</td>
+          <td><code>Aspire/Warmup/</code> (<code>WarmupHostedService</code>, <code>WarmupReadinessGate</code>, <code>WarmupReadinessHealthCheck</code>, <code>OpenIdConnectMetadataWarmupTask</code>) — wired by <code>AddServiceDefaults</code></td>
+          <td><code>WarmupReadinessGateTests</code>, <code>WarmupReadinessHealthCheckTests</code>, <code>WarmupHostedServiceTests</code> (ADR-025)</td>
+          </tr>
+          <tr>
+          <td><strong>Restore drill (central, in-repo)</strong>: seed a database → take a backup → simulate catastrophic data loss → restore from the backup → verify zero data loss, timing the recovery (RTO)</td>
+          <td><code>Tests/Core/MMCA.Common.Infrastructure.Tests/Resilience/DatabaseRestoreDrillTests.cs</code> (ephemeral SQLite via the SQLite online-backup API — the same primitive a real backup/restore uses)</td>
+          <td><code>DatabaseRestoreDrillTests</code> (recovers every row after simulated loss; completes within a bounded RTO ceiling; emits the measured restore time to test output)</td>
+          </tr>
+          </tbody></table></div>
+          <p>Failure isolation, graceful degradation, graceful startup, <strong>and the restore procedure itself</strong> are
+          therefore demonstrated and tested centrally — the framework drills backup→restore against an ephemeral
+          DB and records a baseline restore time (see below). The gaps a library structurally cannot fill —
+          production RTO/RPO against real cloud backups and measured production SLOs — remain the consumer&#39;s, with
+          the templates below.</p>
+          <h3 id="in-repo-restore-drill-baseline-measured-automatically-gated">In-repo restore-drill baseline (measured, automatically gated)</h3>
+          <p><code>DatabaseRestoreDrillTests</code> runs on <strong>every CI build</strong> (it lives in the in-solution unit tier, so the
+          recovery <em>procedure</em> is enforced automatically, not just described): it seeds a 500-row table, backs it
+          up, deletes all rows (the simulated disaster), restores from the backup, and asserts every row returns
+          byte-for-byte. The measured restore time is emitted to test output (<code>Restore RTO (measured): … ms</code>); the
+          assertion ceiling is a deliberately generous 30 s hang-detector, <strong>not</strong> a performance gate (CI runners
+          vary, so a tight latency assertion would be flaky; the drill proves <em>correctness of recovery</em>, and the
+          measured time is recorded as an informational baseline).</p>
+          <p><strong>Recorded baseline</strong> (framework&#39;s own measured restore objective, distinct from the consumer template
+          below; this is the in-repo half §29 owns):</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>SLI</th>
+          <th>Scope</th>
+          <th>Measured</th>
+          <th>Notes</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Restore RTO</td>
+          <td>500-row ephemeral SQLite, backup → wipe → restore → verify</td>
+          <td><strong>~5 ms</strong> (local median; 4.7–7.0 ms over 5 runs)</td>
+          <td>emitted per run as <code>Restore RTO (measured): … ms</code>; bounded by a 30 s ceiling</td>
+          </tr>
+          <tr>
+          <td>Data loss after restore (RPO proxy)</td>
+          <td>same</td>
+          <td><strong>0 rows</strong> (byte-for-byte, asserted)</td>
+          <td><code>RestoreDrill_RecoversEveryRow_AfterSimulatedDataLoss</code></td>
+          </tr>
+          </tbody></table></div>
+          <p>This is the framework&#39;s own analog of the consumer cloud drill below, proving the <em>procedure</em> and a
+          measured baseline centrally; the consumer drill proves it against production-grade backups and real cloud
+          RTO targets (orders of magnitude larger, hence the per-app template below rather than a shared number).</p>
+          <h2 id="baseline-slo--error-budget-template-consumers-fill-in">Baseline SLO / error-budget template (consumers fill in)</h2>
+          <p>Adopt and tune per app; ADC&#39;s filled-in version lives in <code>infra/DISASTER-RECOVERY.md</code> + the SLO
+          metric-alerts in <code>infra/main.bicep</code>.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>SLI</th>
+          <th>Suggested SLO</th>
+          <th>Error budget</th>
+          <th>Measured by</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Availability (successful requests / total)</td>
+          <td>99.5% monthly</td>
+          <td>~3.6 h/month</td>
+          <td>App Insights <code>requests</code> (failed count alert)</td>
+          </tr>
+          <tr>
+          <td>Latency (server response time)</td>
+          <td>p95 &lt; 1 s (read), &lt; 3 s (write)</td>
+          <td>—</td>
+          <td>App Insights <code>requests/duration</code> alert</td>
+          </tr>
+          <tr>
+          <td>Dependency success</td>
+          <td>99.5%</td>
+          <td>—</td>
+          <td>App Insights <code>dependencies/failed</code> alert</td>
+          </tr>
+          <tr>
+          <td>Restore drill</td>
+          <td>≥ 1 successful drill per release train, within the stated RTO</td>
+          <td>a missed/failed drill is a release-blocking §29 regression</td>
+          <td>the drill runbook below</td>
+          </tr>
+          </tbody></table></div>
+          <p>Define <strong>RTO/RPO per service</strong> (ADC&#39;s worked example):</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Scenario</th>
+          <th>RPO</th>
+          <th>RTO</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Accidental data loss / bad migration (within retention)</td>
+          <td>≤ ~10 min (continuous PITR)</td>
+          <td>≤ 2 h</td>
+          </tr>
+          <tr>
+          <td>Single-service DB corruption</td>
+          <td>≤ ~10 min</td>
+          <td>≤ 1 h</td>
+          </tr>
+          <tr>
+          <td>Full region loss</td>
+          <td>≤ 1 h (geo-redundant backup lag)</td>
+          <td>≤ 4 h</td>
+          </tr>
+          </tbody></table></div>
+          <p>A conscious, documented acceptance of single-region risk is a valid §29 posture — state it explicitly
+          (as ADC does) rather than leaving it implicit.</p>
+          <h2 id="restore-drill-runbook-reference">Restore-drill runbook (reference)</h2>
+          <p>The only evidence backups actually restore is a periodic <strong>drill</strong>: restore a throwaway copy, confirm
+          it comes back Online, record the measured restore time, then delete the copy. The live databases are
+          never touched. Run it <strong>per release train</strong> and after any backup/retention change.</p>
+          <pre class="doc-pre"><code class="language-bash"># PITR restore of a throwaway COPY (Azure SQL example — adapt to your store)
+          az sql db restore -g &lt;rg&gt; -s &lt;sqlServer&gt; -n &lt;Db&gt; --dest-name &lt;Db&gt;-drill --time &quot;&lt;recent-utc&gt;&quot;
+          # verify status Online (and a row/table spot-check for a deeper check), record elapsed minutes, then:
+          az sql db delete -g &lt;rg&gt; -s &lt;sqlServer&gt; -n &lt;Db&gt;-drill --yes</code></pre>
+          <p>Wire this as a manual/scheduled workflow + script (worked example: MMCA.ADC&#39;s
+          <code>.github/workflows/dr-drill.yml</code> + <code>scripts/dr-restore-drill.ps1</code>, which restore a copy, measure RTO,
+          verify Online, clean up, and emit a drill-result row). Record each run:</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Drill date</th>
+          <th>Source</th>
+          <th>Result</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><em>yyyy-mm-dd</em></td>
+          <td><em>Db (PITR)</em></td>
+          <td><em>PASS — restored in N min (RTO target …); status Online</em></td>
+          </tr>
+          </tbody></table></div>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/guides/common-RESILIENCE.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

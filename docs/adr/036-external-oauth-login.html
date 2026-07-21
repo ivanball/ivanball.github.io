@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ADR-036: External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-02, migration attribution corrected 2026-07-06).">
+  <meta name="description" content="Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/036-external-oauth-login.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="article">
   <meta property="og:title" content="ADR-036: External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange">
-  <meta property="og:description" content="Accepted (2026-07-02, migration attribution corrected 2026-07-06).">
+  <meta property="og:description" content="Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/036-external-oauth-login.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 48 ADRs</summary>
+        <summary>All 49 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -113,6 +113,7 @@
         <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
         <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
           </ol>
         </nav>
       </details>
@@ -121,7 +122,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-036-external-oauth-login-federated-googlegithub-with-local-jwt-exchange">ADR-036: External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-02, migration attribution corrected 2026-07-06).</p>
+          <p>Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043).</p>
           <h2 id="context">Context</h2>
           <p>The framework&#39;s Identity story so far is entirely first-party: a user registers with an email and
           password, the credentials are hashed (ADR-032), and Identity mints its own RS256 JWT pair. Every auth
@@ -161,8 +162,13 @@
           <code>IAuthenticationService.ExternalLoginAsync</code>. On success it signs the external cookie out immediately,
           so the external principal lives no longer than the exchange.</li>
           <li><strong>Tokens never ride the redirect URL.</strong> <code>CompleteAsync</code> mints a single-use opaque code, stashes the
-          minted token pair server-side in the cache under a short TTL, and redirects to the UI carrying only
-          that code. The UI calls <code>ExchangeAsync</code> (<code>POST</code>) out of band to swap the code for the tokens; the
+          minted token pair server-side in the cache under a short TTL, and redirects carrying only that code.
+          The redirect target defaults to <code>OAuth:UIBaseUrl</code>, but when the stashed <code>returnUrl</code> is an absolute URI
+          whose custom scheme is allow-listed in <code>OAuth:AllowedReturnUrlSchemes</code> it targets that native-app URL
+          instead, so a system-browser <code>WebAuthenticator</code> window captures the code and closes (ADR-043); an
+          empty allowlist (the default) keeps the web-only behavior exactly, and http/https <code>returnUrl</code>s never
+          match, so the allowlist cannot become an open redirect. Completion errors follow the same branch. The
+          UI calls <code>ExchangeAsync</code> (<code>POST</code>) out of band to swap the code for the tokens; the
           code is burned on first use, and a missing, replayed, or expired code yields HTTP 400. Access and
           refresh tokens therefore never land in the address bar, browser history, the <code>Referer</code> header, or
           upstream access logs.</li>
@@ -248,11 +254,13 @@
           everywhere after), ADR-022 (the browser cookies that carry the resulting session), ADR-029 (the
           brute-force protection on the first-party credential surface this flow sits beside), ADR-032 (the
           password hashing external accounts deliberately skip), ADR-020 (the inert-until-configured opt-in
-          posture this mirrors), ADR-005 (<code>User.Anonymize</code> clears the provider fields on erasure).</p>
+          posture this mirrors), ADR-005 (<code>User.Anonymize</code> clears the provider fields on erasure), ADR-043 (the
+          native-app callback that adds the allow-listed custom-scheme redirect branch to this flow&#39;s
+          <code>CompleteAsync</code>).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/036-external-oauth-login.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/036-external-oauth-login.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
       </div>

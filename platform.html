@@ -61,8 +61,8 @@
         </div>
         <div class="stats">
           <div class="stat"><div class="num">15</div><div class="label">NuGet packages</div></div>
-          <div class="stat"><div class="num">48</div><div class="label">Architecture Decision Records</div></div>
-          <div class="stat"><div class="num">85</div><div class="label">Architecture fitness tests</div></div>
+          <div class="stat"><div class="num">49</div><div class="label">Architecture Decision Records</div></div>
+          <div class="stat"><div class="num">91</div><div class="label">Architecture fitness tests</div></div>
           <div class="stat"><div class="num">3</div><div class="label">Reference applications</div></div>
         </div>
       </div>
@@ -214,7 +214,7 @@
         <div class="section-head">
           <p class="eyebrow">Why, not just what</p>
           <h2>Architecture Decision Records</h2>
-          <p>Forty-eight ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
+          <p>Forty-nine ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
         </div>
         <div class="adr-list">
           <a class="adr" href="docs/adr/001-manual-dto-mapping.html"><span class="adr-num">001</span><span><span class="adr-title">Manual DTO mapping</span><span class="adr-sum">Per-entity source-generated mappers chosen over reflection-based AutoMapper.</span></span></a>
@@ -265,6 +265,7 @@
           <a class="adr" href="docs/adr/046-http-api-versioning.html"><span class="adr-num">046</span><span><span class="adr-title">HTTP API versioning strategy</span><span class="adr-sum">Header-based versioning wired in one call; supported and deprecated versions are reported on every response, with a fitness contract asserting the headers.</span></span></a>
           <a class="adr" href="docs/adr/047-soft-deleted-user-session-revocation.html"><span class="adr-num">047</span><span><span class="adr-title">Soft-deleted-user session revocation</span><span class="adr-sum">A middleware returns 401 for authenticated callers whose account is soft-deleted, bounding the stateless-JWT revocation window to a 30-second cache instead of the token lifetime.</span></span></a>
           <a class="adr" href="docs/adr/048-primitive-identifier-type-aliases.html"><span class="adr-num">048</span><span><span class="adr-title">Primitive identifier type aliases</span><span class="adr-sum">Entity IDs stay primitives behind per-module type aliases, chosen over strongly-typed ID structs: readable signatures with zero EF, serializer, or OpenAPI friction.</span></span></a>
+          <a class="adr" href="docs/adr/049-library-configureawait-policy.html"><span class="adr-num">049</span><span><span class="adr-title">Library-scoped ConfigureAwait policy</span><span class="adr-sum">Framework packages await with ConfigureAwait(false), enforced by CA2007 at error severity; application repos keep the analyzer off because ASP.NET Core has no synchronization context.</span></span></a>
         </div>
 
         <div class="btn-row" style="margin-top:2rem">
@@ -281,20 +282,32 @@
         <div class="section-head">
           <p class="eyebrow">Read the source of truth</p>
           <h2>The reference library</h2>
-          <p>The full architecture documentation, published straight from the repositories and rendered as browsable pages: every Architecture Decision Record and the complete onboarding guide that walks the codebase type by type.</p>
+          <p>The full architecture documentation, maintained in this site's repository as its canonical home and rendered as browsable pages: every Architecture Decision Record, the governance scorecards, the guides and specifications, and the complete onboarding guide that walks the codebase type by type.</p>
         </div>
         <div class="grid grid--2">
           <a class="card card--link" href="docs/adr/index.html">
-            <span class="kicker" style="color:var(--accent)">48 records</span>
+            <span class="kicker" style="color:var(--accent)">49 records</span>
             <h3 style="margin:.35rem 0 .5rem">Architecture Decision Records</h3>
             <p class="mb-0">The context, decision, rationale, and trade-offs behind every cross-cutting pattern, from manual DTO mapping and the outbox to JWKS auth, caching, and supply-chain provenance. Numbered, dated, and cross-linked.</p>
             <div class="card-foot" style="margin-top:1rem"><span style="font-weight:600;color:var(--accent)">Browse the ADRs →</span></div>
           </a>
           <a class="card card--link" href="docs/onboarding/index.html">
-            <span class="kicker" style="color:var(--accent)">37 documents</span>
+            <span class="kicker" style="color:var(--accent)">38 documents</span>
             <h3 style="margin:.35rem 0 .5rem">Onboarding guide</h3>
             <p class="mb-0">A teaching guide for an engineer new to the codebase: a primer, a mechanically extracted type inventory, 27 group chapters walking every first-party type, five DevOps chapters, concept maps, and a coverage audit.</p>
             <div class="card-foot" style="margin-top:1rem"><span style="font-weight:600;color:var(--accent)">Open the guide →</span></div>
+          </a>
+          <a class="card card--link" href="docs/governance/index.html">
+            <span class="kicker" style="color:var(--accent)">7 artifacts</span>
+            <h3 style="margin:.35rem 0 .5rem">Architecture governance</h3>
+            <p class="mb-0">The 34-category evaluation rubric, plus an evidence-based scorecard and remediation backlog for each repo. Every score cites the code that earns it.</p>
+            <div class="card-foot" style="margin-top:1rem"><span style="font-weight:600;color:var(--accent)">Read the scorecards →</span></div>
+          </a>
+          <a class="card card--link" href="docs/guides/index.html">
+            <span class="kicker" style="color:var(--accent)">14 guides</span>
+            <h3 style="margin:.35rem 0 .5rem">Guides &amp; specifications</h3>
+            <p class="mb-0">The narrative layer: the getting-started guide for adopting the framework, business specifications and workflow analyses for both applications, and per-concern reference notes.</p>
+            <div class="card-foot" style="margin-top:1rem"><span style="font-weight:600;color:var(--accent)">Browse the guides →</span></div>
           </a>
         </div>
         <div class="btn-row" style="margin-top:1.75rem">

@@ -1,17 +1,20 @@
 /*
- * build-docs.mjs: render the MMCA ADRs and Onboarding guide into static HTML
+ * build-docs.mjs: render the MMCA documentation library into static HTML
  * pages that live natively inside this site (same header/footer/theme).
  *
- * Sources (read at build time from the sibling workspace folders, never copied
- * verbatim (only the rendered HTML is committed)):
- *   - ../../MMCA.Common/ADRs/*.md       (Architecture Decision Records)
- *   - ../../Docs/Onboarding/*.md         (the onboarding guide; underscore-prefixed
+ * Sources (canonical markdown, committed in THIS repo under ../docs-src/):
+ *   - ../docs-src/adr/*.md               (Architecture Decision Records)
+ *   - ../docs-src/onboarding/*.md        (the onboarding guide; underscore-prefixed
  *                                         working files are excluded)
+ *   - ../docs-src/governance/*.md        (rubric + per-repo scorecards/backlogs)
+ *   - ../docs-src/guides/*.md            (getting-started, specs, workflows, notes)
  *
  * Output (committed):
  *   - ../docs/index.html                 Reference-library hub
  *   - ../docs/adr/index.html + adr/*.html
  *   - ../docs/onboarding/index.html + onboarding/*.html
+ *   - ../docs/governance/index.html + governance/*.html
+ *   - ../docs/guides/index.html + guides/*.html
  *
  * Re-run whenever the source docs change:  npm install && npm run build
  * No runtime JS dependency ships to readers: everything is pre-rendered.
@@ -23,10 +26,13 @@ import { Marked } from "marked";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WEBSITE_ROOT = path.resolve(HERE, "..");
-const REPO_ROOT = path.resolve(HERE, "..", "..");
-const ADR_SRC = path.join(REPO_ROOT, "MMCA.Common", "ADRs");
-const ONB_SRC = path.join(REPO_ROOT, "Docs", "Onboarding");
+const DOCS_SRC = path.join(WEBSITE_ROOT, "docs-src");
+const ADR_SRC = path.join(DOCS_SRC, "adr");
+const ONB_SRC = path.join(DOCS_SRC, "onboarding");
+const GOV_SRC = path.join(DOCS_SRC, "governance");
+const GUIDES_SRC = path.join(DOCS_SRC, "guides");
 const SITE = "https://ivanball.github.io";
+const SRC_GITHUB = "https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/";
 
 /* ----- small helpers ----- */
 const norm = (p) => path.resolve(p).toLowerCase();
@@ -102,6 +108,12 @@ const adrFiles = readdirSync(ADR_SRC)
   .sort();
 const onbFiles = readdirSync(ONB_SRC)
   .filter((f) => f.endsWith(".md") && !f.startsWith("_"));
+const govFiles = readdirSync(GOV_SRC)
+  .filter((f) => f.endsWith(".md") && f !== "README.md")
+  .sort();
+const guideFiles = readdirSync(GUIDES_SRC)
+  .filter((f) => f.endsWith(".md") && f !== "README.md")
+  .sort();
 
 const collections = [
   {
@@ -113,7 +125,7 @@ const collections = [
     navTitle: `All ${adrFiles.length} ADRs`,
     indexSrc: "README.md",
     files: ["README.md", ...adrFiles],
-    github: "https://github.com/ivanball/MMCA.Common/blob/main/ADRs/",
+    github: `${SRC_GITHUB}adr/`,
   },
   {
     id: "onboarding",
@@ -125,6 +137,28 @@ const collections = [
     indexSrc: "00-index.md",
     files: onbFiles,
     github: null,
+  },
+  {
+    id: "governance",
+    outDir: "docs/governance",
+    srcDir: GOV_SRC,
+    kicker: "Architecture governance",
+    title: "Architecture Governance",
+    navTitle: "Rubric, scorecards & backlogs",
+    indexSrc: "README.md",
+    files: ["README.md", ...govFiles],
+    github: `${SRC_GITHUB}governance/`,
+  },
+  {
+    id: "guides",
+    outDir: "docs/guides",
+    srcDir: GUIDES_SRC,
+    kicker: "Guides & specifications",
+    title: "Guides & Specifications",
+    navTitle: "All guides",
+    indexSrc: "README.md",
+    files: ["README.md", ...guideFiles],
+    github: `${SRC_GITHUB}guides/`,
   },
 ];
 
@@ -156,6 +190,18 @@ function navLabel(col, file, title) {
   if (g) {
     const t = title.replace(/^Group\s+\d+[.:]?\s*/i, "").replace(/^\d+\.\s*/, "").trim();
     return `${parseInt(g[1], 10)}. ${t}`;
+  }
+  if (col.id === "governance" || col.id === "guides") {
+    const repo = file.match(/^(common|store|adc)-/);
+    if (repo) {
+      const name = { common: "Common", store: "Store", adc: "ADC" }[repo[1]];
+      const t = title
+        .replace(/^MMCA[\w.]*\s*[—–-]\s*/i, "")     // "MMCA.Common.UI — X" -> "X"
+        .replace(/^ADC\s*\([^)]*\)\s*[—–-]\s*/i, "") // "ADC (Atlanta ...) - X" -> "X"
+        .replace(/^MMCA\s+/i, "")                    // "MMCA Business ..." -> "Business ..."
+        .trim();
+      return `${name} · ${t || title}`;
+    }
   }
   return title;
 }
@@ -421,6 +467,8 @@ function docFootHtml(col, doc) {
 /* ----- write the per-document pages ----- */
 mkdirSync(path.join(WEBSITE_ROOT, "docs", "adr"), { recursive: true });
 mkdirSync(path.join(WEBSITE_ROOT, "docs", "onboarding"), { recursive: true });
+mkdirSync(path.join(WEBSITE_ROOT, "docs", "governance"), { recursive: true });
+mkdirSync(path.join(WEBSITE_ROOT, "docs", "guides"), { recursive: true });
 
 let written = 0, mermaidPages = 0;
 for (const col of collections) {
@@ -459,7 +507,7 @@ ${docFootHtml(col, doc)}
 {
   const outRel = "docs/index.html";
   const prefix = assetPrefix(outRel);
-  const adr = collections[0], onb = collections[1];
+  const onb = collections.find((c) => c.id === "onboarding");
   const onbContent = onb.docs.length - 1; // exclude the index page itself
   const content =
 `    <section class="section">
@@ -467,7 +515,7 @@ ${docFootHtml(col, doc)}
         <div class="section-head">
           <p class="eyebrow">Platform · Reference library</p>
           <h1 style="margin:0 0 0.75rem">Reference library</h1>
-          <p style="font-size:1.12rem;max-width:70ch">The architecture documentation behind the MMCA platform, published straight from the source repositories. Every Architecture Decision Record and the complete onboarding guide, rendered as browsable pages, evidence and trade-offs included.</p>
+          <p style="font-size:1.12rem;max-width:70ch">The architecture documentation behind the MMCA platform, published from its canonical home in this site's repository. Every Architecture Decision Record, the governance scorecards, the guides, and the complete onboarding guide, rendered as browsable pages, evidence and trade-offs included.</p>
           <div class="btn-row" style="margin-top:1.25rem">
             <a class="btn btn--ghost" href="${prefix}platform.html">← Back to the platform overview</a>
           </div>
@@ -484,6 +532,18 @@ ${docFootHtml(col, doc)}
             <h2 style="margin:.35rem 0 .5rem">Onboarding Guide</h2>
             <p class="mb-0">A teaching guide for an engineer new to the codebase: a primer, a mechanically extracted type inventory, ${onbFiles.filter((f) => /^group-\d/.test(f)).length} group chapters walking every first-party type, five DevOps chapters, concept maps, and a coverage audit.</p>
             <div class="card-foot" style="margin-top:1rem"><span class="doc-cta">Open the guide →</span></div>
+          </a>
+          <a class="card card--link" href="governance/index.html">
+            <span class="kicker" style="color:var(--accent)">${govFiles.length} artifacts</span>
+            <h2 style="margin:.35rem 0 .5rem">Architecture Governance</h2>
+            <p class="mb-0">The 34-category evaluation rubric, plus an evidence-based scorecard and remediation backlog for each repo (framework, e-commerce, conference). Every score cites the code that earns it.</p>
+            <div class="card-foot" style="margin-top:1rem"><span class="doc-cta">Read the scorecards →</span></div>
+          </a>
+          <a class="card card--link" href="guides/index.html">
+            <span class="kicker" style="color:var(--accent)">${guideFiles.length} guides</span>
+            <h2 style="margin:.35rem 0 .5rem">Guides & Specifications</h2>
+            <p class="mb-0">The narrative layer: the getting-started guide for adopting the framework, business specifications and workflow analyses for both applications, and per-concern notes on accessibility, resilience, responsiveness, versioning, and cost.</p>
+            <div class="card-foot" style="margin-top:1rem"><span class="doc-cta">Browse the guides →</span></div>
           </a>
         </div>
       </div>
@@ -506,5 +566,5 @@ if (existsSync(mermaidSrc)) {
   copyFileSync(mermaidSrc, mermaidDst);
 }
 
-console.log(`Wrote ${written} pages (${collections[0].docs.length} ADRs, ${collections[1].docs.length} onboarding). Mermaid on ${mermaidPages} page(s).`);
+console.log(`Wrote ${written} pages (${collections.map((c) => `${c.docs.length} ${c.id}`).join(", ")}). Mermaid on ${mermaidPages} page(s).`);
 console.log(`Mermaid bundle vendored: ${existsSync(mermaidDst)}`);

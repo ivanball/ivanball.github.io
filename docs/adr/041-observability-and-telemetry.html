@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 48 ADRs</summary>
+        <summary>All 49 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -113,6 +113,7 @@
         <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
         <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
           </ol>
         </nav>
       </details>
@@ -143,7 +144,7 @@
           <li><p><strong>One shared telemetry baseline on every host.</strong> <code>ConfigureOpenTelemetry</code>
           (<code>Source/Hosting/MMCA.Common.Aspire/Extensions.cs:136</code>) wires OpenTelemetry logging with formatted
           messages and scopes (<code>Extensions.cs:139</code>), metrics from ASP.NET Core, <code>HttpClient</code>, and the runtime
-          (<code>Extensions.cs:147</code>), and tracing from ASP.NET Core and <code>HttpClient</code> (<code>Extensions.cs:159</code>). It is
+          (<code>Extensions.cs:147</code>), and tracing from ASP.NET Core and <code>HttpClient</code> (<code>Extensions.cs:180</code>). It is
           called from <code>AddServiceDefaults</code> (<code>Extensions.cs:36</code>), so a host opts in once and every project in
           the Aspire model inherits the same pipeline.</p>
           </li>
@@ -157,14 +158,14 @@
           The <code>outcome</code> tag takes <code>completed</code>, <code>failed</code> (a <code>Result</code> failure), or <code>exception</code>
           (<code>LoggingCommandDecorator.cs:30</code>, <code>:38</code>, <code>:52</code>), so count gives rate, the tag gives errors, and the
           histogram gives duration. The Aspire host subscribes the meter by literal name
-          (<code>Extensions.cs:154</code>).</p>
+          (<code>Extensions.cs:174</code>).</p>
           </li>
           <li><p><strong>An outbox dead-letter counter.</strong> The outbox processor owns a meter <code>MMCA.Common.Outbox</code>
           (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:59</code>) and a counter
           <code>outbox.dead_letter.count</code> (<code>OutboxProcessor.cs:60</code>), incremented with an <code>event_type</code> tag whenever
           a message is dead-lettered because its type cannot be resolved (<code>OutboxProcessor.cs:282</code>). The same
           source emits outbox spans (<code>OutboxProcessor.cs:58</code>); both the meter and the trace source are
-          registered by literal name in the Aspire defaults (<code>Extensions.cs:153</code>, <code>Extensions.cs:158</code>).</p>
+          registered by literal name in the Aspire defaults (<code>Extensions.cs:173</code>, <code>Extensions.cs:179</code>).</p>
           </li>
           <li><p><strong>Correlation-ID middleware ties the request together.</strong> <code>CorrelationIdMiddleware</code>
           (<code>Source/Presentation/MMCA.Common.API/Middleware/CorrelationIdMiddleware.cs:15</code>) uses the
@@ -177,16 +178,16 @@
           up for one request.</p>
           </li>
           <li><p><strong>Head-based sampling as a cost knob, off by default.</strong> <code>Telemetry:TracesSampleRatio</code>
-          (<code>Extensions.cs:174</code>, parsed by <code>TryGetTraceSampleRatio</code> at <code>Extensions.cs:189</code>) is unset by
+          (<code>Extensions.cs:195</code>, parsed by <code>TryGetTraceSampleRatio</code> at <code>Extensions.cs:210</code>) is unset by
           default, so a host samples everything and behavior does not change. A deployed host sets a ratio in
           the open interval (0,1) to keep that fraction of traces; the value wraps a <code>TraceIdRatioBasedSampler</code>
-          in a <code>ParentBasedSampler</code> (<code>Extensions.cs:175</code>) so a sampled-in request keeps its whole trace across
+          in a <code>ParentBasedSampler</code> (<code>Extensions.cs:196</code>) so a sampled-in request keeps its whole trace across
           service boundaries. A key that is absent, unparseable, or outside (0,1) falls back to sample-all
-          (<code>Extensions.cs:193</code>), so a typo can never silently drop all telemetry.</p>
+          (<code>Extensions.cs:214</code>), so a typo can never silently drop all telemetry.</p>
           </li>
           <li><p><strong>Outbox poll spans are filtered out of export.</strong> <code>OutboxPollFilterProcessor</code>
           (<code>Source/Hosting/MMCA.Common.Aspire/Telemetry/OutboxPollFilterProcessor.cs:15</code>), registered before
-          the exporters (<code>Extensions.cs:167</code>), clears the <code>Recorded</code> flag on the recurring <code>OutboxPoll</code> span
+          the exporters (<code>Extensions.cs:188</code>), clears the <code>Recorded</code> flag on the recurring <code>OutboxPoll</code> span
           and its children (<code>OutboxPollFilterProcessor.cs:42</code>). The poll query runs inside that span
           (<code>OutboxProcessor.cs:212</code>, named at <code>OutboxProcessor.cs:53</code>), so steady-state polling does not flood
           Application Insights. Real outbox work is untouched: each per-message <code>OutboxProcess</code> span is started
@@ -194,10 +195,10 @@
           (<code>OutboxProcessor.cs:327</code>), so it is never a child of the poll span.</p>
           </li>
           <li><p><strong>Dual exporters, either or both.</strong> <code>AddOpenTelemetryExporters</code> enables OTLP when
-          <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is present (<code>Extensions.cs:307</code>, the Aspire dashboard sets it) and
+          <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is present (<code>Extensions.cs:339</code>, the Aspire dashboard sets it) and
           Azure Monitor via <code>UseAzureMonitor</code> when <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> is present
-          (<code>Extensions.cs:315</code>, set by the cloud deployment). Both can be active at once
-          (<code>Extensions.cs:302</code>), so local development ships to the Aspire dashboard and production ships to
+          (<code>Extensions.cs:347</code>, set by the cloud deployment). Both can be active at once
+          (<code>Extensions.cs:334</code>), so local development ships to the Aspire dashboard and production ships to
           workspace-based Application Insights with no code change.</p>
           </li>
           </ul>
@@ -223,7 +224,7 @@
           <ul>
           <li><strong>Custom instrumentation carries a maintenance cost.</strong> The Aspire package has no reference to
           Application or Infrastructure by design, so the meter and activity-source names are duplicated as
-          literals (<code>Extensions.cs:151</code>, and the sync notes at <code>CqrsMetrics.cs:8</code> and
+          literals (<code>Extensions.cs:171</code>, and the sync notes at <code>CqrsMetrics.cs:8</code> and
           <code>OutboxPollFilterProcessor.cs:17</code>). A rename on one side silently stops export until the literal is
           updated. That is the price of the decoupled package graph.</li>
           <li><strong>Sampling trades trace completeness for cost.</strong> A sampled-out trace is simply gone; deep debugging
@@ -250,7 +251,7 @@
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/041-observability-and-telemetry.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/041-observability-and-telemetry.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
       </div>

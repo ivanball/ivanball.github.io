@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MMCA.Store — Architecture Scorecard · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Rubric: ../MMCA.Common/ArchitectureEvaluationCriteria.md • Date: 2026-07-17 • Two axes per category: Maturity (0-4, process/governance) and…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/governance/store-ArchitectureScorecard.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="MMCA.Store — Architecture Scorecard">
+  <meta property="og:description" content="Rubric: ../MMCA.Common/ArchitectureEvaluationCriteria.md • Date: 2026-07-17 • Two axes per category: Maturity (0-4, process/governance) and…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/governance/store-ArchitectureScorecard.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/governance/index.html">Architecture Governance</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">Store · Architecture Scorecard</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>Rubric, scorecards &amp; backlogs</summary>
+        <nav class="doc-nav" aria-label="Architecture Governance">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="adc-ArchitectureScorecard.html">ADC · Architecture Scorecard</a></li>
+        <li><a href="adc-RemediationBacklog.html">ADC · Architecture Remediation Backlog</a></li>
+        <li><a href="ArchitectureEvaluationCriteria.html">Architecture Evaluation Criteria</a></li>
+        <li><a href="common-ArchitectureScorecard.html">Common · Architecture Scorecard</a></li>
+        <li><a href="common-RemediationBacklog.html">Common · Architecture Remediation Backlog</a></li>
+        <li><a href="store-ArchitectureScorecard.html" aria-current="page">Store · Architecture Scorecard</a></li>
+        <li><a href="store-RemediationBacklog.html">Store · Architecture Remediation Backlog</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture governance</p>
+          <h1 id="mmcastore--architecture-scorecard">MMCA.Store — Architecture Scorecard</h1>
+          <blockquote>
+          <p><strong>Canonical, version-controlled scorecard for this repo</strong> — the single source of truth for MMCA.Store&#39;s architecture scores. This is Store&#39;s <strong>first in-repo governance artifact</strong> (previously its posture lived only in the workspace docs + memory). Scored against the rubric at <a href="ArchitectureEvaluationCriteria.html"><code>../MMCA.Common/ArchitectureEvaluationCriteria.md</code></a>; framework-wide facts in <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener"><code>../MMCA.Common/FACTS.md</code></a>. Remediation lives in <a href="store-RemediationBacklog.html"><code>RemediationBacklog.md</code></a>; the cross-repo comparison in <span class="doc-deadlink" title="Reference outside the published set"><code>../Docs/Architecture/CrossRepoComparison.md</code></span>.</p>
+          </blockquote>
+          <p><em>Rubric: <a href="ArchitectureEvaluationCriteria.html"><code>../MMCA.Common/ArchitectureEvaluationCriteria.md</code></a> • Date: 2026-07-17 • Two axes per category: <strong>Maturity</strong> (0-4, process/governance) and <strong>Implementation</strong> (0-10, substance/execution). Indices computed deterministically from the scores below. Verified against current source at HEAD <code>89e4a04</code> (clean tree); framework dependency pinned at <em><em>MMCA.Common.</em> v1.117.0</em>* (all 15 packages, lockstep, confirmed no divergence; ADR set 001-048 lives in MMCA.Common). <strong>What moved this cycle (2026-07-03 drift-plan execution, D1/D4/D5/D8/D9/D10):</strong> §21 Accessibility M3→4 and §28 Front-End Testing M3→4 (the Playwright + axe suite now <strong>gates the deploy</strong>: <code>e2e-gate</code> joined <code>deploy.yml</code>&#39;s <code>needs</code> after two consecutive fully green E2E runs, 28682334766 chromium 83/83 with firefox + webkit also green, confirmed by 28683063228), §12 Performance I7→8 (client Web Vitals are now measured in CI: <code>WebVitalsTests</code> writes LCP/CLS/TTFB/FCP artifacts per run), §23 Front-End Performance I6→8 (the public <code>CatalogBrowse</code> moved to server-side paging via <code>GetPagedAsync</code> + bounded <code>MobileInfiniteScrollList</code>, and cart enrichment now uses a targeted by-variant-id batch lookup instead of fetching the whole product list), and §32 Supply-Chain I7→8 (all three CI restores run <code>--locked-mode</code> and the suppress-aware vulnerability audit is now gating, D8/D9). The prior cycle&#39;s moves (2026-07-02 docs sweep: §16/§25/§20 M3→4, §27 scored M4/I7, §14 I6→9, §34 I7→9) are retained in the rows below. <strong>A same-day i18n completion sweep (2026-07-03, ADR-027 Decision 9) then lifted §27 Implementation 7→8</strong> (zero residual literals incl. the cart/checkout/Stripe snackbars, dual CI gates, MudBlazor chrome + nav localized; indices Implementation 80.3%→80.4%). <strong>A subsequent 2026-07-11 drift-convergence cycle (drift plan D1-D13, pin v1.113.0) moved six scores:</strong> §1 SOLID Implementation 8→9 (the ctor-dependency-ceiling gate <code>ConstructorDependencyCountTests</code> + <code>TimeProvider</code> injection, D9), §9 API Implementation 8→9 (the v2 <code>ServiceInfoController</code> + two deploy-gating Contract tests, D12), §24 Forms Maturity 3→4 (the CI-gated <code>FormsConventionTests</code>, D11), §28 Front-End Testing Implementation 6→8 (bUnit breadth grown to 214 facts across 40 files, D7), §29 Resilience Implementation 8→9 (the <code>dr-freshness</code> deploy gate + weekly <code>dr-drill</code> cron + <code>GracefulShutdownTests</code>, D3), and §21 Accessibility Maturity 4→3 with Implementation 7→8 (honest reconciliation to ADC&#39;s M3: 22 axe scans + the new screen-reader runbook, but no dated SR pass yet, D6). D2 (MI-SQL activation wiring) and D4 (cost-guard deploy gate) also landed, with no §17/§31 score move. Indices Maturity 94.4%→94.1%, Implementation 80.4%→82.5%. <strong>A 2026-07-16 full re-score (34 categories, two-pass with adversarial verification) moved three scores:</strong> §13 Observability Implementation 8→9 (both prior deductions closed: the SLO workbook is provisioned in IaC at <code>infra/main.bicep:274</code> and the per-alert <code>infra/OPERATIONS.md</code> runbook is in-repo; Maturity holds 3 because dashboards/runbooks are IaC/review-enforced, not CI-gated), and §18 UI Architecture + §19 State Management Maturity 3→4 (the sealed <code>UIArchitectureConventionTests</code> and <code>StateManagementConventionTests</code> subclasses of the shared v1.116.0 fitness bases run non-vacuously in the deploy-gating <code>MMCA.Store.CI.slnf</code> on every push and PR, the same mechanism that earned ADC its M4; their proposed Implementation bumps were adversarially rejected as enforcement gains mis-posted to the substance axis). The same re-score DECLINED the recorded maturity candidacies on §12 (k6 stays monthly/on-demand, not a merge gate) and §22 (firefox/webkit are still <code>continue-on-error</code> in <code>e2e.yml:71</code>, contrary to the backlog&#39;s promotion claim), and held the §20/§24/§27 impl candidacies. §17 Implementation 8→9 additionally banked on directly verified evidence: MI-SQL is active in production (repo variable <code>USE_MANAGED_IDENTITY_SQL=true</code> since 2026-07-12, activation deploy 29192048197 green), correcting the row&#39;s stale inert claim. Indices Maturity 94.1%→95.9%, Implementation 82.5%→83.0%. <strong>A same-day drift-analysis fold (2026-07-16, cross-repo ADC-vs-Store comparison, each move adversarially verified) moved two more scores:</strong> §23 Maturity 3→4 (the CWV budgets are hard assertions in the deploy-gating chromium <code>e2e-gate</code>, the identical evidence ADC&#39;s twentieth cycle credited; the earlier same-day hold at M3 had wrongly imported §12&#39;s k6-cadence reasoning) and §32 Implementation 8→9 (capability-level parity with ADC&#39;s I9: identical <code>--locked-mode</code>/audit/SBOM gating; the earlier FLAG reasoned from stale scorecard text, not capability). Doc corrections in the same fold: §16&#39;s narrated pin 1.113.0→1.116.0, §32&#39;s lock-file count 49→55, and the README gained the ADC-parity broker note (§33). Indices Maturity 95.9%→96.6%, Implementation 83.0%→83.3%. <strong>A 2026-07-17 full re-score (34 categories, two-pass with adversarial verification, pin v1.117.0) moved four scores:</strong> §5 Vertical Slice M3→4 and I7→8 (the sealed <code>SliceCohesionTests</code> subclass runs non-vacuously in the deploy-gating <code>MMCA.Store.CI.slnf</code>, the identical gate ADC credits at M4/I8; the layered-by-project hybrid stays a deliberate implementation-axis cap, no longer a maturity deduction), §13 Observability M3→4 (<code>ObservabilityConventionTests</code> machine-enforces the <code>sloAlertSpecs</code>-to-<code>OPERATIONS.md</code> pairing in the CI merge gate, closing exactly the &quot;not CI-gated&quot; reasoning that held M3), §22 Responsive M3→4 (the 2026-07-16 gate flip verified live: <code>continue-on-error</code> in <code>e2e.yml</code> is scoped to scheduled non-chromium runs only, so all three engines the <code>e2e-gate</code> invokes can fail a deploy), and §27 i18n I8→9 (the <code>PseudoLocalizationTests</code> candidacy granted: pseudo-loc sentinel, no-overflow, and en-US leak probes run over Store&#39;s own <code>/</code>, <code>/catalog</code>, and <code>/login</code> pages in the deploy-gating chromium <code>e2e-gate</code>). The narrated framework pin refreshed 1.116.0→1.117.0 throughout. Indices Maturity 96.6%→98.4%, Implementation 83.3%→83.6%.</em></p>
+          <h2 id="executive-summary">Executive summary</h2>
+          <p>MMCA.Store is a .NET 10.0 (LangVersion preview) DDD/Clean Architecture e-commerce system (Catalog, Sales, Identity modules; Stripe checkout) extracted into independently-hosted services behind a YARP gateway, collaborating via Result-over-the-wire gRPC and MassTransit integration events on the outbox pattern. It consumes the shared <code>MMCA.Common.*</code> framework at <strong>v1.117.0</strong> in lockstep with MMCA.ADC. <strong>Architecturally it is at ADC parity</strong> — and one prior assumption is corrected here: Store <strong>runs database-per-service</strong> (<code>Store_Catalog</code>/<code>Store_Sales</code>/<code>Store_Identity</code>, each with its own <code>dbo.OutboxMessages</code>; the legacy single <code>MMCAStore</code> DB is retained read-only as an archive/rollback only), not a single shared database. Its tactical depth (Clean Architecture, DDD, CQRS, the decorator pipeline, soft-delete/audit, RowVersion concurrency) is inherited framework substance, enforced by 23 NetArchTest fitness-test classes (shared <code>*TestsBase</code> subclasses from <code>MMCA.Common.Testing.Architecture</code> plus Store-local guards such as <code>DataResidencyTests</code>, <code>PiiConventionTests</code>, and <code>IntegrationEventContractTests</code>, ADR-015; the compile-time layer-guard MSBuild target is MMCA.Common-internal and does not run here).</p>
+          <p>The two axes are asymmetric: <strong>Maturity 98.4%</strong> vs <strong>Implementation 83.6%</strong>. Implementation is the weaker axis by ~15 points, a wider gap than ADC&#39;s. The maturity is high because Store inherits the framework&#39;s governed mechanisms and adds a strong operational floor (two-phase Bicep IaC, OIDC + Key Vault managed identity, a post-deploy smoke gate with auto-rollback, a drilled DR restore, a <code>cost-guard</code> surge-drift check, a k6 load test, and now a chromium E2E/axe deploy gate at ADC parity). The former §21/§28 gate gap and the §23 catalog fetch-all are closed this cycle, and the §27 residual unlocalized strings were closed by the same-day i18n completion sweep (I7→8; zero literals, dual CI gates); the former §18/§19 review-only maturity gap closed on 2026-07-16 (both are now CI-enforced by the shared convention fitness gates at M4), and the same-day drift-fold closed §23 (the deploy-gated CWV budget assertions credited at M4, ADC parity); the 2026-07-17 re-score then closed §5 (slice cohesion CI-gated, the hybrid kept as an implementation cap), §13 (the alert-to-runbook pairing gate), and §22 (the three-engine gate flip verified live), leaving §12 (k6 not a merge gate) and §21 (screen-reader pass pending) as the only below-4 maturity categories. §14&#39;s former coverage gap is closed: the deploy-gating floor is 51.6 measured on Store&#39;s own code (<code>+MMCA.Store.*;-*.Tests</code>, ~54% actual). Supply-chain (§32): the vulnerability gate is NuGetAudit + <code>TreatWarningsAsErrors</code> at restore plus the gating suppress-aware audit, the SBOM is a hard gate, and all three CI restores run <code>--locked-mode</code>.</p>
+          <p>Front-end security is the standout (§26, impl 9): access token in-memory, refresh token in an HttpOnly cookie (no localStorage), a hardened origin-pinned CSP, and runtime-config fetch (no secrets in the bundle), confirmed at ADC parity. No category is N/A: §27 Internationalization is scored (M4/I9 after the 2026-07-03 completion sweep and the 2026-07-17 pseudo-loc layout-tolerance grant) since the ADR-027 en-US + es localization shipped with its CI-gated translation-completeness fitness function, superseding ADR-011&#39;s single-locale exclusion; the sweep added the <code>LocalizedTextConventionTests</code> literal gate and removed every residual hard-coded string.</p>
+          <h2 id="scorecard">Scorecard</h2>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>#</th>
+          <th>Category</th>
+          <th>Weight</th>
+          <th>Maturity (0-4)</th>
+          <th>Impl (0-10)</th>
+          <th>Weighted (M·w / I·w)</th>
+          <th>Evidence / Notes</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>1</td>
+          <td>SOLID Principles</td>
+          <td>3</td>
+          <td>4</td>
+          <td>9</td>
+          <td>12/27</td>
+          <td>Narrow-interface ctor DI, OCP via state strategy (no type-switch); the constructor-dependency ceiling is machine-enforced by <code>ConstructorDependencyCountTests</code> (ceiling 7, <code>AuthenticationService</code> at the high-water mark, the rubric 8+-dependency red flag cleared, D7), and <code>TimeProvider</code> is injected over ambient <code>DateTime.UtcNow</code>. Evidence: <code>Tests/Architecture/MMCA.Store.Architecture.Tests/ConstructorDependencyCountTests.cs:14</code>; <code>AuthenticationService.cs:25</code>; <code>OrdersController.cs:36-47</code>; <code>Order.cs:43-53</code> (<code>FrozenDictionary&lt;OrderStatus,IOrderState&gt;</code>)</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>Design Patterns</td>
+          <td>2</td>
+          <td>4</td>
+          <td>9</td>
+          <td>8/18</td>
+          <td>Factory→Result, payment State machine, Saga (Stripe compensation), Specification, Decorator, Outbox, Repository/UoW — idiomatic, named. — <code>Order.cs:76-106,43-53</code>; <code>Orders/Saga/OrderCancelledSagaHandler.cs</code>; <code>Orders/Specifications/OrdersByCustomerSpecification.cs</code></td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td>Clean Architecture</td>
+          <td>3</td>
+          <td>4</td>
+          <td>9</td>
+          <td>12/27</td>
+          <td>NetArchTest-enforced layer rules; domain framework-pure. (The compile-time layer-guard MSBuild target is MMCA.Common-internal; it is not a Store-side gate.) Evidence: <code>StoreArchitectureMap.cs:14-43</code> + <code>LayerDependencyTests</code>/<code>DomainPurityTests</code>; <code>Order.cs:1-13</code> (imports only Common.Domain/Shared)</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td>Domain-Driven Design</td>
+          <td>3</td>
+          <td>4</td>
+          <td>9</td>
+          <td>12/27</td>
+          <td>Aggregate root, <code>Money</code> VO, by-id cross-aggregate refs, domain events, invariants, factory→Result, rich state behavior; identifier aliases. — <code>Order.cs</code> (<code>Money</code> :32, <code>OrderInvariants</code>, <code>OrderIdentifierType</code>)</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td>Vertical Slice Architecture</td>
+          <td>2</td>
+          <td>4</td>
+          <td>8</td>
+          <td>8/16</td>
+          <td>Cohesive command+handler+request+validator+mapper per operation; deliberate layered-by-project hybrid (cross-cutting in the pipeline). <strong>↑ Maturity 3→4 + Implementation 7→8 (2026-07-17):</strong> slice cohesion is machine-enforced pre-merge by <code>SliceCohesionTests</code> (sealed subclass of the shared non-vacuous <code>SliceCohesionTestsBase</code>, two real rule facts) in the deploy-gating <code>MMCA.Store.CI.slnf</code>, the identical gate ADC credits at M4/I8; the hybrid stays a deliberate implementation-axis cap (holds impl at 8, not a maturity deduction). Evidence: <code>Tests/Architecture/MMCA.Store.Architecture.Tests/SliceCohesionTests.cs:9</code>; <code>MMCA.Store.CI.slnf:52</code>; <code>Application/Orders/UseCases/Cancel/{CancelOrderCommand,CancelOrderHandler}.cs</code></td>
+          </tr>
+          <tr>
+          <td>6</td>
+          <td>CQRS &amp; Event-Driven</td>
+          <td>2</td>
+          <td>4</td>
+          <td>8</td>
+          <td>8/16</td>
+          <td>Command/query split, outbox persist-then-publish, idempotent inbox (<code>AddInboxMessages</code>), Stripe saga; one cross-service event flow (<code>ProductVariantChanged</code>) + a deliberate in-process <code>UserRegistered</code> domain event; the genuine outbox-to-broker-to-consumer round-trip is now covered by the non-gating nightly <code>MMCA.Store.CrossService.IntegrationTests</code> (Testcontainers RabbitMQ+SQL, D5). Evidence: <code>Sales.Service/Program.cs:168-169</code>; <code>IntegrationEventContractTests.cs</code>; <code>Tests/Integration/MMCA.Store.CrossService.IntegrationTests/</code></td>
+          </tr>
+          <tr>
+          <td>7</td>
+          <td>Microservices Readiness</td>
+          <td>3</td>
+          <td>4</td>
+          <td>8</td>
+          <td>12/24</td>
+          <td><strong>Database-per-service</strong> (corrected from the old single-DB assumption) + per-source outbox, async events + versioned gRPC, Polly resilience, extractable modules, 5 independently-built images. Minor: all per-service DBs share one physical SQL <em>server</em>. Evidence: <code>infra/main.bicep:396-418</code> (per-service DBs) + <code>:445-474</code> (Service Bus broker); <code>Sales.Service/Program.cs:156-157,168</code></td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td>Data Architecture</td>
+          <td>3</td>
+          <td>4</td>
+          <td>8</td>
+          <td>12/24</td>
+          <td>Per-aggregate tx, soft-delete + filtered indexes, central audit (Common), RowVersion concurrency, versioned per-service migrations with a model-drift CI gate, LTR backups. — <code>ConcurrencyConventionTests.cs</code> + <code>AddRowVersionToAllEntities</code>; <code>deploy.yml:86-99</code>; <code>main.bicep:383-394</code></td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td>API &amp; Contract Design</td>
+          <td>2</td>
+          <td>4</td>
+          <td>9</td>
+          <td>8/18</td>
+          <td>RFC 9457 Problem Details, header versioning, pagination, DTO decoupling (ADR-001), gRPC <code>.proto</code>, OpenAPI served non-prod, and a demonstrated v2 contract: <code>ServiceInfoController</code> carries <code>[ApiVersion(&quot;1.0&quot;, Deprecated)]</code> + <code>[ApiVersion(&quot;2.0&quot;)]</code>, backed by two deploy-gating contract guards (D12). Below 10: OpenAPI not exposed in prod (internal behind gateway); v2 demonstrated on one endpoint. Evidence: <code>Catalog.API/Controllers/ServiceInfoController.cs:18</code>; <code>Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/{ApiVersioningTests,OpenApiContractTests}.cs</code>; <code>OrdersController.cs:77,34,114</code>; <code>Sales.Service/Program.cs:102,193</code></td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td>Cross-Cutting Concerns</td>
+          <td>2</td>
+          <td>4</td>
+          <td>8</td>
+          <td>8/16</td>
+          <td>Pipeline decorators, typed <code>ValidateOnStart</code> options, CORS/versioning/rate-limit/output-cache/compression, shared Polly — none copy-pasted. — <code>Sales.Service/Program.cs:73-76,88-96,171</code></td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td>Security</td>
+          <td>3</td>
+          <td>4</td>
+          <td>8</td>
+          <td>12/24</td>
+          <td>RS256/JWKS (no shared secret), server-side resource authz (404-not-403), KV secrets via UAMI, EF parameterized, Stripe webhook-secret handling. — <code>main.bicep:475-528,457-460</code>; <code>Sales.Service/Program.cs:116-118</code>; <code>OrdersController.cs:35,143,190,291-317</code></td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td>Performance &amp; Scalability</td>
+          <td>2</td>
+          <td>3</td>
+          <td>8</td>
+          <td>6/16</td>
+          <td>Async throughout, projections/AsNoTracking/paging on hot paths, tiered cache (output + Redis), stateless scale-out, a real k6 load test, and client Web Vitals measured per E2E run (LCP/CLS/TTFB/FCP written as CI artifacts, D10). Evidence: <code>Tests/Load/k6/catalog-read-load.js</code> + <code>load-test.yml</code>; <code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/WebVitalsTests.cs</code> + <code>e2e.yml</code> (<code>WEB_VITALS_OUTPUT_DIR</code>); <code>OrdersController.cs:73,108</code></td>
+          </tr>
+          <tr>
+          <td>13</td>
+          <td>Observability &amp; Operability</td>
+          <td>2</td>
+          <td>4</td>
+          <td>9</td>
+          <td>8/18</td>
+          <td>OTel logs/traces/RED metrics via ServiceDefaults (incl. <code>MMCA.Common.Outbox</code>), <code>/health</code>+<code>/alive</code>+<code>/health/ready</code>, App Insights + 3 SLO alerts + action group + saved SLO workbook provisioned in IaC, per-alert operations runbook in-repo, correlation, poll-span noise control, CI-gated graceful shutdown. <strong>↑ Maturity 3→4 (2026-07-17):</strong> the alert-to-runbook pairing is now a CI-gated fitness function: <code>ObservabilityConventionTests</code> parses the embedded <code>infra/main.bicep</code> <code>sloAlertSpecs</code> and fails the merge gate on any alert without a severity-correct <code>OPERATIONS.md</code> section (3-spec non-vacuity floor), closing exactly the &quot;IaC/review-enforced, not CI-gated&quot; reasoning that held M3. Implementation 9 (2026-07-16: workbook + runbook deductions closed). Evidence: <code>Tests/Architecture/MMCA.Store.Architecture.Tests/ObservabilityConventionTests.cs:24,34</code>; <code>MMCA.Store.CI.slnf:52</code>; <code>main.bicep:204</code> (<code>sloAlertSpecs</code>), <code>:274</code> (workbook); <code>infra/OPERATIONS.md:16</code>; <code>Tests/Hosts/MMCA.Store.Gateway.Tests/GracefulShutdownTests.cs:15</code></td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td>Testability &amp; Test Strategy</td>
+          <td>3</td>
+          <td>4</td>
+          <td>9</td>
+          <td>12/27</td>
+          <td>Non-inverted pyramid + arch fitness + integration tier gating deploy; the unit-tier coverage floor is 51.6 measured on Store&#39;s own code (reportgenerator <code>+MMCA.Store.*;-*.Tests</code>, ~54% actual), the same self-filtered gate shape as ADC. A non-gating nightly real-broker round-trip tier (<code>MMCA.Store.CrossService.IntegrationTests</code>, Testcontainers RabbitMQ+SQL, <code>cross-service-tests.yml</code>) now covers the outbox-to-broker-to-consumer flow the in-process tests only approximate (D5). Held at 9 (not 10): the broker round-trip is non-gating nightly and the SQL integration suite runs only in CI. Evidence: <code>deploy.yml:69-99</code> (floor 51.6 at :86, self-filter at :84), <code>:147-215</code>; arch tests; <code>Common.Testing.E2E</code></td>
+          </tr>
+          <tr>
+          <td>15</td>
+          <td>Best Practices &amp; Code Quality</td>
+          <td>2</td>
+          <td>4</td>
+          <td>8</td>
+          <td>8/16</td>
+          <td>Five analyzers at error + TWAE + CPM; targeted vuln pin; consistent Result pattern. Evidence: <code>Directory.Packages.props:85-88,97</code> (the five analyzers), <code>:130</code> (targeted OpenTelemetry.Api vuln pin)</td>
+          </tr>
+          <tr>
+          <td>16</td>
+          <td>Maintainability &amp; Evolvability</td>
+          <td>2</td>
+          <td>4</td>
+          <td>8</td>
+          <td>8/16</td>
+          <td>Versioned framework contracts (Common 1.117.0, lockstep) with the lockstep invariant executable: <code>FrameworkVersionConsistencyTests</code> asserts every <code>MMCA.Common.*</code> pin shares one version and fails the build on a partial sweep, running in the CI merge gate. Consumes the shared arch-test package, current CLAUDE.md, extractable modules. Evidence: <code>Tests/Architecture/MMCA.Store.Architecture.Tests/FrameworkVersionConsistencyTests.cs</code>; <code>MMCA.Store.CI.slnf:52</code>; <code>Directory.Packages.props:8-19</code></td>
+          </tr>
+          <tr>
+          <td>17</td>
+          <td>DevOps &amp; Deployment</td>
+          <td>2</td>
+          <td>4</td>
+          <td>9</td>
+          <td>8/18</td>
+          <td>CI gates (build/analyzers/tests/coverage-floor/model-drift) then an integration gate then deploy with <strong>post-deploy smoke + auto-rollback</strong>; two-phase Bicep; OIDC managed identity; cost-guard/dr-drill/load-test workflows. <strong>↑ Implementation 8→9 (2026-07-16):</strong> MI-SQL is ACTIVE in production, not inert: the full <code>infra/SQL-MANAGED-IDENTITY.md</code> sequence completed 2026-07-12 (repo variable <code>USE_MANAGED_IDENTITY_SQL=true</code> set 2026-07-12, activation deploy run 29192048197 green with the full gate chain + smoke), so all three services authenticate passwordless via managed identity; the SQL password path remains only as the documented dual-auth rollback. Evidence: <code>deploy.yml:452-454,541-553</code> (MI-SQL wiring); <code>infra/SQL-MANAGED-IDENTITY.md</code>; repo vars <code>USE_MANAGED_IDENTITY_SQL</code>/<code>SQL_AAD_ADMIN_*</code> (verified 2026-07-16)</td>
+          </tr>
+          <tr>
+          <td>18</td>
+          <td>UI Architecture &amp; Components</td>
+          <td>3</td>
+          <td>4</td>
+          <td>8</td>
+          <td>12/24</td>
+          <td>Code-behind split, <code>@inherits DataGridListPageBase&lt;ProductDTO&gt;</code>, scoped cart service owns data/behavior, reuse of Common.UI primitives. <strong>↑ Maturity 3→4 (2026-07-16):</strong> the container/presentational conventions are machine-enforced pre-merge by <code>UIArchitectureConventionTests</code> (sealed subclass of the shared base, 400-line code-behind cap + 120-line inline <code>@code</code> cap, non-vacuous <code>MinimumCodeBehindFiles</code> guard; largest code-behind is 368 lines), running in the deploy-gating <code>MMCA.Store.CI.slnf</code> on push and PR, the same mechanism as ADC&#39;s M4. Implementation holds 8: minor inline-style logic in markup remains. Evidence: <code>Tests/Architecture/MMCA.Store.Architecture.Tests/UIArchitectureConventionTests.cs:11</code>; <code>StoreArchitectureMap.cs:29,37,45</code>; <code>MMCA.Store.CI.slnf:52</code>; <code>deploy.yml:59,429</code>; <code>ProductList.razor.cs:14</code>; <code>CartDrawer.razor:50</code></td>
+          </tr>
+          <tr>
+          <td>19</td>
+          <td>State Management &amp; Data Flow</td>
+          <td>3</td>
+          <td>4</td>
+          <td>8</td>
+          <td>12/24</td>
+          <td>Single source of truth, scoped (no static cross-user state), unidirectional flow with <code>OnChange</code>+<code>InvokeAsync(StateHasChanged)</code>+<code>Dispose</code>, single-flight token hydrate. <strong>↑ Maturity 3→4 (2026-07-16):</strong> both §19 red flags are machine-enforced pre-merge by <code>StateManagementConventionTests</code> (mutable-static-state reflection scan over the <code>Layer.Ui</code> assemblies with a non-vacuous guard, plus the singleton-<code>*StateService</code> source scan), in the deploy-gating <code>MMCA.Store.CI.slnf</code>; <code>CartStateService</code> is registered <code>TryAddScoped</code>, proving the rule the gate enforces. Implementation holds 8. Evidence: <code>Tests/Architecture/MMCA.Store.Architecture.Tests/StateManagementConventionTests.cs:12</code>; <code>Sales.UI/DependencyInjection.cs:35</code>; <code>MMCA.Store.CI.slnf:52</code>; <code>CartStateService.cs:38</code>; <code>CartButton.razor:33</code>; <code>ServerTokenStorageService.cs:44</code></td>
+          </tr>
+          <tr>
+          <td>20</td>
+          <td>Design System &amp; UI Consistency</td>
+          <td>2</td>
+          <td>4</td>
+          <td>7</td>
+          <td>8/14</td>
+          <td>MudBlazor + Common.UI theme/tokens used consistently, shared grid-paging wrapper; the brand-color token convention is now CI-enforced by <code>BrandColorTokenTests</code> (shipped <code>5fbd003</code>, guards both UI hosts&#39; home CSS against hard-coded brand hex). Minor: a few remaining inline <code>style=</code> values in cart/catalog markup hold impl at 7. Evidence: <code>App.razor:11</code>; <code>Tests/Architecture/MMCA.Store.Architecture.Tests/BrandColorTokenTests.cs</code>; <code>ProductList.razor:118</code></td>
+          </tr>
+          <tr>
+          <td>21</td>
+          <td>Accessibility (a11y)</td>
+          <td>3</td>
+          <td>3</td>
+          <td>8</td>
+          <td>9/24</td>
+          <td>Strong semantics/ARIA, stated WCAG 2.1 AA, <strong>22 axe scans</strong> over the public, shopper, and Catalog/Sales/Identity admin surfaces (broadened from 10, D6), and the axe suite <strong>gates the deploy</strong> (the chromium <code>e2e-gate</code> in <code>deploy.yml</code>&#39;s <code>needs</code>; nightly keeps the full matrix). Maturity is honestly 3, not 4 (corrected D6): the rubric pairs axe-in-CI with a recorded manual screen-reader pass, and the new <code>ACCESSIBILITY-SCREENREADER-PASS.md</code> runbook&#39;s results log is still empty, matching ADC&#39;s M3 on the same rubric. Implementation 8: the first deploy-gating E2E run with the broadened scans is pending. Evidence: <code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/AccessibilityTests.cs</code> (22 scans); <code>ACCESSIBILITY-SCREENREADER-PASS.md</code> (runbook, dated pass pending); <code>CartDrawer.razor:9,20,67</code>; <code>deploy.yml</code> (<code>e2e-gate</code> in deploy <code>needs</code>)</td>
+          </tr>
+          <tr>
+          <td>22</td>
+          <td>Responsive &amp; Cross-Browser</td>
+          <td>2</td>
+          <td>4</td>
+          <td>8</td>
+          <td>8/16</td>
+          <td>Fluid layouts, grid→mobile-card reflow, defined+Playwright-verified chromium/firefox/webkit matrix. <strong>↑ Maturity 3→4 (2026-07-17):</strong> the 2026-07-16 gate flip verified live: <code>continue-on-error</code> is scoped to <code>github.event_name == &#39;schedule&#39; &amp;&amp; matrix.browser != &#39;chromium&#39;</code>, the <code>e2e-gate</code> invokes all three engines, and it sits in <code>deploy.yml</code>&#39;s <code>needs</code>, so a firefox/webkit red blocks a deploy (nightly non-chromium legs stay advisory). Evidence: <code>e2e.yml:69,76</code>; <code>deploy.yml:315,429</code>; <code>ProductList.razor:24</code>; <code>CatalogBrowse.razor:86</code></td>
+          </tr>
+          <tr>
+          <td>23</td>
+          <td>Front-End Performance</td>
+          <td>2</td>
+          <td>4</td>
+          <td>8</td>
+          <td>8/16</td>
+          <td>Server paging/debounce/<code>@key</code>/output-cache on admin grids; the public <code>CatalogBrowse</code> uses server-side paging (<code>GetPagedAsync</code> + <code>MudPagination</code>, D4) and cart enrichment resolves names via the targeted by-variant-id batch lookup. <strong>↑ Maturity 3→4 (2026-07-16 drift-fold, adversarially verified):</strong> the Core Web Vitals budgets are HARD assertions (<code>WebVitalsTests.cs:76-79</code>, <code>Assert.True</code> per metric, no soft mode) running unfiltered inside the deploy-gating chromium <code>e2e-gate</code> (<code>deploy.yml:429</code> <code>needs</code>), the identical evidence shape ADC&#39;s twentieth cycle credited M4 for; the prior M3 wrongly imported §12&#39;s k6-cadence reasoning into a category whose own enforcement is per-deploy. Evidence: <code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/WebVitalsTests.cs:76-79</code>; <code>deploy.yml:311-315,429</code>; <code>CatalogBrowse.razor.cs</code>; <code>CartStateService.cs</code></td>
+          </tr>
+          <tr>
+          <td>24</td>
+          <td>Forms, Validation &amp; UX Safety</td>
+          <td>2</td>
+          <td>4</td>
+          <td>8</td>
+          <td>8/16</td>
+          <td>Unsaved-changes guard with current-state accessor (9 pages), double-submit blocked, all states designed, destructive confirm, abandoned-payment recovery. <strong>↑ Maturity 3→4 (D11):</strong> the four admin create forms&#39; guard/dirty/validated-<code>MudForm</code>/<code>Required</code> markers are machine-enforced by the CI-gated <code>FormsConventionTests</code> (<code>MinimumCreateForms=4</code>), matching ADC on the same evidence. Client validation is MudForm-level (not full FluentValidation parity), the impl 8→9 lever. Evidence: <code>Tests/Architecture/MMCA.Store.Architecture.Tests/FormsConventionTests.cs</code>; <code>MMCA.Store.CI.slnf:52</code>; <code>ProductCreate.razor:8,58</code>; <code>CartStateService.cs:232</code></td>
+          </tr>
+          <tr>
+          <td>25</td>
+          <td>Navigation &amp; Information Arch</td>
+          <td>2</td>
+          <td>4</td>
+          <td>8</td>
+          <td>8/16</td>
+          <td>Bookmarkable typed routes, server-enforced <code>[Authorize]</code>/<code>AuthorizeView</code> (not UI-only), 404 handled, breadcrumbs, SSR session-cookie so deep-links/F5 don&#39;t bounce; role-guard regression is CI-gated by the three per-module <code>*RouteAuthorizationTests</code> (commit <code>c4adff2</code>), and per-actor navigation is documented in <code>NavigationFlow.md</code>. Evidence: <code>ProductList.razor:3</code>; <code>CatalogRoutePaths</code>; <code>Tests/Modules/{Catalog,Sales,Identity}/MMCA.Store.*.UI.Tests/*RouteAuthorizationTests.cs</code> in <code>MMCA.Store.CI.slnf:39,45,51</code></td>
+          </tr>
+          <tr>
+          <td>26</td>
+          <td>Front-End Security</td>
+          <td>3</td>
+          <td>4</td>
+          <td>9</td>
+          <td>12/27</td>
+          <td>Access token in-memory, refresh token in HttpOnly cookie (no localStorage), hardened origin-pinned CSP (no <code>unsafe-inline</code> script-src in prod, frame-ancestors none), runtime <code>/client-config</code> fetch (no secrets in bundle), <code>UseAuthenticatedNoStore</code>. Evidence (implementation hoisted to Common in the v1.96.0 Move-to-Common wave, consumed byte-identically here): Common <code>MMCA.Common.UI.Web/Services/ServerTokenStorageService.cs</code>; Common <code>MMCA.Common.UI/Services/Auth/WasmTokenStorageService.cs</code>; Common <code>MMCA.Common.UI.Web/Security/BlazorCspPolicyProvider.cs</code></td>
+          </tr>
+          <tr>
+          <td>27</td>
+          <td>Internationalization (i18n)</td>
+          <td>1</td>
+          <td>4</td>
+          <td>9</td>
+          <td>4/9</td>
+          <td><strong>↑ Implementation 8→9 (2026-07-17): the layout-tolerance lever is realized on Store&#39;s own pages: <code>PseudoLocalizationTests</code> activates <code>qps-Ploc</code> via the production <code>/culture/set</code> cookie mechanism and asserts the <code>[!!</code> sentinel, the no-horizontal-overflow expression, and a per-page en-US leak probe over <code>/</code>, <code>/catalog</code>, and <code>/login</code>, riding the deploy-gating chromium <code>e2e-gate</code> (<code>Tests/E2E/MMCA.Store.E2E.Tests/Workflows/PseudoLocalizationTests.cs:57</code>). Prior: Implementation 7→8 (2026-07-03 i18n completion sweep, ADR-027 Decision 9); Maturity 4 holds with a second gate.</strong> Full ADR-027 adoption (supersedes ADR-011): en-US + es <code>.resx</code> pairs across all three module UIs, the API error resources, both StoreHome hosts, and the three UI modules&#39; nav items (30 base / 30 <code>.es</code> siblings; ~130 new key pairs on the sweep), <code>UseCommonRequestLocalization</code> + <code>MapCultureEndpoint</code> (<code>UI.Web/Program.cs:107,140</code>), per-module <code>AddErrorResources</code> (<code>Identity.Service/Program.cs:150</code>), <code>User.PreferredCulture</code> + <code>AddUserPreferences</code> migration. The prior deductions are ALL closed: zero hard-coded snackbars (35 sites to whole-sentence page keys, including the cart/checkout/Stripe strings; raw <code>{ex.Message}</code> never surfaces), the <code>ErrorMessages.Success</code> concatenation is gone (obsoleted upstream, all 28 sites swept), 33 literal breadcrumb labels localize from <code>Breadcrumb.*</code> keys built in <code>OnInitialized</code>, nav menus localize via <code>NavItem.TitleResource</code> + new module resx pairs, and MudBlazor built-in chrome localizes via the framework&#39;s <code>ResxMudLocalizer</code> (inherited). Maturity 4, now doubly gated in CI.slnf: <code>TranslationCompletenessTests</code> (floor raised 20→25) + the NEW <code>LocalizedTextConventionTests</code> (no hard-coded snackbar/title/<code>&lt;PageTitle&gt;</code>/breadcrumb/<code>NavItem</code> literal can ship; <code>MinimumScannedFiles=40</code>). Evidence: <code>Tests/Architecture/MMCA.Store.Architecture.Tests/{TranslationCompletenessTests.cs,LocalizedTextConventionTests.cs}</code>; <code>Sales.UI/.../CartDrawer.razor.cs</code> + <code>OrderDetail.razor.cs</code> (whole-sentence <code>Snackbar.*</code> keys); <code>CatalogUIModule.cs</code> (<code>TitleResource</code> + resx pair); verification: Store CI suite 1120/1120 green post-sweep</td>
+          </tr>
+          <tr>
+          <td>28</td>
+          <td>Front-End Testing &amp; Quality</td>
+          <td>3</td>
+          <td>4</td>
+          <td>8</td>
+          <td>12/24</td>
+          <td>bUnit <code>.UI.Tests</code> gate the deploy (CI.slnf), broad state-coverage component tests (loading/empty/error/edge), page-level render/parameter/event tests, shared <code>Common.Testing.E2E</code>, and the Playwright suite <strong>gates the deploy</strong> (chromium <code>e2e-gate</code>; firefox/webkit stay advisory on the nightly matrix). <strong>↑ Implementation 6→8 (D7):</strong> bUnit breadth grown to <strong>214 <code>[Fact]</code>/<code>[Theory]</code> across 40 files</strong> (Catalog 63 / Sales 126 / Identity 25), the full CI gate green at 1393/1393. Evidence: <code>Tests/Modules/{Catalog,Sales,Identity}/MMCA.Store.*.UI.Tests</code> (214 facts / 40 files); <code>deploy.yml</code> (<code>e2e-gate</code> in deploy <code>needs</code>); <code>e2e.yml</code> (<code>workflow_call</code> + browsers input)</td>
+          </tr>
+          <tr>
+          <td>29</td>
+          <td>Resilience &amp; Business Continuity</td>
+          <td>3</td>
+          <td>4</td>
+          <td>9</td>
+          <td>12/27</td>
+          <td>RTO/RPO per scenario, PITR(7d geo-redundant)+LTR, a <strong>drilled</strong> restore (recorded PASS 28.9 min), SLO alerts, post-deploy smoke then rollback, single-region risk explicitly accepted. <strong>Maturity 4 legitimately held (D3):</strong> a <code>dr-freshness</code> job is in <code>deploy.needs</code> and fails the deploy when the last successful <code>dr-drill</code> is stale, backed by a weekly <code>dr-drill.yml</code> cron; <strong>Implementation 8→9</strong> on the CI-gated <code>GracefulShutdownTests</code> in <code>MMCA.Store.Gateway.Tests</code> (closing the graceful-shutdown gap vs ADC). Honest note: the recorded drill narrative in <code>DISASTER-RECOVERY.md</code> dates to 2026-06-22, but the weekly <code>dr-drill.yml</code> cron has since run green (most recently 2026-07-13), so <code>dr-freshness</code> is satisfied. Evidence: <code>.github/workflows/deploy.yml</code> (<code>dr-freshness</code> in <code>deploy.needs</code>); <code>.github/workflows/dr-drill.yml:29</code> (weekly cron); <code>Tests/Hosts/MMCA.Store.Gateway.Tests/GracefulShutdownTests.cs</code>; <code>infra/DISASTER-RECOVERY.md:146-148</code></td>
+          </tr>
+          <tr>
+          <td>30</td>
+          <td>Compliance, Privacy &amp; Governance</td>
+          <td>2</td>
+          <td>4</td>
+          <td>8</td>
+          <td>8/16</td>
+          <td>Real erasure path (Delete+Anonymize in one UoW, ADR-005), data export, residency + PII enforced by fitness functions, auto-stamped audit fields. — <code>DeleteUserHandler.cs:43-69</code>; <code>Customer.cs:20</code>/<code>User.cs:17</code> (<code>IAnonymizable</code>); <code>DataResidencyTests.cs</code>; <code>PRIVACY.md:57-85</code></td>
+          </tr>
+          <tr>
+          <td>31</td>
+          <td>Cost Efficiency / FinOps</td>
+          <td>2</td>
+          <td>4</td>
+          <td>8</td>
+          <td>8/16</td>
+          <td>Right-sized Basic per-service DBs, automated surge-drift guard, IaC budget + alerts, telemetry span filtering, resource tags. — <code>cost-guard.yml</code>; <code>infra/main.bicep:80-86,271</code></td>
+          </tr>
+          <tr>
+          <td>32</td>
+          <td>Dependency &amp; Supply-Chain</td>
+          <td>2</td>
+          <td>4</td>
+          <td>9</td>
+          <td>8/18</td>
+          <td>Vulnerability auditing <strong>is</strong> CI-gated twice: NuGetAudit raises advisory warnings at restore and <code>TreatWarningsAsErrors</code> promotes them to errors (failing <code>build-and-test</code> and every Docker image build), and the <code>supply-chain</code> job&#39;s suppress-aware audit now <strong>gates</strong> (exit 1 on any non-suppressed advisory, D8); accepted advisories are the documented <code>NuGetAuditSuppress</code> set. Strong provenance: 55 committed <code>packages.lock.json</code> + CPM + lockstep Common + transitive MassTransit-v8 pin + <code>auditSources</code> config, and all three CI restores run <code>--locked-mode</code> so committed-lock drift fails the build (D9). The SBOM is a hard gate (<code>43d733f</code>); the license report stays report-only by design. <strong>↑ Implementation 8→9 (2026-07-16 drift-fold, adversarially verified):</strong> capability-level comparison found no §32 mechanism ADC&#39;s I9 has that Store lacks (identical <code>--locked-mode</code> restores at <code>deploy.yml:42,123,222</code>, identical gating audit/SBOM, byte-identical suppress/lock config); held below 10 by the same transitive-only MassTransit pin caveat as ADC. Evidence: <code>deploy.yml:42,123,222,133-162</code>; <code>Directory.Build.props:8-12,27,39</code>; <code>nuget.config</code></td>
+          </tr>
+          <tr>
+          <td>33</td>
+          <td>Developer Experience &amp; Inner Loop</td>
+          <td>2</td>
+          <td>4</td>
+          <td>8</td>
+          <td>8/16</td>
+          <td>Aspire one-command local stack (SQL/Redis/RabbitMQ/MailDev/Stripe), cross-repo <code>local.props</code>, fast CI slnf, editorconfig parity, local→Azure parity. — <code>CLAUDE.md:13-90</code>; <code>local.props.template</code>; <code>MMCA.Store.CI.slnf</code></td>
+          </tr>
+          <tr>
+          <td>34</td>
+          <td>Architecture Governance &amp; Docs</td>
+          <td>2</td>
+          <td>4</td>
+          <td>9</td>
+          <td>8/18</td>
+          <td>Exemplary <em>automated</em> conformance (23 arch fitness-test classes over shared bases + Store-local guards) + a thorough current CLAUDE.md + ADRs governed canonically in Common (range/count owned by <code>../MMCA.Common/FACTS.md</code>), completed by the in-repo two-axis scorecard + <code>RemediationBacklog.md</code> (the single per-repo ledger), both committed and kept current per release (the former impl-7 caveat is realized). Evidence: <code>Tests/Architecture/*</code> (StoreArchitectureMap, 23 test classes); <code>CLAUDE.md</code>; committed <code>ArchitectureScorecard.md</code> + <code>RemediationBacklog.md</code>; ADRs in MMCA.Common</td>
+          </tr>
+          </tbody></table></div>
+          <blockquote>
+          <p><strong>Weighted</strong> = Maturity·weight / Implementation·weight. <strong>Axis-gap finding:</strong> §21 Accessibility is honestly M3/I8 (the chromium axe gate earns Implementation 8; Maturity caps at 3 pending a recorded manual screen-reader pass, matching ADC, D6); §13 is the mirror case resolved this cycle (M4/I9 after the pairing gate shipped). The widest remaining M-over-I gap is §20 (M4/I7, residual inline styles).</p>
+          </blockquote>
+          <h2 id="indices">Indices</h2>
+          <ul>
+          <li><strong>Maturity index</strong> = Σ(maturity×weight) ÷ Σ(weight×4) = 315 ÷ 320 = <strong>98.4%</strong> (2026-07-17 re-score: §5 M3→4, §13 M3→4, and §22 M3→4, +2 each at weight 2, 309→315; only §12 and §21 remain at maturity 3)</li>
+          <li><strong>Implementation index</strong> = Σ(impl×weight) ÷ Σ(weight×10) = 669 ÷ 800 = <strong>83.6%</strong> (2026-07-17 re-score: §5 I7→8, +2 at weight 2, and §27 I8→9, +1 at weight 1, 666→669)</li>
+          <li><strong>Weaker axis:</strong> Implementation (execution quality), by ~15 points.</li>
+          <li><strong>No N/A categories:</strong> §27 joined the denominators this cycle (ADR-027 superseded ADR-011). <strong>§32 weight = 2</strong> (default; raised to 3 only for the published framework MMCA.Common).</li>
+          </ul>
+          <h2 id="top-5-strengths">Top 5 strengths</h2>
+          <ol>
+          <li><strong>Clean Architecture + DDD + CQRS depth, fitness-enforced</strong>: §3/§4 (impl 9): inherited framework substance, guarded by the shared NetArchTest suite (23 test classes, <code>StoreArchitectureMap.cs:14-43</code>).</li>
+          <li><strong>Full microservices parity</strong> — §7 (impl 8): database-per-service + per-service outbox + versioned gRPC + MassTransit broker + RS256/JWKS, extractable modules (<code>infra/main.bicep:396-418</code> per-service DBs, <code>:445-474</code> Service Bus). <em>(Corrects the prior &quot;single shared DB&quot; assumption.)</em></li>
+          <li><strong>Exemplary DevOps / operational floor</strong>: §17 (impl 9) / §31 / §12: two-phase Bicep, OIDC + Key Vault MI, passwordless MI-SQL active in prod (2026-07-12), post-deploy smoke gate with auto-rollback (<code>deploy.yml:461-518</code>), <code>cost-guard</code>/<code>dr-drill</code>/<code>load-test</code> workflows.</li>
+          <li><strong>Reference front-end security</strong> — §26 (impl 9): in-memory access token + HttpOnly refresh cookie (no localStorage), hardened origin-pinned CSP, runtime-config fetch (<code>ServerTokenStorageService.cs:10-13</code>, <code>BlazorCspPolicyProvider.cs:71</code>).</li>
+          <li><strong>Drilled DR + real erasure path</strong> (§29 impl 9 / §30 impl 8): recorded 28.9-min restore (<code>DISASTER-RECOVERY.md:146-148</code>), the <code>dr-freshness</code> deploy gate + weekly cron + CI-gated <code>GracefulShutdownTests</code>, <code>IAnonymizable</code> anonymize-in-place + export + residency/PII fitness functions.</li>
+          </ol>
+          <h2 id="top-5-risks">Top 5 risks</h2>
+          <ol>
+          <li><strong>Accessibility maturity is capped pending a human pass</strong>: §21 (mat 3, weight 3): the 22-scan axe suite gates the deploy (impl 8), but the rubric pairs axe-in-CI with a recorded manual screen-reader pass and the <code>ACCESSIBILITY-SCREENREADER-PASS.md</code> results log is still empty (matching ADC&#39;s M3).<ul>
+          <li><em>Remediation:</em> record a dated NVDA/VoiceOver pass in the runbook against the running app (needs a human; cannot be done headless). <em>Expected:</em> §21 mat 3→4.</li>
+          </ul>
+          </li>
+          <li><strong>Load evidence is capacity-planning cadence, not a merge gate</strong>: §12 (mat 3): the k6 suite is real with pass/fail thresholds and a <code>load-freshness</code> deploy gate, but the test itself runs monthly/on-demand, so a latency regression can merge and deploy inside the freshness window.<ul>
+          <li><em>Remediation:</em> right-size deliberately: either accept the monthly cadence as the recorded posture (matching ADC&#39;s accepted §12 M3) or add a cheap latency-regression smoke to the merge path. <em>Expected:</em> decision recorded either way; §12 mat 3→4 only with a gate.</li>
+          </ul>
+          </li>
+          <li><strong>Design-system residual inline styles</strong>: §20 (impl 7, the widest M-over-I gap): the token convention is CI-enforced (<code>BrandColorTokenTests</code>), but MudBlazor <code>Style=</code>/<code>CellStyle=</code> parameter values that CSS isolation cannot target without a DOM-changing wrapper remain in cart/catalog markup (<code>ProductList.razor:118</code>).<ul>
+          <li><em>Remediation:</em> move the residual values behind semantic classes via wrapper elements or theme tokens where feasible. <em>Expected:</em> §20 impl 7→8.</li>
+          </ul>
+          </li>
+          <li><strong>Client validation short of server parity</strong>: §24 (impl 8): the four create forms&#39; guard/dirty/validated-<code>MudForm</code> markers are CI-gated (<code>FormsConventionTests</code>, M4), but client validation stays MudForm-level rather than full FluentValidation parity with the server rules.<ul>
+          <li><em>Remediation:</em> mirror the remaining server-only rules client-side where they do not need the DB. <em>Expected:</em> §24 impl 8→9.</li>
+          </ul>
+          </li>
+          <li><strong>Concurrency seam residual [C→A]</strong>: the ADR-035 client half shipped (11 property-edit requests implement <code>IConcurrencyAware</code>, DTOs expose <code>RowVersion</code>, handlers call <code>SetOriginalRowVersion</code>, stale-token 409 integration-tested), but child-level entities (e.g. <code>ProductVariant</code> under <code>Product</code>) need a child-typed <code>SetOriginalRowVersion</code> overload in MMCA.Common before their edits get the same protection.<ul>
+          <li><em>Remediation:</em> add the aggregate-child overload in Common and sweep (lands in Common, both consumers in one pass). <em>Expected:</em> §8 evidence completes across child edits.</li>
+          </ul>
+          </li>
+          </ol>
+          <h2 id="cross-repo-comparison">Cross-repo comparison</h2>
+          <p>How Store relates to MMCA.Common (the framework) and MMCA.ADC (the sibling consumer) is maintained once, for all three repos, in <strong><span class="doc-deadlink" title="Reference outside the published set"><code>../Docs/Architecture/CrossRepoComparison.md</code></span></strong>.</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/governance/index.html">← Back to Architecture Governance</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/governance/store-ArchitectureScorecard.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

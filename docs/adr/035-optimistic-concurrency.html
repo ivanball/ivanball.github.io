@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ADR-035: Optimistic Concurrency via RowVersion Round-Trip · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-02).">
+  <meta name="description" content="Accepted (2026-07-02). Amended 2026-07-16: a child-entity overload of SetOriginalRowVersion was added (see Decision).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="article">
   <meta property="og:title" content="ADR-035: Optimistic Concurrency via RowVersion Round-Trip">
-  <meta property="og:description" content="Accepted (2026-07-02).">
+  <meta property="og:description" content="Accepted (2026-07-02). Amended 2026-07-16: a child-entity overload of SetOriginalRowVersion was added (see Decision).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 48 ADRs</summary>
+        <summary>All 49 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -113,6 +113,7 @@
         <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
         <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
           </ol>
         </nav>
       </details>
@@ -121,7 +122,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-035-optimistic-concurrency-via-rowversion-round-trip">ADR-035: Optimistic Concurrency via RowVersion Round-Trip</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-02).</p>
+          <p>Accepted (2026-07-02). Amended 2026-07-16: a child-entity overload of <code>SetOriginalRowVersion</code> was added (see Decision).</p>
           <h2 id="context">Context</h2>
           <p>Every mutable aggregate in the framework is edited through a load-modify-save handler: the update use
           case fetches the tracked entity, applies the request, and calls <code>SaveChangesAsync</code>. With one shared
@@ -158,6 +159,14 @@
           and no-ops when the value is null or empty. The update handler calls it right after loading the
           entity (before applying the request), so EF compares the client&#39;s token against the row&#39;s current
           token inside the UPDATE statement, atomically, with no read-then-check race.</li>
+          <li><strong>Child entities get the same protection through the <code>IRowVersioned</code> overload (2026-07-16
+          amendment).</strong> The original method is typed to the repository&#39;s aggregate root (<code>TEntity</code>), so a
+          child edit (e.g. a <code>ProductVariant</code> under a <code>Product</code>) could not receive the token. A second
+          overload, <code>SetOriginalRowVersion(IRowVersioned childEntity, byte[]? rowVersion)</code>, accepts any
+          tracked auditable entity (<code>AuditableBaseEntity&lt;TId&gt;</code> implements the new
+          <code>MMCA.Common.Domain.Interfaces.IRowVersioned</code>), stamping the child&#39;s original token with the same
+          null-or-empty no-op contract. Update handlers that mutate children through the aggregate&#39;s
+          repository call it per child after loading.</li>
           <li><strong>A conflict maps to <code>409 Conflict</code> at the edge.</strong> <code>DbUpdateConcurrencyException</code> is a
           <code>DbUpdateException</code>, and <code>DbUpdateExceptionHandler</code> translates any <code>DbUpdateException</code> into a
           <code>409 Conflict</code> RFC 9457 ProblemDetails, with a generic detail message so the database schema is not
@@ -223,7 +232,7 @@
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/035-optimistic-concurrency.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/035-optimistic-concurrency.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
       </div>

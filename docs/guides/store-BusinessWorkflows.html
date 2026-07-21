@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MMCA Business Workflow Analysis · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="---">
+  <link rel="canonical" href="https://ivanball.github.io/docs/guides/store-BusinessWorkflows.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="MMCA Business Workflow Analysis">
+  <meta property="og:description" content="---">
+  <meta property="og:url" content="https://ivanball.github.io/docs/guides/store-BusinessWorkflows.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/guides/index.html">Guides &amp; Specifications</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">Store · Business Workflow Analysis</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All guides</summary>
+        <nav class="doc-nav" aria-label="Guides &amp; Specifications">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="adc-ACCESSIBILITY-SCREENREADER-PASS.html">ADC · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="adc-IntegrationTestReworkPlan.html">ADC · Integration-Test Tier Rework Plan (RemediationBacklog #14)</a></li>
+        <li><a href="adc-NavigationFlow.html">ADC · Navigation Flow</a></li>
+        <li><a href="adc-specifications.html">ADC · Business Specifications</a></li>
+        <li><a href="common-ACCESSIBILITY.html">Common · Accessibility (rubric §21)</a></li>
+        <li><a href="common-COST.html">Common · Cost &amp; FinOps Notes (rubric §31)</a></li>
+        <li><a href="common-GETTING-STARTED.html">Common · Getting Started: Build a New App on MMCA.Common</a></li>
+        <li><a href="common-RESILIENCE.html">Common · Resilience &amp; Business Continuity (rubric §29)</a></li>
+        <li><a href="common-RESPONSIVE.html">Common · Responsive Design &amp; Cross-Browser Support (rubric §22)</a></li>
+        <li><a href="common-VERSIONING.html">Common · Versioning &amp; Breaking-Change Policy</a></li>
+        <li><a href="store-ACCESSIBILITY-SCREENREADER-PASS.html">Store · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="store-BusinessWorkflows.html" aria-current="page">Store · Business Workflow Analysis</a></li>
+        <li><a href="store-NavigationFlow.html">Store · Navigation Flow</a></li>
+        <li><a href="store-Specification.html">Store · Business Specification Document</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
+          <h1 id="mmca-business-workflow-analysis">MMCA Business Workflow Analysis</h1>
+          <h2 id="workflow-list-summary">Workflow List Summary</h2>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>#</th>
+          <th>Workflow</th>
+          <th>Entry Point</th>
+          <th>Module</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>1</td>
+          <td>User Registration</td>
+          <td><code>POST /auth/register</code></td>
+          <td>Identity</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>User Login</td>
+          <td><code>POST /auth/login</code></td>
+          <td>Identity</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td>Token Refresh</td>
+          <td><code>POST /auth/refresh</code></td>
+          <td>Identity</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td>Token Revocation</td>
+          <td><code>POST /auth/revoke</code></td>
+          <td>Identity</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td>Change Password</td>
+          <td><code>PUT /auth/password</code></td>
+          <td>Identity</td>
+          </tr>
+          <tr>
+          <td>6</td>
+          <td>Change Customer Name</td>
+          <td><code>PUT /customers/{id}/name</code></td>
+          <td>Identity</td>
+          </tr>
+          <tr>
+          <td>7</td>
+          <td>Change Customer Address</td>
+          <td><code>PUT /customers/{id}/address</code></td>
+          <td>Identity</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td>Change Customer Email</td>
+          <td><code>PUT /customers/{id}/email</code></td>
+          <td>Identity</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td>Create Customer</td>
+          <td><code>POST /customers</code></td>
+          <td>Identity</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td>Delete Customer</td>
+          <td><code>DELETE /customers/{id}</code></td>
+          <td>Identity</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td>Create Category</td>
+          <td><code>POST /categories</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td>Rename Category</td>
+          <td><code>PUT /categories/{id}/name</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>13</td>
+          <td>Assign Parent Category</td>
+          <td><code>PUT /categories/{id}/parentcategory</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>14</td>
+          <td>Delete Category</td>
+          <td><code>DELETE /categories/{id}</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>15</td>
+          <td>Create Product</td>
+          <td><code>POST /products</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>16</td>
+          <td>Rename Product</td>
+          <td><code>PUT /products/{id}/name</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>17</td>
+          <td>Change Product Description</td>
+          <td><code>PUT /products/{id}/description</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>18</td>
+          <td>Change Product Brand</td>
+          <td><code>PUT /products/{id}/brand</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>19</td>
+          <td>Assign Category to Product</td>
+          <td><code>PUT /products/{id}/category</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>20</td>
+          <td>Delete Product</td>
+          <td><code>DELETE /products/{id}</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>21</td>
+          <td>Add Product Variant</td>
+          <td><code>POST /products/{id}/productvariants</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>22</td>
+          <td>Remove Product Variant</td>
+          <td><code>DELETE /products/{id}/productvariants/{variantId}</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>23</td>
+          <td>Change Variant SKU</td>
+          <td><code>PUT /products/{id}/productvariants/{variantId}/sku</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>24</td>
+          <td>Change Variant Price</td>
+          <td><code>PUT /products/{id}/productvariants/{variantId}/price</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>25</td>
+          <td>Add Item to Cart</td>
+          <td><code>POST /shoppingcarts/{id}/shoppingcartitems</code></td>
+          <td>Sales</td>
+          </tr>
+          <tr>
+          <td>26</td>
+          <td>Change Cart Item Quantity</td>
+          <td><code>PUT /shoppingcarts/{id}/shoppingcartitems/{variantId}/quantity</code></td>
+          <td>Sales</td>
+          </tr>
+          <tr>
+          <td>27</td>
+          <td>Remove Cart Item</td>
+          <td><code>DELETE /shoppingcarts/{id}/shoppingcartitems/{variantId}</code></td>
+          <td>Sales</td>
+          </tr>
+          <tr>
+          <td>28</td>
+          <td>Clear Cart</td>
+          <td><code>PUT /shoppingcarts/{id}/clear</code></td>
+          <td>Sales</td>
+          </tr>
+          <tr>
+          <td>29</td>
+          <td>Checkout (Cart to Order)</td>
+          <td><code>PUT /shoppingcarts/{id}/checkout</code></td>
+          <td>Sales</td>
+          </tr>
+          <tr>
+          <td>30</td>
+          <td>Create Stripe Checkout Session</td>
+          <td><code>POST /orders/{id}/checkout</code></td>
+          <td>Sales</td>
+          </tr>
+          <tr>
+          <td>31</td>
+          <td>Stripe Payment Webhook</td>
+          <td><code>POST /payments/webhook</code></td>
+          <td>Sales</td>
+          </tr>
+          <tr>
+          <td>32</td>
+          <td>Manual Admin Payment</td>
+          <td><code>PUT /orders/{id}/pay</code></td>
+          <td>Sales</td>
+          </tr>
+          <tr>
+          <td>33</td>
+          <td>Deliver Order</td>
+          <td><code>PUT /orders/{id}/deliver</code></td>
+          <td>Sales</td>
+          </tr>
+          <tr>
+          <td>34</td>
+          <td>Cancel Order</td>
+          <td><code>PUT /orders/{id}/cancel</code></td>
+          <td>Sales</td>
+          </tr>
+          <tr>
+          <td>35</td>
+          <td>Increase Inventory</td>
+          <td><code>PUT /inventoryitems/{id}/increaseinventory</code></td>
+          <td>Sales</td>
+          </tr>
+          <tr>
+          <td>36</td>
+          <td>Decrease Inventory</td>
+          <td><code>PUT /inventoryitems/{id}/decreaseinventory</code></td>
+          <td>Sales</td>
+          </tr>
+          <tr>
+          <td>37</td>
+          <td>Set Inventory</td>
+          <td><code>PUT /inventoryitems/{id}/setinventory</code></td>
+          <td>Sales</td>
+          </tr>
+          </tbody></table></div>
+          <hr>
+          <h2 id="1-identity-module-workflows">1. Identity Module Workflows</h2>
+          <h3 id="11-user-registration">1.1 User Registration</h3>
+          <p><strong>Entry Point:</strong> <code>POST /auth/register</code> — <code>AuthController.RegisterAsync()</code> — AllowAnonymous</p>
+          <p><strong>Execution Path:</strong></p>
+          <pre class="doc-pre"><code>AuthController.RegisterAsync()
+            -&gt; AuthenticationService.RegisterAsync()
+              -&gt; Repository: check email uniqueness
+              -&gt; PasswordHasher.HashPassword() (PBKDF2-HMAC-SHA512, 600k iterations, per-user salt)
+              -&gt; User.Create() factory method
+              -&gt; Repository.AddAsync() + UnitOfWork.SaveChangesAsync()
+              -&gt; [Domain Event] UserRegisteredHandler
+                -&gt; Customer.Create() (creates linked customer profile)
+                -&gt; User.LinkCustomer(customerId)
+              -&gt; TokenService.GenerateTokens()</code></pre>
+          <p><strong>Business Steps:</strong></p>
+          <ol>
+          <li>Validate registration input (email, password, first name, last name, optional address)</li>
+          <li>Check email is not already registered</li>
+          <li>Hash password with PBKDF2-HMAC-SHA512 (600,000 iterations, per-user salt)</li>
+          <li>Create User aggregate (IsActive=true, Role=&quot;Customer&quot;)</li>
+          <li>Persist user — triggers <code>UserRegistered</code> domain event</li>
+          <li>Domain event handler creates Customer profile and links it to User</li>
+          <li>Generate access token (15 min, JWT with claims: sub, jti, iat, user_id, email, role, customer_id) + refresh token (7 days, 64-byte random)</li>
+          <li>Return authentication response with tokens</li>
+          </ol>
+          <p><strong>Decision Points:</strong></p>
+          <ul>
+          <li>Email already exists -&gt; Conflict error</li>
+          <li>Role=&quot;Admin&quot; -&gt; no Customer profile created; Role=&quot;Customer&quot; -&gt; Customer auto-created</li>
+          </ul>
+          <p><strong>State Changes:</strong></p>
+          <ul>
+          <li>Creates <code>User</code> (Active, with RefreshToken and RefreshTokenExpiry)</li>
+          <li>Creates <code>Customer</code> (linked via User.CustomerId)</li>
+          </ul>
+          <p><strong>Domain Events:</strong> <code>UserRegistered</code> -&gt; triggers <code>CustomerCreated</code></p>
+          <hr>
+          <h3 id="12-user-login">1.2 User Login</h3>
+          <p><strong>Entry Point:</strong> <code>POST /auth/login</code> — <code>AuthController.LoginAsync()</code> — AllowAnonymous</p>
+          <p><strong>Execution Path:</strong></p>
+          <pre class="doc-pre"><code>AuthController.LoginAsync()
+            -&gt; AuthenticationService.LoginAsync()
+              -&gt; Repository: find User by email
+              -&gt; PasswordHasher.VerifyPassword() (constant-time comparison)
+              -&gt; Check User.IsActive
+              -&gt; TokenService.GenerateTokens()
+              -&gt; Update User.RefreshToken + RefreshTokenExpiry
+              -&gt; UnitOfWork.SaveChangesAsync()</code></pre>
+          <p><strong>Business Steps:</strong></p>
+          <ol>
+          <li>Look up user by email</li>
+          <li>Verify password against stored hash+salt</li>
+          <li>Verify user is active</li>
+          <li>Generate new access + refresh tokens</li>
+          <li>Store refresh token on user entity</li>
+          <li>Return tokens</li>
+          </ol>
+          <p><strong>Decision Points:</strong></p>
+          <ul>
+          <li>Email not found -&gt; Unauthorized</li>
+          <li>Password mismatch -&gt; Unauthorized</li>
+          <li>User deactivated -&gt; Unauthorized</li>
+          </ul>
+          <p><strong>State Changes:</strong> <code>User.RefreshToken</code> and <code>User.RefreshTokenExpiry</code> updated</p>
+          <hr>
+          <h3 id="13-token-refresh">1.3 Token Refresh</h3>
+          <p><strong>Entry Point:</strong> <code>POST /auth/refresh</code> — AllowAnonymous</p>
+          <p><strong>Execution Path:</strong></p>
+          <pre class="doc-pre"><code>AuthController.RefreshAsync()
+            -&gt; TokenService.GetPrincipalFromExpiredToken() (validates structure, allows expired)
+            -&gt; Extract user_id claim -&gt; fetch User
+            -&gt; Validate RefreshToken matches + not expired + user active
+            -&gt; Generate new tokens -&gt; update User.RefreshToken
+            -&gt; SaveChangesAsync()</code></pre>
+          <p><strong>Decision Points:</strong></p>
+          <ul>
+          <li>Invalid/expired refresh token -&gt; Unauthorized</li>
+          <li>User deactivated -&gt; Unauthorized</li>
+          </ul>
+          <p><strong>State Changes:</strong> Refresh token rotated on User entity</p>
+          <hr>
+          <h3 id="14-token-revocation">1.4 Token Revocation</h3>
+          <p><strong>Entry Point:</strong> <code>POST /auth/revoke</code> — Requires Authorization</p>
+          <p><strong>Business Steps:</strong> Clears <code>User.RefreshToken</code> and <code>User.RefreshTokenExpiry</code> to null.</p>
+          <hr>
+          <h3 id="15-change-password">1.5 Change Password</h3>
+          <p><strong>Entry Point:</strong> <code>PUT /auth/password</code> — Requires Authorization</p>
+          <p><strong>Execution Path:</strong></p>
+          <pre class="doc-pre"><code>AuthController.ChangePasswordAsync()
+            -&gt; ChangePasswordHandler.Handle()
+              -&gt; Verify current password
+              -&gt; Hash new password
+              -&gt; User.ChangePassword() -&gt; publishes UserPasswordChanged
+              -&gt; SaveChangesAsync()</code></pre>
+          <p><strong>Decision Points:</strong> Current password incorrect -&gt; Bad Request</p>
+          <hr>
+          <h3 id="16-customer-profile-management">1.6 Customer Profile Management</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Workflow</th>
+          <th>Endpoint</th>
+          <th>Domain Method</th>
+          <th>Event</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Change Name</td>
+          <td><code>PUT /customers/{id}/name</code></td>
+          <td><code>Customer.ChangeName()</code></td>
+          <td><code>CustomerNameChanged</code></td>
+          </tr>
+          <tr>
+          <td>Change Address</td>
+          <td><code>PUT /customers/{id}/address</code></td>
+          <td><code>Customer.ChangeAddress()</code></td>
+          <td><code>CustomerAddressChanged</code></td>
+          </tr>
+          <tr>
+          <td>Change Email</td>
+          <td><code>PUT /customers/{id}/email</code></td>
+          <td><code>Customer.ChangeEmail()</code></td>
+          <td><code>CustomerEmailChanged</code></td>
+          </tr>
+          </tbody></table></div>
+          <p>Email change includes uniqueness check across customers.</p>
+          <h3 id="17-customer-crud-admin">1.7 Customer CRUD (Admin)</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Workflow</th>
+          <th>Endpoint</th>
+          <th>Auth</th>
+          <th>Notes</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Create Customer</td>
+          <td><code>POST /customers</code></td>
+          <td>Authenticated</td>
+          <td>Idempotent via <code>[Idempotent]</code> attribute</td>
+          </tr>
+          <tr>
+          <td>Delete Customer</td>
+          <td><code>DELETE /customers/{id}</code></td>
+          <td>Authenticated</td>
+          <td>Soft delete (IsDeleted=true), publishes <code>CustomerDeleted</code></td>
+          </tr>
+          <tr>
+          <td>Get Customer</td>
+          <td><code>GET /customers/{id}</code></td>
+          <td>Authenticated</td>
+          <td>Only GetById exposed; GetAll/Paged/Lookup not exposed</td>
+          </tr>
+          </tbody></table></div>
+          <hr>
+          <h2 id="2-catalog-module-workflows">2. Catalog Module Workflows</h2>
+          <h3 id="21-category-management">2.1 Category Management</h3>
+          <h4 id="create-category">Create Category</h4>
+          <p><strong>Entry Point:</strong> <code>POST /categories</code> — Admin only, <code>[Idempotent]</code></p>
+          <pre class="doc-pre"><code>CategoriesController.CreateAsync()
+            -&gt; CreateCategoryHandler
+              -&gt; CategoryCreateRequestValidator (name: required, max 255)
+              -&gt; Category.Create(id, name, parentCategoryId?) -&gt; publishes CategoryCreated
+              -&gt; Repository.AddAsync() + SaveChangesAsync()</code></pre>
+          <p><strong>Response:</strong> 201 Created with <code>CategoryDTO</code></p>
+          <h4 id="rename-category">Rename Category</h4>
+          <p><strong>Entry Point:</strong> <code>PUT /categories/{id}/name</code> — Admin only</p>
+          <pre class="doc-pre"><code>CategoriesController.RenameAsync()
+            -&gt; RenameCategoryHandler
+              -&gt; Validate name (max 255)
+              -&gt; Fetch category -&gt; category.Rename(name)
+              -&gt; Only updates if name differs (case-insensitive comparison)
+              -&gt; Publishes CategoryNameChanged if changed
+              -&gt; Cache invalidation</code></pre>
+          <h4 id="assign-parent-category">Assign Parent Category</h4>
+          <p><strong>Entry Point:</strong> <code>PUT /categories/{id}/parentcategory</code> — Admin only</p>
+          <p>Sets or clears <code>ParentCategoryId</code> to establish hierarchy. No domain event raised.</p>
+          <h4 id="delete-category">Delete Category</h4>
+          <p><strong>Entry Point:</strong> <code>DELETE /categories/{id}</code> — Admin only</p>
+          <p>Soft delete (<code>IsDeleted=true</code>). Publishes <code>CategoryDeleted</code>.</p>
+          <h4 id="query-endpoints">Query Endpoints</h4>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Endpoint</th>
+          <th>Auth</th>
+          <th>Notes</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>GET /categories</code></td>
+          <td>AllowAnonymous</td>
+          <td>Returns all categories (capped at MaxPageSize)</td>
+          </tr>
+          <tr>
+          <td><code>GET /categories/paged</code></td>
+          <td>AllowAnonymous</td>
+          <td>Paginated with filters, sorting, field projection</td>
+          </tr>
+          <tr>
+          <td><code>GET /categories/lookup</code></td>
+          <td>AllowAnonymous</td>
+          <td>Returns ID + name pairs for dropdowns</td>
+          </tr>
+          <tr>
+          <td><code>GET /categories/{id}</code></td>
+          <td>AllowAnonymous</td>
+          <td>Single category with optional FK/children includes</td>
+          </tr>
+          </tbody></table></div>
+          <hr>
+          <h3 id="22-product-management">2.2 Product Management</h3>
+          <h4 id="create-product">Create Product</h4>
+          <p><strong>Entry Point:</strong> <code>POST /products</code> — Admin only, <code>[Idempotent]</code></p>
+          <pre class="doc-pre"><code>ProductsController.CreateAsync()
+            -&gt; CreateProductHandler
+              -&gt; Validate: name (required, max 100), description (max 4000), brand (max 100, no whitespace if provided)
+              -&gt; Product.Create() factory -&gt; publishes ProductCreated
+              -&gt; Repository.AddAsync() + SaveChangesAsync()</code></pre>
+          <h4 id="update-operations">Update Operations</h4>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Workflow</th>
+          <th>Endpoint</th>
+          <th>Validation</th>
+          <th>Event</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Rename</td>
+          <td><code>PUT /products/{id}/name</code></td>
+          <td>Max 100, required</td>
+          <td><code>ProductNameChanged</code></td>
+          </tr>
+          <tr>
+          <td>Change Description</td>
+          <td><code>PUT /products/{id}/description</code></td>
+          <td>Max 4000, nullable</td>
+          <td>None</td>
+          </tr>
+          <tr>
+          <td>Change Brand</td>
+          <td><code>PUT /products/{id}/brand</code></td>
+          <td>Max 100, no whitespace</td>
+          <td>None</td>
+          </tr>
+          <tr>
+          <td>Assign Category</td>
+          <td><code>PUT /products/{id}/category</code></td>
+          <td>Nullable FK</td>
+          <td>None</td>
+          </tr>
+          </tbody></table></div>
+          <h4 id="delete-product">Delete Product</h4>
+          <p><strong>Entry Point:</strong> <code>DELETE /products/{id}</code> — Admin only. Soft delete, publishes <code>ProductDeleted</code>.</p>
+          <h4 id="query-endpoints-1">Query Endpoints</h4>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Endpoint</th>
+          <th>Auth</th>
+          <th>Notes</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>GET /products</code></td>
+          <td>AllowAnonymous</td>
+          <td>Returns all products (capped at MaxPageSize)</td>
+          </tr>
+          <tr>
+          <td><code>GET /products/paged</code></td>
+          <td>AllowAnonymous</td>
+          <td>Paginated with filters, sorting, field projection</td>
+          </tr>
+          <tr>
+          <td><code>GET /products/lookup</code></td>
+          <td>AllowAnonymous</td>
+          <td>Returns ID + name pairs for dropdowns</td>
+          </tr>
+          <tr>
+          <td><code>GET /products/{id}</code></td>
+          <td>AllowAnonymous</td>
+          <td>Single product with optional FK/children includes</td>
+          </tr>
+          </tbody></table></div>
+          <hr>
+          <h3 id="23-product-variant-management">2.3 Product Variant Management</h3>
+          <h4 id="add-product-variant">Add Product Variant</h4>
+          <p><strong>Entry Point:</strong> <code>POST /products/{id}/productvariants</code> — Admin only</p>
+          <pre class="doc-pre"><code>ProductVariantsController.CreateAsync()
+            -&gt; AddVariantHandler
+              -&gt; Validate: SKU (max 50), Price (positive Money)
+              -&gt; IProductVariantService.SkuExistsAsync() -&gt; global SKU uniqueness check
+              -&gt; Fetch Product with variants
+              -&gt; product.AddProductVariant(variantId, sku, price)
+                -&gt; ProductVariant.Create() validates price not negative
+                -&gt; Publishes ProductVariantAdded
+              -&gt; SaveChangesAsync()</code></pre>
+          <p><strong>Cross-Module:</strong> SKU uniqueness checked via <code>IProductVariantService</code></p>
+          <h4 id="change-variant-sku">Change Variant SKU</h4>
+          <p><strong>Entry Point:</strong> <code>PUT /products/{id}/productvariants/{variantId}/sku</code> — Admin only</p>
+          <p>SKU uniqueness verified globally (excluding current variant). Publishes <code>ProductVariantSkuChanged</code> if changed.</p>
+          <h4 id="change-variant-price">Change Variant Price</h4>
+          <p><strong>Entry Point:</strong> <code>PUT /products/{id}/productvariants/{variantId}/price</code> — Admin only</p>
+          <p>Price must be positive. Publishes <code>ProductVariantPriceChanged</code> if changed.</p>
+          <h4 id="remove-product-variant">Remove Product Variant</h4>
+          <p><strong>Entry Point:</strong> <code>DELETE /products/{id}/productvariants/{variantId}</code> — Admin only</p>
+          <p>Soft delete on variant. Publishes <code>ProductVariantRemoved</code>.</p>
+          <hr>
+          <h2 id="3-sales-module-workflows">3. Sales Module Workflows</h2>
+          <h3 id="31-shopping-cart">3.1 Shopping Cart</h3>
+          <h4 id="add-item-to-cart">Add Item to Cart</h4>
+          <p><strong>Entry Point:</strong> <code>POST /shoppingcarts/{customerId}/shoppingcartitems</code> — Authenticated (owner or admin via <code>OwnerOrAdminFilter</code>)</p>
+          <pre class="doc-pre"><code>ShoppingCartsController.CreateShoppingCartItemAsync()
+            -&gt; AddItemHandler
+              -&gt; Validate quantity &gt; 0
+              -&gt; IProductVariantService.ExistsAsync() [cross-module: Catalog]
+              -&gt; Fetch ShoppingCart by CustomerId
+              -&gt; If no cart exists -&gt; ShoppingCart.Create(customerId) -&gt; ShoppingCartCreated event
+              -&gt; If cart is CheckedOut -&gt; shoppingCart.Reactivate() (clears items, resets to Active)
+              -&gt; shoppingCart.AddShoppingCartItem(variantId, quantity)
+                -&gt; If item already in cart -&gt; IncreaseQuantity -&gt; ShoppingCartItemQuantityAdjusted
+                -&gt; If new item -&gt; ShoppingCartItem.Create() -&gt; ShoppingCartItemAdded
+              -&gt; SaveChangesAsync()</code></pre>
+          <p><strong>Decision Points:</strong></p>
+          <ul>
+          <li>Product variant doesn&#39;t exist -&gt; NotFound</li>
+          <li>Quantity not positive -&gt; Invariant error</li>
+          <li>Cart checked out -&gt; auto-reactivated (all old items cleared)</li>
+          </ul>
+          <h4 id="change-item-quantity">Change Item Quantity</h4>
+          <p><strong>Entry Point:</strong> <code>PUT /shoppingcarts/{id}/shoppingcartitems/{variantId}/quantity</code></p>
+          <p>Validates cart is Active, item exists, quantity &gt; 0. Publishes <code>ShoppingCartItemQuantityAdjusted</code>.</p>
+          <h4 id="remove-item">Remove Item</h4>
+          <p><strong>Entry Point:</strong> <code>DELETE /shoppingcarts/{id}/shoppingcartitems/{variantId}</code></p>
+          <p>Validates cart is Active. Soft-deletes item. Publishes <code>ShoppingCartItemRemoved</code>.</p>
+          <h4 id="clear-cart">Clear Cart</h4>
+          <p><strong>Entry Point:</strong> <code>PUT /shoppingcarts/{id}/clear</code></p>
+          <p>Deletes all items. Publishes <code>ShoppingCartCleared</code>.</p>
+          <h4 id="get-cart">Get Cart</h4>
+          <p><strong>Entry Point:</strong> <code>GET /shoppingcarts/{id}</code> — Authenticated + OwnerOrAdmin</p>
+          <p>Returns the customer&#39;s cart with optional children (items). Returns an empty DTO (not 404) if no cart exists (lazy cart pattern).</p>
+          <h4 id="shopping-cart-status-state-machine">Shopping Cart Status State Machine</h4>
+          <pre class="doc-pre"><code>Active --(MarkAsCheckedOut)--&gt; CheckedOut
+            ^                                |
+            +----(Reactivate on AddItem)-----+
+                  (clears all items)</code></pre>
+          <hr>
+          <h3 id="32-checkout-cart-to-order--primary-business-workflow">3.2 Checkout (Cart to Order) — Primary Business Workflow</h3>
+          <p><strong>Entry Point:</strong> <code>PUT /shoppingcarts/{customerId}/checkout</code> — Authenticated, marked <code>ITransactional</code> and <code>ICacheInvalidating</code></p>
+          <pre class="doc-pre"><code>ShoppingCartsController.CheckOutAsync()
+            -&gt; CheckOutHandler
+              -&gt; Fetch ShoppingCart with items
+              -&gt; Collect productVariantIds from cart items
+              -&gt; IProductVariantService.GetUnitPricesAsync(ids) [cross-module: Catalog]
+              -&gt; Fetch InventoryItems for all variants
+              -&gt; CheckOutDomainService.Execute():
+                  1. Validate cart not empty
+                  2. Validate inventory exists for all items
+                  3. For each item: inventoryItem.DecreaseInventory(quantity)
+                     -&gt; Validates sufficient stock
+                     -&gt; Publishes InventoryAdjusted
+                  4. Build order items (variant + price + quantity)
+                  5. Order.Create(customerId, items) -&gt; publishes OrderPlaced
+                  6. shoppingCart.MarkAsCheckedOut() -&gt; publishes ShoppingCartCheckedOut
+              -&gt; Repository.AddAsync(order)
+              -&gt; SaveChangesAsync()
+              -&gt; Return OrderDTO</code></pre>
+          <p><strong>Business Steps:</strong></p>
+          <ol>
+          <li>Validate cart exists and has items</li>
+          <li>Fetch current prices from Catalog module</li>
+          <li>Validate and decrement inventory for all items</li>
+          <li>Create Order aggregate with OrderLines (price snapshot at time of purchase)</li>
+          <li>Transition cart to CheckedOut status</li>
+          <li>Persist everything in a single transaction (<code>ITransactional</code>)</li>
+          </ol>
+          <p><strong>Decision Points:</strong></p>
+          <ul>
+          <li>Cart empty -&gt; Validation error</li>
+          <li>Product variant price not found -&gt; Error</li>
+          <li>Insufficient inventory -&gt; Invariant error</li>
+          <li>Inventory record missing -&gt; NotFound (specific missing variant ID reported)</li>
+          </ul>
+          <p><strong>State Changes:</strong></p>
+          <ul>
+          <li>Creates <code>Order</code> (status: PendingPayment) with <code>OrderLine</code> children</li>
+          <li>Decrements <code>InventoryItem.AvailableQuantity</code> for each item</li>
+          <li><code>ShoppingCart.Status</code> -&gt; CheckedOut</li>
+          </ul>
+          <p><strong>Domain Events:</strong> <code>OrderPlaced</code>, <code>InventoryAdjusted</code> (per item), <code>ShoppingCartCheckedOut</code></p>
+          <hr>
+          <h3 id="33-order-lifecycle">3.3 Order Lifecycle</h3>
+          <h4 id="order-status-state-machine">Order Status State Machine</h4>
+          <pre class="doc-pre"><code>                    +------------------------------------------+
+                              |                                          |
+                              v                                          |
+          PendingPayment --&gt; PaymentInitiated --&gt; Paid -----------&gt; Delivered
+              |                    |               ^
+              |                    |               |
+              |                    v        (MarkAsPaidManually)
+              |              PaymentFailed --------+
+              |                    |
+              |                    v (retry)
+              |              PaymentInitiated
+              |                    |
+              v                    v
+           Cancelled &lt;------- Cancelled
+          (from PendingPayment, PaymentInitiated, or PaymentFailed)</code></pre>
+          <p><strong>Terminal States:</strong> Cancelled, Delivered</p>
+          <h4 id="create-stripe-checkout-session">Create Stripe Checkout Session</h4>
+          <p><strong>Entry Point:</strong> <code>POST /orders/{id}/checkout</code> — Authenticated (owner or admin)</p>
+          <pre class="doc-pre"><code>OrdersController.CreateCheckoutSessionAsync()
+            -&gt; CreateCheckoutSessionHandler
+              -&gt; Fetch Order with OrderLines
+              -&gt; IPaymentService.CreateCheckoutSessionAsync()
+                -&gt; StripePaymentService creates Stripe Checkout Session
+                -&gt; Converts Money to smallest currency unit (amount * 100)
+                -&gt; Sets success/cancel URIs, stores orderId in metadata
+                -&gt; Returns sessionId + checkoutUri
+              -&gt; order.InitiatePayment(sessionId)
+                -&gt; Validates status is PendingPayment or PaymentFailed
+                -&gt; Validates order not empty
+                -&gt; Sets StripeSessionId, status -&gt; PaymentInitiated
+                -&gt; Publishes OrderPaymentInitiated
+              -&gt; SaveChangesAsync()
+              -&gt; Return sessionId + checkoutUri</code></pre>
+          <p><strong>External Interaction:</strong> Stripe API — creates payment session with order line items</p>
+          <h4 id="stripe-payment-webhook">Stripe Payment Webhook</h4>
+          <p><strong>Entry Point:</strong> <code>POST /payments/webhook</code> — AllowAnonymous, <code>ITransactional</code>, <code>ICacheInvalidating</code></p>
+          <pre class="doc-pre"><code>PaymentsController.HandleWebhookAsync()
+            -&gt; ProcessPaymentWebhookHandler
+              -&gt; IPaymentService.ParseWebhookEvent() (Stripe signature verification)
+              -&gt; Route by event type:
+          
+                checkout.session.completed:
+                  -&gt; Find Order by StripeSessionId
+                  -&gt; Idempotent: if already Paid, return success
+                  -&gt; order.MarkAsPaid(paymentIntentId)
+                  -&gt; Status -&gt; Paid, publishes OrderPaid
+          
+                checkout.session.expired / payment_intent.payment_failed:
+                  -&gt; Find Order by StripeSessionId
+                  -&gt; Idempotent: if already PaymentFailed or Cancelled, return success
+                  -&gt; order.MarkAsPaymentFailed()
+                  -&gt; Status -&gt; PaymentFailed, publishes OrderPaymentFailed
+          
+                Other events: silently ignored (returns success)</code></pre>
+          <p><strong>Idempotency:</strong> Already-paid or already-failed orders return success without modification.</p>
+          <p><strong>Controller behavior:</strong> Returns 400 only for signature verification failures; returns 200 for all other cases (including handler errors) to prevent Stripe retries.</p>
+          <h4 id="manual-admin-payment">Manual Admin Payment</h4>
+          <p><strong>Entry Point:</strong> <code>PUT /orders/{id}/pay</code> — Admin only</p>
+          <p>Validates status allows manual payment (PendingPayment, PaymentInitiated, or PaymentFailed). Sets <code>StripePaymentIntentId = &quot;manual-admin-override&quot;</code>, status -&gt; Paid. Publishes <code>OrderPaid</code>.</p>
+          <h4 id="deliver-order">Deliver Order</h4>
+          <p><strong>Entry Point:</strong> <code>PUT /orders/{id}/deliver</code> — Admin only</p>
+          <p>Validates status is Paid. Status -&gt; Delivered. Publishes <code>OrderDelivered</code>.</p>
+          <h4 id="cancel-order">Cancel Order</h4>
+          <p><strong>Entry Point:</strong> <code>PUT /orders/{id}/cancel</code> — Owner or Admin</p>
+          <pre class="doc-pre"><code>OrdersController.CancelAsync()
+            -&gt; CancelOrderHandler
+              -&gt; Fetch Order with OrderLines
+              -&gt; order.MarkAsCancelled()
+                -&gt; Validates status is PendingPayment, PaymentInitiated, or PaymentFailed
+                -&gt; Status -&gt; Cancelled, publishes OrderCancelled
+              -&gt; For each OrderLine:
+                -&gt; IncreaseInventoryHandler restores stock
+                -&gt; Publishes InventoryAdjusted per item
+              -&gt; SaveChangesAsync()</code></pre>
+          <p><strong>Inventory Impact:</strong> All reserved inventory is restored on cancellation.</p>
+          <h4 id="order-query-endpoints">Order Query Endpoints</h4>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Endpoint</th>
+          <th>Auth</th>
+          <th>Notes</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>GET /orders</code></td>
+          <td>Authenticated</td>
+          <td>Customers see only own orders (OrdersByCustomerSpecification); admins see all</td>
+          </tr>
+          <tr>
+          <td><code>GET /orders/paged</code></td>
+          <td>Authenticated</td>
+          <td>Paginated with same ownership filter</td>
+          </tr>
+          <tr>
+          <td><code>GET /orders/{id}</code></td>
+          <td>Authenticated</td>
+          <td>Single order with optional includes</td>
+          </tr>
+          </tbody></table></div>
+          <hr>
+          <h3 id="34-inventory-management">3.4 Inventory Management</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Workflow</th>
+          <th>Endpoint</th>
+          <th>Auth</th>
+          <th>Behavior</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Increase</td>
+          <td><code>PUT /inventoryitems/{id}/increaseinventory</code></td>
+          <td>Admin</td>
+          <td>Adds quantity, validates &gt; 0</td>
+          </tr>
+          <tr>
+          <td>Decrease</td>
+          <td><code>PUT /inventoryitems/{id}/decreaseinventory</code></td>
+          <td>Admin</td>
+          <td>Subtracts, validates sufficient stock</td>
+          </tr>
+          <tr>
+          <td>Set</td>
+          <td><code>PUT /inventoryitems/{id}/setinventory</code></td>
+          <td>Admin</td>
+          <td>Absolute set (creates if not exists)</td>
+          </tr>
+          <tr>
+          <td>Get By ID</td>
+          <td><code>GET /inventoryitems/{id}</code></td>
+          <td>Admin</td>
+          <td>Single inventory item</td>
+          </tr>
+          </tbody></table></div>
+          <p>All mutation operations validate product variant exists via <code>IProductVariantService.ExistsAsync()</code> and publish <code>InventoryAdjusted</code> events when quantity changes.</p>
+          <p><strong>Note:</strong> GetAll, GetPaged, and Lookup endpoints are not exposed on the InventoryItems controller (only GetById is overridden).</p>
+          <hr>
+          <h2 id="4-ui-workflows">4. UI Workflows</h2>
+          <h3 id="41-customer-shopping-experience-ui-side">4.1 Customer Shopping Experience (UI-Side)</h3>
+          <p>The UI provides a complete shopping experience through the CartDrawer component and Blazor pages.</p>
+          <h4 id="cart-drawer-sole-cart-interface">Cart Drawer (Sole Cart Interface)</h4>
+          <p>The CartDrawer is the only cart UI — there is no dedicated cart page. It is a 380px right-side temporary drawer accessible from any page via the cart icon in the top app bar.</p>
+          <p><strong>Features:</strong></p>
+          <ul>
+          <li>View cart items with product name, SKU, and quantity</li>
+          <li>Quantity +/- controls per item (when cart is Active)</li>
+          <li>Remove individual items (when cart is Active)</li>
+          <li>Clear all items</li>
+          <li>Checkout &amp; Pay (creates order + Stripe session, redirects to payment)</li>
+          <li>&quot;Checked Out&quot; chip display when cart is not Active</li>
+          <li>Read-only quantity display when cart is CheckedOut</li>
+          <li>&quot;Continue Shopping&quot; navigation to catalog</li>
+          <li>Empty cart state with &quot;Browse Products&quot; link</li>
+          </ul>
+          <p><strong>State Management:</strong> <code>ICartStateService</code> singleton manages cart state centrally — all cart operations go through this service which refreshes the cart DTO after each mutation and notifies subscribers via <code>OnChange</code> event. Cart items are enriched with product names and SKUs from the Catalog API.</p>
+          <h4 id="catalog-browse--product-detail">Catalog Browse &amp; Product Detail</h4>
+          <ul>
+          <li><code>/catalog</code> — Product grid with name search, category filter, name/newest sort, quick &quot;Add to Cart&quot; per variant</li>
+          <li><code>/catalog/{id}</code> — Product detail with breadcrumbs, variant list, quantity selector, &quot;Add to Cart&quot; button, &quot;Buy Now&quot; (direct Stripe checkout)</li>
+          </ul>
+          <h4 id="order-management">Order Management</h4>
+          <ul>
+          <li><code>/orders</code> — MudDataGrid listing orders with ID, customer, total, status chips, item count</li>
+          <li><code>/orders/{id}</code> — Two-column layout: order summary (status, total, payment/delivery actions) + order lines</li>
+          </ul>
+          <h3 id="42-admin-ui-workflows">4.2 Admin UI Workflows</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Page</th>
+          <th>Route</th>
+          <th>Purpose</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Categories</td>
+          <td><code>/categories</code></td>
+          <td>MudDataGrid: CRUD, search, pagination</td>
+          </tr>
+          <tr>
+          <td>Category Create</td>
+          <td><code>/categories/create</code></td>
+          <td>Form: name, parent category select</td>
+          </tr>
+          <tr>
+          <td>Category Detail</td>
+          <td><code>/categories/{id}</code></td>
+          <td>View/edit mode, parent link, product list</td>
+          </tr>
+          <tr>
+          <td>Products</td>
+          <td><code>/products</code></td>
+          <td>MudDataGrid: name, brand, category, variants</td>
+          </tr>
+          <tr>
+          <td>Product Create</td>
+          <td><code>/products/create</code></td>
+          <td>Form: name, description, brand, category</td>
+          </tr>
+          <tr>
+          <td>Product Detail</td>
+          <td><code>/products/{id}</code></td>
+          <td>View/edit product, inline variant editor (add/edit/delete)</td>
+          </tr>
+          <tr>
+          <td>Inventory</td>
+          <td><code>/inventory</code></td>
+          <td>MudDataGrid: product name, SKU, quantity, in-stock</td>
+          </tr>
+          <tr>
+          <td>Inventory Create</td>
+          <td><code>/inventory/create</code></td>
+          <td>Initialize new inventory item</td>
+          </tr>
+          <tr>
+          <td>Inventory Detail</td>
+          <td><code>/inventory/{id}</code></td>
+          <td>Edit inventory quantity</td>
+          </tr>
+          <tr>
+          <td>Shopping Carts</td>
+          <td><code>/shoppingcarts</code></td>
+          <td>MudDataGrid: customer, items count, status</td>
+          </tr>
+          <tr>
+          <td>Cart Detail</td>
+          <td><code>/shoppingcarts/{id}</code></td>
+          <td>Admin cart view with add/remove/clear/checkout</td>
+          </tr>
+          <tr>
+          <td>Customers</td>
+          <td><code>/customers</code></td>
+          <td>MudDataGrid: name, email, delete</td>
+          </tr>
+          <tr>
+          <td>Customer Create</td>
+          <td><code>/customers/create</code></td>
+          <td>Customer creation form</td>
+          </tr>
+          <tr>
+          <td>Customer Detail</td>
+          <td><code>/customers/{id}</code></td>
+          <td>Customer view/edit</td>
+          </tr>
+          </tbody></table></div>
+          <h3 id="43-user-profile--auth">4.3 User Profile &amp; Auth</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Page</th>
+          <th>Route</th>
+          <th>Purpose</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Login</td>
+          <td><code>/login</code></td>
+          <td>Email/password form, link to register</td>
+          </tr>
+          <tr>
+          <td>Register</td>
+          <td><code>/register</code></td>
+          <td>Name, email, password, optional address</td>
+          </tr>
+          <tr>
+          <td>Profile</td>
+          <td><code>/profile</code></td>
+          <td>Edit name, address, change password</td>
+          </tr>
+          </tbody></table></div>
+          <h3 id="44-navigation-structure">4.4 Navigation Structure</h3>
+          <p><strong>Sidebar Navigation</strong> (role-based, dynamically populated from <code>IUIModule</code> registrations):</p>
+          <p><strong>Customer:</strong></p>
+          <ul>
+          <li>Home (<code>/</code>)</li>
+          <li>Shop (<code>/catalog</code>)</li>
+          <li>My Orders (<code>/orders</code>)</li>
+          <li>My Profile (<code>/profile</code>)</li>
+          </ul>
+          <p><strong>Admin:</strong></p>
+          <ul>
+          <li>Home (<code>/</code>)</li>
+          <li>Categories (<code>/categories</code>)</li>
+          <li>Products (<code>/products</code>)</li>
+          <li>Inventory (<code>/inventory</code>)</li>
+          <li>Shopping Carts (<code>/shoppingcarts</code>)</li>
+          <li>Orders (<code>/orders</code>)</li>
+          <li>Customers (<code>/customers</code>)</li>
+          <li>My Profile (<code>/profile</code>)</li>
+          </ul>
+          <p><strong>Top App Bar:</strong></p>
+          <ul>
+          <li>Shopping cart icon with badge (authenticated, opens CartDrawer)</li>
+          <li>User email display</li>
+          <li>Logout button (authenticated)</li>
+          <li>Login / Register buttons (anonymous)</li>
+          </ul>
+          <hr>
+          <h2 id="5-cross-module-interactions">5. Cross-Module Interactions</h2>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>From -&gt; To</th>
+          <th>Interface</th>
+          <th>Methods Used</th>
+          <th>Context</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Sales -&gt; Catalog</td>
+          <td><code>IProductVariantService</code></td>
+          <td><code>ExistsAsync()</code></td>
+          <td>Cart item validation, inventory creation</td>
+          </tr>
+          <tr>
+          <td>Sales -&gt; Catalog</td>
+          <td><code>IProductVariantService</code></td>
+          <td><code>GetUnitPricesAsync()</code></td>
+          <td>Checkout pricing</td>
+          </tr>
+          <tr>
+          <td>Sales -&gt; Catalog</td>
+          <td><code>IProductVariantService</code></td>
+          <td><code>SkuExistsAsync()</code></td>
+          <td>SKU uniqueness (Catalog internal)</td>
+          </tr>
+          <tr>
+          <td>Sales -&gt; Catalog</td>
+          <td><code>IProductVariantService</code></td>
+          <td><code>GetIdBySkuAsync()</code></td>
+          <td>Seed data inventory setup</td>
+          </tr>
+          <tr>
+          <td>Identity (event)</td>
+          <td>Domain Event</td>
+          <td><code>UserRegisteredHandler</code></td>
+          <td>Auto-creates Customer on registration</td>
+          </tr>
+          </tbody></table></div>
+          <p><strong>Module dependency:</strong> Sales declares a hard dependency on Catalog (<code>RequiresDependencies = true</code>). When Catalog is disabled, a <code>DisabledProductVariantService</code> stub is registered and Sales will fail to start.</p>
+          <hr>
+          <h2 id="6-external-interactions">6. External Interactions</h2>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>System</th>
+          <th>Purpose</th>
+          <th>Integration Point</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><strong>Stripe</strong></td>
+          <td>Payment processing</td>
+          <td><code>StripePaymentService</code> — creates checkout sessions, handles webhooks</td>
+          </tr>
+          <tr>
+          <td><strong>SQL Server</strong></td>
+          <td>Primary persistence</td>
+          <td>Via EF Core + Aspire container orchestration</td>
+          </tr>
+          <tr>
+          <td><strong>SQLite / Cosmos DB</strong></td>
+          <td>Alternative persistence</td>
+          <td>Configurable via <code>IDbContextFactory</code> strategy</td>
+          </tr>
+          <tr>
+          <td><strong>SMTP</strong></td>
+          <td>Email infrastructure</td>
+          <td><code>SmtpEmailSender</code> — infrastructure exists but no domain event handlers trigger emails</td>
+          </tr>
+          </tbody></table></div>
+          <hr>
+          <h2 id="7-cross-cutting-concerns-participating-in-workflows">7. Cross-Cutting Concerns Participating in Workflows</h2>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Concern</th>
+          <th>Implementation</th>
+          <th>Impact</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><strong>Transactions</strong></td>
+          <td><code>ITransactional</code> marker -&gt; <code>TransactionalCommandDecorator</code> wraps in DB transaction</td>
+          <td>Checkout, webhook processing</td>
+          </tr>
+          <tr>
+          <td><strong>Cache Invalidation</strong></td>
+          <td><code>ICacheInvalidating</code> marker -&gt; <code>CachingCommandDecorator</code> clears cache by prefix</td>
+          <td>All mutation commands</td>
+          </tr>
+          <tr>
+          <td><strong>Idempotency</strong></td>
+          <td><code>[Idempotent]</code> attribute -&gt; <code>IdempotencyFilter</code> caches response by <code>Idempotency-Key</code> header for 24h with per-key locking</td>
+          <td>All Create (POST) endpoints</td>
+          </tr>
+          <tr>
+          <td><strong>Authorization</strong></td>
+          <td><code>OwnerOrAdminFilter</code> on cart/order endpoints</td>
+          <td>Customers access only own data</td>
+          </tr>
+          <tr>
+          <td><strong>Rate Limiting</strong></td>
+          <td>FixedWindow: 100 req/min, queue 2, oldest-first</td>
+          <td>All API endpoints</td>
+          </tr>
+          <tr>
+          <td><strong>Exception Handling</strong></td>
+          <td>Middleware chain: Domain -&gt; Validation -&gt; DbUpdate -&gt; OperationCanceled -&gt; Global</td>
+          <td>Maps errors to HTTP status codes</td>
+          </tr>
+          <tr>
+          <td><strong>Profiling</strong></td>
+          <td><code>ProfilingCommandDecorator</code> / <code>ProfilingQueryDecorator</code> via MiniProfiler</td>
+          <td>All handlers when <code>UseMiniProfiler=true</code></td>
+          </tr>
+          <tr>
+          <td><strong>API Versioning</strong></td>
+          <td>Header-based via <code>api-version</code> header, all controllers declare <code>[ApiVersion(&quot;1.0&quot;)]</code></td>
+          <td>All endpoints</td>
+          </tr>
+          </tbody></table></div>
+          <hr>
+          <h2 id="8-end-to-end-customer-journey">8. End-to-End Customer Journey</h2>
+          <pre class="doc-pre"><code>1. Register          POST /auth/register        -&gt; User + Customer created, tokens issued
+          2. Browse Catalog    GET /products               -&gt; View products with variants and prices
+          3. Add to Cart       POST /shoppingcarts/{id}/shoppingcartitems  -&gt; Cart created/updated
+          4. Adjust Cart       PUT/DELETE cart items        -&gt; Modify quantities or remove items
+          5. Checkout          PUT /shoppingcarts/{id}/checkout  -&gt; Order created, inventory reserved
+          6. Pay               POST /orders/{id}/checkout   -&gt; Stripe session created, redirect to payment
+          7. Payment Complete  POST /payments/webhook        -&gt; Stripe confirms, order marked Paid
+          8. Delivery          PUT /orders/{id}/deliver      -&gt; Admin marks as Delivered</code></pre>
+          <p><strong>Alternative Flows:</strong></p>
+          <ul>
+          <li>Payment fails -&gt; Order status <code>PaymentFailed</code> -&gt; customer can retry (create new Stripe session)</li>
+          <li>Cancel order -&gt; Status <code>Cancelled</code> (from PendingPayment, PaymentInitiated, or PaymentFailed) -&gt; inventory restored</li>
+          <li>Cart reactivation -&gt; Checked-out cart auto-reactivated on next add-item (all old items cleared)</li>
+          <li>Manual payment -&gt; Admin bypasses Stripe, sets <code>StripePaymentIntentId = &quot;manual-admin-override&quot;</code></li>
+          </ul>
+          <hr>
+          <h2 id="9-potentially-missing-or-incomplete-workflows">9. Potentially Missing or Incomplete Workflows</h2>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Observation</th>
+          <th>Evidence</th>
+          <th>Recommendation</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><strong>No refund workflow</strong></td>
+          <td>Order can be cancelled only before payment completes (PendingPayment/PaymentInitiated/PaymentFailed); no refund logic for Paid orders</td>
+          <td>Verify if refunds are handled externally via Stripe dashboard or if a refund workflow is planned</td>
+          </tr>
+          <tr>
+          <td><strong>No order editing</strong></td>
+          <td>Once checkout completes, order lines cannot be modified</td>
+          <td>Confirm if this is intentional or if order amendment is planned</td>
+          </tr>
+          <tr>
+          <td><strong>No email notifications</strong></td>
+          <td><code>SmtpEmailSender</code> infrastructure exists but no domain event handlers trigger email sending</td>
+          <td>Verify if notifications are planned (order confirmation, shipment, etc.)</td>
+          </tr>
+          <tr>
+          <td><strong>No full-text search</strong></td>
+          <td>Catalog browse offers a name-contains search box (E2E-covered); there is no full-text/fuzzy search</td>
+          <td>Consider full-text search for larger catalogs</td>
+          </tr>
+          <tr>
+          <td><strong>Inventory not checked during cart add</strong></td>
+          <td>Inventory validation only happens at checkout, not when adding to cart</td>
+          <td>Could lead to poor UX if items go out of stock between add and checkout</td>
+          </tr>
+          <tr>
+          <td><strong>No post-payment cancellation</strong></td>
+          <td>Cancellation allowed from PendingPayment, PaymentInitiated, or PaymentFailed — cannot cancel after payment succeeds</td>
+          <td>Verify if post-payment cancellation with Stripe refund is needed</td>
+          </tr>
+          <tr>
+          <td><strong>No customer deactivation endpoint</strong></td>
+          <td><code>User.Deactivate()</code> method and <code>UserDeactivated</code> event exist in domain but no API endpoint exposes this</td>
+          <td>May be an admin feature not yet implemented</td>
+          </tr>
+          <tr>
+          <td><strong>Category deletion has no cascade check</strong></td>
+          <td>Deleting a category doesn&#39;t check for assigned products</td>
+          <td>Products with deleted category may have orphaned CategoryId</td>
+          </tr>
+          <tr>
+          <td><strong>No InventoryItem list endpoint</strong></td>
+          <td>InventoryItemsController only exposes GetById, not GetAll/GetPaged</td>
+          <td>UI InventoryItemList page likely fetches data through a different mechanism or needs this endpoint</td>
+          </tr>
+          <tr>
+          <td><strong>No partial fulfillment</strong></td>
+          <td>Orders are delivered as a whole — no concept of partial shipments or split deliveries</td>
+          <td>Clarify if partial fulfillment is a future requirement</td>
+          </tr>
+          <tr>
+          <td><strong>No delivery tracking</strong></td>
+          <td><code>MarkAsDelivered</code> is a binary admin action with no tracking number, carrier, or ETA</td>
+          <td>Consider whether shipping/tracking details are needed</td>
+          </tr>
+          </tbody></table></div>
+          <hr>
+          <p><em>This document is derived from source code analysis. All workflows, decisions, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-03-18.</em></p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/guides/store-BusinessWorkflows.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-10).">
+  <meta name="description" content="Accepted (2026-07-10, amended 2026-07-17).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="article">
   <meta property="og:title" content="ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid)">
-  <meta property="og:description" content="Accepted (2026-07-10).">
+  <meta property="og:description" content="Accepted (2026-07-10, amended 2026-07-17).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 48 ADRs</summary>
+        <summary>All 49 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -113,6 +113,7 @@
         <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
         <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
           </ol>
         </nav>
       </details>
@@ -121,7 +122,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-042-device-capability-abstraction-maui-blazor-hybrid">ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-10).</p>
+          <p>Accepted (2026-07-10, amended 2026-07-17).</p>
           <h2 id="context">Context</h2>
           <p>The consumer apps ship the same Blazor component set through three heads: MAUI Blazor Hybrid
           (Android/iOS/MacCatalyst/Windows), Blazor Server SSR, and WebAssembly. Native device capabilities
@@ -213,14 +214,18 @@
           <code>UseMauiDeviceCapabilities()</code> silently loses haptics rather than failing fast). Accepted for
           decoration-grade capabilities; feature waves that depend on a capability assert <code>IsSupported</code> in
           their UI and surface the gap visibly.</li>
-          <li>Biometrics, speech-to-text, and the external-auth broker ship contracts (and web/null fallbacks)
-          before their native implementations, which land with their feature waves. Until then the MAUI
-          head resolves their null defaults.</li>
+          <li>Biometrics, speech-to-text, and the external-auth broker now ship native MAUI implementations,
+          all three registered by <code>AddMauiDeviceCapabilities()</code>
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:44</code>, <code>:45</code>, <code>:59</code>). The residual
+          trade-off is configuration, not code: <code>MauiExternalAuthBroker</code> registers unconditionally but
+          reports <code>IsAvailable == false</code> (<code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/MauiExternalAuthBroker.cs:39</code>)
+          until the head supplies <code>OAuth:MobileRedirectScheme</code>, so a misconfigured head quietly keeps the web
+          anchor flow rather than failing fast.</li>
           </ul>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/042-device-capability-abstraction.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/042-device-capability-abstraction.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
       </div>

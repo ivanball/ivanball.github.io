@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Navigation Flow · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="This document maps the site navigation flow for each actor in the MMCA.Store application. Each mermaid diagram shows the pages accessible to that actor…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/guides/store-NavigationFlow.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Navigation Flow">
+  <meta property="og:description" content="This document maps the site navigation flow for each actor in the MMCA.Store application. Each mermaid diagram shows the pages accessible to that actor…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/guides/store-NavigationFlow.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/guides/index.html">Guides &amp; Specifications</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">Store · Navigation Flow</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All guides</summary>
+        <nav class="doc-nav" aria-label="Guides &amp; Specifications">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="adc-ACCESSIBILITY-SCREENREADER-PASS.html">ADC · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="adc-IntegrationTestReworkPlan.html">ADC · Integration-Test Tier Rework Plan (RemediationBacklog #14)</a></li>
+        <li><a href="adc-NavigationFlow.html">ADC · Navigation Flow</a></li>
+        <li><a href="adc-specifications.html">ADC · Business Specifications</a></li>
+        <li><a href="common-ACCESSIBILITY.html">Common · Accessibility (rubric §21)</a></li>
+        <li><a href="common-COST.html">Common · Cost &amp; FinOps Notes (rubric §31)</a></li>
+        <li><a href="common-GETTING-STARTED.html">Common · Getting Started: Build a New App on MMCA.Common</a></li>
+        <li><a href="common-RESILIENCE.html">Common · Resilience &amp; Business Continuity (rubric §29)</a></li>
+        <li><a href="common-RESPONSIVE.html">Common · Responsive Design &amp; Cross-Browser Support (rubric §22)</a></li>
+        <li><a href="common-VERSIONING.html">Common · Versioning &amp; Breaking-Change Policy</a></li>
+        <li><a href="store-ACCESSIBILITY-SCREENREADER-PASS.html">Store · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="store-BusinessWorkflows.html">Store · Business Workflow Analysis</a></li>
+        <li><a href="store-NavigationFlow.html" aria-current="page">Store · Navigation Flow</a></li>
+        <li><a href="store-Specification.html">Store · Business Specification Document</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
+          <h1 id="navigation-flow">Navigation Flow</h1>
+          <p>This document maps the site navigation flow for each actor in the MMCA.Store application. Each mermaid diagram shows the pages accessible to that actor and the directional navigation links between them. (Companion to MMCA.ADC&#39;s <code>NavigationFlow.md</code>; same per-actor format.)</p>
+          <h2 id="actors">Actors</h2>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Actor</th>
+          <th>Access Level</th>
+          <th>Identification</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><strong>Anonymous</strong></td>
+          <td>Public catalog browse + auth pages</td>
+          <td>Not authenticated</td>
+          </tr>
+          <tr>
+          <td><strong>Customer</strong></td>
+          <td>Anonymous + profile, cart/checkout, own orders</td>
+          <td>Authenticated, default <code>Customer</code> role (<code>customer_id</code> claim)</td>
+          </tr>
+          <tr>
+          <td><strong>Admin</strong></td>
+          <td>Full access: Catalog/Sales/Identity admin CRUD</td>
+          <td>Authenticated, <code>Admin</code> role</td>
+          </tr>
+          </tbody></table></div>
+          <blockquote>
+          <p><strong>Roles and enforcement:</strong> <code>Admin</code> is the only elevated role (registration creates a <code>Customer</code>). The 14 admin pages carry page-level <code>[Authorize(Roles = &quot;Admin&quot;)]</code>, regression-gated in CI by the three per-module <code>*RouteAuthorizationTests</code> (<code>MMCA.Store.CI.slnf:39,45,51</code>). Customer-facing data is additionally row-scoped server-side (see <strong>Authorization Model</strong> at the end), so the page gate is defense-in-depth, never the boundary.</p>
+          </blockquote>
+          <hr>
+          <h2 id="1-anonymous-user">1. Anonymous User</h2>
+          <p>Pages accessible without authentication: home, login, register, and the public catalog.</p>
+          <pre class="mermaid">flowchart TD
+              subgraph Auth[&quot;Authentication&quot;]
+                  Login[&quot;/login&lt;br/&gt;Login&quot;]
+                  Register[&quot;/register&lt;br/&gt;Register&quot;]
+              end
+          
+              subgraph Catalog[&quot;Public Catalog&quot;]
+                  Browse[&quot;/catalog&lt;br/&gt;Catalog Browse&quot;]
+                  ProductDetail[&quot;/catalog/{Id}&lt;br/&gt;Product Detail&quot;]
+              end
+          
+              Home[&quot;/  Store Home&quot;]
+          
+              Home --&gt;|hero / nav menu| Browse
+              Home --&gt;|auth links| Login
+              Home --&gt;|auth links| Register
+          
+              Login --&gt;|on success| Home
+              Register --&gt;|on success| Home
+          
+              Browse --&gt;|card click| ProductDetail
+              ProductDetail --&gt;|back| Browse
+              ProductDetail --&gt;|add to cart| Login</pre>
+          <blockquote>
+          <p>Add-to-cart on the product detail page sits inside an <code>AuthorizeView</code>; an anonymous visitor is prompted to log in instead.</p>
+          </blockquote>
+          <hr>
+          <h2 id="2-customer-authenticated-user">2. Customer (Authenticated User)</h2>
+          <p>Inherits all anonymous pages. Gains the profile page, the cart drawer (a layout component, not a route), checkout, and their own orders. Unauthenticated visitors deep-linking to these pages are redirected to login (SSR session-cookie auth keeps <code>[Authorize]</code> enforced on fresh GETs and F5, ADR-022).</p>
+          <pre class="mermaid">flowchart TD
+              subgraph Auth[&quot;Authentication&quot;]
+                  Login[&quot;/login&lt;br/&gt;Login&quot;]
+              end
+          
+              subgraph Catalog[&quot;Public Catalog&quot;]
+                  Browse[&quot;/catalog&lt;br/&gt;Catalog Browse&quot;]
+                  ProductDetail[&quot;/catalog/{Id}&lt;br/&gt;Product Detail&quot;]
+              end
+          
+              subgraph Sales[&quot;Cart and Orders&quot;]
+                  Cart[&quot;Cart Drawer&lt;br/&gt;(layout component)&quot;]
+                  Orders[&quot;/orders&lt;br/&gt;My Orders&quot;]
+                  OrderDetail[&quot;/orders/{Id}&lt;br/&gt;Order Detail&quot;]
+              end
+          
+              subgraph Identity[&quot;Profile&quot;]
+                  Profile[&quot;/profile&lt;br/&gt;My Profile&quot;]
+              end
+          
+              Home[&quot;/  Store Home&quot;]
+          
+              Home --&gt;|nav menu| Browse
+              Home --&gt;|nav menu| Orders
+              Home --&gt;|nav menu| Profile
+          
+              Browse --&gt;|card click| ProductDetail
+              ProductDetail --&gt;|add to cart| Cart
+              Cart --&gt;|checkout| Orders
+              Cart --&gt;|Stripe payment| OrderDetail
+          
+              Orders --&gt;|row click| OrderDetail
+              OrderDetail --&gt;|back| Orders</pre>
+          <blockquote>
+          <p><code>/orders</code> lists only the caller&#39;s own orders (ownership <code>Specification</code> row-scoping); an admin on the same route sees all orders. The order detail data is ownership-checked server-side with 404-not-403 semantics so foreign order ids do not leak existence. Abandoned Stripe payments are recovered by the <code>OrphanOrderRecovery</code> component on return.</p>
+          </blockquote>
+          <hr>
+          <h2 id="3-admin">3. Admin</h2>
+          <p>Inherits all customer pages, plus the admin CRUD surfaces for all three modules. Every page below carries <code>[Authorize(Roles = &quot;Admin&quot;)]</code>; a customer deep-linking to any of them gets Forbidden on both fresh GET and F5.</p>
+          <pre class="mermaid">flowchart TD
+              subgraph CatalogAdmin[&quot;Catalog Admin&quot;]
+                  Categories[&quot;/categories&lt;br/&gt;Category List&quot;]
+                  CategoryCreate[&quot;/categories/create&lt;br/&gt;Create Category&quot;]
+                  CategoryDetail[&quot;/categories/{Id}&lt;br/&gt;Category Detail&quot;]
+                  Products[&quot;/products&lt;br/&gt;Product List&quot;]
+                  ProductCreate[&quot;/products/create&lt;br/&gt;Create Product&quot;]
+                  ProductDetailAdm[&quot;/products/{Id}&lt;br/&gt;Product Detail&quot;]
+              end
+          
+              subgraph SalesAdmin[&quot;Sales Admin&quot;]
+                  Inventory[&quot;/inventory&lt;br/&gt;Inventory List&quot;]
+                  InventoryCreate[&quot;/inventory/create&lt;br/&gt;Create Inventory Item&quot;]
+                  InventoryDetail[&quot;/inventory/{Id}&lt;br/&gt;Inventory Detail&quot;]
+                  Carts[&quot;/shoppingcarts&lt;br/&gt;Shopping Cart List&quot;]
+                  CartDetail[&quot;/shoppingcarts/{Id}&lt;br/&gt;Shopping Cart Detail&quot;]
+                  OrdersAll[&quot;/orders&lt;br/&gt;All Orders&quot;]
+                  OrderDetailAdm[&quot;/orders/{Id}&lt;br/&gt;Order Detail&quot;]
+              end
+          
+              subgraph IdentityAdmin[&quot;Identity Admin&quot;]
+                  Customers[&quot;/customers&lt;br/&gt;Customer List&quot;]
+                  CustomerCreate[&quot;/customers/create&lt;br/&gt;Create Customer&quot;]
+                  CustomerDetail[&quot;/customers/{Id}&lt;br/&gt;Customer Detail&quot;]
+              end
+          
+              Home[&quot;/  Store Home&quot;]
+          
+              Home --&gt;|nav menu| Categories
+              Home --&gt;|nav menu| Products
+              Home --&gt;|nav menu| Inventory
+              Home --&gt;|nav menu| Carts
+              Home --&gt;|nav menu| OrdersAll
+              Home --&gt;|nav menu| Customers
+          
+              Categories --&gt;|row click| CategoryDetail
+              Categories --&gt;|create| CategoryCreate
+              Products --&gt;|row click| ProductDetailAdm
+              Products --&gt;|create| ProductCreate
+              Inventory --&gt;|row click| InventoryDetail
+              Inventory --&gt;|create| InventoryCreate
+              Carts --&gt;|row click| CartDetail
+              OrdersAll --&gt;|row click| OrderDetailAdm
+              Customers --&gt;|row click| CustomerDetail
+              Customers --&gt;|create| CustomerCreate</pre>
+          <hr>
+          <h2 id="authorization-model">Authorization Model</h2>
+          <p>Three cooperating layers; the API is always the boundary:</p>
+          <ol>
+          <li><strong>Page-level route guards.</strong> The 14 admin pages carry <code>[Authorize(Roles = &quot;Admin&quot;)]</code> and <code>/profile</code> / <code>/orders</code> carry <code>[Authorize]</code>. SSR session-cookie auth (ADR-022, <code>mmca_auth_access</code> HttpOnly cookie) lets these attributes pass on fresh GETs, F5, and new tabs, so deep links never render a protected shell to the wrong actor. Regression-gated by <code>Catalog/Sales/IdentityRouteAuthorizationTests</code> in CI (commit <code>c4adff2</code>).</li>
+          <li><strong>API resource ownership (ADR-033).</strong> <code>OwnerOrAdminFilter</code> 403s requests whose <code>customer_id</code> claim mismatches the owner parameter, and <code>OwnershipHelper.GetOwnershipSpecification()</code> row-scopes collection queries so customers only ever receive their own carts/orders. Per-mutation checks on orders return 404-not-403 to avoid leaking existence.</li>
+          <li><strong>In-page conditionals.</strong> <code>AuthorizeView</code> hides customer-only affordances (add-to-cart) from anonymous visitors and admin-only affordances from customers; these are UX sugar on top of layers 1-2, never the enforcement.</li>
+          </ol>
+          <p>Menu items are rendered per-role, so each actor&#39;s nav menu contains only the routes shown in their diagram above.</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/guides/store-NavigationFlow.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+  <script defer src="../../assets/js/mermaid.min.js"></script>
+  <script>
+    window.addEventListener("load", function () {
+      if (!window.mermaid) { return; }
+      var root = document.documentElement;
+      var dark = root.getAttribute("data-theme") === "dark" ||
+        (!root.getAttribute("data-theme") && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      try {
+        // Diagrams are static, first-party content, so "loose" is safe here and
+        // lets the flowchart labels keep their <br/> / <i> formatting.
+        window.mermaid.initialize({ startOnLoad: false, securityLevel: "loose", theme: dark ? "dark" : "default" });
+        window.mermaid.run({ querySelector: "pre.mermaid" });
+      } catch (e) { /* leave the diagram source visible on failure */ }
+    });
+  </script>
+</body>
+</html>

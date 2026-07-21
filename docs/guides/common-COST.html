@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cost &amp; FinOps Notes (rubric §31) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="MMCA.Common is a library, so it cannot provision anything — right-sizing, scale rules, budgets, and per-service cost attribution live in the consumer…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/guides/common-COST.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Cost &amp; FinOps Notes (rubric §31)">
+  <meta property="og:description" content="MMCA.Common is a library, so it cannot provision anything — right-sizing, scale rules, budgets, and per-service cost attribution live in the consumer…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/guides/common-COST.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/guides/index.html">Guides &amp; Specifications</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">Common · Cost &amp; FinOps Notes (rubric §31)</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All guides</summary>
+        <nav class="doc-nav" aria-label="Guides &amp; Specifications">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="adc-ACCESSIBILITY-SCREENREADER-PASS.html">ADC · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="adc-IntegrationTestReworkPlan.html">ADC · Integration-Test Tier Rework Plan (RemediationBacklog #14)</a></li>
+        <li><a href="adc-NavigationFlow.html">ADC · Navigation Flow</a></li>
+        <li><a href="adc-specifications.html">ADC · Business Specifications</a></li>
+        <li><a href="common-ACCESSIBILITY.html">Common · Accessibility (rubric §21)</a></li>
+        <li><a href="common-COST.html" aria-current="page">Common · Cost &amp; FinOps Notes (rubric §31)</a></li>
+        <li><a href="common-GETTING-STARTED.html">Common · Getting Started: Build a New App on MMCA.Common</a></li>
+        <li><a href="common-RESILIENCE.html">Common · Resilience &amp; Business Continuity (rubric §29)</a></li>
+        <li><a href="common-RESPONSIVE.html">Common · Responsive Design &amp; Cross-Browser Support (rubric §22)</a></li>
+        <li><a href="common-VERSIONING.html">Common · Versioning &amp; Breaking-Change Policy</a></li>
+        <li><a href="store-ACCESSIBILITY-SCREENREADER-PASS.html">Store · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="store-BusinessWorkflows.html">Store · Business Workflow Analysis</a></li>
+        <li><a href="store-NavigationFlow.html">Store · Navigation Flow</a></li>
+        <li><a href="store-Specification.html">Store · Business Specification Document</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
+          <h1 id="cost--finops-notes-rubric-31">Cost &amp; FinOps Notes (rubric §31)</h1>
+          <p>MMCA.Common is a library, so it cannot <em>provision</em> anything — right-sizing, scale rules, budgets,
+          and per-service cost attribution live in the consumer apps&#39; IaC (e.g. MMCA.ADC&#39;s <code>infra/main.bicep</code>,
+          <code>cost-guard.yml</code>, and budget alerts). What the framework <em>can</em> do is keep its own cost-relevant
+          defaults sane and document the levers consumers should set. This note consolidates the cost rationale
+          that previously lived only in code comments.</p>
+          <h2 id="what-the-framework-does-for-cost">What the framework does for cost</h2>
+          <ul>
+          <li><strong>Telemetry ingestion is the real line item, so high-volume / low-value spans are dropped.</strong>
+          <code>OutboxPollFilterProcessor</code> (<code>MMCA.Common.Aspire</code>) suppresses the recurring <code>OutboxPoll</code> activity
+          (and its <code>SqlClient</code> children) from OpenTelemetry export, so idle outbox polling does not dominate
+          Log Analytics / App Insights ingestion. This is on by default in <code>AddServiceDefaults()</code>.</li>
+          <li><strong>Head-based trace sampling is a built-in knob.</strong> Set <code>Telemetry:TracesSampleRatio</code> to a value in
+          <code>(0,1)</code> (e.g. <code>0.1</code> to keep 10% of traces) and <code>ConfigureOpenTelemetry</code> installs a
+          <code>ParentBasedSampler(TraceIdRatioBasedSampler(ratio))</code> — ParentBased so a sampled-in request keeps
+          its whole trace intact across services. Unset (the default) samples everything; an out-of-range or
+          unparseable value also falls back to sample-everything, so a typo can never silently blind you. This
+          is the single biggest lever on trace-ingestion cost once traffic grows.</li>
+          <li><strong>High-volume metric families are drop-able knobs.</strong> On a low-traffic multi-service deployment the
+          <code>AppMetrics</code> table dominates ingestion, and two instrumentation families are ~85% of its data points:
+          HttpClient connection/request metrics (<code>http.client.open_connections</code> / <code>active_requests</code> /
+          <code>request.duration</code>: a high-frequency gauge stream from the pooled gRPC / service-discovery channels)
+          and the .NET runtime metrics (<code>dotnet.gc.*</code> / <code>jit.*</code> / <code>thread_pool.*</code>: ~17 instruments emitted every
+          collection interval regardless of traffic). Neither carries an end-user-visible signal. Set
+          <code>Telemetry:DisableHttpClientMetrics=true</code> and/or <code>Telemetry:DisableRuntimeMetrics=true</code> and
+          <code>ConfigureOpenTelemetry</code> skips that instrumentation; outbound-dependency latency is still captured as
+          <code>AppDependencies</code> traces, and server-side RED metrics (<code>http.server.*</code> / <code>aspnetcore.*</code> / <code>kestrel.*</code>)
+          are untouched. Unset (default) keeps them, so a host that does not opt in sees no change. Anything but
+          a boolean <code>true</code> keeps the family, so a typo cannot silently blind it. On the MMCA apps this cut total
+          Log Analytics ingestion ~70% (AppMetrics is ~80% of the workspace bill).</li>
+          <li><strong>Per-message logs are kept off the <code>Information</code> channel.</strong> The outbox&#39;s per-message
+          &quot;dispatched successfully&quot; line is <code>Debug</code> (it is the single highest-volume log line in steady
+          state); failures stay loud (dead-letter = <code>Error</code>, retry = <code>Warning</code>). So a busy outbox does not
+          emit an <code>Information</code> line per message. Consumers should keep production at <code>Information</code> (or higher
+          for noisy categories) rather than <code>Debug</code> — log volume is billed.</li>
+          <li><strong>Idle compute is kept cheap.</strong> The shared <code>SocketsHttpHandler</code> keep-alive / pooled-connection
+          tuning in <code>MMCA.Common.Aspire</code> avoids per-request connection churn; on consumption-billed compute
+          (e.g. Azure Container Apps) steady low traffic stays in the cheap idle band instead of repeatedly
+          spinning vCPU.</li>
+          <li><strong>The outbox poll interval is tunable and meant to be raised in production.</strong> <code>OutboxProcessor</code>
+          wakes on a signal (new rows written) and uses a smart wait, so real messages still flow in ~5s
+          regardless of the fallback poll. <code>Outbox:PollingIntervalSeconds</code> therefore only controls <em>idle</em>
+          polling — set it high in deployed environments (MMCA.ADC uses <strong>300s</strong> vs the 2s local default) to
+          cut idle DB chatter and telemetry without adding message latency.</li>
+          <li><strong>Outbox/inbox rows are purged, not kept forever.</strong> <code>OutboxCleanupService</code> purges processed rows
+          after <code>Outbox:RetentionDays</code> (default 7), bounding table growth (and the storage/scan cost of an
+          ever-growing audit trail). Set <code>Outbox:RetentionDays = 0</code> to retain indefinitely if a consumer needs it.</li>
+          </ul>
+          <h2 id="recommended-consumer-defaults-set-these-downstream">Recommended consumer defaults (set these downstream)</h2>
+          <ul>
+          <li><strong>Telemetry retention &amp; sampling.</strong> Tune Log Analytics retention to the minimum the consumer&#39;s
+          compliance window allows, and set <code>Telemetry:TracesSampleRatio</code> (the built-in head-based sampler
+          knob above) on high-volume services. The framework emits at sensible levels; the
+          <em>volume × retention</em> bill is a deployment choice.</li>
+          <li><strong>Right-size from measured load, not worst case.</strong> Size compute/database tiers to observed peak
+          (MMCA.ADC sizes to its measured ~67-VU conference peak and runs Basic-tier SQL), and back scale
+          rules with real traffic. A k6/load test that establishes the peak is cheaper than guessing high.</li>
+          <li><strong>Make temporary scale-ups reversible.</strong> Any conference-day / launch surge should have an automated
+          or scheduled revert (MMCA.ADC&#39;s <code>cost-guard.yml</code> fails if a surge wasn&#39;t reverted to Basic tier).</li>
+          <li><strong>Attribute spend.</strong> Tag resources per service/environment so the bill is attributable, and add a
+          budget + alert (MMCA.ADC sets a monthly RG budget with 80%/100% alerts).</li>
+          <li><strong>Use the cheap tier for intermittent/archival workloads</strong> (Basic-tier DBs, serverless/consumption
+          compute, archived databases).</li>
+          </ul>
+          <h2 id="cost-attribution--guardrail-samples-distilled-from-mmcaadc">Cost-attribution &amp; guardrail samples (distilled from MMCA.ADC)</h2>
+          <p>These belong in the consumer&#39;s IaC, not the library, but the framework documents the shape so every
+          consumer attributes spend and guards surges the same way. The worked, deployed versions are
+          <code>MMCA.ADC/infra/main.bicep</code> (tags + budget) and <code>MMCA.ADC/.github/workflows/cost-guard.yml</code>.</p>
+          <p><strong>Cost-attribution tags</strong> — stamp every billable resource with a consistent tag set so Azure Cost
+          Analysis can group by application / environment / cost-centre:</p>
+          <pre class="doc-pre"><code class="language-bicep">var commonTags = {
+            application: &#39;myapp&#39;          // groups the whole app&#39;s spend
+            environment: environmentName  // prod / staging / dev
+            component: &#39;my-component&#39;
+            managedBy: &#39;bicep&#39;
+            costCenter: &#39;my-cost-center&#39;
+          }
+          // apply to every resource: resource x &#39;...&#39; = { ..., tags: commonTags }</code></pre>
+          <p>Add a budget with alerts so the bill cannot surprise you:</p>
+          <pre class="doc-pre"><code class="language-bicep">resource budget &#39;Microsoft.Consumption/budgets@2023-11-01&#39; = if (enableBudget) {
+            name: &#39;myapp-monthly&#39;
+            properties: {
+              amount: monthlyBudgetAmount       // e.g. 200
+              timeGrain: &#39;Monthly&#39;
+              notifications: { /* 80% actual + 100% forecasted → action group */ }
+            }
+          }</code></pre>
+          <p><strong>Surge-revert guard</strong> — a scheduled, read-only check that fails if a temporary scale-up was left
+          running (the rubric&#39;s &quot;scale-ups left running after the event&quot; red flag). Distilled from
+          <code>cost-guard.yml</code>:</p>
+          <pre class="doc-pre"><code class="language-yaml"># .github/workflows/cost-guard.yml — weekly + manual; READ-ONLY, never deploys.
+          on: { schedule: [{ cron: &#39;0 7 * * 1&#39; }], workflow_dispatch: {} }
+          jobs:
+            drift:
+              steps:
+                - run: az login --service-principal --federated-token ... # OIDC, read-only role
+                # Fail the run if any Container App maxReplicas &gt; baseline (e.g. 2)
+                # or any SQL DB tier != the agreed cheap tier (e.g. Basic), and print reset steps.</code></pre>
+          <h2 id="out-of-scope-for-the-framework-by-design">Out of scope for the framework (by design)</h2>
+          <p>Provisioning, scale rules, budgets, per-service cost attribution, and surge/revert automation are
+          consumer/IaC concerns and are <em>not</em> added to the library — see also <code>ADRs/009</code> (resilience/recovery
+          objectives are likewise the deployer&#39;s, not the framework&#39;s).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/guides/common-COST.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

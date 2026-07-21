@@ -1,0 +1,1583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MMCA Business Specification Document · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="MMCA is an e-commerce platform built with .NET 10.0 using DDD and Clean Architecture. The business logic is organized as modules (Catalog, Sales,…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/guides/store-Specification.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="MMCA Business Specification Document">
+  <meta property="og:description" content="MMCA is an e-commerce platform built with .NET 10.0 using DDD and Clean Architecture. The business logic is organized as modules (Catalog, Sales,…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/guides/store-Specification.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/guides/index.html">Guides &amp; Specifications</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">Store · Business Specification Document</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All guides</summary>
+        <nav class="doc-nav" aria-label="Guides &amp; Specifications">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="adc-ACCESSIBILITY-SCREENREADER-PASS.html">ADC · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="adc-IntegrationTestReworkPlan.html">ADC · Integration-Test Tier Rework Plan (RemediationBacklog #14)</a></li>
+        <li><a href="adc-NavigationFlow.html">ADC · Navigation Flow</a></li>
+        <li><a href="adc-specifications.html">ADC · Business Specifications</a></li>
+        <li><a href="common-ACCESSIBILITY.html">Common · Accessibility (rubric §21)</a></li>
+        <li><a href="common-COST.html">Common · Cost &amp; FinOps Notes (rubric §31)</a></li>
+        <li><a href="common-GETTING-STARTED.html">Common · Getting Started: Build a New App on MMCA.Common</a></li>
+        <li><a href="common-RESILIENCE.html">Common · Resilience &amp; Business Continuity (rubric §29)</a></li>
+        <li><a href="common-RESPONSIVE.html">Common · Responsive Design &amp; Cross-Browser Support (rubric §22)</a></li>
+        <li><a href="common-VERSIONING.html">Common · Versioning &amp; Breaking-Change Policy</a></li>
+        <li><a href="store-ACCESSIBILITY-SCREENREADER-PASS.html">Store · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="store-BusinessWorkflows.html">Store · Business Workflow Analysis</a></li>
+        <li><a href="store-NavigationFlow.html">Store · Navigation Flow</a></li>
+        <li><a href="store-Specification.html" aria-current="page">Store · Business Specification Document</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
+          <h1 id="mmca-business-specification-document">MMCA Business Specification Document</h1>
+          <h2 id="1-system-overview">1. System Overview</h2>
+          <p>MMCA is an <strong>e-commerce platform</strong> built with .NET 10.0 using DDD and Clean Architecture. The business logic is organized as modules (Catalog, Sales, Identity) that have been extracted into per-module service hosts behind a YARP Gateway. It enables customers to browse a product catalog, manage shopping carts, place orders, and process payments. Administrators manage the product catalog, inventory, and order fulfillment.</p>
+          <p>The system operates in the <strong>online retail / e-commerce</strong> domain, supporting the full purchase lifecycle from product browsing through payment and delivery.</p>
+          <p><strong>Major Business Areas:</strong></p>
+          <ul>
+          <li><strong>Product Catalog Management</strong> — categories, products, and product variants with pricing</li>
+          <li><strong>Shopping &amp; Ordering</strong> — cart management, checkout, order placement</li>
+          <li><strong>Payment Processing</strong> — Stripe-integrated checkout with webhook confirmation</li>
+          <li><strong>Inventory Management</strong> — stock tracking per product variant</li>
+          <li><strong>Customer Identity &amp; Authentication</strong> — registration, login, JWT-based sessions</li>
+          </ul>
+          <p><strong>Technical Stack:</strong></p>
+          <ul>
+          <li>.NET 10.0 (LangVersion: preview), Blazor Server + WebAssembly hybrid (InteractiveAuto), MudBlazor UI</li>
+          <li>SQL Server (primary, via Aspire), SQLite, Cosmos DB (alternative, via strategy pattern)</li>
+          <li>Stripe payment gateway, PBKDF2-HMAC-SHA512 password hashing, JWT authentication</li>
+          <li>.NET Aspire orchestration (SQL Server container + Gateway :6001 + 3 service hosts + UI)</li>
+          </ul>
+          <hr>
+          <h2 id="2-core-business-entities">2. Core Business Entities</h2>
+          <h3 id="21-category">2.1 Category</h3>
+          <p><strong>Description:</strong> A classification grouping for products. Supports hierarchical (parent-child) structures for nested categorization (e.g., &quot;Jewelry&quot; &gt; &quot;Rings&quot;).</p>
+          <p><strong>Key Properties:</strong></p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Property</th>
+          <th>Description</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Name</td>
+          <td>Display name (max 255 chars, required)</td>
+          </tr>
+          <tr>
+          <td>ParentCategoryId</td>
+          <td>Optional reference to a parent category</td>
+          </tr>
+          </tbody></table></div>
+          <p><strong>Relationships:</strong></p>
+          <ul>
+          <li>A Category may have one parent Category (self-referencing hierarchy)</li>
+          <li>A Category contains zero or more Products</li>
+          </ul>
+          <p><strong>Source:</strong> <code>Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Categories/Category.cs</code></p>
+          <hr>
+          <h3 id="22-product">2.2 Product</h3>
+          <p><strong>Description:</strong> A saleable item in the catalog. Products have descriptive attributes and belong to a category. Each product has one or more purchasable variants.</p>
+          <p><strong>Key Properties:</strong></p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Property</th>
+          <th>Description</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Name</td>
+          <td>Product name (max 100 chars, required)</td>
+          </tr>
+          <tr>
+          <td>Description</td>
+          <td>Detailed description (max 4,000 chars, optional)</td>
+          </tr>
+          <tr>
+          <td>Brand</td>
+          <td>Manufacturer or brand name (max 100 chars, optional, no whitespace-only)</td>
+          </tr>
+          <tr>
+          <td>CategoryId</td>
+          <td>Category this product belongs to (optional)</td>
+          </tr>
+          </tbody></table></div>
+          <p><strong>Relationships:</strong></p>
+          <ul>
+          <li>A Product belongs to zero or one Category</li>
+          <li>A Product contains one or more Product Variants</li>
+          </ul>
+          <p><strong>Source:</strong> <code>Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/Product.cs</code></p>
+          <hr>
+          <h3 id="23-product-variant">2.3 Product Variant</h3>
+          <p><strong>Description:</strong> A specific purchasable configuration of a product (e.g., &quot;Gold Ring - Size 7&quot;). Variants carry the actual price and SKU used for inventory and order processing.</p>
+          <p><strong>Key Properties:</strong></p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Property</th>
+          <th>Description</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>SKU</td>
+          <td>Stock-keeping unit identifier (max 50 chars, globally unique, optional)</td>
+          </tr>
+          <tr>
+          <td>Price</td>
+          <td>Unit price as Money (amount + currency, must be non-negative)</td>
+          </tr>
+          </tbody></table></div>
+          <p><strong>Relationships:</strong></p>
+          <ul>
+          <li>A Product Variant belongs to exactly one Product</li>
+          <li>A Product Variant has zero or one Inventory Item</li>
+          <li>A Product Variant can appear in Shopping Cart Items and Order Lines</li>
+          </ul>
+          <p><strong>Source:</strong> <code>Source/Modules/Catalog/MMCA.Store.Catalog.Domain/Products/ProductVariant.cs</code></p>
+          <hr>
+          <h3 id="24-shopping-cart">2.4 Shopping Cart</h3>
+          <p><strong>Description:</strong> A temporary collection of items a customer intends to purchase. Each customer has exactly one shopping cart (the cart ID equals the customer ID).</p>
+          <p><strong>Key Properties:</strong></p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Property</th>
+          <th>Description</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Status</td>
+          <td>Active or CheckedOut</td>
+          </tr>
+          <tr>
+          <td>ShoppingCartItems</td>
+          <td>Collection of items in the cart</td>
+          </tr>
+          </tbody></table></div>
+          <p><strong>Relationships:</strong></p>
+          <ul>
+          <li>A Shopping Cart belongs to exactly one Customer (1:1 relationship, ID = CustomerId)</li>
+          <li>A Shopping Cart contains zero or more Shopping Cart Items</li>
+          </ul>
+          <p><strong>Source:</strong> <code>Source/Modules/Sales/MMCA.Store.Sales.Domain/ShoppingCarts/ShoppingCart.cs</code></p>
+          <hr>
+          <h3 id="25-shopping-cart-item">2.5 Shopping Cart Item</h3>
+          <p><strong>Description:</strong> A line item in a shopping cart, representing a desired quantity of a specific product variant.</p>
+          <p><strong>Key Properties:</strong></p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Property</th>
+          <th>Description</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>ProductVariantId</td>
+          <td>The product variant being added</td>
+          </tr>
+          <tr>
+          <td>Quantity</td>
+          <td>Number of units desired (must be positive)</td>
+          </tr>
+          </tbody></table></div>
+          <p><strong>Relationships:</strong></p>
+          <ul>
+          <li>Belongs to exactly one Shopping Cart</li>
+          <li>References one Product Variant (cross-module)</li>
+          </ul>
+          <p><strong>Source:</strong> <code>Source/Modules/Sales/MMCA.Store.Sales.Domain/ShoppingCarts/ShoppingCartItem.cs</code></p>
+          <hr>
+          <h3 id="26-order">2.6 Order</h3>
+          <p><strong>Description:</strong> A confirmed purchase transaction created when a customer checks out their shopping cart. Orders track payment status and progress through a defined lifecycle.</p>
+          <p><strong>Key Properties:</strong></p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Property</th>
+          <th>Description</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>CustomerId</td>
+          <td>The customer who placed the order</td>
+          </tr>
+          <tr>
+          <td>Total</td>
+          <td>Calculated order total (Money value, sum of all line totals)</td>
+          </tr>
+          <tr>
+          <td>Status</td>
+          <td>Current lifecycle stage (see state machine below)</td>
+          </tr>
+          <tr>
+          <td>StripeSessionId</td>
+          <td>Payment gateway session reference</td>
+          </tr>
+          <tr>
+          <td>StripePaymentIntentId</td>
+          <td>Payment confirmation reference</td>
+          </tr>
+          </tbody></table></div>
+          <p><strong>Relationships:</strong></p>
+          <ul>
+          <li>An Order belongs to one Customer</li>
+          <li>An Order contains one or more Order Lines</li>
+          </ul>
+          <p><strong>Source:</strong> <code>Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs</code></p>
+          <hr>
+          <h3 id="27-order-line">2.7 Order Line</h3>
+          <p><strong>Description:</strong> A single item within an order, capturing the product variant, quantity, and price at time of purchase.</p>
+          <p><strong>Key Properties:</strong></p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Property</th>
+          <th>Description</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>ProductVariantId</td>
+          <td>The product variant ordered</td>
+          </tr>
+          <tr>
+          <td>Quantity</td>
+          <td>Units ordered (must be positive)</td>
+          </tr>
+          <tr>
+          <td>UnitPrice</td>
+          <td>Price per unit at time of order (Money)</td>
+          </tr>
+          <tr>
+          <td>LineTotal</td>
+          <td>Computed: UnitPrice x Quantity</td>
+          </tr>
+          </tbody></table></div>
+          <p><strong>Relationships:</strong></p>
+          <ul>
+          <li>Belongs to exactly one Order</li>
+          </ul>
+          <p><strong>Source:</strong> <code>Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/OrderLine.cs</code></p>
+          <hr>
+          <h3 id="28-inventory-item">2.8 Inventory Item</h3>
+          <p><strong>Description:</strong> Tracks available stock for a specific product variant. One inventory record per product variant (the inventory item ID equals the product variant ID).</p>
+          <p><strong>Key Properties:</strong></p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Property</th>
+          <th>Description</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>AvailableQuantity</td>
+          <td>Units currently in stock (must be &gt;= 0)</td>
+          </tr>
+          <tr>
+          <td>IsOutOfStock</td>
+          <td>Computed: true when AvailableQuantity equals 0</td>
+          </tr>
+          </tbody></table></div>
+          <p><strong>Relationships:</strong></p>
+          <ul>
+          <li>One Inventory Item per Product Variant (1:1 relationship, ID = ProductVariantId)</li>
+          </ul>
+          <p><strong>Source:</strong> <code>Source/Modules/Sales/MMCA.Store.Sales.Domain/Inventory/InventoryItem.cs</code></p>
+          <hr>
+          <h3 id="29-customer">2.9 Customer</h3>
+          <p><strong>Description:</strong> A registered buyer with personal information and optional mailing address.</p>
+          <p><strong>Key Properties:</strong></p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Property</th>
+          <th>Description</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>FirstName</td>
+          <td>First name (max 100 chars, required)</td>
+          </tr>
+          <tr>
+          <td>LastName</td>
+          <td>Last name (max 100 chars, required)</td>
+          </tr>
+          <tr>
+          <td>Email</td>
+          <td>Email address (max 100 chars, unique, required)</td>
+          </tr>
+          <tr>
+          <td>Address</td>
+          <td>Optional mailing address (value object)</td>
+          </tr>
+          </tbody></table></div>
+          <p><strong>Relationships:</strong></p>
+          <ul>
+          <li>A Customer is linked 1:1 with a User account</li>
+          <li>A Customer has one Shopping Cart</li>
+          <li>A Customer has zero or more Orders</li>
+          </ul>
+          <p><strong>Source:</strong> <code>Source/Modules/Identity/MMCA.Store.Identity.Domain/Customers/Customer.cs</code></p>
+          <hr>
+          <h3 id="210-user">2.10 User</h3>
+          <p><strong>Description:</strong> An authentication account with credentials and role-based access. Users are either administrators or customers.</p>
+          <p><strong>Key Properties:</strong></p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Property</th>
+          <th>Description</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Email</td>
+          <td>Login email (unique, required)</td>
+          </tr>
+          <tr>
+          <td>PasswordHash / PasswordSalt</td>
+          <td>Securely stored credentials (PBKDF2-HMAC-SHA512, 600,000 iterations)</td>
+          </tr>
+          <tr>
+          <td>Role</td>
+          <td>&quot;Admin&quot; or &quot;Customer&quot;</td>
+          </tr>
+          <tr>
+          <td>RefreshToken / RefreshTokenExpiry</td>
+          <td>Session refresh mechanism (7-day expiry)</td>
+          </tr>
+          <tr>
+          <td>IsActive</td>
+          <td>Account active status</td>
+          </tr>
+          <tr>
+          <td>CustomerId</td>
+          <td>Link to Customer profile (for Customer role)</td>
+          </tr>
+          </tbody></table></div>
+          <p><strong>Relationships:</strong></p>
+          <ul>
+          <li>A User with &quot;Customer&quot; role is linked 1:1 to a Customer entity</li>
+          <li>Admin users have no Customer record</li>
+          </ul>
+          <p><strong>Source:</strong> <code>Source/Modules/Identity/MMCA.Store.Identity.Domain/Users/User.cs</code></p>
+          <hr>
+          <h3 id="211-value-objects">2.11 Value Objects</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Value Object</th>
+          <th>Properties</th>
+          <th>Validation</th>
+          <th>Source</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><strong>Money</strong></td>
+          <td>Amount (decimal), Currency (Currency)</td>
+          <td>Cannot have negative amount; currency mismatch on add</td>
+          <td><code>MMCA.Common.Shared/ValueObjects/Money.cs</code></td>
+          </tr>
+          <tr>
+          <td><strong>Currency</strong></td>
+          <td>Code (string)</td>
+          <td>Must be &quot;USD&quot; or &quot;EUR&quot;</td>
+          <td><code>MMCA.Common.Shared/ValueObjects/Currency.cs</code></td>
+          </tr>
+          <tr>
+          <td><strong>Address</strong></td>
+          <td>AddressLine1 (required, max 200), AddressLine2, City, State, ZipCode, Country</td>
+          <td>AddressLine1 required; all fields have max lengths</td>
+          <td><code>MMCA.Common.Shared/ValueObjects/Address.cs</code></td>
+          </tr>
+          </tbody></table></div>
+          <hr>
+          <h2 id="3-business-workflows">3. Business Workflows</h2>
+          <h3 id="31-customer-registration">3.1 Customer Registration</h3>
+          <p><strong>Trigger:</strong> A new user submits registration with first name, last name, email, and password.</p>
+          <p><strong>Steps:</strong></p>
+          <ol>
+          <li>Validate registration request (email format, password requirements)</li>
+          <li>Verify email is not already registered (uniqueness check)</li>
+          <li>Hash the password using PBKDF2-HMAC-SHA512 (600,000 iterations) with a per-user salt</li>
+          <li>Create a User entity with &quot;Customer&quot; role</li>
+          <li>Generate JWT access token (15 min, with claims: sub, jti, iat, user_id, email, role, customer_id) and refresh token (7-day expiry, 64-byte random)</li>
+          <li><strong>Domain event <code>UserRegistered</code> is published</strong>, which triggers automatic Customer creation:<ul>
+          <li>A new Customer entity is created with the same name, email, and address</li>
+          <li>The User is linked to the newly created Customer via <code>CustomerId</code></li>
+          </ul>
+          </li>
+          <li>Return authentication tokens to the caller</li>
+          </ol>
+          <p><strong>Implemented in:</strong></p>
+          <ul>
+          <li><code>Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs</code> (RegisterAsync)</li>
+          <li><code>Source/Modules/Identity/MMCA.Store.Identity.Application/Users/DomainEventHandlers/UserRegisteredHandler.cs</code></li>
+          </ul>
+          <hr>
+          <h3 id="32-customer-login">3.2 Customer Login</h3>
+          <p><strong>Trigger:</strong> A registered user submits email and password.</p>
+          <p><strong>Steps:</strong></p>
+          <ol>
+          <li>Validate login request</li>
+          <li>Look up user by email</li>
+          <li>Verify password using PBKDF2-HMAC-SHA512 with constant-time comparison (legacy HMAC-SHA512 hashes still verify via salt-length detection)</li>
+          <li>Verify user is active</li>
+          <li>Generate new access token and refresh token</li>
+          <li>Update refresh token expiry (7 days from now)</li>
+          <li>Return authentication response with both tokens</li>
+          </ol>
+          <p><strong>Implemented in:</strong></p>
+          <ul>
+          <li><code>Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs</code> (LoginAsync)</li>
+          </ul>
+          <hr>
+          <h3 id="33-add-item-to-shopping-cart">3.3 Add Item to Shopping Cart</h3>
+          <p><strong>Trigger:</strong> An authenticated customer adds a product variant to their cart.</p>
+          <p><strong>Steps:</strong></p>
+          <ol>
+          <li>Validate the request (quantity must be positive)</li>
+          <li>Verify the product variant exists in the Catalog (cross-module check via <code>IProductVariantService</code>)</li>
+          <li>Fetch or create the customer&#39;s shopping cart</li>
+          <li>If the cart was previously checked out, reactivate it (clears all old items, sets status back to Active)</li>
+          <li>If the same product variant already exists in the cart, increase its quantity</li>
+          <li>Otherwise, add a new cart item</li>
+          <li>Persist changes</li>
+          </ol>
+          <p><strong>Business Rules Applied:</strong></p>
+          <ul>
+          <li>Cart must be in Active status to accept items (or will be reactivated)</li>
+          <li>Product variant must exist in the catalog</li>
+          <li>Quantity must be greater than zero</li>
+          <li>Duplicate variants merge (quantities are combined)</li>
+          <li>Reactivation clears all previous items</li>
+          </ul>
+          <p><strong>Implemented in:</strong></p>
+          <ul>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/AddItem/AddItemHandler.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Domain/ShoppingCarts/ShoppingCart.cs</code> (AddShoppingCartItem)</li>
+          </ul>
+          <hr>
+          <h3 id="34-checkout-cart-to-order">3.4 Checkout (Cart to Order)</h3>
+          <p><strong>Trigger:</strong> A customer initiates checkout on their active shopping cart.</p>
+          <p><strong>Steps:</strong></p>
+          <ol>
+          <li>Fetch the customer&#39;s shopping cart with all items</li>
+          <li>Retrieve current unit prices for all product variants from the Catalog module (cross-module call)</li>
+          <li>Fetch inventory items for all product variants</li>
+          <li>Execute the checkout domain service which:
+          a. Validates the cart is not empty
+          b. Validates inventory exists for every item in the cart
+          c. <strong>Decrements inventory</strong> for each item (reserves stock)
+          d. Creates Order Lines with current prices (price snapshot at time of purchase)
+          e. Creates the Order with status <code>PendingPayment</code>
+          f. Transitions the cart to <code>CheckedOut</code> status</li>
+          <li>Persist the new Order</li>
+          <li>Return the Order details</li>
+          </ol>
+          <p><strong>Business Rules Applied:</strong></p>
+          <ul>
+          <li>Cart must contain at least one item</li>
+          <li>All product variants must have corresponding inventory records</li>
+          <li>Sufficient inventory must be available for each item</li>
+          <li>Prices are locked at checkout time (not at cart-add time)</li>
+          <li>This is an atomic (transactional) operation (<code>ITransactional</code>)</li>
+          </ul>
+          <p><strong>Implemented in:</strong></p>
+          <ul>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Domain/Services/CheckOutDomainService.cs</code></li>
+          </ul>
+          <hr>
+          <h3 id="35-payment-processing-stripe">3.5 Payment Processing (Stripe)</h3>
+          <p><strong>Trigger:</strong> After checkout, the customer initiates payment for a pending order.</p>
+          <p><strong>Steps:</strong></p>
+          <ol>
+          <li>Fetch the order with its order lines</li>
+          <li>Call Stripe API to create a checkout session (converts Money to smallest currency unit — cents)</li>
+          <li>Transition order status to <code>PaymentInitiated</code></li>
+          <li>Store the Stripe session ID on the order</li>
+          <li>Return the checkout URL for the customer to complete payment</li>
+          </ol>
+          <p><strong>Webhook Confirmation (asynchronous):</strong></p>
+          <ol>
+          <li>Stripe sends a webhook notification to <code>POST /payments/webhook</code></li>
+          <li>System verifies the webhook signature using Stripe&#39;s <code>EventUtility.ConstructEvent()</code></li>
+          <li>Based on event type:<ul>
+          <li><code>checkout.session.completed</code> -&gt; Mark order as <code>Paid</code>, store payment intent ID</li>
+          <li><code>checkout.session.expired</code> or <code>payment_intent.payment_failed</code> -&gt; Mark order as <code>PaymentFailed</code></li>
+          </ul>
+          </li>
+          <li>Idempotent: skips processing if order is already in the appropriate terminal state</li>
+          </ol>
+          <p><strong>Implemented in:</strong></p>
+          <ul>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/CreateCheckoutSession/CreateCheckoutSessionHandler.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/ProcessPaymentWebhook/ProcessPaymentWebhookHandler.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Services/StripePaymentService.cs</code></li>
+          </ul>
+          <hr>
+          <h3 id="36-order-cancellation">3.6 Order Cancellation</h3>
+          <p><strong>Trigger:</strong> A customer or admin cancels an order.</p>
+          <p><strong>Steps:</strong></p>
+          <ol>
+          <li>Fetch the order with its order lines</li>
+          <li>Validate the order is in a cancellable state (PendingPayment, PaymentInitiated, or PaymentFailed)</li>
+          <li>Transition order status to <code>Cancelled</code></li>
+          <li><strong>Restore inventory</strong>: for each order line, increase inventory by the ordered quantity</li>
+          <li>Persist changes</li>
+          </ol>
+          <p><strong>Business Rules Applied:</strong></p>
+          <ul>
+          <li>Orders in PendingPayment, PaymentInitiated, or PaymentFailed can be cancelled</li>
+          <li>Paid or delivered orders cannot be cancelled (no refund workflow)</li>
+          <li>Inventory is automatically restored upon cancellation</li>
+          </ul>
+          <p><strong>Implemented in:</strong></p>
+          <ul>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Cancel/CancelOrderHandler.cs</code></li>
+          </ul>
+          <hr>
+          <h3 id="37-manual-payment-override">3.7 Manual Payment Override</h3>
+          <p><strong>Trigger:</strong> An administrator manually marks an order as paid (e.g., for cash payments or payment system issues).</p>
+          <p><strong>Steps:</strong></p>
+          <ol>
+          <li>Fetch the order</li>
+          <li>Validate order status allows manual payment (PendingPayment, PaymentInitiated, or PaymentFailed)</li>
+          <li>Set payment intent ID to <code>&quot;manual-admin-override&quot;</code></li>
+          <li>Transition status to <code>Paid</code></li>
+          <li>Persist changes</li>
+          </ol>
+          <p><strong>Implemented in:</strong></p>
+          <ul>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Pay/PayOrderHandler.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Domain/Orders/Order.cs</code> (MarkAsPaidManually)</li>
+          </ul>
+          <hr>
+          <h3 id="38-order-delivery">3.8 Order Delivery</h3>
+          <p><strong>Trigger:</strong> An administrator marks a paid order as delivered.</p>
+          <p><strong>Steps:</strong></p>
+          <ol>
+          <li>Fetch the order</li>
+          <li>Validate order status is <code>Paid</code></li>
+          <li>Transition status to <code>Delivered</code></li>
+          <li>Persist changes</li>
+          </ol>
+          <p><strong>Implemented in:</strong></p>
+          <ul>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Deliver/DeliverOrderHandler.cs</code></li>
+          </ul>
+          <hr>
+          <h2 id="4-order-status-state-machine">4. Order Status State Machine</h2>
+          <pre class="doc-pre"><code>                    +------------------------------------------+
+                              |                                          |
+                              v                                          |
+           +-----------------+----+    InitiatePayment    +--------------+------+
+           |   PendingPayment     |---------------------&gt;|  PaymentInitiated    |
+           +----------------------+                      +---------------------+
+                  |       ^                                    |           |
+                  |       |                                    |           |
+                  |       +------------ PaymentFailed &lt;--------+           |
+                  |                    (can retry)                         |
+                  |                         |                              |
+             MarkAsCancelled           MarkAsCancelled               MarkAsPaid
+                  |                         |                       (webhook or manual)
+                  v                         v                              |
+           +--------------+                                    +-----------+-----+
+           |  Cancelled   | &lt;---- MarkAsCancelled ------------ |      Paid       |
+           +--------------+   (from PaymentInitiated)          +-----------------+
+                                                                       |
+                                                                  MarkAsDelivered
+                                                                       |
+                                                                       v
+                                                               +-----------------+
+                                                               |    Delivered    |
+                                                               +-----------------+</code></pre>
+          <p><strong>Cancellable States:</strong> PendingPayment, PaymentInitiated, PaymentFailed
+          <strong>Manual Payment States:</strong> PendingPayment, PaymentInitiated, PaymentFailed
+          <strong>Terminal States:</strong> Cancelled, Delivered</p>
+          <hr>
+          <h2 id="5-business-rules">5. Business Rules</h2>
+          <h3 id="51-product--catalog-rules">5.1 Product &amp; Catalog Rules</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Rule</th>
+          <th>Description</th>
+          <th>Location</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Category name required</td>
+          <td>Category names cannot be empty or whitespace</td>
+          <td><code>CategoryInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Category name max length</td>
+          <td>Max 255 characters</td>
+          <td><code>CategoryInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Category name uniqueness</td>
+          <td>Category names must be unique (database-enforced)</td>
+          <td><code>CategoryConfiguration.cs</code></td>
+          </tr>
+          <tr>
+          <td>Product name required</td>
+          <td>Product names cannot be empty or whitespace</td>
+          <td><code>ProductInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Product name max length</td>
+          <td>Max 100 characters</td>
+          <td><code>ProductInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Description max length</td>
+          <td>Max 4,000 characters</td>
+          <td><code>ProductInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Brand not whitespace</td>
+          <td>If a brand is provided, it cannot be only whitespace</td>
+          <td><code>ProductInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Brand max length</td>
+          <td>Max 100 characters</td>
+          <td><code>ProductInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Price must be non-negative</td>
+          <td>Product variant prices must have Amount &gt;= 0</td>
+          <td><code>ProductInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>SKU max length</td>
+          <td>Max 50 characters</td>
+          <td><code>ProductInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>SKU global uniqueness</td>
+          <td>SKUs must be globally unique across all product variants (null allowed for multiple variants without SKUs)</td>
+          <td><code>AddVariantHandler.cs</code>, <code>ProductVariantConfiguration.cs</code></td>
+          </tr>
+          </tbody></table></div>
+          <h3 id="52-shopping-cart-rules">5.2 Shopping Cart Rules</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Rule</th>
+          <th>Description</th>
+          <th>Location</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Cart must be active</td>
+          <td>Items can only be added/removed/changed when cart is Active</td>
+          <td><code>ShoppingCartInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Positive quantity</td>
+          <td>Item quantities must be greater than zero</td>
+          <td><code>ShoppingCartInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Non-empty for checkout</td>
+          <td>Cart must contain at least one item to check out</td>
+          <td><code>ShoppingCartInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Variant must exist</td>
+          <td>Product variant must exist in catalog before adding to cart</td>
+          <td><code>AddItemHandler.cs</code></td>
+          </tr>
+          <tr>
+          <td>Duplicate merging</td>
+          <td>Adding a variant already in cart increases its quantity</td>
+          <td><code>ShoppingCart.cs</code></td>
+          </tr>
+          <tr>
+          <td>Reactivation on add</td>
+          <td>Adding items to a checked-out cart reactivates it and clears all old items</td>
+          <td><code>AddItemHandler.cs</code></td>
+          </tr>
+          </tbody></table></div>
+          <h3 id="53-order-rules">5.3 Order Rules</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Rule</th>
+          <th>Description</th>
+          <th>Location</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Orders via checkout only</td>
+          <td>Orders can only be created through the shopping cart checkout process</td>
+          <td><code>CheckOutHandler.cs</code></td>
+          </tr>
+          <tr>
+          <td>Non-empty order</td>
+          <td>Orders must contain at least one order line</td>
+          <td><code>OrderInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Positive line quantity</td>
+          <td>Order line quantities must be greater than zero</td>
+          <td><code>OrderInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Non-negative line price</td>
+          <td>Order line unit prices cannot be negative</td>
+          <td><code>OrderInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Cancellation restriction</td>
+          <td>Only PendingPayment, PaymentInitiated, or PaymentFailed orders can be cancelled</td>
+          <td><code>OrderInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Payment initiation restriction</td>
+          <td>Payment can only be initiated from PendingPayment or PaymentFailed states</td>
+          <td><code>OrderInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Payment confirmation restriction</td>
+          <td>Only PaymentInitiated orders can be marked as paid (via webhook)</td>
+          <td><code>OrderInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Manual payment restriction</td>
+          <td>Manual payment allowed from PendingPayment, PaymentInitiated, or PaymentFailed</td>
+          <td><code>OrderInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Delivery restriction</td>
+          <td>Only Paid orders can be marked as delivered</td>
+          <td><code>OrderInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Inventory restoration</td>
+          <td>Cancelling an order restores all order line quantities to inventory</td>
+          <td><code>CancelOrderHandler.cs</code></td>
+          </tr>
+          <tr>
+          <td>Price snapshot</td>
+          <td>Order lines capture the unit price at checkout time, not current catalog price</td>
+          <td><code>CheckOutDomainService.cs</code></td>
+          </tr>
+          </tbody></table></div>
+          <h3 id="54-inventory-rules">5.4 Inventory Rules</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Rule</th>
+          <th>Description</th>
+          <th>Location</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Non-negative stock</td>
+          <td>Available quantity can never go below zero</td>
+          <td><code>InventoryItemInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Positive adjustment</td>
+          <td>Increase/decrease amounts must be positive</td>
+          <td><code>InventoryItemInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Sufficient stock</td>
+          <td>Decreasing inventory requires sufficient available quantity</td>
+          <td><code>InventoryItemInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Variant must exist</td>
+          <td>Inventory can only be created for existing product variants</td>
+          <td><code>AdjustInventoryHandler.cs</code></td>
+          </tr>
+          </tbody></table></div>
+          <h3 id="55-identity--authentication-rules">5.5 Identity &amp; Authentication Rules</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Rule</th>
+          <th>Description</th>
+          <th>Location</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Unique email (User)</td>
+          <td>User emails must be unique</td>
+          <td><code>UserConfiguration.cs</code></td>
+          </tr>
+          <tr>
+          <td>Unique email (Customer)</td>
+          <td>Customer emails must be unique</td>
+          <td><code>CustomerConfiguration.cs</code></td>
+          </tr>
+          <tr>
+          <td>Valid role</td>
+          <td>User roles must be either &quot;Admin&quot; or &quot;Customer&quot;</td>
+          <td><code>UserInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Access token expiry</td>
+          <td>Access tokens expire after 15 minutes (configurable)</td>
+          <td><code>JwtSettings</code></td>
+          </tr>
+          <tr>
+          <td>Refresh token expiry</td>
+          <td>Refresh tokens expire after 7 days (configurable)</td>
+          <td><code>JwtSettings</code></td>
+          </tr>
+          <tr>
+          <td>Auto customer creation</td>
+          <td>Registering as a Customer automatically creates a linked Customer entity</td>
+          <td><code>UserRegisteredHandler.cs</code></td>
+          </tr>
+          <tr>
+          <td>Admin no customer</td>
+          <td>Admin users do not get an associated Customer record</td>
+          <td><code>UserRegisteredHandler.cs</code></td>
+          </tr>
+          <tr>
+          <td>Name required</td>
+          <td>Customer first name and last name cannot be empty or whitespace</td>
+          <td><code>CustomerInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Email required</td>
+          <td>Customer email cannot be empty or whitespace</td>
+          <td><code>CustomerInvariants.cs</code></td>
+          </tr>
+          <tr>
+          <td>Address line 1 required</td>
+          <td>If address is provided, AddressLine1 is required</td>
+          <td><code>AddressInvariants.cs</code></td>
+          </tr>
+          </tbody></table></div>
+          <hr>
+          <h2 id="6-use-cases">6. Use Cases</h2>
+          <h3 id="customer-facing">Customer-Facing</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Use Case</th>
+          <th>Actor</th>
+          <th>Description</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Register</td>
+          <td>Anonymous</td>
+          <td>Create a new customer account with email and password</td>
+          </tr>
+          <tr>
+          <td>Login</td>
+          <td>Anonymous</td>
+          <td>Authenticate with email and password to receive JWT tokens</td>
+          </tr>
+          <tr>
+          <td>Refresh session</td>
+          <td>Any authenticated</td>
+          <td>Obtain new tokens using a valid refresh token</td>
+          </tr>
+          <tr>
+          <td>Revoke session</td>
+          <td>Any authenticated</td>
+          <td>Invalidate refresh token to end session</td>
+          </tr>
+          <tr>
+          <td>Browse catalog</td>
+          <td>Anonymous</td>
+          <td>View categories, products, and product variants with pricing</td>
+          </tr>
+          <tr>
+          <td>View product detail</td>
+          <td>Anonymous</td>
+          <td>See product details, variants, pricing, and add to cart</td>
+          </tr>
+          <tr>
+          <td>Add item to cart</td>
+          <td>Customer</td>
+          <td>Add a product variant with quantity to shopping cart (via drawer)</td>
+          </tr>
+          <tr>
+          <td>Change cart item quantity</td>
+          <td>Customer</td>
+          <td>Update the quantity of an item already in cart (+/- controls)</td>
+          </tr>
+          <tr>
+          <td>Remove item from cart</td>
+          <td>Customer</td>
+          <td>Remove a product variant from shopping cart</td>
+          </tr>
+          <tr>
+          <td>Clear cart</td>
+          <td>Customer</td>
+          <td>Remove all items from shopping cart</td>
+          </tr>
+          <tr>
+          <td>Checkout</td>
+          <td>Customer</td>
+          <td>Convert shopping cart into an order (reserves inventory)</td>
+          </tr>
+          <tr>
+          <td>Initiate payment</td>
+          <td>Customer</td>
+          <td>Start Stripe checkout session for a pending order</td>
+          </tr>
+          <tr>
+          <td>View my orders</td>
+          <td>Customer</td>
+          <td>List all orders belonging to the authenticated customer</td>
+          </tr>
+          <tr>
+          <td>View order detail</td>
+          <td>Customer</td>
+          <td>See order status, lines, and payment information</td>
+          </tr>
+          <tr>
+          <td>Cancel order</td>
+          <td>Customer</td>
+          <td>Cancel a pending/initiated/failed order (restores inventory)</td>
+          </tr>
+          <tr>
+          <td>Update profile</td>
+          <td>Customer</td>
+          <td>Change name, address, or password via profile page (email change is not offered in the UI)</td>
+          </tr>
+          <tr>
+          <td>Change password</td>
+          <td>Customer</td>
+          <td>Update account password via profile page</td>
+          </tr>
+          </tbody></table></div>
+          <h3 id="administrator-facing">Administrator-Facing</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Use Case</th>
+          <th>Actor</th>
+          <th>Description</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Manage categories</td>
+          <td>Admin</td>
+          <td>Create, rename, assign parent, delete categories</td>
+          </tr>
+          <tr>
+          <td>Manage products</td>
+          <td>Admin</td>
+          <td>Create, rename, update description/brand/category of products</td>
+          </tr>
+          <tr>
+          <td>Manage product variants</td>
+          <td>Admin</td>
+          <td>Add/remove variants, change SKU and price</td>
+          </tr>
+          <tr>
+          <td>Manage inventory</td>
+          <td>Admin</td>
+          <td>Increase, decrease, or set stock levels per variant</td>
+          </tr>
+          <tr>
+          <td>Mark order as paid</td>
+          <td>Admin</td>
+          <td>Manually override payment for an order</td>
+          </tr>
+          <tr>
+          <td>Mark order as delivered</td>
+          <td>Admin</td>
+          <td>Confirm order has been delivered</td>
+          </tr>
+          <tr>
+          <td>View all orders</td>
+          <td>Admin</td>
+          <td>View orders across all customers with filtering/pagination</td>
+          </tr>
+          <tr>
+          <td>Cancel order</td>
+          <td>Admin</td>
+          <td>Cancel any cancellable order</td>
+          </tr>
+          <tr>
+          <td>View all shopping carts</td>
+          <td>Admin</td>
+          <td>Browse customer shopping carts with status</td>
+          </tr>
+          <tr>
+          <td>View cart details</td>
+          <td>Admin</td>
+          <td>See cart contents, manage items, checkout on behalf</td>
+          </tr>
+          <tr>
+          <td>Manage customers</td>
+          <td>Admin</td>
+          <td>Create, view, edit, and delete customer profiles</td>
+          </tr>
+          </tbody></table></div>
+          <hr>
+          <h2 id="7-domain-events-and-state-changes">7. Domain Events and State Changes</h2>
+          <h3 id="catalog-events">Catalog Events</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Event</th>
+          <th>Trigger</th>
+          <th>Business Meaning</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>CategoryCreated</td>
+          <td>Category added to catalog</td>
+          <td>New product classification available</td>
+          </tr>
+          <tr>
+          <td>CategoryDeleted</td>
+          <td>Category removed (soft delete)</td>
+          <td>Classification no longer available</td>
+          </tr>
+          <tr>
+          <td>CategoryNameChanged</td>
+          <td>Category renamed (only if name actually differs)</td>
+          <td>Classification label updated</td>
+          </tr>
+          <tr>
+          <td>ProductCreated</td>
+          <td>New product added</td>
+          <td>New item available for sale</td>
+          </tr>
+          <tr>
+          <td>ProductDeleted</td>
+          <td>Product removed (soft delete)</td>
+          <td>Item no longer available</td>
+          </tr>
+          <tr>
+          <td>ProductNameChanged</td>
+          <td>Product renamed (only if name actually differs)</td>
+          <td>Item label updated</td>
+          </tr>
+          <tr>
+          <td>ProductVariantAdded</td>
+          <td>Variant added to product</td>
+          <td>New purchasable option available</td>
+          </tr>
+          <tr>
+          <td>ProductVariantRemoved</td>
+          <td>Variant removed (soft delete)</td>
+          <td>Purchasable option discontinued</td>
+          </tr>
+          <tr>
+          <td>ProductVariantSkuChanged</td>
+          <td>SKU updated (only if actually differs)</td>
+          <td>Inventory tracking identifier changed</td>
+          </tr>
+          <tr>
+          <td>ProductVariantPriceChanged</td>
+          <td>Price updated (only if actually differs)</td>
+          <td>Item pricing adjusted</td>
+          </tr>
+          </tbody></table></div>
+          <h3 id="sales-events">Sales Events</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Event</th>
+          <th>Trigger</th>
+          <th>Business Meaning</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>ShoppingCartCreated</td>
+          <td>First item added by customer</td>
+          <td>Customer started shopping</td>
+          </tr>
+          <tr>
+          <td>ShoppingCartItemAdded</td>
+          <td>New variant added to cart</td>
+          <td>Customer interested in a product</td>
+          </tr>
+          <tr>
+          <td>ShoppingCartItemQuantityAdjusted</td>
+          <td>Quantity changed (increase on duplicate add, or explicit change)</td>
+          <td>Customer adjusted desired quantity</td>
+          </tr>
+          <tr>
+          <td>ShoppingCartItemRemoved</td>
+          <td>Item removed from cart (soft delete)</td>
+          <td>Customer no longer wants item</td>
+          </tr>
+          <tr>
+          <td>ShoppingCartCheckedOut</td>
+          <td>Checkout completed</td>
+          <td>Customer committed to purchase</td>
+          </tr>
+          <tr>
+          <td>ShoppingCartCleared</td>
+          <td>All items removed</td>
+          <td>Customer abandoned selections</td>
+          </tr>
+          <tr>
+          <td>ShoppingCartDeleted</td>
+          <td>Cart soft-deleted</td>
+          <td>Cart record removed</td>
+          </tr>
+          <tr>
+          <td>OrderPlaced</td>
+          <td>Checkout creates order</td>
+          <td>Purchase order confirmed</td>
+          </tr>
+          <tr>
+          <td>OrderPaymentInitiated</td>
+          <td>Stripe session created</td>
+          <td>Customer directed to payment</td>
+          </tr>
+          <tr>
+          <td>OrderPaid</td>
+          <td>Payment confirmed (webhook or manual)</td>
+          <td>Revenue collected</td>
+          </tr>
+          <tr>
+          <td>OrderPaymentFailed</td>
+          <td>Payment unsuccessful</td>
+          <td>Payment needs retry or cancellation</td>
+          </tr>
+          <tr>
+          <td>OrderDelivered</td>
+          <td>Admin marks delivered</td>
+          <td>Fulfillment completed</td>
+          </tr>
+          <tr>
+          <td>OrderCancelled</td>
+          <td>Order cancelled</td>
+          <td>Purchase reversed, inventory restored</td>
+          </tr>
+          <tr>
+          <td>OrderDeleted</td>
+          <td>Order soft-deleted</td>
+          <td>Order record removed</td>
+          </tr>
+          <tr>
+          <td>InventoryItemCreated</td>
+          <td>Stock record created</td>
+          <td>Variant now trackable</td>
+          </tr>
+          <tr>
+          <td>InventoryAdjusted</td>
+          <td>Stock level changed (only when quantity actually changes)</td>
+          <td>Available quantity updated</td>
+          </tr>
+          <tr>
+          <td>InventoryItemDeleted</td>
+          <td>Stock record soft-deleted</td>
+          <td>Variant no longer tracked</td>
+          </tr>
+          </tbody></table></div>
+          <h3 id="identity-events">Identity Events</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Event</th>
+          <th>Trigger</th>
+          <th>Business Meaning</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>UserRegistered</td>
+          <td>New account created</td>
+          <td>New user in the system</td>
+          </tr>
+          <tr>
+          <td>UserPasswordChanged</td>
+          <td>Password updated</td>
+          <td>Security credentials rotated</td>
+          </tr>
+          <tr>
+          <td>UserDeactivated</td>
+          <td>Account disabled</td>
+          <td>User can no longer access system</td>
+          </tr>
+          <tr>
+          <td>CustomerCreated</td>
+          <td>Auto-created on registration</td>
+          <td>Customer profile established</td>
+          </tr>
+          <tr>
+          <td>CustomerDeleted</td>
+          <td>Customer soft-deleted</td>
+          <td>Profile removed</td>
+          </tr>
+          <tr>
+          <td>CustomerNameChanged</td>
+          <td>Name updated (only if differs)</td>
+          <td>Profile information changed</td>
+          </tr>
+          <tr>
+          <td>CustomerEmailChanged</td>
+          <td>Email updated (only if differs)</td>
+          <td>Contact information changed</td>
+          </tr>
+          <tr>
+          <td>CustomerAddressChanged</td>
+          <td>Address updated (only if differs)</td>
+          <td>Shipping information changed</td>
+          </tr>
+          </tbody></table></div>
+          <hr>
+          <h2 id="8-external-integrations">8. External Integrations</h2>
+          <h3 id="81-stripe-payment-gateway">8.1 Stripe Payment Gateway</h3>
+          <p><strong>Purpose:</strong> Processes online customer payments for orders.</p>
+          <p><strong>Business Impact:</strong> Enables the system to collect payments from customers and confirm payment success or failure asynchronously via webhooks.</p>
+          <p><strong>Integration Points:</strong></p>
+          <ul>
+          <li><strong>Checkout Session Creation</strong>: Creates hosted payment pages with order details, converting internal Money values to Stripe&#39;s smallest currency unit (cents). Maps order lines to Stripe line items with product name, quantity, and unit amount.</li>
+          <li><strong>Webhook Processing</strong>: Receives and verifies payment status notifications using Stripe&#39;s signature verification (<code>EventUtility.ConstructEvent()</code>). Handles <code>checkout.session.completed</code>, <code>checkout.session.expired</code>, and <code>payment_intent.payment_failed</code> events.</li>
+          <li><strong>Error Handling</strong>: Stripe API errors return <code>Result.Failure</code> with code <code>&quot;Payment.Stripe.SessionCreationFailed&quot;</code>. Signature verification failures return <code>&quot;Payment.SignatureVerification.Failed&quot;</code>.</li>
+          <li><strong>Configuration</strong>: Stripe API key (<code>SecretKey</code>) and webhook secret (<code>WebhookSecret</code>) configured per environment via <code>StripeSettings</code> (user secrets recommended).</li>
+          </ul>
+          <p><strong>Source:</strong> <code>Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Services/StripePaymentService.cs</code></p>
+          <h3 id="82-smtp-email-service">8.2 SMTP Email Service</h3>
+          <p><strong>Purpose:</strong> Infrastructure for sending email notifications.</p>
+          <p><strong>Business Impact:</strong> Provides the capability for system-to-user communication.</p>
+          <p><strong>Configuration:</strong></p>
+          <ul>
+          <li>Host, Port (default 25), Username, Password, EnableSsl, From, To</li>
+          <li>Default: <code>localhost:25</code> with SSL disabled</li>
+          </ul>
+          <p><strong>Source:</strong> <code>Source/Common/MMCA.Common.Infrastructure/Services/SmtpEmailSender.cs</code></p>
+          <p><strong>Note:</strong> While the email service infrastructure is fully implemented, no domain event handlers currently trigger email sending. This may be planned functionality.</p>
+          <hr>
+          <h2 id="9-authorization-model">9. Authorization Model</h2>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Policy</th>
+          <th>Access Level</th>
+          <th>Description</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Anonymous</td>
+          <td>No auth required</td>
+          <td>Catalog browsing (GET categories, products), login, registration, payment webhooks</td>
+          </tr>
+          <tr>
+          <td>RequireAuthenticated</td>
+          <td>Any logged-in user</td>
+          <td>Shopping cart operations, order viewing (own), profile management</td>
+          </tr>
+          <tr>
+          <td>RequireCustomer</td>
+          <td>Customer role</td>
+          <td>Customer-specific operations</td>
+          </tr>
+          <tr>
+          <td>RequireAdmin</td>
+          <td>Admin role</td>
+          <td>Catalog management, inventory management, manual payment, delivery confirmation</td>
+          </tr>
+          </tbody></table></div>
+          <p><strong>Ownership Enforcement:</strong> The <code>OwnerOrAdminFilter</code> validates that the route parameter <code>id</code> (CustomerIdentifierType) matches the authenticated user&#39;s customer ID, or that the user has the Admin role. Applied to shopping cart and order endpoints. Returns 403 Forbidden if unauthorized.</p>
+          <p><strong>JWT Claims:</strong> Access tokens contain: <code>sub</code>, <code>jti</code>, <code>iat</code>, <code>user_id</code>, <code>email</code>, <code>role</code>, and <code>customer_id</code> (when applicable).</p>
+          <hr>
+          <h2 id="10-cross-module-communication">10. Cross-Module Communication</h2>
+          <p>The system enforces strict module boundaries. Modules communicate only through shared interface contracts:</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Interface</th>
+          <th>Provider Module</th>
+          <th>Consumer Module</th>
+          <th>Purpose</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>IProductVariantService</code></td>
+          <td>Catalog</td>
+          <td>Sales</td>
+          <td>Verify variant existence, check SKU uniqueness, fetch unit prices, get ID by SKU</td>
+          </tr>
+          </tbody></table></div>
+          <p><strong>Confirmed behaviors:</strong></p>
+          <ul>
+          <li>Sales module cannot directly access Catalog domain entities</li>
+          <li>When Catalog module is disabled, a stub <code>DisabledProductVariantService</code> is registered</li>
+          <li>Sales module declares a hard dependency on Catalog (<code>RequiresDependencies = true</code>) — it will not start without Catalog</li>
+          <li>Module discovery uses reflection; registration follows topological dependency order (Kahn&#39;s algorithm)</li>
+          </ul>
+          <hr>
+          <h2 id="11-user-interface">11. User Interface</h2>
+          <h3 id="111-technology">11.1 Technology</h3>
+          <p>The UI is a <strong>Blazor Server + WebAssembly hybrid</strong> (<code>InteractiveAuto</code> render mode) using <strong>MudBlazor</strong> component library. It supports multiple hosting targets:</p>
+          <ul>
+          <li><strong>Web</strong> (Server + WASM): <code>Source/UI/Hosts/MMCA.Store.UI.Web</code></li>
+          <li><strong>WebAssembly Client</strong>: <code>Source/UI/Hosts/MMCA.Store.UI.Web.Client</code></li>
+          <li><strong>MAUI</strong> (iOS, Android, macOS, Windows): <code>Source/UI/Hosts/MMCA.Store.UI</code></li>
+          </ul>
+          <h3 id="112-shopping-cart-ux">11.2 Shopping Cart UX</h3>
+          <p>The shopping cart is exclusively accessible through a <strong>380px right-side drawer</strong> (CartDrawer), opened via the cart icon in the top app bar. There is no dedicated cart page.</p>
+          <p><strong>Features:</strong></p>
+          <ul>
+          <li>Quantity +/- controls per item when cart is Active</li>
+          <li>Remove individual items, clear all items</li>
+          <li>&quot;Checkout &amp; Pay&quot; button triggers order creation + Stripe redirect</li>
+          <li>&quot;Checked Out&quot; chip and read-only mode for checked-out carts</li>
+          <li>Empty state with &quot;Browse Products&quot; navigation</li>
+          <li>&quot;Continue Shopping&quot; link to catalog</li>
+          </ul>
+          <p><strong>State Management:</strong> The <code>ICartStateService</code> singleton manages cart state centrally. It enriches cart items with product names and SKUs from the Catalog API after each refresh.</p>
+          <h3 id="113-catalog-browse">11.3 Catalog Browse</h3>
+          <p>The catalog browse page (<code>/catalog</code>) provides:</p>
+          <ul>
+          <li>Product grid with search by name</li>
+          <li>Category filter dropdown</li>
+          <li>Sort by name or price</li>
+          <li>Quick &quot;Add to Cart&quot; buttons per variant</li>
+          <li>&quot;View Details&quot; navigation to product detail page</li>
+          </ul>
+          <p>The product detail page (<code>/catalog/{id}</code>) shows:</p>
+          <ul>
+          <li>Breadcrumbs (Home &gt; Catalog &gt; Product)</li>
+          <li>Product description, brand, category</li>
+          <li>Variant list with SKU, price, quantity selector, and &quot;Add to Cart&quot;</li>
+          <li>&quot;Buy Now&quot; option (direct Stripe checkout for single variant)</li>
+          </ul>
+          <h3 id="114-navigation-structure">11.4 Navigation Structure</h3>
+          <p><strong>Sidebar</strong> (role-based, dynamically populated from <code>IUIModule</code> registrations):</p>
+          <ul>
+          <li>Customer: Home, Shop, My Orders, My Profile</li>
+          <li>Admin: Home, Categories, Products, Inventory, Shopping Carts, Orders, Customers, My Profile</li>
+          </ul>
+          <p><strong>Top App Bar</strong>: Cart icon with badge count, user email, Logout button (authenticated) or Login/Register buttons (anonymous)</p>
+          <h3 id="115-module-registration">11.5 Module Registration</h3>
+          <p>UI modules implement <code>IUIModule</code> (providing <code>NavItems</code> and <code>Assembly</code> for route discovery). Modules can be conditionally enabled via <code>UIModuleConfiguration.IsModuleEnabled(configuration, moduleName)</code>.</p>
+          <hr>
+          <h2 id="12-cross-cutting-infrastructure">12. Cross-Cutting Infrastructure</h2>
+          <h3 id="121-commandquery-pipeline-decorators">12.1 Command/Query Pipeline Decorators</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Decorator</th>
+          <th>Marker</th>
+          <th>Behavior</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>TransactionalCommandDecorator</code></td>
+          <td><code>ITransactional</code></td>
+          <td>Wraps command in database transaction (begin/commit/rollback)</td>
+          </tr>
+          <tr>
+          <td><code>CachingCommandDecorator</code></td>
+          <td><code>ICacheInvalidating</code></td>
+          <td>Invalidates cache entries by prefix on successful command execution</td>
+          </tr>
+          <tr>
+          <td><code>ProfilingCommandDecorator</code></td>
+          <td>(all commands)</td>
+          <td>Records MiniProfiler step (when <code>UseMiniProfiler=true</code>)</td>
+          </tr>
+          <tr>
+          <td><code>ProfilingQueryDecorator</code></td>
+          <td>(all queries)</td>
+          <td>Records MiniProfiler step (when <code>UseMiniProfiler=true</code>)</td>
+          </tr>
+          </tbody></table></div>
+          <h3 id="122-idempotency">12.2 Idempotency</h3>
+          <p>The <code>IdempotencyFilter</code> (applied via <code>[Idempotent]</code> attribute on Create endpoints) caches the first response for a given <code>Idempotency-Key</code> header value for 24 hours. Duplicate requests receive the cached response with an <code>X-Idempotent-Replay: true</code> header. Per-key <code>SemaphoreSlim</code> locking prevents concurrent duplicate execution.</p>
+          <h3 id="123-exception-handling">12.3 Exception Handling</h3>
+          <p>Five exception handlers (registered as middleware in priority order):</p>
+          <ol>
+          <li><strong>DomainExceptionHandler</strong> -&gt; HTTP 400</li>
+          <li><strong>ValidationExceptionHandler</strong> (FluentValidation) -&gt; HTTP 400 with grouped errors</li>
+          <li><strong>DbUpdateExceptionHandler</strong> -&gt; HTTP 409 Conflict</li>
+          <li><strong>OperationCanceledExceptionHandler</strong> -&gt; HTTP 499</li>
+          <li><strong>GlobalExceptionHandler</strong> -&gt; HTTP 500 (catch-all)</li>
+          </ol>
+          <h3 id="124-multi-database-strategy">12.4 Multi-Database Strategy</h3>
+          <p>The <code>IDbContextFactory</code> implements a strategy pattern supporting three data sources:</p>
+          <ul>
+          <li><strong>SQL Server</strong> (default, via Aspire container)</li>
+          <li><strong>SQLite</strong> (alternative)</li>
+          <li><strong>Cosmos DB</strong> (alternative, no transaction support)</li>
+          </ul>
+          <p>Entity types are routed to data sources via <code>[UseDataSource]</code> attribute on EF configurations. The <code>IDataSourceService</code> caches entity-to-datasource mappings.</p>
+          <hr>
+          <h2 id="13-testing">13. Testing</h2>
+          <h3 id="131-test-structure">13.1 Test Structure</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Type</th>
+          <th>Projects</th>
+          <th>Description</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><strong>Unit</strong></td>
+          <td>15 projects (per module per layer + common)</td>
+          <td>Entity creation, invariants, domain events, handlers, mappers, validators</td>
+          </tr>
+          <tr>
+          <td><strong>Architecture</strong></td>
+          <td>1 project (12 test files)</td>
+          <td>NetArchTest.Rules: layer dependencies, module isolation, domain purity, naming conventions</td>
+          </tr>
+          <tr>
+          <td><strong>Integration</strong></td>
+          <td>3 per-service projects (Catalog, Sales, Identity)</td>
+          <td>Each boots one service host via <code>WebApplicationFactory</code>; Testcontainers.MsSql + Respawn for DB reset (or a real SQL Server via <code>STORE_TEST_SQL_BASE</code>), JWT token generation, full HTTP endpoint testing. Runs via <code>MMCA.Store.Integration.slnf</code> and gates deploy. The old combined single-host <code>MMCA.Store.IntegrationTests</code> has been removed.</td>
+          </tr>
+          <tr>
+          <td><strong>E2E</strong></td>
+          <td>1 project</td>
+          <td>Playwright (Chromium), page objects, Blazor wait helpers, full user journey tests</td>
+          </tr>
+          </tbody></table></div>
+          <h3 id="132-key-test-scenarios">13.2 Key Test Scenarios</h3>
+          <ul>
+          <li>Full customer journey: Register -&gt; Browse -&gt; Add to Cart -&gt; Checkout -&gt; Admin Pay -&gt; Deliver</li>
+          <li>Order lifecycle: all state transitions including cancellation with inventory restoration</li>
+          <li>Cart operations: add, change quantity, remove, clear, checkout</li>
+          <li>Authorization: anonymous, customer, admin role enforcement</li>
+          <li>Cross-module: Catalog -&gt; Sales pricing, inventory validation</li>
+          </ul>
+          <hr>
+          <h2 id="14-missing-or-unclear-business-logic">14. Missing or Unclear Business Logic</h2>
+          <h3 id="141-no-email-notifications-on-events">14.1 No Email Notifications on Events</h3>
+          <p><strong>Observation:</strong> The SMTP email service infrastructure is implemented, but no domain event handlers trigger email notifications for events like order confirmation, payment receipt, or shipping notification.
+          <strong>Recommendation:</strong> Clarify whether email notifications are planned or intentionally omitted.</p>
+          <h3 id="142-no-returnrefund-workflow">14.2 No Return/Refund Workflow</h3>
+          <p><strong>Observation:</strong> Once an order reaches <code>Paid</code> or <code>Delivered</code> status, there are no further state transitions available. No return, refund, or exchange workflow exists. Cancellation is only possible before payment succeeds.
+          <strong>Recommendation:</strong> Clarify whether returns/refunds are in scope and whether Stripe refund integration is needed.</p>
+          <h3 id="143-no-inventory-check-at-cart-add-time">14.3 No Inventory Check at Cart-Add Time</h3>
+          <p><strong>Observation:</strong> When a customer adds an item to the cart, the system verifies the product variant exists but does <strong>not</strong> check if inventory is available. Inventory is only validated at checkout.
+          <strong>Recommendation:</strong> This may be intentional (allowing customers to add items that are temporarily out of stock) or may warrant a stock availability indicator on the cart.</p>
+          <h3 id="144-cart-reactivation-clears-all-items">14.4 Cart Reactivation Clears All Items</h3>
+          <p><strong>Observation:</strong> When a customer adds an item to a previously checked-out cart, all previous items are deleted and the cart is reactivated empty (with only the new item). The business intent behind clearing the cart rather than preserving previous items is unclear.
+          <strong>Recommendation:</strong> Confirm this is the desired behavior — some systems prefer to retain unchecked-out items.</p>
+          <h3 id="145-no-price-change-protection">14.5 No Price Change Protection</h3>
+          <p><strong>Observation:</strong> Product variant prices can be changed at any time by administrators. If a customer has items in their cart and prices change before checkout, the customer will be charged the new price (prices are fetched at checkout, not at cart-add time).
+          <strong>Recommendation:</strong> Determine if customers should be notified of price changes or if cart items should display price warnings.</p>
+          <h3 id="146-delivery-tracking-absent">14.6 Delivery Tracking Absent</h3>
+          <p><strong>Observation:</strong> The <code>MarkAsDelivered</code> transition exists but there is no tracking number, carrier information, or estimated delivery date. Delivery is a binary admin action.
+          <strong>Recommendation:</strong> Consider whether shipping/tracking details are needed for the business use case.</p>
+          <h3 id="147-no-partial-order-fulfillment">14.7 No Partial Order Fulfillment</h3>
+          <p><strong>Observation:</strong> Orders are delivered as a whole — there is no concept of partial shipments or split deliveries.
+          <strong>Recommendation:</strong> Clarify if partial fulfillment is a future requirement.</p>
+          <h3 id="148-no-customeruser-deactivation-endpoint">14.8 No Customer/User Deactivation Endpoint</h3>
+          <p><strong>Observation:</strong> <code>User.Deactivate()</code> method and <code>UserDeactivated</code> domain event exist in the domain model, but no API endpoint or UI action exposes this functionality.
+          <strong>Recommendation:</strong> May be an admin feature not yet implemented.</p>
+          <h3 id="149-category-deletion-has-no-cascade-check">14.9 Category Deletion Has No Cascade Check</h3>
+          <p><strong>Observation:</strong> Deleting a category doesn&#39;t check for assigned products. Products with a deleted category may have an orphaned <code>CategoryId</code>.
+          <strong>Recommendation:</strong> Consider validating no products reference the category before deletion, or cascading the nullification.</p>
+          <h3 id="1410-inventory-list-endpoint-not-exposed">14.10 Inventory List Endpoint Not Exposed</h3>
+          <p><strong>Observation:</strong> The <code>InventoryItemsController</code> only exposes <code>GetById</code> — the <code>GetAll</code>, <code>GetPaged</code>, and <code>Lookup</code> endpoints from the base class are not overridden. The UI <code>InventoryItemList</code> page may need these endpoints.
+          <strong>Recommendation:</strong> Verify how the inventory list page fetches its data and whether list endpoints should be added.</p>
+          <hr>
+          <h2 id="15-seed-data-initial-system-state">15. Seed Data (Initial System State)</h2>
+          <p>The system seeds the following data at startup:</p>
+          <p><strong>Users:</strong></p>
+          <ul>
+          <li>Admin: one seeded administrator account (Admin role, no Customer record; credentials are environment-specific and not published)</li>
+          <li>Customer: one seeded demo customer account (Customer role)</li>
+          </ul>
+          <p><strong>Catalog:</strong></p>
+          <ul>
+          <li>Categories: &quot;Jewelry&quot; (id=1), &quot;Watches&quot; (id=2)</li>
+          <li>Product: &quot;Gold Ring&quot; (id=11, brand: &quot;WhatNot&quot;, category: Jewelry)</li>
+          <li>Variants: &quot;Gold Ring - Size 6&quot; ($15.00), &quot;Gold Ring - Size 7&quot; ($15.50), &quot;Gold Ring - Size 8&quot; ($16.00) — all USD</li>
+          </ul>
+          <p><strong>Inventory:</strong> 100,000 units per variant (for all 3 Gold Ring sizes)</p>
+          <p><strong>Seeding is idempotent</strong> — seeders check for existing data via <code>ExistsAsync()</code> before inserting, and only run for enabled modules.</p>
+          <hr>
+          <p><em>This specification is derived entirely from the source code. All business rules, workflows, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-03-18.</em></p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/guides/store-Specification.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -322,7 +322,7 @@
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the read request that backs a user&#39;s in-app notification inbox: &quot;give me page N of my notifications.&quot; A <code>sealed record</code> carrying the caller&#39;s <code>UserId</code> plus paging arguments.</li>
-          <li><strong>Depends on</strong>: the solution-wide <code>UserIdentifierType</code> alias (<code>int</code>, see <span class="doc-deadlink" title="Reference outside the published set">primer §2</span>); BCL only otherwise. Consumed by <a href="#getmynotificationshandler"><code>GetMyNotificationsHandler</code></a> through the query side of the CQRS pipeline (<a href="group-05-cqrs-pipeline.html#iqueryhandlerin-tquery-tresult"><code>IQueryHandler</code></a>).</li>
+          <li><strong>Depends on</strong>: the solution-wide <code>UserIdentifierType</code> alias (<code>int</code>, see <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a>); BCL only otherwise. Consumed by <a href="#getmynotificationshandler"><code>GetMyNotificationsHandler</code></a> through the query side of the CQRS pipeline (<a href="group-05-cqrs-pipeline.html#iqueryhandlerin-tquery-tresult"><code>IQueryHandler</code></a>).</li>
           <li><strong>Concept introduced</strong>: <strong>the paged-query record shape.</strong> This is the first notification query, so note the convention it shares with every read in the codebase: an immutable positional <code>record</code> with defaulted paging (<code>PageNumber = 1</code>, <code>PageSize = 20</code>, line 9-10) is the message; a matching handler is the behavior; the two are wired by the query dispatcher, never called directly. Tag: <code>[Rubric §6, CQRS &amp; Event-Driven]</code> assesses whether reads and writes are modeled as distinct, single-purpose messages, and this record is a pure read with no side effects. <code>[Rubric §12, Performance &amp; Scalability]</code> assesses guarding against unbounded work: the XML doc pins <code>PageSize</code> at &quot;max 500&quot; (line 6) and the handler enforces that ceiling, so a client cannot request an unbounded page.</li>
           <li><strong>Walkthrough</strong>: three positional members: <code>UserId</code> (the authenticated user, line 8), <code>PageNumber</code> defaulting to 1 (line 9), <code>PageSize</code> defaulting to 20 (line 10). No factory, no validation here: it is a plain carrier, and the page ceiling is applied downstream in the handler.</li>
           <li><strong>Why it&#39;s built this way</strong>: a positional record gives value equality and immutability for free, which is exactly what a query message wants (it is data in flight, never mutated). The default page size keeps the common &quot;just show my inbox&quot; call one-argument-simple.</li>
@@ -560,7 +560,7 @@
           <code>UserIdentifierType</code> aliases (<code>MarkNotificationReadCommand.cs:7-8</code>), which are solution-wide <code>global using ... = int;</code> aliases linked via <code>Directory.Build.props</code>, so there is no first-party type edge.</li>
           <li><strong>Concept</strong>: a command carrying its own authorization key. Unlike a request DTO, a command is the
           input to a <a href="#marknotificationreadhandler">handler</a> in the CQRS pipeline (see
-          <span class="doc-deadlink" title="Reference outside the published set">primer §2</span>). The load-bearing
+          <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a>). The load-bearing
           detail is that <code>UserId</code> is part of the command, not looked up loosely later: the handler filters on it
           to enforce ownership. <code>[Rubric §6, CQRS &amp; Event-Driven]</code> assesses whether writes flow through explicit
           command messages; this is the minimal shape of one.</li>
@@ -583,7 +583,7 @@
           flag key once as a <code>const string</code> keeps every gate that references it typo-free; the value is resolved
           at runtime by the feature-management layer that the <code>FeatureGate</code> command/query decorators consult
           (the outermost decorator in the CQRS pipeline, see
-          <span class="doc-deadlink" title="Reference outside the published set">primer §2</span>).</li>
+          <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a>).</li>
           <li><strong>Walkthrough</strong>: one <code>public const string</code> on a <code>static</code> class (<code>NotificationFeatures.cs:6-10</code>).</li>
           <li><strong>Where it&#39;s used</strong>: wherever push behavior is conditionally enabled, both the Notification handlers
           gated by the feature and the UI that hides push affordances when the flag is off.</li>
@@ -639,7 +639,7 @@
           primitive obsession: the <code>Id</code> is typed <code>UserNotificationIdentifierType</code> and the foreign key
           <code>PushNotificationId</code> is typed <code>PushNotificationIdentifierType</code>, so the <em>names</em> carry intent even though
           both currently resolve to <code>int</code>. Change the alias in one file and every usage updates (see
-          <span class="doc-deadlink" title="Reference outside the published set">primer §2</span>).</li>
+          <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a>).</li>
           <li><strong>Walkthrough</strong>: a <code>sealed record class</code> with seven <code>init</code> properties. <code>required</code> marks the values
           that must always be present, <code>Id</code>, <code>PushNotificationId</code>, <code>Title</code>, <code>Body</code>, <code>IsRead</code>
           (<code>UserNotificationDTO.cs:10-22</code>); plain <code>init</code> marks the optional/nullable ones, <code>ReadOn?</code> and
@@ -850,7 +850,7 @@
           <li><strong>Concept, the <code>extension(IServiceCollection)</code> registration block.</strong> DI wiring here uses the C#
           preview extension-member syntax (<code>DependencyInjection.cs:14</code>), which lets the framework add methods
           directly to <code>IServiceCollection</code> (taught in the
-          <span class="doc-deadlink" title="Reference outside the published set">primer</span>). <code>[Rubric §3, Clean Architecture]</code> is visible in the split of responsibility: the module registers its <em>app-specific</em>
+          <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer</a>). <code>[Rubric §3, Clean Architecture]</code> is visible in the split of responsibility: the module registers its <em>app-specific</em>
           choices (attendees as recipients, the export service) and then calls the framework&#39;s
           <code>AddNotificationApplicationServices()</code> (line 31) for the reusable handlers, mapper, validator, and
           entity query service, so shared and app-specific wiring stay separate.</li>
@@ -1591,7 +1591,7 @@
           <li>The default no-op recipient provider (<code>DependencyInjection.cs:68</code>), then returns the collection for chaining (<code>DependencyInjection.cs:70</code>).</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: hand-registration keeps the notification sub-system self-contained inside the framework package while still honoring the framework-wide override contract (<code>TryAdd</code>), and the <code>extension(IServiceCollection)</code> C# preview syntax lets it read as a first-class <code>services.AddNotificationApplicationServices()</code> call (see <span class="doc-deadlink" title="Reference outside the published set">primer §4</span>).</li>
+          <li><strong>Why it&#39;s built this way</strong>: hand-registration keeps the notification sub-system self-contained inside the framework package while still honoring the framework-wide override contract (<code>TryAdd</code>), and the <code>extension(IServiceCollection)</code> C# preview syntax lets it read as a first-class <code>services.AddNotificationApplicationServices()</code> call (see <a href="00-primer.html#c-extensiont-types--read-this-once">primer §4</a>).</li>
           <li><strong>Where it&#39;s used</strong>: called from every consuming host&#39;s Application composition root, before <code>AddApplicationDecorators()</code> so the scanned handlers exist when the decorator pipeline wraps them. Its API counterpart is the <code>AddNotificationControllers</code> helper above.</li>
           </ul>
           <hr>

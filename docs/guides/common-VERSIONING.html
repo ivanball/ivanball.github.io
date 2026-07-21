@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Versioning &amp; Breaking-Change Policy · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="MMCA.Common publishes fifteen NuGet packages that are versioned and released together as a single unit. They share one version number so a consumer…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/guides/common-VERSIONING.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Versioning &amp; Breaking-Change Policy">
+  <meta property="og:description" content="MMCA.Common publishes fifteen NuGet packages that are versioned and released together as a single unit. They share one version number so a consumer…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/guides/common-VERSIONING.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/guides/index.html">Guides &amp; Specifications</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">Common · Versioning &amp; Breaking-Change Policy</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All guides</summary>
+        <nav class="doc-nav" aria-label="Guides &amp; Specifications">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="adc-ACCESSIBILITY-SCREENREADER-PASS.html">ADC · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="adc-IntegrationTestReworkPlan.html">ADC · Integration-Test Tier Rework Plan (RemediationBacklog #14)</a></li>
+        <li><a href="adc-NavigationFlow.html">ADC · Navigation Flow</a></li>
+        <li><a href="adc-specifications.html">ADC · Business Specifications</a></li>
+        <li><a href="common-ACCESSIBILITY.html">Common · Accessibility (rubric §21)</a></li>
+        <li><a href="common-COST.html">Common · Cost &amp; FinOps Notes (rubric §31)</a></li>
+        <li><a href="common-GETTING-STARTED.html">Common · Getting Started: Build a New App on MMCA.Common</a></li>
+        <li><a href="common-RESILIENCE.html">Common · Resilience &amp; Business Continuity (rubric §29)</a></li>
+        <li><a href="common-RESPONSIVE.html">Common · Responsive Design &amp; Cross-Browser Support (rubric §22)</a></li>
+        <li><a href="common-VERSIONING.html" aria-current="page">Common · Versioning &amp; Breaking-Change Policy</a></li>
+        <li><a href="store-ACCESSIBILITY-SCREENREADER-PASS.html">Store · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="store-BusinessWorkflows.html">Store · Business Workflow Analysis</a></li>
+        <li><a href="store-NavigationFlow.html">Store · Navigation Flow</a></li>
+        <li><a href="store-Specification.html">Store · Business Specification Document</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
+          <h1 id="versioning--breaking-change-policy">Versioning &amp; Breaking-Change Policy</h1>
+          <p>MMCA.Common publishes fifteen NuGet packages that are versioned and released <strong>together</strong> as a
+          single unit. They share one version number so a consumer never has to reason about cross-package
+          compatibility. (<code>MMCA.Common.UI.Maui</code> rides the same tag but is built and packed by a dedicated
+          windows job in <code>release.yml</code>, since its MAUI target frameworks cannot build on the ubuntu runner.)</p>
+          <h2 id="semantic-versioning">Semantic Versioning</h2>
+          <p>Versions follow <a href="https://semver.org/" target="_blank" rel="noopener">SemVer 2.0</a> — <code>MAJOR.MINOR.PATCH</code>:</p>
+          <ul>
+          <li><strong>MAJOR</strong> — a breaking change to the public API or a behavior contract (see below).</li>
+          <li><strong>MINOR</strong> — backward-compatible new capability.</li>
+          <li><strong>PATCH</strong> — backward-compatible bug fix.</li>
+          </ul>
+          <p>Versions are produced by <strong>MinVer</strong> from annotated git tags of the form <code>vMAJOR.MINOR.PATCH</code>
+          (e.g. <code>v1.51.0</code>). Untagged builds get a height-based pre-release suffix. There is no hand-edited
+          version property; tag the commit and the release workflow packs and pushes.</p>
+          <h2 id="what-counts-as-breaking">What counts as breaking</h2>
+          <p>A <strong>MAJOR</strong> bump is required for any of:</p>
+          <ul>
+          <li>Removing or renaming a public type/member, or changing a signature.</li>
+          <li>Changing the meaning of an existing configuration key, or changing a default in a way that
+          alters runtime behavior for an unchanged consumer (e.g. the <code>Outbox:RetentionDays</code> default —
+          call these out in <a href="https://github.com/ivanball/MMCA.Common/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG.md</a> under <strong>Changed (Behavior)</strong>).</li>
+          <li>Tightening a base-class contract (e.g. making a virtual member abstract, or a factory now
+          returning <code>Result&lt;T&gt;</code> where it returned a bare entity).</li>
+          <li>Removing or narrowing a supported transport/provider/data-source engine.</li>
+          </ul>
+          <p>Additive, opt-in changes (new settings with safe defaults, new overloads, new interfaces) are
+          <strong>MINOR</strong>.</p>
+          <h2 id="consumer-rollout">Consumer rollout</h2>
+          <p>Per project convention, framework upgrades are <strong>swept across all consumers in one pass</strong> —
+          there are no opt-in flags or phased rollouts for a MMCA.Common change. When a release contains a
+          breaking change, the consuming repos (MMCA.ADC, MMCA.Store) are updated in the same change set.</p>
+          <h2 id="deprecation">Deprecation</h2>
+          <p>Prefer deprecation over removal where possible: mark the old API <code>[Obsolete(&quot;…&quot;, error: false)]</code>
+          for at least one MINOR release, document the replacement in the CHANGELOG, then remove in the next
+          MAJOR.</p>
+          <h2 id="supply-chain">Supply chain</h2>
+          <ul>
+          <li>All package versions are centrally pinned (<code>Directory.Packages.props</code>).</li>
+          <li>NuGet <strong>lock files</strong> are committed for reproducible restores.</li>
+          <li><code>MassTransit</code> is pinned to <strong>v8</strong> by policy (v9 needs a commercial license) — enforced by a
+          fitness test, not just a comment.</li>
+          <li>A <strong>CycloneDX SBOM</strong> is produced at release; dependency vulnerabilities are audited in CI.</li>
+          </ul>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/guides/common-VERSIONING.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Architecture Evaluation Criteria · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="A structured rubric for evaluating the architecture of an enterprise application. Each category defines what is being assessed, concrete criteria to…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/governance/ArchitectureEvaluationCriteria.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Architecture Evaluation Criteria">
+  <meta property="og:description" content="A structured rubric for evaluating the architecture of an enterprise application. Each category defines what is being assessed, concrete criteria to…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/governance/ArchitectureEvaluationCriteria.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/governance/index.html">Architecture Governance</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">Architecture Evaluation Criteria</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>Rubric, scorecards &amp; backlogs</summary>
+        <nav class="doc-nav" aria-label="Architecture Governance">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="adc-ArchitectureScorecard.html">ADC · Architecture Scorecard</a></li>
+        <li><a href="adc-RemediationBacklog.html">ADC · Architecture Remediation Backlog</a></li>
+        <li><a href="ArchitectureEvaluationCriteria.html" aria-current="page">Architecture Evaluation Criteria</a></li>
+        <li><a href="common-ArchitectureScorecard.html">Common · Architecture Scorecard</a></li>
+        <li><a href="common-RemediationBacklog.html">Common · Architecture Remediation Backlog</a></li>
+        <li><a href="store-ArchitectureScorecard.html">Store · Architecture Scorecard</a></li>
+        <li><a href="store-RemediationBacklog.html">Store · Architecture Remediation Backlog</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture governance</p>
+          <h1 id="architecture-evaluation-criteria">Architecture Evaluation Criteria</h1>
+          <p>A structured rubric for evaluating the architecture of an enterprise application. Each
+          category defines <strong>what</strong> is being assessed, <strong>concrete criteria</strong> to check, <strong>red flags</strong>
+          that signal trouble, and a <strong>maturity scale</strong> so scores are comparable across reviews.</p>
+          <p>Although written against a .NET / DDD / Clean Architecture / CQRS stack (modular monolith
+          evolving toward microservices) with a Blazor / MudBlazor front end, the criteria generalize
+          to any enterprise codebase and component-based UI.</p>
+          <p>The categories are organized in three parts: <strong>Part A — Application / Backend Architecture</strong>
+          (§1–17), <strong>Part B — Front-End / UI Architecture</strong> (§18–28), and <strong>Part C — Operational,
+          Governance &amp; Cross-Cutting Concerns</strong> (§29–34).</p>
+          <hr>
+          <h2 id="how-to-use-this-rubric">How to Use This Rubric</h2>
+          <h3 id="maturity-scale-per-category">Maturity scale (per category)</h3>
+          <p>Score each category 0–4. Use the same scale everywhere so totals are comparable.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Level</th>
+          <th>Name</th>
+          <th>Meaning</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>0</td>
+          <td><strong>Absent</strong></td>
+          <td>Principle/pattern not applied; actively violated.</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><strong>Initial</strong></td>
+          <td>Ad-hoc, inconsistent, present only in isolated spots.</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><strong>Developing</strong></td>
+          <td>Applied in most new code; legacy gaps remain; some confusion.</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><strong>Consistent</strong></td>
+          <td>Applied uniformly with conventions; enforced by review.</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><strong>Optimized</strong></td>
+          <td>Enforced automatically (analyzers/tests/CI), documented, and evolved deliberately.</td>
+          </tr>
+          </tbody></table></div>
+          <h3 id="implementation-score-per-category">Implementation score (per category)</h3>
+          <p>Alongside the maturity level, rate <strong>how well each category is actually implemented</strong> on a finer
+          0–10 scale. The two axes measure different things and should both be recorded:</p>
+          <ul>
+          <li><strong>Maturity (0–4)</strong> — <em>process</em>: how consistently and how well-governed the pattern is (ad-hoc → enforced by CI).</li>
+          <li><strong>Implementation (0–10)</strong> — <em>substance</em>: how good the implementation is right now, judged against the category&#39;s <strong>criteria</strong> and <strong>red flags</strong>.</li>
+          </ul>
+          <p>A category can be mature-but-mediocre (enforced conventions wrapped around a weak design) or
+          excellent-but-inconsistent (a strong implementation applied only in spots) — two scores capture that
+          difference where one cannot.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Score</th>
+          <th>Band</th>
+          <th>Meaning</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>0</td>
+          <td><strong>None</strong></td>
+          <td>Category not implemented; criteria unmet, red flags pervasive.</td>
+          </tr>
+          <tr>
+          <td>1–2</td>
+          <td><strong>Poor</strong></td>
+          <td>Isolated, partial attempts; major gaps; multiple red flags present.</td>
+          </tr>
+          <tr>
+          <td>3–4</td>
+          <td><strong>Partial</strong></td>
+          <td>Several criteria met; meaningful gaps remain; some red flags.</td>
+          </tr>
+          <tr>
+          <td>5–6</td>
+          <td><strong>Adequate</strong></td>
+          <td>Most criteria met; functional with rough edges; a few red flags.</td>
+          </tr>
+          <tr>
+          <td>7–8</td>
+          <td><strong>Strong</strong></td>
+          <td>Nearly all criteria met well; only minor, isolated gaps; no significant red flags.</td>
+          </tr>
+          <tr>
+          <td>9–10</td>
+          <td><strong>Exemplary</strong></td>
+          <td>All criteria met to a high standard; reference-quality. <strong>10 = perfectly implemented — nothing left to improve.</strong></td>
+          </tr>
+          </tbody></table></div>
+          <p><strong>Rule of thumb:</strong> the implementation score usually tracks maturity (≈ maturity × 2.5 as a starting
+          point), then nudge it up or down for execution quality the coarse maturity level can&#39;t express. A
+          large gap between the two axes is itself a finding worth a note.</p>
+          <h3 id="scoring-model">Scoring model</h3>
+          <ul>
+          <li><strong>Weight</strong> each category by risk to <em>this</em> system (weights below are defaults — adjust per engagement).</li>
+          <li><strong>Maturity index</strong> = Σ(category maturity score × weight) ÷ Σ(weight × 4) → a 0–100% architecture health index.</li>
+          <li><strong>Implementation index</strong> = Σ(category implementation score × weight) ÷ Σ(weight × 10) → a parallel 0–100% measure of execution quality. Compare the two indices: a lower implementation index means quality is the weaker axis; a lower maturity index means consistency/governance is.</li>
+          <li>Capture <strong>evidence</strong> (file paths, PRs, ADRs) for every score. A score without evidence is an opinion.</li>
+          <li>Re-run quarterly or per-release to trend both indices over time.</li>
+          </ul>
+          <h3 id="scorecard-template">Scorecard template</h3>
+          <pre class="doc-pre"><code>| # | Category                      | Weight | Maturity (0-4) | Impl (0-10) | Weighted | Evidence / Notes |
+          |---|-------------------------------|--------|----------------|-------------|----------|------------------|
+          | 1 | SOLID Principles              |   3    |                |             |          |                  |
+          | 2 | Design Patterns               |   2    |                |             |          |                  |
+          | 3 | Clean Architecture            |   3    |                |             |          |                  |
+          | 4 | Domain-Driven Design          |   3    |                |             |          |                  |
+          | 5 | Vertical Slice Architecture   |   2    |                |             |          |                  |
+          | 6 | CQRS &amp; Event-Driven           |   2    |                |             |          |                  |
+          | 7 | Microservices Readiness       |   3    |                |             |          |                  |
+          | 8 | Data Architecture             |   3    |                |             |          |                  |
+          | 9 | API &amp; Contract Design         |   2    |                |             |          |                  |
+          |10 | Cross-Cutting Concerns        |   2    |                |             |          |                  |
+          |11 | Security                      |   3    |                |             |          |                  |
+          |12 | Performance &amp; Scalability     |   2    |                |             |          |                  |
+          |13 | Observability &amp; Operability   |   2    |                |             |          |                  |
+          |14 | Testability &amp; Test Strategy   |   3    |                |             |          |                  |
+          |15 | Best Practices &amp; Code Quality |   2    |                |             |          |                  |
+          |16 | Maintainability &amp; Evolvability|   2    |                |             |          |                  |
+          |17 | DevOps &amp; Deployment           |   2    |                |             |          |                  |
+          |   | **— Part B: Front-End / UI —**|        |                |             |          |                  |
+          |18 | UI Architecture &amp; Components  |   3    |                |             |          |                  |
+          |19 | State Management &amp; Data Flow  |   3    |                |             |          |                  |
+          |20 | Design System &amp; UI Consistency|   2    |                |             |          |                  |
+          |21 | Accessibility (a11y)          |   3    |                |             |          |                  |
+          |22 | Responsive &amp; Cross-Browser    |   2    |                |             |          |                  |
+          |23 | Front-End Performance         |   2    |                |             |          |                  |
+          |24 | Forms, Validation &amp; UX Safety |   2    |                |             |          |                  |
+          |25 | Navigation &amp; Information Arch  |   2    |                |             |          |                  |
+          |26 | Front-End Security            |   3    |                |             |          |                  |
+          |27 | Internationalization (i18n)   |   1    |                |             |          |                  |
+          |28 | Front-End Testing &amp; Quality   |   3    |                |             |          |                  |
+          |   | **— Part C: Operational &amp; Governance —** | |          |             |          |                  |
+          |29 | Resilience &amp; Business Continuity| 3    |                |             |          |                  |
+          |30 | Compliance, Privacy &amp; Governance| 2    |                |             |          |                  |
+          |31 | Cost Efficiency / FinOps      |   2    |                |             |          |                  |
+          |32 | Dependency &amp; Supply-Chain     |  2/3   |                |             |          |                  |
+          |33 | Developer Experience &amp; Inner Loop| 2   |                |             |          |                  |
+          |34 | Architecture Governance &amp; Docs|   2    |                |             |          |                  |</code></pre>
+          <hr>
+          <h2 id="1-solid-principles">1. SOLID Principles</h2>
+          <p><strong>Intent:</strong> Object/module-level design discipline that keeps code flexible and decoupled.</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>SRP</strong> — each class/handler has one reason to change; no &quot;god&quot; services orchestrating unrelated concerns.</li>
+          <li><strong>OCP</strong> — behavior extended via new types/strategies/decorators, not by editing switch statements.</li>
+          <li><strong>LSP</strong> — derived types are substitutable; no <code>NotSupportedException</code> overrides or type-sniffing (<code>is</code>/<code>as</code> dispatch).</li>
+          <li><strong>ISP</strong> — interfaces are narrow and role-specific; clients aren&#39;t forced to depend on members they ignore.</li>
+          <li><strong>DIP</strong> — high-level modules depend on abstractions; concretions injected via DI, not <code>new</code>-ed inline.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Constructors with 8+ dependencies (SRP/ISP smell).</li>
+          <li><code>switch</code>/<code>if</code> on a type enum that grows with every feature (OCP miss).</li>
+          <li>Domain or application code referencing concrete infrastructure classes (DIP miss).</li>
+          <li>Interfaces with a single implementation created only to &quot;mock everything.&quot;</li>
+          </ul>
+          <p><strong>Default weight:</strong> 3</p>
+          <hr>
+          <h2 id="2-design-patterns">2. Design Patterns</h2>
+          <p><strong>Intent:</strong> Appropriate, idiomatic use of patterns — solving real problems, not pattern theater.</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li>Creational (Factory methods on entities, Builder, Options) used where construction is non-trivial.</li>
+          <li>Structural (Adapter, Decorator, Facade) used for boundaries and pipelines — e.g., handler decorator pipeline for validation/logging/transactions.</li>
+          <li>Behavioral (Strategy, Mediator/dispatcher, Specification, Observer/domain events) used for variation and decoupling.</li>
+          <li>Domain patterns: <strong>Result</strong> for error flow, <strong>Repository/Unit of Work</strong>, <strong>Specification</strong> for query intent, <strong>Outbox</strong> for reliable messaging.</li>
+          <li>Patterns are <em>named consistently</em> and discoverable; team shares vocabulary.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Patterns applied where a plain method would do (Singleton for stateless helpers, abstract factories with one product).</li>
+          <li>Anemic &quot;manager/helper/util&quot; classes that hide procedural code.</li>
+          <li>Reinvented infrastructure (hand-rolled mediator/retry) where a vetted library exists.</li>
+          <li>Exceptions used for control flow where a Result/validation result is the established convention.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 2</p>
+          <hr>
+          <h2 id="3-clean-architecture">3. Clean Architecture</h2>
+          <p><strong>Intent:</strong> Dependencies point inward; business rules are independent of frameworks, UI, and data stores.</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>Dependency rule</strong> enforced: Domain → (nothing); Application → Domain; Infrastructure/API/UI → inward only. Verified by project references and ideally an architecture test (NetArchTest/ArchUnitNET).</li>
+          <li><strong>Domain purity</strong> — no EF, ASP.NET, serialization, or framework attributes in the domain layer.</li>
+          <li><strong>Ports &amp; adapters</strong> — application defines interfaces (ports); infrastructure implements them (adapters).</li>
+          <li><strong>Use-case centric</strong> — application layer expresses business operations, not CRUD-on-tables.</li>
+          <li>Framework concerns (DI wiring, middleware, persistence) live at the outermost ring.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Domain entities decorated with <code>[Table]</code>, <code>[JsonProperty]</code>, or referencing <code>DbContext</code>.</li>
+          <li>Controllers/endpoints calling repositories directly, bypassing the application layer.</li>
+          <li>&quot;Shared kernel&quot; turning into a dumping ground that couples everything.</li>
+          <li>Circular references between layers or modules.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 3</p>
+          <hr>
+          <h2 id="4-domain-driven-design">4. Domain-Driven Design</h2>
+          <p><strong>Intent:</strong> The model reflects the business; boundaries follow capability seams, not technical layers.</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>Ubiquitous language</strong> — type/method names match business terms used by stakeholders.</li>
+          <li><strong>Bounded contexts / modules</strong> with explicit boundaries and ownership (e.g., Catalog, Sales, Identity).</li>
+          <li><strong>Aggregates</strong> with clear roots and invariants enforced inside the boundary; references between aggregates by ID, not object graph.</li>
+          <li><strong>Value objects</strong> for concepts with no identity (Money, Address, EmailAddress); immutability respected.</li>
+          <li><strong>Domain events</strong> raised by aggregates to signal meaningful state changes.</li>
+          <li><strong>Factory methods returning <code>Result&lt;T&gt;</code></strong> so invalid entities can&#39;t be constructed.</li>
+          <li>Rich behavior on entities, not setters-only.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Anemic domain model — all logic in services, entities are property bags.</li>
+          <li>Aggregates that load half the database; transactions spanning many aggregates.</li>
+          <li>Context boundaries that leak (one module querying another&#39;s tables directly).</li>
+          <li>Primitive obsession (raw <code>string</code>/<code>Guid</code>/<code>decimal</code> instead of strong types and identifier aliases).</li>
+          </ul>
+          <p><strong>Default weight:</strong> 3</p>
+          <hr>
+          <h2 id="5-vertical-slice-architecture">5. Vertical Slice Architecture</h2>
+          <p><strong>Intent:</strong> Code is organized by feature/capability, so a change touches one cohesive slice.</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li>Features grouped by use case (command/query + handler + validator + DTO together), not by horizontal technical folders.</li>
+          <li>Each slice is independently understandable and testable; minimal shared mutable state.</li>
+          <li>Cross-cutting concerns handled by the pipeline (decorators/behaviors), not duplicated per slice.</li>
+          <li>Adding a feature means adding a slice, rarely editing shared switchboards.</li>
+          <li>Coupling <em>within</em> a slice is high (cohesive); coupling <em>between</em> slices is low.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>&quot;Layered-by-type&quot; sprawl where one feature spreads across <code>Services/</code>, <code>Repositories/</code>, <code>DTOs/</code>, <code>Validators/</code> with no locality.</li>
+          <li>Shared base handlers/services that every slice must modify.</li>
+          <li>Slices reaching into each other&#39;s internals instead of going through a defined contract or event.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 2</p>
+          <hr>
+          <h2 id="6-cqrs--event-driven-design">6. CQRS &amp; Event-Driven Design</h2>
+          <p><strong>Intent:</strong> Reads and writes are separated where it pays off; integration via events is reliable.</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li>Commands (mutate, return Result) and queries (read, side-effect-free) are distinct.</li>
+          <li>Handler dispatch via a mediator/dispatcher with a decorator pipeline (validation → logging → transaction → handler).</li>
+          <li>Read models/projections shaped for the consumer where read/write asymmetry warrants it.</li>
+          <li><strong>Outbox pattern</strong> for atomic persist-then-publish; no &quot;save then publish and hope.&quot;</li>
+          <li>Idempotent consumers; events carry enough context; versioning strategy for event schemas.</li>
+          <li>Eventual consistency boundaries are explicit and documented (ADR).</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>&quot;CQRS&quot; that&#39;s just two folders sharing one fat model with no real benefit.</li>
+          <li>Dual-write to DB and broker without an outbox (lost-message risk).</li>
+          <li>Synchronous chains of commands masquerading as events.</li>
+          <li>Consumers that aren&#39;t idempotent and break on redelivery.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 2</p>
+          <hr>
+          <h2 id="7-microservices-readiness">7. Microservices Readiness</h2>
+          <p><strong>Intent:</strong> Whether services (or future-extractable modules) are independently deployable and own their data.</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>Service boundaries</strong> align with bounded contexts; one team can own and deploy a service.</li>
+          <li><strong>Data ownership</strong> — each service/module owns its schema; <strong>no shared writable database</strong> across service boundaries.</li>
+          <li><strong>Communication</strong> — async events for integration, sync calls only where strong consistency is required; contracts are explicit and versioned.</li>
+          <li><strong>Resilience</strong> — timeouts, retries with backoff, circuit breakers, bulkheads, graceful degradation.</li>
+          <li><strong>Independent deployability</strong> — services build/test/deploy independently; backward-compatible contracts.</li>
+          <li><strong>Distributed observability</strong> — correlation/trace IDs propagate across service hops.</li>
+          <li>For a <strong>modular monolith</strong>: modules implement a common contract, are discovered/registered in dependency order, and are extractable without rewrites.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>&quot;Distributed monolith&quot; — services that must deploy together; chatty synchronous call graphs.</li>
+          <li>Shared database tables read/written by multiple services.</li>
+          <li>No resilience policies; a downstream outage cascades.</li>
+          <li>Integration via direct DB access instead of contracts/events.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 3</p>
+          <hr>
+          <h2 id="8-data-architecture">8. Data Architecture</h2>
+          <p><strong>Intent:</strong> Persistence, consistency, and migrations are deliberate and safe.</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li>Transaction boundaries match aggregate boundaries; unit-of-work scope is clear.</li>
+          <li><strong>Migrations</strong> are versioned, reviewed, reversible/forward-only by policy, and run in CI/CD.</li>
+          <li><strong>Soft-delete + global query filters</strong> (or an intentional alternative) applied consistently.</li>
+          <li><strong>Audit fields</strong> (created/modified by/on) stamped centrally, not per-handler.</li>
+          <li>Query efficiency: explicit eager-loading strategy; no N+1; projections for read paths.</li>
+          <li>Concurrency handled (optimistic concurrency tokens) where contention exists.</li>
+          <li>Per-service data isolation where microservices are in play (see §7).</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Migrations hand-applied to production; schema drift between environments.</li>
+          <li>N+1 queries, <code>Include</code> chains loading whole graphs, client-side evaluation.</li>
+          <li>Cross-module/service joins coupling independent contexts.</li>
+          <li>Hard deletes where soft-delete is the convention (orphaned references, lost audit trail).</li>
+          </ul>
+          <p><strong>Default weight:</strong> 3</p>
+          <hr>
+          <h2 id="9-api--contract-design">9. API &amp; Contract Design</h2>
+          <p><strong>Intent:</strong> External and inter-service contracts are clear, stable, and evolvable.</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li>Consistent resource/endpoint design (REST/minimal APIs/gRPC) with predictable shapes.</li>
+          <li><strong>Versioning</strong> strategy for breaking changes; backward compatibility honored.</li>
+          <li>Standardized error responses (e.g., Problem Details) and consistent status codes.</li>
+          <li>Request validation at the edge; DTOs decoupled from domain entities (manual mapping or mapper by ADR).</li>
+          <li>Pagination, filtering, sorting conventions are uniform.</li>
+          <li>Contracts documented (OpenAPI) and generated/verified, not hand-maintained drift.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Domain entities serialized directly to the wire (leaks internals, couples API to schema).</li>
+          <li>Breaking changes shipped without versioning; consumers break silently.</li>
+          <li>Inconsistent error shapes; 200-with-error-body anti-pattern.</li>
+          <li>Undocumented or stale API specs.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 2</p>
+          <hr>
+          <h2 id="10-cross-cutting-concerns">10. Cross-Cutting Concerns</h2>
+          <p><strong>Intent:</strong> Validation, caching, resilience, configuration, and mapping are centralized and consistent.</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li>Validation, logging, transactions handled by pipeline behaviors/decorators — not copy-pasted.</li>
+          <li>Configuration via strongly-typed options, validated at startup; environment-specific overrides clean.</li>
+          <li>Caching strategy explicit (what, where, invalidation) and not hiding correctness bugs.</li>
+          <li>Resilience policies (retry/timeout/circuit-breaker) applied consistently via a shared mechanism.</li>
+          <li>Mapping strategy consistent and decided by ADR (manual vs. library).</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Validation/logging duplicated in every handler.</li>
+          <li>Magic strings for config; secrets in config files.</li>
+          <li>Cache with no invalidation story (stale data) or caching used to mask slow queries.</li>
+          <li>Inconsistent, per-call retry logic.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 2</p>
+          <hr>
+          <h2 id="11-security">11. Security</h2>
+          <p><strong>Intent:</strong> AuthN/AuthZ, secrets, and data protection are correct by construction.</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>Authentication</strong> centralized; tokens validated; identity flows documented (e.g., dual-fetch ADR).</li>
+          <li><strong>Authorization</strong> enforced at the right layer (policy/resource-based), not just UI hiding.</li>
+          <li><strong>Secrets</strong> in a vault/managed identity, never in source or plain config; rotation possible.</li>
+          <li>Input validation and output encoding guard against injection/XSS; parameterized queries only.</li>
+          <li>Transport security (TLS), data-at-rest protection, PII handling, and least-privilege access.</li>
+          <li>Dependency and package vulnerability scanning in CI (audit sources configured).</li>
+          <li>OWASP Top 10 reviewed; rate limiting / anti-automation where exposed.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Authorization checks only in the UI; APIs callable unguarded.</li>
+          <li>Connection strings/keys committed or in appsettings.</li>
+          <li>Over-broad permissions (admin everywhere), no least privilege.</li>
+          <li>Ignored package audit warnings.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 3</p>
+          <hr>
+          <h2 id="12-performance--scalability">12. Performance &amp; Scalability</h2>
+          <p><strong>Intent:</strong> The system meets latency/throughput goals and scales horizontally.</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li>Async I/O throughout; no sync-over-async; no blocking the request thread.</li>
+          <li>Hot-path query efficiency (projections, indexes, no N+1); measured, not assumed.</li>
+          <li>Caching at appropriate tiers with sound invalidation.</li>
+          <li>Stateless services enabling horizontal scale; session/state externalized.</li>
+          <li>Load/stress tested against realistic volumes; capacity provisioning evidence-based (right-sized, not guessed).</li>
+          <li>Pagination/streaming for large result sets; backpressure on queues.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li><code>.Result</code>/<code>.Wait()</code> deadlock risks; synchronous DB calls in async pipelines.</li>
+          <li>Unbounded queries returning whole tables.</li>
+          <li>In-memory state preventing scale-out.</li>
+          <li>Provisioning by guesswork (massive over- or under-provisioning) with no load data.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 2</p>
+          <hr>
+          <h2 id="13-observability--operability">13. Observability &amp; Operability</h2>
+          <p><strong>Intent:</strong> You can understand and operate the system in production.</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>Structured logging</strong> with correlation/trace IDs flowing across module/service boundaries.</li>
+          <li><strong>Distributed tracing</strong> (OpenTelemetry) and <strong>metrics</strong> (RED/USE) wired to a backend (e.g., App Insights).</li>
+          <li><strong>Health checks</strong> (liveness/readiness) and dependency checks exposed for orchestrators.</li>
+          <li>Alerting on SLO breaches; dashboards exist and are used.</li>
+          <li>Noise control — high-volume/low-value telemetry (e.g., poll spans) deliberately filtered to manage cost.</li>
+          <li>Runbooks for common failures; graceful shutdown and startup ordering.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li><code>Console.WriteLine</code>/unstructured logs; no correlation across services.</li>
+          <li>No health endpoints; orchestrator can&#39;t tell if the app is alive.</li>
+          <li>Telemetry cost unmanaged (everything logged at Information) or, conversely, nothing logged.</li>
+          <li>No alerts — failures discovered by users.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 2</p>
+          <hr>
+          <h2 id="14-testability--test-strategy">14. Testability &amp; Test Strategy</h2>
+          <p><strong>Intent:</strong> The design supports fast, reliable, meaningful tests at the right levels.</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li>Healthy <strong>test pyramid</strong>: many fast unit tests on domain/application, fewer integration, few E2E.</li>
+          <li>Domain logic testable without infrastructure (pure, injectable dependencies).</li>
+          <li>Integration tests cover persistence, messaging, and module wiring against real-ish dependencies (Testcontainers/Aspire).</li>
+          <li>Shared test infrastructure (page objects, fixtures, base classes) reused across consumers, not duplicated.</li>
+          <li><strong>Architecture tests</strong> enforce dependency rules automatically.</li>
+          <li>Tests are deterministic, isolated, and run in CI as a gate.</li>
+          <li>Coverage tracked on meaningful paths (not chased as a vanity number).</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Inverted pyramid (mostly slow E2E), flaky tests, tests disabled/skipped without tracking.</li>
+          <li>Logic only reachable through HTTP, forcing heavy integration tests for unit-level concerns.</li>
+          <li>Mock-everything tests that assert implementation details, not behavior.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 3</p>
+          <hr>
+          <h2 id="15-best-practices--code-quality">15. Best Practices &amp; Code Quality</h2>
+          <p><strong>Intent:</strong> Day-to-day craftsmanship that keeps the codebase healthy.</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>Analyzers at error severity</strong> (style, security, threading, maintainability) enforced in CI; warnings-as-errors.</li>
+          <li>Consistent conventions (file-scoped namespaces, naming, immutability, nullability) applied uniformly.</li>
+          <li><strong>Central package management</strong>; pinned, audited dependencies; intentional version policy (e.g., a library pinned for licensing reasons).</li>
+          <li>Error handling via the established pattern (Result vs. exceptions) used consistently.</li>
+          <li>Code is self-documenting; comments explain <em>why</em>, not <em>what</em>; ADRs capture significant decisions.</li>
+          <li>Dead code, TODOs, and suppressions are tracked, not accumulated.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Disabled analyzers / blanket <code>#pragma warning disable</code>.</li>
+          <li>Mixed conventions, inconsistent error handling.</li>
+          <li>Unpinned or unaudited dependencies; accidental major-version bumps reintroducing known-bad packages.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 2</p>
+          <hr>
+          <h2 id="16-maintainability--evolvability">16. Maintainability &amp; Evolvability</h2>
+          <p><strong>Intent:</strong> The system absorbs change cheaply and ages well. (The <em>governance/documentation depth</em> behind this — ADRs, fitness functions, diagrams — is scored separately in §34.)</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li>Low coupling / high cohesion measured (dependency graphs, change-coupling); modules swap independently.</li>
+          <li>Clear module/package boundaries with explicit, versioned contracts (e.g., shared framework packages consumed downstream).</li>
+          <li><strong>Consistent upgrade strategy</strong> — framework changes rolled out to all consumers together (no long-lived divergent versions) per team policy.</li>
+          <li>Documentation that stays current: ADRs for the <em>why</em>, architecture map for the <em>what</em>.</li>
+          <li>Onboarding cost is low; conventions discoverable.</li>
+          <li>Tech-debt register exists and is serviced.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Shotgun surgery — one change touches many modules.</li>
+          <li>Divergent versions of a shared library across consumers; partial rollouts that linger.</li>
+          <li>Tribal knowledge; undocumented decisions; stale docs contradicting the code.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 2</p>
+          <hr>
+          <h2 id="17-devops--deployment">17. DevOps &amp; Deployment</h2>
+          <p><strong>Intent:</strong> Building, releasing, and provisioning are automated, repeatable, and safe. (The <em>local developer experience / inner loop</em> behind this — local orchestration, cross-repo dev, build speed — is scored separately in §33.)</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>CI</strong> gates: build, analyzers, tests, security/audit on every PR; fast feedback.</li>
+          <li><strong>CD</strong> with repeatable, automated deployments; rollback strategy.</li>
+          <li><strong>Infrastructure as Code</strong> (Bicep/Terraform) — environments reproducible; no click-ops drift.</li>
+          <li>Secrets/identity via managed identity / OIDC, least privilege for deployment principals.</li>
+          <li>Environment parity; configuration externalized per environment.</li>
+          <li>Cost awareness — provisioning right-sized with evidence; temporary scale-ups tracked with revert plans.</li>
+          <li>Containerization/orchestration (or Aspire-style local-to-cloud parity) where applicable.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Manual deploys; environment drift; &quot;works on the build server.&quot;</li>
+          <li>Infra changed by hand in the portal; no IaC source of truth.</li>
+          <li>Long-lived elevated credentials; secrets in pipelines.</li>
+          <li>Scale-ups left running after the event that needed them.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 2</p>
+          <hr>
+          <h1 id="part-b--front-end--ui-architecture">Part B — Front-End / UI Architecture</h1>
+          <p>Categories §18–28 assess the presentation tier. They use the same 0–4 maturity scale and
+          weighting model as Part A. Where a concern has a backend counterpart (security, performance,
+          testing), Part B focuses on the <strong>client/UI-specific</strong> facets and cross-references Part A.</p>
+          <hr>
+          <h2 id="18-ui-architecture--component-design">18. UI Architecture &amp; Component Design</h2>
+          <p><strong>Intent:</strong> Components are cohesive, reusable, and composed cleanly — the UI has a deliberate structure, not page-sized blobs.</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>Container/presentational split</strong> — smart components own data/behavior; dumb components render from parameters and raise events. Logic isn&#39;t buried in markup.</li>
+          <li><strong>Component contracts</strong> — typed parameters with sensible defaults; outputs via callbacks/<code>EventCallback</code>; two-way binding used intentionally, not everywhere.</li>
+          <li><strong>Composition over inheritance</strong> — layouts, render fragments, and slots compose UI; minimal deep component hierarchies.</li>
+          <li><strong>Reuse</strong> — shared/primitive components live in a common UI library (consumed by multiple apps), not copy-pasted per page.</li>
+          <li><strong>Render lifecycle discipline</strong> — expensive work kept out of render; <code>ShouldRender</code>/keys/<code>@key</code> used to control re-render where it matters.</li>
+          <li><strong>Separation of concerns</strong> — no direct data-access or business rules in components; they call application services/clients.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>1000-line page components mixing data fetching, validation, and markup.</li>
+          <li>Business logic in <code>.razor</code> code-behind that belongs in the application layer.</li>
+          <li>Prop-drilling many levels deep instead of composition or scoped state.</li>
+          <li>Components that reach into global singletons for data instead of receiving it.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 3</p>
+          <hr>
+          <h2 id="19-state-management--data-flow">19. State Management &amp; Data Flow</h2>
+          <p><strong>Intent:</strong> Client state has a clear owner and predictable flow; server state is cached and invalidated deliberately.</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>Single source of truth</strong> per piece of state; ownership is explicit (component-local vs. scoped service vs. global store).</li>
+          <li><strong>Unidirectional data flow</strong> — state flows down via parameters, changes flow up via events; avoid hidden mutation of shared objects.</li>
+          <li><strong>Server vs. client state distinguished</strong> — fetched data cached with a staleness/invalidation strategy; not refetched on every render.</li>
+          <li><strong>Component communication</strong> via well-defined channels (cascading values, scoped state services, mediators) — not static mutable globals.</li>
+          <li><strong>Render correctness</strong> — <code>StateHasChanged</code> called intentionally; async state updates marshalled to the UI thread/context correctly.</li>
+          <li><strong>Lifetime correctness</strong> — scoped vs. singleton services chosen correctly for the hosting model (Server vs. WASM); no accidental cross-user state leakage.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Static mutable fields holding user/session state (leaks across users in Blazor Server).</li>
+          <li>Stale UI because a parent mutated state but didn&#39;t notify children (e.g., wrapped guard components reading a stale <code>IsDirty</code> because the parent didn&#39;t <code>StateHasChanged()</code> before navigating).</li>
+          <li>Refetching/recomputing on every render; no memoization or caching.</li>
+          <li>&quot;Spooky action at a distance&quot; — multiple components mutating one shared object.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 3</p>
+          <hr>
+          <h2 id="20-design-system-theming--ui-consistency">20. Design System, Theming &amp; UI Consistency</h2>
+          <p><strong>Intent:</strong> A coherent visual language enforced by a component library, not re-implemented per screen.</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>Component library used consistently</strong> (e.g., MudBlazor) — teams build on it rather than bypassing it with raw HTML/CSS.</li>
+          <li><strong>Design tokens / theme</strong> centralized (palette, typography, spacing, breakpoints); dark/light or brand variants driven from the theme.</li>
+          <li><strong>Consistency</strong> — spacing, density, iconography, button hierarchy, empty/loading states look the same across pages.</li>
+          <li><strong>Encapsulated overrides</strong> — custom styling wrapped in reusable components, not scattered inline styles or <code>!important</code> overrides.</li>
+          <li><strong>Known-issue guardrails</strong> — wrappers/conventions exist around library quirks so every page doesn&#39;t re-hit the same bug (e.g., a grid wrapper that normalizes paging/sorting behavior).</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Mixed component libraries or hand-rolled controls duplicating library ones.</li>
+          <li>Inline styles and magic pixel values everywhere; no shared tokens.</li>
+          <li>Inconsistent loading/empty/error treatments per page.</li>
+          <li>Library defaults fought page-by-page instead of fixed once in a shared wrapper.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 2</p>
+          <hr>
+          <h2 id="21-accessibility-a11y">21. Accessibility (a11y)</h2>
+          <p><strong>Intent:</strong> The UI is usable by everyone, including assistive-technology users — and ideally enforced, not aspirational.</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>Semantic structure</strong> — correct landmarks/headings/lists; interactive elements are real buttons/links, not click-handlers on <code>div</code>s.</li>
+          <li><strong>Keyboard operability</strong> — everything reachable and operable by keyboard; logical tab order; visible focus; no keyboard traps.</li>
+          <li><strong>ARIA where needed</strong> — names/roles/states on custom widgets; live regions for async updates; relies on native semantics first.</li>
+          <li><strong>Color &amp; contrast</strong> — meets WCAG 2.1 AA contrast; information not conveyed by color alone.</li>
+          <li><strong>Forms</strong> — labels associated with inputs; errors announced and programmatically linked to fields.</li>
+          <li><strong>Verification</strong> — automated checks (axe/Lighthouse) in CI plus periodic manual screen-reader/keyboard passes; target conformance level stated (e.g., WCAG 2.1 AA).</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li><code>div</code>/<code>span</code> click handlers with no role/keyboard support.</li>
+          <li>Placeholder-as-label; unlabeled icon buttons; missing alt text.</li>
+          <li>Focus lost or invisible after navigation/dialog open.</li>
+          <li>No a11y testing in CI; accessibility treated as a post-launch fix.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 3</p>
+          <hr>
+          <h2 id="22-responsive-design--cross-browserdevice">22. Responsive Design &amp; Cross-Browser/Device</h2>
+          <p><strong>Intent:</strong> The UI works across viewport sizes, input modes, and supported browsers.</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>Fluid/responsive layouts</strong> via the design system&#39;s grid/breakpoints; no fixed-width desktop-only screens.</li>
+          <li><strong>Touch and pointer</strong> both supported; adequate target sizes; no hover-only affordances for critical actions.</li>
+          <li><strong>Supported matrix defined</strong> (browsers/devices) and verified; graceful degradation outside it.</li>
+          <li><strong>Content reflow</strong> — tables/grids/dialogs adapt or provide mobile alternatives; no horizontal scrolling of core content.</li>
+          <li><strong>Density options</strong> where data-dense (comfortable/compact) without breaking layout.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Pixel-perfect desktop layouts that break below a breakpoint.</li>
+          <li>Data grids unusable on mobile with no alternative view.</li>
+          <li>Hover-only menus/tooltips hiding essential actions on touch.</li>
+          <li>&quot;Works in Chrome&quot; with no other-browser verification.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 2</p>
+          <hr>
+          <h2 id="23-front-end-performance--rendering">23. Front-End Performance &amp; Rendering</h2>
+          <p><strong>Intent:</strong> The UI loads and responds fast; rendering work is bounded. (Complements §12 — this is the client side.)</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>Initial load</strong> — bundle/payload size controlled; lazy-loading/code-splitting for heavy routes; prerender/SSR where it helps perceived speed.</li>
+          <li><strong>Render efficiency</strong> — avoid unnecessary re-renders (<code>ShouldRender</code>, <code>@key</code>, stable callbacks); virtualization for long lists/grids.</li>
+          <li><strong>Data efficiency</strong> — server-side paging/filtering/sorting for large sets (not loading everything client-side); debounced inputs.</li>
+          <li><strong>Perceived performance</strong> — skeletons/optimistic UI/loading states; interactions stay responsive (no blocking the UI thread/circuit).</li>
+          <li><strong>Asset hygiene</strong> — images sized/compressed; fonts/icons subset; caching headers set.</li>
+          <li><strong>Measured</strong> — Core Web Vitals (LCP/INP/CLS) or equivalent tracked, not assumed.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Loading entire datasets into the client then paging in memory.</li>
+          <li>Re-rendering large trees on every keystroke; janky typing.</li>
+          <li>No virtualization on long grids/lists.</li>
+          <li>Blocking the Blazor Server circuit / UI thread with sync work.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 2</p>
+          <hr>
+          <h2 id="24-forms-validation--ux-safety">24. Forms, Validation &amp; UX Safety</h2>
+          <p><strong>Intent:</strong> Data entry is safe, forgiving, and consistent — users don&#39;t lose work or get confused by errors.</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>Validation parity</strong> — client-side validation for fast feedback mirrors server-side rules (server remains authoritative; see §11).</li>
+          <li><strong>Error presentation</strong> — field-level, human-readable, tied to inputs; summary for form-level errors; consistent styling.</li>
+          <li><strong>Dirty tracking &amp; unsaved-changes guards</strong> — navigating away from an edited form prompts; guard reads <em>current</em> dirty state reliably.</li>
+          <li><strong>States covered</strong> — loading, submitting (disabled/!double-submit), success, empty, and error states all designed.</li>
+          <li><strong>Forgiving input</strong> — sensible defaults, input masks/formatters, undo where feasible; destructive actions confirmed.</li>
+          <li><strong>Accessibility of validation</strong> — errors announced and associated with fields (ties to §21).</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Client validation that disagrees with the server (false pass/fail).</li>
+          <li>Silent data loss on navigation; or a guard that misfires because it reads stale dirty state.</li>
+          <li>Double-submit allowed; no disabled/spinner state on submit.</li>
+          <li>Generic &quot;an error occurred&quot; with no field context.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 2</p>
+          <hr>
+          <h2 id="25-navigation-routing--information-architecture">25. Navigation, Routing &amp; Information Architecture</h2>
+          <p><strong>Intent:</strong> Users can find their way; routes are meaningful, guarded, and role-aware.</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>Route design</strong> — clean, bookmarkable, deep-linkable URLs; parameters typed and validated.</li>
+          <li><strong>Guards &amp; authorization</strong> — route-level auth enforced (UI hiding is not security; see §11); unauthorized access redirects sensibly.</li>
+          <li><strong>Role-based flows</strong> — navigation reflects actor roles; flows documented (e.g., per-actor navigation diagrams) and match the implementation.</li>
+          <li><strong>Wayfinding</strong> — breadcrumbs/active states/back behavior consistent; not-found and forbidden pages handled.</li>
+          <li><strong>State on navigation</strong> — query/route state preserved appropriately; in-progress work protected (ties to §24).</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Menu items visible to roles that can&#39;t use them (or hidden items still routable).</li>
+          <li>Non-bookmarkable state hidden entirely in memory.</li>
+          <li>Navigation flows that drift from the documented per-role design.</li>
+          <li>No handling for 404/403 within the app shell.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 2</p>
+          <hr>
+          <h2 id="26-front-end-security">26. Front-End Security</h2>
+          <p><strong>Intent:</strong> The client doesn&#39;t become the weak link — XSS, token handling, and trust boundaries are correct. (Complements §11.)</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>Output encoding / XSS</strong> — no unsanitized HTML injection (<code>MarkupString</code>/<code>innerHTML</code> only on trusted, sanitized content); user content encoded by default.</li>
+          <li><strong>Token &amp; session handling</strong> — auth tokens stored and transmitted safely; minimal sensitive data in the browser; logout clears state.</li>
+          <li><strong>Content Security Policy</strong> and security headers configured; third-party scripts vetted.</li>
+          <li><strong>No secrets in the client</strong> — API keys/secrets never shipped to WASM/browser bundles.</li>
+          <li><strong>Client is untrusted</strong> — all authorization re-checked server-side; client checks are UX only.</li>
+          <li><strong>Dependency hygiene</strong> — JS/interop and front-end packages audited for vulnerabilities.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Rendering user input as raw HTML/markup without sanitization.</li>
+          <li>Secrets or privileged config embedded in client bundles.</li>
+          <li>Auth tokens in insecure storage or logged.</li>
+          <li>Authorization enforced only in the UI.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 3</p>
+          <hr>
+          <h2 id="27-internationalization--localization">27. Internationalization &amp; Localization</h2>
+          <p><strong>Intent:</strong> The UI can be translated and respects culture — if in scope. (Score weight 0–1 if single-locale by design.)</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>Externalized strings</strong> — UI text in resource files, not hard-coded; keys consistent.</li>
+          <li><strong>Culture-aware formatting</strong> — dates, numbers, currency, time zones formatted per culture, not hard-coded.</li>
+          <li><strong>Layout tolerance</strong> — components handle text expansion and, where required, RTL.</li>
+          <li><strong>Locale selection</strong> — discoverable, persisted; server and client cultures aligned.</li>
+          <li><strong>Pluralization &amp; interpolation</strong> handled by the i18n mechanism, not string concatenation.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Hard-coded user-facing strings throughout markup.</li>
+          <li>Manual date/number formatting ignoring culture.</li>
+          <li>Layouts that break with longer translations.</li>
+          <li>Concatenated sentences impossible to translate correctly.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 1</p>
+          <hr>
+          <h2 id="28-front-end-testing--quality">28. Front-End Testing &amp; Quality</h2>
+          <p><strong>Intent:</strong> The UI is verified at the right levels with stable, meaningful tests. (Complements §14.)</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>Component tests</strong> (e.g., bUnit) for rendering logic, parameters, events, and conditional UI.</li>
+          <li><strong>End-to-end tests</strong> (e.g., Playwright) for critical user journeys; shared E2E infrastructure (page objects, fixtures, abstract bases) reused across apps rather than duplicated.</li>
+          <li><strong>Accessibility checks</strong> (axe/Lighthouse) and ideally <strong>visual-regression</strong> tests run in CI.</li>
+          <li><strong>Stability</strong> — tests use robust selectors (roles/test-ids), avoid timing flakiness, run as a merge gate.</li>
+          <li><strong>Coverage of states</strong> — loading/empty/error/edge states tested, not just the happy path.</li>
+          <li><strong>Right pyramid</strong> — many fast component tests, fewer broad E2E flows.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Only manual click-testing; no automated UI tests.</li>
+          <li>Flaky, sleep-based E2E using brittle CSS-path selectors.</li>
+          <li>Duplicated E2E setup per app instead of a shared package.</li>
+          <li>Happy-path-only coverage; a11y untested.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 3</p>
+          <hr>
+          <h1 id="part-c--operational-governance--cross-cutting-concerns">Part C — Operational, Governance &amp; Cross-Cutting Concerns</h1>
+          <p>Categories §29–32 span backend and front end and are judged over the system&#39;s full lifecycle.
+          They use the same 0–4 maturity scale and weighting.</p>
+          <hr>
+          <h2 id="29-resilience-reliability--business-continuity">29. Resilience, Reliability &amp; Business Continuity</h2>
+          <p><strong>Intent:</strong> The system survives partial failure and recovers from disaster within defined objectives. (Extends the resilience facets of §7/§12 into a first-class recovery story.)</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>Failure isolation</strong> — timeouts, retries with backoff + jitter, circuit breakers, bulkheads; one failing dependency doesn&#39;t cascade.</li>
+          <li><strong>Graceful degradation</strong> — fallbacks/queued work when a dependency is down; the broker buffers integration events and the outbox guarantees eventual delivery after recovery.</li>
+          <li><strong>Backup &amp; restore</strong> — automated backups for every stateful store (per-service DBs); <strong>restores actually tested</strong>; documented procedure.</li>
+          <li><strong>Disaster recovery</strong> — defined <strong>RTO/RPO</strong> per service; failover/multi-region strategy, or a conscious and documented acceptance of single-region risk.</li>
+          <li><strong>Reliability targets</strong> — SLOs/error budgets defined and measured; health/readiness probes drive orchestration and auto-heal.</li>
+          <li><strong>Failure testing</strong> — chaos/fault injection or at least documented failure-mode analysis; startup ordering and graceful shutdown verified.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Backups that have never been restored (untested recovery).</li>
+          <li>Undefined RTO/RPO; &quot;we&#39;d figure it out.&quot;</li>
+          <li>Retries without backoff/idempotency (retry storms, duplicate side effects).</li>
+          <li>Single points of failure with no failover and no explicit, documented risk acceptance.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 3</p>
+          <hr>
+          <h2 id="30-compliance-privacy--data-governance">30. Compliance, Privacy &amp; Data Governance</h2>
+          <p><strong>Intent:</strong> Personal and regulated data is classified, governed, and handled lawfully across its lifecycle. (§11 defends against attackers; this answers to regulators.)</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>PII/sensitive-data inventory</strong> — what&#39;s collected, where it&#39;s stored, who can access it.</li>
+          <li><strong>Retention &amp; purge</strong> — defined retention periods with an actual purge mechanism; <strong>reconcile soft-delete with right-to-erasure</strong> — soft-delete preserves rows, erasure requires real removal/anonymization, so a hard-delete/anonymize path must exist for subject requests.</li>
+          <li><strong>Data-subject rights</strong> — export/access and deletion requests supported operationally, not just in theory.</li>
+          <li><strong>Data residency &amp; sovereignty</strong> — storage region matches regulatory/contractual requirements.</li>
+          <li><strong>Consent &amp; lawful basis</strong> — captured where required and auditable.</li>
+          <li><strong>Audit trail</strong> — audit fields + access logs support accountability and legal hold.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Soft-delete as the <em>only</em> deletion path, with no erasure mechanism (direct GDPR/CCPA conflict).</li>
+          <li>No retention policy — data kept forever by default.</li>
+          <li>PII in logs/telemetry; PII replicated into read models/caches without governance.</li>
+          <li>Residency requirements unverified for the chosen region.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 2</p>
+          <hr>
+          <h2 id="31-cost-efficiency--finops">31. Cost Efficiency / FinOps</h2>
+          <p><strong>Intent:</strong> Cloud spend is proportional to value and driven by data, not guesswork. (§17 mentions cost; this makes it a first-class axis.)</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>Right-sizing</strong> — compute/database tiers matched to <em>measured</em> load; scaling rules backed by real traffic, not worst-case guesses.</li>
+          <li><strong>Reversible scale events</strong> — temporary scale-ups for known peaks have an automated or scheduled <strong>revert</strong>; nothing stays scaled up after the event.</li>
+          <li><strong>Telemetry/log cost control</strong> — retention tuned, high-volume/low-value signals filtered, sampling where appropriate (logs and traces are a real line item).</li>
+          <li><strong>Resource lifecycle</strong> — dev/test/ephemeral resources deprovisioned; orphaned resources reaped.</li>
+          <li><strong>Cost visibility</strong> — spend attributable per service/environment; budgets/alerts; cost considered in design (poll intervals, chatty calls).</li>
+          <li><strong>Tier fit</strong> — shared/serverless/Basic tiers used for intermittent or archival workloads.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Provisioning by guesswork — large over- (or under-) provisioning with no load evidence.</li>
+          <li>Scale-ups left running after the event that justified them.</li>
+          <li>Unbounded log/trace retention; everything emitted at Information.</li>
+          <li>No per-service/environment cost attribution; surprises on the bill.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 2</p>
+          <hr>
+          <h2 id="32-dependency--supply-chain-management">32. Dependency &amp; Supply-Chain Management</h2>
+          <p><strong>Intent:</strong> Third-party and inter-package dependencies are controlled, auditable, and evolve safely — especially critical for a framework that publishes packages. (Elevates §15&#39;s hygiene into release + provenance.)</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>Pinned, central versions</strong> (central package management); deliberate, reviewed upgrades — no accidental major bumps reintroducing known-bad versions (a library pinned for licensing must stay pinned).</li>
+          <li><strong>Vulnerability auditing in CI</strong> across all feeds — including private/GitHub Packages, with audit-source config so private feeds don&#39;t break the build.</li>
+          <li><strong>Published-package versioning</strong> — semantic versioning + a breaking-change policy for the framework&#39;s packages, so consumers know what an upgrade implies.</li>
+          <li><strong>Coordinated rollout</strong> — framework changes swept across all consumers together; no long-lived divergent versions or lingering partial rollouts.</li>
+          <li><strong>Provenance &amp; integrity</strong> — SBOM, lock files, trusted sources only; transitive dependencies reviewed.</li>
+          <li><strong>License compliance</strong> — dependency licenses tracked; commercial-license constraints honored.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Blanket &quot;update all packages&quot; that reintroduces a pinned/known-bad dependency.</li>
+          <li>Private-feed audit warnings ignored or suppressed wholesale.</li>
+          <li>Consumers stranded on divergent framework versions.</li>
+          <li>No SBOM/lock files; unaudited transitive dependencies; unreviewed licenses.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 2 (raise to <strong>3</strong> for a published framework such as MMCA.Common)</p>
+          <hr>
+          <h2 id="33-developer-experience--inner-loop">33. Developer Experience &amp; Inner Loop</h2>
+          <p><strong>Intent:</strong> Developers build, run, test, and iterate locally with fast, low-friction feedback. (Promoted out of §17 — that scores release/ops automation; this scores the <em>inner</em> loop.)</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>Fast inner loop</strong> — build and test times kept low; incremental builds; hot reload where available; tests fast enough to run constantly.</li>
+          <li><strong>One-command local run</strong> — local orchestration brings up the whole system (e.g., Aspire AppHost spins up services, dependencies, and dashboards) with no manual wiring.</li>
+          <li><strong>Cross-repo local dev</strong> — a frictionless way to develop the shared framework alongside consumers <em>without publishing</em> (e.g., a <code>local.props</code> override pointing at <code>../MMCA.Common/Source</code>); documented and gitignored.</li>
+          <li><strong>Onboarding</strong> — a new dev is productive quickly; prerequisites, secrets bootstrap, and run instructions documented and current.</li>
+          <li><strong>Consistent tooling</strong> — analyzers/formatting/<code>.editorconfig</code> enforce the same rules locally as CI; fast pre-merge feedback.</li>
+          <li><strong>Local/cloud parity</strong> — local topology mirrors production (Aspire-to-Azure) so integration bugs surface locally, not in prod.</li>
+          <li><strong>Discoverable commands</strong> — build/test/migrate/run are each one obvious command.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Multi-step manual setup to run locally; tribal knowledge required.</li>
+          <li>Slow builds/tests that discourage running them.</li>
+          <li>No cross-repo dev path — must publish a package to test a framework change.</li>
+          <li>Local environment diverges from prod (different brokers/DBs) hiding integration bugs.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 2</p>
+          <hr>
+          <h2 id="34-architecture-governance--documentation">34. Architecture Governance &amp; Documentation</h2>
+          <p><strong>Intent:</strong> Decisions are recorded, conformance is enforced, and the system is documented so it stays coherent as it evolves. (Promoted out of §16 — that scores the <em>property</em> of evolvability; this scores the <em>machinery</em> that protects it.)</p>
+          <p><strong>Criteria</strong></p>
+          <ul>
+          <li><strong>Decision records</strong> — significant decisions captured as ADRs with context/rationale/consequences, and kept current (e.g., the <code>ADRs/</code> set on manual mapping, navigation populators, outbox dual-dispatch, auth dual-fetch).</li>
+          <li><strong>Fitness functions</strong> — architecture rules enforced <em>automatically</em> as executable governance (architecture tests / NetArchTest), not just prose.</li>
+          <li><strong>Living documentation</strong> — an architecture map/overview (C4, or a dependency-ordered class encyclopedia) that matches the code and is maintained.</li>
+          <li><strong>Documented conventions</strong> — contributor guides (<code>CLAUDE.md</code>) describe patterns, layering rules, and how to extend; discoverable and current.</li>
+          <li><strong>Change governance</strong> — a lightweight process for evolving cross-cutting patterns; consistency enforced across modules and repos.</li>
+          <li><strong>Traceability</strong> — docs link to code/ADRs; stale docs are detected and pruned.</li>
+          </ul>
+          <p><strong>Red flags</strong></p>
+          <ul>
+          <li>Significant decisions live only in people&#39;s heads; ADRs absent or stale.</li>
+          <li>Architecture rules exist only as prose nobody checks (no fitness functions).</li>
+          <li>Diagrams/docs that contradict the code (worse than none).</li>
+          <li>No documented conventions; every module reinvents patterns.</li>
+          </ul>
+          <p><strong>Default weight:</strong> 2</p>
+          <hr>
+          <h2 id="appendix-quick-scan-checklist">Appendix: Quick-Scan Checklist</h2>
+          <p>A 2-minute triage before the full evaluation — any &quot;no&quot; warrants a deeper look.</p>
+          <ul>
+          <li><input disabled="" type="checkbox"> Can you draw the dependency graph and is it acyclic and inward-pointing?</li>
+          <li><input disabled="" type="checkbox"> Is the domain layer free of framework references?</li>
+          <li><input disabled="" type="checkbox"> Does each service/module own its own data?</li>
+          <li><input disabled="" type="checkbox"> Is there an outbox (or equivalent) guaranteeing persist-then-publish atomicity?</li>
+          <li><input disabled="" type="checkbox"> Are authorization checks enforced server-side at the application boundary?</li>
+          <li><input disabled="" type="checkbox"> Are secrets out of source and config?</li>
+          <li><input disabled="" type="checkbox"> Do analyzers + tests gate every merge?</li>
+          <li><input disabled="" type="checkbox"> Are migrations automated and reviewed?</li>
+          <li><input disabled="" type="checkbox"> Do traces/correlation IDs span service hops?</li>
+          <li><input disabled="" type="checkbox"> Is provisioning sized from load data rather than guesswork?</li>
+          <li><input disabled="" type="checkbox"> Are ADRs present for the non-obvious decisions?</li>
+          <li><input disabled="" type="checkbox"> Can a new feature be added as one cohesive slice?</li>
+          </ul>
+          <p><strong>Front-end / UI:</strong></p>
+          <ul>
+          <li><input disabled="" type="checkbox"> Is UI logic out of components and in the application layer (components stay presentational)?</li>
+          <li><input disabled="" type="checkbox"> Does each piece of client state have one clear owner, with no static mutable cross-user state?</li>
+          <li><input disabled="" type="checkbox"> Is the component library/design system used consistently instead of bypassed page-by-page?</li>
+          <li><input disabled="" type="checkbox"> Are interactive elements real controls (keyboard-operable, labeled), with a stated WCAG target?</li>
+          <li><input disabled="" type="checkbox"> Do large grids/lists use server-side paging and virtualization rather than loading everything client-side?</li>
+          <li><input disabled="" type="checkbox"> Do edit forms guard against unsaved-changes loss with reliable dirty tracking?</li>
+          <li><input disabled="" type="checkbox"> Are routes guarded server-side (UI hiding is not authorization) and role flows matching the docs?</li>
+          <li><input disabled="" type="checkbox"> Is user content encoded/sanitized, with no secrets in client bundles?</li>
+          <li><input disabled="" type="checkbox"> Are there automated component + E2E tests (with shared E2E infra) gating merges?</li>
+          </ul>
+          <p><strong>Operational / governance:</strong></p>
+          <ul>
+          <li><input disabled="" type="checkbox"> Has a database restore actually been tested, with defined RTO/RPO per service?</li>
+          <li><input disabled="" type="checkbox"> Do retries use backoff + idempotency, and does the broker/outbox guarantee delivery after recovery?</li>
+          <li><input disabled="" type="checkbox"> Is there a real erasure/anonymize path reconciling soft-delete with right-to-be-forgotten?</li>
+          <li><input disabled="" type="checkbox"> Is data residency verified for the region, and is PII kept out of logs/telemetry?</li>
+          <li><input disabled="" type="checkbox"> Is provisioning sized from load data, with temporary scale-ups auto-reverted?</li>
+          <li><input disabled="" type="checkbox"> Are log/trace retention and volume tuned for cost?</li>
+          <li><input disabled="" type="checkbox"> Are package versions pinned/audited, with coordinated cross-consumer upgrades and licenses honored?</li>
+          <li><input disabled="" type="checkbox"> Can the whole system be run locally with one command, and the framework developed against consumers without publishing?</li>
+          <li><input disabled="" type="checkbox"> Are architecture rules enforced by fitness functions (tests), and are ADRs + the architecture map current and matching the code?</li>
+          </ul>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/governance/index.html">← Back to Architecture Governance</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/governance/ArchitectureEvaluationCriteria.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -626,7 +626,7 @@
           per-module migrations project (<code>MMCA.ADC.Migrations.SqlServer.Conference</code>) snapshots the resulting
           schema. Cross-module FKs (e.g. <code>UserSessionBookmark.SessionId → Session</code>) are deliberately <strong>not</strong>
           configured here, that would create a cross-module Infrastructure→Domain coupling, and instead degrade
-          to scalar columns under the database-per-service model (see <span class="doc-deadlink" title="Reference outside the published set">ADR-006</span>).</p>
+          to scalar columns under the database-per-service model (see <a href="../adr/006-database-per-service.html">ADR-006</a>).</p>
           <ul>
           <li><strong>Caveats / not-in-source</strong>: <code>SessionAiScore</code> persistence exists, but whether AI scoring is run in
           production at all is a runtime/config concern not visible in these configs (see the Anthropic scoring

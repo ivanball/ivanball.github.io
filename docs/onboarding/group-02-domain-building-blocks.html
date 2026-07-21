@@ -137,7 +137,7 @@
           <p>All of these live in the two innermost layers, <code>MMCA.Common.Shared</code> (value objects, invariants,
           <code>DomainHelper</code>) and <code>MMCA.Common.Domain</code> (entities, interfaces, attributes, enums), so the whole
           group sits below Application and Infrastructure in the dependency flow (see
-          <span class="doc-deadlink" title="Reference outside the published set">primer §1</span>). Nothing here references EF Core, ASP.NET, or a message
+          <a href="00-primer.html#1-the-big-picture">primer §1</a>). Nothing here references EF Core, ASP.NET, or a message
           broker; persistence and dispatch are <em>described</em> by these types and <em>implemented</em> by higher groups.
           That separation is the [Rubric §3, Clean Architecture] and [Rubric §4, Domain-Driven Design] story
           in miniature: the model is framework-free, and the framework adapts to it.</p>
@@ -145,7 +145,7 @@
           <p>Read the chain bottom-up. <a href="#baseentitytidentifiertype"><code>BaseEntity&lt;TIdentifierType&gt;</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/BaseEntity.cs:14</code>) is almost nothing: a single
           <code>required init</code> identifier of the per-entity alias type (see
-          <span class="doc-deadlink" title="Reference outside the published set">identifier aliases</span>). <code>required init</code>
+          <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">identifier aliases</a>). <code>required init</code>
           is the load-bearing choice, a factory method sets <code>Id</code> once at construction and it is immutable
           thereafter, while EF Core still materializes the entity through the parameterless constructor.</p>
           <p><a href="#auditablebaseentitytidentifiertype"><code>AuditableBaseEntity&lt;TIdentifierType&gt;</code></a>
@@ -188,7 +188,7 @@
           values match, not because they are the same row. <a href="#valueobject"><code>ValueObject</code></a> is the cheapest possible
           base, <code>public abstract record ValueObject;</code>, so every value object inherits compiler-generated
           structural equality and immutability for free (the canonical Value Object teaching is in
-          <span class="doc-deadlink" title="Reference outside the published set">primer §2</span>).</p>
+          <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a>).</p>
           <p>The shared shape across all of them is the <strong>private-constructor + static <code>Create</code> factory returning
           <a href="group-01-result-error-handling.html#result"><code>Result&lt;T&gt;</code></a></strong> idiom: you cannot <code>new</code> a value object, and
           the only way in runs through validation, so an invalid <code>Email</code>, <code>Money</code>, <code>Address</code>, or <code>DateRange</code>
@@ -238,7 +238,7 @@
           route parameters into strongly-typed ids without coupling to a concrete id type, its
           <code>CultureInfo.InvariantCulture</code> parsing is also the codebase&#39;s headline [Rubric §27,
           Internationalization] decision (deliberate culture-invariance where culture would otherwise introduce
-          bugs; see <span class="doc-deadlink" title="Reference outside the published set">primer §6</span>).</p>
+          bugs; see <a href="00-primer.html#6-the-34-category-architecture-evaluation-lens">primer §6</a>).</p>
           <h2 id="where-this-group-sits">Where this group sits</h2>
           <p>Everything above is consumed by the layers that follow: every module entity (e.g. the
           <a href="group-17-conference-domain.html">Conference domain</a>, Engagement, and Identity modules) derives from one

@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Integration-Test Tier Rework Plan (RemediationBacklog #14) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Status: complete (Phase 4 broker-transport tier landed 2026-07-06; Phase 5 residual = coverlet only). - Phase 0 ✅ — Tests/WebAPI revived as…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/guides/adc-IntegrationTestReworkPlan.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Integration-Test Tier Rework Plan (RemediationBacklog #14)">
+  <meta property="og:description" content="Status: complete (Phase 4 broker-transport tier landed 2026-07-06; Phase 5 residual = coverlet only). - Phase 0 ✅ — Tests/WebAPI revived as…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/guides/adc-IntegrationTestReworkPlan.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/guides/index.html">Guides &amp; Specifications</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">ADC · Integration-Test Tier Rework Plan (RemediationBacklog #14)</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All guides</summary>
+        <nav class="doc-nav" aria-label="Guides &amp; Specifications">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="adc-ACCESSIBILITY-SCREENREADER-PASS.html">ADC · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="adc-IntegrationTestReworkPlan.html" aria-current="page">ADC · Integration-Test Tier Rework Plan (RemediationBacklog #14)</a></li>
+        <li><a href="adc-NavigationFlow.html">ADC · Navigation Flow</a></li>
+        <li><a href="adc-specifications.html">ADC · Business Specifications</a></li>
+        <li><a href="common-ACCESSIBILITY.html">Common · Accessibility (rubric §21)</a></li>
+        <li><a href="common-COST.html">Common · Cost &amp; FinOps Notes (rubric §31)</a></li>
+        <li><a href="common-GETTING-STARTED.html">Common · Getting Started: Build a New App on MMCA.Common</a></li>
+        <li><a href="common-RESILIENCE.html">Common · Resilience &amp; Business Continuity (rubric §29)</a></li>
+        <li><a href="common-RESPONSIVE.html">Common · Responsive Design &amp; Cross-Browser Support (rubric §22)</a></li>
+        <li><a href="common-VERSIONING.html">Common · Versioning &amp; Breaking-Change Policy</a></li>
+        <li><a href="store-ACCESSIBILITY-SCREENREADER-PASS.html">Store · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="store-BusinessWorkflows.html">Store · Business Workflow Analysis</a></li>
+        <li><a href="store-NavigationFlow.html">Store · Navigation Flow</a></li>
+        <li><a href="store-Specification.html">Store · Business Specification Document</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
+          <h1 id="integration-test-tier-rework-plan-remediationbacklog-14">Integration-Test Tier Rework Plan (RemediationBacklog #14)</h1>
+          <p>Status: <strong>complete</strong> (Phase 4 broker-transport tier landed 2026-07-06; Phase 5 residual = coverlet only).</p>
+          <ul>
+          <li><strong>Phase 0 ✅</strong> — <code>Tests/WebAPI</code> revived as <code>MMCA.Common.API</code> middleware unit tests (16 tests), in <code>MMCA.ADC.CI.slnf</code>.</li>
+          <li><strong>Phase 1 (Identity) — ✅ verified green in CI.</strong> <code>Tests/Integration/MMCA.ADC.Identity.IntegrationTests</code>: reusable <code>IdentityIntegrationTestFixture</code> (boots the host via <code>WebApplicationFactory&lt;Program&gt;</code>, overrides config via <strong>process env vars</strong> set before <code>CreateClient</code>, real SQL DB via <code>ADC_TEST_SQL_BASE</code>/LocalDB, Respawn reset, drop-on-dispose) + 11 re-homed tests (<code>AnonymousAuthTests</code>, <code>AttendeeClaimsTests</code>). <strong>Compiles clean; runtime is verified by the <code>integration-tests</code> workflow</strong> (SQL Server service container) — it cannot be run in the headless dev environment (no Docker + an instance-wide SQL logon trigger blocks LocalDB/localhost). Run via <code>MMCA.ADC.Integration.slnf</code>.</li>
+          <li><strong>Phase 2 (Conference) — ✅ verified green in CI.</strong> <code>Tests/Integration/MMCA.ADC.Conference.IntegrationTests</code>: the WAF <strong>re-points the <code>AddForwardedJwtBearer</code> Bearer scheme at the in-memory test key</strong> (<code>PostConfigure&lt;JwtBearerOptions&gt;</code> — Authority/ConfigurationManager nulled, static RSA <code>IssuerSigningKey</code> + <code>ValidIssuer</code>), <strong>fakes the Engagement gRPC <code>IBookmarkCountService</code></strong>, and the host got an env-gated <strong>warmup guard</strong> (<code>Conference.Service/Program.cs</code> uses <code>app.RunAsync()</code> under <code>Testing</code> instead of <code>StartAsync</code>+self-HTTP warmup). Re-homed <code>AnonymousConferenceReadTests</code> (33 tests — anonymous reads + organizer-authenticated writes, so it exercises the JWT override). Added to <code>MMCA.ADC.Integration.slnf</code> (same CI job). Compiles 0/0.</li>
+          <li><strong>Phase 3 (Engagement) — ✅ verified green in CI.</strong> <code>Tests/Integration/MMCA.ADC.Engagement.IntegrationTests</code>: same WAF shape as Conference (JWT in-process override; no warmup guard — Engagement uses <code>app.RunAsync()</code>), with the Conference gRPC <code>ISessionBookmarkValidationService</code> <strong>faked</strong> (validates every session except a sentinel id). <code>AttendeeBookmarkTests</code> (10 tests) re-homed and adapted to Engagement-only — bookmark CRUD, duplicate→409, ineligible-session→400/404, and the <code>OwnerOrAdminFilter</code> ownership matrix (attendee-self / organizer-any / other-attendee→403). Added to <code>MMCA.ADC.Integration.slnf</code>. Compiles 0/0; CI run pending.</li>
+          <li><strong>Breadth fan-out (in progress).</strong> Re-homing the remaining single-service tests onto the proven fixtures: <strong>Conference +14 files (~102 tests)</strong> — Organizer Event/Session/Room/Question/Category CRUD + lifecycle + edge-cases, Associations, Attendee Q&amp;A, Speaker management/update-auth; <strong>Identity +4 files (~21 tests)</strong> — Auth edge-cases, Attendee auth, Attendee profile (<code>/UserClaims</code>), Organizer user management. Compiles 0/0. <strong>Access-denied authz matrices split + re-homed</strong> (~55 tests, the #11 authz-gate coverage): <code>Anonymous</code> → Identity 5 / Conference 21 / Engagement 4; <code>Attendee</code> → Conference 24 / Identity 1. <em>Still to re-home:</em> Engagement bookmark edge-cases (3); speaker-link/analytics (cross-service → Phase 4).</li>
+          <li><strong>Phase 5 (partial): integration-tests is now a deploy gate.</strong> The <code>integration-tests</code> job moved into <code>deploy.yml</code> as a required dependency of <code>deploy</code> (<code>needs: [build-and-test, integration-tests]</code>), and the standalone <code>integration-tests.yml</code> was removed — so the ~290 integration tests must pass before any production deploy (they also run on PRs). Branch-protection required-checks were rejected: they&#39;d force PRs, conflicting with the direct-push-to-main workflow. <em>Remaining in Phase 5:</em> coverlet coverage collection (needs the MTP <code>Microsoft.Testing.Extensions.CodeCoverage</code> wiring — deferred to avoid risking the now-gating job on an unverified coverage flag).</li>
+          <li><strong>Phase 4 (cross-service flows) — headline flows ✅ done in-process; broker-transport tier deferred.</strong>
+          The two load-bearing cross-service flows are re-homed as <strong>in-process consumer-handler integration
+          tests</strong> on the proven per-service fixtures (no Docker — they resolve the real
+          <code>IIntegrationEventHandler&lt;T&gt;</code> from the booted host and assert against the real DB; runtime verified by
+          the SQL <code>integration-tests</code> job, same as Phases 1–3):<ul>
+          <li><strong>BR-207 auto-link</strong> — <code>Tests/Integration/MMCA.ADC.Conference.IntegrationTests/CrossService/CrossServiceUserRegisteredTests.cs</code>
+          drives Conference&#39;s <code>UserRegisteredHandler</code> (name-match link, ambiguous-name skip, no-match skip).
+          Complements <code>OutboxFidelityTests</code> (Identity tier, which proved the <em>producer</em> enqueues the event):
+          the <em>consumer</em> auto-link is now covered too.</li>
+          <li><strong>Speaker-link round-trip</strong> — <code>Tests/Integration/MMCA.ADC.Identity.IntegrationTests/CrossService/CrossServiceSpeakerLinkTests.cs</code>
+          drives Identity&#39;s <code>SpeakerLinkedToUserHandler</code> / <code>SpeakerUnlinkedFromUserHandler</code> (sets / clears
+          <code>User.LinkedSpeakerId</code>).</li>
+          <li>Both required only a small additive <code>public IServiceProvider Services =&gt; _factory!.Services;</code> accessor
+          on the Conference + Identity fixtures. <strong>Compile 0/0.</strong></li>
+          <li><strong>Broker-transport tier: ✅ landed 2026-07-06 (container-backed, non-gating).</strong> New
+          <code>Tests/Integration/MMCA.ADC.CrossService.IntegrationTests</code> boots all three REST hosts in one process
+          (extern-alias <code>Program</code> access) against real Testcontainers SQL Server + RabbitMQ, proving the genuine
+          <strong>MassTransit broker round-trip</strong> (<code>UserRegistered</code>→auto-link and <code>SpeakerLinked/Unlinked</code> transit
+          outbox→broker→consumer, not just handler logic) plus the <strong>Conference→Engagement bookmark-count gRPC</strong>
+          read (Engagement on a real Kestrel socket). 9 tests behind a smoke gate. It runs in the new nightly /
+          <code>workflow_dispatch</code> <code>cross-service-tests.yml</code> (needs Docker), is excluded from both slnf filters, and is
+          <strong>never in <code>deploy.needs</code></strong> so it cannot block a production deploy. First execution is a manual dispatch.
+          Speaker analytics cross-service reads remain the only deferred item (low value; revisit if needed).</li>
+          </ul>
+          </li>
+          </ul>
+          <p>The original <code>MMCA.ADC.IntegrationTests</code> (258 tests / 29 files) and <code>MMCA.ADC.WebAPI.Tests</code>
+          referenced the <strong>deleted single <code>MMCA.ADC.WebAPI</code> host</strong>, won&#39;t build, and were removed from
+          <code>MMCA.ADC.slnx</code>. Their single-service tests are re-homed (breadth fan-out above) and their headline
+          cross-service flows are re-homed (Phase 4 above), so the orphaned <code>MMCA.ADC.IntegrationTests</code> project
+          folder is now fully superseded and <strong>safe to delete</strong> (the last Phase 5 step):
+          <code>Remove-Item -Recurse -Force Tests/Integration/MMCA.ADC.IntegrationTests</code>.</p>
+          <h2 id="recommended-strategy--two-tiers">Recommended strategy — two tiers</h2>
+          <ol>
+          <li><strong>Primary: per-service <code>WebApplicationFactory&lt;Program&gt;</code></strong> — one in-process host per service
+          (Identity / Conference / Engagement), cross-service edges mocked. <code>AddBrokerMessaging</code>
+          short-circuits to in-process when <code>MessageBus:Provider</code> is absent, so <strong>no broker container</strong>
+          is needed. Covers ~80% of the suite (auth gate, CRUD, validation, soft-delete, ownership).</li>
+          <li><strong>Secondary: real-broker + real-gRPC</strong> — Testcontainers RabbitMQ + a real Identity JWKS
+          endpoint, for the genuine cross-process flows (BR-207 <code>UserRegistered</code>→speaker auto-link,
+          <code>SpeakerLinkedToUser</code>/<code>SpeakerUnlinkedFromUser</code> round-trip, Conference→Engagement bookmark count).</li>
+          <li><strong>Aspire <code>DistributedApplicationTestingBuilder</code> is deferred</strong> to the existing Playwright E2E lane
+          (too heavy for the integration tier; overlaps E2E).</li>
+          </ol>
+          <h2 id="three-code-facts-that-shape-the-rework-verified">Three code facts that shape the rework (verified)</h2>
+          <ul>
+          <li><strong>Only <code>Conference.Service</code> is WAF-incompatible</strong> — it ends with <code>StartAsync()</code> + self-HTTP/2
+          <code>WarmupViaHttpAsync</code> + <code>WaitForShutdownAsync()</code>. Identity/Engagement/Notification use <code>app.RunAsync()</code>.
+          Conference needs an <strong>env-gated guard</strong> (skip warmup + use <code>RunAsync</code> under <code>Testing</code>).</li>
+          <li><strong>Non-Identity services use <code>AddForwardedJwtBearer</code></strong> (fetches <code>{authority}/.well-known/...</code> JWKS).
+          A per-service WAF has no JWKS authority, so the fixture must <strong>override <code>JwtBearerOptions</code></strong> to
+          validate the <code>JwtTokenGenerator</code> test public key in-process (Authority/ConfigurationManager nulled,
+          <code>IssuerSigningKey</code> set). Identity itself uses <code>AddCommonAuthentication</code> (in-process) — no override.</li>
+          <li>Each host needs <strong><code>public partial class Program;</code></strong> (one line) so <code>WebApplicationFactory&lt;Program&gt;</code>
+          can bind.</li>
+          </ul>
+          <h2 id="databases">Databases</h2>
+          <ul>
+          <li><strong>SQLite in-memory</strong> for the fast bulk tier (no Docker, CI-friendly; <code>DatabaseInitStrategy=EnsureCreated</code>).</li>
+          <li><strong>MsSql Testcontainers</strong> for a tagged SQL-fidelity subset (soft-delete filters, rowversion
+          concurrency, outbox, <code>ef migrations has-pending-model-changes</code> drift check — the #8 gaps).</li>
+          <li>No <code>SQLServerDbContext</code> split — per-service DB routing is config-only via <code>DataSources</code>.</li>
+          </ul>
+          <h2 id="project-structure">Project structure</h2>
+          <ul>
+          <li>One WAF test project per service (<code>MMCA.ADC.{Identity,Conference,Engagement}.IntegrationTests</code>) —
+          can&#39;t reference two <code>Program</code>-bearing hosts in one project.</li>
+          <li>One <code>MMCA.ADC.CrossService.IntegrationTests</code> for the real-broker/real-gRPC tier.</li>
+          <li>Revive <code>WebAPI.Tests</code> as a <strong>host-neutral middleware unit-test project</strong> (it&#39;s ~16 pure unit tests
+          of <code>MMCA.Common.API</code> exception handlers — only the dead WebAPI <code>ProjectReference</code> broke it).</li>
+          <li>Reuse <code>MMCA.Common.Testing</code> <code>IntegrationTestBase&lt;TFixture&gt;</code> + <code>JwtTokenGenerator</code>.</li>
+          </ul>
+          <h2 id="ci">CI</h2>
+          <ul>
+          <li>Add the <strong>SQLite per-service tier to <code>CI.slnf</code></strong> (seconds, no Docker) → restores the authz/CRUD
+          <strong>merge gate (#11)</strong> with no workflow change.</li>
+          <li>Keep the <strong>container-based MsSql + RabbitMQ tier in a separate push-to-main / nightly job</strong>.</li>
+          </ul>
+          <h2 id="phased-sequencing-fastest-win-first">Phased sequencing (fastest win first)</h2>
+          <ul>
+          <li><strong>Phase 0</strong> — re-home <code>WebAPI.Tests</code> middleware unit tests; drop the dead WebAPI reference;
+          re-add to <code>slnx</code>+<code>CI.slnf</code>. ~16 tests green; removes a non-building project (#16).</li>
+          <li><strong>Phase 1</strong> — <strong>Identity WAF</strong> (simplest host). Build the reusable <code>ServiceTestFixture&lt;TProgram&gt;</code>;
+          re-home the <code>Auth*</code>/<code>AttendeeClaims</code>/<code>OrganizerUser</code> tests. Restores the auth/authz gate (#11).</li>
+          <li><strong>Phase 2</strong> — <strong>Conference WAF</strong>: first use of the <code>JwtBearerOptions</code> override + the warmup guard;
+          mock <code>IBookmarkCountService</code>; re-home the CRUD/lifecycle/edge-case block.</li>
+          <li><strong>Phase 3</strong> — <strong>Engagement WAF</strong>: mock <code>ISessionBookmarkValidationService</code>; bookmark +
+          <code>OwnerOrAdminFilter</code> tests.</li>
+          <li><strong>Phase 4</strong> — SQL-fidelity subset (MsSql) + cross-service real-broker tier (BR-207, speaker-link,
+          bookmark-count); the separate container CI job.</li>
+          <li><strong>Phase 5</strong> — wire coverlet, finalize <code>slnx</code>/<code>CI.slnf</code>, update the CLAUDE.md &quot;excluded&quot; note, tick #14.</li>
+          </ul>
+          <h2 id="key-risks">Key risks</h2>
+          <ul>
+          <li>The non-Identity <code>JwtBearerOptions</code> in-process override is the trickiest piece — prove it on one
+          Conference auth test before fanning out.</li>
+          <li>SQLite vs SQL-Server fidelity (owned types, soft-delete filters, rowversion) — run the
+          concurrency/soft-delete/outbox subset on MsSql.</li>
+          <li>Re-homing ~258 cross-module tests is the bulk of the effort: cross-module seeding becomes
+          &quot;seed-own-DB + fake-foreign-service&quot;; genuine cross-module assertions move to the real-broker tier.</li>
+          </ul>
+          <h2 id="critical-files">Critical files</h2>
+          <ul>
+          <li><code>Tests/Integration/MMCA.ADC.IntegrationTests/Infrastructure/TestWebApplicationFactory.cs</code>
+          (combined-host factory → split into per-service fixtures; its JWT config block is the auth-override template)</li>
+          <li><code>Tests/Integration/MMCA.ADC.IntegrationTests/Infrastructure/IntegrationTestBase.cs</code> (ADC seed/auth helpers)</li>
+          <li><code>Source/Services/MMCA.ADC.Conference.Service/Program.cs</code> (warmup/<code>StartAsync</code> guard + <code>public partial class Program</code>)</li>
+          <li><code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs</code>
+          (<code>AddForwardedJwtBearer</code>/<code>AddCommonAuthentication</code> — the seam the WAF overrides)</li>
+          <li><code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/IntegrationTestBase.cs</code>, <code>JwtTokenGenerator.cs</code></li>
+          <li><code>MMCA.ADC.slnx</code>, <code>MMCA.ADC.CI.slnf</code> (re-add reworked projects; CI inclusion per above)</li>
+          </ul>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/guides/adc-IntegrationTestReworkPlan.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

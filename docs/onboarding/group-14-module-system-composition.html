@@ -197,7 +197,7 @@
           <h2 id="the-two-composition-roots-and-the-ordering-they-enforce">The two composition roots and the ordering they enforce</h2>
           <p>Service registration itself lives in two static <a href="#dependencyinjection"><code>DependencyInjection</code></a> classes,
           each using a C# <code>extension(IServiceCollection services)</code> block (see
-          <span class="doc-deadlink" title="Reference outside the published set">primer §4</span> for the <code>extension(T)</code> syntax). The
+          <a href="00-primer.html#4-c-build-and-code-style-conventions">primer §4</a> for the <code>extension(T)</code> syntax). The
           <strong>Application</strong> root
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:21</code>) exposes <code>AddApplication()</code>
           (core services: the domain-event dispatcher, navigation-metadata provider, query pipeline, and the
@@ -287,7 +287,7 @@
           <strong>engine</strong> (<a href="group-07-persistence-ef-core.html#datasource"><code>DataSource</code></a>: SQL Server / Cosmos / SQLite)
           and is carried by the provider-specific configuration base classes, so choosing a base class chooses
           the engine with no change to the entity (see
-          <span class="doc-deadlink" title="Reference outside the published set">primer §2</span>).
+          <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a>).
           <a href="#usedatabaseattribute"><code>UseDatabaseAttribute</code></a> (<code>UseDatabaseAttribute.cs:22-26</code>) names the <strong>logical
           database</strong> <em>on</em> that engine; its documented resolution order (<code>UseDatabaseAttribute.cs:9-14</code>) is the
           attribute value, then the module name derived from the entity&#39;s namespace (the segment before
@@ -408,7 +408,7 @@
           </li>
           <li><p><strong>Walkthrough</strong>: three <code>{ get; init; }</code> members (lines 10, 13, 23). <code>init</code>-only accessors mean the binder sets them once at startup and the object is immutable thereafter (safe to share as a singleton). The XML doc on <code>DatabaseInitStrategy</code> (lines 15–23) enumerates the three accepted string values and their intent.</p>
           </li>
-          <li><p><strong>Why it&#39;s built this way</strong>: separating the interface (Application layer) from the concrete class lets higher layers inject the abstraction while only the composition root knows the implementation, the dependency-inversion shape the primer describes for ports/adapters (<span class="doc-deadlink" title="Reference outside the published set">primer §2</span>).</p>
+          <li><p><strong>Why it&#39;s built this way</strong>: separating the interface (Application layer) from the concrete class lets higher layers inject the abstraction while only the composition root knows the implementation, the dependency-inversion shape the primer describes for ports/adapters (<a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a>).</p>
           </li>
           <li><p><strong>Where it&#39;s used</strong>: the root <a href="#dependencyinjection"><code>AddApplication()</code></a> registers it via <code>TryAddSingleton&lt;IApplicationSettings&gt;(sp =&gt; sp.GetRequiredService&lt;IOptions&lt;ApplicationSettings&gt;&gt;().Value)</code> (<code>DependencyInjection.cs:31</code>); consumed by the query pipeline (<code>MaxPageSize</code> clamping), the startup database-initialization path (<code>DatabaseInitStrategy</code>), and the profiling-decorator registration (<code>UseMiniProfiler</code>).</p>
           </li>
@@ -561,7 +561,7 @@
           <li><code>AddApplicationProfiling()</code> (line 186): optional, <code>TryDecorate</code>s <code>ProfilingCommandDecorator&lt;,&gt;</code>/<code>ProfilingQueryDecorator&lt;,&gt;</code> on top, used when <code>IApplicationSettings.UseMiniProfiler</code> is on.</li>
           </ul>
           </li>
-          <li><p><strong>Why it&#39;s built this way</strong>: <code>[Rubric §3, Clean Architecture]</code>: registration lives in a static <code>DependencyInjection.cs</code> at the composition root, so domain and Application types never reference the container. The pervasive <code>TryAdd*</code> / <code>TryDecorate</code> pattern lets a consuming app override any framework default simply by registering its own implementation first. The <code>extension(IServiceCollection services)</code> block (line 23) is the C# 14 preview extension-member syntax the framework uses for all DI registration, see <span class="doc-deadlink" title="Reference outside the published set">primer §4</span>.</p>
+          <li><p><strong>Why it&#39;s built this way</strong>: <code>[Rubric §3, Clean Architecture]</code>: registration lives in a static <code>DependencyInjection.cs</code> at the composition root, so domain and Application types never reference the container. The pervasive <code>TryAdd*</code> / <code>TryDecorate</code> pattern lets a consuming app override any framework default simply by registering its own implementation first. The <code>extension(IServiceCollection services)</code> block (line 23) is the C# 14 preview extension-member syntax the framework uses for all DI registration, see <a href="00-primer.html#c-extensiont-types-read-this-once">primer §4</a>.</p>
           </li>
           <li><p><strong>Where it&#39;s used</strong>: called from every consuming host (<code>MMCA.ADC.*.Service/Program.cs</code>, the Gateway, test fixtures) following the canonical sequence in MMCA.Common <code>CLAUDE.md</code>: <code>AddApplication()</code> → one <code>ScanModuleApplicationServices&lt;…ClassReference&gt;()</code> per module → <code>AddApplicationDecorators()</code> (last) → Infrastructure → API. Module-level <code>DependencyInjection</code> classes (e.g. the ADC Conference/Engagement/Identity composition roots) are the callers of <code>ScanModuleApplicationServices&lt;ClassReference&gt;()</code>.</p>
           </li>

@@ -582,12 +582,12 @@
           <li>CI/CD chapter, <code>deploy.yml</code> applies per-module idempotent migration scripts and runs the
           post-deploy smoke gate; <code>cutover-per-service-dbs.yml</code> is a sibling workflow in the same
           <code>prod-azure</code> concurrency group.</li>
-          <li><span class="doc-deadlink" title="Reference outside the published set">ADR-006</span>, the decision to adopt database-per-service,
+          <li><a href="../adr/006-database-per-service.html">ADR-006</a>, the decision to adopt database-per-service,
           the trade-offs, and the <code>CrossDataSourceDegradeConvention</code> that removes cross-database FKs.</li>
-          <li><span class="doc-deadlink" title="Reference outside the published set">ADR-009</span>, the resilience and recovery
+          <li><a href="../adr/009-resilience-and-recovery-objectives.html">ADR-009</a>, the resilience and recovery
           objectives framework, including the requirement that <code>DISASTER-RECOVERY.md</code> exists and that the
           drill-result table is filled.</li>
-          <li><span class="doc-deadlink" title="Reference outside the published set">ADR-003</span>, the outbox pattern that the cutover workflow
+          <li><a href="../adr/003-outbox-dual-dispatch.html">ADR-003</a>, the outbox pattern that the cutover workflow
           gates on (drain first) and that the per-service databases each own independently.</li>
           </ul>
           <hr>

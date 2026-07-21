@@ -156,7 +156,7 @@
           (<code>MMCA.Common.Testing/IIntegrationTestFixture.cs:8</code>): a two-method contract, <code>CreateClient()</code> and
           <code>ResetDatabaseAsync()</code>, that hides how the host and its database are provisioned. Its remarks are
           load-bearing, a host running multiple physical data sources (&quot;database per microservice&quot;, see
-          <span class="doc-deadlink" title="Reference outside the published set">primer</span> and ADR-006) must reset <strong>every</strong>
+          <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer</a> and ADR-006) must reset <strong>every</strong>
           relational source, and the fixture can resolve <code>IEntityDataSourceRegistry</code> / <code>IDataSourceResolver</code> from
           the booted host to enumerate them.</p>
           <p><a href="#integrationtestbasetfixture"><code>IntegrationTestBase&lt;TFixture&gt;</code></a>
@@ -746,7 +746,7 @@
           <ul>
           <li><strong>What it is</strong> - the closed vocabulary of architectural layers a fitness function can reason about: <code>Shared</code>, <code>Domain</code>, <code>Application</code>, <code>Infrastructure</code>, <code>Api</code>, <code>Ui</code>, <code>Grpc</code>, <code>Contracts</code>, <code>ServiceHost</code> (lines 11-19).</li>
           <li><strong>Depends on</strong> - nothing; a plain enum.</li>
-          <li><strong>Concept introduced</strong> - the Clean Architecture layer taxonomy made into a type. The layer flow itself is taught in <span class="doc-deadlink" title="Reference outside the published set">primer §1</span>; here it becomes an enum the rule library keys off, so a rule that iterates layers is written once against the enum rather than hard-coded per repo. [Rubric §3 - Clean Architecture] assesses whether the layering is explicit and enforced; this enum is the shared alphabet.</li>
+          <li><strong>Concept introduced</strong> - the Clean Architecture layer taxonomy made into a type. The layer flow itself is taught in <a href="00-primer.html#1-the-big-picture">primer §1</a>; here it becomes an enum the rule library keys off, so a rule that iterates layers is written once against the enum rather than hard-coded per repo. [Rubric §3 - Clean Architecture] assesses whether the layering is explicit and enforced; this enum is the shared alphabet.</li>
           <li><strong>Walkthrough</strong> - the doc (lines 3-7) notes that <code>Ui</code>, <code>Grpc</code>, <code>Contracts</code>, and <code>ServiceHost</code> are optional: a repo simply omits them from its map when absent, so a rule iterating them is vacuously satisfied with no compile dependency on the missing assembly. <a href="#architecturemapbase"><code>ArchitectureMapBase.Segment</code></a> translates each member to its namespace segment (e.g. <code>Api</code> to <code>&quot;API&quot;</code>).</li>
           <li><strong>Where it&#39;s used</strong> - carried by <a href="#layerref"><code>LayerRef</code></a>, projected by <a href="#iarchitecturemap"><code>IArchitectureMap.OfLayer</code></a>, and threaded through nearly every method in <a href="#architecturerules"><code>ArchitectureRules</code></a>.</li>
           </ul>
@@ -954,7 +954,7 @@
           <ul>
           <li><strong>What it is</strong> - the CQRS handler convention base: handlers and validators live only in Application, handlers and services do not broker other handlers, and no <code>*Service</code> exceeds the god-class constructor-arity ceiling.</li>
           <li><strong>Depends on</strong> - <a href="#iarchitecturemap"><code>IArchitectureMap</code></a>, <a href="#architecturerules"><code>ArchitectureRules</code></a>.</li>
-          <li><strong>Concept introduced</strong> - cross-references the delegating-base shape (<a href="#aggregateconventiontestsbase"><code>AggregateConventionTestsBase</code></a>); adds a <code>MaxServiceConstructorParameters</code> override (line 12, default 8). [Rubric §6 - CQRS] and [Rubric §1 - SOLID] apply; the CQRS decorator pipeline itself is taught in <span class="doc-deadlink" title="Reference outside the published set">primer §2</span>.</li>
+          <li><strong>Concept introduced</strong> - cross-references the delegating-base shape (<a href="#aggregateconventiontestsbase"><code>AggregateConventionTestsBase</code></a>); adds a <code>MaxServiceConstructorParameters</code> override (line 12, default 8). [Rubric §6 - CQRS] and [Rubric §1 - SOLID] apply; the CQRS decorator pipeline itself is taught in <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a>.</li>
           <li><strong>Walkthrough</strong> - six <code>[Fact]</code>s: <code>Handlers_ShouldResideIn_ApplicationLayer</code> (line 15), <code>Handlers_ShouldNotInject_OtherHandlers</code> (line 18), <code>ApplicationServices_ShouldNotInject_Handlers</code> (line 21), <code>ApplicationServices_ShouldNotExceed_ConstructorArity</code> (line 24, passing the max), <code>Validators_ShouldResideIn_ApplicationLayer</code> (line 27), <code>EventHandlers_ShouldResideIn_ApplicationLayer_AndBeSealed</code> (line 30).</li>
           <li><strong>Where it&#39;s used</strong> - subclassed in all three repos.</li>
           </ul>
@@ -2238,7 +2238,7 @@
           <code>global.json</code> sets <code>&quot;runner&quot;: &quot;Microsoft.Testing.Platform&quot;</code>), with <strong>AwesomeAssertions</strong> for fluent
           asserts, <strong>Moq</strong> for test doubles, and <strong>coverlet</strong> for coverage. The lone exception is
           <code>MMCA.Common.Benchmarks</code>, a <strong>BenchmarkDotNet</strong> executable (not a test project). See
-          <span class="doc-deadlink" title="Reference outside the published set">primer §3</span> for the platform/runner
+          <a href="00-primer.html#3-the-external-stack-bcl--nuget--external-level-0">primer §3</a> for the platform/runner
           externals.</li>
           <li><strong>Layering mirror.</strong> The ADC module suites repeat the same seven-project shape per module
           (<code>{Module}.{Shared,Domain,Application,Infrastructure,API,UI}.Tests</code> + a per-service

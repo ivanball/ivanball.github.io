@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ADR-003: Outbox Pattern with Dual Dispatch · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted">
+  <meta name="description" content="Accepted. Revised 2026-07-19 (integration-event routing via IMessageBus, lease-based claims for safe scale-out, dead-letter visibility, post-commit…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="article">
   <meta property="og:title" content="ADR-003: Outbox Pattern with Dual Dispatch">
-  <meta property="og:description" content="Accepted">
+  <meta property="og:description" content="Accepted. Revised 2026-07-19 (integration-event routing via IMessageBus, lease-based claims for safe scale-out, dead-letter visibility, post-commit…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 48 ADRs</summary>
+        <summary>All 49 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -113,6 +113,7 @@
         <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
         <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
           </ol>
         </nav>
       </details>
@@ -121,7 +122,8 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-003-outbox-pattern-with-dual-dispatch">ADR-003: Outbox Pattern with Dual Dispatch</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted</p>
+          <p>Accepted. Revised 2026-07-19 (integration-event routing via <code>IMessageBus</code>, lease-based claims for
+          safe scale-out, dead-letter visibility, post-commit dispatch; see Revision below).</p>
           <h2 id="context">Context</h2>
           <p>Domain events must be reliably published after aggregate changes are persisted. Two failure modes exist:</p>
           <ol>
@@ -154,10 +156,41 @@
           <li>Failed-message retries pace at the polling interval: with a 300s prod interval, a persistently failing message dead-letters after ~25 minutes instead of seconds (an intentional, healthier backoff).</li>
           <li>Rows orphaned by a process crash (no signal exists) wait up to the polling interval before the safety-net pickup.</li>
           </ul>
+          <h2 id="revision-2026-07-19">Revision (2026-07-19)</h2>
+          <p>Four changes from the 2026-07-19 full review:</p>
+          <ol>
+          <li><strong>Integration events route through the outbox to <code>IMessageBus</code>, never local dispatch.</strong> An
+          <code>IIntegrationEvent</code> raised via <code>AddDomainEvent</code> used to be dispatched in-process and marked
+          processed, silently never reaching the wire in broker mode. Now
+          <code>DomainEventSaveChangesInterceptor</code> writes its outbox row but does NOT dispatch it in-process;
+          the row stays unprocessed and <code>OutboxProcessor</code> publishes it via <code>IMessageBus</code>, so the
+          registered transport (in-process for the monolith, MassTransit broker for extracted services)
+          determines delivery. <code>AddDomainEvent(integrationEvent)</code> is therefore broker-correct. Pure
+          domain events keep the dual-dispatch fast path described above.</li>
+          <li><strong>Lease-based claims make scale-out safe by construction.</strong> <code>OutboxMessage</code> gains <code>LockedUntil</code>
+          and <code>LockToken</code>: before dispatching, a processor replica claims the eligible batch with an
+          atomic <code>ExecuteUpdateAsync</code> lease (<code>Outbox:LeaseSeconds</code>, default 300); other replicas skip
+          rows under an unexpired lease and a race between two claim updates resolves per row (each
+          replica processes only rows carrying its own token). A replica that dies mid-batch releases its
+          rows implicitly when the lease expires. Running <code>minReplicas: 1</code> is therefore <strong>no longer a
+          correctness requirement for the outbox</strong> (previously two replicas could drain the same rows and
+          double-dispatch every event); it remains a cost choice, and ADR-030&#39;s sole-migrator rationale
+          for the setting stands on its own.</li>
+          <li><strong>Dead-letter visibility.</strong> Retry exhaustion is now loud: the <code>outbox.dead_letter.count</code> metric
+          gets a <code>reason=retries_exhausted</code> tag (beside the existing <code>type_unresolvable</code>), an Error-level
+          log fires at the moment of exhaustion (the operator&#39;s last signal before the row leaves the
+          poll), and <code>Outbox:DeadLetterRetentionDays</code> retains dead-lettered payloads longer than
+          <code>Outbox:RetentionDays</code> (0 = same retention) for diagnosis and manual replay before
+          <code>OutboxCleanupService</code> purges them.</li>
+          <li><strong>In-process dispatch defers until after commit.</strong> When the save runs inside a transaction (the
+          ADR-014 Transactional path), the post-save dispatch/mark-processed work is deferred and flushed
+          only after a successful commit; rollback (exception or the new business-failure rollback,
+          ADR-014 Revision) drops it together with the outbox rows.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/003-outbox-dual-dispatch.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/003-outbox-dual-dispatch.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
       </div>

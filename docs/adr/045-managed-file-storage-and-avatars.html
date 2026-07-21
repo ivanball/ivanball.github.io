@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 48 ADRs</summary>
+        <summary>All 49 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -113,6 +113,7 @@
         <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
         <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
           </ol>
         </nav>
       </details>
@@ -152,8 +153,9 @@
           degraded path.</li>
           <li><strong>Avatar contract (BR-116a, applied per consumer)</strong>: one avatar per user; accept jpeg/png/webp
           up to 2 MB; server re-encodes to 256x256 JPEG via <code>IImageProcessor</code> (client-declared content
-          types are advisory only); blob name <code>avatars/{userId}-{random8}.jpg</code> in a public-read
-          container; upload deletes the previous blob; the URL lives on the user entity as <code>[Pii]</code>,
+          types are advisory only); blob name <code>{userId}-{random8}.jpg</code> in the infrastructure-provisioned
+          public-read <code>avatars</code> container (so the URL path reads <code>avatars/{userId}-{random8}.jpg</code>);
+          upload deletes the previous blob; the URL lives on the user entity as <code>[Pii]</code>,
           nulled on anonymize with the blob deleted; exported in the GDPR data export.</li>
           </ul>
           <h2 id="consequences">Consequences</h2>
@@ -173,7 +175,7 @@
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/045-managed-file-storage-and-avatars.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/045-managed-file-storage-and-avatars.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
       </div>

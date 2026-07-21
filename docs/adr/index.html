@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 48 ADRs</summary>
+        <summary>All 49 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html" aria-current="page">Overview</a></li>
@@ -113,6 +113,7 @@
         <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
         <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
           </ol>
         </nav>
       </details>
@@ -143,7 +144,7 @@
           <tr>
           <td><a href="003-outbox-dual-dispatch.html">003</a></td>
           <td>Outbox dual dispatch</td>
-          <td>Outbox + in-process dispatch + background processor; at-least-once delivery.</td>
+          <td>Outbox + in-process dispatch + background processor; at-least-once delivery. Revised 2026-07-19: integration events route through the outbox to <code>IMessageBus</code> (never local dispatch), lease columns (<code>LockedUntil</code>/<code>LockToken</code>) make replica scale-out safe by construction, and retry exhaustion is dead-lettered loudly (metric + Error log + <code>DeadLetterRetentionDays</code>).</td>
           </tr>
           <tr>
           <td><a href="004-authentication-dual-fetch.html">004</a></td>
@@ -198,7 +199,7 @@
           <tr>
           <td><a href="014-cqrs-decorator-pipeline.html">014</a></td>
           <td>CQRS decorator pipeline</td>
-          <td>Thin <code>ICommandHandler</code>/<code>IQueryHandler</code> use cases behind a Scrutor decorator chain (FeatureGate → Logging → Caching → Validating → Transactional → Handler); the order is load-bearing.</td>
+          <td>Thin <code>ICommandHandler</code>/<code>IQueryHandler</code> use cases behind a Scrutor decorator chain (FeatureGate → Logging → Caching → Validating → Transactional → Handler); the order is load-bearing. Revised 2026-07-19: business failures (<code>Result.Failure</code>) now roll the transaction back like exceptions, and in-process event dispatch is deferred until after commit.</td>
           </tr>
           <tr>
           <td><a href="015-architecture-fitness-functions.html">015</a></td>
@@ -366,6 +367,11 @@
           <td><code>SoftDeletedUserMiddleware</code> (BR-133, after authentication, before authorization) returns 401 for authenticated callers whose <code>User.IsDeleted</code>, via <code>ISoftDeletedUserValidator</code> behind a 30-second cached check; the validator is lazily resolved so hosts that do not register one (non-Identity services, Helpdesk) no-op. Bounds the stateless-JWT revocation window (ADR-004) to roughly the cache duration instead of the token lifetime.</td>
           </tr>
           <tr>
+          <td><a href="049-library-configureawait-policy.html">049</a></td>
+          <td>Library-scoped ConfigureAwait(false) policy</td>
+          <td>Packaged non-UI framework code awaits with <code>ConfigureAwait(false)</code>, enforced as a build gate (CA2007 = warning for <code>Source/**</code> in MMCA.Common&#39;s .editorconfig repo-delta, UI component packages excluded); the application repos keep ConfigureAwait analyzers off. Protects the MAUI head (ADR-042) and any non-ASP.NET consumer from library context-capture deadlocks.</td>
+          </tr>
+          <tr>
           <td><a href="048-primitive-identifier-type-aliases.html">048</a></td>
           <td>Primitive identifier type aliases</td>
           <td>Entity IDs are primitives behind per-module <code>global using {Entity}IdentifierType = ...</code> aliases, linked solution-wide via <code>Directory.Build.props</code>, chosen over DDD strongly-typed ID structs: readable signatures with zero EF/serializer/OpenAPI friction, at the cost of no compile-time protection against swapping two same-typed IDs. Wrapper structs were considered and deferred (the empty <code>StronglyTypedIds</code> folders).</td>
@@ -380,7 +386,7 @@
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/README.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/README.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
       </div>

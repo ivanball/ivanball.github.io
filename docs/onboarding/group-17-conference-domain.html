@@ -1843,7 +1843,7 @@
           private validators, <em>what counts as a valid answer depends on the question&#39;s type</em>:<ul>
           <li><code>ValidateRatingAnswer</code> (line 128): <code>int.TryParse</code> with <code>NumberStyles.Integer</code> +
           <code>CultureInfo.InvariantCulture</code>, must be <code>1..5</code>; otherwise <code>Error.Validation</code>. (Culture-invariant
-          parsing, see the <span class="doc-deadlink" title="Reference outside the published set">primer §27 note</span>.)</li>
+          parsing, see the <a href="00-primer.html#6-the-34-category-architecture-evaluation-lens">primer §27 note</a>.)</li>
           <li><code>ValidateTextAnswer</code> (line 142): length not exceeding <code>TextAnswerMaxLength</code> (2000).</li>
           <li><code>ValidateEmailAnswer</code> (line 156): constructs a <code>System.Net.Mail.MailAddress</code> and treats a
           <code>FormatException</code> as invalid, the BCL is the format authority.</li>

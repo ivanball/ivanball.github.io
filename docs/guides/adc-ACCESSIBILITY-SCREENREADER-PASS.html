@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Manual Screen-Reader Pass: Runbook (§21 Accessibility) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="The automated layer (axe-core WCAG 2.1 AA scans in Tests/E2E/MMCA.ADC.E2E.Tests/AccessibilityTests.cs plus the shared Login/Register/Profile bases in…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/guides/adc-ACCESSIBILITY-SCREENREADER-PASS.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Manual Screen-Reader Pass: Runbook (§21 Accessibility)">
+  <meta property="og:description" content="The automated layer (axe-core WCAG 2.1 AA scans in Tests/E2E/MMCA.ADC.E2E.Tests/AccessibilityTests.cs plus the shared Login/Register/Profile bases in…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/guides/adc-ACCESSIBILITY-SCREENREADER-PASS.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/guides/index.html">Guides &amp; Specifications</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">ADC · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All guides</summary>
+        <nav class="doc-nav" aria-label="Guides &amp; Specifications">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="adc-ACCESSIBILITY-SCREENREADER-PASS.html" aria-current="page">ADC · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="adc-IntegrationTestReworkPlan.html">ADC · Integration-Test Tier Rework Plan (RemediationBacklog #14)</a></li>
+        <li><a href="adc-NavigationFlow.html">ADC · Navigation Flow</a></li>
+        <li><a href="adc-specifications.html">ADC · Business Specifications</a></li>
+        <li><a href="common-ACCESSIBILITY.html">Common · Accessibility (rubric §21)</a></li>
+        <li><a href="common-COST.html">Common · Cost &amp; FinOps Notes (rubric §31)</a></li>
+        <li><a href="common-GETTING-STARTED.html">Common · Getting Started: Build a New App on MMCA.Common</a></li>
+        <li><a href="common-RESILIENCE.html">Common · Resilience &amp; Business Continuity (rubric §29)</a></li>
+        <li><a href="common-RESPONSIVE.html">Common · Responsive Design &amp; Cross-Browser Support (rubric §22)</a></li>
+        <li><a href="common-VERSIONING.html">Common · Versioning &amp; Breaking-Change Policy</a></li>
+        <li><a href="store-ACCESSIBILITY-SCREENREADER-PASS.html">Store · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="store-BusinessWorkflows.html">Store · Business Workflow Analysis</a></li>
+        <li><a href="store-NavigationFlow.html">Store · Navigation Flow</a></li>
+        <li><a href="store-Specification.html">Store · Business Specification Document</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
+          <h1 id="manual-screen-reader-pass-runbook-21-accessibility">Manual Screen-Reader Pass: Runbook (§21 Accessibility)</h1>
+          <p>The automated layer (axe-core WCAG 2.1 AA scans in <code>Tests/E2E/MMCA.ADC.E2E.Tests/AccessibilityTests.cs</code>
+          plus the shared Login/Register/Profile bases in <code>MMCA.Common.Testing.E2E</code>) catches programmatic
+          violations: missing labels, contrast, ARIA misuse, landmark gaps. It cannot judge whether the experience
+          is actually usable with a screen reader: focus order, meaningful announcements, live-region updates, and
+          keyboard operability. This runbook is the manual complement the rubric (§21) calls for. Record a dated
+          pass in the results table below; that record is the evidence the scorecard reads.</p>
+          <blockquote>
+          <p>Scope note: this is a manual, periodic pass (run it before a release and when a flow changes), not a CI
+          gate. The CI a11y gate is the separate axe + E2E merge-gate promotion tracked in <code>RemediationBacklog.md</code>
+          (TD-06/TD-07). The two are complementary: automation catches regressions cheaply, the manual pass catches
+          what automation cannot.</p>
+          </blockquote>
+          <h2 id="tools">Tools</h2>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>OS</th>
+          <th>Screen reader</th>
+          <th>Browser</th>
+          <th>Start / stop</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Windows</td>
+          <td><strong>NVDA</strong> (free, nvaccess.org)</td>
+          <td>Chrome or Edge</td>
+          <td><code>Ctrl</code>+<code>Alt</code>+<code>N</code> to start, <code>Insert</code>+<code>Q</code> to quit</td>
+          </tr>
+          <tr>
+          <td>macOS</td>
+          <td><strong>VoiceOver</strong> (built in)</td>
+          <td>Safari</td>
+          <td><code>Cmd</code>+<code>F5</code> to toggle</td>
+          </tr>
+          </tbody></table></div>
+          <p>Run against the app started via Aspire (<code>dotnet run --project Source/Hosting/MMCA.ADC.AppHost</code>), reaching
+          the UI through the Gateway. Test with the <strong>keyboard only</strong> (no mouse) for the whole pass.</p>
+          <h2 id="what-to-verify-on-every-flow">What to verify on every flow</h2>
+          <ol>
+          <li><strong>Landmarks and headings.</strong> The SR&#39;s landmark/heading list (NVDA <code>Insert</code>+<code>F7</code>) exposes a logical
+          <code>banner</code> / <code>navigation</code> / <code>main</code> structure and a sensible <code>h1...hN</code> outline (one <code>h1</code> per page).</li>
+          <li><strong>Skip link.</strong> The first <code>Tab</code> reaches a working &quot;skip to main content&quot; link (<code>MainLayout.razor</code>).</li>
+          <li><strong>Focus order.</strong> <code>Tab</code> / <code>Shift</code>+<code>Tab</code> move in reading order; focus is always visible; no focus is
+          trapped (you can always <code>Tab</code> back out of menus, dialogs, the data grid).</li>
+          <li><strong>Accessible names.</strong> Every control announces a meaningful name plus role (icon-only buttons announce
+          their <code>aria-label</code>, not &quot;button&quot;; links announce their destination, not &quot;link&quot;).</li>
+          <li><strong>State changes announced.</strong> Loading spinners, snackbars, validation errors, and the theme/culture
+          switch are announced via a live region (<code>role=&quot;alert&quot;</code> / <code>aria-live</code>), not silently visual-only.</li>
+          <li><strong>Forms.</strong> Each field&#39;s label, required state, and (on submit) its error are announced, and focus moves
+          to the first error; the per-form error summary is reachable.</li>
+          <li><strong>Data grid.</strong> Rows/columns are navigable and announce header context; sort/filter/page controls have
+          names and announce the result count.</li>
+          <li><strong>Dialogs.</strong> Opening a confirm/delete dialog moves focus into it, traps focus within it while open, and
+          returns focus to the trigger on close.</li>
+          </ol>
+          <h2 id="flows-to-cover-mirror-the-automated-accessibilitytests-plus-the-role-journeys">Flows to cover (mirror the automated AccessibilityTests plus the role journeys)</h2>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>#</th>
+          <th>Flow</th>
+          <th>Key checks beyond axe</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>1</td>
+          <td><strong>Login</strong> (<code>/login</code>)</td>
+          <td>Field labels and error announced; submit state announced</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><strong>Register</strong> (<code>/register</code>)</td>
+          <td>Same; password-rule helper text announced</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><strong>Profile</strong> (<code>/profile</code>)</td>
+          <td>Change-password per-field errors plus summary announced; delete-account confirm dialog focus trap</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><strong>Theme + culture switch</strong></td>
+          <td>Toggling dark mode / <code>es</code> announces the change and does not lose focus</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td><strong>Anonymous browse</strong> (<code>/events</code>, <code>/sessions</code>, <code>/speakers</code>)</td>
+          <td>Grid navigation; &quot;view&quot; links announce the target</td>
+          </tr>
+          <tr>
+          <td>6</td>
+          <td><strong>Attendee</strong>, bookmark a session</td>
+          <td>Bookmark toggle announces on/off state</td>
+          </tr>
+          <tr>
+          <td>7</td>
+          <td><strong>Speaker dashboard</strong>, &quot;My Sessions&quot;</td>
+          <td>Empty/loaded state announced</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><strong>Organizer admin</strong>, create/edit an event</td>
+          <td>Required-field errors, unsaved-changes guard prompt announced</td>
+          </tr>
+          </tbody></table></div>
+          <h2 id="results-log">Results log</h2>
+          <p>Record one row per pass. A flow with any unresolved blocker is a FAIL (open a backlog item for it).</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Date</th>
+          <th>Reviewer</th>
+          <th>SR / browser</th>
+          <th>Flows passed</th>
+          <th>Issues found (-&gt; backlog item)</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><em>yyyy-mm-dd</em></td>
+          <td></td>
+          <td>NVDA / Chrome</td>
+          <td></td>
+          <td></td>
+          </tr>
+          </tbody></table></div>
+          <h2 id="after-a-pass">After a pass</h2>
+          <ul>
+          <li>File any defect as a remediation item; cross-link it from the §21 row&#39;s evidence.</li>
+          <li>Update the dated row above so the scorecard can cite a real, current manual pass (this is what lifts the
+          &quot;no manual screen-reader pass is evidenced&quot; §21 deduction).</li>
+          </ul>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/guides/adc-ACCESSIBILITY-SCREENREADER-PASS.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

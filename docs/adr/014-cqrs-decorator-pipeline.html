@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ADR-014: CQRS Handlers with a Decorator Pipeline · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted">
+  <meta name="description" content="Accepted. Revised 2026-07-19 (Transactional semantics: rollback on business failure + post-commit event dispatch; see Revision below).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="article">
   <meta property="og:title" content="ADR-014: CQRS Handlers with a Decorator Pipeline">
-  <meta property="og:description" content="Accepted">
+  <meta property="og:description" content="Accepted. Revised 2026-07-19 (Transactional semantics: rollback on business failure + post-commit event dispatch; see Revision below).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 48 ADRs</summary>
+        <summary>All 49 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -113,6 +113,7 @@
         <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
         <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
           </ol>
         </nav>
       </details>
@@ -121,7 +122,8 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-014-cqrs-handlers-with-a-decorator-pipeline">ADR-014: CQRS Handlers with a Decorator Pipeline</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted</p>
+          <p>Accepted. Revised 2026-07-19 (Transactional semantics: rollback on business failure + post-commit
+          event dispatch; see Revision below).</p>
           <h2 id="context">Context</h2>
           <p>Commands and queries share cross-cutting concerns: validation, transactions, cache invalidation,
           logging / timing, and feature gating. Putting that logic inside each handler scatters it, makes the
@@ -179,13 +181,31 @@
           <li>A new cross-cutting concern means a new decorator inserted at the correct depth; placing it wrong can
           silently change semantics (for example, validating <em>inside</em> the transaction).</li>
           </ul>
+          <h2 id="revision-2026-07-19">Revision (2026-07-19)</h2>
+          <p>Two Transactional-decorator semantics changed with the 2026-07-19 full review:</p>
+          <ul>
+          <li><strong>A returned business failure now rolls the transaction back.</strong> Previously a handler returning
+          <code>Result.Failure</code> committed whatever it had already saved (only exceptions rolled back), so a
+          handler that saved and then failed a later invariant left the partial mutation committed. In a
+          framework that mandates Result-over-exceptions (ADR-013), failure values must get the same
+          atomicity as thrown exceptions: <code>DbContextFactory.ExecuteInTransactionAsync</code> inspects the
+          returned <code>Result</code> and calls <code>RollbackTransaction()</code> when <code>IsFailure</code> is true. Cache invalidation
+          was already skipped on failure; that is unchanged.</li>
+          <li><strong>In-process domain event dispatch is deferred until after commit.</strong> Post-save dispatch captured
+          during an active transaction is queued (<code>DomainEventSaveChangesInterceptor</code> deferred table) and
+          flushed only after a successful commit; rollback (including the new business-failure rollback)
+          drops it. Handlers therefore never act on state that could still roll back, and a retrying
+          execution strategy cannot dispatch the same events once per attempt. The events&#39; outbox rows roll
+          back with the data, so nothing is delivered on either failure path.</li>
+          </ul>
+          <p>The pipeline order and the &quot;cache invalidation outside the transaction&quot; rule are unchanged.</p>
           <h2 id="related">Related</h2>
           <p>ADR-013 (Result, the short-circuit currency of the pipeline), ADR-003 (handlers raise domain events
-          that the outbox drains after <code>SaveChanges</code>).</p>
+          that the outbox drains after <code>SaveChanges</code>; its 2026-07-19 revision pairs with this one).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common/blob/main/ADRs/014-cqrs-decorator-pipeline.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/014-cqrs-decorator-pipeline.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
       </div>

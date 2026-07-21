@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Navigation Flow · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="This document maps the site navigation flow for each actor in the MMCA.ADC application. Each mermaid diagram shows the pages accessible to that actor…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/guides/adc-NavigationFlow.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Navigation Flow">
+  <meta property="og:description" content="This document maps the site navigation flow for each actor in the MMCA.ADC application. Each mermaid diagram shows the pages accessible to that actor…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/guides/adc-NavigationFlow.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/guides/index.html">Guides &amp; Specifications</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">ADC · Navigation Flow</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All guides</summary>
+        <nav class="doc-nav" aria-label="Guides &amp; Specifications">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="adc-ACCESSIBILITY-SCREENREADER-PASS.html">ADC · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="adc-IntegrationTestReworkPlan.html">ADC · Integration-Test Tier Rework Plan (RemediationBacklog #14)</a></li>
+        <li><a href="adc-NavigationFlow.html" aria-current="page">ADC · Navigation Flow</a></li>
+        <li><a href="adc-specifications.html">ADC · Business Specifications</a></li>
+        <li><a href="common-ACCESSIBILITY.html">Common · Accessibility (rubric §21)</a></li>
+        <li><a href="common-COST.html">Common · Cost &amp; FinOps Notes (rubric §31)</a></li>
+        <li><a href="common-GETTING-STARTED.html">Common · Getting Started: Build a New App on MMCA.Common</a></li>
+        <li><a href="common-RESILIENCE.html">Common · Resilience &amp; Business Continuity (rubric §29)</a></li>
+        <li><a href="common-RESPONSIVE.html">Common · Responsive Design &amp; Cross-Browser Support (rubric §22)</a></li>
+        <li><a href="common-VERSIONING.html">Common · Versioning &amp; Breaking-Change Policy</a></li>
+        <li><a href="store-ACCESSIBILITY-SCREENREADER-PASS.html">Store · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="store-BusinessWorkflows.html">Store · Business Workflow Analysis</a></li>
+        <li><a href="store-NavigationFlow.html">Store · Navigation Flow</a></li>
+        <li><a href="store-Specification.html">Store · Business Specification Document</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
+          <h1 id="navigation-flow">Navigation Flow</h1>
+          <p>This document maps the site navigation flow for each actor in the MMCA.ADC application. Each mermaid diagram shows the pages accessible to that actor and the directional navigation links between them.</p>
+          <h2 id="actors">Actors</h2>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Actor</th>
+          <th>Access Level</th>
+          <th>Identification</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><strong>Anonymous</strong></td>
+          <td>Public conference pages only</td>
+          <td>Not authenticated</td>
+          </tr>
+          <tr>
+          <td><strong>Attendee</strong></td>
+          <td>Public + profile + feedback + bookmarks</td>
+          <td>Authenticated, default <code>Attendee</code> role</td>
+          </tr>
+          <tr>
+          <td><strong>Speaker</strong></td>
+          <td>Attendee + speaker dashboard</td>
+          <td>Authenticated, account linked to a Speaker (<code>speaker_id</code> claim)</td>
+          </tr>
+          <tr>
+          <td><strong>Organizer</strong></td>
+          <td>Full access: conference CRUD, user management, feedback analytics, session selection</td>
+          <td>Authenticated, <code>Organizer</code> role</td>
+          </tr>
+          </tbody></table></div>
+          <blockquote>
+          <p><strong>Roles &amp; menu:</strong> <code>Organizer</code> is the only elevated role (default is <code>Attendee</code>). A <em>Speaker</em> is an attendee whose account is linked to a Speaker, surfaced via the <code>speaker_id</code> claim. The left nav is data-driven from each module&#39;s <code>IUIModule.NavItems</code> — items carry a required role (<code>Organizer</code>) or claim (<code>speaker_id</code>) and are hidden when the user lacks it. See <strong>Authorization Model</strong> at the end.</p>
+          </blockquote>
+          <hr>
+          <h2 id="1-anonymous-user">1. Anonymous User</h2>
+          <p>Pages accessible without authentication: home, login, register, and all public conference pages.</p>
+          <pre class="mermaid">flowchart TD
+              subgraph Auth[&quot;Authentication&quot;]
+                  Login[&quot;/login&lt;br/&gt;Login&quot;]
+                  Register[&quot;/register&lt;br/&gt;Register&quot;]
+              end
+          
+              subgraph Public[&quot;Public Conference&quot;]
+                  PubEvents[&quot;/conference/events&lt;br/&gt;Event List&quot;]
+                  PubEventDetail[&quot;/conference/events/{Id}&lt;br/&gt;Event Detail&quot;]
+                  PubSessions[&quot;/conference/sessions&lt;br/&gt;Session List&quot;]
+                  PubSessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;]
+                  PubSpeakers[&quot;/conference/speakers&lt;br/&gt;Speaker List&quot;]
+                  PubSpeakerDetail[&quot;/conference/speakers/{Id}&lt;br/&gt;Speaker Detail&quot;]
+              end
+          
+              Home[&quot;/  Home Page&quot;]
+          
+              Home --&gt;|nav menu| PubEvents
+              Home --&gt;|nav menu| PubSessions
+              Home --&gt;|nav menu| PubSpeakers
+              Home --&gt;|auth links| Login
+              Home --&gt;|auth links| Register
+          
+              Login --&gt;|on success| Home
+              Register --&gt;|on success| Home
+          
+              PubEvents --&gt;|row click| PubEventDetail
+              PubEventDetail --&gt;|back| PubEvents
+              PubEventDetail --&gt;|view sessions| PubSessions
+          
+              PubSessions --&gt;|row click| PubSessionDetail
+              PubSessionDetail --&gt;|back| PubSessions
+              PubSessionDetail --&gt;|speaker link| PubSpeakerDetail
+          
+              PubSpeakers --&gt;|row click| PubSpeakerDetail
+              PubSpeakerDetail --&gt;|back| PubSpeakers</pre>
+          <hr>
+          <h2 id="2-attendee-authenticated-user">2. Attendee (Authenticated User)</h2>
+          <p>Inherits all anonymous pages. Gains access to profile, feedback submission, and session bookmarking. Unauthenticated visitors are redirected to login.</p>
+          <pre class="mermaid">flowchart TD
+              subgraph Auth[&quot;Authentication&quot;]
+                  Login[&quot;/login&lt;br/&gt;Login&quot;]
+                  Register[&quot;/register&lt;br/&gt;Register&quot;]
+              end
+          
+              subgraph Profile[&quot;Identity / Profile&quot;]
+                  MyProfile[&quot;/profile&lt;br/&gt;My Profile&quot;]
+                  Claims[&quot;/profile/claims&lt;br/&gt;User Claims&quot;]
+              end
+          
+              subgraph Public[&quot;Public Conference&quot;]
+                  PubEvents[&quot;/conference/events&lt;br/&gt;Event List&quot;]
+                  PubEventDetail[&quot;/conference/events/{Id}&lt;br/&gt;Event Detail&quot;]
+                  PubSessions[&quot;/conference/sessions&lt;br/&gt;Session List&quot;]
+                  PubSessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;]
+                  PubSpeakers[&quot;/conference/speakers&lt;br/&gt;Speaker List&quot;]
+                  PubSpeakerDetail[&quot;/conference/speakers/{Id}&lt;br/&gt;Speaker Detail&quot;]
+              end
+          
+              subgraph Engagement[&quot;Engagement / Feedback&quot;]
+                  EventFeedback[&quot;/feedback/event/{EventId}&lt;br/&gt;Event Feedback&quot;]
+                  SessionFeedback[&quot;/feedback/session/{SessionId}&lt;br/&gt;Session Feedback&quot;]
+              end
+          
+              Home[&quot;/  Home Page&quot;]
+          
+              Home --&gt;|nav menu| PubEvents
+              Home --&gt;|nav menu| PubSessions
+              Home --&gt;|nav menu| PubSpeakers
+              Home --&gt;|nav menu| MyProfile
+          
+              Login --&gt;|on success| Home
+              Register --&gt;|on success| Home
+              MyProfile --&gt;|logout| Home
+          
+              PubEvents --&gt;|row click| PubEventDetail
+              PubEventDetail --&gt;|back| PubEvents
+              PubEventDetail --&gt;|view sessions| PubSessions
+              PubEventDetail --&gt;|submit feedback| EventFeedback
+          
+              PubSessions --&gt;|row click| PubSessionDetail
+              PubSessionDetail --&gt;|back| PubSessions
+              PubSessionDetail --&gt;|speaker link| PubSpeakerDetail
+              PubSessionDetail --&gt;|submit feedback| SessionFeedback
+          
+              PubSpeakers --&gt;|row click| PubSpeakerDetail
+              PubSpeakerDetail --&gt;|back| PubSpeakers
+          
+              EventFeedback --&gt;|cancel| PubEventDetail
+              SessionFeedback --&gt;|cancel| PubSessionDetail</pre>
+          <hr>
+          <h2 id="3-speaker">3. Speaker</h2>
+          <p>Inherits all attendee pages. Gains access to the speaker dashboard for managing their own profile, viewing assigned sessions, and reviewing feedback ratings.</p>
+          <pre class="mermaid">flowchart TD
+              subgraph Auth[&quot;Authentication&quot;]
+                  Login[&quot;/login&lt;br/&gt;Login&quot;]
+              end
+          
+              subgraph Profile[&quot;Identity / Profile&quot;]
+                  MyProfile[&quot;/profile&lt;br/&gt;My Profile&quot;]
+                  Claims[&quot;/profile/claims&lt;br/&gt;User Claims&quot;]
+              end
+          
+              subgraph Speaker[&quot;Speaker Area&quot;]
+                  Dashboard[&quot;/speaker/dashboard&lt;br/&gt;Speaker Dashboard&quot;]
+              end
+          
+              subgraph Public[&quot;Public Conference&quot;]
+                  PubEvents[&quot;/conference/events&lt;br/&gt;Event List&quot;]
+                  PubEventDetail[&quot;/conference/events/{Id}&lt;br/&gt;Event Detail&quot;]
+                  PubSessions[&quot;/conference/sessions&lt;br/&gt;Session List&quot;]
+                  PubSessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;]
+                  PubSpeakers[&quot;/conference/speakers&lt;br/&gt;Speaker List&quot;]
+                  PubSpeakerDetail[&quot;/conference/speakers/{Id}&lt;br/&gt;Speaker Detail&quot;]
+              end
+          
+              subgraph Engagement[&quot;Engagement / Feedback&quot;]
+                  EventFeedback[&quot;/feedback/event/{EventId}&lt;br/&gt;Event Feedback&quot;]
+                  SessionFeedback[&quot;/feedback/session/{SessionId}&lt;br/&gt;Session Feedback&quot;]
+              end
+          
+              Home[&quot;/  Home Page&quot;]
+          
+              Home --&gt;|nav menu| PubEvents
+              Home --&gt;|nav menu| PubSessions
+              Home --&gt;|nav menu| PubSpeakers
+              Home --&gt;|nav menu| MyProfile
+              Home --&gt;|nav menu| Dashboard
+          
+              Login --&gt;|on success| Home
+              MyProfile --&gt;|logout| Home
+          
+              PubEvents --&gt;|row click| PubEventDetail
+              PubEventDetail --&gt;|back| PubEvents
+              PubEventDetail --&gt;|view sessions| PubSessions
+              PubEventDetail --&gt;|submit feedback| EventFeedback
+          
+              PubSessions --&gt;|row click| PubSessionDetail
+              PubSessionDetail --&gt;|back| PubSessions
+              PubSessionDetail --&gt;|speaker link| PubSpeakerDetail
+              PubSessionDetail --&gt;|submit feedback| SessionFeedback
+          
+              PubSpeakers --&gt;|row click| PubSpeakerDetail
+              PubSpeakerDetail --&gt;|back| PubSpeakers
+          
+              EventFeedback --&gt;|cancel| PubEventDetail
+              SessionFeedback --&gt;|cancel| PubSessionDetail</pre>
+          <hr>
+          <h2 id="4-organizer">4. Organizer</h2>
+          <p>Authenticated users with the <code>Organizer</code> role. Inherits all attendee and public pages. Adds CRUD management for every conference entity (events, sessions, speakers, categories, questions, rooms), user management, feedback analytics, and the AI-assisted <strong>Session Selection Dashboard</strong>. These items appear under the nav menu&#39;s <em>Admin</em> section (most grouped under &quot;Conference&quot;).</p>
+          <pre class="mermaid">flowchart TD
+              subgraph Auth[&quot;Authentication&quot;]
+                  Login[&quot;/login&lt;br/&gt;Login&quot;]
+              end
+          
+              subgraph Profile[&quot;Identity&quot;]
+                  MyProfile[&quot;/profile&lt;br/&gt;My Profile&quot;]
+                  Users[&quot;/users&lt;br/&gt;User Management&quot;]
+              end
+          
+              subgraph Public[&quot;Public Conference&quot;]
+                  PubEvents[&quot;/conference/events&lt;br/&gt;Public Event List&quot;]
+                  PubEventDetail[&quot;/conference/events/{Id}&lt;br/&gt;Public Event Detail&quot;]
+                  PubSessions[&quot;/conference/sessions&lt;br/&gt;Public Session List&quot;]
+                  PubSessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Public Session Detail&quot;]
+                  PubSpeakers[&quot;/conference/speakers&lt;br/&gt;Public Speaker List&quot;]
+                  PubSpeakerDetail[&quot;/conference/speakers/{Id}&lt;br/&gt;Public Speaker Detail&quot;]
+              end
+          
+              subgraph Engagement[&quot;Engagement / Feedback&quot;]
+                  EventFeedback[&quot;/feedback/event/{EventId}&lt;br/&gt;Submit Event Feedback&quot;]
+                  SessionFeedback[&quot;/feedback/session/{SessionId}&lt;br/&gt;Submit Session Feedback&quot;]
+              end
+          
+              subgraph EventMgmt[&quot;Organizer: Event Management&quot;]
+                  EventList[&quot;/events&lt;br/&gt;Event List&quot;]
+                  EventCreate[&quot;/events/create&lt;br/&gt;Create Event&quot;]
+                  EventDetail[&quot;/events/{Id}&lt;br/&gt;Edit Event&quot;]
+                  AdminEventFB[&quot;/events/{Id}/feedback&lt;br/&gt;Event Feedback Analytics&quot;]
+              end
+          
+              subgraph SessionMgmt[&quot;Organizer: Session Management&quot;]
+                  SessionList[&quot;/sessions&lt;br/&gt;Session List&quot;]
+                  SessionCreate[&quot;/sessions/create&lt;br/&gt;Create Session&quot;]
+                  SessionDetail[&quot;/sessions/{Id}&lt;br/&gt;Edit Session&quot;]
+                  AdminSessionFB[&quot;/sessions/{SessionId}/feedback&lt;br/&gt;Session Feedback Analytics&quot;]
+              end
+          
+              subgraph SpeakerMgmt[&quot;Organizer: Speaker Management&quot;]
+                  SpeakerList[&quot;/speakers&lt;br/&gt;Speaker List&quot;]
+                  SpeakerCreate[&quot;/speakers/create&lt;br/&gt;Create Speaker&quot;]
+                  SpeakerDetail[&quot;/speakers/{Id}&lt;br/&gt;Edit Speaker&quot;]
+              end
+          
+              subgraph RefData[&quot;Organizer: Reference Data&quot;]
+                  CatList[&quot;/conferencecategories&lt;br/&gt;Category List&quot;]
+                  CatCreate[&quot;/conferencecategories/create&lt;br/&gt;Create Category&quot;]
+                  CatDetail[&quot;/conferencecategories/{Id}&lt;br/&gt;Edit Category&quot;]
+                  QuestionList[&quot;/questions&lt;br/&gt;Question List&quot;]
+                  QuestionCreate[&quot;/questions/create&lt;br/&gt;Create Question&quot;]
+                  QuestionDetail[&quot;/questions/{Id}&lt;br/&gt;Edit Question&quot;]
+                  RoomList[&quot;/rooms&lt;br/&gt;Room List&quot;]
+                  RoomCreate[&quot;/rooms/create&lt;br/&gt;Create Room&quot;]
+                  RoomDetail[&quot;/rooms/{Id}&lt;br/&gt;Edit Room&quot;]
+              end
+          
+              subgraph Decision[&quot;Organizer: Session Selection&quot;]
+                  SessionSelection[&quot;/sessions/selection-dashboard&lt;br/&gt;Session Selection Dashboard&lt;br/&gt;status mix, AI scoring&quot;]
+              end
+          
+              Home[&quot;/  Home Page&quot;]
+          
+              %% Top-level navigation
+              Home --&gt;|nav menu| PubEvents
+              Home --&gt;|nav menu| PubSessions
+              Home --&gt;|nav menu| PubSpeakers
+              Home --&gt;|nav menu| MyProfile
+              Home --&gt;|nav menu| Users
+              Home --&gt;|nav menu| EventList
+              Home --&gt;|nav menu| SessionList
+              Home --&gt;|nav menu| SpeakerList
+              Home --&gt;|nav menu| CatList
+              Home --&gt;|nav menu| QuestionList
+              Home --&gt;|nav menu| RoomList
+              Home --&gt;|nav menu| SessionSelection
+          
+              Login --&gt;|on success| Home
+              MyProfile --&gt;|logout| Home
+          
+              %% Public flows
+              PubEvents --&gt;|row click| PubEventDetail
+              PubEventDetail --&gt;|back| PubEvents
+              PubEventDetail --&gt;|view sessions| PubSessions
+              PubEventDetail --&gt;|submit feedback| EventFeedback
+              PubSessions --&gt;|row click| PubSessionDetail
+              PubSessionDetail --&gt;|back| PubSessions
+              PubSessionDetail --&gt;|speaker link| PubSpeakerDetail
+              PubSessionDetail --&gt;|submit feedback| SessionFeedback
+              PubSpeakers --&gt;|row click| PubSpeakerDetail
+              PubSpeakerDetail --&gt;|back| PubSpeakers
+              EventFeedback --&gt;|cancel| PubEventDetail
+              SessionFeedback --&gt;|cancel| PubSessionDetail
+          
+              %% Event CRUD
+              EventList --&gt;|create| EventCreate
+              EventList --&gt;|row click| EventDetail
+              EventCreate --&gt;|on success| EventDetail
+              EventCreate --&gt;|back| EventList
+              EventDetail --&gt;|back| EventList
+              EventDetail --&gt;|view feedback| AdminEventFB
+          
+              %% Session CRUD
+              SessionList --&gt;|create| SessionCreate
+              SessionList --&gt;|row click| SessionDetail
+              SessionCreate --&gt;|on success| SessionDetail
+              SessionCreate --&gt;|back| SessionList
+              SessionDetail --&gt;|back| SessionList
+              SessionDetail --&gt;|view feedback| AdminSessionFB
+          
+              %% Speaker CRUD
+              SpeakerList --&gt;|create| SpeakerCreate
+              SpeakerList --&gt;|row click| SpeakerDetail
+              SpeakerCreate --&gt;|on success| SpeakerDetail
+              SpeakerCreate --&gt;|back| SpeakerList
+              SpeakerDetail --&gt;|back| SpeakerList
+          
+              %% Cross-entity navigation
+              EventDetail --&gt;|click speaker| SpeakerDetail
+              EventDetail --&gt;|click room| RoomDetail
+              SpeakerDetail --&gt;|click session| SessionDetail
+              SessionSelection --&gt;|click speaker| SpeakerDetail
+              SessionSelection --&gt;|click session| SessionDetail
+          
+              %% Category CRUD
+              CatList --&gt;|create| CatCreate
+              CatList --&gt;|row click| CatDetail
+              CatCreate --&gt;|on success| CatDetail
+              CatCreate --&gt;|back| CatList
+              CatDetail --&gt;|back| CatList
+          
+              %% Question CRUD
+              QuestionList --&gt;|create| QuestionCreate
+              QuestionList --&gt;|row click| QuestionDetail
+              QuestionCreate --&gt;|on success| QuestionDetail
+              QuestionCreate --&gt;|back| QuestionList
+              QuestionDetail --&gt;|back| QuestionList
+          
+              %% Room CRUD
+              RoomList --&gt;|create| RoomCreate
+              RoomList --&gt;|row click| RoomDetail
+              RoomCreate --&gt;|on success| RoomDetail
+              RoomCreate --&gt;|back| RoomList
+              RoomDetail --&gt;|back| RoomList</pre>
+          <hr>
+          <h2 id="5-functionality-flows-attendee--speaker">5. Functionality Flows (Attendee &amp; Speaker)</h2>
+          <p>The diagrams in sections 1–4 map <em>which pages</em> each actor can reach. The diagrams below map <em>how attendees and speakers accomplish each functionality</em>, including inline actions — bookmarking, schedule filtering, dashboard editing — that are not separate pages. Pages appear as <code>route</code> nodes; edge labels are user actions. Flows in 5.3–5.5 require authentication.</p>
+          <h3 id="51-account--identity">5.1 Account &amp; Identity</h3>
+          <pre class="mermaid">flowchart TD
+              Visitor([&quot;Visitor&quot;]) --&gt;|Register| Register[&quot;/register&lt;br/&gt;Register&quot;]
+              Visitor --&gt;|Login| Login[&quot;/login&lt;br/&gt;Login&quot;]
+              Register --&gt;|submit, auto-links speaker by email| Home[&quot;/&lt;br/&gt;Home, signed in&quot;]
+              Login --&gt;|submit| Home
+              Home --&gt;|My Profile| Profile[&quot;/profile&lt;br/&gt;Change Password&quot;]
+              Profile --&gt;|Change Password| Profile
+              Profile -.-&gt;|direct route| Claims[&quot;/profile/claims&lt;br/&gt;My Claims, incl. speaker_id&quot;]
+              Claims --&gt;|Back to Profile| Profile
+              Home --&gt;|Logout| Login</pre>
+          <h3 id="52-discover-the-schedule-also-available-anonymously">5.2 Discover the Schedule (also available anonymously)</h3>
+          <pre class="mermaid">flowchart LR
+              Home[&quot;/&lt;br/&gt;Home&quot;] --&gt;|Events| Events[&quot;/conference/events&lt;br/&gt;Event List&quot;]
+              Home --&gt;|Sessions| Sessions[&quot;/conference/sessions&lt;br/&gt;Session List&quot;]
+              Home --&gt;|Speakers| Speakers[&quot;/conference/speakers&lt;br/&gt;Speaker List&quot;]
+              Events --&gt;|row click| EventDetail[&quot;/conference/events/{Id}&lt;br/&gt;Event Detail: dates, venue, map, WiFi&quot;]
+              EventDetail --&gt;|View Schedule| Sessions
+              Sessions --&gt;|search title - list auto-scoped to the current or next event| Sessions
+              Sessions --&gt;|row click| SessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail: time, room, accessibility, resources&quot;]
+              Speakers --&gt;|row click| SpeakerDetail[&quot;/conference/speakers/{Id}&lt;br/&gt;Speaker Detail: bio, social links, sessions&quot;]
+              SessionDetail --&gt;|speaker link| SpeakerDetail
+              SpeakerDetail --&gt;|session link| SessionDetail</pre>
+          <h3 id="53-personal-schedule--bookmarking">5.3 Personal Schedule / Bookmarking</h3>
+          <pre class="mermaid">flowchart TD
+              Sessions[&quot;/conference/sessions&lt;br/&gt;Session List&quot;] --&gt;|star icon on row| Toggle{{&quot;Toggle bookmark - eligible, non-service sessions only&quot;}}
+              SessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;] --&gt;|Add to or Remove from Schedule| Toggle
+              Toggle --&gt;|added| Saved[&quot;Bookmark saved&quot;]
+              Toggle --&gt;|removed| Removed[&quot;Bookmark removed&quot;]
+              Sessions --&gt;|switch All Sessions to My Schedule| MySchedule[&quot;Session List filtered to my starred sessions&quot;]
+              MySchedule --&gt;|star icon| Toggle</pre>
+          <h3 id="54-submit--manage-feedback">5.4 Submit &amp; Manage Feedback</h3>
+          <pre class="mermaid">flowchart TD
+              EventDetail[&quot;/conference/events/{Id}&lt;br/&gt;Event Detail&quot;] --&gt;|Submit Feedback| EventFB[&quot;/feedback/event/{EventId}&lt;br/&gt;Event Feedback Form&quot;]
+              SessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;] --&gt;|Submit Feedback| SessionFB[&quot;/feedback/session/{SessionId}&lt;br/&gt;Session Feedback Form&quot;]
+              SessionFB --&gt;|not eligible, e.g. time window or service session| Blocked[&quot;Warning shown, no form&quot;]
+              Blocked --&gt;|Back to Session| SessionDetail
+              EventFB --&gt; Answer[&quot;Answer questions: Rating 1-5, Text, Email. Existing answers pre-filled&quot;]
+              SessionFB --&gt; Answer
+              Answer --&gt;|Submit, upsert| Done[&quot;Saved, back to detail&quot;]
+              Answer --&gt;|Clear answer| Deleted[&quot;Answer removed&quot;]
+              Answer --&gt;|Cancel| Back[&quot;Return to detail, guards unsaved&quot;]</pre>
+          <h3 id="55-speaker-dashboard-requires-speaker_id-claim">5.5 Speaker Dashboard (requires <code>speaker_id</code> claim)</h3>
+          <pre class="mermaid">flowchart TD
+              Home[&quot;/&lt;br/&gt;Home&quot;] --&gt;|Speaker Dashboard| Dash[&quot;/speaker/dashboard&lt;br/&gt;Speaker Dashboard&quot;]
+              Dash --&gt;|account not linked| NotLinked[&quot;Info: contact organizer to link account&quot;]
+              Dash --&gt; Profile[&quot;Profile card: photo, tagline, bio&quot;]
+              Profile --&gt;|Edit| EditProfile[&quot;Edit bio, tagline, social links&quot;]
+              EditProfile --&gt;|Save| Profile
+              EditProfile --&gt;|Cancel| Profile
+              EditProfile -.-&gt;|warning| Overwrite[&quot;Edits may be overwritten on next Sessionize refresh&quot;]
+              Dash --&gt; MySessions[&quot;My Sessions list&quot;]
+              MySessions --&gt;|bookmark-count badge| Counts[&quot;See attendee bookmark counts&quot;]
+              MySessions --&gt;|expand review icon| Feedback[&quot;View ratings avg and count, plus text comments&quot;]
+              MySessions --&gt;|session title| SessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;]</pre>
+          <hr>
+          <h2 id="navigation-patterns">Navigation Patterns</h2>
+          <h3 id="authentication-redirects">Authentication Redirects</h3>
+          <ul>
+          <li>Unauthenticated users accessing protected pages are redirected to <code>/login</code> via the <code>RedirectToLogin</code> component.</li>
+          <li>Successful login/register redirects to Home (<code>/</code>) with a full page reload.</li>
+          <li>Logout (from NavMenu, MainLayout, or Profile) redirects to <code>/login</code> with a full page reload.</li>
+          </ul>
+          <h3 id="authorization-model">Authorization Model</h3>
+          <ul>
+          <li><strong>Roles:</strong> <code>Organizer</code> is the only elevated role; every other authenticated user is an <code>Attendee</code> (the default). There is no separate &quot;Admin&quot; role.</li>
+          <li><strong>Speaker:</strong> not a role — an attendee whose account is linked to a Speaker, surfaced as the <code>speaker_id</code> JWT claim (auto-linked by email match at registration, or linked manually by an organizer).</li>
+          <li><strong>Menu-driven visibility:</strong> the left nav is built from each module&#39;s <code>IUIModule.NavItems</code>. Items declare a required role (<code>Organizer</code>) or claim (<code>speaker_id</code>); the menu hides what the current user can&#39;t use. Organizer items sit in the <em>Admin</em> nav section (most grouped under &quot;Conference&quot;); &quot;My Profile&quot; and the Speaker &quot;Dashboard&quot; sit in the <em>User</em> section.</li>
+          <li><strong>Page guards (<code>@attribute [Authorize…]</code>):</strong><ul>
+          <li><em>Organizer role required:</em> <code>/sessions/selection-dashboard</code>, <code>/events/{Id}/feedback</code>, <code>/sessions/{SessionId}/feedback</code>, and every conference/user management page (<code>/events</code>, <code>/sessions</code>, <code>/speakers</code>, <code>/conferencecategories</code>, <code>/questions</code>, <code>/rooms</code>, <code>/users</code>), each carrying a page-level <code>[Authorize(Roles = &quot;Organizer&quot;)]</code> (e.g. <code>EventList.razor</code>, <code>UserList.razor</code>). The shared <code>Routes.razor</code> renders the Forbidden page for an authenticated non-Organizer; the inherited <code>RegisteredUser_AdminPages_ShouldBeForbidden</code> E2E fact pins this for all seven routes. API-side role enforcement applies as well (defense in depth).</li>
+          <li><em>Authentication only:</em> <code>/profile</code>, <code>/profile/claims</code>, <code>/speaker/dashboard</code>, both attendee feedback forms, and <code>/speakers/{Id}</code> (SpeakerDetail is the one management page still gated by plain <code>[Authorize]</code> because linked speakers edit their own bio there; organizer-only actions on it are enforced API-side).</li>
+          <li><em>Public (no attribute):</em> all <code>/conference/*</code> read pages.</li>
+          </ul>
+          </li>
+          </ul>
+          <h3 id="crud-pattern-organizer">CRUD Pattern (Organizer)</h3>
+          <p>All admin entity management follows the same navigation pattern:</p>
+          <pre class="doc-pre"><code>List ──row click──► Detail ──back──► List
+           │                    ▲
+           └──create──► Create ─┘ (on success)
+                        │
+                        └──back──► List</code></pre>
+          <h3 id="cross-entity-links-organizer">Cross-Entity Links (Organizer)</h3>
+          <ul>
+          <li><strong>Event Detail</strong> links to Speaker Detail and Room Detail for associated entities.</li>
+          <li><strong>Speaker Detail</strong> links to Session Detail for assigned sessions.</li>
+          <li><strong>Session Selection Dashboard</strong> links to Speaker Detail and Session Detail for each analyzed speaker/session.</li>
+          </ul>
+          <h3 id="public--engagement-flow">Public → Engagement Flow</h3>
+          <ul>
+          <li><strong>Public Event Detail</strong> and <strong>Public Session Detail</strong> show a &quot;Submit Feedback&quot; button (visible to authenticated users only) that navigates to the corresponding feedback form.</li>
+          <li>Feedback forms navigate back to the originating public detail page on cancel.</li>
+          </ul>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/guides/adc-NavigationFlow.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+  <script defer src="../../assets/js/mermaid.min.js"></script>
+  <script>
+    window.addEventListener("load", function () {
+      if (!window.mermaid) { return; }
+      var root = document.documentElement;
+      var dark = root.getAttribute("data-theme") === "dark" ||
+        (!root.getAttribute("data-theme") && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      try {
+        // Diagrams are static, first-party content, so "loose" is safe here and
+        // lets the flowchart labels keep their <br/> / <i> formatting.
+        window.mermaid.initialize({ startOnLoad: false, securityLevel: "loose", theme: dark ? "dark" : "default" });
+        window.mermaid.run({ querySelector: "pre.mermaid" });
+      } catch (e) { /* leave the diagram source visible on failure */ }
+    });
+  </script>
+</body>
+</html>

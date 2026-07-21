@@ -122,7 +122,7 @@
           dispatcher, the outbox tables and their background drainers, and the swappable in-process/broker
           buses.</p>
           <p>If you have not yet met the <strong>Result pattern</strong>, <strong>aggregate roots and domain events</strong>, or the
-          <strong>database-per-service</strong> rule, skim <span class="doc-deadlink" title="Reference outside the published set">primer §2</span>
+          <strong>database-per-service</strong> rule, skim <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a>
           first, this chapter builds directly on them.</p>
           <h2 id="the-two-kinds-of-event">The two kinds of event</h2>
           <p>Everything starts with two marker interfaces in the Domain layer. <a href="#idomainevent"><code>IDomainEvent</code></a> is
@@ -165,7 +165,7 @@
           back, neither exists. There is no window where they disagree. <code>[Rubric §8, Data Architecture]</code>
           (transactional integrity) and <code>[Rubric §6]</code> both hinge on this atomicity. Crucially, the rows go to
           the same physical database as the aggregate, every relational source owns its own <code>OutboxMessages</code>
-          table, never a shared one (ADR-006; see <span class="doc-deadlink" title="Reference outside the published set">primer on database-per-service</span>).</p>
+          table, never a shared one (ADR-006; see <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer on database-per-service</a>).</p>
           <h2 id="dual-dispatch-the-happy-path-and-the-safety-net">Dual dispatch: the happy path and the safety net</h2>
           <p>Right after the transaction commits (<code>SavedChanges</code>), the interceptor dispatches the captured events
           <strong>in-process</strong> through <a href="#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a>, then marks the outbox rows

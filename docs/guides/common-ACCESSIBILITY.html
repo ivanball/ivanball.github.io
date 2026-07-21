@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Accessibility (rubric §21) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="The shared MMCA.Common.UI surface targets WCAG 2.1 AA. Accessibility is enforced two ways: an automated axe-core gate in CI (the bulk of coverage) and…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/guides/common-ACCESSIBILITY.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Accessibility (rubric §21)">
+  <meta property="og:description" content="The shared MMCA.Common.UI surface targets WCAG 2.1 AA. Accessibility is enforced two ways: an automated axe-core gate in CI (the bulk of coverage) and…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/guides/common-ACCESSIBILITY.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/guides/index.html">Guides &amp; Specifications</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">Common · Accessibility (rubric §21)</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All guides</summary>
+        <nav class="doc-nav" aria-label="Guides &amp; Specifications">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="adc-ACCESSIBILITY-SCREENREADER-PASS.html">ADC · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="adc-IntegrationTestReworkPlan.html">ADC · Integration-Test Tier Rework Plan (RemediationBacklog #14)</a></li>
+        <li><a href="adc-NavigationFlow.html">ADC · Navigation Flow</a></li>
+        <li><a href="adc-specifications.html">ADC · Business Specifications</a></li>
+        <li><a href="common-ACCESSIBILITY.html" aria-current="page">Common · Accessibility (rubric §21)</a></li>
+        <li><a href="common-COST.html">Common · Cost &amp; FinOps Notes (rubric §31)</a></li>
+        <li><a href="common-GETTING-STARTED.html">Common · Getting Started: Build a New App on MMCA.Common</a></li>
+        <li><a href="common-RESILIENCE.html">Common · Resilience &amp; Business Continuity (rubric §29)</a></li>
+        <li><a href="common-RESPONSIVE.html">Common · Responsive Design &amp; Cross-Browser Support (rubric §22)</a></li>
+        <li><a href="common-VERSIONING.html">Common · Versioning &amp; Breaking-Change Policy</a></li>
+        <li><a href="store-ACCESSIBILITY-SCREENREADER-PASS.html">Store · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="store-BusinessWorkflows.html">Store · Business Workflow Analysis</a></li>
+        <li><a href="store-NavigationFlow.html">Store · Navigation Flow</a></li>
+        <li><a href="store-Specification.html">Store · Business Specification Document</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
+          <h1 id="accessibility-rubric-21">Accessibility (rubric §21)</h1>
+          <p>The shared <code>MMCA.Common.UI</code> surface targets <strong>WCAG 2.1 AA</strong>. Accessibility is enforced two ways: an
+          automated axe-core gate in CI (the bulk of coverage) and a documented manual screen-reader pass (this
+          file) for the things automation cannot judge (meaningful focus order, sensible reading order, announcement
+          quality). It complements <a href="../adr/022-browser-session-cookie-auth.html">ADR-022</a> (auth UX) and
+          <a href="../adr/028-dark-theme-mode.html">ADR-028</a> (theme).</p>
+          <h2 id="automated-coverage-axe-core-wcag-21-aa">Automated coverage (axe-core, WCAG 2.1 AA)</h2>
+          <p>The <code>ui-e2e</code> CI job runs Playwright + axe-core against the backend-less gallery; <strong>chromium is the blocking
+          merge gate</strong> (firefox/webkit advisory). Scanned states:</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Page / state</th>
+          <th>Test</th>
+          <th>Notes</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Login</td>
+          <td><code>LoginPageE2ETests.LoginPage_HasNoWcag21AaViolations</code></td>
+          <td>real <code>MMCA.Common.UI</code> Login page</td>
+          </tr>
+          <tr>
+          <td>Register</td>
+          <td><code>RegisterPageE2ETests</code></td>
+          <td>real Register page (EditForm + per-field validation)</td>
+          </tr>
+          <tr>
+          <td>Components showcase: header, empty state, <strong>loading state</strong>, <strong>error state</strong>, card list, infinite-scroll, delete-confirmation</td>
+          <td><code>ComponentsPageE2ETests.ComponentsPage_HasNoWcag21AaViolations</code></td>
+          <td>broadened 2026-06-29 to include the loading (named progressbar) and error (alert) primitive states</td>
+          </tr>
+          <tr>
+          <td><strong>Dark mode</strong>: Login + Components showcase re-scanned with the dark palette active</td>
+          <td><code>DarkModeE2ETests</code></td>
+          <td>gated 2026-07-11 after the dark-palette tuning (dark <code>PrimaryContrastText</code>/<code>ErrorContrastText</code>); dark mode is seeded via the <code>mmca_theme</code> cookie</td>
+          </tr>
+          </tbody></table></div>
+          <p>Component render is additionally regression-gated in the unit tier by <strong>bUnit render-snapshot tests</strong>
+          (<code>PrimitivesSnapshotTests</code>, rubric §28), so an unintended markup change to a shared primitive fails the
+          build even without a browser.</p>
+          <h3 id="defect-found-and-fixed-by-broadening-coverage-2026-06-29">Defect found and fixed by broadening coverage (2026-06-29)</h3>
+          <p>Adding the loading state to the axe scan surfaced a real WCAG 4.1.2 defect in <code>PageLoadingState</code>: it wrapped
+          the spinner in a bare <code>&lt;div aria-label=&quot;...&quot;&gt;</code> (a prohibited ARIA attribute on a non-role element) around an
+          <strong>anonymous</strong> <code>progressbar</code>. Fixed: the wrapper is now <code>role=&quot;status&quot; aria-live=&quot;polite&quot;</code> (a valid live
+          region) and the spinner carries the accessible name (<code>aria-label</code>), so the progressbar is announced.</p>
+          <h2 id="manual-screen-reader-pass">Manual screen-reader pass</h2>
+          <p>Automation cannot judge reading order, focus management, or announcement quality, so the shared surface is
+          walked manually. Checklist (re-run on any change to <code>MainLayout</code>, the auth pages, or a shared primitive):</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Check</th>
+          <th>Surface</th>
+          <th>Result (2026-06-29)</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Skip-to-content link is first in tab order and moves focus to <code>&lt;main&gt;</code></td>
+          <td><code>MainLayout</code></td>
+          <td>PASS (<code>MainLayout.razor</code> skip-nav + <code>role=&quot;main&quot;</code>)</td>
+          </tr>
+          <tr>
+          <td>Landmarks present and unique (banner / navigation / main)</td>
+          <td><code>MainLayout</code></td>
+          <td>PASS</td>
+          </tr>
+          <tr>
+          <td>Every interactive control is keyboard-operable and visibly focused</td>
+          <td>Login / Register / Components</td>
+          <td>PASS</td>
+          </tr>
+          <tr>
+          <td>Form fields have programmatic labels; validation errors are tied to the field and announced</td>
+          <td>Login / Register</td>
+          <td>PASS (<code>EditForm</code> + <code>ValidationMessage For=</code>, rubric §24)</td>
+          </tr>
+          <tr>
+          <td>Icon-only buttons have accessible names (theme toggle, culture switcher, notification bell, delete)</td>
+          <td><code>MainLayout</code> chrome / Components</td>
+          <td>PASS (localized <code>aria-label</code>s)</td>
+          </tr>
+          <tr>
+          <td>Status/progress is announced (loading spinner, snackbars)</td>
+          <td>Components</td>
+          <td>PASS after the <code>PageLoadingState</code> fix above</td>
+          </tr>
+          <tr>
+          <td>Color is not the only information channel; AA contrast in <strong>light</strong> mode</td>
+          <td>all</td>
+          <td>PASS (axe-gated)</td>
+          </tr>
+          </tbody></table></div>
+          <h2 id="known-limitations-tracked">Known limitations (tracked)</h2>
+          <ul>
+          <li><del><strong>Dark-mode contrast (§20, not §21).</strong></del> <strong>RESOLVED (2026-07-11).</strong> The two dark-palette WCAG AA
+          contrast failures the prototype scan flagged (filled-primary button label ~2.65:1 on <code>#42A5F5</code>;
+          filled error-alert message text ~3.5:1 on <code>#EF5350</code>) are fixed by the Material dark-theme treatment:
+          <code>PaletteDark.PrimaryContrastText</code>/<code>ErrorContrastText</code> are now dark (<code>rgba(0,0,0,0.87)</code>, ~6.6:1 and
+          ~5.5:1), mirroring the existing <code>WarningContrastText</code> fix. The dark-mode axe scan is now part of the
+          blocking gate (<code>DarkModeE2ETests</code>, table above), so the dark palette can no longer regress silently.</li>
+          <li><strong>Per-component-state breadth.</strong> The axe gate covers the gallery&#39;s representative states; deep
+          consumer-specific states are scored in the consumer apps (ADC/Store).</li>
+          <li><strong>No automated focus-trap / reading-order assertion.</strong> Covered by the manual pass above rather than a
+          tool.</li>
+          </ul>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/guides/common-ACCESSIBILITY.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>
