@@ -722,11 +722,13 @@ package: `Microsoft.Extensions.TimeProvider.Testing` 10.7.0.
   I9→8 rejected; 9 re-confirmed), §29 Resilience (I8→9 rejected: zero commits touch resilience,
   restore-drill, or warm-up files since the twentieth-wave baseline, and the resilience guide still states
   the capping gap).
-- 🆕 **New item under #34: `CONTRIBUTING.md`'s gate list has drifted from live protection.** It advertises
-  five required gates and calls webkit advisory (`CONTRIBUTING.md:57-64`), while protection requires eight;
-  the reproduce snippet omits webkit, the Helpdesk canary, and the perf gate. Load-bearing rather than
-  cosmetic: this file's authority is what held §12 at Maturity 3 for a cycle after its gate was promoted.
-  Effort S.
+- ✅ **New item under #34, opened and closed same day: `CONTRIBUTING.md`'s gate list had drifted from live
+  protection.** It advertised five required gates and called webkit advisory, while protection requires
+  eight, and the reproduce snippet omitted webkit, the Helpdesk canary, and the perf gate (replaying it
+  would have *downgraded* protection). Load-bearing rather than cosmetic: this file's authority is what
+  held §12 at Maturity 3 for a cycle after its gate was promoted. **Fixed in MMCA.Common PR #100
+  (`658786b`)**, which also points readers at the branch-protection API as authoritative over the
+  committed copy. §34 holds M4/I8: this closes a stale-docs deduction, not an enforcement gap.
 - 📎 **Path provenance note added** to *Deliberate / accepted*: `COST.md` and the other in-repo doc paths
   cited by historical entries moved to `Website/docs-src/` in the 2026-07-20 centralization.
 - ✅ **Counts refresh.** The source-generated, CI-gated `FACTS.md` reports **15 packages / 91 fitness
@@ -902,7 +904,7 @@ Soft-delete is the only deletion model — no lawful erasure path. *(All three f
 ### [ ] #34 · Architecture Governance & Documentation
 - **(low ×2)** `Docs/Architecture/ArchitecturalAnalysis.md` contradicts the code on DB-per-service ("deliberately not database-per-service," race "only mitigated"); the two biggest recent decisions (DB-per-service, gRPC extraction) lack ADRs.
 - [ ] Refresh the analysis doc; write the **two missing ADRs**; add an ADR index/template.
-- [ ] **(added 2026-07-21, twenty-first-wave re-score; priority 2 band, effort S)** **Sync `CONTRIBUTING.md`'s required-merge-gate list and its branch-protection reproduce snippet with live protection.** Live `required_status_checks` on `main` carries 8 contexts (`build-and-test`; `Build MMCA.Common.UI.Maui (windows, 4 TFMs)`; UI a11y + render smoke on chromium, firefox, and webkit; `coverage`; `Consumer source build (Helpdesk)`; `Performance gate (BenchmarkDotNet Short + baseline verify)`), but the doc lists five gates and still calls webkit advisory (`CONTRIBUTING.md:57-64`), and the reproduce snippet omits webkit, the Helpdesk canary, and the perf gate (`CONTRIBUTING.md:104-112,124`). `ci.yml:116-118` already asserts all three engines are required, so the workflow and the doc disagree. This is load-bearing beyond hygiene: scorecard adjudications cite this file, and its staleness is exactly why §12 was held at Maturity 3 for a cycle after its gate was in fact promoted. Prefer the branch-protection API over the committed snippet when adjudicating.
+- [x] **(added and CLOSED 2026-07-21, twenty-first-wave re-score; priority 2 band, effort S)** **Sync `CONTRIBUTING.md`'s required-merge-gate list and its branch-protection reproduce snippet with live protection.** **DONE (MMCA.Common PR #100, merged `658786b`, all 8 required gates green):** the prose list now names all eight gates with webkit marked as promoted 2026-07-16 and the perf gate described against `Tests/Performance/perf-baseline.json`; the reproduce snippet was extended to the same eight contexts and verified byte-identical against the live protection API; and a line now directs readers to `gh api repos/ivanball/MMCA.Common/branches/main/protection` as authoritative over the committed copy, which is the durable fix for this class of drift. Original finding: Live `required_status_checks` on `main` carries 8 contexts (`build-and-test`; `Build MMCA.Common.UI.Maui (windows, 4 TFMs)`; UI a11y + render smoke on chromium, firefox, and webkit; `coverage`; `Consumer source build (Helpdesk)`; `Performance gate (BenchmarkDotNet Short + baseline verify)`), but the doc lists five gates and still calls webkit advisory (`CONTRIBUTING.md:57-64`), and the reproduce snippet omits webkit, the Helpdesk canary, and the perf gate (`CONTRIBUTING.md:104-112,124`). `ci.yml:116-118` already asserts all three engines are required, so the workflow and the doc disagree. This is load-bearing beyond hygiene: scorecard adjudications cite this file, and its staleness is exactly why §12 was held at Maturity 3 for a cycle after its gate was in fact promoted. Prefer the branch-protection API over the committed snippet when adjudicating.
 
 ### [x] #5 · Vertical Slice Architecture — **DONE (eighth wave: impl 7→8 AND maturity 3→4)** → moved to the level-4 protect list
 - [x] Slice-cohesion fitness function added: `ArchitectureRules.Slices.cs` + `SliceCohesionTestsBase` (shared package, the 18th fitness base) + Common/ADC subclasses — fails the build if a handler/validator is stranded from its same-assembly contract. Because this is automatic CI enforcement of the slice convention, §5 maturity also rose 3→4 (the rubric's maturity-4 "enforced automatically by tests/CI" bar), so §5 now belongs in "Already at level 4 — protect, don't regress" below.
