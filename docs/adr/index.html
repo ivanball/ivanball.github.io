@@ -380,7 +380,7 @@
           <tr>
           <td><a href="050-jwt-refresh-token-rotation.html">050</a></td>
           <td>JWT + single rotating refresh token</td>
-          <td>One issuance workflow in <code>AuthenticationServiceBase&lt;TUser&gt;</code>: a short-lived stateless JWT access token (default 15 min) plus one server-stored, opaque refresh token per user that rotates on every use; a presented token that mismatches the stored one (or is expired) triggers <code>RevokeRefreshToken</code> and 401. Absolute 7-day refresh lifetime (hardcoded base property; <code>JwtSettings.RefreshTokenExpirationDays</code> binds but is unread), refresh bound to the same principal via <code>GetPrincipalFromExpiredToken</code>. Single-token-per-user means a new login signs out other devices&#39; refresh chains.</td>
+          <td>One issuance workflow in <code>AuthenticationServiceBase&lt;TUser&gt;</code>: a short-lived stateless JWT access token (default 15 min) plus one server-stored, opaque refresh token per user that rotates on every use; a presented token that mismatches the stored one (or is expired) triggers <code>RevokeRefreshToken</code> and 401. Each rotation re-stamps the expiry (<code>Jwt:RefreshTokenExpirationDays</code>, default 7 days, honored since 2026-07-21), so the lifetime is a sliding inactivity window, not an absolute session cap; refresh is bound to the same principal via <code>GetPrincipalFromExpiredToken</code>. Single-token-per-user means a new login signs out other devices&#39; refresh chains.</td>
           </tr>
           </tbody></table></div>
           <h2 id="writing-a-new-adr">Writing a new ADR</h2>

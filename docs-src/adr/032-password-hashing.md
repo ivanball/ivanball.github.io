@@ -52,7 +52,7 @@ the singleton lifetime is safe.
   sealed subclass of `AuthenticationServiceBase<TUser>`
   (`Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:34`) that passes `IPasswordHasher`
   into the base constructor rather than calling the hasher itself. The login-time `VerifyPassword`
-  (`AuthenticationServiceBase.cs:102`) and the registration-time `HashPassword` (`AuthenticationServiceBase.cs:150`)
+  (`AuthenticationServiceBase.cs:112`) and the registration-time `HashPassword` (`AuthenticationServiceBase.cs:160`)
   both live once in that base, so a single hoisted call site verifies and hashes for both apps. ADC's subclass
   declares the `IPasswordHasher` parameter and forwards it to the base
   (`MMCA.ADC/.../Identity.Application/Users/AuthenticationService.cs:38`, forwarded at `AuthenticationService.cs:43`);
