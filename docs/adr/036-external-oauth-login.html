@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ADR-036: External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043).">
+  <meta name="description" content="Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043, email-verified…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/036-external-oauth-login.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="article">
   <meta property="og:title" content="ADR-036: External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange">
-  <meta property="og:description" content="Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043).">
+  <meta property="og:description" content="Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043, email-verified…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/036-external-oauth-login.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 49 ADRs</summary>
+        <summary>All 50 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -114,6 +114,7 @@
         <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
           </ol>
         </nav>
       </details>
@@ -122,7 +123,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-036-external-oauth-login-federated-googlegithub-with-local-jwt-exchange">ADR-036: External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043).</p>
+          <p>Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043, email-verified account-takeover guard before linking added 2026-07-21).</p>
           <h2 id="context">Context</h2>
           <p>The framework&#39;s Identity story so far is entirely first-party: a user registers with an email and
           password, the credentials are hashed (ADR-032), and Identity mints its own RS256 JWT pair. Every auth
@@ -172,14 +173,22 @@
           code is burned on first use, and a missing, replayed, or expired code yields HTTP 400. Access and
           refresh tokens therefore never land in the address bar, browser history, the <code>Referer</code> header, or
           upstream access logs.</li>
-          <li><strong>The exchange resolves to a local <code>User</code>, three ways.</strong> <code>ExternalLoginAsync</code> (app-level) first
-          looks the user up by <code>LoginProvider</code> + <code>ProviderKey</code>. Missing, it looks up by email and, if a local
-          or other-provider account already owns that email, <strong>links</strong> the external provider to it
-          (<code>User.LinkExternalProvider</code>) rather than rejecting the sign-in. Only when no account owns the email
-          does it <strong>create</strong> a new <code>Attendee</code> via <code>User.CreateExternal</code> (an external user has empty password
-          hash/salt and carries <code>LoginProvider</code> / <code>ProviderKey</code>). Either way it rotates the refresh token,
-          saves, and mints the access token, so the caller receives the same <code>AuthenticationResponse</code> shape as
-          a local login.</li>
+          <li><strong>The exchange resolves to a local <code>User</code>, three ways, and guards the by-email link.</strong>
+          <code>ExternalLoginAsync</code> (app-level,
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:123</code>)
+          first looks the user up by <code>LoginProvider</code> + <code>ProviderKey</code> (<code>AuthenticationService.cs:144</code>). Missing,
+          it looks up by email (<code>AuthenticationService.cs:158</code>) and, when a local or other-provider account
+          already owns that email, applies an account-takeover guard before linking: it asks
+          <code>IExternalLoginEmailVerifier.IsCurrentExternalLoginEmailVerifiedAsync</code> (<code>AuthenticationService.cs:173</code>)
+          whether the provider asserted the incoming email as verified, and when it did not it <strong>rejects</strong> the
+          sign-in with <code>Auth.ExternalEmailNotVerified</code> (defined inline at <code>AuthenticationService.cs:179</code>)
+          instead of linking, so an unverified provider assertion cannot claim an existing local account. Only
+          when the provider did assert a verified email does it <strong>link</strong> the external provider to that account
+          (<code>User.LinkExternalProvider</code>, <code>AuthenticationService.cs:184</code>). When no account owns the email it
+          <strong>creates</strong> a new <code>Attendee</code> via <code>User.CreateExternal</code> (<code>AuthenticationService.cs:190</code>; an external
+          user has empty password hash/salt and carries <code>LoginProvider</code> / <code>ProviderKey</code>). In the link and
+          create cases it rotates the refresh token, saves, and mints the access token, so the caller receives
+          the same <code>AuthenticationResponse</code> shape as a local login.</li>
           <li><strong>The linkage is two nullable columns and a filtered unique index.</strong> <code>User.LoginProvider</code>
           (<code>varchar(50)</code>) and <code>User.ProviderKey</code> (<code>varchar(256)</code>) are null for local accounts;
           <code>IsExternalLogin</code> is derived from <code>LoginProvider is not null</code>. In ADC&#39;s per-service Identity database
@@ -237,10 +246,22 @@
           target). A host that registers schemes but forgets the controller, or configures a <code>ClientId</code>
           without the matching UI flags, gets a broken or invisible button, the same audit-the-inventory
           caveat as ADR-020. Adopting it also requires the migration that adds the provider columns.</li>
-          <li><strong>Email trust is inherited from the provider.</strong> Link-by-email assumes the provider returns a
-          verified email; a provider that returns an unverified address would let an external sign-in attach
-          to an existing account. GitHub&#39;s <code>user:email</code> scope and Google&#39;s verified email are the mitigation,
-          not a check the framework performs.</li>
+          <li><strong>The verified-email guard is ADC-level, not framework-provided.</strong> Link-by-email would let an
+          unverified address attach to an existing account, so ADC gates the auto-link on a provider-asserted
+          verified email rather than trusting the address outright. The gate is <code>IExternalLoginEmailVerifier</code>
+          (interface in the Identity Application layer,
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/IExternalLoginEmailVerifier.cs:11</code>),
+          implemented at the API edge over the short-lived <code>ExternalLogin</code> cookie principal by
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Authentication/HttpContextExternalLoginEmailVerifier.cs:17</code>,
+          which reads the provider&#39;s <code>email_verified</code> claim (<code>HttpContextExternalLoginEmailVerifier.cs:33</code>) and
+          is wired at <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/DependencyInjection.cs:55</code>. Google&#39;s
+          <code>email_verified</code> claim passes the guard; GitHub&#39;s OAuth flow asserts nothing, so a GitHub sign-in
+          whose email matches an existing account is rejected with <code>Auth.ExternalEmailNotVerified</code>, not linked.
+          The framework itself still performs no such check: <code>Auth.ExternalEmailNotVerified</code> is defined inline
+          in ADC&#39;s override (<code>AuthenticationService.cs:179</code>), and a non-adopting host (Store, Helpdesk) gets only
+          the framework&#39;s not-supported default (<code>Auth.ExternalLoginNotSupported</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/IAuthenticationService.cs:74</code>), so the guard is
+          ADC&#39;s own edge, not a framework guarantee.</li>
           <li><strong>Not exactly-once account creation across the redirect.</strong> The exchange commits the <code>User</code> before
           the UI redeems the code; an abandoned redemption still creates (or links) the account. That is the
           intended tradeoff (the identity is real once the provider vouched for it), but it means a completed

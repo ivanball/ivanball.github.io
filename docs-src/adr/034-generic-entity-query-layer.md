@@ -46,7 +46,7 @@ contract, supplied by two controller bases over a shared query pipeline.
 3. **Sparse fieldsets via `fields`.** A comma-separated `fields` query parameter
    (`EntityControllerBase.cs:77`, `:121`, `:193`) drives a server-side projection:
    `QueryFieldService.ApplyFieldSelection`
-   (`Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:140`) builds a
+   (`Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:154`) builds a
    `MemberInit` expression that selects only the requested writable properties so
    only those columns leave the database.
 
@@ -101,24 +101,24 @@ contract, supplied by two controller bases over a shared query pipeline.
   not unbounded in the engine: each property is filtered only by a registered
   `IFilterStrategy` whose `SupportedOperators` are validated before the database is
   touched (`QueryFilterService.ValidateFilters`, `QueryFilterService.cs:124`,
-  invoked at `Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:102`),
+  invoked at `Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:187`),
   and `MaxUnboundedResultLimit` (`EntityQueryPipeline.cs:22`) plus the `MaxPageSize`
   clamp (`EntityControllerBase.cs:127`) bound the result size.
 - **Composes with manual DTO mapping (ADR-001).** Entities are projected to DTOs by
-  an injected `IEntityDTOMapper` (`EntityQueryService.cs:32`, `:48`) via
-  `DTOMapper.MapToDTOs` (`EntityQueryService.cs:137`); a `DTOToEntityPropertyMap`
-  (`EntityQueryService.cs:58`) translates DTO field names to entity property paths
+  an injected `IEntityDTOMapper` (`EntityQueryService.cs:35`, `:51`) via
+  `DTOMapper.MapToDTOs` (`EntityQueryService.cs:222`); a `DTOToEntityPropertyMap`
+  (`EntityQueryService.cs:61`) translates DTO field names to entity property paths
   for filter and sort, so the wire contract speaks DTO names while the engine speaks
   entity names.
 - **Composes with populators (ADR-002).** The unsupported-include path delegates to
-  `INavigationPopulator` (`EntityQueryService.cs:33`), the same cross-source batch
+  `INavigationPopulator` (`EntityQueryService.cs:36`), the same cross-source batch
   loader that bridges relationships EF cannot JOIN.
 
 ## Trade-offs
 - **The wire contract tracks the entity model.** Filterable, sortable, and
   projectable surface is the entity's property set. A model change is an API change
-  unless mediated by the DTO and `DTOToEntityPropertyMap` (`EntityQueryService.cs:58`),
-  which is the seam that decouples the two when needed.
+  unless mediated by the DTO and `DTOToEntityPropertyMap` (`EntityQueryService.cs:61`),
+  which is the boundary that decouples the two when needed.
 - **Dynamic filtering is an injection and over-fetch surface.** Arbitrary
   client-supplied property/operator/value triples are an attack surface; it is
   bounded by validating properties and operators up front
@@ -126,7 +126,7 @@ contract, supplied by two controller bases over a shared query pipeline.
   type through its registered `IFilterStrategy` rather than free-form expression
   evaluation, and capping rows with `MaxUnboundedResultLimit`
   (`EntityQueryPipeline.cs:22`). Sparse fieldsets reject non-writable properties at
-  projection (`QueryFieldService.cs:140`).
+  projection (`QueryFieldService.cs:167`).
 - **Generic endpoints are less self-documenting than bespoke ones.** One generic
   shape per entity is consistent but conveys less domain intent than a named,
   purpose-built endpoint; the query contract (filter key syntax, operators) must be

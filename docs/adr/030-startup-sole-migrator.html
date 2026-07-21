@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 49 ADRs</summary>
+        <summary>All 50 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -114,6 +114,7 @@
         <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
           </ol>
         </nav>
       </details>
@@ -143,8 +144,8 @@
           at startup, before the new revision serves traffic. There is deliberately <strong>no</strong> separate deploy-step
           migration (no <code>sqlcmd</code> / <code>dotnet ef database update</code> apply in <code>deploy.yml</code>).</p>
           <ul>
-          <li><strong>Set in prod for every service.</strong> <code>MMCA.Store/infra/main.bicep:704,804,892</code> (Identity/Catalog/Sales)
-          and <code>MMCA.ADC/infra/main.bicep:831,972,1067,1184</code> (Identity/Conference/Engagement/Notification) all set
+          <li><strong>Set in prod for every service.</strong> <code>MMCA.Store/infra/main.bicep:707,807,895</code> (Identity/Catalog/Sales)
+          and <code>MMCA.ADC/infra/main.bicep:964,1118,1226,1360</code> (Identity/Conference/Engagement/Notification) all set
           <code>DatabaseInitStrategy = &#39;Migrate&#39;</code>.</li>
           <li><strong>One applier per revision.</strong> Each service runs <code>minReplicas: 1</code>, so the startup <code>MigrateAsync</code> is not
           racing sibling replicas of the same revision. (Since the 2026-07-19 outbox lease revision, ADR-003,
@@ -152,10 +153,10 @@
           is scale-out safe by construction, so above one replica the setting is a cost/migration choice.)</li>
           <li><strong>No deploy-step backstop, on purpose.</strong> Both <code>deploy.yml</code> files carry an explicit comment that there
           is <em>no external <code>sqlcmd</code> migration backstop</em> and that each service is the <strong>sole migrator</strong>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:642</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:658</code>). The
+          (<code>MMCA.Store/.github/workflows/deploy.yml:789</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:966</code>). The
           <code>sqlcmd</code> that <em>is</em> installed in the pipeline is a connectivity/readiness probe, not a migration apply.</li>
           <li><strong>Build-time drift gate, not a runtime apply.</strong> CI runs
-          <code>dotnet ef migrations has-pending-model-changes</code> (Store <code>deploy.yml:102</code>, ADC <code>deploy.yml:99</code>) so a
+          <code>dotnet ef migrations has-pending-model-changes</code> (Store <code>deploy.yml:164</code>, ADC <code>deploy.yml:228</code>) so a
           model that has drifted from its migrations fails the build — but that gate only <em>detects</em>; it never
           applies anything. The container does the applying.</li>
           <li><strong>This overrides the framework&#39;s documented &quot;None for production&quot; default</strong>, accepting auto-migrate-on-

@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 49 ADRs</summary>
+        <summary>All 50 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -114,6 +114,7 @@
         <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
           </ol>
         </nav>
       </details>
@@ -142,10 +143,10 @@
           for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.</p>
           <ul>
           <li><p><strong>One shared telemetry baseline on every host.</strong> <code>ConfigureOpenTelemetry</code>
-          (<code>Source/Hosting/MMCA.Common.Aspire/Extensions.cs:136</code>) wires OpenTelemetry logging with formatted
-          messages and scopes (<code>Extensions.cs:139</code>), metrics from ASP.NET Core, <code>HttpClient</code>, and the runtime
-          (<code>Extensions.cs:147</code>), and tracing from ASP.NET Core and <code>HttpClient</code> (<code>Extensions.cs:180</code>). It is
-          called from <code>AddServiceDefaults</code> (<code>Extensions.cs:36</code>), so a host opts in once and every project in
+          (<code>Source/Hosting/MMCA.Common.Aspire/Extensions.cs:121</code>) wires OpenTelemetry logging with formatted
+          messages and scopes (<code>Extensions.cs:125</code>), metrics from ASP.NET Core, <code>HttpClient</code>, and the runtime
+          (<code>Extensions.cs:132</code>), and tracing from ASP.NET Core and <code>HttpClient</code> (<code>Extensions.cs:164</code>). It is
+          called from <code>AddServiceDefaults</code> (<code>Extensions.cs:41</code>), so a host opts in once and every project in
           the Aspire model inherits the same pipeline.</p>
           </li>
           <li><p><strong>Custom RED metrics from the CQRS pipeline.</strong> A single meter <code>MMCA.Common.Cqrs</code>
@@ -158,14 +159,14 @@
           The <code>outcome</code> tag takes <code>completed</code>, <code>failed</code> (a <code>Result</code> failure), or <code>exception</code>
           (<code>LoggingCommandDecorator.cs:30</code>, <code>:38</code>, <code>:52</code>), so count gives rate, the tag gives errors, and the
           histogram gives duration. The Aspire host subscribes the meter by literal name
-          (<code>Extensions.cs:174</code>).</p>
+          (<code>Extensions.cs:158</code>).</p>
           </li>
           <li><p><strong>An outbox dead-letter counter.</strong> The outbox processor owns a meter <code>MMCA.Common.Outbox</code>
-          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:59</code>) and a counter
-          <code>outbox.dead_letter.count</code> (<code>OutboxProcessor.cs:60</code>), incremented with an <code>event_type</code> tag whenever
-          a message is dead-lettered because its type cannot be resolved (<code>OutboxProcessor.cs:282</code>). The same
-          source emits outbox spans (<code>OutboxProcessor.cs:58</code>); both the meter and the trace source are
-          registered by literal name in the Aspire defaults (<code>Extensions.cs:173</code>, <code>Extensions.cs:179</code>).</p>
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:62</code>) and a counter
+          <code>outbox.dead_letter.count</code> (<code>OutboxProcessor.cs:63</code>), incremented with an <code>event_type</code> tag whenever
+          a message is dead-lettered because its type cannot be resolved (<code>OutboxProcessor.cs:348</code>). The same
+          source emits outbox spans (<code>OutboxProcessor.cs:61</code>); both the meter and the trace source are
+          registered by literal name in the Aspire defaults (<code>Extensions.cs:157</code>, <code>Extensions.cs:163</code>).</p>
           </li>
           <li><p><strong>Correlation-ID middleware ties the request together.</strong> <code>CorrelationIdMiddleware</code>
           (<code>Source/Presentation/MMCA.Common.API/Middleware/CorrelationIdMiddleware.cs:15</code>) uses the
@@ -178,27 +179,27 @@
           up for one request.</p>
           </li>
           <li><p><strong>Head-based sampling as a cost knob, off by default.</strong> <code>Telemetry:TracesSampleRatio</code>
-          (<code>Extensions.cs:195</code>, parsed by <code>TryGetTraceSampleRatio</code> at <code>Extensions.cs:210</code>) is unset by
+          (<code>Extensions.cs:179</code>, parsed by <code>TryGetTraceSampleRatio</code> at <code>Extensions.cs:327</code>) is unset by
           default, so a host samples everything and behavior does not change. A deployed host sets a ratio in
           the open interval (0,1) to keep that fraction of traces; the value wraps a <code>TraceIdRatioBasedSampler</code>
-          in a <code>ParentBasedSampler</code> (<code>Extensions.cs:196</code>) so a sampled-in request keeps its whole trace across
+          in a <code>ParentBasedSampler</code> (<code>Extensions.cs:180</code>) so a sampled-in request keeps its whole trace across
           service boundaries. A key that is absent, unparseable, or outside (0,1) falls back to sample-all
-          (<code>Extensions.cs:214</code>), so a typo can never silently drop all telemetry.</p>
+          (<code>Extensions.cs:331</code>), so a typo can never silently drop all telemetry.</p>
           </li>
           <li><p><strong>Outbox poll spans are filtered out of export.</strong> <code>OutboxPollFilterProcessor</code>
           (<code>Source/Hosting/MMCA.Common.Aspire/Telemetry/OutboxPollFilterProcessor.cs:15</code>), registered before
-          the exporters (<code>Extensions.cs:188</code>), clears the <code>Recorded</code> flag on the recurring <code>OutboxPoll</code> span
+          the exporters (<code>Extensions.cs:172</code>), clears the <code>Recorded</code> flag on the recurring <code>OutboxPoll</code> span
           and its children (<code>OutboxPollFilterProcessor.cs:42</code>). The poll query runs inside that span
-          (<code>OutboxProcessor.cs:212</code>, named at <code>OutboxProcessor.cs:53</code>), so steady-state polling does not flood
+          (<code>OutboxProcessor.cs:266</code>, named at <code>OutboxProcessor.cs:56</code>), so steady-state polling does not flood
           Application Insights. Real outbox work is untouched: each per-message <code>OutboxProcess</code> span is started
           under an explicit parent context restored from the message&#39;s stored trace and span ids
-          (<code>OutboxProcessor.cs:327</code>), so it is never a child of the poll span.</p>
+          (<code>OutboxProcessor.cs:416</code>), so it is never a child of the poll span.</p>
           </li>
           <li><p><strong>Dual exporters, either or both.</strong> <code>AddOpenTelemetryExporters</code> enables OTLP when
-          <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is present (<code>Extensions.cs:339</code>, the Aspire dashboard sets it) and
+          <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is present (<code>Extensions.cs:250</code>, the Aspire dashboard sets it) and
           Azure Monitor via <code>UseAzureMonitor</code> when <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> is present
-          (<code>Extensions.cs:347</code>, set by the cloud deployment). Both can be active at once
-          (<code>Extensions.cs:334</code>), so local development ships to the Aspire dashboard and production ships to
+          (<code>Extensions.cs:258</code>, set by the cloud deployment). Both can be active at once
+          (<code>Extensions.cs:245</code>), so local development ships to the Aspire dashboard and production ships to
           workspace-based Application Insights with no code change.</p>
           </li>
           </ul>

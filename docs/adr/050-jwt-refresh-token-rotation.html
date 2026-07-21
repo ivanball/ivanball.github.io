@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADR-050: JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-07-21).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ADR-050: JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection">
+  <meta property="og:description" content="Accepted (2026-07-21).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 50 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html" aria-current="page">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-050-jwt-access-tokens-with-a-single-rotating-refresh-token-and-reuse-detection">ADR-050: JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-07-21).</p>
+          <h2 id="context">Context</h2>
+          <p>Identity issues two credentials on every successful sign-in: a short-lived, stateless JWT access
+          token that every service validates by signature and expiry (ADR-004), and a long-lived refresh token
+          the client presents to obtain a fresh access token without re-entering a password. The framework needs
+          one canonical issuance-and-rotation workflow so the token lifetime, the rotation rule, and the
+          reuse-detection response are decided once and inherited by every consuming Identity module, rather than
+          re-implemented per app.</p>
+          <p>Two forces shape the model. A stateless access token cannot be revoked before it expires, so its
+          lifetime must stay short to bound exposure, which in turn makes a refresh token necessary for a usable
+          session. And a refresh token is a bearer credential with a long life: if it is captured, replay must be
+          detectable and answerable. The workflow lives once in <code>AuthenticationServiceBase&lt;TUser&gt;</code>
+          (<code>Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:34</code>); the app-specific claim set
+          and account gates stay in each app&#39;s sealed subclass (ADR-004 dual-fetch, ADR-032 hashing).</p>
+          <h2 id="decision">Decision</h2>
+          <p>Mint a stateless JWT access token plus a single, server-stored refresh token that rotates on every use,
+          with a token mismatch triggering revocation.</p>
+          <ul>
+          <li><strong>Access token is stateless; refresh token is one column on the user row.</strong> The access token is a
+          signed JWT carrying the user claims and an <code>exp</code> set from
+          <code>JwtSettings.AccessTokenExpirationMinutes</code> (default 15 minutes,
+          <code>Source/Core/MMCA.Common.Infrastructure/Settings/JwtSettings.cs:42</code>), written by
+          <code>TokenService.GenerateAccessToken</code> (<code>Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:97</code>).
+          The refresh token is a single nullable <code>RefreshToken</code> string plus its <code>RefreshTokenExpiry</code>
+          (<code>Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:20,24</code>), persisted on the app&#39;s <code>User</code> aggregate.
+          There is exactly one stored refresh token per user, not a per-device or per-session set.</li>
+          <li><strong>The refresh token is 64 random bytes, base64-encoded, opaque.</strong> <code>TokenService.GenerateRefreshToken</code>
+          draws 64 bytes from <code>RandomNumberGenerator.GetBytes</code> and base64-encodes them
+          (<code>TokenService.cs:104,106,107</code>). It carries no claims and is meaningful only by exact match against the
+          stored value.</li>
+          <li><strong>Rotation on every issuance.</strong> Both login and refresh route through <code>IssueTokensAsync</code>, which mints a
+          new access token, generates a new refresh token, and overwrites the stored one via
+          <code>user.UpdateRefreshToken(...)</code> before <code>SaveChangesAsync</code>
+          (<code>AuthenticationServiceBase.cs:254,258,259,260,262</code>). Registration seeds the first refresh token the
+          same way (<code>AuthenticationServiceBase.cs:158,159</code>). <code>UpdateRefreshToken</code> sets the token and its expiry
+          (<code>IAuthUser.cs:27</code>; ADC <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:234,236,237</code>,
+          Store <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Users/User.cs:129,131,132</code>). The
+          previous refresh token is therefore invalid the moment a new one is issued.</li>
+          <li><strong>Refresh binds to the same principal via the expired access token.</strong> <code>RefreshTokenAsync</code> requires the
+          client to present the expired access token alongside the refresh token and calls
+          <code>TokenService.GetPrincipalFromExpiredToken</code> (<code>AuthenticationServiceBase.cs:180,192</code>). That method
+          validates issuer, audience, signing key, and the pinned algorithm but skips only the lifetime check
+          (<code>TokenService.cs:117,121,122,123,125,130</code>), so an unsigned, wrong-audience, or algorithm-swapped token
+          yields no principal and the refresh fails (<code>AuthenticationServiceBase.cs:193-197</code>). The <code>user_id</code> claim
+          from that principal selects the row whose stored refresh token is then compared
+          (<code>AuthenticationServiceBase.cs:199,206</code>).</li>
+          <li><strong>Absolute lifetime, not sliding.</strong> The stored refresh token&#39;s expiry is stamped as now plus the
+          <code>RefreshTokenLifetime</code> base property, <code>TimeSpan.FromDays(7)</code>
+          (<code>AuthenticationServiceBase.cs:60,159,260</code>). Because that absolute expiry is copied forward unchanged on
+          each rotation from the original issuance clock read, a session cannot be extended past seven days by
+          refreshing: the window is fixed from the login that opened it, and re-login is required when it lapses.
+          (<code>JwtSettings.RefreshTokenExpirationDays</code> at <code>JwtSettings.cs:45</code> is a bound setting but is not the value
+          applied here; the applied lifetime is the base property.)</li>
+          <li><strong>Mismatch or expiry revokes the stored token.</strong> On refresh, if the presented token does not equal the
+          stored <code>RefreshToken</code>, or the stored expiry is in the past, the workflow calls
+          <code>user.RevokeRefreshToken()</code> and saves before returning a 401
+          (<code>AuthenticationServiceBase.cs:221,223,224,227</code>). <code>RevokeRefreshToken</code> nulls both the token and its
+          expiry (<code>IAuthUser.cs:30</code>; ADC <code>User.cs:243,245,246</code>, Store <code>User.cs:139,141,142</code>), so a presented
+          token that has already been rotated away (the signature of reuse or theft) invalidates the current
+          stored token as well, forcing a fresh password login rather than silently reissuing.</li>
+          <li><strong>Explicit revocation and account-state changes clear the same slot.</strong> <code>RevokeTokenAsync</code> loads the
+          user and revokes the stored token on demand (<code>AuthenticationServiceBase.cs:234,244,245</code>). Both apps also
+          revoke on account deactivation and erasure, so those transitions immediately end the refresh chain: ADC
+          in <code>Delete()</code> and <code>Anonymize()</code> (<code>MMCA.ADC/.../Identity.Domain/Users/User.cs:350,403</code>), Store in
+          <code>Deactivate()</code> and <code>Anonymize()</code> (<code>MMCA.Store/.../Identity.Domain/Users/User.cs:217,249</code>).</li>
+          <li><strong>Both apps inherit the workflow through a sealed subclass.</strong> ADC&#39;s <code>AuthenticationService</code>
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:35</code>,
+          forwarded to the base at <code>AuthenticationService.cs:43</code>) and Store&#39;s
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/AuthenticationService.cs:20</code>,
+          forwarded at <code>AuthenticationService.cs:27</code>) both pass <code>ITokenService</code> into the base constructor and
+          supply only app-specific hooks (the claim set, deactivated-account gates, the registration side-effect).
+          The rotation, reuse-detection, and lifetime logic is identical across both apps because it lives once in
+          the base. ADC&#39;s external OAuth path (ADR-036) issues the same single rotating refresh token when it
+          exchanges an external identity for the local token pair (<code>AuthenticationService.cs:202,203</code>).</li>
+          </ul>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Short access token plus refresh keeps the hot path stateless.</strong> Every service validates the access
+          token with no store lookup (ADR-004); the short <code>exp</code> bounds the revocation gap, and the refresh token
+          is the one place a database round trip is paid, only when the access token has already expired.</li>
+          <li><strong>Rotation makes theft self-limiting.</strong> Because each refresh invalidates the prior refresh token, a
+          stolen token is useful for at most one rotation; the legitimate client&#39;s next refresh then presents a
+          token that no longer matches, which surfaces the compromise instead of letting two parties refresh
+          indefinitely from the same secret.</li>
+          <li><strong>Revoke-on-mismatch turns a silent replay into a forced re-login.</strong> Treating any mismatch as reuse and
+          clearing the stored token means a captured-and-replayed refresh cannot quietly mint tokens; it ends the
+          session for everyone holding that token and requires a password to reopen it.</li>
+          <li><strong>Absolute lifetime caps a long-lived credential.</strong> A sliding window would let an active session live
+          forever on refreshes alone. Anchoring expiry to the opening login guarantees the refresh credential
+          cannot outlive a fixed seven-day bound without re-authentication.</li>
+          <li><strong>One workflow, app-specific edges.</strong> Putting issuance, rotation, and reuse detection in the shared base
+          means a future hardening (shorter lifetime, a per-device token table, a different reuse response) is one
+          edit both apps inherit, while the claim set and account gates stay in each subclass.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>One refresh token per user means one live session.</strong> A new login overwrites the single stored token
+          (<code>AuthenticationServiceBase.cs:260</code>), so signing in on a second device invalidates the first device&#39;s
+          refresh chain; the first device&#39;s next refresh mismatches and is revoked. Concurrent multi-device
+          sessions that each keep their own refresh token are not supported by this model. A per-device or
+          per-session token table would be required for that, and is deliberately out of scope here.</li>
+          <li><strong>Reuse detection is aggressive by design.</strong> A benign race (two client tabs refreshing near-simultaneously,
+          the second presenting the just-rotated-away token) is indistinguishable from theft, so it revokes the
+          stored token and forces a re-login. The safety of failing closed is chosen over the convenience of a
+          short reuse grace window.</li>
+          <li><strong>The refresh token is server-side state.</strong> Unlike the fully stateless access token, the refresh token
+          is a column that must be written on every login and every refresh (<code>AuthenticationServiceBase.cs:262</code>),
+          so the refresh path always incurs a write to the Identity database; it is not a stateless operation.</li>
+          <li><strong>Weekly re-login is mandatory.</strong> The absolute seven-day lifetime
+          (<code>AuthenticationServiceBase.cs:60</code>) means even a continuously active user must re-authenticate at least
+          weekly. Lengthening it widens the exposure of a captured refresh token; the seven-day value is the
+          chosen balance and is a base property, not a per-host appsetting.</li>
+          <li><strong>The bound refresh setting is not the applied one.</strong> <code>JwtSettings.RefreshTokenExpirationDays</code>
+          (<code>JwtSettings.cs:45</code>) exists and binds, but the lifetime actually applied comes from the
+          <code>RefreshTokenLifetime</code> base property (<code>AuthenticationServiceBase.cs:60</code>); an operator changing the
+          config value would not change the refresh lifetime, which is a latent point of confusion to be aware of.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p>ADR-004 (the stateless RS256/JWKS access token this refresh flow reissues, and the algorithm pinning
+          <code>GetPrincipalFromExpiredToken</code> relies on), ADR-032 (the password hashing that gates the login which opens
+          a refresh session, sharing the same <code>AuthenticationServiceBase&lt;TUser&gt;</code>), ADR-036 (the external OAuth path
+          that exchanges a federated identity for this same single rotating refresh token), ADR-047 (the
+          soft-deleted-user middleware that bounds the stateless access token&#39;s revocation gap, complementing the
+          refresh-token revocation this ADR performs on the user row).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/050-jwt-refresh-token-rotation.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

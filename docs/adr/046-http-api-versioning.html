@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 49 ADRs</summary>
+        <summary>All 50 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -114,6 +114,7 @@
         <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
           </ol>
         </nav>
       </details>
@@ -191,7 +192,7 @@
           <li><strong>Every REST host adopts it the same way.</strong> The extracted services call <code>AddCommonApiVersioning</code>
           in their startup: ADC&#39;s Conference
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:134</code>) and Identity
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:126</code>) hosts, Store&#39;s Catalog host
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:131</code>) hosts, Store&#39;s Catalog host
           (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:94</code>), and the same call is made
           by the other extracted hosts and by the monolith reference host
           (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:31</code>).</li>

@@ -15,7 +15,7 @@ in it would break the web heads at compile time.
 
 Two constraints shape the packaging. First, per-head service selection already has a working
 precedent: `ITokenStorageService` is implemented by each host and registered after `AddUIShared`
-(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:99`). Second, MMCA.Common's CI and release
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:98`). Second, MMCA.Common's CI and release
 pipelines run on ubuntu-latest, which cannot build MAUI target frameworks at all, while the
 framework's packages release in lockstep (ADR-016).
 
@@ -95,7 +95,7 @@ Add a per-capability contract layer to `MMCA.Common.UI` and a fifteenth package,
   their UI and surface the gap visibly.
 - Biometrics, speech-to-text, and the external-auth broker now ship native MAUI implementations,
   all three registered by `AddMauiDeviceCapabilities()`
-  (`Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:44`, `:45`, `:59`). The residual
+  (`Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:43`, `:44`, `:58`). The residual
   trade-off is configuration, not code: `MauiExternalAuthBroker` registers unconditionally but
   reports `IsAvailable == false` (`Source/Presentation/MMCA.Common.UI.Maui/Capabilities/MauiExternalAuthBroker.cs:39`)
   until the head supplies `OAuth:MobileRedirectScheme`, so a misconfigured head quietly keeps the web

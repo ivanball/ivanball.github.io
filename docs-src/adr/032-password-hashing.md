@@ -20,9 +20,10 @@ factor, and comparison are decided once and not re-implemented per app. Two forc
 ## Decision
 Provide a single `IPasswordHasher` (`MMCA.Common.Application.Interfaces.Infrastructure`,
 `IPasswordHasher.cs:6`) with one implementation `PasswordHasher`
-(`Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:12`), registered unconditionally by
-`AddInfrastructure` as a singleton (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:186`,
-inside the method at `DependencyInjection.cs:48`). The type is stateless (only `const` parameters), so
+(`Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:12`), registered unconditionally as
+a singleton (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:183`, in the `AddServices`
+helper that `AddInfrastructure` calls at `DependencyInjection.cs:137`). The type is stateless (only
+`const` parameters), so
 the singleton lifetime is safe.
 
 - **New passwords use PBKDF2-HMAC-SHA512.** `HashPassword` draws a fresh 32-byte (256-bit) salt from
@@ -54,7 +55,7 @@ the singleton lifetime is safe.
   (`AuthenticationServiceBase.cs:102`) and the registration-time `HashPassword` (`AuthenticationServiceBase.cs:150`)
   both live once in that base, so a single hoisted call site verifies and hashes for both apps. ADC's subclass
   declares the `IPasswordHasher` parameter and forwards it to the base
-  (`MMCA.ADC/.../Identity.Application/Users/AuthenticationService.cs:25`, forwarded at `AuthenticationService.cs:30`);
+  (`MMCA.ADC/.../Identity.Application/Users/AuthenticationService.cs:38`, forwarded at `AuthenticationService.cs:43`);
   Store's subclass does the same (`MMCA.Store/.../Identity.Application/Users/AuthenticationService.cs:23`,
   forwarded at `AuthenticationService.cs:30`). A handful of use cases still inject `IPasswordHasher` directly
   rather than through the base: both apps' `ChangePasswordHandler`

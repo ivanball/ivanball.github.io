@@ -1,7 +1,7 @@
 # ADR-038: Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)
 
 ## Status
-Accepted (2026-07-06).
+Accepted (2026-07-06; revised 2026-07-21).
 
 ## Context
 MMCA.Common is a published framework: it packs its NuGet packages and pushes them to GitHub Packages
@@ -42,15 +42,16 @@ posture ADR-015 applies to architecture rules. Four controls, each a hard gate:
 
 3. **CI fails on any non-suppressed vulnerable package.** The audit step runs
    `dotnet list MMCA.Common.slnx package --vulnerable --include-transitive` (ci.yml:36-38) and fails the
-   build (`exit 1`) on any vulnerable-package row (ci.yml:45-51). Accepted advisories are the sole
+   build (`exit 1`) on any vulnerable-package row (ci.yml:45-52). Accepted advisories are the sole
    exception, and their single source of truth is the `NuGetAuditSuppress` list in
    `Directory.Build.props`. Because `dotnet list --vulnerable` ignores `NuGetAuditSuppress`, the step
    re-derives that accept-list itself by reading the `GHSA-*` ids out of `Directory.Build.props`
    (ci.yml:40-48). The accepted-advisory list is currently empty: the one prior entry, the SQLite
    advisory GHSA-2m69-gcr7-jv3q (CVE-2025-6965), was suppressed from 2026-06-19 while SQLitePCLRaw
-   shipped no patched build. SQLitePCLRaw 2.1.12 (published 2026-07-14) fixed it, so the suppression
-   was removed on 2026-07-20 and replaced with a direct fix: a `SQLitePCLRaw.bundle_e_sqlite3` pin at
-   2.1.12 in `Directory.Packages.props`, referenced directly by `MMCA.Common.Infrastructure` so the
+   shipped no patched build. SQLitePCLRaw 2.1.12 (published 2026-07-14) delivered the patched build, so
+   the suppression was removed on 2026-07-20 and replaced with a direct fix: a
+   `SQLitePCLRaw.bundle_e_sqlite3` pin tracked in `Directory.Packages.props` (Directory.Packages.props:42),
+   referenced directly by `MMCA.Common.Infrastructure` (MMCA.Common.Infrastructure.csproj:23-25) so the
    patched version flows to consumers through the published package graph, the same pattern used for
    the MessagePack pin. This complements the build-time audit: `NuGetAudit` with `NuGetAuditMode=all`
    (Directory.Build.props:9-10)
@@ -73,9 +74,10 @@ posture ADR-015 applies to architecture rules. Four controls, each a hard gate:
   (ArchitectureEvaluationCriteria.md:808).
 - **One accept-list, re-applied where the tool ignores it.** The audit keeps `Directory.Build.props`
   as the only place an advisory is accepted, and re-reads that file in CI precisely because
-  `dotnet list --vulnerable` does not honor `NuGetAuditSuppress` (ci.yml:40-42). A reviewer sees every
-  accepted advisory in one place, with a dated rationale (Directory.Build.props:19-25), rather than a
-  blanket suppression.
+  `dotnet list --vulnerable` does not honor `NuGetAuditSuppress` (ci.yml:40-42). A `NuGetAuditSuppress`
+  item is the sanctioned way to accept an advisory, paired with a dated rationale in an adjacent
+  comment, so a reviewer sees every accepted advisory in one place rather than a blanket suppression.
+  No suppressions are active today: the accept-list is empty after the 2026-07-20/21 SQLite fix.
 - **Build-gates-invariants, at the supply-chain layer.** SBOM, audit, and source mapping turn
   "remember to check the dependencies" into red builds, the same lever ADR-015 uses for the layer and
   event rules and ADR-016 uses for the MassTransit pin.
@@ -87,9 +89,10 @@ posture ADR-015 applies to architecture rules. Four controls, each a hard gate:
 - **The SBOM is generated and archived, not yet signed or attested.** The gate proves a bill of
   materials exists for each release (release.yml:50); it does not add cryptographic attestation or
   signature verification of the pushed packages. That is a possible follow-up, not a claim made here.
-- **Accept-list drift is possible.** A suppressed advisory (Directory.Build.props:26-27) silences the
-  audit for that id until someone removes it; the inline "re-check periodically" note
-  (Directory.Build.props:24-25) is a review reminder, not an automated expiry.
+- **Accept-list drift is possible.** A `NuGetAuditSuppress` entry silences the audit for that id until
+  someone removes it, and its accompanying rationale comment is a review reminder, not an automated
+  expiry. No entries are active today, but the mechanism carries this cost whenever an advisory is
+  accepted.
 - **Audit granularity is text-matched.** The CI step matches vulnerable rows and `GHSA-*` ids by
   parsing tool output (ci.yml:43-48). It is deliberately simple and depends on the `dotnet list`
   output shape rather than a structured feed.

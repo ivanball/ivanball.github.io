@@ -1,7 +1,8 @@
 # ADR-048: Primitive Identifier Type Aliases over Strongly-Typed ID Structs
 
 ## Status
-Accepted (2026-07-15).
+Accepted (2026-07-15). Revised 2026-07-21 (corrected the empty-placeholder-folder inventory and the
+`Directory.Build.props` and ADC `User` source citations).
 
 ## Context
 Every entity needs an identity type. The framework's base entity is generic over that type:
@@ -15,10 +16,12 @@ generic parameter accepts either of the two common identity styles:
    prescribes, to make identifiers non-interchangeable at compile time.
 
 The codebase chose the first, but until now that choice lived only as a CLAUDE.md convention with no
-recorded trade-off. The wrapper-struct alternative was scaffolded, not written: a `StronglyTypedIds`
-folder exists in `MMCA.Common.Shared` and in every module's `.Shared` project (for example
-`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/StronglyTypedIds`,
-`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/StronglyTypedIds`) and each contains **no
+recorded trade-off. The wrapper-struct alternative was scaffolded, not written: an empty `StronglyTypedIds`
+folder survives in five module `.Shared` projects (Store Catalog, Sales, and Identity, plus ADC
+Conference and Engagement, for example
+`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/StronglyTypedIds` and
+`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/StronglyTypedIds`), while no such folder
+exists under `MMCA.Common.Shared` or `MMCA.ADC.Identity.Shared`. Every surviving folder holds **no
 types**. This ADR records the primitive-alias decision and its cost so the deferral is deliberate and
 legible.
 
@@ -45,13 +48,13 @@ not as a wrapper struct.
 - **Aliases are linked solution-wide via `Directory.Build.props`.** Each `GlobalUsings.*.cs` file is
   pulled into every project with a `<Compile Include ... Link=... />` block, so the alias is visible
   everywhere without a project reference: Common
-  (`MMCA.Common/Directory.Build.props:76-77,82-83`), ADC
-  (`MMCA.ADC/Directory.Build.props:66-76`), Store (`MMCA.Store/Directory.Build.props:66-73`). Adding a
+  (`MMCA.Common/Directory.Build.props:70-79`), ADC
+  (`MMCA.ADC/Directory.Build.props:77-87`), Store (`MMCA.Store/Directory.Build.props:75-86`). Adding a
   solution-wide alias is a new `GlobalUsings.*.cs` plus a matching `<Compile Include>` line, nothing more.
 - **The alias flows unchanged through every layer.** Tracing the ADC `User` aggregate: the domain
   entity is `User : AuditableAggregateRootEntity<UserIdentifierType>`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:17`); the cross-context
-  reference to a speaker is typed `SpeakerIdentifierType? LinkedSpeakerId` (same file, line 53); the EF
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:18`); the cross-context
+  reference to a speaker is typed `SpeakerIdentifierType? LinkedSpeakerId` (same file, line 54); the EF
   configuration is `EntityTypeConfigurationSQLServer<User, UserIdentifierType>`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/EntityConfiguration/UserConfiguration.cs:13`);
   the repository handle is `GetRepository<User, UserIdentifierType>()`

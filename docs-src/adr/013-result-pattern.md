@@ -1,7 +1,7 @@
 # ADR-013: Result Pattern over Exceptions for Flow Control
 
 ## Status
-Accepted
+Accepted. Revised 2026-07-21 (exception-handler chain / ProblemDetails edge contract documented).
 
 ## Context
 Operations at every layer fail in *expected* ways: input is invalid, a domain invariant is broken, a
@@ -29,6 +29,32 @@ not exceptions.
 - Exceptions are reserved for the genuinely exceptional: programming errors (null-argument guards) and
   infrastructure faults (DB / transaction failures) that should abort the request rather than be
   modeled as a business outcome.
+- When an exception does escape to the HTTP edge, the API layer converges it onto the same RFC 9457
+  ProblemDetails shape via an ordered `IExceptionHandler` chain, so both channels (Result and
+  exception) return one wire contract. `AddCommonExceptionHandlers()` first registers `AddProblemDetails`
+  (which stamps a `requestId` extension from the request's trace identifier), then registers the handlers
+  in a load-bearing order; ASP.NET Core runs them in registration order and stops at the first handler
+  that reports the exception handled, so most-specific-first placement is the mechanism, not a comment
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:116-127`, registrations at
+  lines 121-125):
+  - `OperationCanceledExceptionHandler` (registered first) maps a client-disconnect
+    `OperationCanceledException` to the non-standard HTTP 499 Client Closed Request, so monitoring can
+    tell an abandoned request apart from a server fault
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/OperationCanceledExceptionHandler.cs:27,32`).
+  - `DomainExceptionHandler` maps a `DomainException` (a business-rule violation reaching the edge as an
+    exception rather than a `Result`) to HTTP 400 Bad Request
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DomainExceptionHandler.cs:27,32`).
+  - `DbUpdateExceptionHandler` maps an EF Core `DbUpdateException` (concurrency, unique-constraint, or
+    foreign-key failure) to HTTP 409 Conflict, returning a generic detail so no database schema detail
+    leaks to the client
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DbUpdateExceptionHandler.cs:28,33,37`).
+  - `ValidationExceptionHandler` maps a FluentValidation `ValidationException` to HTTP 400, grouping the
+    failures by property name into an `errors` extension that matches ASP.NET Core's model-validation
+    shape
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ValidationExceptionHandler.cs:28,33,48-54`).
+  - `GlobalExceptionHandler` (registered last) is the catch-all that turns any remaining unhandled
+    exception into HTTP 500
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/GlobalExceptionHandler.cs:26-28`).
 
 ## Rationale
 - **Failures are in the signature.** A method that can fail returns `Result<T>`, so the caller cannot
@@ -38,6 +64,10 @@ not exceptions.
 - **Composable.** The railway-oriented combinators chain steps without an `IsFailure` check at every
   line, and short-circuit on the first failure.
 - **Cheap and predictable.** No throw/catch on the common "won't do it" path.
+- **One wire contract for both channels.** Whether a request ends in a `Result.Failure` mapped by
+  `HandleFailure()` or an escaped exception caught by the handler chain, the client receives the same
+  RFC 9457 ProblemDetails body (carrying the shared `requestId` extension), so consumers parse one error
+  shape regardless of which channel produced it.
 
 ## Trade-offs
 - More ceremony at call sites than letting an exception bubble; the combinators absorb most of it.
@@ -46,6 +76,11 @@ not exceptions.
   otherwise throw.
 - The `ErrorType` to HTTP mapping is one-directional and first-error-wins for the *status code* (all
   errors still serialize into the ProblemDetails body).
+- The exception-handler registration order is load-bearing. Because ASP.NET Core stops at the first
+  handler that reports the exception handled, a mis-ordered registration (for example the catch-all
+  `GlobalExceptionHandler` ahead of a specific handler) would swallow the more precise status;
+  `GlobalExceptionHandler` must stay registered last
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:121-125`).
 
 ## Related
 ADR-007 (Result over the wire via gRPC), ADR-014 (the decorator pipeline returns `Result.Failure` to

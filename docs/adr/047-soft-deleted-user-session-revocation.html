@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 49 ADRs</summary>
+        <summary>All 50 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -114,6 +114,7 @@
         <li><a href="047-soft-deleted-user-session-revocation.html" aria-current="page">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
           </ol>
         </nav>
       </details>
@@ -166,8 +167,8 @@
           (ADC: <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/SoftDeletedUserValidator.cs:10,21-24</code>;
           Store: <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/SoftDeletedUserValidator.cs:10,21-24</code>),
           registered scoped in each Identity module&#39;s DI
-          (<code>MMCA.ADC.Identity.Application/DependencyInjection.cs:33</code>,
-          <code>MMCA.Store.Identity.Application/DependencyInjection.cs:40</code>). The query bypasses the soft-delete
+          (<code>MMCA.ADC.Identity.Application/DependencyInjection.cs:32</code>,
+          <code>MMCA.Store.Identity.Application/DependencyInjection.cs:39</code>). The query bypasses the soft-delete
           global query filter deliberately, because a plain read would hide the very row it needs to find.</li>
           <li><strong>A 30-second cache amortizes the lookup.</strong> <code>CacheDuration</code> is
           <code>TimeSpan.FromSeconds(30)</code> (<code>SoftDeletedUserMiddleware.cs:17</code>). The middleware reads

@@ -4,7 +4,7 @@
 Accepted (2026-07-15).
 
 ## Context
-MMCA.Common publishes its `MMCA.Common.*` NuGet package set (see `../FACTS.md` for the authoritative
+MMCA.Common publishes its `MMCA.Common.*` NuGet package set (see `FACTS.md` for the authoritative
 list and count) consumed by three downstream repos: the two
 production apps (Store, ADC) and the reference seed Helpdesk (which defaults to local-source mode but
 declares the same `MMCA.Common.*` package versions in its own `Directory.Packages.props`).
@@ -20,9 +20,9 @@ Two related governance questions had no recorded answer:
 
 ## Decision
 1. **Version the whole `MMCA.Common.*` package set in lockstep.** All packages share one version (MinVer, derived from
-   a single `vX.Y.Z` git tag); a release tags every package (see `../FACTS.md` for the authoritative list and count)
+   a single `vX.Y.Z` git tag); a release tags every package (see `FACTS.md` for the authoritative list and count)
    at the same version. SemVer and the
-   breaking-change policy live in `VERSIONING.md`.
+   breaking-change policy live in `common-VERSIONING.md` in `docs-src/guides/`.
 2. **Sweep every consumer in one pass, with no phased rollout.** A framework change ships and all
    consumers bump every `MMCA.Common.*` entry in their `Directory.Packages.props` together.
    The two production apps (Store, ADC) now **commit NuGet lock files** (`RestorePackagesWithLockFile`,

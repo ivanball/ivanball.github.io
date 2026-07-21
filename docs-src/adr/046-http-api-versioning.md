@@ -73,7 +73,7 @@ proves two live versions coexist.
 - **Every REST host adopts it the same way.** The extracted services call `AddCommonApiVersioning`
   in their startup: ADC's Conference
   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:134`) and Identity
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:126`) hosts, Store's Catalog host
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:131`) hosts, Store's Catalog host
   (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:94`), and the same call is made
   by the other extracted hosts and by the monolith reference host
   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:31`).

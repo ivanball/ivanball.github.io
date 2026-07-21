@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 49 ADRs</summary>
+        <summary>All 50 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -114,6 +114,7 @@
         <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
           </ol>
         </nav>
       </details>
@@ -167,7 +168,7 @@
           (<code>SendPushNotificationHandler.cs:88-105</code>), an OS-level native-push channel that reaches devices the
           SignalR hub cannot (the app backgrounded or killed). It is best-effort by the same logic as the live
           push (a throw is logged, never fatal, and the SignalR leg has already decided the audit status), and it
-          defaults to <code>NullNativePushSender</code> (<code>MMCA.Common.Infrastructure</code>, <code>DependencyInjection.cs:203</code>), so it
+          defaults to <code>NullNativePushSender</code> (<code>MMCA.Common.Infrastructure</code>, <code>DependencyInjection.cs:200</code>), so it
           stays inert until a native hub is configured. The design of that channel is ADR-044&#39;s scope; this ADR
           keeps its own on the inbox and SignalR channels, so the &quot;Two-Channel&quot; title names the durable and
           transient channels this record governs, not a hard cap on the number of delivery legs.</li>
