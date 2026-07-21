@@ -9,7 +9,7 @@ valid to bookmark?", "give me the user ids of every attendee". This chapter is t
 transport seam**: a tiny, transport-only package (`MMCA.Common.Grpc`) plus a per-consumer
 `*.Contracts` convention that together let a module be lifted out of the monolith and called over
 **gRPC** *without rewriting a line of application or domain code*. The governing decision is
-[ADR-007 (gRPC extraction)](../adr/007-grpc-extraction.md), with the supporting topology in
+[ADR-007 (gRPC extraction)](../ADRs/007-grpc-extraction.md), with the supporting topology in
 ADR-008 (YARP service mesh), auth in ADR-004 (JWKS dual-fetch), and the concrete Kestrel/HTTP-2
 transport choices (h2c `Http2`-only for ADC vs `Http1AndHttp2` + ALPN for Store) in ADR-012. `[Rubric §7, Microservices
 Readiness]` is the headline lens here, it assesses whether modules can genuinely be extracted, with

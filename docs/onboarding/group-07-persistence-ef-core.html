@@ -120,71 +120,95 @@
           <a href="#iwriterepositorytentity-tidentifiertype"><code>IWriteRepository&lt;TEntity, TIdentifierType&gt;</code></a>,
           <a href="#irepositorytentity-tidentifiertype"><code>IRepository&lt;TEntity, TIdentifierType&gt;</code></a>) coordinated by a
           <a href="#unitofwork"><code>UnitOfWork</code></a>; a data-source routing layer that lets every entity resolve to its own
-          physical database (&quot;database per service&quot;); an engine-portable entity-configuration hierarchy; and the
-          supporting cast of value generators, an encryption converter, model conventions, seeders, and
-          design-time factories. The whole thing is the <code>[Rubric §8, Data Architecture]</code> chapter of the codebase,
-          and it leans hard on <code>[Rubric §7, Microservices Readiness]</code> and <code>[Rubric §3, Clean Architecture]</code>.</p>
+          physical database (&quot;database per service&quot;); two model-finalizing conventions that keep that routing
+          honest; an engine-portable entity-configuration hierarchy; and a supporting cast of value generators,
+          an encryption converter, seeders, and design-time factories. The group also hosts the framework&#39;s
+          non-EF storage-adjacent services: blob storage, image normalization, and native push registration and
+          delivery. The whole thing is the <code>[Rubric §8, Data Architecture]</code> chapter of the codebase, and it
+          leans hard on <code>[Rubric §7, Microservices Readiness]</code> and <code>[Rubric §3, Clean Architecture]</code>.</p>
           <h2 id="one-base-context-one-class-per-engine-one-instance-per-database">One base context, one class per engine, one instance per database</h2>
           <p><a href="#applicationdbcontext"><code>ApplicationDbContext</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:34</code>)
           is an abstract primary-constructor class over EF&#39;s <code>DbContext</code>. It holds the cross-cutting model
           configuration that every engine shares: it applies a global soft-delete query filter to every non-owned
           <a href="group-02-domain-building-blocks.html#iauditableentity"><code>IAuditableEntity</code></a> using a runtime-built
-          expression tree (<code>ApplicationDbContext.cs:149-163</code>), configures the <code>RowVersion</code> optimistic-concurrency
-          token (as SQL Server <code>rowversion</code> or a plain application-managed token on other providers,
-          <code>ApplicationDbContext.cs:176-196</code>), and maps the outbox and inbox tables so every relational database
-          carries its own (<code>ApplicationDbContext.cs:203-232</code>). Its <code>SaveChangesAsync(userId, ...)</code> overload
-          (<code>ApplicationDbContext.cs:79-84</code>) is the one entry point handlers care about: it stashes the current
-          user id in <code>CurrentSaveUserId</code> so the audit interceptor can read it, then delegates to <code>base</code>.</p>
+          expression tree, registered as a named <code>&quot;SoftDelete&quot;</code> filter (<code>ApplicationDbContext.cs:184-198</code>);
+          it configures the <code>RowVersion</code> optimistic-concurrency token, mapped as a SQL Server <code>rowversion</code> or as
+          a plain application-managed token on other providers (<code>ApplicationDbContext.cs:211-231</code>); and it maps
+          the outbox and inbox tables so every relational database carries its own
+          (<a href="group-04-events-outbox.html#outboxmessage"><code>OutboxMessage</code></a> at <code>ApplicationDbContext.cs:238-251</code>,
+          <a href="group-04-events-outbox.html#inboxmessage"><code>InboxMessage</code></a> at <code>ApplicationDbContext.cs:258-267</code>). It also
+          registers four keyless <a href="#valreturnt"><code>ValReturn&lt;T&gt;</code></a> shapes (<code>ApplicationDbContext.cs:51</code>,
+          <code>165-168</code>) so raw SQL scalar queries have somewhere to land. Its <code>SaveChangesAsync(userId, ...)</code>
+          overload (<code>ApplicationDbContext.cs:79-93</code>) is the one entry point handlers care about: it stashes the
+          current user id in <code>CurrentSaveUserId</code> so the audit interceptor can read it, delegates to <code>base</code>, then
+          clears it in a <code>finally</code> so a later internal save cannot silently reuse the previous caller&#39;s identity.</p>
           <p>The design decision that shapes this whole group is stated in the base&#39;s own doc comment: <strong>one context
           class per engine, one instance per physical data source</strong> (<code>ApplicationDbContext.cs:23-28</code>). The same
           <a href="#sqlserverdbcontext"><code>SQLServerDbContext</code></a> class
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/SQLServerDbContext.cs:14</code>)
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/SQLServerDbContext.cs:13</code>)
           is instantiated once per SQL Server database, each instance carrying a different
-          <a href="#physicaldatasource"><code>PhysicalDataSource</code></a> (connection string plus migrations assembly). To keep EF
-          from silently reusing the first-built model for every database,
+          <a href="#physicaldatasource"><code>PhysicalDataSource</code></a> (connection string, migrations assembly, Cosmos database
+          name). To keep EF from silently reusing the first-built model for every database,
           <a href="#datasourcemodelcachekeyfactory"><code>DataSourceModelCacheKeyFactory</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/DataSourceModelCacheKeyFactory.cs:16</code>)
-          keys EF&#39;s model cache by <code>(context type, physical source name)</code> so each database builds a model
-          containing only its own entities. This is deliberately not a per-module context split: one sealed
-          context per engine over the abstract base is ADR-006&#39;s ruling, and <code>[Rubric §6, CQRS &amp; Event-Driven]</code>
-          plus <code>[Rubric §8, Data Architecture]</code> both hang off it. <code>SQLServerDbContext</code> adds the provider-specific
-          touches: transient-fault retry (<code>EnableRetryOnFailure</code>, <code>SQLServerDbContext.cs:42-45</code>) and a suppressed
-          <code>PendingModelChangesWarning</code> (<code>SQLServerDbContext.cs:58</code>) so an extracted service that registers only
-          its own module&#39;s entity configurations starts cleanly against a migration snapshot that captures every
-          module&#39;s tables. That warning suppression is a direct <code>[Rubric §7, Microservices Readiness]</code> decision,
-          called out with its trade-off in the source comment.</p>
+          keys EF&#39;s model cache by <code>(context type, physical source name, designTime)</code> and is installed by the base
+          in <code>OnConfiguring</code> (<code>ApplicationDbContext.cs:131</code>). This is deliberately not a per-module context split:
+          one sealed context per engine over the abstract base is ADR-006&#39;s ruling. <code>SQLServerDbContext</code> adds the
+          provider-specific touches: transient-fault retry (<code>EnableRetryOnFailure</code> with 5 attempts and a 10-second
+          cap, <code>SQLServerDbContext.cs:41-45</code>) and a suppressed <code>PendingModelChangesWarning</code>
+          (<code>SQLServerDbContext.cs:57</code>) so an extracted service that registers only its own module&#39;s entity
+          configurations starts cleanly against a migration snapshot that captures every module&#39;s tables. That
+          warning suppression is a direct <code>[Rubric §7, Microservices Readiness]</code> decision, and the source comment
+          states the trade-off plainly: monolith hosts lose the &quot;you forgot a migration&quot; safety net, so CI is
+          expected to run <code>dotnet ef migrations has-pending-model-changes</code> as a separate gate.</p>
           <h2 id="savechanges-as-an-interceptor-pipeline">SaveChanges as an interceptor pipeline</h2>
-          <p>The base context registers two EF Core <code>SaveChangesInterceptor</code>s from DI in <code>OnConfiguring</code>
-          (<code>ApplicationDbContext.cs:94-96</code>), and together they turn a bare save into the framework&#39;s audit-plus-
+          <p>The base context resolves two EF Core <code>SaveChangesInterceptor</code>s from DI in <code>OnConfiguring</code>
+          (<code>ApplicationDbContext.cs:124-126</code>), and together they turn a bare save into the framework&#39;s audit-plus-
           outbox flow. <a href="#auditsavechangesinterceptor"><code>AuditSaveChangesInterceptor</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:13</code>)
           runs on <code>SavingChanges</code>: it walks every tracked
-          <a href="group-02-domain-building-blocks.html#iauditableentity"><code>IAuditableEntity</code></a> and stamps <code>CreatedOn/By</code>
-          on <code>Added</code> and <code>LastModifiedOn/By</code> on <code>Modified</code>, reading the timestamp from an injected <code>TimeProvider</code>
-          and the user id from <code>CurrentSaveUserId</code> (falling back to <code>default</code> as the system-operation sentinel,
+          <a href="group-02-domain-building-blocks.html#iauditableentity"><code>IAuditableEntity</code></a>, stamps <code>CreatedOn/By</code> plus
+          <code>LastModifiedOn/By</code> on <code>Added</code>, and on <code>Modified</code> marks the two <code>Created*</code> properties unmodified before
+          re-stamping <code>LastModified*</code>, reading the timestamp from an injected <code>TimeProvider</code> and the user id from
+          <code>CurrentSaveUserId</code> (falling back to <code>default</code> as the system-operation sentinel,
           <code>AuditSaveChangesInterceptor.cs:38-65</code>). This is why the domain declares audit fields with private
           setters and never writes them: the interceptor sets them centrally through <code>entry.Property(...).CurrentValue</code>,
           bypassing setter visibility. That is the <code>[Rubric §10, Cross-Cutting Concerns]</code> payoff, one enforcement
           point instead of copy-paste in every handler.</p>
           <p><a href="#domaineventsavechangesinterceptor"><code>DomainEventSaveChangesInterceptor</code></a>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:21</code>)
-          is the producer end of the outbox. On <code>SavingChanges</code> it collects the pending
-          <a href="group-04-events-outbox.html#idomainevent"><code>IDomainEvent</code></a>s from every tracked
-          <a href="group-02-domain-building-blocks.html#iaggregateroot"><code>IAggregateRoot</code></a>, serializes each into an
-          <a href="group-04-events-outbox.html#outboxmessage"><code>OutboxMessage</code></a> row, and adds those rows to the same context
-          (<code>DomainEventSaveChangesInterceptor.cs:79-108</code>), so the events land in the database <strong>in the same
-          transaction</strong> as the aggregate changes. The captured state is parked in a
-          <a href="#capturedstate"><code>CapturedState</code></a> record held in a <code>ConditionalWeakTable</code> keyed by context
-          (<code>DomainEventSaveChangesInterceptor.cs:31,155-158</code>) so it is cleaned up automatically when the context
-          is disposed. After the save commits, <code>SavedChangesAsync</code> dispatches the captured events to in-process
-          handlers, marks the outbox rows processed, and clears the events off the aggregates
-          (<code>DomainEventSaveChangesInterceptor.cs:114-143</code>); if in-process dispatch throws, it signals the outbox
-          processor to retry from the persisted rows rather than losing the event. Cosmos DB has no relational
-          outbox table, so the base exposes a <code>SupportsOutbox</code> flag (<code>ApplicationDbContext.cs:62</code>) the interceptor
-          honors. This split, atomic persistence plus best-effort immediate dispatch with a durable fallback, is
-          the at-least-once contract of ADR-003; the consumer end and <a href="group-04-events-outbox.html#outboxprocessor"><code>OutboxProcessor</code></a>
-          live in <a href="group-04-events-outbox.html">Group 04</a>.</p>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:38</code>)
+          is the producer end of the outbox, and it is the most subtle type in the group. On <code>SavingChanges</code> it
+          collects pending <a href="group-04-events-outbox.html#idomainevent"><code>IDomainEvent</code></a>s from every tracked
+          <a href="group-02-domain-building-blocks.html#iaggregateroot"><code>IAggregateRoot</code></a> and writes an
+          <a href="group-04-events-outbox.html#outboxmessage"><code>OutboxMessage</code></a> row for each into the same context, so the
+          events land in the database <strong>in the same transaction</strong> as the aggregate changes
+          (<code>DomainEventSaveChangesInterceptor.cs:143-195</code>). The routing split happens right there: an
+          <a href="group-04-events-outbox.html#iintegrationevent"><code>IIntegrationEvent</code></a> gets a row but no in-process
+          dispatch (its row stays unprocessed so the <a href="group-04-events-outbox.html#outboxprocessor"><code>OutboxProcessor</code></a>
+          publishes it over <code>IMessageBus</code>), while a local event gets both a row and the fast in-process path
+          (<code>DomainEventSaveChangesInterceptor.cs:160-191</code>). The captured state is parked in a
+          <a href="#capturedstate"><code>CapturedState</code></a> record (<code>DomainEventSaveChangesInterceptor.cs:268</code>) held in a
+          <code>ConditionalWeakTable</code> keyed by context (<code>:48</code>), so it is cleaned up automatically when the context is
+          disposed.</p>
+          <p>After the save, <code>SavedChangesAsync</code> does one of two things (<code>DomainEventSaveChangesInterceptor.cs:201-218</code>).
+          With no ambient transaction it flushes immediately: dispatch local events through
+          <a href="group-04-events-outbox.html#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a>, clear the aggregates&#39; event
+          lists, mark the local outbox rows processed, and signal the outbox for integration events
+          (<code>:224-252</code>). With an active transaction it clears the events (so a second save inside the same
+          transaction cannot re-capture them) and parks a <a href="#deferreddispatch"><code>DeferredDispatch</code></a>
+          (<code>:275</code>) in a second weak table; <a href="#dbcontextfactory"><code>DbContextFactory</code></a> then calls the static
+          <code>FlushDeferredAsync</code> only after a successful commit (<code>:120-129</code>) and <code>DropDeferred</code> on rollback (<code>:137</code>).
+          That is what keeps handler side effects from acting on state that could still roll back, and what keeps a
+          retrying execution strategy from dispatching the same events once per attempt. If in-process dispatch
+          throws, the interceptor logs a warning and signals the outbox to retry from the persisted rows rather
+          than losing the event (<code>:238-246</code>). The synchronous <code>SavedChanges</code> path cannot await a dispatcher at
+          all, so it clears events and leaves delivery entirely to the outbox (<code>:100-113</code>). Cosmos DB has no
+          relational outbox table, so the base exposes a <code>SupportsOutbox</code> flag (<code>ApplicationDbContext.cs:62</code>) that
+          <a href="#cosmosdbcontext"><code>CosmosDbContext</code></a> overrides to <code>false</code> (<code>CosmosDbContext.cs:69</code>) and the interceptor
+          honors by dispatching everything in-process instead. This split, atomic persistence plus best-effort
+          immediate dispatch with a durable fallback, is the at-least-once contract of ADR-003; the consumer end
+          lives in <a href="group-04-events-outbox.html">Group 04</a>.</p>
           <h2 id="repositories-and-the-unit-of-work">Repositories and the unit of work</h2>
           <p>Handlers do not touch a <code>DbContext</code> directly. They ask a <a href="#unitofwork"><code>UnitOfWork</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/UnitOfWork.cs:13</code>) for a repository.
@@ -193,145 +217,243 @@
           that only needs a lookup can depend on the narrow <a href="#ientityreadertentity-tidentifiertype"><code>IEntityReader&lt;TEntity, TIdentifierType&gt;</code></a>
           (<code>IRepository.cs:14</code>) or <a href="#ientityqueriertentity-tidentifiertype"><code>IEntityQuerier&lt;TEntity, TIdentifierType&gt;</code></a>
           (<code>IRepository.cs:64</code>); <a href="#ireadrepositorytentity-tidentifiertype"><code>IReadRepository&lt;TEntity, TIdentifierType&gt;</code></a>
-          (<code>IRepository.cs:110</code>) combines both plus raw <code>IQueryable</code> access, <a href="#iwriterepositorytentity-tidentifiertype"><code>IWriteRepository&lt;TEntity, TIdentifierType&gt;</code></a>
+          (<code>IRepository.cs:110</code>) combines both plus four <code>IQueryable</code> surfaces (tracking, no-tracking, single-query,
+          split-query), <a href="#iwriterepositorytentity-tidentifiertype"><code>IWriteRepository&lt;TEntity, TIdentifierType&gt;</code></a>
           (<code>IRepository.cs:133</code>) adds mutation, and <a href="#irepositorytentity-tidentifiertype"><code>IRepository&lt;TEntity, TIdentifierType&gt;</code></a>
-          (<code>IRepository.cs:202</code>) is the union. That layering is the group&#39;s clearest <code>[Rubric §1, SOLID]</code>
-          (interface-segregation) statement. The concrete <a href="#efreadrepositorytentity-tidentifiertype"><code>EFReadRepository&lt;TEntity, TIdentifierType&gt;</code></a>
-          and <a href="#efrepositorytentity-tidentifiertype"><code>EFRepository&lt;TEntity, TIdentifierType&gt;</code></a>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:14</code>)
-          wrap an EF <code>DbSet</code>, with the write side handling tracked-entity patching, <code>RowVersion</code> original-value
-          seeding for optimistic concurrency, and a set-based <code>ExecuteDelete</code> escape hatch that deliberately
-          bypasses change tracking (<code>EFRepository.cs:43-89</code>).</p>
+          (<code>IRepository.cs:214</code>) is the union. That layering is the group&#39;s clearest <code>[Rubric §1, SOLID]</code>
+          (interface-segregation) statement, and <a href="#readrepositoryextensions"><code>ReadRepositoryExtensions</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Extensions/ReadRepositoryExtensions.cs:10</code>) adds the
+          <code>GetByIdOrFailAsync</code> convenience that turns a miss into a
+          <a href="group-01-result-error-handling.html#result"><code>Result</code></a> failure. The concrete
+          <a href="#efreadrepositorytentity-tidentifiertype"><code>EFReadRepository&lt;TEntity, TIdentifierType&gt;</code></a> and
+          <a href="#efrepositorytentity-tidentifiertype"><code>EFRepository&lt;TEntity, TIdentifierType&gt;</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:15</code>)
+          wrap an EF <code>DbSet</code>. The write side patches already-tracked entities in place through an O(1)
+          <code>Local.FindEntry</code> lookup instead of re-attaching (<code>EFRepository.cs:44-62</code>), seeds <code>RowVersion</code> original
+          values for optimistic concurrency on both the aggregate and any child implementing <code>IRowVersioned</code>
+          (<code>EFRepository.cs:72-93</code>, ADR-035), and offers a set-based <code>ExecuteDeleteAsync</code> escape hatch that the
+          interface itself documents as bypassing domain events, audit stamps, and soft-delete
+          (<code>IRepository.cs:187-197</code>).</p>
           <p>Two factories keep the wiring honest. <a href="#repositoryfactory"><code>RepositoryFactory</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/Factory/RepositoryFactory.cs:13</code>)
-          builds a repository over a given context and conditionally wraps it in a MiniProfiler
-          <a href="#efrepositorydecoratortentity-tidentifiertype"><code>EFRepositoryDecorator&lt;TEntity, TIdentifierType&gt;</code></a> when
-          <code>UseMiniProfiler</code> is on, a decorator that adds timing without the base repository knowing.
-          <a href="#dbcontextfactory"><code>DbContextFactory</code></a>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:19</code>)
+          builds a repository over a given context and conditionally wraps it in a MiniProfiler decorator
+          (<a href="#efrepositorydecoratortentity-tidentifiertype"><code>EFRepositoryDecorator&lt;TEntity, TIdentifierType&gt;</code></a> or
+          <a href="#efreadrepositorydecoratortentity-tidentifiertype"><code>EFReadRepositoryDecorator&lt;TEntity, TIdentifierType&gt;</code></a>)
+          when <code>UseMiniProfiler</code> is on (<code>RepositoryFactory.cs:30-37</code>, <code>54-61</code>), adding timing without the base
+          repository knowing. <a href="#dbcontextfactory"><code>DbContextFactory</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:18</code>)
           is the scoped coordinator: it caches one <a href="#applicationdbcontext"><code>ApplicationDbContext</code></a> per
-          <a href="#datasourcekey"><code>DataSourceKey</code></a> so every repository in a scope shares one change tracker
-          (<code>DbContextFactory.cs:52-67</code>), and it owns the transaction lifecycle. Because there can be more than one
-          physical source in play, <code>ExecuteInTransactionAsync</code> opens a transaction per source and commits them
-          sequentially, best-effort, with no two-phase commit (<code>DbContextFactory.cs:258-304</code>); cross-source
-          consistency is the outbox&#39;s job, not a distributed transaction&#39;s. <code>DbContextFactory</code> also carries the
-          <code>SET IDENTITY_INSERT</code> machinery (<a href="#identityinsertgroup"><code>IdentityInsertGroup</code></a>, <code>DbContextFactory.cs:132-226</code>)
-          for importing entities with explicit database-generated ids one table at a time. <a href="#unitofwork"><code>UnitOfWork</code></a>
-          sits on top, resolving an entity&#39;s physical source through <a href="#idatasourceservice"><code>IDataSourceService</code></a>,
-          handing the matching context to the factory, and caching the resulting repository per entity type
-          (<code>UnitOfWork.cs:33-66</code>). The physical creation itself runs through <a href="#physicaldbcontextfactory"><code>PhysicalDbContextFactory</code></a>
+          <a href="#datasourcekey"><code>DataSourceKey</code></a> so every repository in a scope shares one change tracker, and it enlists
+          a late-created context into an already-open transaction (<code>DbContextFactory.cs:51-66</code>). Because there can
+          be more than one physical source in play, <code>ExecuteInTransactionAsync</code> runs the operation under the first
+          transactional context&#39;s execution strategy, opens a transaction per source, and commits them
+          sequentially with no two-phase commit (<code>DbContextFactory.cs:296-357</code>); cross-source consistency is the
+          outbox&#39;s job. A returned failed <a href="group-01-result-error-handling.html#result"><code>Result</code></a> rolls back exactly
+          like an exception (<code>DbContextFactory.cs:314-321</code>), which is what makes ADR-013&#39;s Result-over-exceptions
+          rule safe for partial persistence, and rollback also drops the deferred event dispatch
+          (<code>DbContextFactory.cs:265-276</code>). <code>DbContextFactory</code> further carries the <code>SET IDENTITY_INSERT</code> machinery
+          (<a href="#identityinsertgroup"><code>IdentityInsertGroup</code></a> at <code>DbContextFactory.cs:240</code>, the save split at
+          <code>131-191</code>) for importing entities with explicit database-generated ids one table at a time, and the
+          <code>MigrateAsync</code> / <code>HasPendingMigrationsAsync</code> sweeps over every SQL Server source in use
+          (<code>DbContextFactory.cs:361-377</code>).</p>
+          <p><a href="#unitofwork"><code>UnitOfWork</code></a> sits on top, resolving an entity&#39;s physical source through
+          <a href="#idatasourceservice"><code>IDataSourceService</code></a>, handing the matching context to the factory, and caching the
+          resulting repository per closed generic interface type (<code>UnitOfWork.cs:33-66</code>). The physical creation
+          itself runs through <a href="#physicaldbcontextfactory"><code>PhysicalDbContextFactory</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/PhysicalDbContextFactory.cs:16</code>),
-          a singleton that constructs the right engine&#39;s context and which the doc comment warns must <strong>never</strong> be
-          pooled, because each instance carries per-source state that pooling would smear across databases
-          (<code>PhysicalDbContextFactory.cs:9-14</code>). The interfaces (<a href="#iunitofwork"><code>IUnitOfWork</code></a>,
+          a singleton that switches on the key&#39;s engine to construct the right context class
+          (<code>PhysicalDbContextFactory.cs:34-45</code>) and whose doc comment warns it must <strong>never</strong> be pooled, because
+          each instance carries per-source constructor state that pooling would smear across databases
+          (<code>PhysicalDbContextFactory.cs:10-14</code>). Three thin adapters
+          (<a href="#defaultsqlserverdbcontextfactory"><code>DefaultSqlServerDbContextFactory</code></a>,
+          <a href="#defaultsqlitedbcontextfactory"><code>DefaultSqliteDbContextFactory</code></a>,
+          <a href="#defaultcosmosdbcontextfactory"><code>DefaultCosmosDbContextFactory</code></a>, all in
+          <code>.../Factory/DefaultEngineDbContextFactories.cs:13-37</code>) preserve EF&#39;s <code>IDbContextFactory&lt;TContext&gt;</code> DI
+          surface for the Default source, and <a href="#applicationdbcontexteffactory"><code>ApplicationDbContextEFFactory</code></a>
+          (<code>.../Factory/ApplicationDbContextEFFactory.cs:14</code>) picks among them from the <code>DefaultDataSource</code> or
+          <code>DataSource</code> configuration key. The interfaces (<a href="#iunitofwork"><code>IUnitOfWork</code></a>,
           <a href="#idbcontextfactory"><code>IDbContextFactory</code></a>, <a href="#iphysicaldbcontextfactory"><code>IPhysicalDbContextFactory</code></a>,
           <a href="#irepositoryfactory"><code>IRepositoryFactory</code></a>) keep the application layer talking to abstractions.</p>
           <h2 id="routing-an-entity-to-its-database">Routing an entity to its database</h2>
           <p>The heart of ADR-006 is that every entity resolves to a <a href="#datasourcekey"><code>DataSourceKey</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/DataSourceKey.cs:15</code>), a
-          <code>(Engine, Name)</code> pair where the <a href="#datasource"><code>DataSource</code></a> engine
+          <code>(Engine, Name)</code> record struct where the <a href="#datasource"><code>DataSource</code></a> engine
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IDataSourceService.cs:6</code>) is
-          one of SQL Server, Cosmos, or SQLite, and <code>Name</code> is a <strong>physical</strong> database name. Two layers compute
-          this. <a href="#datasourceresolver"><code>DataSourceResolver</code></a>
+          one of Cosmos DB, SQLite, or SQL Server, and <code>Name</code> is a <strong>physical</strong> database name defaulting to
+          <code>&quot;Default&quot;</code> (<code>DataSourceKey.cs:18-23</code>). Two layers compute this. <a href="#datasourceresolver"><code>DataSourceResolver</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:13</code>),
-          a singleton, builds the logical-to-physical map once from configuration: named sources whose connection
-          string matches (or is absent from) the top-level <code>ConnectionStrings</code> value <strong>collapse onto the <code>Default</code>
+          a singleton, builds the logical-to-physical map once per engine from configuration: named sources with no
+          connection string, or whose connection identity equals the top-level one, <strong>collapse onto the <code>Default</code>
           source</strong>, so a host with no <code>DataSources</code> section behaves exactly like a single-database monolith
-          (<code>DataSourceResolver.cs:90-135</code>), and sources sharing a connection collapse to one physical key. It
-          fails fast when two logical names collapsing to one database declare conflicting migrations assemblies
-          (<code>DataSourceResolver.cs:229-249</code>). <a href="#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a>
+          (<code>DataSourceResolver.cs:94-135</code>), and sources sharing a connection identity collapse onto one canonical
+          key named after their alphabetically-first member (<code>DataSourceResolver.cs:172-210</code>). It fails fast when
+          two logical names collapsing to one database declare conflicting migrations assemblies
+          (<code>DataSourceResolver.cs:229-249</code>) and logs a warning when a separate SQL Server source falls back to the
+          Default migrations assembly (<code>DataSourceResolver.cs:185-192</code>).
+          <a href="#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/EntityDataSourceRegistry.cs:21</code>),
-          also a singleton, scans the configuration assemblies up front and maps each entity to its physical key,
-          deriving the engine from the <code>[UseDataSource]</code> attribute and the logical name from
-          <code>[UseDatabase]</code> or the module namespace via <a href="#namespaceconventions"><code>NamespaceConventions</code></a><code>.GetModuleName</code>
-          (<code>EntityDataSourceRegistry.cs:164-177</code>). It caches an immutable <a href="#snapshot"><code>Snapshot</code></a>
-          (<code>EntityDataSourceRegistry.cs:25</code>), rescans once on a miss to pick up late-loaded module assemblies, and
-          rejects an entity claimed by two different sources (<code>EntityDataSourceRegistry.cs:134-142</code>). Because the
-          registry reads the same attributes the model configuration reads, routing and model contents agree by
-          construction. <a href="#datasourceservice"><code>DataSourceService</code></a>
+          also a singleton, scans the configuration assemblies and maps each entity to its physical key, deriving
+          the engine from the <code>[UseDataSource]</code> attribute on the <strong>configuration class</strong> and the logical name from
+          <code>[UseDatabase]</code>, the entity&#39;s module namespace via <a href="#namespaceconventions"><code>NamespaceConventions</code></a><code>.GetModuleName</code>,
+          or <code>Default</code> (<code>EntityDataSourceRegistry.cs:164-177</code>). It caches an immutable <a href="#snapshot"><code>Snapshot</code></a>
+          of frozen collections (<code>EntityDataSourceRegistry.cs:25</code>), rescans once on a lookup miss when the assembly
+          set changed so late-loaded module assemblies are picked up (<code>:91-106</code>), and rejects an entity claimed by
+          two different sources (<code>:134-145</code>). Because the registry reads the same attributes the model
+          configuration reads, routing and model contents agree by construction, and configurations that implement
+          a provider interface directly without the attributed base classes are deliberately skipped as legacy
+          (<code>:155-170</code>). <a href="#datasourceservice"><code>DataSourceService</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/DataSourceService.cs:12</code>) is the thin
-          application-facing facade over the registry, and it answers the one question navigation loading needs:
-          whether two entities share a physical database on a relational engine, and therefore support EF
-          <code>.Include()</code> (<code>DataSourceService.cs:31-38</code>).</p>
-          <p>The reason routing can be lazy and attribute-driven and still produce a valid EF model is
-          <a href="#crossdatasourcedegradeconvention"><code>CrossDataSourceDegradeConvention</code></a>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/CrossDataSourceDegradeConvention.cs:34</code>),
-          a model-finalizing convention the base context adds (<code>ApplicationDbContext.cs:115-116</code>). When a
-          relationship&#39;s two ends live in different physical sources, it removes the foreign-key constraint (a
-          database cannot enforce an FK into another database), keeps the scalar FK columns plus a compensating
-          index, ignores the CLR navigation members, and drops the foreign entity types out of this database&#39;s
-          model entirely (<code>CrossDataSourceDegradeConvention.cs:39-90</code>). Runtime navigation across sources then
-          flows through the <a href="group-11-navigation-populators.html#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;in TEntity&gt;</code></a>
-          batch-loading machinery in <a href="group-11-navigation-populators.html">Group 11</a>, and consistency across sources
-          is the outbox&#39;s job. Crucially, when every entity collapses onto one physical source (the monolith
-          case), nothing is foreign and the convention is a structural no-op, the model is byte-identical to the
-          single-database model. That is the property that lets the same codebase run as a monolith today and as
-          split services later without a rewrite, the core <code>[Rubric §7, Microservices Readiness]</code> claim.</p>
+          application-facing facade over <a href="#ientitydatasourceregistry"><code>IEntityDataSourceRegistry</code></a>, and it answers
+          the one question navigation loading needs: two entities support EF <code>.Include()</code> only when their physical
+          keys are equal and the engine is not Cosmos (<code>DataSourceService.cs:31-38</code>).</p>
+          <h2 id="two-model-finalizing-conventions">Two model-finalizing conventions</h2>
+          <p>The base context adds both of its conventions in <code>ConfigureConventions</code> (<code>ApplicationDbContext.cs:137-152</code>),
+          and each exists because a cross-cutting policy above would otherwise produce an invalid or surprising
+          model. <a href="#crossdatasourcedegradeconvention"><code>CrossDataSourceDegradeConvention</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/CrossDataSourceDegradeConvention.cs:33</code>,
+          added at <code>ApplicationDbContext.cs:146</code>) is what lets routing be lazy and attribute-driven and still
+          produce a valid EF model. When a relationship&#39;s two ends live in different physical sources it removes
+          the foreign key (a database cannot enforce an FK into another database), keeps the declared scalar FK
+          columns plus a compensating index unless an existing index already covers them as a prefix, ignores the
+          CLR navigation members, and drops the foreign entity types out of this database&#39;s model entirely
+          (<code>CrossDataSourceDegradeConvention.cs:38-89</code>, <code>107-138</code>). It works through EF&#39;s <strong>mutable</strong> model API
+          rather than convention builders, because the soft-delete and concurrency helpers have already promoted
+          every entity type to the Explicit configuration source (<code>:22-24</code>, <code>:44-46</code>), and it skips the
+          compensating index on Cosmos, which auto-indexes everything and rejects explicit index definitions
+          (<code>:65</code>, <code>:96-105</code>). Runtime navigation across sources then flows through the
+          <a href="group-11-navigation-populators.html#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;in TEntity&gt;</code></a>
+          batch-loading machinery in <a href="group-11-navigation-populators.html">Group 11</a>. Crucially, when every entity
+          collapses onto one physical source (the monolith case) nothing is foreign and the convention returns
+          early (<code>:52-55</code>), so the model is identical to the single-database model. That is the property that lets
+          the same codebase run as a monolith today and as split services later without a rewrite, the core
+          <code>[Rubric §7, Microservices Readiness]</code> claim.</p>
+          <p><a href="#softdeleteuniqueindexconvention"><code>SoftDeleteUniqueIndexConvention</code></a>
+          (<code>.../Conventions/SoftDeleteUniqueIndexConvention.cs:24</code>, added at <code>ApplicationDbContext.cs:151</code>) closes
+          a smaller but sharper hole. Soft-delete hides a row from queries, but a plain unique index still enforces
+          uniqueness against it, so &quot;deleting&quot; a speaker would permanently block re-creating one with the same
+          email. The convention appends an <code>IsDeleted = 0</code> filter to every unique index on a soft-deletable entity,
+          in provider-correct syntax (bracketed for SQL Server, quoted for SQLite), leaves hand-authored filters
+          untouched, and no-ops for Cosmos (<code>SoftDeleteUniqueIndexConvention.cs:33-56</code>). Both conventions run at
+          model finalization, after module configurations have declared their indexes and after EF&#39;s own
+          relationship discovery, which is why they can see the finished picture.</p>
           <h2 id="entity-configuration-and-engine-portability">Entity configuration and engine portability</h2>
-          <p>Concrete entity configurations derive from the engine-aware <a href="#entitytypeconfigurationtentity-tidentifiertype"><code>EntityTypeConfiguration&lt;TEntity, TIdentifierType&gt;</code></a>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfiguration.cs:29</code>)
-          or, more commonly, one of the fixed-engine shims like <a href="#entitytypeconfigurationsqlservertentity-tidentifiertype"><code>EntityTypeConfigurationSQLServer&lt;TEntity, TIdentifierType&gt;</code></a>
-          (<code>.../EntityTypeConfigurationSQLServer.cs:18</code>), which is just that base annotated
-          <code>[UseDataSource(DataSource.SQLServer)]</code>. The base reads that attribute and applies the engine&#39;s
-          conventions in <code>ApplyEngineConventions</code> (<code>EntityTypeConfiguration.cs:58-100</code>): SQL Server gets a table
-          in a module schema, SQLite a plain table, Cosmos a per-module container with the entity id as partition
-          key, and each maps key generation according to the entity&#39;s
+          <p>Concrete entity configurations derive from the engine-aware
+          <a href="#entitytypeconfigurationtentity-tidentifiertype"><code>EntityTypeConfiguration&lt;TEntity, TIdentifierType&gt;</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfiguration.cs:28</code>)
+          or, more commonly, one of the fixed-engine shims like
+          <a href="#entitytypeconfigurationsqlservertentity-tidentifiertype"><code>EntityTypeConfigurationSQLServer&lt;TEntity, TIdentifierType&gt;</code></a>
+          (<code>.../EntityTypeConfigurationSQLServer.cs:17</code>), which is that base annotated
+          <code>[UseDataSource(DataSource.SQLServer)]</code>. The base reads the attribute off its own runtime type and throws
+          a clear error when it is missing (<code>EntityTypeConfiguration.cs:43-47</code>), then applies the engine&#39;s
+          conventions in <code>ApplyEngineConventions</code> (<code>:57-99</code>): SQL Server gets a table in a module schema, SQLite a
+          plain table, Cosmos a per-module container with the entity id as partition key, and each maps key
+          generation according to the entity&#39;s
           <a href="group-02-domain-building-blocks.html#entitytypeextensions"><code>EntityTypeExtensions</code></a><code>.IsIdValueGenerated</code>
-          marker (<code>ValueGeneratedOnAdd</code> for database identity, or the <a href="#cosmosintidvaluegenerator"><code>CosmosIntIdValueGenerator</code></a>
-          for Cosmos, which has no server-side identity). Because the engine is a single attribute and every
-          configuration implements all three provider marker interfaces, <strong>moving an entity between engines is a
-          one-line attribute change with no configuration-body edits</strong>, the framework strips relational-only
-          constructs and degrades cross-source relationships automatically. The shared
-          <a href="#entitytypeconfigurationbasetentity-tidentifiertype"><code>EntityTypeConfigurationBase&lt;TEntity, TIdentifierType&gt;</code></a>
+          marker (<code>ValueGeneratedOnAdd</code> for database identity, <code>ValueGeneratedNever</code> otherwise, or the
+          <a href="#cosmosintidvaluegenerator"><code>CosmosIntIdValueGenerator</code></a> for Cosmos, which has no server-side identity
+          and increments a process-level counter seeded from the Unix timestamp,
+          <code>.../ValueGenerators/CosmosIntIdValueGenerator.cs:16-25</code>). Because the engine is a single attribute and
+          the base implements all three provider marker interfaces
+          (<a href="#ientitytypeconfigurationsqlservertentity-tidentifiertype"><code>IEntityTypeConfigurationSQLServer&lt;TEntity, TIdentifierType&gt;</code></a>,
+          <a href="#ientitytypeconfigurationsqlitetentity-tidentifiertype"><code>IEntityTypeConfigurationSqlite&lt;TEntity, TIdentifierType&gt;</code></a>,
+          <a href="#ientitytypeconfigurationcosmostentity-tidentifiertype"><code>IEntityTypeConfigurationCosmos&lt;TEntity, TIdentifierType&gt;</code></a>,
+          all over the common <a href="#ientitytypeconfigurationbasetentity-tidentifiertype"><code>IEntityTypeConfigurationBase&lt;TEntity, TIdentifierType&gt;</code></a>),
+          <strong>moving an entity between engines is a one-line attribute change with no configuration-body edits</strong>. The
+          shared <a href="#entitytypeconfigurationbasetentity-tidentifiertype"><code>EntityTypeConfigurationBase&lt;TEntity, TIdentifierType&gt;</code></a>
           (<code>.../EntityTypeConfigurationBase.cs:19</code>) handles the one universal concern: excluding the in-memory
-          <code>DomainEvents</code> collection from mapping (<code>EntityTypeConfigurationBase.cs:29-32</code>). This engine-portability
-          design is ADR-018 (polyglot persistence); note the current-reality caveat: the SQLite and Cosmos plumbing
-          is shipped and tested, but SQL Server is the only engine backing production entities today.</p>
-          <h2 id="encryption-conventions-seeding-and-design-time">Encryption, conventions, seeding, and design time</h2>
-          <p>A handful of supporting pieces round out the group. <a href="#encryptedstringconverter"><code>EncryptedStringConverter</code></a>
+          <code>DomainEvents</code> collection from mapping (<code>:29-32</code>). Discovery runs through
+          <a href="#modelbuilderextensions"><code>ModelBuilderExtensions</code></a><code>.ApplyAllConfigurations</code>
+          (<code>.../DbContexts/ModelBuilderExtensions.cs:10</code>), which the base calls with an entity filter so each
+          database&#39;s model receives only its own entities (<code>ApplicationDbContext.cs:276-303</code>), over the assemblies
+          supplied by <a href="#ientityconfigurationassemblyprovider"><code>IEntityConfigurationAssemblyProvider</code></a> and its
+          <a href="#defaultentityconfigurationassemblyprovider"><code>DefaultEntityConfigurationAssemblyProvider</code></a> implementation
+          (configured through <a href="#entityconfigurationoptions"><code>EntityConfigurationOptions</code></a>). Two configurations ship
+          inside the framework itself, <a href="#pushnotificationconfiguration"><code>PushNotificationConfiguration</code></a> and
+          <a href="#usernotificationconfiguration"><code>UserNotificationConfiguration</code></a>
+          (<code>.../Configuration/EntityTypeConfiguration/Notifications/*.cs:15</code>), both tagged <code>[UseDatabase(&quot;Notification&quot;)]</code>
+          and re-declaring the <code>Notification</code> schema because namespace derivation would otherwise resolve them to
+          <code>Common</code>. This engine-portability design is ADR-018 (polyglot persistence); note the current-reality
+          caveat: the SQLite and Cosmos plumbing is shipped and tested, but SQL Server is the only engine backing
+          production entities today.</p>
+          <h2 id="encryption-seeding-design-time-and-the-shared-helpers">Encryption, seeding, design time, and the shared helpers</h2>
+          <p>A handful of supporting pieces round out the EF side. <a href="#encryptedstringconverter"><code>EncryptedStringConverter</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Encryption/EncryptedStringConverter.cs:28</code>)
-          is an EF value converter that transparently encrypts a string column with authenticated AES-256-GCM (a
-          random 12-byte nonce, a 128-bit tag, stored Base64 as <code>nonce+ciphertext+tag</code>), taking a caller-supplied
-          32-byte key (<code>EncryptedStringConverter.cs:40-58</code>). It is the <code>[Rubric §11, Security]</code> control that
+          is a value converter that transparently encrypts a string column with authenticated AES-256-GCM (a random
+          12-byte nonce, a 16-byte tag, stored Base64 as nonce plus ciphertext plus tag), rejecting any key that is
+          not exactly 32 bytes (<code>:30-52</code>, <code>:60-80</code>). It is the <code>[Rubric §11, Security]</code> control that
           <a href="group-02-domain-building-blocks.html#ianonymizable"><code>IAnonymizable</code></a> points at for fields that must remain
           retrievable after erasure. Its current reality matches ADR-037: it is shipped and unit-tested but
-          <strong>unadopted</strong>, no entity configuration wires it yet. On the read side,
-          <a href="#iqueryableexecutor"><code>IQueryableExecutor</code></a> and its EF implementation <a href="#efqueryableexecutor"><code>EFQueryableExecutor</code></a>
-          abstract async query materialization so higher layers (specification evaluation, the query service in
-          <a href="group-03-querying-specifications.html">Group 03</a>) can execute an <code>IQueryable</code> without referencing EF
-          directly. <a href="#profilinghelper"><code>ProfilingHelper</code></a> and <a href="#modelbuilderextensions"><code>ModelBuilderExtensions</code></a>
-          are the small internal utilities that apply configurations across assemblies and light up MiniProfiler,
-          configured through <a href="#entityconfigurationoptions"><code>EntityConfigurationOptions</code></a> and the
-          <a href="#defaultentityconfigurationassemblyprovider"><code>DefaultEntityConfigurationAssemblyProvider</code></a> (with
-          <a href="#ientityconfigurationassemblyprovider"><code>IEntityConfigurationAssemblyProvider</code></a> as its contract).</p>
+          <strong>unadopted</strong>, no entity configuration wires it (the only non-test references are its own file and the
+          <code>IAnonymizable</code> doc comment). On the read side, <a href="#iqueryableexecutor"><code>IQueryableExecutor</code></a> and its
+          implementation <a href="#efqueryableexecutor"><code>EFQueryableExecutor</code></a>
+          (<code>.../Persistence/EFQueryableExecutor.cs:11</code>) abstract async query materialization so higher layers can
+          execute an <code>IQueryable</code> without referencing EF, detecting a real EF query by its <code>IAsyncEnumerable&lt;T&gt;</code>
+          implementation and degrading to LINQ-to-Objects otherwise (<code>EFQueryableExecutor.cs:45</code>). That is what
+          makes the specification evaluation in <a href="group-03-querying-specifications.html">Group 03</a> unit-testable
+          without a database, a small but real <code>[Rubric §14, Testability]</code> win.
+          <a href="#profilinghelper"><code>ProfilingHelper</code></a> (<code>.../Persistence/ProfilingHelper.cs:9</code>) is the MiniProfiler
+          step wrapper the repository decorators share.</p>
           <p>Seeding and design time close the loop. <a href="#idbseeder"><code>IDbSeeder</code></a> and the <a href="#dbseeder"><code>DbSeeder</code></a> base
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Seeding/DbSeeder.cs:7</code>) give
-          module seeders a <code>GetId&lt;T&gt;</code> helper that maps integer seed ids to either <code>int</code> or a deterministic <code>Guid</code>
-          so seed data reproduces across key strategies (<code>DbSeeder.cs:20-39</code>). For migrations,
+          module seeders a <code>GetId&lt;TIdentifier&gt;</code> helper that maps integer seed ids to either <code>int</code> or a deterministic
+          <code>Guid</code> so seed data reproduces across key strategies (<code>DbSeeder.cs:22-40</code>). For migrations,
           <a href="#designtimedbcontexthelper"><code>DesignTimeDbContextHelper</code></a>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:34</code>)
-          builds a <a href="#sqlserverdbcontext"><code>SQLServerDbContext</code></a> for <code>dotnet ef</code> without the app&#39;s DI container: a
-          downstream migrations project writes a few-line <code>IDesignTimeDbContextFactory</code>, and
-          <code>dotnet ef migrations add X -- --datasource Conference</code> selects which physical source to build against,
-          so each database gets its own migrations project. It composes minimal stand-ins (<a href="#explicitassemblyprovider"><code>ExplicitAssemblyProvider</code></a>,
-          <a href="#nulldomaineventdispatcher"><code>NullDomainEventDispatcher</code></a>) and a <a href="#designtimedbcontextoptions"><code>DesignTimeDbContextOptions</code></a>
-          carrying the connection settings, then wires the same <a href="#datasourceresolver"><code>DataSourceResolver</code></a> and
-          <a href="#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a> the runtime uses so a design-time model matches
-          the runtime one (<code>DesignTimeDbContextHelper.cs:43-81</code>).</p>
+          (<code>.../DbContexts/Design/DesignTimeDbContextHelper.cs:34</code>) builds a
+          <a href="#sqlserverdbcontext"><code>SQLServerDbContext</code></a> for <code>dotnet ef</code> without the app&#39;s DI container: a downstream
+          migrations project writes a few-line <code>IDesignTimeDbContextFactory</code>, and
+          <code>dotnet ef migrations add X -- --datasource Conference</code> selects which physical source to build against
+          (<code>:86-104</code>), so each database gets its own migrations project. It composes minimal stand-ins
+          (<a href="#explicitassemblyprovider"><code>ExplicitAssemblyProvider</code></a> at <code>:106</code>,
+          <a href="#nulldomaineventdispatcher"><code>NullDomainEventDispatcher</code></a> at <code>:111</code>) and a
+          <a href="#designtimedbcontextoptions"><code>DesignTimeDbContextOptions</code></a> carrying the connection settings, then wires
+          the same <a href="#datasourceresolver"><code>DataSourceResolver</code></a> and <a href="#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a>
+          the runtime uses so the design-time model matches the runtime one (<code>:43-81</code>).</p>
+          <h2 id="blobs-images-and-native-push">Blobs, images, and native push</h2>
+          <p>The group also carries the storage-adjacent infrastructure services that are not EF at all, each behind
+          an Application-layer interface with a null default so a host that has not configured the backend still
+          starts and degrades cleanly. <a href="#ifilestorageservice"><code>IFileStorageService</code></a>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IFileStorageService.cs:11</code>)
+          stores and deletes blobs behind a <a href="group-01-result-error-handling.html#result"><code>Result</code></a>-returning API and
+          exposes an <code>IsConfigured</code> flag handlers can gate features on;
+          <a href="#azureblobfilestorageservice"><code>AzureBlobFileStorageService</code></a>
+          (<code>.../Services/AzureBlobFileStorageService.cs:15</code>) is the Azure implementation over a single
+          pre-provisioned container, and <a href="#nullfilestorageservice"><code>NullFileStorageService</code></a>
+          (<code>.../Services/NullFileStorageService.cs:11</code>) fails uploads with a named error while letting deletes
+          succeed. <a href="#iimageprocessor"><code>IImageProcessor</code></a> and <a href="#imagesharpimageprocessor"><code>ImageSharpImageProcessor</code></a>
+          (<code>.../Services/ImageSharpImageProcessor.cs:14</code>) normalize untrusted uploads by decoding, baking in the
+          EXIF orientation, center-cropping to a square, stripping all metadata, and re-encoding as JPEG, so only
+          pixels survive; the dependency-free <a href="#imagecontentsniffer"><code>ImageContentSniffer</code></a>
+          (<code>.../Interfaces/Infrastructure/ImageContentSniffer.cs:10</code>) is its upload-side companion, deciding the
+          accepted formats from magic bytes rather than the client-declared content type. Both are ADR-045, and
+          both are squarely <code>[Rubric §11, Security]</code> (EXIF GPS is PII, and a full re-encode is the defense against
+          polyglot payloads). On the push side, <a href="#inativepushsender"><code>INativePushSender</code></a> and
+          <a href="#ipushdeviceregistrar"><code>IPushDeviceRegistrar</code></a> describe OS-level delivery and the device-installation
+          registry that backs it (ADR-044), implemented by
+          <a href="#azurenotificationhubnativepushsender"><code>AzureNotificationHubNativePushSender</code></a>
+          (<code>.../Services/AzureNotificationHubNativePushSender.cs:14</code>) and
+          <a href="#azurenotificationhubdeviceregistrar"><code>AzureNotificationHubDeviceRegistrar</code></a>
+          (<code>.../Services/AzureNotificationHubDeviceRegistrar.cs:15</code>) over Azure Notification Hubs, with
+          <a href="#nullnativepushsender"><code>NullNativePushSender</code></a> and <a href="#nullpushdeviceregistrar"><code>NullPushDeviceRegistrar</code></a>
+          as the unconfigured defaults. <a href="#nativepushpayloads"><code>NativePushPayloads</code></a>
+          (<code>.../Services/NativePushPayloads.cs:10</code>) is the pure helper that builds the FCM v1 and APNs payload
+          shapes and chunks user tags at the hub&#39;s 20-tag expression cap (<code>NativePushPayloads.cs:13</code>), which is
+          what makes those rules unit-testable without a hub. This channel sits beside the persisted notification
+          record and the SignalR path in <a href="group-10-notifications.html">Group 10</a>.</p>
           <h2 id="where-this-group-sits">Where this group sits</h2>
           <p>Persistence is the concrete floor the abstract domain stands on. The entity bases and audit contracts
           from <a href="group-02-domain-building-blocks.html">Group 02</a> are what the interceptors stamp and the query filters
           hide; the domain events aggregates raise are what <a href="#domaineventsavechangesinterceptor"><code>DomainEventSaveChangesInterceptor</code></a>
-          drains into the outbox that <a href="group-04-events-outbox.html">Group 04</a> delivers; the specifications and query
-          service in <a href="group-03-querying-specifications.html">Group 03</a> run through this group&#39;s repositories and
-          <code>IQueryable</code> surfaces; the navigation populators in <a href="group-11-navigation-populators.html">Group 11</a> fill
-          the cross-source gaps this group&#39;s degrade convention opens; and the entity-source registry answers the
-          <code>.Include()</code> questions those populators ask. The design axes here are two orthogonal ones, ADR-006&#39;s
-          <code>Name</code> axis (which database) and ADR-018&#39;s <code>Engine</code> axis (which storage technology), collapsed behind a
-          single <a href="#datasourcekey"><code>DataSourceKey</code></a> so application code never has to know which it is running on.
-          Read this group as the answer to one question the rest of the guide keeps asking: how does a framework
-          that describes persistence in pure domain terms actually put a row in a database, and do it in a way that
-          survives a module being pulled out into its own service.</p>
+          drains into the outbox that <a href="group-04-events-outbox.html">Group 04</a> delivers; the transactional decorator in
+          <a href="group-05-cqrs-pipeline.html">Group 05</a> is what opens the transaction whose commit releases the deferred
+          dispatch; the specifications and query service in <a href="group-03-querying-specifications.html">Group 03</a> run
+          through this group&#39;s repositories and <code>IQueryable</code> surfaces; the navigation populators in
+          <a href="group-11-navigation-populators.html">Group 11</a> fill the cross-source gaps the degrade convention opens;
+          and the entity-source registry answers the <code>.Include()</code> questions those populators ask. The design axes
+          here are two orthogonal ones, ADR-006&#39;s <code>Name</code> axis (which database) and ADR-018&#39;s <code>Engine</code> axis (which
+          storage technology), collapsed behind a single <a href="#datasourcekey"><code>DataSourceKey</code></a> so application code never
+          has to know which it is running on. Read this group as the answer to one question the rest of the guide
+          keeps asking: how does a framework that describes persistence in pure domain terms actually put a row in a
+          database, and do it in a way that survives a module being pulled out into its own service.</p>
           <h3 id="datasource">DataSource</h3>
           <blockquote>
           <p>MMCA.Common.Application · <code>MMCA.Common.Application.Interfaces.Infrastructure</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IDataSourceService.cs:6</code> · Level 0 · enum</p>
@@ -569,7 +691,7 @@
           with a clear error, until a host calls <code>AddAzureBlobFileStorage(configuration)</code> with a complete
           <code>FileStorage</code> section. Returning <a href="group-01-result-error-handling.html#result"><code>Result</code></a> rather than
           throwing keeps a failed upload on the same error-flow rails as the rest of the stack (see the
-          <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">Result pattern</a>).</li>
+          <span class="doc-deadlink" title="Reference outside the published set">Result pattern</span>).</li>
           <li><strong>Walkthrough</strong>: one property and two methods.<ul>
           <li><code>IsConfigured</code> (<code>IFileStorageService.cs:14</code>): whether a real store is wired, so a handler can gate
           a feature on it rather than attempt a doomed upload.</li>
@@ -877,7 +999,7 @@
           <code>[Rubric §3, Clean Architecture]</code>.</li>
           <li><strong>Where it&#39;s used</strong>: injected into every write command handler; used by the transactional command
           decorator (the CQRS pipeline, taught in the
-          <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer</a>).</li>
+          <span class="doc-deadlink" title="Reference outside the published set">primer</span>).</li>
           </ul>
           <h3 id="entityconfigurationoptions">EntityConfigurationOptions</h3>
           <blockquote>
@@ -1572,7 +1694,7 @@
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: a pure helper that builds the platform-native JSON bodies (FCM v1 for Android, APNs for Apple) and the <code>user:{id}</code> OR-tag expressions that an Azure Notification Hubs send needs. It holds no state and touches no hub, so the payload shapes and the tag-chunking rule are unit-testable in isolation (<code>NativePushPayloads.cs:5-10</code>).</li>
-          <li><strong>Depends on</strong>: the BCL only: <code>System.Text.Json.JsonSerializer</code> for the payload strings, <code>Enumerable.Chunk</code> for the OR-expression batching, and the <code>UserIdentifierType</code> alias (see <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a>) for the user-tag input.</li>
+          <li><strong>Depends on</strong>: the BCL only: <code>System.Text.Json.JsonSerializer</code> for the payload strings, <code>Enumerable.Chunk</code> for the OR-expression batching, and the <code>UserIdentifierType</code> alias (see <span class="doc-deadlink" title="Reference outside the published set">primer §2</span>) for the user-tag input.</li>
           <li><strong>Concept introduced, native push payload construction and the 20-tag chunk rule.</strong> <code>[Rubric §7, Microservices Readiness]</code> assesses whether cross-cutting delivery mechanics live behind a reusable, transport-specific boundary rather than smeared through handlers; here the exact wire shapes of two third-party push protocols are pinned in one place. Azure Notification Hubs caps a single tag expression at 20 tags (<code>MaxTagsPerExpression</code>, <code>NativePushPayloads.cs:13</code>), so a user-targeted broadcast to a large audience is split into <code>Chunk(20)</code> groups, each rendered as a <code>user:a || user:b || ...</code> OR-expression (<code>NativePushPayloads.cs:59-63</code>). That cap is a real hub limit, not an arbitrary batch size, which is why it is a named constant the sender reuses rather than a literal.</li>
           <li><strong>Walkthrough</strong>: <code>BuildFcmV1Payload</code> (<code>NativePushPayloads.cs:16-28</code>) nests a <code>notification</code> block of <code>title</code>/<code>body</code> under a <code>message</code> envelope, adding a <code>data</code> map only when metadata is non-empty (<code>{ Count: &gt; 0 }</code> pattern, line 22). <code>BuildApnsPayload</code> (<code>NativePushPayloads.cs:31-53</code>) builds the APNs <code>aps.alert</code> block, then copies each metadata pair up to the top level as a custom key while explicitly refusing to overwrite the reserved <code>aps</code> key (<code>NativePushPayloads.cs:44-49</code>). <code>BuildUserTagExpressions</code> (<code>NativePushPayloads.cs:59-63</code>) maps each id through <code>UserTag</code>, chunks, and joins. <code>UserTag</code> (<code>NativePushPayloads.cs:66-67</code>) formats <code>user:{userId}</code> under <code>InvariantCulture</code> via <code>string.Create</code>, so a numeric id never picks up a locale-specific separator.</li>
           <li><strong>Why it&#39;s built this way</strong>: keeping the payload shapes and the hub&#39;s tag cap in a stateless helper (ADR-044) means the <a href="#azurenotificationhubnativepushsender"><code>AzureNotificationHubNativePushSender</code></a> stays a thin adapter and the fiddly JSON/tag rules can be proven correct without a live hub or credentials.</li>
@@ -1615,6 +1737,24 @@
           <li><strong>Why it&#39;s built this way</strong>: ADR-044 gives the framework three notification channels; a no-op default keeps the native channel optional so a host that never configures a hub still composes and runs.</li>
           <li><strong>Where it&#39;s used</strong>: registered as the default <code>INativePushSender</code>; paired with <a href="#nullpushdeviceregistrar"><code>NullPushDeviceRegistrar</code></a>, the no-op registrar for the same disabled-hub scenario.</li>
           </ul>
+          <h3 id="softdeleteuniqueindexconvention">SoftDeleteUniqueIndexConvention</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Conventions</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/SoftDeleteUniqueIndexConvention.cs:24</code> · Level 1 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: an EF Core <strong>model-finalizing convention</strong> that appends an <code>IsDeleted = 0</code> filter to every unique index on a soft-deletable entity type, so a soft-deleted row stops occupying its unique slot (<code>SoftDeleteUniqueIndexConvention.cs:10-24</code>).</li>
+          <li><strong>Depends on</strong>: <a href="group-02-domain-building-blocks.html#iauditableentity"><code>IAuditableEntity</code></a> (the soft-delete marker it tests for) and the <a href="#datasource"><code>DataSource</code></a> engine enum; externally, EF Core&#39;s convention metadata API (<code>IModelFinalizingConvention</code>, <code>IConventionModelBuilder</code>, <code>IConventionEntityType</code>, <code>IConventionIndex</code>).</li>
+          <li><strong>Concept introduced, filtered (partial) unique indexes as the database half of soft delete.</strong> <code>[Rubric §8, Data Architecture]</code> assesses whether the storage model actually enforces the semantics the application presents, and <code>[Rubric §16, Maintainability]</code> assesses whether a cross-cutting rule is applied once centrally instead of remembered per entity. Soft delete (see <span class="doc-deadlink" title="Reference outside the published set">primer §2</span>) hides a row behind a global query filter, but the row is still physically present, so a plain unique index keeps rejecting a new record that reuses the deleted one&#39;s value: delete a speaker and that email address stays permanently unusable (<code>SoftDeleteUniqueIndexConvention.cs:11-16</code>). A filtered index solves this by indexing only live rows. Making it a convention means no entity configuration author has to remember the rule.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li>The primary constructor takes the engine of the context being built (<code>SoftDeleteUniqueIndexConvention.cs:24</code>), because filter syntax is provider-specific.</li>
+          <li><code>ProcessModelFinalizing</code> (<code>SoftDeleteUniqueIndexConvention.cs:27-41</code>) null-guards the builder, returns immediately for Cosmos (<code>SoftDeleteUniqueIndexConvention.cs:33-34</code>), then selects every entity type assignable to <code>IAuditableEntity</code> that is not owned (<code>SoftDeleteUniqueIndexConvention.cs:36-37</code>) and processes each.</li>
+          <li><code>ApplyFilterToUniqueIndexes</code> (<code>SoftDeleteUniqueIndexConvention.cs:43-57</code>) resolves the mapped column name for <code>IsDeleted</code>, falling back to the property name when the property is absent (<code>SoftDeleteUniqueIndexConvention.cs:45-46</code>), then builds the SQL literal: bracket-quoted <code>[IsDeleted] = 0</code> for SQL Server, double-quoted <code>&quot;IsDeleted&quot; = 0</code> otherwise (<code>SoftDeleteUniqueIndexConvention.cs:48-50</code>).</li>
+          <li>The loop applies the filter only to indexes that are unique <strong>and</strong> have no filter already (<code>SoftDeleteUniqueIndexConvention.cs:52-56</code>), so a hand-authored filter in an entity configuration always wins.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: running at model finalization guarantees the convention sees every index a module configuration declared, rather than racing declaration order. Cosmos is skipped because it has no partial-index concept; SQL Server and SQLite both support filtered/partial indexes (<code>SoftDeleteUniqueIndexConvention.cs:17-21</code>). Respecting an existing filter keeps the convention additive, never destructive.</li>
+          <li><strong>Where it&#39;s used</strong>: registered per context in <code>ApplicationDbContext.ConfigureConventions</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:151</code>), immediately after <a href="#crossdatasourcedegradeconvention"><code>CrossDataSourceDegradeConvention</code></a>, and it therefore applies to every entity in every module of every host.</li>
+          </ul>
           <h3 id="designtimedbcontextoptions">DesignTimeDbContextOptions</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.DbContexts.Design</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Design/DesignTimeDbContextOptions.cs:11</code> · Level 2 · class (sealed)</p>
@@ -1638,6 +1778,26 @@
           <li><strong>Why it&#39;s built this way</strong>: the design-time service graph is deliberately minimal (null loggers, null dispatcher, a hand-built <code>ServiceCollection</code>) so scaffolding a migration never spins up the app; this type is one leaf of that minimal graph.</li>
           <li><strong>Where it&#39;s used</strong>: registered as the <code>IDomainEventDispatcher</code> inside <code>DesignTimeDbContextHelper.CreateSqlServer</code> (<code>DesignTimeDbContextHelper.cs:66</code>).</li>
           <li><strong>Caveats / not-in-source</strong>: private nested type inside <code>DesignTimeDbContextHelper</code>; not accessible from outside.</li>
+          </ul>
+          <h3 id="crossdatasourcedegradeconvention">CrossDataSourceDegradeConvention</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Conventions</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/CrossDataSourceDegradeConvention.cs:33</code> · Level 3 · class (sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the EF Core <strong>model-finalizing convention</strong> that detects relationships whose two ends resolve to different physical databases and degrades them: the foreign key and its navigations are removed from the model, the declared scalar FK columns survive with a compensating index, and entity types belonging to another source are dropped from this model entirely (<code>CrossDataSourceDegradeConvention.cs:9-33</code>).</li>
+          <li><strong>Depends on</strong>: <a href="#datasourcekey"><code>DataSourceKey</code></a>, <a href="#datasource"><code>DataSource</code></a>, <a href="#ientitydatasourceregistry"><code>IEntityDataSourceRegistry</code></a>; externally EF Core&#39;s metadata API (<code>IModelFinalizingConvention</code>, <code>IMutableModel</code>, <code>IMutableEntityType</code>, <code>IMutableForeignKey</code>, <code>IMutableProperty</code>, <code>IConventionIndex</code>).</li>
+          <li><strong>Concept introduced, automatic cross-database relationship degradation.</strong> <code>[Rubric §8, Data Architecture]</code> assesses the database-per-service consistency strategy, and <code>[Rubric §7, Microservices Readiness]</code> assesses whether the model adapts to the deployment topology without per-entity code. Under database-per-service (ADR-006) a database cannot enforce a foreign key that points into another database, so this convention strips those relationships automatically at model finalization. The scalar column survives (a query can still filter on, say, a <code>UserId</code>), cross-source loading is left to <code>INavigationPopulator</code> batch loading (ADR-002, see <a href="group-11-navigation-populators.html#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;in TEntity&gt;</code></a>), and cross-source consistency is the outbox&#39;s job (<code>CrossDataSourceDegradeConvention.cs:12-21</code>). The closing remark is the load-bearing invariant: when every entity resolves to the same physical source (the monolith-collapse case) nothing is foreign and the convention is a structural no-op, so the collapsed model is identical to the single-database model (<code>CrossDataSourceDegradeConvention.cs:25-29</code>).</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li>The primary constructor takes the <code>contextKey</code> (the physical source whose model is being built) and the <a href="#ientitydatasourceregistry"><code>IEntityDataSourceRegistry</code></a> (<code>CrossDataSourceDegradeConvention.cs:33-35</code>); <code>IsForeign</code> (<code>CrossDataSourceDegradeConvention.cs:91-94</code>) asks the registry for a CLR type&#39;s key and returns true when it differs from <code>contextKey</code>.</li>
+          <li><code>ProcessModelFinalizing</code> (<code>CrossDataSourceDegradeConvention.cs:38-89</code>) casts the model to the <strong>mutable</strong> surface (<code>CrossDataSourceDegradeConvention.cs:46</code>) deliberately: cross-cutting helpers (soft-delete filters, concurrency tokens) promote every entity type to the Explicit configuration source, which convention-sourced builder calls cannot override (<code>CrossDataSourceDegradeConvention.cs:22-24,44-45</code>). It collects the non-owned foreign entity types (<code>CrossDataSourceDegradeConvention.cs:48-50</code>) and returns early when there are none (<code>CrossDataSourceDegradeConvention.cs:52-55</code>).</li>
+          <li>Step 1 (<code>CrossDataSourceDegradeConvention.cs:62-74</code>): for every <em>local</em> dependent it degrades each declared FK pointing at a foreign principal. <code>addCompensatingIndex</code> is false for Cosmos (<code>CrossDataSourceDegradeConvention.cs:65</code>), because Cosmos auto-indexes every property and rejects explicit index definitions; that skip is what makes one configuration body portable to Cosmos without edits (<code>CrossDataSourceDegradeConvention.cs:100-105</code>).</li>
+          <li><code>DegradeForeignKey</code> (<code>CrossDataSourceDegradeConvention.cs:107-138</code>) keeps the non-shadow scalar FK properties, removes the FK (<code>CrossDataSourceDegradeConvention.cs:116</code>), then eagerly drops the convention-created FK index before the coverage check (<code>CrossDataSourceDegradeConvention.cs:123-130</code>), because EF&#39;s deferred event processing would otherwise remove it <em>after</em> the check and leave the column unindexed. It adds a plain index only when <code>HasCoveringIndex</code> (<code>CrossDataSourceDegradeConvention.cs:140-144</code>) finds no existing index covering those columns as a prefix.</li>
+          <li>Step 2 (<code>CrossDataSourceDegradeConvention.cs:79-82</code>): <code>IgnoreForeignMembers</code> (<code>CrossDataSourceDegradeConvention.cs:151-165</code>) removes skip navigations to foreign types and ignores any CLR property whose (collection-unwrapped) type is a foreign entity, so model validation does not later reject an unmapped entity-typed property; <code>UnwrapCollectionElementType</code> (<code>CrossDataSourceDegradeConvention.cs:171-174</code>) handles the <code>List&lt;T&gt;</code> / <code>ICollection&lt;T&gt;</code> case.</li>
+          <li>Step 3 (<code>CrossDataSourceDegradeConvention.cs:84-88</code>): removes the foreign entity types from the model.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: degrading in a convention rather than per-configuration means no module author has to remember to break a cross-service relationship by hand; the same configuration class works whether its module ships inside the monolith or as its own service (ADR-006, ADR-007).</li>
+          <li><strong>Where it&#39;s used</strong>: registered per context in <code>ApplicationDbContext.ConfigureConventions</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:146</code>), just before <a href="#softdeleteuniqueindexconvention"><code>SoftDeleteUniqueIndexConvention</code></a>; <a href="#datasourcemodelcachekeyfactory"><code>DataSourceModelCacheKeyFactory</code></a> (<code>ApplicationDbContext.cs:131</code>) ensures each database caches its own degraded model rather than reusing one built for a different source.</li>
           </ul>
           <h3 id="datasourceservice">DataSourceService</h3>
           <blockquote>
@@ -1723,14 +1883,14 @@
           </ul>
           <h3 id="capturedstate">CapturedState</h3>
           <blockquote>
-          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Interceptors</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:155</code> · Level 2 · record (sealed, private nested)</p>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Interceptors</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:268</code> · Level 2 · record (sealed, private nested)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: a private nested record inside <a href="#domaineventsavechangesinterceptor"><code>DomainEventSaveChangesInterceptor</code></a> that carries the state captured <em>before</em> the save (the tracked aggregate roots, their extracted domain events, and the outbox rows built from them) so it can be consumed <em>after</em> the save completes.</li>
+          <li><strong>What it is</strong>: a private nested record inside <a href="#domaineventsavechangesinterceptor"><code>DomainEventSaveChangesInterceptor</code></a> that carries everything captured <em>before</em> a save so it can be consumed <em>after</em> the save completes: the tracked aggregate roots, the events that are eligible for in-process dispatch, the outbox rows backing those events, and a flag saying whether any integration events were also written.</li>
           <li><strong>Depends on</strong>: <a href="group-02-domain-building-blocks.html#iaggregateroot"><code>IAggregateRoot</code></a> (via <code>EntityEntry&lt;IAggregateRoot&gt;[]</code>), <a href="group-04-events-outbox.html#idomainevent"><code>IDomainEvent</code></a>, <a href="group-04-events-outbox.html#outboxmessage"><code>OutboxMessage</code></a>; <code>Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry&lt;T&gt;</code> (EF Core).</li>
-          <li><strong>Concept introduced, pre-save / post-save state handoff.</strong> <code>[Rubric §6, CQRS &amp; Event-Driven]</code> assesses whether state changes are announced as events with reliable delivery rather than leaked as side effects; here the interceptor runs in two phases (capture before the write, dispatch after it), and <code>CapturedState</code> is the immutable value that bridges the two phases instead of a mutable field that a concurrent save could clobber. The three positional members (<code>AggregateRootEntities</code>, <code>DomainEvents</code>, <code>OutboxEntries</code>, lines 156-158) are exactly what the after-save phase needs: the entries to clear events from, the events to dispatch, and the rows to mark processed.</li>
-          <li><strong>Walkthrough</strong>: a plain <code>record</code> with three constructor-set collections (<code>DomainEventSaveChangesInterceptor.cs:155</code>). It is stored per-<code>DbContext</code> in the interceptor&#39;s static <code>ConditionalWeakTable&lt;DbContext, CapturedState&gt;</code> (<code>DomainEventSaveChangesInterceptor.cs:31</code>) and removed again in the after-save phase, so nothing keeps a context alive past its own lifetime.</li>
-          <li><strong>Where it&#39;s used</strong>: created in <code>CaptureEventsAndPersistToOutbox</code> (<code>DomainEventSaveChangesInterceptor.cs:106</code>) and read back in <code>DispatchAndFinalizeAsync</code> (<code>DomainEventSaveChangesInterceptor.cs:116</code>).</li>
+          <li><strong>Concept introduced, pre-save / post-save state handoff.</strong> <code>[Rubric §6, CQRS &amp; Event-Driven]</code> assesses whether state changes are announced as events with reliable delivery rather than leaked as ad-hoc side effects; here the interceptor runs in two phases (capture before the write, route after it), and <code>CapturedState</code> is the immutable value that bridges them instead of a mutable field a concurrent save could clobber. Its four positional members (<code>DomainEventSaveChangesInterceptor.cs:268-272</code>) are exactly what the post-save phase needs: <code>AggregateRootEntities</code> (the entries whose events must be cleared), <code>LocalEvents</code> (what to dispatch in process), <code>LocalOutboxEntries</code> (the rows to mark processed once that dispatch succeeds), and <code>HasIntegrationEvents</code> (whether to wake the outbox processor for rows that deliberately stay unprocessed).</li>
+          <li><strong>Walkthrough</strong>: a <code>sealed record</code> with four constructor-set members (<code>DomainEventSaveChangesInterceptor.cs:268-272</code>). Instances live per-<code>DbContext</code> in the interceptor&#39;s static <code>ConditionalWeakTable&lt;DbContext, CapturedState&gt;</code> (<code>DomainEventSaveChangesInterceptor.cs:48</code>) and are removed again in the post-save phase (<code>DomainEventSaveChangesInterceptor.cs:105</code>, <code>DomainEventSaveChangesInterceptor.cs:206</code>), so nothing keeps a context alive past its own lifetime. When a transaction is active the same instance is re-wrapped in a <a href="#deferreddispatch"><code>DeferredDispatch</code></a> and parked until commit (<code>DomainEventSaveChangesInterceptor.cs:213</code>).</li>
+          <li><strong>Where it&#39;s used</strong>: created in <code>CaptureEventsAndPersistToOutbox</code> (<code>DomainEventSaveChangesInterceptor.cs:193-194</code>), read back in <code>DispatchAndFinalizeAsync</code> (<code>DomainEventSaveChangesInterceptor.cs:203-206</code>), consumed in <code>FlushStateAsync</code> (<code>DomainEventSaveChangesInterceptor.cs:224</code>), and drained on the synchronous save path in <code>SavedChanges</code> (<code>DomainEventSaveChangesInterceptor.cs:103-109</code>).</li>
           <li><strong>Caveats / not-in-source</strong>: private nested type; it surfaces in the inventory only because the tool includes private nested types. It is not part of the public API.</li>
           </ul>
           <h3 id="ientitydatasourceregistry">IEntityDataSourceRegistry</h3>
@@ -1738,9 +1898,9 @@
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.DataSources</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/IEntityDataSourceRegistry.cs:11</code> · Level 2 · interface</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: the contract for the eagerly-built registry that maps every configured entity type to the physical database it lives in. Four members: <code>GetDataSourceKey(Type)</code> (line 17), <code>GetDataSourceKey(string entityFullName)</code> (line 23), <code>TryGetDataSourceKey(string, out DataSourceKey)</code> (line 29), and <code>GetPhysicalSourcesInUse()</code> (line 35).</li>
+          <li><strong>What it is</strong>: the contract for the eagerly-built registry that maps every configured entity type to the physical database it lives in. Four members: <code>GetDataSourceKey(Type)</code> (<code>IEntityDataSourceRegistry.cs:17</code>), <code>GetDataSourceKey(string entityFullName)</code> (<code>IEntityDataSourceRegistry.cs:23</code>), <code>TryGetDataSourceKey(string, out DataSourceKey)</code> (<code>IEntityDataSourceRegistry.cs:29</code>), and <code>GetPhysicalSourcesInUse()</code> (<code>IEntityDataSourceRegistry.cs:35</code>).</li>
           <li><strong>Depends on</strong>: <a href="#datasourcekey"><code>DataSourceKey</code></a>.</li>
-          <li><strong>Concept introduced, eager entity-to-database mapping.</strong> <code>[Rubric §8, Data Architecture]</code> assesses whether database routing is a deliberate, discoverable design rather than an accident of query order; <code>[Rubric §7, Microservices Readiness]</code> assesses whether a module can be lifted into its own service without rewriting application code. The doc comment (lines 5-10) states the reason this interface exists: it replaces a legacy lazy cache that was populated as a <em>side effect</em> of EF model building, so routing decisions (unit of work, cross-source navigation classification, outbox enumeration) no longer depend on a model having been built first. <code>GetPhysicalSourcesInUse()</code> returns the distinct databases the host actually uses, which is how migrations, <code>EnsureCreated</code>, and the outbox processor know which databases to touch (lines 31-35). Lookups that name an unregistered entity throw <code>InvalidOperationException</code> (the strict <code>GetDataSourceKey</code> overloads), while <code>TryGetDataSourceKey</code> is the non-throwing probe used where a miss is legitimate.</li>
+          <li><strong>Concept introduced, eager entity-to-database mapping.</strong> <code>[Rubric §8, Data Architecture]</code> assesses whether database routing is a deliberate, discoverable design rather than an accident of query order; <code>[Rubric §7, Microservices Readiness]</code> assesses whether a module can be lifted into its own service without rewriting application code. The doc comment (<code>IEntityDataSourceRegistry.cs:5-10</code>) states why this interface exists: it replaces a legacy lazy cache that was populated as a <em>side effect</em> of EF model building, so routing decisions (unit of work, navigation classification, outbox enumeration) no longer depend on a model having been built first. <code>GetPhysicalSourcesInUse()</code> returns the distinct databases this host actually uses, which is how migrations, <code>EnsureCreated</code>, and the outbox processor know which databases to touch (<code>IEntityDataSourceRegistry.cs:31-35</code>). The two strict <code>GetDataSourceKey</code> overloads throw <code>InvalidOperationException</code> for an unregistered entity (documented at <code>IEntityDataSourceRegistry.cs:16</code> and <code>IEntityDataSourceRegistry.cs:22</code>), while <code>TryGetDataSourceKey</code> is the non-throwing probe used where a miss is legitimate.</li>
           <li><strong>Why it&#39;s built this way</strong>: database-per-service (ADR-006) needs every entity to resolve to exactly one physical source; building the map eagerly turns a misconfiguration into a loud startup failure instead of a silent wrong-database query.</li>
           <li><strong>Where it&#39;s used</strong>: implemented by <a href="#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a>; consumed by <a href="#crossdatasourcedegradeconvention"><code>CrossDataSourceDegradeConvention</code></a> (to classify foreign entity types), <a href="#datasourceservice"><code>DataSourceService</code></a> (the runtime facade), and the outbox/migrations enumeration paths.</li>
           </ul>
@@ -1749,91 +1909,76 @@
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.DataSources</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/PhysicalDataSource.cs:17</code> · Level 2 · record (sealed)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: the fully-resolved connection information for one physical database: <code>Key</code> (its engine+name identity), <code>ConnectionString</code>, <code>SqlServerMigrationsAssembly?</code>, and <code>CosmosDatabaseName</code> (lines 17-21).</li>
+          <li><strong>What it is</strong>: the fully-resolved connection information for one physical database: <code>Key</code> (its engine plus name identity), <code>ConnectionString</code>, <code>SqlServerMigrationsAssembly?</code>, and <code>CosmosDatabaseName</code> (<code>PhysicalDataSource.cs:17-21</code>).</li>
           <li><strong>Depends on</strong>: <a href="#datasourcekey"><code>DataSourceKey</code></a>.</li>
-          <li><strong>Concept, a logical name resolved to a real connection.</strong> <code>[Rubric §8, Data Architecture]</code> (the resolution of a configured name like <code>DataSources:Conference</code> to an actual database). The record&#39;s doc comment (lines 5-9) explains it is produced by <a href="#idatasourceresolver"><code>IDataSourceResolver</code></a> from the top-level <code>ConnectionStrings</code> section (the <code>Default</code> source) plus the named <code>DataSources</code> entries. Two fields are engine-scoped: <code>SqlServerMigrationsAssembly</code> is null for non-SQL-Server engines and lets each SQL database own its own EF migration history (lines 12-15); <code>CosmosDatabaseName</code> is ignored for relational engines (line 16). Making this a <code>record</code> gives value equality so two resolutions of the same source compare equal.</li>
-          <li><strong>Where it&#39;s used</strong>: produced by <a href="#datasourceresolver"><code>DataSourceResolver.GetPhysical</code></a>; consumed downstream by <a href="#physicaldbcontextfactory"><code>PhysicalDbContextFactory</code></a> to open a context against the right database with the right migrations assembly.</li>
+          <li><strong>Concept, a logical name resolved to a real connection.</strong> <code>[Rubric §8, Data Architecture]</code> covers the step from a configured name like <code>DataSources:Conference</code> to an actual database. The record&#39;s doc comment (<code>PhysicalDataSource.cs:5-9</code>) explains that it is produced by <a href="#idatasourceresolver"><code>IDataSourceResolver</code></a> from the top-level <code>ConnectionStrings</code> section (the <code>Default</code> source) plus the named <code>DataSources</code> entries. Two members are engine-scoped: <code>SqlServerMigrationsAssembly</code> is null for non-SQL-Server engines and lets each SQL database own its own EF migration history (<code>PhysicalDataSource.cs:12-15</code>); <code>CosmosDatabaseName</code> is ignored for relational engines (<code>PhysicalDataSource.cs:16</code>). Making this a <code>record</code> gives value equality, so two resolutions of the same source compare equal.</li>
+          <li><strong>Where it&#39;s used</strong>: produced by <a href="#datasourceresolver"><code>DataSourceResolver</code></a> (<code>DataSourceResolver.cs:156-160</code> for the Default source and <code>DataSourceResolver.cs:200-204</code> for named ones) and handed back by <code>GetPhysical</code> (<code>DataSourceResolver.cs:63</code>); consumed downstream by <a href="#physicaldbcontextfactory"><code>PhysicalDbContextFactory</code></a> to open a context against the right database with the right migrations assembly.</li>
           </ul>
           <h3 id="snapshot">Snapshot</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.DataSources</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/EntityDataSourceRegistry.cs:25</code> · Level 2 · record (sealed, private nested)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: the immutable point-in-time view of <a href="#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a>&#39;s state: <code>FrozenDictionary&lt;string, (DataSourceKey Key, Type ConfigurationType)&gt; Entities</code> and <code>FrozenSet&lt;Assembly&gt; ScannedAssemblies</code> (lines 25-27).</li>
-          <li><strong>Depends on</strong>: <a href="#datasourcekey"><code>DataSourceKey</code></a>; <code>System.Collections.Frozen</code> (BCL).</li>
-          <li><strong>Concept introduced, the lock-free volatile-snapshot pattern.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code> assesses whether hot-path reads avoid contention; the registry holds <code>private volatile Snapshot? _snapshot</code> (<code>EntityDataSourceRegistry.cs:30</code>) and reads it without a lock, relying on <code>volatile</code> for a store/load barrier so every thread sees a consistent reference. Writes (the initial build and any rescan) take <code>Lock _rebuildLock</code> (<code>EntityDataSourceRegistry.cs:29</code>) for mutual exclusion, then atomically swap in a brand-new <code>Snapshot</code>. Because <code>FrozenDictionary</code>/<code>FrozenSet</code> are immutable once built, any number of readers can share one snapshot with zero synchronization; <code>ScannedAssemblies</code> records which assemblies that snapshot covered so the registry can detect when a rescan is warranted.</li>
-          <li><strong>Where it&#39;s used</strong>: exclusively inside <a href="#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a> (built by <code>BuildSnapshot</code>, <code>EntityDataSourceRegistry.cs:108</code>; swapped in <code>GetOrBuildSnapshot</code> and <code>RescanIfAssembliesChanged</code>).</li>
+          <li><strong>What it is</strong>: the immutable point-in-time view of <a href="#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a>&#39;s state: <code>FrozenDictionary&lt;string, (DataSourceKey Key, Type ConfigurationType)&gt; Entities</code> and <code>FrozenSet&lt;Assembly&gt; ScannedAssemblies</code> (<code>EntityDataSourceRegistry.cs:25-27</code>).</li>
+          <li><strong>Depends on</strong>: <a href="#datasourcekey"><code>DataSourceKey</code></a>; <code>System.Collections.Frozen</code>, <code>System.Reflection.Assembly</code> (BCL).</li>
+          <li><strong>Concept introduced, the lock-free volatile-snapshot pattern.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code> assesses whether hot-path reads avoid contention; the registry holds <code>private volatile Snapshot? _snapshot</code> (<code>EntityDataSourceRegistry.cs:30</code>) and reads it without a lock, relying on <code>volatile</code> for the store/load barrier so every thread sees a consistent reference. Writes (the initial build and any rescan) take <code>Lock _rebuildLock</code> (<code>EntityDataSourceRegistry.cs:29</code>) for mutual exclusion, then atomically swap in a brand-new <code>Snapshot</code>. Because <code>FrozenDictionary</code>/<code>FrozenSet</code> are immutable once built, any number of readers share one snapshot with zero synchronization. The second member is the reason the record carries more than a lookup table: <code>ScannedAssemblies</code> records which assemblies that snapshot covered, so the registry can tell whether a miss is genuine or just a stale scan.</li>
+          <li><strong>Walkthrough</strong>: the value type carried in <code>Entities</code> is a tuple of the resolved <a href="#datasourcekey"><code>DataSourceKey</code></a> <em>and</em> the configuration type that produced it (<code>EntityDataSourceRegistry.cs:26</code>). The configuration type is not used for routing; it exists so the duplicate-registration failure can name both conflicting configuration classes in its message (<code>EntityDataSourceRegistry.cs:138-141</code>).</li>
+          <li><strong>Where it&#39;s used</strong>: exclusively inside <a href="#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a>: built by <code>BuildSnapshot</code> (<code>EntityDataSourceRegistry.cs:150-152</code>), swapped in <code>GetOrBuildSnapshot</code> (<code>EntityDataSourceRegistry.cs:87</code>) and <code>RescanIfAssembliesChanged</code> (<code>EntityDataSourceRegistry.cs:102-104</code>).</li>
           <li><strong>Caveats / not-in-source</strong>: private nested type; it appears in the inventory because private nested types are included.</li>
-          </ul>
-          <h3 id="crossdatasourcedegradeconvention">CrossDataSourceDegradeConvention</h3>
-          <blockquote>
-          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Conventions</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Conventions/CrossDataSourceDegradeConvention.cs:34</code> · Level 3 · class (sealed)</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: an EF Core <strong>model-finalizing convention</strong> that detects relationships whose two ends resolve to <em>different</em> physical databases and degrades them: it drops the FK constraint and navigations from the model, keeps the declared scalar FK columns plus a compensating index, and removes foreign entity types from this database&#39;s model entirely.</li>
-          <li><strong>Depends on</strong>: <a href="#datasourcekey"><code>DataSourceKey</code></a>, <a href="#datasource"><code>DataSource</code></a>, <a href="#ientitydatasourceregistry"><code>IEntityDataSourceRegistry</code></a>; <code>IModelFinalizingConvention</code>, <code>IMutableModel</code>, <code>IMutableEntityType</code>, <code>IMutableForeignKey</code> (EF Core metadata API).</li>
-          <li><strong>Concept introduced, automatic cross-database relationship degradation.</strong> <code>[Rubric §8, Data Architecture]</code> assesses the database-per-service consistency strategy; <code>[Rubric §7, Microservices Readiness]</code> assesses whether the model adapts to the deployment topology without per-entity code. In a database-per-service architecture (ADR-006) EF cannot enforce a foreign key that points into another database, so this convention runs at model finalization and strips those relationships automatically. The scalar column survives (a query can still filter on, say, a <code>UserId</code>), but cross-source loading is left to <code>INavigationPopulator</code> batch loading (ADR-002) and cross-source consistency to the outbox. The doc comment&#39;s closing note (lines 24-30) is the key invariant: when every entity resolves to the <em>same</em> physical source (the monolith-collapse case) nothing is foreign and the convention is a structural no-op, so the collapsed model is byte-for-byte the single-database model.</li>
-          <li><strong>Walkthrough</strong><ul>
-          <li>Constructor (line 34) takes the <code>contextKey</code> (the physical source whose model is being built) and the <a href="#ientitydatasourceregistry"><code>IEntityDataSourceRegistry</code></a>; <code>IsForeign</code> (line 92) asks the registry for each CLR type&#39;s key and returns true when it differs from <code>contextKey</code>.</li>
-          <li><code>ProcessModelFinalizing</code> (line 39) casts the model to the <strong>mutable</strong> surface (<code>IMutableModel</code>, line 47) deliberately: cross-cutting helpers (soft-delete filters, concurrency tokens) promote every entity type to the Explicit configuration source, which convention-sourced builder calls could not override (comment, lines 23-26). It collects foreign entity types (line 49) and returns early when there are none (line 53).</li>
-          <li>Step 1 (lines 63-75): for each <em>local</em> dependent it degrades every declared FK that points at a foreign principal via <code>DegradeForeignKey</code>. The compensating index is added for relational engines but <em>skipped for Cosmos</em> (<code>addCompensatingIndex</code>, line 66), because Cosmos auto-indexes every property and rejects explicit index definitions; that skip is what makes one configuration body portable to Cosmos without edits (comment, lines 97-107).</li>
-          <li><code>DegradeForeignKey</code> (line 108) keeps the non-shadow scalar FK properties, removes the FK (line 117), eagerly drops the convention-created FK index before the coverage check so the column is not left unindexed (lines 124-131), and adds a plain index only when no existing index already covers those columns as a prefix (<code>HasCoveringIndex</code>, line 141).</li>
-          <li>Step 2 (lines 80-83): <code>IgnoreForeignMembers</code> (line 152) ignores skip navigations and any unmapped CLR property whose (collection-unwrapped) type is a foreign entity, so model validation does not later reject an unmapped entity-typed property; <code>UnwrapCollectionElementType</code> (line 172) handles <code>List&lt;T&gt;</code>/<code>ICollection&lt;T&gt;</code>.</li>
-          <li>Step 3 (lines 86-89): removes the foreign entity types from the model.</li>
-          </ul>
-          </li>
-          <li><strong>Why it&#39;s built this way</strong>: degrading in a convention rather than per-configuration means no module author has to remember to break a cross-service relationship by hand; the same configuration class works whether its module ships in the monolith or as its own service.</li>
-          <li><strong>Where it&#39;s used</strong>: registered per database in the model-building pipeline; the per-source <a href="#datasourcemodelcachekeyfactory"><code>DataSourceModelCacheKeyFactory</code></a> ensures each database caches its own degraded model.</li>
           </ul>
           <h3 id="idatasourceresolver">IDataSourceResolver</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.DataSources</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/IDataSourceResolver.cs:15</code> · Level 3 · interface</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: the contract that maps a <em>logical</em> data source name (from a <code>[UseDatabase]</code> attribute, a module namespace, or a setting like <code>Outbox:DatabaseName</code>) to a <em>physical</em> <a href="#datasourcekey"><code>DataSourceKey</code></a>, and hands back the resolved <a href="#physicaldatasource"><code>PhysicalDataSource</code></a> for a key. Two members: <code>ResolveLogical(DataSource engine, string logicalName)</code> (line 27) and <code>GetPhysical(DataSourceKey key)</code> (line 35).</li>
+          <li><strong>What it is</strong>: the contract that maps a <em>logical</em> data source name (from a <code>[UseDatabase]</code> attribute, a module namespace, or a setting like <code>Outbox:DatabaseName</code>) to a <em>physical</em> <a href="#datasourcekey"><code>DataSourceKey</code></a>, and hands back the resolved <a href="#physicaldatasource"><code>PhysicalDataSource</code></a> for such a key. Two members: <code>ResolveLogical(DataSource engine, string logicalName)</code> (<code>IDataSourceResolver.cs:27</code>) and <code>GetPhysical(DataSourceKey key)</code> (<code>IDataSourceResolver.cs:35</code>).</li>
           <li><strong>Depends on</strong>: <a href="#datasource"><code>DataSource</code></a>, <a href="#datasourcekey"><code>DataSourceKey</code></a>, <a href="#physicaldatasource"><code>PhysicalDataSource</code></a>.</li>
-          <li><strong>Concept introduced, logical-to-physical collapse as the backward-compatibility guarantee.</strong> <code>[Rubric §8, Data Architecture]</code> and <code>[Rubric §7, Microservices Readiness]</code> (routing is reconfigurable purely through settings). The interface comment (lines 5-14) states the collapse rule precisely: in a host with no <code>DataSources</code> configuration every logical name resolves to <code>Default</code>, yielding one DbContext per engine with an identical change tracker, FK constraints, transactions, and EF model. <code>ResolveLogical</code>&#39;s contract (lines 17-27) spells out the three collapse cases: a name with no <code>DataSources</code> entry, no connection string for the engine, or a connection equal to the top-level one falls to <code>Default</code>; names sharing a connection with each other collapse to one physical source named after the alphabetically-first logical name. <code>GetPhysical</code> (lines 29-35) is the reverse lookup and throws if handed a key that did not come from <code>ResolveLogical</code>.</li>
-          <li><strong>Where it&#39;s used</strong>: implemented by <a href="#datasourceresolver"><code>DataSourceResolver</code></a>; injected into <a href="#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a> (to resolve each entity&#39;s derived logical name) and the context factories.</li>
+          <li><strong>Concept introduced, logical-to-physical collapse as the backward-compatibility guarantee.</strong> <code>[Rubric §8, Data Architecture]</code> and <code>[Rubric §7, Microservices Readiness]</code> both apply, because routing is reconfigurable purely through settings. The interface comment (<code>IDataSourceResolver.cs:5-14</code>) states the collapse rule precisely: in a host with no <code>DataSources</code> configuration every logical name resolves to <code>Default</code>, yielding one DbContext per engine with an identical change tracker, FK constraints, transactions, and EF model as a plain single-database monolith. <code>ResolveLogical</code>&#39;s contract (<code>IDataSourceResolver.cs:17-27</code>) spells out the collapse cases: a name with no <code>DataSources</code> entry, with no connection string for the engine, or whose connection equals the top-level one falls to <code>DataSourceKey.Default(engine)</code>; entries sharing a connection with each other collapse to one physical source named after the alphabetically-first logical name. <code>GetPhysical</code> (<code>IDataSourceResolver.cs:29-35</code>) is the reverse lookup and throws if handed a key that did not come from <code>ResolveLogical</code>.</li>
+          <li><strong>Why it&#39;s built this way</strong>: the collapse is what makes &quot;build the monolith now, extract a service later&quot; a configuration change rather than a rewrite (ADR-006). A single interface owns the rule, so no caller has to reimplement the defaulting logic.</li>
+          <li><strong>Where it&#39;s used</strong>: implemented by <a href="#datasourceresolver"><code>DataSourceResolver</code></a>; injected into <a href="#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a> (<code>EntityDataSourceRegistry.cs:23</code>) to resolve each entity&#39;s derived logical name, and into the context factories to open connections.</li>
           </ul>
           <h3 id="datasourceresolver">DataSourceResolver</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.DataSources</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/DataSourceResolver.cs:13</code> · Level 4 · class (sealed, partial)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: the singleton implementation of <a href="#idatasourceresolver"><code>IDataSourceResolver</code></a>: it builds the logical→physical map once at construction from the connection-string settings and the named <code>DataSources</code> entries, validates migrations-assembly conflicts, and then serves both lookups from in-memory dictionaries.</li>
+          <li><strong>What it is</strong>: the singleton implementation of <a href="#idatasourceresolver"><code>IDataSourceResolver</code></a>. It builds the logical-to-physical map once at construction from the connection-string settings and the named <code>DataSources</code> entries, validates migrations-assembly conflicts, and then serves both lookups from in-memory dictionaries.</li>
           <li><strong>Depends on</strong>: <a href="#datasource"><code>DataSource</code></a>, <a href="#datasourcekey"><code>DataSourceKey</code></a>, <a href="#physicaldatasource"><code>PhysicalDataSource</code></a>, <a href="#idatasourceresolver"><code>IDataSourceResolver</code></a>, <a href="group-14-module-system-composition.html#iconnectionstringsettings"><code>IConnectionStringSettings</code></a>, <a href="group-14-module-system-composition.html#datasourcessettings"><code>DataSourcesSettings</code></a>, <a href="group-14-module-system-composition.html#datasourceentrysettings"><code>DataSourceEntrySettings</code></a>; <code>ILogger&lt;T&gt;</code>.</li>
-          <li><strong>Concept introduced, eager, validated data-source resolution.</strong> <code>[Rubric §8, Data Architecture]</code> (deliberate multi-database routing) and <code>[Rubric §7, Microservices Readiness]</code> (ADR-006, database-per-service). The resolver realizes the collapse rule described on <a href="#idatasourceresolver"><code>IDataSourceResolver</code></a>. Two guardrails are worth calling out: conflicting <code>SQLServerMigrationsAssembly</code> declarations on logical names that collapse to the same physical database throw at startup (<code>DataSourceResolver.cs:243-245</code>), a loud fail-fast; and <code>[Rubric §13, Observability]</code> shows in the source-generated <code>[LoggerMessage]</code> <code>LogMigrationsAssemblyFallback</code> (line 278) that warns when a <em>named</em> SQL source has no dedicated migrations assembly and falls back to another database&#39;s, which is almost always a mistake because that snapshot describes a different schema.</li>
+          <li><strong>Concept introduced, eager and validated data-source resolution.</strong> <code>[Rubric §8, Data Architecture]</code> (deliberate multi-database routing) and <code>[Rubric §7, Microservices Readiness]</code> (ADR-006, database-per-service). The resolver realizes the collapse rule described on <a href="#idatasourceresolver"><code>IDataSourceResolver</code></a>. Two guardrails are worth calling out. First, conflicting <code>SQLServerMigrationsAssembly</code> declarations on logical names that collapse to the same physical database throw at startup (<code>DataSourceResolver.cs:243-245</code>), a loud fail-fast rather than a silent pick. Second, <code>[Rubric §13, Observability &amp; Operability]</code> shows in the source-generated <code>[LoggerMessage]</code> <code>LogMigrationsAssemblyFallback</code> (<code>DataSourceResolver.cs:278-279</code>), which warns when a <em>named</em> SQL Server source has no dedicated migrations assembly and falls back to another database&#39;s, because that snapshot describes a different schema.</li>
           <li><strong>Walkthrough</strong><ul>
-          <li>Constructor (line 33): validates its two settings arguments, then loops all three engines (<code>AllEngines</code> = CosmosDB, Sqlite, SQLServer, line 15) calling <code>BuildEngineMap</code> per engine. State lives in two dictionaries: <code>_logicalToPhysical</code> keyed by (engine, logical name) (line 18) and <code>_physicalSources</code> keyed by <a href="#datasourcekey"><code>DataSourceKey</code></a> (line 21).</li>
-          <li><code>BuildEngineMap</code> (line 75): <code>ClassifyEntries</code> splits the engine&#39;s named entries into &quot;collapsed onto Default&quot; and &quot;grouped by connection identity&quot; (line 81); then <code>RegisterDefaultSource</code> and <code>RegisterNamedSource</code> populate the two dictionaries.</li>
-          <li><code>ClassifyEntries</code> (line 94): computes a per-connection identity string (<code>GetIdentity</code>, line 257: Cosmos identities include the database name because one account hosts many databases, relational engines use the connection string alone, compared <em>ordinally</em> so textually-different-but-equivalent strings deliberately do not collapse). Entries with no connection string for the engine are skipped entirely (lines 107-112) because <code>ResolveLogical</code> already defaults on a map miss.</li>
-          <li><code>RegisterNamedSource</code> (line 172): names the physical key after the alphabetically-first member (<code>Order(...).First()</code>, line 178) for deterministic routing regardless of config key order.</li>
-          <li><code>ResolveLogical</code> (line 48): a <code>Default</code>-name short-circuit (line 52) then a dictionary lookup; a miss returns <code>DataSourceKey.Default(engine)</code> (line 59), the monolith default.</li>
-          <li><code>GetPhysical</code> (line 63): a <code>_physicalSources</code> lookup that throws if the key was not produced by <code>ResolveLogical</code> (lines 65-68).</li>
-          <li><code>ResolveMigrationsAssembly</code> (line 229): returns null for non-SQL-Server engines or when no explicit value exists, and throws when logical names sharing a database declare conflicting assemblies (lines 240-246).</li>
+          <li>Constructor (<code>DataSourceResolver.cs:33-45</code>): validates its two settings arguments, then loops all three engines (<code>AllEngines</code> = CosmosDB, Sqlite, SQLServer, <code>DataSourceResolver.cs:15</code>) calling <code>BuildEngineMap</code>. State lives in two dictionaries: <code>_logicalToPhysical</code> keyed by <code>(engine, logical name)</code> (<code>DataSourceResolver.cs:18</code>) and <code>_physicalSources</code> keyed by <a href="#datasourcekey"><code>DataSourceKey</code></a> (<code>DataSourceResolver.cs:21</code>).</li>
+          <li><code>BuildEngineMap</code> (<code>DataSourceResolver.cs:75</code>): <code>ClassifyEntries</code> splits the engine&#39;s named entries into &quot;collapsed onto Default&quot; and &quot;grouped by connection identity&quot; (<code>DataSourceResolver.cs:81</code>); <code>RegisterDefaultSource</code> then <code>RegisterNamedSource</code> populate the two dictionaries.</li>
+          <li><code>ClassifyEntries</code> (<code>DataSourceResolver.cs:94</code>): computes a per-connection identity string via <code>GetIdentity</code> (<code>DataSourceResolver.cs:257-260</code>), where Cosmos identities append the database name because one account hosts many databases, relational engines use the connection string alone, and comparison is <em>ordinal</em>, so semantically-equal-but-textually-different connection strings deliberately do not collapse. Entries with no connection string for the engine are skipped entirely (<code>DataSourceResolver.cs:107-112</code>) because <code>ResolveLogical</code> already defaults on a map miss.</li>
+          <li><code>RegisterDefaultSource</code> (<code>DataSourceResolver.cs:141</code>): registers the <code>Default</code> key for the engine, letting entries that collapsed onto it contribute an explicit migrations assembly (<code>DataSourceResolver.cs:148-154</code>), and maps each collapsed logical name onto that key (<code>DataSourceResolver.cs:162-165</code>).</li>
+          <li><code>RegisterNamedSource</code> (<code>DataSourceResolver.cs:172</code>): names the physical key after the alphabetically-first member (<code>Order(...).First()</code>, <code>DataSourceResolver.cs:178</code>) so routing is deterministic regardless of config key order, then warns and falls back when a SQL Server source declares no migrations assembly of its own (<code>DataSourceResolver.cs:185-192</code>).</li>
+          <li><code>ResolveLogical</code> (<code>DataSourceResolver.cs:48</code>): a <code>Default</code>-name short-circuit (<code>DataSourceResolver.cs:52-55</code>) then a dictionary lookup; a miss returns <code>DataSourceKey.Default(engine)</code> (<code>DataSourceResolver.cs:59</code>), the monolith default.</li>
+          <li><code>GetPhysical</code> (<code>DataSourceResolver.cs:63</code>): a <code>_physicalSources</code> lookup that throws with an actionable message if the key was not produced by <code>ResolveLogical</code> (<code>DataSourceResolver.cs:65-68</code>).</li>
+          <li><code>ResolveMigrationsAssembly</code> (<code>DataSourceResolver.cs:229</code>): returns null for non-SQL-Server engines or when no explicit value exists (<code>DataSourceResolver.cs:234-237</code>), and throws when logical names sharing a database declare conflicting assemblies (<code>DataSourceResolver.cs:239-246</code>).</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: resolving eagerly at construction turns a misconfiguration into a startup failure rather than a mid-request surprise, and the deterministic canonical-name rule keeps routing stable across config orderings.</li>
-          <li><strong>Where it&#39;s used</strong>: registered as the singleton <a href="#idatasourceresolver"><code>IDataSourceResolver</code></a>; consumed by <a href="#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a> and the context factories.</li>
+          <li><strong>Why it&#39;s built this way</strong>: resolving eagerly at construction turns a misconfiguration into a startup failure rather than a mid-request surprise, and the deterministic canonical-name rule keeps routing stable across config orderings (ADR-006).</li>
+          <li><strong>Where it&#39;s used</strong>: registered as the singleton <a href="#idatasourceresolver"><code>IDataSourceResolver</code></a>; consumed by <a href="#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a>, the context factories, and the design-time helper.</li>
           </ul>
           <h3 id="entitydatasourceregistry">EntityDataSourceRegistry</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.DataSources</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DataSources/EntityDataSourceRegistry.cs:21</code> · Level 5 · class (sealed)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: the singleton implementation of <a href="#ientitydatasourceregistry"><code>IEntityDataSourceRegistry</code></a>. It reflects over the configuration assemblies, finds every entity type configuration, derives each entity&#39;s physical database from the configuration class&#39;s attributes and namespace, and freezes the result into a lock-free lookup that it rescans lazily when new assemblies appear.</li>
+          <li><strong>What it is</strong>: the singleton implementation of <a href="#ientitydatasourceregistry"><code>IEntityDataSourceRegistry</code></a>. It reflects over the configuration assemblies, finds every entity type configuration, derives each entity&#39;s physical database from the configuration class&#39;s attributes and the entity&#39;s namespace, and freezes the result into a lock-free lookup that it rescans lazily when new assemblies appear.</li>
           <li><strong>Depends on</strong>: <a href="#datasourcekey"><code>DataSourceKey</code></a>, <a href="#ientitydatasourceregistry"><code>IEntityDataSourceRegistry</code></a>, <a href="#idatasourceresolver"><code>IDataSourceResolver</code></a>, <a href="#ientitytypeconfigurationbasetentity-tidentifiertype"><code>IEntityTypeConfigurationBase&lt;TEntity, TIdentifierType&gt;</code></a>, <a href="#namespaceconventions"><code>NamespaceConventions</code></a>, <a href="group-14-module-system-composition.html#usedatasourceattribute"><code>UseDataSourceAttribute</code></a>, <a href="group-14-module-system-composition.html#usedatabaseattribute"><code>UseDatabaseAttribute</code></a>, <a href="#ientityconfigurationassemblyprovider"><code>IEntityConfigurationAssemblyProvider</code></a>, <a href="#snapshot"><code>Snapshot</code></a> (nested); <code>System.Reflection</code>, <code>System.Collections.Frozen</code>, <code>Lock</code> (BCL).</li>
-          <li><strong>Concept introduced, eager entity-to-data-source mapping.</strong> <code>[Rubric §8, Data Architecture]</code> (ADR-006, &quot;an entity lives in exactly one database&quot;). The doc comment (lines 8-20) explains the fix over the legacy design: routing used to be a side effect of model building (lazy, per-context), which silently skipped unmapped entities; the registry now builds the map eagerly by scanning configuration classes rather than model metadata. It also tolerates duplicate registrations of one entity when they agree on the physical source and rejects them (fail-fast) when they conflict.</li>
+          <li><strong>Concept introduced, eager entity-to-data-source mapping.</strong> <code>[Rubric §8, Data Architecture]</code> (ADR-006: an entity lives in exactly one database). The doc comment (<code>EntityDataSourceRegistry.cs:8-20</code>) explains the design: the map is derived from <em>configuration classes</em>, not from EF model metadata, so it exists before any model is built; it is built lazily on first access and rescanned once on a lookup miss to pick up module assemblies loaded later; and duplicate registrations of one entity are tolerated when they agree on the physical source and rejected when they conflict.</li>
           <li><strong>Walkthrough</strong><ul>
-          <li><code>_rebuildLock</code> (line 29) and the <code>volatile</code> <code>_snapshot</code> (line 30) implement the snapshot pattern taught under <a href="#snapshot"><code>Snapshot</code></a>: reads are lock-free, rebuilds are serialized and swap in a new immutable snapshot.</li>
-          <li><code>TryGetDataSourceKey</code> (line 49): probes the current snapshot; on a miss it calls <code>RescanIfAssembliesChanged</code> once (line 62) to pick up module assemblies loaded after the first scan, then retries. This two-step check avoids taking the lock on the common hit path.</li>
-          <li><code>GetOrBuildSnapshot</code> (line 77) double-checks <code>_snapshot</code> and builds under the lock; <code>RescanIfAssembliesChanged</code> (line 91) rebuilds only when the provider reports assemblies not already in <code>ScannedAssemblies</code> (lines 96-100).</li>
-          <li><code>BuildSnapshot</code> (line 108): for every loadable type in every configuration assembly, it skips abstract/open-generic types (line 115), finds the closed <code>IEntityTypeConfigurationBase&lt;,&gt;</code> interface (lines 120-125), extracts the entity type from the first generic argument (line 127), and calls <code>DeriveDataSourceKey</code>. A second configuration registering the same entity against a <em>different</em> key throws with an actionable message (lines 138-141).</li>
-          <li><code>DeriveDataSourceKey</code> (line 164): reads the engine from <a href="group-14-module-system-composition.html#usedatasourceattribute"><code>UseDataSourceAttribute</code></a> (returning null, and thus skipping, configurations that implement a provider interface directly instead of deriving from the attributed base classes, lines 166-170), resolves the logical name as <code>[UseDatabase]</code> → <a href="#namespaceconventions"><code>NamespaceConventions.GetModuleName</code></a> → <code>DataSourceKey.DefaultName</code> (lines 172-174), then delegates to <a href="#idatasourceresolver"><code>IDataSourceResolver.ResolveLogical</code></a>.</li>
-          <li><code>GetLoadableTypes</code> (line 182): wraps <code>assembly.GetTypes()</code> and tolerates <code>ReflectionTypeLoadException</code> (mirrors module discovery), so a partially-loaded assembly does not abort the scan.</li>
+          <li><code>_rebuildLock</code> (<code>EntityDataSourceRegistry.cs:29</code>) and the <code>volatile _snapshot</code> (<code>EntityDataSourceRegistry.cs:30</code>) implement the pattern taught under <a href="#snapshot"><code>Snapshot</code></a>: reads are lock-free, rebuilds are serialized and swap in a new immutable snapshot.</li>
+          <li><code>GetDataSourceKey(Type)</code> (<code>EntityDataSourceRegistry.cs:33</code>) null-guards and forwards to the string overload via <code>FullName</code>; <code>GetDataSourceKey(string)</code> (<code>EntityDataSourceRegistry.cs:40</code>) is <code>TryGetDataSourceKey</code> plus a throw whose message names the exact remedy: add an <code>EntityTypeConfigurationSQLServer/Cosmos/Sqlite</code> for the entity in a discovered configuration assembly (<code>EntityDataSourceRegistry.cs:43-46</code>).</li>
+          <li><code>TryGetDataSourceKey</code> (<code>EntityDataSourceRegistry.cs:49</code>): probes the current snapshot; on a miss it calls <code>RescanIfAssembliesChanged</code> once (<code>EntityDataSourceRegistry.cs:62</code>) and retries. This two-step check keeps the common hit path off the lock.</li>
+          <li><code>GetPhysicalSourcesInUse</code> (<code>EntityDataSourceRegistry.cs:74</code>): projects the snapshot&#39;s values to distinct keys, which is how migrations, <code>EnsureCreated</code>, and outbox draining enumerate this host&#39;s databases.</li>
+          <li><code>GetOrBuildSnapshot</code> (<code>EntityDataSourceRegistry.cs:77</code>) double-checks <code>_snapshot</code> and builds under the lock; <code>RescanIfAssembliesChanged</code> (<code>EntityDataSourceRegistry.cs:91</code>) rebuilds only when the provider reports assemblies not already in <code>ScannedAssemblies</code> (<code>EntityDataSourceRegistry.cs:96-100</code>).</li>
+          <li><code>BuildSnapshot</code> (<code>EntityDataSourceRegistry.cs:108</code>): for every loadable type in every configuration assembly, it skips abstract and open-generic types (<code>EntityDataSourceRegistry.cs:115-118</code>), finds the closed <code>IEntityTypeConfigurationBase&lt;,&gt;</code> interface (<code>EntityDataSourceRegistry.cs:120-125</code>), takes the entity type from the first generic argument (<code>EntityDataSourceRegistry.cs:127</code>), and calls <code>DeriveDataSourceKey</code>. A second configuration registering the same entity against a <em>different</em> key throws with a message naming both configuration classes and both keys (<code>EntityDataSourceRegistry.cs:134-145</code>); an agreeing duplicate is simply ignored.</li>
+          <li><code>DeriveDataSourceKey</code> (<code>EntityDataSourceRegistry.cs:164</code>): reads the engine from <a href="group-14-module-system-composition.html#usedatasourceattribute"><code>UseDataSourceAttribute</code></a> and returns null when it is absent (<code>EntityDataSourceRegistry.cs:166-170</code>), deliberately skipping configurations that implement a provider interface directly instead of deriving from the attributed base classes. It then resolves the logical name in priority order <code>[UseDatabase]</code> then <a href="#namespaceconventions"><code>NamespaceConventions.GetModuleName</code></a> then <code>DataSourceKey.DefaultName</code> (<code>EntityDataSourceRegistry.cs:172-174</code>), and delegates the collapse to <a href="#idatasourceresolver"><code>IDataSourceResolver.ResolveLogical</code></a> (<code>EntityDataSourceRegistry.cs:176</code>).</li>
+          <li><code>GetLoadableTypes</code> (<code>EntityDataSourceRegistry.cs:182</code>): wraps <code>assembly.GetTypes()</code> and tolerates <code>ReflectionTypeLoadException</code> by keeping the types that did load (<code>EntityDataSourceRegistry.cs:187-191</code>), mirroring module discovery, so a partially-loaded assembly does not abort the scan.</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: building at startup rather than per-query means a missing or conflicting configuration surfaces as a startup failure, which is critical in a multi-database system where the alternative is a silent wrong-database read.</li>
+          <li><strong>Why it&#39;s built this way</strong>: building from configuration classes at startup rather than per-query means a missing or conflicting configuration surfaces early, which matters in a multi-database system where the alternative is a silent wrong-database read.</li>
           <li><strong>Where it&#39;s used</strong>: registered as the singleton <a href="#ientitydatasourceregistry"><code>IEntityDataSourceRegistry</code></a>; consumed by <a href="#crossdatasourcedegradeconvention"><code>CrossDataSourceDegradeConvention</code></a>, <a href="#datasourceservice"><code>DataSourceService</code></a>, and the outbox/migrations enumeration.</li>
           </ul>
           <h3 id="auditsavechangesinterceptor">AuditSaveChangesInterceptor</h3>
@@ -1841,45 +1986,61 @@
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Interceptors</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:13</code> · Level 6 · class (sealed)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: an EF Core <code>SaveChangesInterceptor</code> that automatically stamps <code>CreatedOn/By</code> and <code>LastModifiedOn/By</code> on every <a href="group-02-domain-building-blocks.html#iauditableentity"><code>IAuditableEntity</code></a> entry before the database write.</li>
-          <li><strong>Depends on</strong>: <a href="#applicationdbcontext"><code>ApplicationDbContext</code></a>, <a href="group-02-domain-building-blocks.html#iauditableentity"><code>IAuditableEntity</code></a>; <code>SaveChangesInterceptor</code>, <code>TimeProvider</code> (BCL).</li>
-          <li><strong>Concept introduced, the EF Core <code>SaveChangesInterceptor</code> as a cross-cutting hook.</strong> <code>[Rubric §10, Cross-Cutting Concerns]</code> assesses whether audit and similar concerns are wired centrally rather than per-handler. An interceptor is a class EF calls at defined points in the save pipeline (<code>SavingChanges</code> before the write, <code>SavedChanges</code> after). Using an interceptor rather than overriding <code>SaveChangesAsync</code> means the logic runs for both the sync and async save paths, multiple interceptors compose cleanly through EF&#39;s pipeline, and the concern lives in one class. <code>[Rubric §8, Data Architecture]</code> (audit stamped centrally, not per-operation) and <code>[Rubric §30, Compliance &amp; Data Governance]</code> (a consistent audit trail supports accountability).</li>
+          <li><strong>What it is</strong>: an EF Core <code>SaveChangesInterceptor</code> that automatically stamps <code>CreatedOn/By</code> and <code>LastModifiedOn/By</code> on every <a href="group-02-domain-building-blocks.html#iauditableentity"><code>IAuditableEntity</code></a> entry before the database write (<code>AuditSaveChangesInterceptor.cs:8-13</code>).</li>
+          <li><strong>Depends on</strong>: <a href="#applicationdbcontext"><code>ApplicationDbContext</code></a>, <a href="group-02-domain-building-blocks.html#iauditableentity"><code>IAuditableEntity</code></a>; <code>SaveChangesInterceptor</code> (EF Core), <code>TimeProvider</code> (BCL).</li>
+          <li><strong>Concept introduced, the EF Core <code>SaveChangesInterceptor</code> as a cross-cutting hook.</strong> <code>[Rubric §10, Cross-Cutting Concerns]</code> assesses whether audit and similar concerns are wired centrally rather than repeated per handler. An interceptor is a class EF calls at defined points in the save pipeline (<code>SavingChanges</code> before the write, <code>SavedChanges</code> after). Using an interceptor rather than overriding <code>SaveChangesAsync</code> means the logic runs for both the sync and async save paths, multiple interceptors compose through EF&#39;s own pipeline, and the concern lives in one class. <code>[Rubric §8, Data Architecture]</code> (audit stamped centrally, not per operation) and <code>[Rubric §30, Compliance/Privacy/Data Governance]</code> (a consistent audit trail supports accountability) also apply.</li>
           <li><strong>Walkthrough</strong><ul>
-          <li><code>SavingChangesAsync</code> (line 16) and <code>SavingChanges</code> (line 28): both call <code>StampAuditFields</code> when the context is an <a href="#applicationdbcontext"><code>ApplicationDbContext</code></a>, then delegate to base.</li>
-          <li><code>StampAuditFields</code> (line 38): reads <code>timeProvider.GetUtcNow().UtcDateTime</code> (line 40) and the context&#39;s <code>CurrentSaveUserId ?? default</code> (line 41), then walks <code>ChangeTracker.Entries&lt;IAuditableEntity&gt;()</code>.<ul>
-          <li><strong>Added</strong> (lines 47-52): stamps all four fields from the resolved user id and timestamp; a <code>null</code> current user resolves to <code>default</code> (0), the sentinel for system-generated rows.</li>
-          <li><strong>Modified</strong> (lines 53-58): stamps only <code>LastModifiedBy</code>/<code>LastModifiedOn</code>, and marks <code>CreatedBy</code>/<code>CreatedOn</code> as <code>IsModified = false</code> (lines 54-55) so an update can never overwrite the creation fields, an important invariant.</li>
-          <li><strong>Detached / Unchanged / Deleted</strong> (lines 59-63): no-op. Soft-delete is a domain concern (the entity sets <code>IsDeleted = true</code>, which lands it in the <code>Modified</code> branch), not something this interceptor special-cases.</li>
+          <li><code>SavingChangesAsync</code> (<code>AuditSaveChangesInterceptor.cs:16</code>) and <code>SavingChanges</code> (<code>AuditSaveChangesInterceptor.cs:28</code>): both call <code>StampAuditFields</code> when the context is an <a href="#applicationdbcontext"><code>ApplicationDbContext</code></a>, then delegate to base. Stamping in the <em>saving</em> phase is what puts the values into the same SQL statement as the entity change.</li>
+          <li><code>StampAuditFields</code> (<code>AuditSaveChangesInterceptor.cs:38</code>): reads <code>timeProvider.GetUtcNow().UtcDateTime</code> once (<code>AuditSaveChangesInterceptor.cs:40</code>) so every entity in one save shares a timestamp, and reads the context&#39;s <code>CurrentSaveUserId ?? default</code> (<code>AuditSaveChangesInterceptor.cs:41</code>), the per-save user handed in by <a href="#applicationdbcontext"><code>ApplicationDbContext</code></a> (<code>ApplicationDbContext.cs:69</code>). It then walks <code>ChangeTracker.Entries&lt;IAuditableEntity&gt;()</code>.<ul>
+          <li><strong>Added</strong> (<code>AuditSaveChangesInterceptor.cs:47-52</code>): stamps all four fields from the resolved user id and timestamp; a null current user resolves to <code>default</code>, the sentinel for system-generated rows.</li>
+          <li><strong>Modified</strong> (<code>AuditSaveChangesInterceptor.cs:53-58</code>): stamps only <code>LastModifiedBy</code>/<code>LastModifiedOn</code>, and marks <code>CreatedBy</code>/<code>CreatedOn</code> as <code>IsModified = false</code> (<code>AuditSaveChangesInterceptor.cs:54-55</code>) so an update can never overwrite the creation fields. That is the load-bearing invariant of this class.</li>
+          <li><strong>Detached / Unchanged / Deleted</strong> (<code>AuditSaveChangesInterceptor.cs:59-63</code>): no-op. Soft delete is a domain concern (the entity sets <code>IsDeleted = true</code>, which lands it in the <code>Modified</code> branch), not something this interceptor special-cases.</li>
           </ul>
           </li>
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: centralizing audit in an interceptor guarantees no handler can forget the stamps; injecting <code>TimeProvider</code> rather than reading <code>DateTime.UtcNow</code> makes the stamps deterministic under test (<code>[Rubric §14, Testability]</code>).</li>
-          <li><strong>Where it&#39;s used</strong>: registered alongside <a href="#domaineventsavechangesinterceptor"><code>DomainEventSaveChangesInterceptor</code></a> on every <a href="#applicationdbcontext"><code>ApplicationDbContext</code></a> instance.</li>
+          <li><strong>Where it&#39;s used</strong>: registered as a singleton in <code>AddInfrastructure</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:52</code>) and added to every context&#39;s options alongside <a href="#domaineventsavechangesinterceptor"><code>DomainEventSaveChangesInterceptor</code></a> in <code>ApplicationDbContext.OnConfiguring</code> (<code>ApplicationDbContext.cs:124-126</code>); the design-time helper registers its own copy (<code>Persistence/DbContexts/Design/DesignTimeDbContextHelper.cs:68</code>).</li>
+          </ul>
+          <h3 id="deferreddispatch">DeferredDispatch</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Interceptors</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:275</code> · Level 6 · record (sealed, private nested)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: a two-member private record pairing a <a href="#capturedstate"><code>CapturedState</code></a> with the <a href="#domaineventsavechangesinterceptor"><code>DomainEventSaveChangesInterceptor</code></a> instance that captured it, representing one unit of post-save work parked until the surrounding transaction commits (<code>DomainEventSaveChangesInterceptor.cs:274-275</code>).</li>
+          <li><strong>Depends on</strong>: <a href="#domaineventsavechangesinterceptor"><code>DomainEventSaveChangesInterceptor</code></a>, <a href="#capturedstate"><code>CapturedState</code></a>.</li>
+          <li><strong>Concept introduced, carrying the owner so a static entry point can flush instance work.</strong> <code>[Rubric §1, SOLID]</code> (dependency direction) and <code>[Rubric §6, CQRS &amp; Event-Driven]</code> (delivery ordered after commit) both apply. The deferred list is stored in a <em>static</em> <code>ConditionalWeakTable&lt;DbContext, List&lt;DeferredDispatch&gt;&gt;</code> (<code>DomainEventSaveChangesInterceptor.cs:55</code>) and drained by the <em>static</em> <code>FlushDeferredAsync</code>, which <a href="#dbcontextfactory"><code>DbContextFactory</code></a> calls after a successful commit. Flushing needs the interceptor&#39;s injected dispatcher and outbox signal, which a static method does not have. Rather than give the factory a DI edge back to the interceptor, each entry carries its own <code>Owner</code> and the flush loop calls <code>dispatch.Owner.FlushStateAsync(...)</code> (<code>DomainEventSaveChangesInterceptor.cs:127-128</code>). The comment at <code>DomainEventSaveChangesInterceptor.cs:50-54</code> states exactly that intent.</li>
+          <li><strong>Walkthrough</strong>: created in <code>DispatchAndFinalizeAsync</code> when <code>context.Database.CurrentTransaction is not null</code> (<code>DomainEventSaveChangesInterceptor.cs:208-214</code>), appended to the per-context list via <code>DeferredTable.GetOrCreateValue(context).Add(...)</code> (<code>DomainEventSaveChangesInterceptor.cs:213</code>); consumed in <code>FlushDeferredAsync</code> (<code>DomainEventSaveChangesInterceptor.cs:120-129</code>) or discarded wholesale by <code>DropDeferred</code> (<code>DomainEventSaveChangesInterceptor.cs:137</code>). It is a <code>List</code> rather than a single entry because several saves can occur inside one transaction.</li>
+          <li><strong>Where it&#39;s used</strong>: only inside <a href="#domaineventsavechangesinterceptor"><code>DomainEventSaveChangesInterceptor</code></a>; the flush and drop entry points are called by <a href="#dbcontextfactory"><code>DbContextFactory</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:329</code> on commit, <code>DbContextFactory.cs:275</code> and <code>DbContextFactory.cs:347</code> on rollback and abort).</li>
+          <li><strong>Caveats / not-in-source</strong>: private nested type; it surfaces in the inventory only because private nested types are included.</li>
           </ul>
           <h3 id="domaineventsavechangesinterceptor">DomainEventSaveChangesInterceptor</h3>
           <blockquote>
-          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Interceptors</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:21</code> · Level 6 · class (sealed, partial)</p>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Interceptors</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:38</code> · Level 6 · class (sealed, partial)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: the EF Core interceptor that implements the transactional-outbox producer end: <em>before</em> the write it captures domain events from aggregate roots and serializes them into <a href="group-04-events-outbox.html#outboxmessage"><code>OutboxMessage</code></a> rows in the same transaction; <em>after</em> the write it dispatches those events in-process and marks the rows processed; and on an in-process dispatch failure it signals the background outbox processor to retry.</li>
-          <li><strong>Depends on</strong>: <a href="#applicationdbcontext"><code>ApplicationDbContext</code></a>, <a href="#capturedstate"><code>CapturedState</code></a> (nested), <a href="group-02-domain-building-blocks.html#iaggregateroot"><code>IAggregateRoot</code></a>, <a href="group-04-events-outbox.html#idomainevent"><code>IDomainEvent</code></a>, <a href="group-04-events-outbox.html#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a>, <a href="group-04-events-outbox.html#ioutboxsignal"><code>IOutboxSignal</code></a>, <a href="group-04-events-outbox.html#outboxmessage"><code>OutboxMessage</code></a>, <a href="group-04-events-outbox.html#outboxfinalizer"><code>OutboxFinalizer</code></a>; <code>ConditionalWeakTable</code>, <code>ILogger</code> (BCL).</li>
-          <li><strong>Concept introduced, the dual-dispatch transactional outbox (ADR-003).</strong> <code>[Rubric §6, CQRS &amp; Event-Driven]</code> (state changes announced as events) and <code>[Rubric §29, Resilience &amp; Business Continuity]</code> (at-least-once delivery). There are two delivery tracks:<ol>
-          <li><strong>Transactional persistence</strong>: before <code>base.SaveChangesAsync</code>, each event is serialized to an <a href="group-04-events-outbox.html#outboxmessage"><code>OutboxMessage</code></a> and <code>Add</code>ed to the context, so the rows commit in the <em>same database transaction</em> as the aggregate change; a crash between the write and the dispatch cannot lose an event.</li>
-          <li><strong>In-process fast path</strong>: after the transaction commits, the interceptor immediately dispatches the events and marks the outbox rows processed, so the background processor finds nothing to do on its next scan. If dispatch fails, the rows stay unmarked and the processor picks them up. The <a href="group-04-events-outbox.html#outboxprocessor"><code>OutboxProcessor</code></a> is the safety net, not the primary path.</li>
+          <li><strong>What it is</strong>: the EF Core interceptor that implements the producer end of the transactional outbox. Before the write it captures domain events from aggregate roots and serializes each to an <a href="group-04-events-outbox.html#outboxmessage"><code>OutboxMessage</code></a> row in the same transaction; after the write it <em>routes</em> them, dispatching local events in process and leaving integration-event rows for the <a href="group-04-events-outbox.html#outboxprocessor"><code>OutboxProcessor</code></a> to publish; and when a transaction is open it defers all of that until after commit.</li>
+          <li><strong>Depends on</strong>: <a href="#applicationdbcontext"><code>ApplicationDbContext</code></a>, <a href="#capturedstate"><code>CapturedState</code></a> and <a href="#deferreddispatch"><code>DeferredDispatch</code></a> (nested), <a href="group-02-domain-building-blocks.html#iaggregateroot"><code>IAggregateRoot</code></a>, <a href="group-04-events-outbox.html#idomainevent"><code>IDomainEvent</code></a>, <a href="group-04-events-outbox.html#iintegrationevent"><code>IIntegrationEvent</code></a>, <a href="group-04-events-outbox.html#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a>, <a href="group-04-events-outbox.html#ioutboxsignal"><code>IOutboxSignal</code></a>, <a href="group-04-events-outbox.html#outboxmessage"><code>OutboxMessage</code></a>, <a href="group-04-events-outbox.html#outboxfinalizer"><code>OutboxFinalizer</code></a>; <code>SaveChangesInterceptor</code>, <code>ConditionalWeakTable</code>, <code>ILogger&lt;T&gt;</code> (EF Core / BCL).</li>
+          <li><strong>Concept introduced, the routed transactional outbox (ADR-003).</strong> <code>[Rubric §6, CQRS &amp; Event-Driven]</code> (state changes announced as events) and <code>[Rubric §29, Resilience &amp; Business Continuity]</code> (at-least-once delivery). There are three rules layered on top of each other, all stated in the class doc comment (<code>DomainEventSaveChangesInterceptor.cs:12-34</code>):<ol>
+          <li><strong>Transactional persistence.</strong> Every captured event becomes an <a href="group-04-events-outbox.html#outboxmessage"><code>OutboxMessage</code></a> added to the context <em>before</em> <code>base.SaveChangesAsync</code>, so the rows commit in the same database transaction as the aggregate change. A crash between the write and the dispatch cannot lose an event.</li>
+          <li><strong>Routing by event kind.</strong> Local domain events get an outbox row <em>and</em> an in-process dispatch, after which their rows are marked processed. Events implementing <a href="group-04-events-outbox.html#iintegrationevent"><code>IIntegrationEvent</code></a> get a row and <strong>no</strong> in-process dispatch: their rows stay unprocessed so the <a href="group-04-events-outbox.html#outboxprocessor"><code>OutboxProcessor</code></a> publishes them through <code>IMessageBus</code>, letting the registered transport (in process for the monolith, broker for an extracted service) decide delivery. The comment records why this matters (<code>DomainEventSaveChangesInterceptor.cs:22-24</code>): before this routing existed, <code>AddDomainEvent(integrationEvent)</code> dispatched locally and marked the row processed, so the event silently never reached the wire.</li>
+          <li><strong>Deferral under a transaction.</strong> When the save runs inside the Transactional decorator&#39;s transaction, all post-save work is parked as a <a href="#deferreddispatch"><code>DeferredDispatch</code></a> and flushed by <a href="#dbcontextfactory"><code>DbContextFactory</code></a> only after a successful commit (<code>DomainEventSaveChangesInterceptor.cs:26-33</code>). That keeps handler side effects (email, cache writes, pushes) from acting on state that may still roll back, and keeps EF execution-strategy retries from dispatching the same events once per attempt.</li>
           </ol>
           </li>
           <li><strong>Walkthrough</strong><ul>
-          <li><strong><code>ConditionalWeakTable&lt;DbContext, CapturedState&gt;</code></strong> (line 31): associates the per-save <a href="#capturedstate"><code>CapturedState</code></a> with the context instance without preventing garbage collection, so state cleans up automatically on context disposal (comment, lines 26-31).</li>
-          <li><strong><code>SavingChangesAsync</code> / <code>SavingChanges</code></strong> (lines 34, 46): call <code>CaptureEventsAndPersistToOutbox</code> synchronously when the context is an <a href="#applicationdbcontext"><code>ApplicationDbContext</code></a>; capture must happen before the SQL write, in the same unit of work.</li>
-          <li><strong><code>CaptureEventsAndPersistToOutbox</code></strong> (line 79): collects tracked <a href="group-02-domain-building-blocks.html#iaggregateroot"><code>IAggregateRoot</code></a> entries that carry pending events (lines 81-83), returns early when there are none (line 85), flattens the events, and (only when <code>context.SupportsOutbox</code>, line 94) builds an <a href="group-04-events-outbox.html#outboxmessage"><code>OutboxMessage</code></a> per event via <code>OutboxMessage.FromDomainEvent</code> and adds it to the set (lines 96-103). The <code>Add</code> is intentionally the synchronous DbSet call (the <code>VSTHRD103</code> pragma, lines 100-102, notes <code>AddAsync</code> is only for special value generators). It then stores a <a href="#capturedstate"><code>CapturedState</code></a> into the table (lines 106-107).</li>
-          <li><strong><code>SavedChangesAsync</code></strong> (line 57): after the commit, calls <code>DispatchAndFinalizeAsync</code>. The synchronous <code>SavedChanges</code> (line 72) is a deliberate no-op because events are only captured on the async path (comment, lines 68-71).</li>
-          <li><strong><code>DispatchAndFinalizeAsync</code></strong> (line 114): retrieves and removes the <a href="#capturedstate"><code>CapturedState</code></a> (lines 116-119), dispatches via <a href="group-04-events-outbox.html#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a> (line 123), clears events from the aggregates (line 125), then marks the rows processed through <a href="group-04-events-outbox.html#outboxfinalizer"><code>OutboxFinalizer.MarkProcessedAsync</code></a> (line 127). On any exception it logs, and if there are outbox rows calls <code>outboxSignal.Signal()</code> to wake the processor (lines 129-137); a <code>finally</code> clears the aggregates&#39; events again idempotently (lines 138-142) so a dispatch failure never leaves stale events on the aggregate.</li>
-          <li><strong><code>LogDispatchError</code></strong> (line 151): a source-generated <code>[LoggerMessage]</code> warning, which is why the class is <code>partial</code>.</li>
+          <li><strong>Two <code>ConditionalWeakTable</code>s.</strong> <code>StateTable</code> (<code>DomainEventSaveChangesInterceptor.cs:48</code>) associates the per-save <a href="#capturedstate"><code>CapturedState</code></a> with the context instance; <code>DeferredTable</code> (<code>DomainEventSaveChangesInterceptor.cs:55</code>) holds the parked <a href="#deferreddispatch"><code>DeferredDispatch</code></a> list. Weak tables mean neither structure keeps a context alive, so state cleans up automatically on disposal (<code>DomainEventSaveChangesInterceptor.cs:43-47</code>).</li>
+          <li><strong><code>SavingChangesAsync</code> / <code>SavingChanges</code></strong> (<code>DomainEventSaveChangesInterceptor.cs:58</code>, <code>DomainEventSaveChangesInterceptor.cs:70</code>): both call <code>CaptureEventsAndPersistToOutbox</code> when the context is an <a href="#applicationdbcontext"><code>ApplicationDbContext</code></a>; capture must happen before the SQL write, in the same unit of work.</li>
+          <li><strong><code>CaptureEventsAndPersistToOutbox</code></strong> (<code>DomainEventSaveChangesInterceptor.cs:143</code>): collects tracked <a href="group-02-domain-building-blocks.html#iaggregateroot"><code>IAggregateRoot</code></a> entries carrying pending events (<code>DomainEventSaveChangesInterceptor.cs:145-150</code>) and flattens their events. When <code>context.SupportsOutbox</code> (<code>DomainEventSaveChangesInterceptor.cs:160</code>) it builds one row per event via <code>OutboxMessage.FromDomainEvent</code>, adds it to the set, and sorts the event into the integration bucket (flag only) or the local bucket (event plus its row) (<code>DomainEventSaveChangesInterceptor.cs:165-184</code>). The <code>Add</code> is intentionally the synchronous <code>DbSet</code> call; the <code>VSTHRD103</code> pragma (<code>DomainEventSaveChangesInterceptor.cs:169-171</code>) records that <code>AddAsync</code> exists only for special value generators. When the context has no outbox table (Cosmos overrides <code>SupportsOutbox</code> to false, <code>Persistence/DbContexts/CosmosDbContext.cs:69</code>) nothing can carry an integration event to the bus, so the legacy behavior of dispatching everything in process is kept (<code>DomainEventSaveChangesInterceptor.cs:186-191</code>). The result is stored as a <a href="#capturedstate"><code>CapturedState</code></a> (<code>DomainEventSaveChangesInterceptor.cs:193-194</code>).</li>
+          <li><strong><code>SavedChangesAsync</code></strong> (<code>DomainEventSaveChangesInterceptor.cs:81</code>): the post-commit entry point, calls <code>DispatchAndFinalizeAsync</code>.</li>
+          <li><strong><code>SavedChanges</code></strong> (the synchronous path, <code>DomainEventSaveChangesInterceptor.cs:100</code>): cannot await the dispatcher, so it relies entirely on the outbox. For outbox-capable contexts it removes the state, clears the aggregates&#39; events (preventing the duplicate re-capture a later async save used to produce) and signals the processor if there is anything pending (<code>DomainEventSaveChangesInterceptor.cs:102-110</code>). Contexts without outbox support keep the legacy no-op so a later async save can still deliver their events (<code>DomainEventSaveChangesInterceptor.cs:93-99</code>).</li>
+          <li><strong><code>DispatchAndFinalizeAsync</code></strong> (<code>DomainEventSaveChangesInterceptor.cs:201</code>): pulls and removes the state, then branches on <code>context.Database.CurrentTransaction</code>. With a transaction open it clears the aggregates&#39; events <em>now</em> (so a second save inside the same transaction cannot re-capture them, <code>DomainEventSaveChangesInterceptor.cs:210-212</code>), parks a <a href="#deferreddispatch"><code>DeferredDispatch</code></a>, and returns. Otherwise it flushes immediately.</li>
+          <li><strong><code>FlushStateAsync</code></strong> (<code>DomainEventSaveChangesInterceptor.cs:224</code>): dispatches local events through <a href="group-04-events-outbox.html#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a> (<code>DomainEventSaveChangesInterceptor.cs:228-229</code>), clears the aggregates&#39; events, marks the local rows processed via <a href="group-04-events-outbox.html#outboxfinalizer"><code>OutboxFinalizer</code></a> (<code>DomainEventSaveChangesInterceptor.cs:233</code>), and signals the processor when integration events are waiting (<code>DomainEventSaveChangesInterceptor.cs:235-236</code>). A <code>catch</code> logs and signals so the unprocessed rows get picked up (<code>DomainEventSaveChangesInterceptor.cs:238-246</code>), and a <code>finally</code> clears events idempotently (<code>DomainEventSaveChangesInterceptor.cs:247-251</code>) so a dispatch failure never leaves stale events on an aggregate.</li>
+          <li><strong><code>FlushDeferredAsync</code> / <code>DropDeferred</code></strong> (<code>DomainEventSaveChangesInterceptor.cs:120</code>, <code>DomainEventSaveChangesInterceptor.cs:137</code>): the <code>internal static</code> pair <a href="#dbcontextfactory"><code>DbContextFactory</code></a> calls after commit and on rollback. The flush comment notes a missed flush is safe (<code>DomainEventSaveChangesInterceptor.cs:117-118</code>): the rows are still there unprocessed and the outbox delivers them.</li>
+          <li><strong><code>LogDispatchError</code></strong> (<code>DomainEventSaveChangesInterceptor.cs:260-261</code>): a source-generated <code>[LoggerMessage]</code> warning, which is why the class is <code>partial</code> (<code>[Rubric §13, Observability &amp; Operability]</code>).</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: ADR-003 requires at-least-once delivery; in-process dispatch is tried first because it avoids a broker round-trip, and the outbox row already committed in the same transaction is the durable backstop. Clearing events <em>before</em> finalizing the outbox keeps the follow-up save from re-capturing already-dispatched events.</li>
-          <li><strong>Where it&#39;s used</strong>: registered alongside <a href="#auditsavechangesinterceptor"><code>AuditSaveChangesInterceptor</code></a> on every <a href="#applicationdbcontext"><code>ApplicationDbContext</code></a> instance; its outbox rows are later drained by the <a href="group-04-events-outbox.html#outboxprocessor"><code>OutboxProcessor</code></a>.</li>
+          <li><strong>Why it&#39;s built this way</strong>: ADR-003 requires at-least-once delivery, so the durable row is written in the same transaction and the in-process dispatch is only a fast path that avoids a round trip. Splitting integration events out of that fast path is what makes the same <code>AddDomainEvent</code> call correct in both the monolith and an extracted service (ADR-007). Deferring until after commit resolves the one remaining ordering hazard, a handler observing state that later rolls back.</li>
+          <li><strong>Where it&#39;s used</strong>: registered as a singleton in <code>AddInfrastructure</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:53</code>, stateless because per-save state lives in the weak tables, per the comment at <code>DependencyInjection.cs:50-51</code>) and added to every context&#39;s options alongside <a href="#auditsavechangesinterceptor"><code>AuditSaveChangesInterceptor</code></a> in <code>ApplicationDbContext.OnConfiguring</code> (<code>ApplicationDbContext.cs:124-126</code>); its deferred work is driven by <a href="#dbcontextfactory"><code>DbContextFactory</code></a> and its rows are drained by the <a href="group-04-events-outbox.html#outboxprocessor"><code>OutboxProcessor</code></a>.</li>
           </ul>
           <h3 id="ientitytypeconfigurationbasetentity-tidentifiertype">IEntityTypeConfigurationBase&lt;TEntity, TIdentifierType&gt;</h3>
           <blockquote>
@@ -2002,7 +2163,7 @@
           <ul>
           <li><strong>What it is</strong>: adds a <code>GetByIdOrFailAsync</code> extension member to <a href="#ireadrepositorytentity-tidentifiertype"><code>IReadRepository&lt;TEntity, TIdentifierType&gt;</code></a>, turning the null-returning lookup into a <a href="group-01-result-error-handling.html#result"><code>Result&lt;TEntity&gt;</code></a> that fails with <a href="group-01-result-error-handling.html#error"><code>Error.NotFound</code></a> when the entity is absent.</li>
           <li><strong>Depends on</strong>: <a href="#ireadrepositorytentity-tidentifiertype"><code>IReadRepository&lt;TEntity, TIdentifierType&gt;</code></a>, <a href="group-02-domain-building-blocks.html#auditablebaseentitytidentifiertype"><code>AuditableBaseEntity&lt;TIdentifierType&gt;</code></a>, <a href="group-01-result-error-handling.html#result"><code>Result</code></a>, <a href="group-01-result-error-handling.html#error"><code>Error</code></a>.</li>
-          <li><strong>Concept</strong>: C# <code>extension(T)</code> members (see <a href="00-primer.html">primer</a>) applied to an infrastructure abstraction from the Application layer. <code>[Rubric §15: Best Practices]</code>: it removes the load-then-null-check-then-404 boilerplate otherwise repeated in every command handler.</li>
+          <li><strong>Concept</strong>: C# <code>extension(T)</code> members (see <span class="doc-deadlink" title="Reference outside the published set">primer</span>) applied to an infrastructure abstraction from the Application layer. <code>[Rubric §15: Best Practices]</code>: it removes the load-then-null-check-then-404 boilerplate otherwise repeated in every command handler.</li>
           <li><strong>Walkthrough</strong>: the <code>extension&lt;TEntity, TIdentifierType&gt;(IReadRepository&lt;...&gt; repository)</code> block (line 12) hosts <code>GetByIdOrFailAsync</code> (lines 27-48). It calls <code>GetAllAsync</code> with a <code>where: e =&gt; e.Id.Equals(id)</code> predicate (rather than <code>GetByIdAsync</code>) so the call still flows through the full <code>includes</code> pipeline (lines 34-38), takes <code>FirstOrDefault</code>, and on <code>null</code> returns <code>Result.Failure(Error.NotFound.WithSource(source).WithTarget(typeof(TEntity).Name))</code> (lines 43-44), stamping both the caller source and the entity type onto the error.</li>
           <li><strong>Where it&#39;s used</strong>: called by command handlers across the modules whenever they need to load an entity or fail with a typed not-found error.</li>
           </ul>

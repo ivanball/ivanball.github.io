@@ -1,6 +1,6 @@
 # Phase 1b - Functional Group Taxonomy
 
-This is the **primary axis** of the guide. Every one of the **2,497** distinct first-party type
+This is the **primary axis** of the guide. Every one of the **2,587** distinct first-party type
 nodes from [`00-inventory.md`](00-inventory.md) is assigned to **exactly one** functional group -
 its primary *home*: the capability or cross-cutting concern it most exists to serve. A type used
 across many groups (e.g. `Result<T>`, the entity base) lives in the one foundational group that
@@ -54,15 +54,15 @@ disclosure) and is cross-linked in the chapter.
 | # | Group (chapter) | Types | Levels | Charter |
 |---|-----------------|-------|--------|---------|
 | G01 | **Result & Error Handling**<br/>group-01-result-error-handling.md | 11 | L0-L2 | The Result/Error railway that every operation returns instead of throwing; pagination result shapes. |
-| G02 | **Domain Building Blocks (Entities, Value Objects, Aggregates)**<br/>group-02-domain-building-blocks.md | 27 | L0-L4 | The DDD primitives: entity/aggregate base classes, audit fields, value objects + invariants, domain markers, attributes, identifier aliases. |
-| G03 | **Querying: Specifications, Filtering & the Entity Query Service**<br/>group-03-querying-specifications.md | 25 | L0-L8 | Composable read-side: the Specification pattern, dynamic filtering/sorting/paging, and the generic entity query pipeline. |
+| G02 | **Domain Building Blocks (Entities, Value Objects, Aggregates)**<br/>group-02-domain-building-blocks.md | 28 | L0-L4 | The DDD primitives: entity/aggregate base classes, audit fields, value objects + invariants, domain markers, attributes, identifier aliases. |
+| G03 | **Querying: Specifications, Filtering & the Entity Query Service**<br/>group-03-querying-specifications.md | 26 | L0-L8 | Composable read-side: the Specification pattern, dynamic filtering/sorting/paging, and the generic entity query pipeline. |
 | G04 | **Domain & Integration Events + Outbox Dual-Dispatch**<br/>group-04-events-outbox.md | 31 | L0-L8 | Event contracts, the domain-event dispatcher, the transactional outbox/inbox, and the in-process + broker message buses. |
 | G05 | **CQRS: Commands, Queries & the Decorator Pipeline**<br/>group-05-cqrs-pipeline.md | 23 | L0-L8 | The command/query handler abstraction and the cross-cutting decorator pipeline (logging, transaction, caching, feature-gate, idempotency) wrapping it. |
 | G06 | **Validation**<br/>group-06-validation.md | 17 | L0-L5 | The FluentValidation-based validation contracts and failure mapping that gate commands before they execute. |
-| G07 | **Persistence & EF Core**<br/>group-07-persistence-ef-core.md | 83 | L0-L8 | The single SQLServerDbContext over the abstract ApplicationDbContext, interceptors, repositories, specifications evaluation, data-source routing (database-per-service), conventions, value generators, encryption, factories and design-time. |
+| G07 | **Persistence & EF Core**<br/>group-07-persistence-ef-core.md | 85 | L0-L8 | The single SQLServerDbContext over the abstract ApplicationDbContext, interceptors, repositories, specifications evaluation, data-source routing (database-per-service), conventions, value generators, encryption, factories and design-time. |
 | G08 | **Authentication & Authorization**<br/>group-08-auth.md | 56 | L0-L8 | JWT/JWKS dual-fetch token validation, current-user/claims, password hashing, cookie sessions, and policy/authorization plumbing. |
 | G09 | **Caching**<br/>group-09-caching.md | 4 | L0-L1 | The cache abstraction and its decorator-driven, invalidation-aware integration into the query pipeline. |
-| G10 | **Notifications (Push + In-App Inbox + Email)**<br/>group-10-notifications.md | 53 | L0-L10 | The notification subsystem: push (SignalR), the in-app inbox, email sending, recipient providers, and the thin ADC Notification module host. |
+| G10 | **Notifications (Push + In-App Inbox + Email)**<br/>group-10-notifications.md | 54 | L0-L10 | The notification subsystem: push (SignalR), the in-app inbox, email sending, recipient providers, and the thin ADC Notification module host. |
 | G11 | **Navigation Metadata & Populators (EF-decoupled eager loading)**<br/>group-11-navigation-populators.md | 12 | L0-L9 | INavigationMetadata/INavigationPopulator and the loader that hydrate cross-container/cross-source relationships without EF Include coupling (ADR-002). |
 | G12 | **API Hosting, Middleware, Idempotency & DTO/Contract Mapping**<br/>group-12-api-hosting-mapping.md | 56 | L0-L10 | The ASP.NET Core edge: controller bases, middleware, startup, model binders, JSON converters, feature management, idempotency, correlation, and manual DTO/request mapping. |
 | G13 | **gRPC & Inter-Service Contracts**<br/>group-13-grpc-contracts.md | 6 | L0-L4 | Typed gRPC clients/servers, interceptors, Result-over-the-wire, and the ServiceContract marker for synchronous inter-service calls (ADR-007). |
@@ -70,18 +70,18 @@ disclosure) and is cross-linked in the chapter.
 | G15 | **Common UI Framework (MudBlazor components, theme, base pages)**<br/>group-15-common-ui-framework.md | 82 | L0-L7 | Reusable Blazor building blocks: the data-grid list page base, theme, common pages/services, and UI extensions shared by every consumer app. |
 | G16 | **Aspire Orchestration & Service Defaults**<br/>group-16-aspire-orchestration.md | 16 | L0-L3 | The Aspire AppHost wiring, ServiceDefaults, warmup, telemetry and security helpers that compose and run the distributed app locally and in Azure. |
 | G17 | **ADC Conference - Domain Model & Module Contracts**<br/>group-17-conference-domain.md | 85 | L0-L8 | The Conference bounded context: Event/Session/Speaker/Category/Question aggregates, their domain events and invariants, plus the Shared identifiers/DTOs/integration-event contracts. |
-| G18 | **ADC Conference - Application & Use Cases**<br/>group-18-conference-application.md | 202 | L0-L11 | Conference CQRS handlers, validators, DTOs, specifications, the Sessionize import, and the session-selection decision-support analytics. |
+| G18 | **ADC Conference - Application & Use Cases**<br/>group-18-conference-application.md | 211 | L0-L11 | Conference CQRS handlers, validators, DTOs, specifications, the Sessionize import, and the session-selection decision-support analytics. |
 | G19 | **ADC Conference - Infrastructure & Persistence**<br/>group-19-conference-infrastructure.md | 27 | L0-L8 | The Conference module DbContext registration, EF entity configurations, database seeding, and infrastructure services. |
-| G20 | **ADC Conference - API, gRPC Contracts & Service Host**<br/>group-20-conference-api-grpc.md | 40 | L0-L10 | Conference REST controllers, the .Contracts gRPC surface, the extractable service host, and the gRPC adapter. |
-| G21 | **ADC Conference - UI**<br/>group-21-conference-ui.md | 79 | L0-L8 | The Conference Blazor pages (events, sessions, speakers, categories, questions, rooms, feedback, public, session-selection) and their UI services. |
-| G22 | **ADC Engagement Module (Session Bookmarks)**<br/>group-22-engagement-module.md | 67 | L0-L11 | The Engagement bounded context end-to-end: bookmark aggregate, use cases, persistence, API/contracts/service, and feedback UI. |
+| G20 | **ADC Conference - API, gRPC Contracts & Service Host**<br/>group-20-conference-api-grpc.md | 41 | L0-L10 | Conference REST controllers, the .Contracts gRPC surface, the extractable service host, and the gRPC adapter. |
+| G21 | **ADC Conference - UI**<br/>group-21-conference-ui.md | 89 | L0-L8 | The Conference Blazor pages (events, sessions, speakers, categories, questions, rooms, feedback, public, session-selection) and their UI services. |
+| G22 | **ADC Engagement Module (Session Bookmarks)**<br/>group-22-engagement-module.md | 72 | L0-L11 | The Engagement bounded context end-to-end: bookmark aggregate, use cases, persistence, API/contracts/service, and feedback UI. |
 | G26 | **ADC Engagement Live Layer (Real-Time Polls & Session Q&A)**<br/>group-23-engagement-live-layer.md | 92 | L0-L10 | Real-time audience interaction in the Engagement bounded context: event-wide live polls with voting and moderated per-session Q&A with upvoting, over the SignalR hub-channel transport (ADR-039) and the cross-service gRPC live-channel adapter. |
-| G23 | **ADC Identity Module (Users, Profiles, GDPR Export/Erasure)**<br/>group-24-identity-module.md | 78 | L0-L11 | The Identity bounded context end-to-end: the User aggregate, change-password/delete/export use cases, persistence, API/contracts/service, and profile/user UI. |
-| G24 | **ADC Application Host, UI Shell & Cross-Module Composition**<br/>group-25-adc-host-composition.md | 34 | L0-L11 | The ADC host: the Blazor Web/WASM/WinUI shells, host pages/services, security, and the cross-module application composition. |
+| G23 | **ADC Identity Module (Users, Profiles, GDPR Export/Erasure)**<br/>group-24-identity-module.md | 82 | L0-L11 | The Identity bounded context end-to-end: the User aggregate, change-password/delete/export use cases, persistence, API/contracts/service, and profile/user UI. |
+| G24 | **ADC Application Host, UI Shell & Cross-Module Composition**<br/>group-25-adc-host-composition.md | 18 | L0-L11 | The ADC host: the Blazor Web/WASM/WinUI shells, host pages/services, security, and the cross-module application composition. |
 | G27 | **Device Capability Abstraction Layer (Native Contracts, MAUI, Browser & Fallback Adapters)**<br/>group-26-device-capability-layer.md | 87 | L0-L4 | Per-capability interface contracts (biometric, geocoding/geolocation, speech, push registration, media/clipboard/screenshot, haptics, share, external auth/links, local cache/notifications, connectivity/battery/accessibility, deep links) plus their MAUI-native, browser-JS-interop, and inert fallback implementations, selected per host at DI composition time (ADR-042/043/044/045). |
-| G25 | **Testing & Quality Infrastructure**<br/>group-27-testing-infrastructure.md | 1170 | L0-L17 | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception). |
+| G25 | **Testing & Quality Infrastructure**<br/>group-27-testing-infrastructure.md | 1242 | L0-L17 | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception). |
 
-**Reconciliation:** 1327 production types across 26 groups + 1170 test/testing types in G25 = **2497** (matches the inventory's distinct-node count). No type appears twice; none dropped.
+**Reconciliation:** 1345 production types across 26 groups + 1242 test/testing types in G25 = **2587** (matches the inventory's distinct-node count). No type appears twice; none dropped.
 
 ---
 
@@ -107,7 +107,7 @@ disclosure) and is cross-linked in the chapter.
 
 ### G02 - Domain Building Blocks (Entities, Value Objects, Aggregates)
 
-> `group-02-domain-building-blocks.md` | 27 types | The DDD primitives: entity/aggregate base classes, audit fields, value objects + invariants, domain markers, attributes, identifier aliases.
+> `group-02-domain-building-blocks.md` | 28 types | The DDD primitives: entity/aggregate base classes, audit fields, value objects + invariants, domain markers, attributes, identifier aliases.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
@@ -116,6 +116,7 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `IAuditableEntity` | interface | MMCA.Common.Domain.Interfaces |
 | 0 | `IBaseEntity<TIdentifierType>` | interface | MMCA.Common.Domain.Interfaces |
 | 0 | `IdValueGeneratedAttribute` | class | MMCA.Common.Domain.Attributes |
+| 0 | `IRowVersioned` | interface | MMCA.Common.Domain.Interfaces |
 | 0 | `PiiAttribute` | class | MMCA.Common.Domain.Attributes |
 | 0 | `RedactableProperty` | class | MMCA.Common.Domain.Privacy |
 | 0 | `ValueObject` | record | MMCA.Common.Shared.ValueObjects |
@@ -141,11 +142,12 @@ disclosure) and is cross-linked in the chapter.
 
 ### G03 - Querying: Specifications, Filtering & the Entity Query Service
 
-> `group-03-querying-specifications.md` | 25 types | Composable read-side: the Specification pattern, dynamic filtering/sorting/paging, and the generic entity query pipeline.
+> `group-03-querying-specifications.md` | 26 types | Composable read-side: the Specification pattern, dynamic filtering/sorting/paging, and the generic entity query pipeline.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
 | 0 | `EntityQueryParameters<TEntity>` | record | MMCA.Common.Application.Services.Query |
+| 0 | `FilterValueParser` | class | MMCA.Common.Application.Services.Filtering |
 | 0 | `IFilterStrategy` | interface | MMCA.Common.Application.Services.Filtering |
 | 0 | `ParameterReplacer` | class | MMCA.Common.Application.Specifications |
 | 0 | `PropertyAccessor` | record struct | MMCA.Common.Application.Services |
@@ -265,7 +267,7 @@ disclosure) and is cross-linked in the chapter.
 
 ### G07 - Persistence & EF Core
 
-> `group-07-persistence-ef-core.md` | 83 types | The single SQLServerDbContext over the abstract ApplicationDbContext, interceptors, repositories, specifications evaluation, data-source routing (database-per-service), conventions, value generators, encryption, factories and design-time.
+> `group-07-persistence-ef-core.md` | 85 types | The single SQLServerDbContext over the abstract ApplicationDbContext, interceptors, repositories, specifications evaluation, data-source routing (database-per-service), conventions, value generators, encryption, factories and design-time.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
@@ -291,6 +293,7 @@ disclosure) and is cross-linked in the chapter.
 | 1 | `EFQueryableExecutor` | class | MMCA.Common.Infrastructure.Persistence |
 | 1 | `ExplicitAssemblyProvider` | class | MMCA.Common.Infrastructure.Persistence.DbContexts.Design |
 | 1 | `NullNativePushSender` | class | MMCA.Common.Infrastructure.Services |
+| 1 | `SoftDeleteUniqueIndexConvention` | class | MMCA.Common.Infrastructure.Persistence.Conventions |
 | 2 | `CapturedState` | record | MMCA.Common.Infrastructure.Persistence.Interceptors |
 | 2 | `DesignTimeDbContextOptions` | class | MMCA.Common.Infrastructure.Persistence.DbContexts.Design |
 | 2 | `IDataSourceService` | interface | MMCA.Common.Application.Interfaces.Infrastructure |
@@ -323,6 +326,7 @@ disclosure) and is cross-linked in the chapter.
 | 6 | `ApplicationDbContext` | class | MMCA.Common.Infrastructure.Persistence.DbContexts |
 | 6 | `AuditSaveChangesInterceptor` | class | MMCA.Common.Infrastructure.Persistence.Interceptors |
 | 6 | `DataSourceModelCacheKeyFactory` | class | MMCA.Common.Infrastructure.Persistence.DbContexts |
+| 6 | `DeferredDispatch` | record | MMCA.Common.Infrastructure.Persistence.Interceptors |
 | 6 | `DomainEventSaveChangesInterceptor` | class | MMCA.Common.Infrastructure.Persistence.Interceptors |
 | 6 | `EFReadRepository<TEntity, TIdentifierType>` | class | MMCA.Common.Infrastructure.Persistence.Repositories |
 | 6 | `EFReadRepositoryDecorator<TEntity, TIdentifierType>` | class | MMCA.Common.Infrastructure.Persistence.Repositories |
@@ -429,7 +433,7 @@ disclosure) and is cross-linked in the chapter.
 
 ### G10 - Notifications (Push + In-App Inbox + Email)
 
-> `group-10-notifications.md` | 53 types | The notification subsystem: push (SignalR), the in-app inbox, email sending, recipient providers, and the thin ADC Notification module host.
+> `group-10-notifications.md` | 54 types | The notification subsystem: push (SignalR), the in-app inbox, email sending, recipient providers, and the thin ADC Notification module host.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
@@ -441,6 +445,7 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `ILiveChannelPublisher` | interface | MMCA.Common.Application.Interfaces.Infrastructure |
 | 0 | `INotificationRecipientProvider` | interface | MMCA.Common.Application.Interfaces.Infrastructure |
 | 0 | `IPushNotificationSender` | interface | MMCA.Common.Application.Interfaces.Infrastructure |
+| 0 | `KestrelConfiguration` | class | MMCA.ADC.Notification.Service |
 | 0 | `MarkAllNotificationsReadCommand` | record | MMCA.Common.Application.Notifications.UserNotifications.UseCases.MarkAllRead |
 | 0 | `MarkNotificationReadCommand` | record | MMCA.Common.Application.Notifications.UserNotifications.UseCases.MarkRead |
 | 0 | `NotificationFeatures` | class | MMCA.Common.Shared.Notifications |
@@ -829,7 +834,7 @@ disclosure) and is cross-linked in the chapter.
 
 ### G18 - ADC Conference - Application & Use Cases
 
-> `group-18-conference-application.md` | 202 types | Conference CQRS handlers, validators, DTOs, specifications, the Sessionize import, and the session-selection decision-support analytics.
+> `group-18-conference-application.md` | 211 types | Conference CQRS handlers, validators, DTOs, specifications, the Sessionize import, and the session-selection decision-support analytics.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
@@ -844,6 +849,7 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `GetNowNextQuery` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.NowNext |
 | 0 | `GetPublicSessionFilterQuery` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.GetPublicSessionFilter |
 | 0 | `GetSessionBookmarkCountQuery` | record | MMCA.ADC.Conference.Application.Speakers.UseCases.GetSessionBookmarkCount |
+| 0 | `GetSessionBookmarkCountsQuery` | record | MMCA.ADC.Conference.Application.Speakers.UseCases.GetSessionBookmarkCounts |
 | 0 | `GetSessionFeedbackQuery` | record | MMCA.ADC.Conference.Application.Speakers.UseCases.GetSessionFeedback |
 | 0 | `GetSessionSelectionDashboardQuery` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetSessionSelectionDashboard |
 | 0 | `GetSpeakersByEventFilterQuery` | record | MMCA.ADC.Conference.Application.Speakers.UseCases.GetSpeakersByEventFilter |
@@ -887,6 +893,12 @@ disclosure) and is cross-linked in the chapter.
 | 5 | `RoomFloorRules<T>` | class | MMCA.ADC.Conference.Application.Events.Validation |
 | 5 | `RoomLocationRules<T>` | class | MMCA.ADC.Conference.Application.Events.Validation |
 | 5 | `RoomNameRules<T>` | class | MMCA.ADC.Conference.Application.Events.Validation |
+| 5 | `SessionAccessibilityInfoRules<T>` | class | MMCA.ADC.Conference.Application.Sessions.Validation |
+| 5 | `SessionDescriptionRules<T>` | class | MMCA.ADC.Conference.Application.Sessions.Validation |
+| 5 | `SessionLiveUrlRules<T>` | class | MMCA.ADC.Conference.Application.Sessions.Validation |
+| 5 | `SessionRecordingUrlRules<T>` | class | MMCA.ADC.Conference.Application.Sessions.Validation |
+| 5 | `SessionResourceLinksRules<T>` | class | MMCA.ADC.Conference.Application.Sessions.Validation |
+| 5 | `SessionStatusRules<T>` | class | MMCA.ADC.Conference.Application.Sessions.Validation |
 | 5 | `SessionTitleRules<T>` | class | MMCA.ADC.Conference.Application.Sessions.Validation |
 | 5 | `SpeakerFirstNameRules<T>` | class | MMCA.ADC.Conference.Application.Speakers.Validation |
 | 5 | `SpeakerLastNameRules<T>` | class | MMCA.ADC.Conference.Application.Speakers.Validation |
@@ -957,6 +969,7 @@ disclosure) and is cross-linked in the chapter.
 | 7 | `SessionCategoryItemDTOMapper` | class | MMCA.ADC.Conference.Application.Sessions.DTOs |
 | 7 | `SessionCreateRequest` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.Create |
 | 7 | `SessionQuestionAnswerDTOMapper` | class | MMCA.ADC.Conference.Application.Sessions.DTOs |
+| 7 | `SessionRoomScheduling` | class | MMCA.ADC.Conference.Application.Sessions.Validation |
 | 7 | `SessionSpeakerDTOMapper` | class | MMCA.ADC.Conference.Application.Sessions.DTOs |
 | 7 | `SpeakerCreateRequestMapper` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.Create |
 | 7 | `SpeakerCreateRequestValidator` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.Create |
@@ -988,6 +1001,7 @@ disclosure) and is cross-linked in the chapter.
 | 8 | `GetContentSimilarityHandler` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetContentSimilarity |
 | 8 | `GetNowNextHandler` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.NowNext |
 | 8 | `GetSessionBookmarkCountHandler` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.GetSessionBookmarkCount |
+| 8 | `GetSessionBookmarkCountsHandler` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.GetSessionBookmarkCounts |
 | 8 | `GetSessionFeedbackHandler` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.GetSessionFeedback |
 | 8 | `GetSessionSelectionDashboardHandler` | class | MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetSessionSelectionDashboard |
 | 8 | `GetSpeakersByEventFilterHandler` | class | MMCA.ADC.Conference.Application.Speakers.UseCases.GetSpeakersByEventFilter |
@@ -1072,7 +1086,7 @@ disclosure) and is cross-linked in the chapter.
 
 ### G20 - ADC Conference - API, gRPC Contracts & Service Host
 
-> `group-20-conference-api-grpc.md` | 40 types | Conference REST controllers, the .Contracts gRPC surface, the extractable service host, and the gRPC adapter.
+> `group-20-conference-api-grpc.md` | 41 types | Conference REST controllers, the .Contracts gRPC surface, the extractable service host, and the gRPC adapter.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
@@ -1087,6 +1101,7 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `AssemblyReference` | class | MMCA.ADC.Conference.API |
 | 0 | `ClassReference` | class | MMCA.ADC.Conference.API |
 | 0 | `ConferenceErrorResources` | class | MMCA.ADC.Conference.API.Resources |
+| 0 | `KestrelConfiguration` | class | MMCA.ADC.Conference.Service |
 | 0 | `UpdateCategoryItemRequest` | record | MMCA.ADC.Conference.API.Controllers |
 | 0 | `UpdateEventQuestionAnswerRequest` | record | MMCA.ADC.Conference.API.Controllers |
 | 0 | `UpdateRoomRequest` | record | MMCA.ADC.Conference.API.Controllers |
@@ -1119,20 +1134,29 @@ disclosure) and is cross-linked in the chapter.
 
 ### G21 - ADC Conference - UI
 
-> `group-21-conference-ui.md` | 79 types | The Conference Blazor pages (events, sessions, speakers, categories, questions, rooms, feedback, public, session-selection) and their UI services.
+> `group-21-conference-ui.md` | 89 types | The Conference Blazor pages (events, sessions, speakers, categories, questions, rooms, feedback, public, session-selection) and their UI services.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
+| 0 | `ADCEventInfo` | record | MMCA.ADC.Conference.UI.Pages.Home |
 | 0 | `CategoryItemInfo` | record | MMCA.ADC.Conference.UI.Services |
 | 0 | `ConferenceRoutePaths` | class | MMCA.ADC.Conference.UI |
+| 0 | `ConferenceTrackInfo` | record | MMCA.ADC.Conference.UI.Pages.Home |
 | 0 | `EventInfo` | record | MMCA.ADC.Conference.UI.Services |
+| 0 | `EventPhase` | enum | MMCA.ADC.Conference.UI.Pages.Home |
 | 0 | `IPublicLinkBuilder` | interface | MMCA.ADC.Conference.UI.Services |
+| 0 | `KeynoteSpeakerInfo` | record | MMCA.ADC.Conference.UI.Pages.Home |
+| 0 | `ScorePollSignal` | enum | MMCA.ADC.Conference.UI.Pages.SessionSelection |
 | 0 | `SessionSelectionDisplay` | class | MMCA.ADC.Conference.UI.Pages.SessionSelection |
 | 0 | `SpeakerInfo` | record | MMCA.ADC.Conference.UI.Services |
+| 0 | `SponsorInfo` | record | MMCA.ADC.Conference.UI.Pages.Home |
+| 1 | `ADCCollectionResult` | record | MMCA.ADC.Conference.UI.Pages.Home |
 | 1 | `ICategoryItemLookupService` | interface | MMCA.ADC.Conference.UI.Services |
 | 1 | `IEventLookupService` | interface | MMCA.ADC.Conference.UI.Services |
 | 1 | `ISpeakerLookupService` | interface | MMCA.ADC.Conference.UI.Services |
 | 1 | `NavigationPublicLinkBuilder` | class | MMCA.ADC.Conference.UI.Services |
+| 1 | `ScorePollTracker` | class | MMCA.ADC.Conference.UI.Pages.SessionSelection |
+| 1 | `SponsorTierInfo` | record | MMCA.ADC.Conference.UI.Pages.Home |
 | 2 | `IEventSpeakerUIService` | interface | MMCA.ADC.Conference.UI.Services |
 | 2 | `IOrganizerEventFeedbackUIService` | interface | MMCA.ADC.Conference.UI.Services |
 | 2 | `IOrganizerSessionFeedbackUIService` | interface | MMCA.ADC.Conference.UI.Services |
@@ -1193,6 +1217,7 @@ disclosure) and is cross-linked in the chapter.
 | 6 | `RoomDetail` | class | MMCA.ADC.Conference.UI.Pages.Room |
 | 6 | `SpeakerCategoryItemsPanel` | class | MMCA.ADC.Conference.UI.Pages.Speaker |
 | 6 | `SpeakerDetail` | class | MMCA.ADC.Conference.UI.Pages.Speaker |
+| 7 | `ADCHome` | class | MMCA.ADC.Conference.UI.Pages.Home |
 | 7 | `PublicSessionDetail` | class | MMCA.ADC.Conference.UI.Pages.Public |
 | 7 | `PublicSpeakerList` | class | MMCA.ADC.Conference.UI.Pages.Public |
 | 7 | `RoomList` | class | MMCA.ADC.Conference.UI.Pages.Room |
@@ -1205,7 +1230,7 @@ disclosure) and is cross-linked in the chapter.
 
 ### G22 - ADC Engagement Module (Session Bookmarks)
 
-> `group-22-engagement-module.md` | 67 types | The Engagement bounded context end-to-end: bookmark aggregate, use cases, persistence, API/contracts/service, and feedback UI.
+> `group-22-engagement-module.md` | 72 types | The Engagement bounded context end-to-end: bookmark aggregate, use cases, persistence, API/contracts/service, and feedback UI.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
@@ -1214,12 +1239,11 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `AssemblyReference` | class | MMCA.ADC.Engagement.Infrastructure |
 | 0 | `AssemblyReference` | class | MMCA.ADC.Engagement.Application |
 | 0 | `AssemblyReference` | class | MMCA.ADC.Engagement.Domain |
-| 0 | `ClassReference` | class | MMCA.ADC.Engagement.API |
 | 0 | `ClassReference` | class | MMCA.ADC.Engagement.Infrastructure |
+| 0 | `ClassReference` | class | MMCA.ADC.Engagement.API |
 | 0 | `ClassReference` | class | MMCA.ADC.Engagement.Application |
 | 0 | `ClassReference` | class | MMCA.ADC.Engagement.Domain |
 | 0 | `CreateBookmarkRequest` | record | MMCA.ADC.Engagement.Shared.UserSessionBookmarks |
-| 0 | `DependencyInjection` | class | MMCA.ADC.Engagement.Infrastructure |
 | 0 | `EngagementErrorResources` | class | MMCA.ADC.Engagement.API.Resources |
 | 0 | `EngagementFeatures` | class | MMCA.ADC.Engagement.Shared |
 | 0 | `EngagementPermissions` | class | MMCA.ADC.Engagement.Shared.Authorization |
@@ -1227,11 +1251,14 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `GetBookmarkedSessionIdsQuery` | record | MMCA.ADC.Engagement.Application.UserSessionBookmarks.UseCases.GetBookmarkedSessionIds |
 | 0 | `GetUserBookmarksQuery` | record | MMCA.ADC.Engagement.Application.UserSessionBookmarks.UseCases.GetUserBookmarks |
 | 0 | `IBookmarkCountService` | interface | MMCA.ADC.Engagement.Shared.UserSessionBookmarks |
+| 0 | `KestrelConfiguration` | class | MMCA.ADC.Engagement.Service |
+| 0 | `LiveChannelPublishWorkItem` | record | MMCA.ADC.Engagement.Application.Live |
 | 0 | `SessionReminder` | record | MMCA.ADC.Engagement.UI.Services |
 | 0 | `UserEngagementBookmarkExportDTO` | record | MMCA.ADC.Engagement.Shared.Exports |
 | 0 | `UserEngagementSubmittedQuestionExportDTO` | record | MMCA.ADC.Engagement.Shared.Exports |
 | 1 | `CreateBookmarkRequestValidator` | class | MMCA.ADC.Engagement.Application.UserSessionBookmarks.UseCases.Create |
 | 1 | `DisabledBookmarkCountService` | class | MMCA.ADC.Engagement.Shared.UserSessionBookmarks |
+| 1 | `ILiveChannelPublishQueue` | interface | MMCA.ADC.Engagement.Application.Live |
 | 1 | `SessionReminderPlanner` | class | MMCA.ADC.Engagement.UI.Services |
 | 1 | `UserEngagementExportDTO` | record | MMCA.ADC.Engagement.Shared.Exports |
 | 1 | `UserSessionBookmarkDTO` | record | MMCA.ADC.Engagement.Shared.UserSessionBookmarks |
@@ -1242,21 +1269,24 @@ disclosure) and is cross-linked in the chapter.
 | 2 | `ISessionBookmarkUIService` | interface | MMCA.ADC.Engagement.Shared.UserSessionBookmarks |
 | 2 | `ISessionFeedbackUIService` | interface | MMCA.ADC.Engagement.UI.Services |
 | 2 | `IUserEngagementExportService` | interface | MMCA.ADC.Engagement.Shared.Exports |
+| 2 | `LiveChannelPublishQueue` | class | MMCA.ADC.Engagement.Application.Live |
 | 2 | `SessionReminderCoordinator` | class | MMCA.ADC.Engagement.UI.Services |
 | 2 | `UserSessionBookmarkChanged` | record | MMCA.ADC.Engagement.Domain.UserSessionBookmarks.DomainEvents |
 | 3 | `BookmarkService` | class | MMCA.ADC.Engagement.UI.Services |
 | 3 | `DisabledUserEngagementExportService` | class | MMCA.ADC.Engagement.Shared.Exports |
 | 3 | `EngagementUIModule` | class | MMCA.ADC.Engagement.UI |
-| 3 | `EventFeedback` | class | MMCA.ADC.Engagement.UI.Pages.Feedback |
 | 3 | `EventFeedbackService` | class | MMCA.ADC.Engagement.UI.Services |
+| 3 | `LiveChannelPublishProcessor` | class | MMCA.ADC.Engagement.Infrastructure.Live |
 | 3 | `QuestionLookupService` | class | MMCA.ADC.Engagement.UI.Services |
 | 3 | `SessionBookmarkUIService` | class | MMCA.ADC.Engagement.UI.Services |
 | 3 | `SessionFeedbackService` | class | MMCA.ADC.Engagement.UI.Services |
+| 4 | `DependencyInjection` | class | MMCA.ADC.Engagement.Infrastructure |
 | 4 | `EngagementModule` | class | MMCA.ADC.Engagement.API |
 | 4 | `UserSessionBookmarkInvariants` | class | MMCA.ADC.Engagement.Domain.UserSessionBookmarks |
 | 5 | `SessionFeedback` | class | MMCA.ADC.Engagement.UI.Pages.Feedback |
 | 5 | `UserSessionBookmark` | class | MMCA.ADC.Engagement.Domain.UserSessionBookmarks |
 | 6 | `BookmarksController` | class | MMCA.ADC.Engagement.API.Controllers |
+| 6 | `EventFeedback` | class | MMCA.ADC.Engagement.UI.Pages.Feedback |
 | 6 | `IBookmarkManagementDomainService` | interface | MMCA.ADC.Engagement.Domain.Services |
 | 6 | `UserSessionBookmarkDTOMapper` | class | MMCA.ADC.Engagement.Application.UserSessionBookmarks.DTOs |
 | 7 | `BookmarkManagementDomainService` | class | MMCA.ADC.Engagement.Domain.Services |
@@ -1378,19 +1408,19 @@ disclosure) and is cross-linked in the chapter.
 
 ### G23 - ADC Identity Module (Users, Profiles, GDPR Export/Erasure)
 
-> `group-24-identity-module.md` | 78 types | The Identity bounded context end-to-end: the User aggregate, change-password/delete/export use cases, persistence, API/contracts/service, and profile/user UI.
+> `group-24-identity-module.md` | 82 types | The Identity bounded context end-to-end: the User aggregate, change-password/delete/export use cases, persistence, API/contracts/service, and profile/user UI.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
-| 0 | `AssemblyReference` | class | MMCA.ADC.Identity.API |
 | 0 | `AssemblyReference` | class | MMCA.ADC.Identity.Application |
-| 0 | `AssemblyReference` | class | MMCA.ADC.Identity.Domain |
+| 0 | `AssemblyReference` | class | MMCA.ADC.Identity.API |
 | 0 | `AssemblyReference` | class | MMCA.ADC.Identity.Infrastructure |
+| 0 | `AssemblyReference` | class | MMCA.ADC.Identity.Domain |
 | 0 | `ChangePreferencesRequest` | record | MMCA.ADC.Identity.Application.Users.UseCases.ChangePreferences |
-| 0 | `ClassReference` | class | MMCA.ADC.Identity.Domain |
 | 0 | `ClassReference` | class | MMCA.ADC.Identity.API |
-| 0 | `ClassReference` | class | MMCA.ADC.Identity.Application |
 | 0 | `ClassReference` | class | MMCA.ADC.Identity.Infrastructure |
+| 0 | `ClassReference` | class | MMCA.ADC.Identity.Domain |
+| 0 | `ClassReference` | class | MMCA.ADC.Identity.Application |
 | 0 | `DependencyInjection` | class | MMCA.ADC.Identity.Infrastructure |
 | 0 | `ExportUserDataQuery` | record | MMCA.ADC.Identity.Application.Users.UseCases.ExportUserData |
 | 0 | `GetUserAvatarQuery` | record | MMCA.ADC.Identity.Application.Users.UseCases.GetUserAvatar |
@@ -1401,6 +1431,8 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `IdentityPermissions` | class | MMCA.ADC.Identity.Shared.Authorization |
 | 0 | `IdentityRoutePaths` | class | MMCA.ADC.Identity.UI |
 | 0 | `IdentitySettings` | class | MMCA.ADC.Identity.Shared |
+| 0 | `IExternalLoginEmailVerifier` | interface | MMCA.ADC.Identity.Application.Users |
+| 0 | `KestrelConfiguration` | class | MMCA.ADC.Identity.Service |
 | 0 | `RemoveUserAvatarCommand` | record | MMCA.ADC.Identity.Application.Users.UseCases.RemoveUserAvatar |
 | 0 | `SetUserAvatarCommand` | record | MMCA.ADC.Identity.Application.Users.UseCases.SetUserAvatar |
 | 0 | `UserAvatarDTO` | record | MMCA.ADC.Identity.Shared.Users |
@@ -1411,11 +1443,13 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `UserPreferencesResponse` | record | MMCA.ADC.Identity.Application.Users.UseCases.GetPreferences |
 | 1 | `ChangePasswordRequestValidator` | class | MMCA.ADC.Identity.Application.Users.Validation |
 | 1 | `DisabledAttendeeQueryService` | class | MMCA.ADC.Identity.Shared.Users |
+| 1 | `HttpContextExternalLoginEmailVerifier` | class | MMCA.ADC.Identity.API.Authentication |
 | 1 | `IUserUIService` | interface | MMCA.ADC.Identity.UI.Services |
 | 1 | `UserDataExportEngagementSectionDTO` | record | MMCA.ADC.Identity.Shared.Users |
 | 1 | `UserDataExportNotificationSectionDTO` | record | MMCA.ADC.Identity.Shared.Users |
 | 1 | `UserDTO` | record | MMCA.ADC.Identity.Shared.Users |
 | 2 | `DependencyInjection` | class | MMCA.ADC.Identity.API |
+| 2 | `ListPageActions` | class | MMCA.ADC.Identity.UI.Common |
 | 2 | `UserDataExportDTO` | record | MMCA.ADC.Identity.Shared.Users |
 | 2 | `UserDeleted` | record | MMCA.ADC.Identity.Domain.Users.DomainEvents |
 | 2 | `UserPasswordChanged` | record | MMCA.ADC.Identity.Domain.Users.DomainEvents |
@@ -1463,39 +1497,23 @@ disclosure) and is cross-linked in the chapter.
 
 ### G24 - ADC Application Host, UI Shell & Cross-Module Composition
 
-> `group-25-adc-host-composition.md` | 34 types | The ADC host: the Blazor Web/WASM/WinUI shells, host pages/services, security, and the cross-module application composition.
+> `group-25-adc-host-composition.md` | 18 types | The ADC host: the Blazor Web/WASM/WinUI shells, host pages/services, security, and the cross-module application composition.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
-| 0 | `ADCEventInfo` | record | MMCA.ADC.UI.Web.Client.Pages |
-| 0 | `ADCEventInfo` | record | MMCA.ADC.UI.Pages |
-| 0 | `ConferenceTrackInfo` | record | MMCA.ADC.UI.Web.Client.Pages |
-| 0 | `ConferenceTrackInfo` | record | MMCA.ADC.UI.Pages |
-| 0 | `EventPhase` | enum | MMCA.ADC.UI.Web.Client.Pages |
-| 0 | `EventPhase` | enum | MMCA.ADC.UI.Pages |
-| 0 | `KeynoteSpeakerInfo` | record | MMCA.ADC.UI.Pages |
-| 0 | `KeynoteSpeakerInfo` | record | MMCA.ADC.UI.Web.Client.Pages |
 | 0 | `NowNextSession` | record | MMCA.ADC.UI |
-| 0 | `SponsorInfo` | record | MMCA.ADC.UI.Pages |
-| 0 | `SponsorInfo` | record | MMCA.ADC.UI.Web.Client.Pages |
 | 0 | `WebAuthenticatorCallbackActivity` | class | MMCA.ADC.UI |
-| 1 | `ADCCollectionResult` | record | MMCA.ADC.UI.Web.Client.Pages |
-| 1 | `ADCCollectionResult` | record | MMCA.ADC.UI.Pages |
+| 1 | `ADCHomePageContent` | class | MMCA.ADC.UI.Web.Client.Pages |
 | 1 | `AppActionsInitializer` | class | MMCA.ADC.UI.Services |
 | 1 | `MauiPublicLinkBuilder` | class | MMCA.ADC.UI.Services |
 | 1 | `MauiTokenStorageService` | class | MMCA.ADC.UI.Services |
 | 1 | `NowNextSnapshot` | record | MMCA.ADC.UI |
-| 1 | `SponsorTierInfo` | record | MMCA.ADC.UI.Web.Client.Pages |
-| 1 | `SponsorTierInfo` | record | MMCA.ADC.UI.Pages |
 | 2 | `MainPage` | class | MMCA.ADC.UI |
 | 3 | `App` | class | MMCA.ADC.UI |
 | 3 | `DeviceUIModule` | class | MMCA.ADC.UI |
 | 3 | `MainActivity` | class | MMCA.ADC.UI |
 | 4 | `NowNextWidgetProvider` | class | MMCA.ADC.UI |
-| 7 | `ADCHome` | class | MMCA.ADC.UI.Web.Client.Pages |
-| 7 | `ADCHome` | class | MMCA.ADC.UI.Pages |
 | 8 | `ADCHomePageContent` | class | MMCA.ADC.UI.Pages |
-| 8 | `ADCHomePageContent` | class | MMCA.ADC.UI.Web.Client.Pages |
 | 9 | `MauiProgram` | class | MMCA.ADC.UI |
 | 10 | `App` | class | MMCA.ADC.UI.WinUI |
 | 10 | `AppDelegate` | class | MMCA.ADC.UI |
@@ -1598,54 +1616,58 @@ disclosure) and is cross-linked in the chapter.
 
 ### G25 - Testing & Quality Infrastructure
 
-> `group-27-testing-infrastructure.md` | 1170 types | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).
+> `group-27-testing-infrastructure.md` | 1242 types | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).
 
 Rolled up by project (individual `[Fact]`s not sectioned - logged exception). Reusable test
 infrastructure assemblies (sectioned in full in the chapter) are marked **(infra)**.
 
 | Test project (assembly) | Types | Levels | Kind |
 |--------------------------|-------|--------|------|
-| `MMCA.ADC.Architecture.Tests` **(infra)** | 26 | L1-L10 |  |
-| `MMCA.ADC.Conference.API.Tests`  | 15 | L1-L9 |  |
-| `MMCA.ADC.Conference.Application.Tests`  | 139 | L0-L12 |  |
+| `MMCA.ADC.Architecture.Tests` **(infra)** | 30 | L0-L10 |  |
+| `MMCA.ADC.Conference.API.Tests`  | 16 | L1-L9 |  |
+| `MMCA.ADC.Conference.Application.Tests`  | 133 | L0-L12 |  |
 | `MMCA.ADC.Conference.Domain.Tests`  | 22 | L5-L9 |  |
 | `MMCA.ADC.Conference.Infrastructure.Tests`  | 7 | L0-L10 |  |
 | `MMCA.ADC.Conference.IntegrationTests`  | 36 | L1-L16 |  |
 | `MMCA.ADC.Conference.Shared.Tests`  | 17 | L0-L8 |  |
-| `MMCA.ADC.Conference.UI.Tests`  | 25 | L3-L9 |  |
+| `MMCA.ADC.Conference.UI.Tests`  | 27 | L3-L9 |  |
 | `MMCA.ADC.CrossService.IntegrationTests`  | 12 | L0-L16 |  |
 | `MMCA.ADC.E2E.Tests`  | 60 | L0-L5 |  |
 | `MMCA.ADC.Engagement.API.Tests`  | 6 | L1-L8 |  |
 | `MMCA.ADC.Engagement.Application.Tests`  | 27 | L0-L10 |  |
 | `MMCA.ADC.Engagement.Domain.Tests`  | 6 | L6-L8 |  |
-| `MMCA.ADC.Engagement.Infrastructure.Tests`  | 2 | L9-L10 |  |
+| `MMCA.ADC.Engagement.Infrastructure.Tests`  | 4 | L1-L10 |  |
 | `MMCA.ADC.Engagement.IntegrationTests`  | 13 | L4-L16 |  |
 | `MMCA.ADC.Engagement.Shared.Tests`  | 2 | L2-L2 |  |
-| `MMCA.ADC.Engagement.UI.Tests`  | 14 | L3-L7 |  |
-| `MMCA.ADC.Gateway.Tests`  | 3 | L12-L13 |  |
+| `MMCA.ADC.Engagement.UI.Tests`  | 19 | L3-L7 |  |
+| `MMCA.ADC.Gateway.Tests`  | 6 | L0-L13 |  |
 | `MMCA.ADC.Identity.API.Tests`  | 7 | L1-L12 |  |
-| `MMCA.ADC.Identity.Application.Tests`  | 20 | L2-L10 |  |
+| `MMCA.ADC.Identity.Application.Tests`  | 21 | L2-L10 |  |
 | `MMCA.ADC.Identity.Domain.Tests`  | 4 | L7-L7 |  |
 | `MMCA.ADC.Identity.Infrastructure.Tests`  | 4 | L8-L10 |  |
-| `MMCA.ADC.Identity.IntegrationTests`  | 28 | L0-L17 |  |
+| `MMCA.ADC.Identity.IntegrationTests`  | 33 | L0-L17 |  |
 | `MMCA.ADC.Identity.Shared.Tests`  | 3 | L2-L5 |  |
 | `MMCA.ADC.Identity.UI.Tests`  | 6 | L3-L7 |  |
-| `MMCA.ADC.Notification.IntegrationTests`  | 7 | L1-L16 |  |
+| `MMCA.ADC.Notification.API.Tests`  | 1 | L4-L4 |  |
+| `MMCA.ADC.Notification.Application.Tests`  | 5 | L1-L10 |  |
+| `MMCA.ADC.Notification.IntegrationTests`  | 8 | L1-L16 |  |
+| `MMCA.ADC.ServiceBusEmulator.IntegrationTests`  | 3 | L0-L4 |  |
 | `MMCA.Common.API.Tests`  | 65 | L0-L12 |  |
-| `MMCA.Common.Application.Tests`  | 147 | L0-L10 |  |
-| `MMCA.Common.Architecture.Tests` **(infra)** | 22 | L4-L8 |  |
-| `MMCA.Common.Aspire.Tests`  | 10 | L0-L3 |  |
+| `MMCA.Common.Application.Tests`  | 160 | L0-L10 |  |
+| `MMCA.Common.Architecture.Tests` **(infra)** | 25 | L1-L8 |  |
+| `MMCA.Common.Aspire.Tests`  | 11 | L0-L3 |  |
 | `MMCA.Common.Benchmarks`  | 4 | L2-L4 |  |
 | `MMCA.Common.Domain.Tests`  | 43 | L0-L6 |  |
 | `MMCA.Common.Grpc.Tests`  | 13 | L0-L4 |  |
-| `MMCA.Common.Infrastructure.Tests`  | 157 | L0-L10 |  |
+| `MMCA.Common.Infrastructure.Tests`  | 171 | L0-L10 |  |
 | `MMCA.Common.Shared.Tests`  | 22 | L0-L5 |  |
-| `MMCA.Common.Testing` **(infra)** | 10 | L0-L2 |  |
-| `MMCA.Common.Testing.Architecture` **(infra)** | 36 | L0-L4 |  |
+| `MMCA.Common.Testing` **(infra)** | 12 | L0-L9 |  |
+| `MMCA.Common.Testing.Architecture` **(infra)** | 38 | L0-L4 |  |
 | `MMCA.Common.Testing.E2E` **(infra)** | 21 | L0-L4 |  |
+| `MMCA.Common.Testing.Tests`  | 9 | L0-L10 |  |
 | `MMCA.Common.Testing.UI` **(infra)** | 15 | L0-L3 |  |
-| `MMCA.Common.UI.E2E.Tests`  | 11 | L8-L11 |  |
-| `MMCA.Common.UI.Gallery` **(infra)** | 8 | L0-L7 |  |
+| `MMCA.Common.UI.E2E.Tests`  | 11 | L9-L12 |  |
+| `MMCA.Common.UI.Gallery` **(infra)** | 9 | L0-L8 |  |
 | `MMCA.Common.UI.Tests`  | 71 | L0-L6 |  |
 | `MMCA.Common.UI.Web.Tests`  | 4 | L1-L5 |  |
 

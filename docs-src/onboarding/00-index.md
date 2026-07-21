@@ -50,10 +50,10 @@ called out where it occurs. They are listed in the
 
 The type inventory and dependency graph are produced **mechanically** by a small Roslyn syntactic
 parser (`Tools/invtool/`), so the type list, namespaces, and `file:line` are exact and reproducible. Edges
-are resolved by **namespace-aware name matching**; ~97% bind by namespace visibility, the rest by a
-globally-unique-name fallback (237 edges), and 26 references are dropped as ambiguous. The functional grouping is
+are resolved by **namespace-aware name matching**; ~96% bind by namespace visibility, the rest by a
+globally-unique-name fallback (331 edges), and 27 references are dropped as ambiguous. The functional grouping is
 then applied mechanically (`Tools/invtool/classify.ps1` → `00-group-taxonomy.md`), so every one of the
-**2,497** distinct type nodes maps to exactly one group with no silent drops. See the
+**2,587** distinct type nodes maps to exactly one group with no silent drops. See the
 [manifest's accuracy note](00-dependency-manifest.md#edge-resolution--accuracy) for residual caveats.
 
 ---
@@ -64,7 +64,7 @@ then applied mechanically (`Tools/invtool/classify.ps1` → `00-group-taxonomy.m
 | File | Contents |
 |------|----------|
 | [`00-primer.md`](00-primer.md) | Cross-cutting concepts, the BCL/NuGet stack, build/language conventions, and the 34-category rubric, taught **once** |
-| [`00-inventory.md`](00-inventory.md) | Phase 0, every in-scope type (2,497 distinct), mechanically extracted, with `file:line` |
+| [`00-inventory.md`](00-inventory.md) | Phase 0, every in-scope type (2,587 distinct), mechanically extracted, with `file:line` |
 | [`00-dependency-manifest.md`](00-dependency-manifest.md) | Phase 1a, per-type first-party deps + computed Level; the 16 cycles |
 | [`00-group-taxonomy.md`](00-group-taxonomy.md) | Phase 1b, the ordered groups + every type's group assignment (the primary axis) |
 
@@ -72,15 +72,15 @@ then applied mechanically (`Tools/invtool/classify.ps1` → `00-group-taxonomy.m
 | # | Chapter | Types | Concern |
 |---|---------|-------|---------|
 | 1 | [Result & Error Handling](group-01-result-error-handling.md) | 11 | The `Result`/`Error` railway returned instead of throwing, incl. its own JSON round-trip converter |
-| 2 | [Domain Building Blocks](group-02-domain-building-blocks.md) | 27 | Entity/aggregate bases, value objects + invariants, domain markers, attributes, identifier aliases, `[Pii]` redaction |
-| 3 | [Querying: Specifications, Filtering & the Entity Query Service](group-03-querying-specifications.md) | 25 | Specification pattern (incl. cross-source), dynamic filter/sort/page, the generic query pipeline |
+| 2 | [Domain Building Blocks](group-02-domain-building-blocks.md) | 28 | Entity/aggregate bases, value objects + invariants, domain markers, attributes, identifier aliases, `[Pii]` redaction, row-version concurrency marker |
+| 3 | [Querying: Specifications, Filtering & the Entity Query Service](group-03-querying-specifications.md) | 26 | Specification pattern (incl. cross-source), dynamic filter/sort/page (incl. IN-list value parsing), the generic query pipeline |
 | 4 | [Domain & Integration Events + Outbox Dual-Dispatch](group-04-events-outbox.md) | 31 | Event contracts, dispatcher, transactional outbox/inbox (incl. the async `OutboxFinalizer`), message buses |
 | 5 | [CQRS: Commands, Queries & the Decorator Pipeline](group-05-cqrs-pipeline.md) | 23 | Handler abstraction + the logging/transaction/caching/feature-gate/idempotency decorators (incl. the cache-stampede lock) |
 | 6 | [Validation](group-06-validation.md) | 17 | FluentValidation contracts + failure mapping that gate commands |
-| 7 | [Persistence & EF Core](group-07-persistence-ef-core.md) | 83 | `SQLServerDbContext` over abstract `ApplicationDbContext`, interceptors, repositories, engine-aware entity config, data-source routing, conventions, factories, managed file storage + image processing (ADR-045), native-push device registrar (ADR-044) |
+| 7 | [Persistence & EF Core](group-07-persistence-ef-core.md) | 85 | `SQLServerDbContext` over abstract `ApplicationDbContext`, interceptors (incl. the deferred-dispatch record), repositories, engine-aware entity config, data-source routing, conventions (incl. the soft-delete unique-index convention), factories, managed file storage + image processing (ADR-045), native-push device registrar (ADR-044) |
 | 8 | [Authentication & Authorization](group-08-auth.md) | 56 | JWT/JWKS dual-fetch, the shared `AuthenticationServiceBase<TUser>` login/refresh workflow (`IAuthUser`), current-user/claims, password hashing, cookie sessions, role policies + the permission-based authorization mechanism (registry, `[HasPermission]`), the `RoleValue` base, the external-auth-broker contract (ADR-042/043) |
 | 9 | [Caching](group-09-caching.md) | 4 | The cache abstraction + its invalidation-aware decorator integration |
-| 10 | [Notifications (Push + In-App Inbox + Email)](group-10-notifications.md) | 53 | Push (SignalR), in-app inbox, email, recipient providers, the ADR-039 hub-channel live publisher, ADR-044 native OS-level push (Azure Notification Hubs, shipped inert), ADC Notification module + its cross-service gRPC live-channel plumbing |
+| 10 | [Notifications (Push + In-App Inbox + Email)](group-10-notifications.md) | 54 | Push (SignalR), in-app inbox, email, recipient providers, the ADR-039 hub-channel live publisher, ADR-044 native OS-level push (Azure Notification Hubs, shipped inert), ADC Notification module + its cross-service gRPC live-channel plumbing + extractable-host Kestrel config |
 | 11 | [Navigation Metadata & Populators](group-11-navigation-populators.md) | 12 | EF-decoupled cross-container/cross-source eager loading (ADR-002) |
 | 12 | [API Hosting, Middleware, Idempotency & DTO/Contract Mapping](group-12-api-hosting-mapping.md) | 56 | Controller bases (incl. OAuth + service-info + API versioning, ADR-046), middleware (incl. soft-deleted-user revocation, ADR-047), startup, model binders, JSON converters, feature mgmt, idempotency, mapping, edge error localization (i18n), authenticated output caching (ADR-040), app-association/deep-link endpoints (ADR-043) |
 | 13 | [gRPC & Inter-Service Contracts](group-13-grpc-contracts.md) | 6 | Typed gRPC clients/servers, interceptors, Result-over-the-wire (ADR-007) |
@@ -88,16 +88,16 @@ then applied mechanically (`Tools/invtool/classify.ps1` → `00-group-taxonomy.m
 | 15 | [Common UI Framework](group-15-common-ui-framework.md) | 82 | Reusable MudBlazor building blocks: data-grid list page base, theme, common pages/services, i18n culture bootstrap + day/dark `ThemeService`, user-preference readers/writers, pseudo-localization gate, OAuth UI settings + token storage (Web/WASM), hub-channel subscriptions (ADR-039) |
 | 16 | [Aspire Orchestration & Service Defaults](group-16-aspire-orchestration.md) | 16 | AppHost wiring, ServiceDefaults, warmup, telemetry, security helpers, the shared `HttpResilienceDefaults` Polly source of truth |
 | 17 | [ADC Conference, Domain Model & Module Contracts](group-17-conference-domain.md) | 85 | Event/Session/Speaker/Category/Question aggregates + domain events + invariants + Shared contracts (incl. `ConferencePermissions`, the current/next-event selector + live-validation contracts) |
-| 18 | [ADC Conference, Application & Use Cases](group-18-conference-application.md) | 202 | Conference CQRS handlers, validators, DTOs, specs, Sessionize import, decision-support analytics, event-filtering-by-role handlers, calendar (.ics) export slice (ADR-042) |
+| 18 | [ADC Conference, Application & Use Cases](group-18-conference-application.md) | 211 | Conference CQRS handlers, validators (incl. the per-field session validation-rule family), DTOs, specs, Sessionize import, decision-support analytics, batch bookmark-count query, event-filtering-by-role handlers, calendar (.ics) export slice (ADR-042) |
 | 19 | [ADC Conference, Infrastructure & Persistence](group-19-conference-infrastructure.md) | 27 | Conference DbContext registration, EF configs, seeding, infra services |
-| 20 | [ADC Conference, API, gRPC Contracts & Service Host](group-20-conference-api-grpc.md) | 40 | REST controllers, `.Contracts` gRPC, the extractable service host, the gRPC adapters (incl. cross-service live-validation), localized error resources |
-| 21 | [ADC Conference, UI](group-21-conference-ui.md) | 79 | Conference Blazor pages + UI services, calendar/QR export UI, OfflineBanner, PresenterLayout on Common theme providers |
-| 22 | [ADC Engagement Module (Session Bookmarks)](group-22-engagement-module.md) | 67 | The async session-bookmarking slice of the Engagement bounded context: bookmark aggregate, use cases, persistence, API/contracts/service, feedback UI, the cross-service user-engagement export slice (gRPC) |
+| 20 | [ADC Conference, API, gRPC Contracts & Service Host](group-20-conference-api-grpc.md) | 41 | REST controllers, `.Contracts` gRPC, the extractable service host (incl. its Kestrel config), the gRPC adapters (incl. cross-service live-validation), localized error resources |
+| 21 | [ADC Conference, UI](group-21-conference-ui.md) | 89 | Conference Blazor pages + UI services, the single canonical ADC Home page + its view models, the AI-scoring poll recovery tracker, calendar/QR export UI, OfflineBanner, PresenterLayout on Common theme providers |
+| 22 | [ADC Engagement Module (Session Bookmarks)](group-22-engagement-module.md) | 72 | The async session-bookmarking slice of the Engagement bounded context: bookmark aggregate, use cases, persistence, API/contracts/service, feedback UI, the durable live-channel publish queue (ADR-039), the cross-service user-engagement export slice (gRPC) |
 | 23 | [ADC Engagement Live Layer (Real-Time Polls & Session Q&A)](group-23-engagement-live-layer.md) | 92 | Event-wide live polls with voting + moderated per-session Q&A with upvoting, over the ADR-039 hub-channel transport and the cross-service gRPC live-channel adapter (HappeningNow / SessionLive / PresenterView) |
-| 24 | [ADC Identity Module (Users, Profiles, GDPR Export/Erasure)](group-24-identity-module.md) | 78 | The Identity bounded context end-to-end (incl. `IdentityPermissions`, user culture/theme preferences, the ADR-045 user-avatar photo slice end to end; `AuthenticationService` now extends Common's shared base) |
-| 25 | [ADC Application Host, UI Shell & Cross-Module Composition](group-25-adc-host-composition.md) | 34 | Blazor Web/WASM/WinUI shells, host pages/services, security, app composition, device-capability DI wiring, one-time preference migrator |
+| 24 | [ADC Identity Module (Users, Profiles, GDPR Export/Erasure)](group-24-identity-module.md) | 82 | The Identity bounded context end-to-end (incl. `IdentityPermissions`, user culture/theme preferences, the ADR-045 user-avatar photo slice end to end, the external-login email verifier + extractable-host Kestrel config; `AuthenticationService` now extends Common's shared base) |
+| 25 | [ADC Application Host, UI Shell & Cross-Module Composition](group-25-adc-host-composition.md) | 18 | Blazor Web/WASM/WinUI shells, host pages/services, security, app composition, device-capability DI wiring, one-time preference migrator (the shared ADC Home page + its view models now live in the Conference UI chapter) |
 | 26 | [Device Capability Abstraction Layer (Native Contracts, MAUI, Browser & Fallback Adapters)](group-26-device-capability-layer.md) | 87 | Per-capability interface contracts (biometric, geolocation, speech, push registration, clipboard/share/haptics, external auth/links, connectivity/battery, deep links) + their MAUI-native, browser-JS-interop, and inert-fallback implementations, selected per host at DI composition time (ADR-042/043/044/045) |
-| 27 | [Testing & Quality Infrastructure](group-27-testing-infrastructure.md) | 1170 | All test projects + reusable Testing/Testing.E2E/Testing.UI/**Testing.Architecture** bases + architecture-fitness tests + Gallery + the BenchmarkDotNet perf-smoke suite |
+| 27 | [Testing & Quality Infrastructure](group-27-testing-infrastructure.md) | 1242 | All test projects + reusable Testing/Testing.E2E/Testing.UI/**Testing.Architecture** bases (incl. the handler + decorator-pipeline test bases and the Gallery auth stubs) + architecture-fitness tests + Gallery + the BenchmarkDotNet perf-smoke suite |
 
 ### DevOps & operations chapters
 | File | Contents |

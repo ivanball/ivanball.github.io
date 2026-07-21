@@ -266,7 +266,7 @@ never plumbing.
 
 - **What it is**: registration helpers that add named output-cache policies backed by [PublicEndpointOutputCachePolicy](#publicendpointoutputcachepolicy) onto ASP.NET Core's `OutputCacheOptions`.
 - **Depends on**: `Microsoft.AspNetCore.OutputCaching` (`OutputCacheOptions`) and [PublicEndpointOutputCachePolicy](#publicendpointoutputcachepolicy).
-- **Concept**: this is a thin fluent facade over `OutputCacheOptions.AddPolicy`, using a C# `extension(OutputCacheOptions options)` block (`OutputCacheOptionsExtensions.cs:8`) so the policy registration reads as a first-class option on the options object. See the [DI registration `extension(T)` convention](00-primer.md#2-architectural-styles-this-codebase-commits-to). `[Rubric §9, API & Contract Design]` is relevant, the helper gives callers a self-documenting, named entry point instead of hand-constructing the policy at each call site.
+- **Concept**: this is a thin fluent facade over `OutputCacheOptions.AddPolicy`, using a C# `extension(OutputCacheOptions options)` block (`OutputCacheOptionsExtensions.cs:8`) so the policy registration reads as a first-class option on the options object. See the [DI registration `extension(T)` convention](../00-primer.md#2-architectural-styles-this-codebase-commits-to). `[Rubric §9, API & Contract Design]` is relevant, the helper gives callers a self-documenting, named entry point instead of hand-constructing the policy at each call site.
 - **Walkthrough**: two overloads of `AddPublicEndpointPolicy`. The first (`OutputCacheOptionsExtensions.cs:20`) takes `name`, `expiration`, and `params string[] tags` and registers `new PublicEndpointOutputCachePolicy(expiration, tags)`. The second (`:34`) adds a `string[] bypassRoles` parameter before the `params string[] tags` and forwards to the three-argument policy constructor, for endpoints whose payload is identical for every caller except one privileged role. Both are expression-bodied and return `void`, mutating the options in place.
 - **Why it's built this way**: keeping the policy construction behind a named helper means the "apply only to `[AllowAnonymous]`, identity-independent endpoints" guidance travels with the API surface (see the doc comments at `:10-16` and `:23-29`) instead of being re-derived at each registration.
 - **Where it's used**: called during host composition where the app configures `AddOutputCache(...)`; the registered `name` is then referenced by `[OutputCache(PolicyName = ...)]` on controller actions.
@@ -324,7 +324,7 @@ never plumbing.
 
 - **What it is**: the options object bound from the `Idempotency` configuration section, controlling how long a cached idempotent response is retained.
 - **Depends on**: `System.ComponentModel.DataAnnotations` for the `[Range]` validation attribute.
-- **Concept**: the standard options pattern (see [primer](00-primer.md)). `[Rubric §10, Cross-Cutting]`: the whole section is optional because every property has a default, so a host that never configures idempotency still behaves correctly.
+- **Concept**: the standard options pattern (see [primer](../00-primer.md)). `[Rubric §10, Cross-Cutting]`: the whole section is optional because every property has a default, so a host that never configures idempotency still behaves correctly.
 - **Walkthrough**: `SectionName = "Idempotency"` (line 12) names the binding section; `CacheExpirationHours` (line 16) defaults to 24 and is constrained to `[Range(1, 168)]` (line 15), one hour to one week. The property is `init`-only, so the value is fixed once bound.
 - **Where it's used**: resolved as `IOptions<IdempotencySettings>` inside [`IdempotencyFilter`](#idempotencyfilter); when it is absent the filter falls back to a hard-coded 24-hour window.
 
@@ -702,7 +702,7 @@ never plumbing.
     example `"/conference/*"`) that each become a `{ "/": pattern }` entry; the comment notes these
     should mirror the app's shared Blazor routes so web and device use identical URLs.
 - **Why it's built this way**: `required init` gives compile-checked construction with immutability
-  once bound (see the primer's [immutability conventions](00-primer.md#2-architectural-styles-this-codebase-commits-to)):
+  once bound (see the primer's [immutability conventions](../00-primer.md#2-architectural-styles-this-codebase-commits-to)):
   the host binds it once from configuration and the endpoint reads it for the process lifetime.
 - **Where it's used**: passed to `MapAppAssociationEndpoints(...)` on
   [`AppAssociationEndpointExtensions`](#appassociationendpointextensions) in a Blazor UI host's

@@ -417,7 +417,7 @@ from the shared invariants constant prevents schema/validator drift.
 per-module migrations project (`MMCA.ADC.Migrations.SqlServer.Conference`) snapshots the resulting
 schema. Cross-module FKs (e.g. `UserSessionBookmark.SessionId → Session`) are deliberately **not**
 configured here, that would create a cross-module Infrastructure→Domain coupling, and instead degrade
-to scalar columns under the database-per-service model (see [ADR-006](../adr/006-database-per-service.md)).
+to scalar columns under the database-per-service model (see [ADR-006](../ADRs/006-database-per-service.md)).
 
 - **Caveats / not-in-source**: `SessionAiScore` persistence exists, but whether AI scoring is run in
   production at all is a runtime/config concern not visible in these configs (see the Anthropic scoring

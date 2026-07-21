@@ -13,7 +13,7 @@ dispatcher, the outbox tables and their background drainers, and the swappable i
 buses.
 
 If you have not yet met the **Result pattern**, **aggregate roots and domain events**, or the
-**database-per-service** rule, skim [primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to)
+**database-per-service** rule, skim [primer §2](../00-primer.md#2-architectural-styles-this-codebase-commits-to)
 first, this chapter builds directly on them.
 
 ## The two kinds of event
@@ -61,7 +61,7 @@ chapter: if the business data committed, the event is durably recorded; if the t
 back, neither exists. There is no window where they disagree. `[Rubric §8, Data Architecture]`
 (transactional integrity) and `[Rubric §6]` both hinge on this atomicity. Crucially, the rows go to
 the same physical database as the aggregate, every relational source owns its own `OutboxMessages`
-table, never a shared one (ADR-006; see [primer on database-per-service](00-primer.md#2-architectural-styles-this-codebase-commits-to)).
+table, never a shared one (ADR-006; see [primer on database-per-service](../00-primer.md#2-architectural-styles-this-codebase-commits-to)).
 
 ## Dual dispatch: the happy path and the safety net
 

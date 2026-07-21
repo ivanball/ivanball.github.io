@@ -124,10 +124,10 @@
           is still linked (only one possible target). Names that are neither visible nor unique are
           dropped as unresolvable without full semantic binding.</p>
           <ul>
-          <li>Edges resolved by namespace visibility: <strong>8596</strong> (~97%)</li>
-          <li>Edges resolved by globally-unique name (fallback): <strong>237</strong></li>
-          <li>References dropped as ambiguous (matched &gt;1 type, none visible): <strong>26</strong></li>
-          <li>Sensitivity: <strong>270 / 2497</strong> type levels would change if the globally-unique fallback
+          <li>Edges resolved by namespace visibility: <strong>8868</strong> (~96%)</li>
+          <li>Edges resolved by globally-unique name (fallback): <strong>331</strong></li>
+          <li>References dropped as ambiguous (matched &gt;1 type, none visible): <strong>27</strong></li>
+          <li>Sensitivity: <strong>362 / 2587</strong> type levels would change if the globally-unique fallback
           were excluded; the fallback is retained because a globally-unique first-party name is
           unambiguous, so excluding it would under-count real dependencies.</li>
           </ul>
@@ -145,59 +145,59 @@
           </thead>
           <tbody><tr>
           <td>0</td>
-          <td>505</td>
+          <td>518</td>
           </tr>
           <tr>
           <td>1</td>
-          <td>299</td>
+          <td>312</td>
           </tr>
           <tr>
           <td>2</td>
-          <td>200</td>
+          <td>205</td>
           </tr>
           <tr>
           <td>3</td>
-          <td>193</td>
+          <td>207</td>
           </tr>
           <tr>
           <td>4</td>
-          <td>251</td>
+          <td>263</td>
           </tr>
           <tr>
           <td>5</td>
-          <td>163</td>
+          <td>172</td>
           </tr>
           <tr>
           <td>6</td>
-          <td>147</td>
+          <td>153</td>
           </tr>
           <tr>
           <td>7</td>
-          <td>143</td>
+          <td>151</td>
           </tr>
           <tr>
           <td>8</td>
-          <td>253</td>
+          <td>248</td>
           </tr>
           <tr>
           <td>9</td>
-          <td>163</td>
+          <td>108</td>
           </tr>
           <tr>
           <td>10</td>
-          <td>68</td>
+          <td>132</td>
           </tr>
           <tr>
           <td>11</td>
-          <td>23</td>
+          <td>16</td>
           </tr>
           <tr>
           <td>12</td>
-          <td>11</td>
+          <td>20</td>
           </tr>
           <tr>
           <td>13</td>
-          <td>7</td>
+          <td>8</td>
           </tr>
           <tr>
           <td>14</td>
@@ -205,11 +205,11 @@
           </tr>
           <tr>
           <td>15</td>
-          <td>12</td>
+          <td>14</td>
           </tr>
           <tr>
           <td>16</td>
-          <td>52</td>
+          <td>53</td>
           </tr>
           <tr>
           <td>17</td>
@@ -272,8 +272,8 @@
           </tr>
           <tr>
           <td>6</td>
-          <td>5</td>
-          <td>Infrastructure:ApplicationDbContext, Infrastructure:DataSourceModelCacheKeyFactory, Infrastructure:AuditSaveChangesInterceptor, Infrastructure:DomainEventSaveChangesInterceptor, Infrastructure:OutboxFinalizer</td>
+          <td>6</td>
+          <td>Infrastructure:ApplicationDbContext, Infrastructure:DataSourceModelCacheKeyFactory, Infrastructure:AuditSaveChangesInterceptor, Infrastructure:DomainEventSaveChangesInterceptor, Infrastructure:DeferredDispatch, Infrastructure:OutboxFinalizer</td>
           </tr>
           <tr>
           <td>6</td>
@@ -318,6 +318,13 @@
           </tr>
           </thead>
           <tbody><tr>
+          <td>0</td>
+          <td><code>ObservabilityConventionTests</code></td>
+          <td>MMCA.ADC.Architecture.Tests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
           <td>0</td>
           <td><code>AddCategoryItemRequest</code></td>
           <td>MMCA.ADC.Conference.API</td>
@@ -495,6 +502,13 @@
           <tr>
           <td>0</td>
           <td><code>GetSessionBookmarkCountQuery</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>GetSessionBookmarkCountsQuery</code></td>
           <td>MMCA.ADC.Conference.Application</td>
           <td>0</td>
           <td>(none)</td>
@@ -753,6 +767,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>KestrelConfiguration</code></td>
+          <td>MMCA.ADC.Conference.Service</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>CategoryItemDistribution</code></td>
           <td>MMCA.ADC.Conference.Shared</td>
           <td>0</td>
@@ -865,6 +886,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>ADCEventInfo</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>CategoryItemInfo</code></td>
           <td>MMCA.ADC.Conference.UI</td>
           <td>0</td>
@@ -879,6 +907,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>ConferenceTrackInfo</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>EventInfo</code></td>
           <td>MMCA.ADC.Conference.UI</td>
           <td>0</td>
@@ -886,7 +921,28 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>EventPhase</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>IPublicLinkBuilder</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>KeynoteSpeakerInfo</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>ScorePollSignal</code></td>
           <td>MMCA.ADC.Conference.UI</td>
           <td>0</td>
           <td>(none)</td>
@@ -901,6 +957,13 @@
           <tr>
           <td>0</td>
           <td><code>SpeakerInfo</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>SponsorInfo</code></td>
           <td>MMCA.ADC.Conference.UI</td>
           <td>0</td>
           <td>(none)</td>
@@ -1229,6 +1292,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>LiveChannelPublishWorkItem</code></td>
+          <td>MMCA.ADC.Engagement.Application</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>OpenLivePollCommand</code></td>
           <td>MMCA.ADC.Engagement.Application</td>
           <td>0</td>
@@ -1285,8 +1355,8 @@
           </tr>
           <tr>
           <td>0</td>
-          <td><code>DependencyInjection</code></td>
-          <td>MMCA.ADC.Engagement.Infrastructure</td>
+          <td><code>KestrelConfiguration</code></td>
+          <td>MMCA.ADC.Engagement.Service</td>
           <td>0</td>
           <td>(none)</td>
           </tr>
@@ -1509,6 +1579,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>RecordingHttpForwarder</code></td>
+          <td>MMCA.ADC.Gateway.Tests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>AssemblyReference</code></td>
           <td>MMCA.ADC.Identity.API</td>
           <td>0</td>
@@ -1573,6 +1650,13 @@
           <tr>
           <td>0</td>
           <td><code>GetUsersQuery</code></td>
+          <td>MMCA.ADC.Identity.Application</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>IExternalLoginEmailVerifier</code></td>
           <td>MMCA.ADC.Identity.Application</td>
           <td>0</td>
           <td>(none)</td>
@@ -1649,8 +1733,22 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>PiiLogCapture</code></td>
+          <td>MMCA.ADC.Identity.IntegrationTests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>PreferencesResponse</code></td>
           <td>MMCA.ADC.Identity.IntegrationTests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>KestrelConfiguration</code></td>
+          <td>MMCA.ADC.Identity.Service</td>
           <td>0</td>
           <td>(none)</td>
           </tr>
@@ -1719,6 +1817,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>KestrelConfiguration</code></td>
+          <td>MMCA.ADC.Notification.Service</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>UserNotificationExportItemDTO</code></td>
           <td>MMCA.ADC.Notification.Shared</td>
           <td>0</td>
@@ -1726,29 +1831,8 @@
           </tr>
           <tr>
           <td>0</td>
-          <td><code>ADCEventInfo</code></td>
-          <td>MMCA.ADC.UI</td>
-          <td>0</td>
-          <td>(none)</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>ConferenceTrackInfo</code></td>
-          <td>MMCA.ADC.UI</td>
-          <td>0</td>
-          <td>(none)</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>EventPhase</code></td>
-          <td>MMCA.ADC.UI</td>
-          <td>0</td>
-          <td>(none)</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>KeynoteSpeakerInfo</code></td>
-          <td>MMCA.ADC.UI</td>
+          <td><code>ServiceBusEmulatorFixture</code></td>
+          <td>MMCA.ADC.ServiceBusEmulator.IntegrationTests</td>
           <td>0</td>
           <td>(none)</td>
           </tr>
@@ -1761,50 +1845,8 @@
           </tr>
           <tr>
           <td>0</td>
-          <td><code>SponsorInfo</code></td>
-          <td>MMCA.ADC.UI</td>
-          <td>0</td>
-          <td>(none)</td>
-          </tr>
-          <tr>
-          <td>0</td>
           <td><code>WebAuthenticatorCallbackActivity</code></td>
           <td>MMCA.ADC.UI</td>
-          <td>0</td>
-          <td>(none)</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>ADCEventInfo</code></td>
-          <td>MMCA.ADC.UI.Web.Client</td>
-          <td>0</td>
-          <td>(none)</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>ConferenceTrackInfo</code></td>
-          <td>MMCA.ADC.UI.Web.Client</td>
-          <td>0</td>
-          <td>(none)</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>EventPhase</code></td>
-          <td>MMCA.ADC.UI.Web.Client</td>
-          <td>0</td>
-          <td>(none)</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>KeynoteSpeakerInfo</code></td>
-          <td>MMCA.ADC.UI.Web.Client</td>
-          <td>0</td>
-          <td>(none)</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>SponsorInfo</code></td>
-          <td>MMCA.ADC.UI.Web.Client</td>
           <td>0</td>
           <td>(none)</td>
           </tr>
@@ -2070,6 +2112,13 @@
           <tr>
           <td>0</td>
           <td><code>EntityQueryParameters&lt;TEntity&gt;</code></td>
+          <td>MMCA.Common.Application</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>FilterValueParser</code></td>
           <td>MMCA.Common.Application</td>
           <td>0</td>
           <td>(none)</td>
@@ -2391,6 +2440,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>FakeModuleTracker</code></td>
+          <td>MMCA.Common.Application.Tests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>FixedTimeProvider</code></td>
           <td>MMCA.Common.Application.Tests</td>
           <td>0</td>
@@ -2399,6 +2455,13 @@
           <tr>
           <td>0</td>
           <td><code>FixedTimeProvider</code></td>
+          <td>MMCA.Common.Application.Tests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>IFakeRemoteContract</code></td>
           <td>MMCA.Common.Application.Tests</td>
           <td>0</td>
           <td>(none)</td>
@@ -2651,6 +2714,13 @@
           <tr>
           <td>0</td>
           <td><code>IdValueGeneratedAttribute</code></td>
+          <td>MMCA.Common.Domain</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>IRowVersioned</code></td>
           <td>MMCA.Common.Domain</td>
           <td>0</td>
           <td>(none)</td>
@@ -3357,6 +3427,27 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>FakeHandler</code></td>
+          <td>MMCA.Common.Testing.Tests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>PingCommand</code></td>
+          <td>MMCA.Common.Testing.Tests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>PingQuery</code></td>
+          <td>MMCA.Common.Testing.Tests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>BunitInteractionExtensions</code></td>
           <td>MMCA.Common.Testing.UI</td>
           <td>0</td>
@@ -3805,7 +3896,7 @@
           </tr>
           <tr>
           <td>0</td>
-          <td><code>AnonymousAuthenticationStateProvider</code></td>
+          <td><code>GalleryFakeAuthenticationHandler</code></td>
           <td>MMCA.Common.UI.Gallery</td>
           <td>0</td>
           <td>(none)</td>
@@ -4085,6 +4176,13 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>ADCCollectionResult</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>1</td>
+          <td>ADCEventInfo</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>ICategoryItemLookupService</code></td>
           <td>MMCA.ADC.Conference.UI</td>
           <td>1</td>
@@ -4110,6 +4208,20 @@
           <td>MMCA.ADC.Conference.UI</td>
           <td>1</td>
           <td>IPublicLinkBuilder</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>ScorePollTracker</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>1</td>
+          <td>ScorePollSignal</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>SponsorTierInfo</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>1</td>
+          <td>SponsorInfo</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4162,6 +4274,13 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>ILiveChannelPublishQueue</code></td>
+          <td>MMCA.ADC.Engagement.Application</td>
+          <td>1</td>
+          <td>LiveChannelPublishWorkItem</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>ModerateQuestionCommand</code></td>
           <td>MMCA.ADC.Engagement.Application</td>
           <td>1</td>
@@ -4180,6 +4299,13 @@
           <td>MMCA.ADC.Engagement.Application.Tests</td>
           <td>1</td>
           <td>IQueryableExecutor</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>RecordingPublisher</code></td>
+          <td>MMCA.ADC.Engagement.Infrastructure.Tests</td>
+          <td>2</td>
+          <td>ILiveChannelPublisher, LiveChannelPublishWorkItem</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4253,6 +4379,13 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>HttpContextExternalLoginEmailVerifier</code></td>
+          <td>MMCA.ADC.Identity.API</td>
+          <td>2</td>
+          <td>ExternalAuthExtensions, IExternalLoginEmailVerifier</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>IdentityErrorResourcesTests</code></td>
           <td>MMCA.ADC.Identity.API.Tests</td>
           <td>2</td>
@@ -4264,6 +4397,13 @@
           <td>MMCA.ADC.Identity.Application</td>
           <td>2</td>
           <td>ChangePasswordRequest, StrongPasswordRules&lt;T&gt;</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>PiiCaptureLogger</code></td>
+          <td>MMCA.ADC.Identity.IntegrationTests</td>
+          <td>1</td>
+          <td>PiiLogCapture</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4309,6 +4449,13 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>InMemoryQueryableExecutor</code></td>
+          <td>MMCA.ADC.Notification.Application.Tests</td>
+          <td>1</td>
+          <td>IQueryableExecutor</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>LiveChannelPublisherGrpcAdapter</code></td>
           <td>MMCA.ADC.Notification.Contracts</td>
           <td>1</td>
@@ -4337,10 +4484,10 @@
           </tr>
           <tr>
           <td>1</td>
-          <td><code>ADCCollectionResult</code></td>
-          <td>MMCA.ADC.UI</td>
+          <td><code>ServiceBusEmulatorCollection</code></td>
+          <td>MMCA.ADC.ServiceBusEmulator.IntegrationTests</td>
           <td>1</td>
-          <td>ADCEventInfo</td>
+          <td>ServiceBusEmulatorFixture</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4372,24 +4519,10 @@
           </tr>
           <tr>
           <td>1</td>
-          <td><code>SponsorTierInfo</code></td>
-          <td>MMCA.ADC.UI</td>
-          <td>1</td>
-          <td>SponsorInfo</td>
-          </tr>
-          <tr>
-          <td>1</td>
-          <td><code>ADCCollectionResult</code></td>
+          <td><code>ADCHomePageContent</code></td>
           <td>MMCA.ADC.UI.Web.Client</td>
           <td>1</td>
-          <td>ADCEventInfo</td>
-          </tr>
-          <tr>
-          <td>1</td>
-          <td><code>SponsorTierInfo</code></td>
-          <td>MMCA.ADC.UI.Web.Client</td>
-          <td>1</td>
-          <td>SponsorInfo</td>
+          <td>IHomePageContent</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4619,8 +4752,8 @@
           <td>1</td>
           <td><code>GuidFilterStrategy</code></td>
           <td>MMCA.Common.Application</td>
-          <td>1</td>
-          <td>IFilterStrategy</td>
+          <td>2</td>
+          <td>FilterValueParser, IFilterStrategy</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4640,8 +4773,8 @@
           <td>1</td>
           <td><code>IntFilterStrategy</code></td>
           <td>MMCA.Common.Application</td>
-          <td>1</td>
-          <td>IFilterStrategy</td>
+          <td>2</td>
+          <td>FilterValueParser, IFilterStrategy</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4703,8 +4836,8 @@
           <td>1</td>
           <td><code>StringFilterStrategy</code></td>
           <td>MMCA.Common.Application</td>
-          <td>1</td>
-          <td>IFilterStrategy</td>
+          <td>2</td>
+          <td>FilterValueParser, IFilterStrategy</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4740,6 +4873,27 @@
           <td>MMCA.Common.Application.Tests</td>
           <td>1</td>
           <td>IBaseDTO&lt;TIdentifierType&gt;</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>FakeModuleAlphaSeeder</code></td>
+          <td>MMCA.Common.Application.Tests</td>
+          <td>2</td>
+          <td>FakeModuleTracker, IModuleSeeder</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>FakeRemoteContractRealAdapter</code></td>
+          <td>MMCA.Common.Application.Tests</td>
+          <td>1</td>
+          <td>IFakeRemoteContract</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>FakeRemoteContractStub</code></td>
+          <td>MMCA.Common.Application.Tests</td>
+          <td>1</td>
+          <td>IFakeRemoteContract</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4838,6 +4992,13 @@
           <td>MMCA.Common.Application.Tests</td>
           <td>1</td>
           <td>ErrorType</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>NavigationContractTests</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>1</td>
+          <td>UISharedAssemblyReference</td>
           </tr>
           <tr>
           <td>1</td>
@@ -5149,6 +5310,13 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>SoftDeleteUniqueIndexConvention</code></td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td>2</td>
+          <td>DataSource, IAuditableEntity</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>UseDataSourceAttribute</code></td>
           <td>MMCA.Common.Infrastructure</td>
           <td>1</td>
@@ -5216,6 +5384,13 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>1</td>
           <td>NativePushPayloads</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>NullAssemblyProvider</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>IEntityConfigurationAssemblyProvider</td>
           </tr>
           <tr>
           <td>1</td>
@@ -5307,6 +5482,13 @@
           <td>MMCA.Common.Shared.Tests</td>
           <td>1</td>
           <td>ValueObject</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>DecoratorPipelineOrderTestsBase&lt;TCommand, TCommandResult, TQuery, TQueryResult&gt;</code></td>
+          <td>MMCA.Common.Testing</td>
+          <td>2</td>
+          <td>ICommandHandler&lt;in TCommand, TResult&gt;, IQueryHandler&lt;in TQuery, TResult&gt;</td>
           </tr>
           <tr>
           <td>1</td>
@@ -6206,6 +6388,13 @@
           </tr>
           <tr>
           <td>2</td>
+          <td><code>LiveChannelPublishQueue</code></td>
+          <td>MMCA.ADC.Engagement.Application</td>
+          <td>2</td>
+          <td>ILiveChannelPublishQueue, LiveChannelPublishWorkItem</td>
+          </tr>
+          <tr>
+          <td>2</td>
           <td><code>CastVoteCommandValidatorTests</code></td>
           <td>MMCA.ADC.Engagement.Application.Tests</td>
           <td>2</td>
@@ -6334,8 +6523,8 @@
           <td>2</td>
           <td><code>DependencyInjection</code></td>
           <td>MMCA.ADC.Identity.API</td>
-          <td>3</td>
-          <td>ApplicationSettings, IdentityPermissions, RoleNames</td>
+          <td>5</td>
+          <td>ApplicationSettings, HttpContextExternalLoginEmailVerifier, IdentityPermissions, IExternalLoginEmailVerifier, RoleNames</td>
           </tr>
           <tr>
           <td>2</td>
@@ -6381,6 +6570,13 @@
           </tr>
           <tr>
           <td>2</td>
+          <td><code>PiiCaptureLoggerProvider</code></td>
+          <td>MMCA.ADC.Identity.IntegrationTests</td>
+          <td>1</td>
+          <td>PiiCaptureLogger</td>
+          </tr>
+          <tr>
+          <td>2</td>
           <td><code>UserDataExportDTO</code></td>
           <td>MMCA.ADC.Identity.Shared</td>
           <td>2</td>
@@ -6395,10 +6591,24 @@
           </tr>
           <tr>
           <td>2</td>
+          <td><code>ListPageActions</code></td>
+          <td>MMCA.ADC.Identity.UI</td>
+          <td>1</td>
+          <td>MobileInfiniteScrollList&lt;TItem&gt;</td>
+          </tr>
+          <tr>
+          <td>2</td>
           <td><code>DependencyInjection</code></td>
           <td>MMCA.ADC.Notification.API</td>
           <td>1</td>
           <td>ApplicationSettings</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>AttendeeNotificationRecipientProviderTests</code></td>
+          <td>MMCA.ADC.Notification.Application.Tests</td>
+          <td>2</td>
+          <td>AttendeeNotificationRecipientProvider, IAttendeeQueryService</td>
           </tr>
           <tr>
           <td>2</td>
@@ -6971,8 +7181,15 @@
           <td>2</td>
           <td><code>TestIntegrationEvent</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>2</td>
+          <td>BaseDomainEvent, IIntegrationEvent</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>TestLocalEvent</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
           <td>1</td>
-          <td>IIntegrationEvent</td>
+          <td>BaseDomainEvent</td>
           </tr>
           <tr>
           <td>2</td>
@@ -7375,6 +7592,13 @@
           </tr>
           <tr>
           <td>3</td>
+          <td><code>RecordingIntegrationEventPublisher</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>2</td>
+          <td>IIntegrationEvent, IIntegrationEventPublisher</td>
+          </tr>
+          <tr>
+          <td>3</td>
           <td><code>CategoryChanged</code></td>
           <td>MMCA.ADC.Conference.Domain</td>
           <td>2</td>
@@ -7613,6 +7837,20 @@
           </tr>
           <tr>
           <td>3</td>
+          <td><code>LiveChannelPublishQueueTests</code></td>
+          <td>MMCA.ADC.Engagement.Application.Tests</td>
+          <td>2</td>
+          <td>LiveChannelPublishQueue, LiveChannelPublishWorkItem</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>LiveChannelPublishProcessor</code></td>
+          <td>MMCA.ADC.Engagement.Infrastructure</td>
+          <td>2</td>
+          <td>ILiveChannelPublisher, LiveChannelPublishQueue</td>
+          </tr>
+          <tr>
+          <td>3</td>
           <td><code>DisabledUserEngagementExportService</code></td>
           <td>MMCA.ADC.Engagement.Shared</td>
           <td>2</td>
@@ -7631,13 +7869,6 @@
           <td>MMCA.ADC.Engagement.UI</td>
           <td>3</td>
           <td>EngagementRoutePaths, IUIModule, NavItem</td>
-          </tr>
-          <tr>
-          <td>3</td>
-          <td><code>EventFeedback</code></td>
-          <td>MMCA.ADC.Engagement.UI</td>
-          <td>6</td>
-          <td>AnswerState, EventQuestionAnswerDTO, IEventFeedbackUIService, IEventLookupService, IQuestionLookupService, QuestionDTO</td>
           </tr>
           <tr>
           <td>3</td>
@@ -7701,6 +7932,13 @@
           <td>MMCA.ADC.Engagement.UI.Tests</td>
           <td>14</td>
           <td>ApiSettings, BunitComponentTestBase, HappeningNowPage, IHapticFeedbackService, ILiveEventUIService, ILivePollUIService, ISessionLookupService, ITokenStorageService, LiveEventContext, NotificationHubService, NotificationState, NullHapticFeedbackService, SessionInfo, TestPrincipal</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>LiveChannelJoinTests</code></td>
+          <td>MMCA.ADC.Engagement.UI.Tests</td>
+          <td>17</td>
+          <td>ApiSettings, BunitComponentTestBase, HappeningNowPage, IHapticFeedbackService, ILiveEventUIService, ILivePollUIService, ISessionLookupService, ISessionQuestionUIService, ISpeechToTextService, ITokenStorageService, LiveEventContext, NotificationHubService, NotificationState, NullHapticFeedbackService, NullSpeechToTextService, SessionInfo, TestPrincipal</td>
           </tr>
           <tr>
           <td>3</td>
@@ -7977,6 +8215,62 @@
           </tr>
           <tr>
           <td>3</td>
+          <td><code>FakeConsumerModule</code></td>
+          <td>MMCA.Common.Application.Tests</td>
+          <td>3</td>
+          <td>ApplicationSettings, FakeModuleTracker, IModule</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>FakeCycleModuleOne</code></td>
+          <td>MMCA.Common.Application.Tests</td>
+          <td>3</td>
+          <td>ApplicationSettings, FakeModuleTracker, IModule</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>FakeCycleModuleTwo</code></td>
+          <td>MMCA.Common.Application.Tests</td>
+          <td>3</td>
+          <td>ApplicationSettings, FakeModuleTracker, IModule</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>FakeModuleAlpha</code></td>
+          <td>MMCA.Common.Application.Tests</td>
+          <td>3</td>
+          <td>ApplicationSettings, FakeModuleTracker, IModule</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>FakeModuleBravo</code></td>
+          <td>MMCA.Common.Application.Tests</td>
+          <td>3</td>
+          <td>ApplicationSettings, FakeModuleTracker, IModule</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>FakeModuleCharlie</code></td>
+          <td>MMCA.Common.Application.Tests</td>
+          <td>3</td>
+          <td>ApplicationSettings, FakeModuleTracker, IModule</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>FakeStrictModule</code></td>
+          <td>MMCA.Common.Application.Tests</td>
+          <td>3</td>
+          <td>ApplicationSettings, FakeModuleTracker, IModule</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>FakeStubbedModule</code></td>
+          <td>MMCA.Common.Application.Tests</td>
+          <td>5</td>
+          <td>ApplicationSettings, FakeModuleTracker, FakeRemoteContractStub, IFakeRemoteContract, IModule</td>
+          </tr>
+          <tr>
+          <td>3</td>
           <td><code>MultiHandlerEventHandler1</code></td>
           <td>MMCA.Common.Application.Tests</td>
           <td>2</td>
@@ -8033,6 +8327,13 @@
           </tr>
           <tr>
           <td>3</td>
+          <td><code>MetricsInstrumentationToggleTests</code></td>
+          <td>MMCA.Common.Aspire.Tests</td>
+          <td>1</td>
+          <td>Extensions</td>
+          </tr>
+          <tr>
+          <td>3</td>
           <td><code>SecurityHeadersMiddlewareTests</code></td>
           <td>MMCA.Common.Aspire.Tests</td>
           <td>6</td>
@@ -8070,8 +8371,8 @@
           <td>3</td>
           <td><code>AuditableBaseEntity&lt;TIdentifierType&gt;</code></td>
           <td>MMCA.Common.Domain</td>
-          <td>4</td>
-          <td>BaseEntity&lt;TIdentifierType&gt;, Error, IAuditableEntity, Result</td>
+          <td>5</td>
+          <td>BaseEntity&lt;TIdentifierType&gt;, Error, IAuditableEntity, IRowVersioned, Result</td>
           </tr>
           <tr>
           <td>3</td>
@@ -8429,6 +8730,20 @@
           <td>MMCA.Common.Testing.E2E</td>
           <td>5</td>
           <td>AxeOptions, E2ETestCollection, E2ETestConfiguration, PlaywrightFixture, Result</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>PingCommandHandler</code></td>
+          <td>MMCA.Common.Testing.Tests</td>
+          <td>3</td>
+          <td>ICommandHandler&lt;in TCommand, TResult&gt;, PingCommand, Result</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>PingQueryHandler</code></td>
+          <td>MMCA.Common.Testing.Tests</td>
+          <td>3</td>
+          <td>IQueryHandler&lt;in TQuery, TResult&gt;, PingQuery, Result</td>
           </tr>
           <tr>
           <td>3</td>
@@ -8812,8 +9127,8 @@
           <td>4</td>
           <td><code>ConferenceCategoryList</code></td>
           <td>MMCA.ADC.Conference.UI</td>
-          <td>6</td>
-          <td>ConferenceCategoryDTO, ConferenceRoutePaths, DataGridListPageBase&lt;TDto&gt;, ErrorMessages, IConferenceCategoryUIService, MobileInfiniteScrollList&lt;TItem&gt;</td>
+          <td>7</td>
+          <td>ConferenceCategoryDTO, ConferenceRoutePaths, DataGridListPageBase&lt;TDto&gt;, ErrorMessages, IConferenceCategoryUIService, ListPageActions, MobileInfiniteScrollList&lt;TItem&gt;</td>
           </tr>
           <tr>
           <td>4</td>
@@ -8847,8 +9162,8 @@
           <td>4</td>
           <td><code>PublicSessionListView</code></td>
           <td>MMCA.ADC.Conference.UI</td>
-          <td>7</td>
-          <td>BookmarkService, ConferenceRoutePaths, IHapticFeedbackService, ISessionBookmarkUIService, MobileInfiniteScrollList&lt;TItem&gt;, SessionDTO, SpeakerInfo</td>
+          <td>8</td>
+          <td>BookmarkService, ConferenceRoutePaths, IHapticFeedbackService, ISessionBookmarkUIService, ListPageActions, MobileInfiniteScrollList&lt;TItem&gt;, SessionDTO, SpeakerInfo</td>
           </tr>
           <tr>
           <td>4</td>
@@ -9153,6 +9468,20 @@
           </tr>
           <tr>
           <td>4</td>
+          <td><code>DependencyInjection</code></td>
+          <td>MMCA.ADC.Engagement.Infrastructure</td>
+          <td>1</td>
+          <td>LiveChannelPublishProcessor</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>LiveChannelPublishProcessorTests</code></td>
+          <td>MMCA.ADC.Engagement.Infrastructure.Tests</td>
+          <td>5</td>
+          <td>ILiveChannelPublisher, LiveChannelPublishProcessor, LiveChannelPublishQueue, LiveChannelPublishWorkItem, RecordingPublisher</td>
+          </tr>
+          <tr>
+          <td>4</td>
           <td><code>FakeEventLiveValidationService</code></td>
           <td>MMCA.ADC.Engagement.IntegrationTests</td>
           <td>6</td>
@@ -9246,8 +9575,29 @@
           <td>4</td>
           <td><code>UserList</code></td>
           <td>MMCA.ADC.Identity.UI</td>
-          <td>5</td>
-          <td>DataGridListPageBase&lt;TDto&gt;, IUserUIService, MobileInfiniteScrollList&lt;TItem&gt;, UserListDTO, UserService</td>
+          <td>6</td>
+          <td>DataGridListPageBase&lt;TDto&gt;, IUserUIService, ListPageActions, MobileInfiniteScrollList&lt;TItem&gt;, UserListDTO, UserService</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>NotificationModuleTests</code></td>
+          <td>MMCA.ADC.Notification.API.Tests</td>
+          <td>3</td>
+          <td>DisabledUserNotificationExportService, IUserNotificationExportService, NotificationModule</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>TestSupport</code></td>
+          <td>MMCA.ADC.Notification.Application.Tests</td>
+          <td>2</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, BaseEntity&lt;TIdentifierType&gt;</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>ServiceBusRoundTripSmokeTests</code></td>
+          <td>MMCA.ADC.ServiceBusEmulator.IntegrationTests</td>
+          <td>4</td>
+          <td>ServiceBusEmulatorCollection, ServiceBusEmulatorFixture, SpeakerLinkedToUser, UserRegistered</td>
           </tr>
           <tr>
           <td>4</td>
@@ -9477,8 +9827,8 @@
           <td>4</td>
           <td><code>IWriteRepository&lt;TEntity, TIdentifierType&gt;</code></td>
           <td>MMCA.Common.Application</td>
-          <td>1</td>
-          <td>AuditableBaseEntity&lt;TIdentifierType&gt;</td>
+          <td>2</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, IRowVersioned</td>
           </tr>
           <tr>
           <td>4</td>
@@ -9610,8 +9960,8 @@
           <td>4</td>
           <td><code>ModuleLoaderTests</code></td>
           <td>MMCA.Common.Application.Tests</td>
-          <td>4</td>
-          <td>ApplicationSettings, ModuleLoader, ModuleSettings, ModulesSettings</td>
+          <td>10</td>
+          <td>ApplicationSettings, FakeCycleModuleOne, FakeCycleModuleTwo, FakeModuleTracker, FakeRemoteContractRealAdapter, FakeRemoteContractStub, IFakeRemoteContract, ModuleLoader, ModuleSettings, ModulesSettings</td>
           </tr>
           <tr>
           <td>4</td>
@@ -9979,6 +10329,13 @@
           </tr>
           <tr>
           <td>4</td>
+          <td><code>FilteredIndexEntity</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;</td>
+          </tr>
+          <tr>
+          <td>4</td>
           <td><code>IntegrationEventConsumerTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>4</td>
@@ -10035,7 +10392,21 @@
           </tr>
           <tr>
           <td>4</td>
+          <td><code>SoftDeletableEntity</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;</td>
+          </tr>
+          <tr>
+          <td>4</td>
           <td><code>TestAuditEntity</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>TestChildEntity</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>1</td>
           <td>AuditableBaseEntity&lt;TIdentifierType&gt;</td>
@@ -10050,6 +10421,13 @@
           <tr>
           <td>4</td>
           <td><code>TestNonAggregateEntity</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>UniqueNamedEntity</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>1</td>
           <td>AuditableBaseEntity&lt;TIdentifierType&gt;</td>
@@ -10203,6 +10581,13 @@
           </tr>
           <tr>
           <td>4</td>
+          <td><code>HandlerResultConventionTestsBase</code></td>
+          <td>MMCA.Common.Testing.Architecture</td>
+          <td>2</td>
+          <td>ArchitectureRules, IArchitectureMap</td>
+          </tr>
+          <tr>
+          <td>4</td>
           <td><code>ImmutabilityTestsBase</code></td>
           <td>MMCA.Common.Testing.Architecture</td>
           <td>2</td>
@@ -10219,8 +10604,8 @@
           <td>4</td>
           <td><code>LayerDependencyTestsBase</code></td>
           <td>MMCA.Common.Testing.Architecture</td>
-          <td>2</td>
-          <td>ArchitectureRules, IArchitectureMap</td>
+          <td>3</td>
+          <td>ArchitectureRules, IArchitectureMap, Layer</td>
           </tr>
           <tr>
           <td>4</td>
@@ -10263,6 +10648,13 @@
           <td>MMCA.Common.Testing.Architecture</td>
           <td>2</td>
           <td>ArchitectureRules, IArchitectureMap</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>RawQueryableConventionTestsBase</code></td>
+          <td>MMCA.Common.Testing.Architecture</td>
+          <td>4</td>
+          <td>ArchitectureAssert, ArchitectureMapBase, IArchitectureMap, Layer</td>
           </tr>
           <tr>
           <td>4</td>
@@ -10340,6 +10732,13 @@
           <td>MMCA.Common.Testing.E2E</td>
           <td>4</td>
           <td>AxeOptions, E2ETestBase, PlaywrightFixture, RegisterPage</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>TestChildEntity</code></td>
+          <td>MMCA.Common.Testing.Tests</td>
+          <td>1</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;</td>
           </tr>
           <tr>
           <td>4</td>
@@ -10469,6 +10868,13 @@
           </tr>
           <tr>
           <td>5</td>
+          <td><code>SessionSelectionControllerTests</code></td>
+          <td>MMCA.ADC.Conference.API.Tests</td>
+          <td>20</td>
+          <td>CategoryDistributionDTO, CategoryGroupDistribution, CategoryItemDistribution, ContentSimilarityDTO, Error, GetCategoryDistributionQuery, GetContentSimilarityQuery, GetSessionSelectionDashboardQuery, GetSpeakerSessionOverlapQuery, ICommandHandler&lt;in TCommand, TResult&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, MultiSessionSpeaker, Result, ScoreEventSessionsCommand, ScoreEventSessionsResultDTO, SessionSelectionController, SessionSelectionDashboardDTO, SimilarSessionPair, SpeakerSessionOverlapDTO, SpeakerSessionSummary</td>
+          </tr>
+          <tr>
+          <td>5</td>
           <td><code>EventNameRules&lt;T&gt;</code></td>
           <td>MMCA.ADC.Conference.Application</td>
           <td>2</td>
@@ -10515,6 +10921,48 @@
           <td>MMCA.ADC.Conference.Application</td>
           <td>1</td>
           <td>EventInvariants</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td><code>SessionAccessibilityInfoRules&lt;T&gt;</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>2</td>
+          <td>OptionalStringRules&lt;T&gt;, SessionInvariants</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td><code>SessionDescriptionRules&lt;T&gt;</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>2</td>
+          <td>OptionalStringRules&lt;T&gt;, SessionInvariants</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td><code>SessionLiveUrlRules&lt;T&gt;</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>2</td>
+          <td>OptionalStringRules&lt;T&gt;, SessionInvariants</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td><code>SessionRecordingUrlRules&lt;T&gt;</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>2</td>
+          <td>OptionalStringRules&lt;T&gt;, SessionInvariants</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td><code>SessionResourceLinksRules&lt;T&gt;</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>2</td>
+          <td>OptionalStringRules&lt;T&gt;, SessionInvariants</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td><code>SessionStatusRules&lt;T&gt;</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>2</td>
+          <td>OptionalStringRules&lt;T&gt;, SessionInvariants</td>
           </tr>
           <tr>
           <td>5</td>
@@ -10702,8 +11150,8 @@
           <td>5</td>
           <td><code>EventList</code></td>
           <td>MMCA.ADC.Conference.UI</td>
-          <td>7</td>
-          <td>ConferenceRoutePaths, DataGridListPageBase&lt;TDto&gt;, ErrorMessages, EventDTO, EventService, IEventUIService, MobileInfiniteScrollList&lt;TItem&gt;</td>
+          <td>8</td>
+          <td>ConferenceRoutePaths, DataGridListPageBase&lt;TDto&gt;, ErrorMessages, EventDTO, EventService, IEventUIService, ListPageActions, MobileInfiniteScrollList&lt;TItem&gt;</td>
           </tr>
           <tr>
           <td>5</td>
@@ -10723,8 +11171,8 @@
           <td>5</td>
           <td><code>PublicEventList</code></td>
           <td>MMCA.ADC.Conference.UI</td>
-          <td>6</td>
-          <td>ConferenceRoutePaths, DataGridListPageBase&lt;TDto&gt;, EventDTO, EventService, IEventUIService, MobileInfiniteScrollList&lt;TItem&gt;</td>
+          <td>7</td>
+          <td>ConferenceRoutePaths, DataGridListPageBase&lt;TDto&gt;, EventDTO, EventService, IEventUIService, ListPageActions, MobileInfiniteScrollList&lt;TItem&gt;</td>
           </tr>
           <tr>
           <td>5</td>
@@ -10737,8 +11185,8 @@
           <td>5</td>
           <td><code>QuestionList</code></td>
           <td>MMCA.ADC.Conference.UI</td>
-          <td>7</td>
-          <td>ConferenceRoutePaths, DataGridListPageBase&lt;TDto&gt;, ErrorMessages, IQuestionUIService, MobileInfiniteScrollList&lt;TItem&gt;, QuestionDTO, QuestionService</td>
+          <td>8</td>
+          <td>ConferenceRoutePaths, DataGridListPageBase&lt;TDto&gt;, ErrorMessages, IQuestionUIService, ListPageActions, MobileInfiniteScrollList&lt;TItem&gt;, QuestionDTO, QuestionService</td>
           </tr>
           <tr>
           <td>5</td>
@@ -10774,6 +11222,13 @@
           <td>MMCA.ADC.Conference.UI.Tests</td>
           <td>5</td>
           <td>CapturingHttpMessageHandler, DomainInvariantViolationException, EventService, HttpTestDoubles, RefreshFromSessionizeResultDTO</td>
+          </tr>
+          <tr>
+          <td>5</td>
+          <td><code>SessionSelectionAiScoresTests</code></td>
+          <td>MMCA.ADC.Conference.UI.Tests</td>
+          <td>6</td>
+          <td>BunitTestBase, CategoryDistributionDTO, SessionAiScoreDTO, SessionSelectionAiScores, SessionSelectionDashboardDTO, SpeakerSessionOverlapDTO</td>
           </tr>
           <tr>
           <td>5</td>
@@ -11505,6 +11960,13 @@
           </tr>
           <tr>
           <td>5</td>
+          <td><code>TestAggregate</code></td>
+          <td>MMCA.Common.Testing.Tests</td>
+          <td>1</td>
+          <td>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</td>
+          </tr>
+          <tr>
+          <td>5</td>
           <td><code>DependencyInjection</code></td>
           <td>MMCA.Common.UI</td>
           <td>8</td>
@@ -11787,8 +12249,8 @@
           <td>6</td>
           <td><code>SessionUpdateRequestValidator</code></td>
           <td>MMCA.ADC.Conference.Application</td>
-          <td>2</td>
-          <td>SessionTitleRules&lt;T&gt;, SessionUpdateRequest</td>
+          <td>8</td>
+          <td>SessionAccessibilityInfoRules&lt;T&gt;, SessionDescriptionRules&lt;T&gt;, SessionLiveUrlRules&lt;T&gt;, SessionRecordingUrlRules&lt;T&gt;, SessionResourceLinksRules&lt;T&gt;, SessionStatusRules&lt;T&gt;, SessionTitleRules&lt;T&gt;, SessionUpdateRequest</td>
           </tr>
           <tr>
           <td>6</td>
@@ -11887,6 +12349,13 @@
           <td>MMCA.ADC.Conference.Application</td>
           <td>4</td>
           <td>ICacheInvalidating, ICommandWithRequest&lt;out TRequest&gt;, Speaker, SpeakerUpdateRequest</td>
+          </tr>
+          <tr>
+          <td>6</td>
+          <td><code>SpeakerDeletedHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>7</td>
+          <td>DomainEntityState, IIntegrationEvent, IIntegrationEventPublisher, Mocks, SpeakerChanged, SpeakerDeletedHandler, SpeakerUnlinkedFromUser</td>
           </tr>
           <tr>
           <td>6</td>
@@ -12149,6 +12618,13 @@
           </tr>
           <tr>
           <td>6</td>
+          <td><code>SessionSelectionSpeakerOverlapTests</code></td>
+          <td>MMCA.ADC.Conference.UI.Tests</td>
+          <td>5</td>
+          <td>BunitTestBase, MultiSessionSpeaker, SessionSelectionSpeakerOverlap, Speaker, SpeakerSessionSummary</td>
+          </tr>
+          <tr>
+          <td>6</td>
           <td><code>BookmarksController</code></td>
           <td>MMCA.ADC.Engagement.API</td>
           <td>19</td>
@@ -12219,17 +12695,17 @@
           </tr>
           <tr>
           <td>6</td>
+          <td><code>EventFeedback</code></td>
+          <td>MMCA.ADC.Engagement.UI</td>
+          <td>7</td>
+          <td>AnswerState, EventQuestionAnswerDTO, IEventFeedbackUIService, IEventLookupService, IQuestionLookupService, Question, QuestionDTO</td>
+          </tr>
+          <tr>
+          <td>6</td>
           <td><code>SessionLiveModerationPanel</code></td>
           <td>MMCA.ADC.Engagement.UI</td>
           <td>11</td>
           <td>CreateLivePollRequest, ErrorMessages, ILivePollUIService, ISessionQuestionUIService, LivePollDTO, LivePollResultsDTO, LivePollStatus, OptionState, Question, QuestionService, SessionQuestionDTO</td>
-          </tr>
-          <tr>
-          <td>6</td>
-          <td><code>EventFeedbackTests</code></td>
-          <td>MMCA.ADC.Engagement.UI.Tests</td>
-          <td>9</td>
-          <td>BunitComponentTestBase, EventFeedback, EventInfo, EventQuestionAnswerDTO, IEventFeedbackUIService, IEventLookupService, IQuestionLookupService, Question, QuestionDTO</td>
           </tr>
           <tr>
           <td>6</td>
@@ -12247,10 +12723,31 @@
           </tr>
           <tr>
           <td>6</td>
+          <td><code>PresenterViewTests</code></td>
+          <td>MMCA.ADC.Engagement.UI.Tests</td>
+          <td>15</td>
+          <td>ApiSettings, BunitComponentTestBase, ILivePollUIService, ISessionLookupService, ISessionQuestionUIService, ITokenStorageService, LivePollOptionResultDTO, LivePollResultsDTO, LivePollStatus, NotificationHubService, PresenterView, Question, QuestionStatus, SessionInfo, SessionQuestionDTO</td>
+          </tr>
+          <tr>
+          <td>6</td>
           <td><code>SessionFeedbackTests</code></td>
           <td>MMCA.ADC.Engagement.UI.Tests</td>
           <td>9</td>
           <td>BunitComponentTestBase, IEntityService&lt;TEntityDTO, TIdentifierType&gt;, IQuestionLookupService, ISessionFeedbackUIService, Question, QuestionDTO, SessionDTO, SessionFeedback, SessionQuestionAnswerDTO</td>
+          </tr>
+          <tr>
+          <td>6</td>
+          <td><code>SessionLivePollPanelTests</code></td>
+          <td>MMCA.ADC.Engagement.UI.Tests</td>
+          <td>9</td>
+          <td>BunitComponentTestBase, IHapticFeedbackService, ILivePollUIService, LivePollOptionResultDTO, LivePollResultsDTO, LivePollStatus, NullHapticFeedbackService, Question, SessionLivePollPanel</td>
+          </tr>
+          <tr>
+          <td>6</td>
+          <td><code>SessionLiveQuestionPanelTests</code></td>
+          <td>MMCA.ADC.Engagement.UI.Tests</td>
+          <td>8</td>
+          <td>BunitComponentTestBase, ISessionQuestionUIService, ISpeechToTextService, Question, QuestionStatus, SessionLiveQuestionPanel, SessionQuestionDTO, SubmitQuestionRequest</td>
           </tr>
           <tr>
           <td>6</td>
@@ -12480,8 +12977,8 @@
           <td>6</td>
           <td><code>ApplicationDbContext</code></td>
           <td>MMCA.Common.Infrastructure</td>
-          <td>17</td>
-          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, AuditSaveChangesInterceptor, CrossDataSourceDegradeConvention, DataSource, DataSourceKey, DataSourceModelCacheKeyFactory, DomainEventSaveChangesInterceptor, IAuditableEntity, IEntityConfigurationAssemblyProvider, IEntityDataSourceRegistry, IEntityTypeConfigurationCosmos&lt;TEntity, TIdentifierType&gt;, IEntityTypeConfigurationSqlite&lt;TEntity, TIdentifierType&gt;, IEntityTypeConfigurationSQLServer&lt;TEntity, TIdentifierType&gt;, InboxMessage, OutboxMessage, PhysicalDataSource, ValReturn&lt;T&gt;</td>
+          <td>18</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, AuditSaveChangesInterceptor, CrossDataSourceDegradeConvention, DataSource, DataSourceKey, DataSourceModelCacheKeyFactory, DomainEventSaveChangesInterceptor, IAuditableEntity, IEntityConfigurationAssemblyProvider, IEntityDataSourceRegistry, IEntityTypeConfigurationCosmos&lt;TEntity, TIdentifierType&gt;, IEntityTypeConfigurationSqlite&lt;TEntity, TIdentifierType&gt;, IEntityTypeConfigurationSQLServer&lt;TEntity, TIdentifierType&gt;, InboxMessage, OutboxMessage, PhysicalDataSource, SoftDeleteUniqueIndexConvention, ValReturn&lt;T&gt;</td>
           </tr>
           <tr>
           <td>6</td>
@@ -12499,10 +12996,17 @@
           </tr>
           <tr>
           <td>6</td>
+          <td><code>DeferredDispatch</code></td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td>2</td>
+          <td>CapturedState, DomainEventSaveChangesInterceptor</td>
+          </tr>
+          <tr>
+          <td>6</td>
           <td><code>DomainEventSaveChangesInterceptor</code></td>
           <td>MMCA.Common.Infrastructure</td>
-          <td>7</td>
-          <td>ApplicationDbContext, CapturedState, IAggregateRoot, IDomainEventDispatcher, IOutboxSignal, OutboxFinalizer, OutboxMessage</td>
+          <td>10</td>
+          <td>ApplicationDbContext, CapturedState, DeferredDispatch, IAggregateRoot, IDomainEvent, IDomainEventDispatcher, IIntegrationEvent, IOutboxSignal, OutboxFinalizer, OutboxMessage</td>
           </tr>
           <tr>
           <td>6</td>
@@ -12571,8 +13075,8 @@
           <td>6</td>
           <td><code>TestDbContext</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>3</td>
-          <td>FakeAggregate, FakeEntity, TestEntity</td>
+          <td>4</td>
+          <td>FakeAggregate, FakeEntity, TestChildEntity, TestEntity</td>
           </tr>
           <tr>
           <td>6</td>
@@ -12835,6 +13339,13 @@
           </tr>
           <tr>
           <td>7</td>
+          <td><code>SessionRoomScheduling</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>2</td>
+          <td>Error, Session</td>
+          </tr>
+          <tr>
+          <td>7</td>
           <td><code>SessionSpeakerDTOMapper</code></td>
           <td>MMCA.ADC.Conference.Application</td>
           <td>3</td>
@@ -12926,6 +13437,13 @@
           </tr>
           <tr>
           <td>7</td>
+          <td><code>InMemoryRepository&lt;TEntity, TIdentifierType&gt;</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>4</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, BaseLookup&lt;TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IRowVersioned</td>
+          </tr>
+          <tr>
+          <td>7</td>
           <td><code>OwnEventQuestionAnswerSpecificationTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>2</td>
@@ -12977,8 +13495,8 @@
           <td>7</td>
           <td><code>SessionUpdateRequestValidatorTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>2</td>
-          <td>SessionUpdateRequest, SessionUpdateRequestValidator</td>
+          <td>3</td>
+          <td>SessionInvariants, SessionUpdateRequest, SessionUpdateRequestValidator</td>
           </tr>
           <tr>
           <td>7</td>
@@ -13080,6 +13598,13 @@
           </tr>
           <tr>
           <td>7</td>
+          <td><code>ADCHome</code></td>
+          <td>MMCA.ADC.Conference.UI</td>
+          <td>8</td>
+          <td>ADCCollectionResult, ADCEventInfo, ConferenceTrackInfo, CurrentEventSelector, EventPhase, KeynoteSpeakerInfo, SponsorInfo, SponsorTierInfo</td>
+          </tr>
+          <tr>
+          <td>7</td>
           <td><code>PublicSessionDetail</code></td>
           <td>MMCA.ADC.Conference.UI</td>
           <td>16</td>
@@ -13089,15 +13614,15 @@
           <td>7</td>
           <td><code>PublicSpeakerList</code></td>
           <td>MMCA.ADC.Conference.UI</td>
-          <td>11</td>
-          <td>ConferenceRoutePaths, CurrentEventSelector, DataGridListPageBase&lt;TDto&gt;, EventInfo, EventLookupService, IEventLookupService, ISpeakerUIService, MobileInfiniteScrollList&lt;TItem&gt;, RoleNames, SpeakerDTO, SpeakerService</td>
+          <td>12</td>
+          <td>ConferenceRoutePaths, CurrentEventSelector, DataGridListPageBase&lt;TDto&gt;, EventInfo, EventLookupService, IEventLookupService, ISpeakerUIService, ListPageActions, MobileInfiniteScrollList&lt;TItem&gt;, RoleNames, SpeakerDTO, SpeakerService</td>
           </tr>
           <tr>
           <td>7</td>
           <td><code>RoomList</code></td>
           <td>MMCA.ADC.Conference.UI</td>
-          <td>11</td>
-          <td>ConferenceRoutePaths, CurrentEventSelector, DataGridListPageBase&lt;TDto&gt;, ErrorMessages, EventInfo, EventLookupService, IEventLookupService, IRoomUIService, MobileInfiniteScrollList&lt;TItem&gt;, RoomDTO, RoomService</td>
+          <td>12</td>
+          <td>ConferenceRoutePaths, CurrentEventSelector, DataGridListPageBase&lt;TDto&gt;, ErrorMessages, EventInfo, EventLookupService, IEventLookupService, IRoomUIService, ListPageActions, MobileInfiniteScrollList&lt;TItem&gt;, RoomDTO, RoomService</td>
           </tr>
           <tr>
           <td>7</td>
@@ -13110,8 +13635,8 @@
           <td>7</td>
           <td><code>SessionSelectionDashboard</code></td>
           <td>MMCA.ADC.Conference.UI</td>
-          <td>7</td>
-          <td>ConferenceRoutePaths, CurrentEventSelector, EventInfo, EventLookupService, IEventLookupService, ISessionSelectionUIService, SessionSelectionDashboardDTO</td>
+          <td>9</td>
+          <td>ConferenceRoutePaths, CurrentEventSelector, EventInfo, EventLookupService, IEventLookupService, ISessionSelectionUIService, ScorePollSignal, ScorePollTracker, SessionSelectionDashboardDTO</td>
           </tr>
           <tr>
           <td>7</td>
@@ -13124,8 +13649,8 @@
           <td>7</td>
           <td><code>SpeakerList</code></td>
           <td>MMCA.ADC.Conference.UI</td>
-          <td>11</td>
-          <td>ConferenceRoutePaths, CurrentEventSelector, DataGridListPageBase&lt;TDto&gt;, ErrorMessages, EventInfo, EventLookupService, IEventLookupService, ISpeakerUIService, MobileInfiniteScrollList&lt;TItem&gt;, SpeakerDTO, SpeakerService</td>
+          <td>12</td>
+          <td>ConferenceRoutePaths, CurrentEventSelector, DataGridListPageBase&lt;TDto&gt;, ErrorMessages, EventInfo, EventLookupService, IEventLookupService, ISpeakerUIService, ListPageActions, MobileInfiniteScrollList&lt;TItem&gt;, SpeakerDTO, SpeakerService</td>
           </tr>
           <tr>
           <td>7</td>
@@ -13241,6 +13766,20 @@
           </tr>
           <tr>
           <td>7</td>
+          <td><code>EventFeedbackTests</code></td>
+          <td>MMCA.ADC.Engagement.UI.Tests</td>
+          <td>9</td>
+          <td>BunitComponentTestBase, EventFeedback, EventInfo, EventQuestionAnswerDTO, IEventFeedbackUIService, IEventLookupService, IQuestionLookupService, Question, QuestionDTO</td>
+          </tr>
+          <tr>
+          <td>7</td>
+          <td><code>SessionLiveModerationPanelTests</code></td>
+          <td>MMCA.ADC.Engagement.UI.Tests</td>
+          <td>11</td>
+          <td>BunitComponentTestBase, CreateLivePollRequest, ILivePollUIService, ISessionQuestionUIService, LivePollDTO, LivePollResultsDTO, LivePollStatus, Question, QuestionStatus, SessionLiveModerationPanel, SessionQuestionDTO</td>
+          </tr>
+          <tr>
+          <td>7</td>
           <td><code>SessionReminderPlannerTests</code></td>
           <td>MMCA.ADC.Engagement.UI.Tests</td>
           <td>3</td>
@@ -13280,6 +13819,13 @@
           <td>MMCA.ADC.Identity.Application</td>
           <td>4</td>
           <td>Email, IEntityDTOMapper&lt;TEntity, TEntityDTO, TIdentifierType&gt;, User, UserDTO</td>
+          </tr>
+          <tr>
+          <td>7</td>
+          <td><code>InMemoryRepository&lt;TEntity, TIdentifierType&gt;</code></td>
+          <td>MMCA.ADC.Identity.Application.Tests</td>
+          <td>4</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, BaseLookup&lt;TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IRowVersioned</td>
           </tr>
           <tr>
           <td>7</td>
@@ -13336,20 +13882,6 @@
           <td>MMCA.ADC.Identity.UI.Tests</td>
           <td>8</td>
           <td>BunitTestBase, Email, IUserUIService, ListPageQueryStateService, ListPageStateService, User, UserList, UserListDTO</td>
-          </tr>
-          <tr>
-          <td>7</td>
-          <td><code>ADCHome</code></td>
-          <td>MMCA.ADC.UI</td>
-          <td>8</td>
-          <td>ADCCollectionResult, ADCEventInfo, ConferenceTrackInfo, CurrentEventSelector, EventPhase, KeynoteSpeakerInfo, SponsorInfo, SponsorTierInfo</td>
-          </tr>
-          <tr>
-          <td>7</td>
-          <td><code>ADCHome</code></td>
-          <td>MMCA.ADC.UI.Web.Client</td>
-          <td>8</td>
-          <td>ADCCollectionResult, ADCEventInfo, ConferenceTrackInfo, CurrentEventSelector, EventPhase, KeynoteSpeakerInfo, SponsorInfo, SponsorTierInfo</td>
           </tr>
           <tr>
           <td>7</td>
@@ -13439,15 +13971,15 @@
           <td>7</td>
           <td><code>EFRepository&lt;TEntity, TIdentifierType&gt;</code></td>
           <td>MMCA.Common.Infrastructure</td>
-          <td>3</td>
-          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, EFReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;</td>
+          <td>4</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, EFReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IRowVersioned</td>
           </tr>
           <tr>
           <td>7</td>
           <td><code>EFRepositoryDecorator&lt;TEntity, TIdentifierType&gt;</code></td>
           <td>MMCA.Common.Infrastructure</td>
-          <td>4</td>
-          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, EFReadRepositoryDecorator&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, ProfilingHelper</td>
+          <td>5</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, EFReadRepositoryDecorator&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IRowVersioned, ProfilingHelper</td>
           </tr>
           <tr>
           <td>7</td>
@@ -13542,6 +14074,13 @@
           </tr>
           <tr>
           <td>7</td>
+          <td><code>OutboxRoutingTestDbContext</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>9</td>
+          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IEntityDataSourceRegistry, NullAssemblyProvider, OutboxMessage, TestAggregate, TestPhysicalDataSources</td>
+          </tr>
+          <tr>
+          <td>7</td>
           <td><code>OutboxTestDbContext</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>4</td>
@@ -13553,6 +14092,13 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>3</td>
           <td>DataSource, EntityTypeConfiguration&lt;TEntity, TIdentifierType&gt;, PortableThing</td>
+          </tr>
+          <tr>
+          <td>7</td>
+          <td><code>SoftDeleteTestDbContext</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>10</td>
+          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, SoftDeletableEntity, TestPhysicalDataSources</td>
           </tr>
           <tr>
           <td>7</td>
@@ -13612,6 +14158,20 @@
           </tr>
           <tr>
           <td>7</td>
+          <td><code>TransactionTestDbContext</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>11</td>
+          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, OutboxMessage, TestAggregate, TestPhysicalDataSources</td>
+          </tr>
+          <tr>
+          <td>7</td>
+          <td><code>UniqueIndexTestDbContext</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>12</td>
+          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, FilteredIndexEntity, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, NullAssemblyProvider, TestPhysicalDataSources, UniqueNamedEntity</td>
+          </tr>
+          <tr>
+          <td>7</td>
           <td><code>DependencyInjection</code></td>
           <td>MMCA.Common.UI</td>
           <td>22</td>
@@ -13619,10 +14179,17 @@
           </tr>
           <tr>
           <td>7</td>
-          <td><code>GalleryHost</code></td>
+          <td><code>GalleryAuthenticationStateProvider</code></td>
           <td>MMCA.Common.UI.Gallery</td>
-          <td>15</td>
-          <td>AnonymousAuthenticationStateProvider, GalleryUIModule, IAuthUIService, INotificationInboxUIService, IPushNotificationUIService, ITokenRefresher, ITokenStorageService, IUIModule, NoOpAuthUIService, NotificationState, NullTokenRefresher, NullTokenStorageService, StubNotificationInboxUIService, StubPushNotificationUIService, SupportedCultures</td>
+          <td>1</td>
+          <td>User</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>DecoratorPipelineOrderTests</code></td>
+          <td>MMCA.ADC.Architecture.Tests</td>
+          <td>9</td>
+          <td>ChangePreferencesCommand, ClassReference, DecoratorPipelineOrderTestsBase&lt;TCommand, TCommandResult, TQuery, TQueryResult&gt;, GetUserPreferencesQuery, ICacheService, ICorrelationContext, IUnitOfWork, Result, UserPreferencesResponse</td>
           </tr>
           <tr>
           <td>8</td>
@@ -13677,8 +14244,8 @@
           <td>8</td>
           <td><code>SpeakersController</code></td>
           <td>MMCA.ADC.Conference.API</td>
-          <td>27</td>
-          <td>AggregateRootEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest&gt;, BaseLookup&lt;TIdentifierType&gt;, CollectionResult&lt;T&gt;, ConferencePermissions, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, GetSessionBookmarkCountQuery, GetSessionFeedbackQuery, GetSpeakersByEventFilterQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, LinkUserRequest, LinkUserToSpeakerCommand, PagedCollectionResult&lt;T&gt;, QueryFilterModelBinder, Result, RoleNames, Route, SessionFeedbackDTO …(+7)</td>
+          <td>28</td>
+          <td>AggregateRootEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest&gt;, BaseLookup&lt;TIdentifierType&gt;, CollectionResult&lt;T&gt;, ConferencePermissions, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, GetSessionBookmarkCountQuery, GetSessionBookmarkCountsQuery, GetSessionFeedbackQuery, GetSpeakersByEventFilterQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, LinkUserRequest, LinkUserToSpeakerCommand, PagedCollectionResult&lt;T&gt;, QueryFilterModelBinder, Result, RoleNames, Route …(+8)</td>
           </tr>
           <tr>
           <td>8</td>
@@ -13878,6 +14445,13 @@
           </tr>
           <tr>
           <td>8</td>
+          <td><code>GetSessionBookmarkCountsHandler</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>6</td>
+          <td>GetSessionBookmarkCountsQuery, IBookmarkCountService, IQueryHandler&lt;in TQuery, TResult&gt;, IUnitOfWork, Result, Session</td>
+          </tr>
+          <tr>
+          <td>8</td>
           <td><code>GetSessionFeedbackHandler</code></td>
           <td>MMCA.ADC.Conference.Application</td>
           <td>10</td>
@@ -13908,8 +14482,8 @@
           <td>8</td>
           <td><code>LinkUserToSpeakerHandler</code></td>
           <td>MMCA.ADC.Conference.Application</td>
-          <td>8</td>
-          <td>Error, ICommandHandler&lt;in TCommand, TResult&gt;, IIntegrationEventPublisher, IUnitOfWork, LinkUserToSpeakerCommand, Result, Speaker, SpeakerLinkedToUser</td>
+          <td>7</td>
+          <td>Error, ICommandHandler&lt;in TCommand, TResult&gt;, IUnitOfWork, LinkUserToSpeakerCommand, Result, Speaker, SpeakerLinkedToUser</td>
           </tr>
           <tr>
           <td>8</td>
@@ -13999,8 +14573,8 @@
           <td>8</td>
           <td><code>SessionCreateRequestValidator</code></td>
           <td>MMCA.ADC.Conference.Application</td>
-          <td>3</td>
-          <td>SessionCreateRequest, SessionEventIdRules&lt;T&gt;, SessionTitleRules&lt;T&gt;</td>
+          <td>9</td>
+          <td>SessionAccessibilityInfoRules&lt;T&gt;, SessionCreateRequest, SessionDescriptionRules&lt;T&gt;, SessionEventIdRules&lt;T&gt;, SessionLiveUrlRules&lt;T&gt;, SessionRecordingUrlRules&lt;T&gt;, SessionResourceLinksRules&lt;T&gt;, SessionStatusRules&lt;T&gt;, SessionTitleRules&lt;T&gt;</td>
           </tr>
           <tr>
           <td>8</td>
@@ -14020,8 +14594,8 @@
           <td>8</td>
           <td><code>UnlinkUserFromSpeakerHandler</code></td>
           <td>MMCA.ADC.Conference.Application</td>
-          <td>8</td>
-          <td>Error, ICommandHandler&lt;in TCommand, TResult&gt;, IIntegrationEventPublisher, IUnitOfWork, Result, Speaker, SpeakerUnlinkedFromUser, UnlinkUserFromSpeakerCommand</td>
+          <td>7</td>
+          <td>Error, ICommandHandler&lt;in TCommand, TResult&gt;, IUnitOfWork, Result, Speaker, SpeakerUnlinkedFromUser, UnlinkUserFromSpeakerCommand</td>
           </tr>
           <tr>
           <td>8</td>
@@ -14179,69 +14753,6 @@
           </tr>
           <tr>
           <td>8</td>
-          <td><code>Mocks</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>5</td>
-          <td>ICurrentUserService, IEntityQueryPipeline, IReadRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Speaker</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>Mocks</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>5</td>
-          <td>Category, ConferenceCategoryCreateRequest, IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>Mocks</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>10</td>
-          <td>Event, EventCreateRequest, ICurrentUserService, IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Question, Room, Session</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>Mocks</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>8</td>
-          <td>EventQuestionAnswer, IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Question, QuestionCreateRequest, SessionQuestionAnswer</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>Mocks</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>8</td>
-          <td>Event, ICurrentUserService, IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Question, Session, SessionCreateRequest</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>Mocks</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>7</td>
-          <td>ICurrentUserService, IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, IIntegrationEventPublisher, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Speaker, SpeakerCreateRequest</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>Mocks</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>8</td>
-          <td>Category, Event, IAiScoringService, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Session, SessionAiScore, Speaker</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>Mocks</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>3</td>
-          <td>Event, IReadRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>Mocks</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>5</td>
-          <td>EventSpeaker, IReadRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Session, SessionSpeaker</td>
-          </tr>
-          <tr>
-          <td>8</td>
           <td><code>OwnSessionQuestionAnswerSpecificationTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>2</td>
@@ -14256,17 +14767,10 @@
           </tr>
           <tr>
           <td>8</td>
-          <td><code>ServiceMocks</code></td>
+          <td><code>RecordingUnitOfWork</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>4</td>
-          <td>Event, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Session</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>ServiceMocks</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>3</td>
-          <td>IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Session</td>
+          <td>6</td>
+          <td>AuditableAggregateRootEntity&lt;TIdentifierType&gt;, AuditableBaseEntity&lt;TIdentifierType&gt;, InMemoryRepository&lt;TEntity, TIdentifierType&gt;, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork</td>
           </tr>
           <tr>
           <td>8</td>
@@ -14281,6 +14785,13 @@
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>3</td>
           <td>Session, SessionQuestionAnswer, SessionQuestionAnswerDTOMapper</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>SessionRoomSchedulingTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>3</td>
+          <td>ErrorType, Session, SessionRoomScheduling</td>
           </tr>
           <tr>
           <td>8</td>
@@ -14482,8 +14993,8 @@
           <td>8</td>
           <td><code>SessionList</code></td>
           <td>MMCA.ADC.Conference.UI</td>
-          <td>13</td>
-          <td>ConferenceRoutePaths, CurrentEventDefaults, DataGridListPageBase&lt;TDto&gt;, ErrorMessages, EventDTO, EventService, IEventUIService, ISessionUIService, ISpeakerLookupService, MobileInfiniteScrollList&lt;TItem&gt;, SessionDTO, SessionService, SpeakerInfo</td>
+          <td>14</td>
+          <td>ConferenceRoutePaths, CurrentEventDefaults, DataGridListPageBase&lt;TDto&gt;, ErrorMessages, EventDTO, EventService, IEventUIService, ISessionUIService, ISpeakerLookupService, ListPageActions, MobileInfiniteScrollList&lt;TItem&gt;, SessionDTO, SessionService, SpeakerInfo</td>
           </tr>
           <tr>
           <td>8</td>
@@ -14545,15 +15056,15 @@
           <td>8</td>
           <td><code>BookmarkCountService</code></td>
           <td>MMCA.ADC.Engagement.Application</td>
-          <td>3</td>
-          <td>IBookmarkCountService, IUnitOfWork, UserSessionBookmark</td>
+          <td>4</td>
+          <td>IBookmarkCountService, IQueryableExecutor, IUnitOfWork, UserSessionBookmark</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>CloseLivePollHandler</code></td>
           <td>MMCA.ADC.Engagement.Application</td>
-          <td>11</td>
-          <td>CloseLivePollCommand, Error, ICommandHandler&lt;in TCommand, TResult&gt;, IEventLiveValidationService, ILiveChannelPublisher, IUnitOfWork, LivePoll, LivePollAuthorization, LivePollChannel, LivePollClosedPayload, Result</td>
+          <td>12</td>
+          <td>CloseLivePollCommand, Error, ICommandHandler&lt;in TCommand, TResult&gt;, IEventLiveValidationService, ILiveChannelPublishQueue, IUnitOfWork, LiveChannelPublishWorkItem, LivePoll, LivePollAuthorization, LivePollChannel, LivePollClosedPayload, Result</td>
           </tr>
           <tr>
           <td>8</td>
@@ -14615,8 +15126,8 @@
           <td>8</td>
           <td><code>SessionQuestionViewBuilder</code></td>
           <td>MMCA.ADC.Engagement.Application</td>
-          <td>4</td>
-          <td>IUnitOfWork, SessionQuestion, SessionQuestionDTO, SessionQuestionUpvote</td>
+          <td>5</td>
+          <td>IQueryableExecutor, IUnitOfWork, SessionQuestion, SessionQuestionDTO, SessionQuestionUpvote</td>
           </tr>
           <tr>
           <td>8</td>
@@ -14636,8 +15147,8 @@
           <td>8</td>
           <td><code>HandlerMocks</code></td>
           <td>MMCA.ADC.Engagement.Application.Tests</td>
-          <td>6</td>
-          <td>IEventLiveValidationService, ILiveChannelPublisher, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, LivePoll, LivePollVote</td>
+          <td>7</td>
+          <td>IEventLiveValidationService, ILiveChannelPublisher, ILiveChannelPublishQueue, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, LivePoll, LivePollVote</td>
           </tr>
           <tr>
           <td>8</td>
@@ -14659,13 +15170,6 @@
           <td>MMCA.ADC.Engagement.Application.Tests</td>
           <td>3</td>
           <td>LivePoll, LivePollDTOMapper, LivePollStatus</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>ServiceMocks</code></td>
-          <td>MMCA.ADC.Engagement.Application.Tests</td>
-          <td>3</td>
-          <td>IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, UserSessionBookmark</td>
           </tr>
           <tr>
           <td>8</td>
@@ -14830,24 +15334,17 @@
           </tr>
           <tr>
           <td>8</td>
-          <td><code>Mocks</code></td>
-          <td>MMCA.ADC.Identity.Application.Tests</td>
-          <td>3</td>
-          <td>IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, User</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>Mocks</code></td>
+          <td><code>RecordingUnitOfWork</code></td>
           <td>MMCA.ADC.Identity.Application.Tests</td>
           <td>6</td>
-          <td>IPasswordHasher, IQueryableExecutor, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, User</td>
+          <td>AuditableAggregateRootEntity&lt;TIdentifierType&gt;, AuditableBaseEntity&lt;TIdentifierType&gt;, InMemoryRepository&lt;TEntity, TIdentifierType&gt;, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>ServiceMocks</code></td>
           <td>MMCA.ADC.Identity.Application.Tests</td>
-          <td>11</td>
-          <td>IIntegrationEventPublisher, ILoginProtectionService, IPasswordHasher, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, ITokenService, IUnitOfWork, LoginRequest, RefreshTokenRequest, RegisterRequest, User</td>
+          <td>10</td>
+          <td>IExternalLoginEmailVerifier, ILoginProtectionService, IPasswordHasher, IRepository&lt;TEntity, TIdentifierType&gt;, ITokenService, IUnitOfWork, LoginRequest, RefreshTokenRequest, RegisterRequest, User</td>
           </tr>
           <tr>
           <td>8</td>
@@ -14888,13 +15385,6 @@
           <td>8</td>
           <td><code>ADCHomePageContent</code></td>
           <td>MMCA.ADC.UI</td>
-          <td>2</td>
-          <td>ADCHome, IHomePageContent</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>ADCHomePageContent</code></td>
-          <td>MMCA.ADC.UI.Web.Client</td>
           <td>2</td>
           <td>ADCHome, IHomePageContent</td>
           </tr>
@@ -15054,6 +15544,13 @@
           </tr>
           <tr>
           <td>8</td>
+          <td><code>HandlerResultConventionTests</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>3</td>
+          <td>CommonArchitectureMap, HandlerResultConventionTestsBase, IArchitectureMap</td>
+          </tr>
+          <tr>
+          <td>8</td>
           <td><code>LayerDependencyTests</code></td>
           <td>MMCA.Common.Architecture.Tests</td>
           <td>3</td>
@@ -15079,6 +15576,13 @@
           <td>MMCA.Common.Architecture.Tests</td>
           <td>3</td>
           <td>CommonArchitectureMap, IArchitectureMap, PiiConventionTestsBase</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>RawQueryableConventionTests</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>4</td>
+          <td>ArchitectureMapBase, CommonArchitectureMap, IArchitectureMap, RawQueryableConventionTestsBase</td>
           </tr>
           <tr>
           <td>8</td>
@@ -15119,8 +15623,8 @@
           <td>8</td>
           <td><code>DbContextFactory</code></td>
           <td>MMCA.Common.Infrastructure</td>
-          <td>11</td>
-          <td>ApplicationDbContext, CosmosDbContext, DataSource, DataSourceKey, ICurrentUserService, IDataSourceResolver, IDbContextFactory, IdentityInsertGroup, IEntityDataSourceRegistry, IPhysicalDbContextFactory, SQLServerDbContext</td>
+          <td>13</td>
+          <td>ApplicationDbContext, CosmosDbContext, DataSource, DataSourceKey, DomainEventSaveChangesInterceptor, ICurrentUserService, IDataSourceResolver, IDbContextFactory, IdentityInsertGroup, IEntityDataSourceRegistry, IPhysicalDbContextFactory, Result, SQLServerDbContext</td>
           </tr>
           <tr>
           <td>8</td>
@@ -15175,8 +15679,8 @@
           <td>8</td>
           <td><code>OutboxProcessor</code></td>
           <td>MMCA.Common.Infrastructure</td>
-          <td>12</td>
-          <td>DataSource, DataSourceKey, IDataSourceResolver, IDbContextFactory, IDomainEventDispatcher, IEntityDataSourceRegistry, IIntegrationEvent, IMessageBus, IOutboxSignal, OutboxCycleResult, OutboxMessage, OutboxSettings</td>
+          <td>13</td>
+          <td>ApplicationDbContext, DataSource, DataSourceKey, IDataSourceResolver, IDbContextFactory, IDomainEventDispatcher, IEntityDataSourceRegistry, IIntegrationEvent, IMessageBus, IOutboxSignal, OutboxCycleResult, OutboxMessage, OutboxSettings</td>
           </tr>
           <tr>
           <td>8</td>
@@ -15278,6 +15782,13 @@
           </tr>
           <tr>
           <td>8</td>
+          <td><code>DomainEventSaveChangesInterceptorOutboxRoutingTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>9</td>
+          <td>DomainEventSaveChangesInterceptor, IDomainEvent, IDomainEventDispatcher, IOutboxSignal, OutboxMessage, OutboxRoutingTestDbContext, TestAggregate, TestIntegrationEvent, TestLocalEvent</td>
+          </tr>
+          <tr>
+          <td>8</td>
           <td><code>DomainEventSaveChangesInterceptorTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>7</td>
@@ -15308,8 +15819,8 @@
           <td>8</td>
           <td><code>EFRepositoryIntegrationTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>4</td>
-          <td>EFReadRepository&lt;TEntity, TIdentifierType&gt;, EFRepository&lt;TEntity, TIdentifierType&gt;, TestDbContext, TestEntity</td>
+          <td>5</td>
+          <td>EFReadRepository&lt;TEntity, TIdentifierType&gt;, EFRepository&lt;TEntity, TIdentifierType&gt;, TestChildEntity, TestDbContext, TestEntity</td>
           </tr>
           <tr>
           <td>8</td>
@@ -15383,6 +15894,20 @@
           </tr>
           <tr>
           <td>8</td>
+          <td><code>SoftDeleteQueryFilterTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>2</td>
+          <td>SoftDeletableEntity, SoftDeleteTestDbContext</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>SoftDeleteUniqueIndexConventionTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>3</td>
+          <td>FilteredIndexEntity, UniqueIndexTestDbContext, UniqueNamedEntity</td>
+          </tr>
+          <tr>
+          <td>8</td>
           <td><code>SqliteTestEntityConfig</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>2</td>
@@ -15390,10 +15915,10 @@
           </tr>
           <tr>
           <td>8</td>
-          <td><code>GalleryHostFixture</code></td>
-          <td>MMCA.Common.UI.E2E.Tests</td>
-          <td>2</td>
-          <td>E2ETestConfiguration, GalleryHost</td>
+          <td><code>GalleryHost</code></td>
+          <td>MMCA.Common.UI.Gallery</td>
+          <td>16</td>
+          <td>GalleryAuthenticationStateProvider, GalleryFakeAuthenticationHandler, GalleryUIModule, IAuthUIService, INotificationInboxUIService, IPushNotificationUIService, ITokenRefresher, ITokenStorageService, IUIModule, NoOpAuthUIService, NotificationState, NullTokenRefresher, NullTokenStorageService, StubNotificationInboxUIService, StubPushNotificationUIService, SupportedCultures</td>
           </tr>
           <tr>
           <td>9</td>
@@ -15462,15 +15987,15 @@
           <td>9</td>
           <td><code>SpeakersControllerTests</code></td>
           <td>MMCA.ADC.Conference.API.Tests</td>
-          <td>23</td>
-          <td>DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Error, GetSessionBookmarkCountQuery, GetSessionFeedbackQuery, GetSpeakersByEventFilterQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, InlineSpecification&lt;TEntity, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, LinkUserRequest, LinkUserToSpeakerCommand, PagedCollectionResult&lt;T&gt;, Result, SessionFeedbackDTO, Speaker, SpeakerCreateRequest, SpeakerDTO, SpeakersController, SpeakerUpdateRequest …(+3)</td>
+          <td>24</td>
+          <td>DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Error, GetSessionBookmarkCountQuery, GetSessionBookmarkCountsQuery, GetSessionFeedbackQuery, GetSpeakersByEventFilterQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, InlineSpecification&lt;TEntity, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, LinkUserRequest, LinkUserToSpeakerCommand, PagedCollectionResult&lt;T&gt;, Result, SessionFeedbackDTO, Speaker, SpeakerCreateRequest, SpeakerDTO, SpeakersController …(+4)</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>CreateSessionHandler</code></td>
           <td>MMCA.ADC.Conference.Application</td>
-          <td>10</td>
-          <td>Error, ICommandHandler&lt;in TCommand, TResult&gt;, IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, IUnitOfWork, Result, Session, SessionCreateRequest, SessionDTO, SessionDTOMapper, SessionInvariants</td>
+          <td>11</td>
+          <td>Error, ICommandHandler&lt;in TCommand, TResult&gt;, IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, IUnitOfWork, Result, Session, SessionCreateRequest, SessionDTO, SessionDTOMapper, SessionInvariants, SessionRoomScheduling</td>
           </tr>
           <tr>
           <td>9</td>
@@ -15497,36 +16022,8 @@
           <td>9</td>
           <td><code>UpdateSessionHandler</code></td>
           <td>MMCA.ADC.Conference.Application</td>
-          <td>9</td>
-          <td>Error, Event, ICommandHandler&lt;in TCommand, TResult&gt;, IUnitOfWork, Result, Session, SessionDTOMapper, UpdateSessionCommand, UpdateSessionResult</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>AddCategoryItemHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>8</td>
-          <td>AddCategoryItemCommand, AddCategoryItemHandler, Category, CategoryItemDTOMapper, ErrorType, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>AddEventQuestionAnswerHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>10</td>
-          <td>AddEventQuestionAnswerCommand, AddEventQuestionAnswerHandler, ErrorType, Event, EventQuestionAnswerDTOMapper, ICurrentUserService, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Question</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>AddEventSpeakerHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>8</td>
-          <td>AddEventSpeakerCommand, AddEventSpeakerHandler, ErrorType, Event, EventSpeakerDTOMapper, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>AddRoomHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>11</td>
-          <td>AddRoomCommand, AddRoomHandler, ErrorType, Event, EventInvariants, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Room, RoomDTOMapper</td>
+          <td>Error, Event, ICommandHandler&lt;in TCommand, TResult&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Result, Session, SessionDTOMapper, SessionRoomScheduling, UpdateSessionCommand, UpdateSessionResult</td>
           </tr>
           <tr>
           <td>9</td>
@@ -15537,24 +16034,10 @@
           </tr>
           <tr>
           <td>9</td>
-          <td><code>AddSessionCategoryItemHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>8</td>
-          <td>AddSessionCategoryItemCommand, AddSessionCategoryItemHandler, ErrorType, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Session, SessionCategoryItemDTOMapper</td>
-          </tr>
-          <tr>
-          <td>9</td>
           <td><code>AddSessionQuestionAnswerCommandValidatorTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>2</td>
           <td>AddSessionQuestionAnswerCommand, AddSessionQuestionAnswerCommandValidator</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>AddSessionQuestionAnswerHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>11</td>
-          <td>AddSessionQuestionAnswerCommand, AddSessionQuestionAnswerHandler, ErrorType, Event, ICurrentUserService, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Question, Session, SessionQuestionAnswerDTOMapper</td>
           </tr>
           <tr>
           <td>9</td>
@@ -15565,62 +16048,6 @@
           </tr>
           <tr>
           <td>9</td>
-          <td><code>AddSessionSpeakerHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>8</td>
-          <td>AddSessionSpeakerCommand, AddSessionSpeakerHandler, ErrorType, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Session, SessionSpeakerDTOMapper</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>AddSpeakerCategoryItemHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>9</td>
-          <td>AddSpeakerCategoryItemCommand, AddSpeakerCategoryItemHandler, ErrorType, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Mocks, Speaker, SpeakerCategoryItemDTOMapper</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>CreateConferenceCategoryHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>11</td>
-          <td>Category, CategoryItemDTOMapper, ConferenceCategoryCreateRequest, ConferenceCategoryDTOMapper, CreateConferenceCategoryHandler, Error, IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Result</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>CreateEventHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>13</td>
-          <td>CreateEventHandler, Error, Event, EventCreateRequest, EventDTOMapper, EventQuestionAnswerDTOMapper, EventSpeakerDTOMapper, IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Result, RoomDTOMapper</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>CreateQuestionHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>10</td>
-          <td>CreateQuestionHandler, IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Question, QuestionCreateRequest, QuestionDTOMapper, QuestionInvariants, Result</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>CreateSpeakerHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>15</td>
-          <td>CreateSpeakerHandler, Email, Error, ICurrentUserService, IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Mocks, Result, Speaker, SpeakerCategoryItemDTOMapper, SpeakerCreateRequest, SpeakerDTOMapper, SpeakerQuestionAnswerDTOMapper</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>DeleteEventHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>9</td>
-          <td>DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, DeleteEventHandler, ErrorType, Event, EventCascadeDeletionDomainService, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Session</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>EventLiveValidationServiceTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>8</td>
-          <td>ErrorType, Event, EventLiveValidationService, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, QuestionModerationDefault, ServiceMocks, Session</td>
-          </tr>
-          <tr>
-          <td>9</td>
           <td><code>ExportSessionCalendarHandlerTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>7</td>
@@ -15628,17 +16055,10 @@
           </tr>
           <tr>
           <td>9</td>
-          <td><code>GetCategoryDistributionHandlerTests</code></td>
+          <td><code>Fakes</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>9</td>
-          <td>Category, GetCategoryDistributionHandler, GetCategoryDistributionQuery, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Mocks, Session, SessionStatuses</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>GetContentSimilarityHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>9</td>
-          <td>Category, GetContentSimilarityHandler, GetContentSimilarityQuery, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Mocks, Session, SessionStatuses</td>
+          <td>4</td>
+          <td>InMemoryRepository&lt;TEntity, TIdentifierType&gt;, RecordingIntegrationEventPublisher, RecordingUnitOfWork, Speaker</td>
           </tr>
           <tr>
           <td>9</td>
@@ -15656,6 +16076,13 @@
           </tr>
           <tr>
           <td>9</td>
+          <td><code>GetSessionBookmarkCountsHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>6</td>
+          <td>GetSessionBookmarkCountsHandler, GetSessionBookmarkCountsQuery, IBookmarkCountService, IReadRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Session</td>
+          </tr>
+          <tr>
+          <td>9</td>
           <td><code>GetSessionFeedbackHandlerTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>9</td>
@@ -15663,122 +16090,10 @@
           </tr>
           <tr>
           <td>9</td>
-          <td><code>GetSessionSelectionDashboardHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>13</td>
-          <td>Category, ErrorType, Event, GetSessionSelectionDashboardHandler, GetSessionSelectionDashboardQuery, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Mocks, Session, SessionAiScore, SessionStatuses, Speaker</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>GetSpeakersByEventFilterHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>11</td>
-          <td>EventSpeaker, GetSpeakersByEventFilterHandler, GetSpeakersByEventFilterQuery, IReadRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Mocks, Mocks, Session, SessionSpeaker, Speaker</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>GetSpeakerSessionOverlapHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>10</td>
-          <td>Category, GetSpeakerSessionOverlapHandler, GetSpeakerSessionOverlapQuery, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Mocks, Session, SessionStatuses, Speaker</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>LinkUserToSpeakerHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>11</td>
-          <td>ErrorType, IIntegrationEvent, IIntegrationEventPublisher, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, LinkUserToSpeakerCommand, LinkUserToSpeakerHandler, Mocks, Mocks, Speaker, SpeakerLinkedToUser</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>Mocks</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>5</td>
-          <td>IIntegrationEventPublisher, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Speaker, UserRegisteredHandler</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>PublishEventHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>7</td>
-          <td>ErrorType, Event, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, PublishEventCommand, PublishEventHandler</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>RemoveCategoryItemHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>7</td>
-          <td>Category, ErrorType, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, RemoveCategoryItemCommand, RemoveCategoryItemHandler</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>RemoveEventQuestionAnswerHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>9</td>
-          <td>ErrorType, Event, ICurrentUserService, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, RemoveEventQuestionAnswerCommand, RemoveEventQuestionAnswerHandler, RoleNames</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>RemoveEventSpeakerHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>7</td>
-          <td>ErrorType, Event, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, RemoveEventSpeakerCommand, RemoveEventSpeakerHandler</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>RemoveRoomHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>7</td>
-          <td>ErrorType, Event, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, RemoveRoomCommand, RemoveRoomHandler</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>RemoveSessionCategoryItemHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>7</td>
-          <td>ErrorType, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, RemoveSessionCategoryItemCommand, RemoveSessionCategoryItemHandler, Session</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>RemoveSessionQuestionAnswerHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>9</td>
-          <td>ErrorType, ICurrentUserService, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, RemoveSessionQuestionAnswerCommand, RemoveSessionQuestionAnswerHandler, RoleNames, Session</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>RemoveSessionSpeakerHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>7</td>
-          <td>ErrorType, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, RemoveSessionSpeakerCommand, RemoveSessionSpeakerHandler, Session</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>RemoveSpeakerCategoryItemHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>8</td>
-          <td>ErrorType, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Mocks, RemoveSpeakerCategoryItemCommand, RemoveSpeakerCategoryItemHandler, Speaker</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>ScoreEventSessionsHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>13</td>
-          <td>IAiScoringService, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Mocks, ScoreEventSessionsCommand, ScoreEventSessionsHandler, Session, SessionAiScore, SessionScoringInput, SessionScoringResult, SessionStatuses, Speaker</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>SessionBookmarkValidationServiceTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>6</td>
-          <td>ErrorType, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, ServiceMocks, Session, SessionBookmarkValidationService</td>
-          </tr>
-          <tr>
-          <td>9</td>
           <td><code>SessionCreateRequestValidatorTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>2</td>
-          <td>SessionCreateRequest, SessionCreateRequestValidator</td>
+          <td>3</td>
+          <td>SessionCreateRequest, SessionCreateRequestValidator, SessionInvariants</td>
           </tr>
           <tr>
           <td>9</td>
@@ -15786,83 +16101,6 @@
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>6</td>
           <td>Event, Session, SessionCategoryItemDTOMapper, SessionDTOMapper, SessionQuestionAnswerDTOMapper, SessionSpeakerDTOMapper</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>SpeakerDeletedHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>8</td>
-          <td>DomainEntityState, IIntegrationEvent, IIntegrationEventPublisher, Mocks, Mocks, SpeakerChanged, SpeakerDeletedHandler, SpeakerUnlinkedFromUser</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>UnlinkUserFromSpeakerHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>11</td>
-          <td>ErrorType, IIntegrationEvent, IIntegrationEventPublisher, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Mocks, Speaker, SpeakerUnlinkedFromUser, UnlinkUserFromSpeakerCommand, UnlinkUserFromSpeakerHandler</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>UnpublishEventHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>7</td>
-          <td>ErrorType, Event, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, UnpublishEventCommand, UnpublishEventHandler</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>UpdateCategoryItemHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>7</td>
-          <td>Category, ErrorType, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, UpdateCategoryItemCommand, UpdateCategoryItemHandler</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>UpdateConferenceCategoryHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>10</td>
-          <td>Category, CategoryItemDTOMapper, ConferenceCategoryDTOMapper, ConferenceCategoryUpdateRequest, ErrorType, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, UpdateConferenceCategoryCommand, UpdateConferenceCategoryHandler</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>UpdateEventHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>13</td>
-          <td>ErrorType, Event, EventDTOMapper, EventQuestionAnswerDTOMapper, EventSpeakerDTOMapper, EventUpdateRequest, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, RoomDTOMapper, Session, UpdateEventCommand, UpdateEventHandler</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>UpdateEventQuestionAnswerHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>9</td>
-          <td>ErrorType, Event, ICurrentUserService, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, RoleNames, UpdateEventQuestionAnswerCommand, UpdateEventQuestionAnswerHandler</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>UpdateQuestionHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>12</td>
-          <td>ErrorType, EventQuestionAnswer, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Question, QuestionDTOMapper, QuestionUpdateRequest, SessionQuestionAnswer, UpdateQuestionCommand, UpdateQuestionHandler</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>UpdateRoomHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>7</td>
-          <td>ErrorType, Event, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, UpdateRoomCommand, UpdateRoomHandler</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>UpdateSessionQuestionAnswerHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>10</td>
-          <td>ErrorType, Event, ICurrentUserService, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, RoleNames, Session, UpdateSessionQuestionAnswerCommand, UpdateSessionQuestionAnswerHandler</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>UpdateSpeakerHandlerTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>14</td>
-          <td>Email, ErrorType, ICurrentUserService, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Mocks, Speaker, SpeakerCategoryItemDTOMapper, SpeakerDTOMapper, SpeakerQuestionAnswerDTOMapper, SpeakerUpdateRequest, UpdateSpeakerCommand, UpdateSpeakerHandler</td>
           </tr>
           <tr>
           <td>9</td>
@@ -15931,15 +16169,15 @@
           <td>9</td>
           <td><code>CastVoteHandler</code></td>
           <td>MMCA.ADC.Engagement.Application</td>
-          <td>11</td>
-          <td>CastVoteCommand, Error, ICommandHandler&lt;in TCommand, TResult&gt;, ILiveChannelPublisher, IUnitOfWork, LivePoll, LivePollChannel, LivePollResultsBuilder, LivePollResultsDTO, LivePollVote, Result</td>
+          <td>13</td>
+          <td>CastVoteCommand, Error, ICommandHandler&lt;in TCommand, TResult&gt;, ILiveChannelPublishQueue, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, LiveChannelPublishWorkItem, LivePoll, LivePollChannel, LivePollResultsBuilder, LivePollResultsDTO, LivePollVote, Result</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>GetModerationQueueHandler</code></td>
           <td>MMCA.ADC.Engagement.Application</td>
-          <td>9</td>
-          <td>GetModerationQueueQuery, IEventLiveValidationService, IQueryHandler&lt;in TQuery, TResult&gt;, IUnitOfWork, LivePollAuthorization, Result, SessionQuestion, SessionQuestionDTO, SessionQuestionViewBuilder</td>
+          <td>10</td>
+          <td>GetModerationQueueQuery, IEventLiveValidationService, IQueryableExecutor, IQueryHandler&lt;in TQuery, TResult&gt;, IUnitOfWork, LivePollAuthorization, Result, SessionQuestion, SessionQuestionDTO, SessionQuestionViewBuilder</td>
           </tr>
           <tr>
           <td>9</td>
@@ -15959,85 +16197,15 @@
           <td>9</td>
           <td><code>GetSessionQuestionsHandler</code></td>
           <td>MMCA.ADC.Engagement.Application</td>
-          <td>8</td>
-          <td>GetSessionQuestionsQuery, IQueryHandler&lt;in TQuery, TResult&gt;, IUnitOfWork, QuestionStatus, Result, SessionQuestion, SessionQuestionDTO, SessionQuestionViewBuilder</td>
+          <td>9</td>
+          <td>GetSessionQuestionsQuery, IQueryableExecutor, IQueryHandler&lt;in TQuery, TResult&gt;, IUnitOfWork, QuestionStatus, Result, SessionQuestion, SessionQuestionDTO, SessionQuestionViewBuilder</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>SubmitQuestionHandler</code></td>
           <td>MMCA.ADC.Engagement.Application</td>
-          <td>16</td>
-          <td>Error, ICommandHandler&lt;in TCommand, TResult&gt;, IEventLiveValidationService, ILiveChannelPublisher, IUnitOfWork, LivePollChannel, QuestionModerationDefault, QuestionStatus, Result, SessionQuestion, SessionQuestionApprovedPayload, SessionQuestionChannel, SessionQuestionDTO, SessionQuestionPendingCountChangedPayload, SessionQuestionViewBuilder, SubmitQuestionCommand</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>BookmarkCountServiceTests</code></td>
-          <td>MMCA.ADC.Engagement.Application.Tests</td>
-          <td>5</td>
-          <td>BookmarkCountService, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, ServiceMocks, UserSessionBookmark</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>CloseLivePollHandlerTests</code></td>
-          <td>MMCA.ADC.Engagement.Application.Tests</td>
-          <td>15</td>
-          <td>CloseLivePollCommand, CloseLivePollHandler, Error, ErrorType, HandlerMocks, IEventLiveValidationService, ILiveChannelPublisher, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, LivePoll, LivePollChannel, LivePollStatus, QuestionModerationDefault, Result, SessionLiveInfo</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>CreateBookmarkHandlerTests</code></td>
-          <td>MMCA.ADC.Engagement.Application.Tests</td>
-          <td>12</td>
-          <td>BookmarkManagementDomainService, CreateBookmarkHandler, CreateBookmarkRequest, Error, ErrorType, HandlerMocks, IRepository&lt;TEntity, TIdentifierType&gt;, ISessionBookmarkValidationService, IUnitOfWork, Result, UserSessionBookmark, UserSessionBookmarkDTOMapper</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>CreateLivePollHandlerTests</code></td>
-          <td>MMCA.ADC.Engagement.Application.Tests</td>
           <td>17</td>
-          <td>CreateLivePollCommand, CreateLivePollHandler, CreateLivePollRequest, Error, ErrorType, EventLiveInfo, HandlerMocks, IEventLiveValidationService, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, LivePoll, LivePollDTOMapper, LivePollStatus, Question, QuestionModerationDefault, Result, SessionLiveInfo</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>GetBookmarkedSessionIdsHandlerTests</code></td>
-          <td>MMCA.ADC.Engagement.Application.Tests</td>
-          <td>6</td>
-          <td>GetBookmarkedSessionIdsHandler, GetBookmarkedSessionIdsQuery, HandlerMocks, IReadRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, UserSessionBookmark</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>GetEventPollsHandlerTests</code></td>
-          <td>MMCA.ADC.Engagement.Application.Tests</td>
-          <td>7</td>
-          <td>GetEventPollsHandler, GetEventPollsQuery, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, LivePoll, LivePollDTOMapper, LivePollStatus</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>GetUserBookmarksHandlerTests</code></td>
-          <td>MMCA.ADC.Engagement.Application.Tests</td>
-          <td>9</td>
-          <td>GetUserBookmarksHandler, GetUserBookmarksQuery, HandlerMocks, IQueryableExecutor, IRepository&lt;TEntity, TIdentifierType&gt;, ISessionBookmarkValidationService, IUnitOfWork, UserSessionBookmark, UserSessionBookmarkDTOMapper</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>ModerateQuestionHandlerTests</code></td>
-          <td>MMCA.ADC.Engagement.Application.Tests</td>
-          <td>17</td>
-          <td>Error, ErrorType, HandlerMocks, IEventLiveValidationService, ILiveChannelPublisher, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, ModerateQuestionCommand, ModerateQuestionHandler, ModerationAction, QuestionModerationDefault, QuestionStatus, Result, SessionLiveInfo, SessionQuestion, SessionQuestionChannel</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>OpenLivePollHandlerTests</code></td>
-          <td>MMCA.ADC.Engagement.Application.Tests</td>
-          <td>17</td>
-          <td>Error, ErrorType, EventLiveInfo, FixedTimeProvider, HandlerMocks, IEventLiveValidationService, ILiveChannelPublisher, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, LivePoll, LivePollChannel, LivePollStatus, OpenLivePollCommand, OpenLivePollHandler, QuestionModerationDefault, Result, SessionLiveInfo</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>ToggleUpvoteHandlerTests</code></td>
-          <td>MMCA.ADC.Engagement.Application.Tests</td>
-          <td>12</td>
-          <td>ErrorType, FixedTimeProvider, HandlerMocks, ILiveChannelPublisher, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, QuestionStatus, SessionQuestion, SessionQuestionChannel, SessionQuestionUpvote, ToggleUpvoteCommand, ToggleUpvoteHandler</td>
+          <td>Error, ICommandHandler&lt;in TCommand, TResult&gt;, IEventLiveValidationService, ILiveChannelPublisher, IUnitOfWork, LivePollChannel, QuestionModerationDefault, QuestionStatus, Result, SessionQuestion, SessionQuestionApprovedPayload, SessionQuestionChannel, SessionQuestionDTO, SessionQuestionInvariants, SessionQuestionPendingCountChangedPayload, SessionQuestionViewBuilder, SubmitQuestionCommand</td>
           </tr>
           <tr>
           <td>9</td>
@@ -16092,8 +16260,8 @@
           <td>9</td>
           <td><code>AuthenticationService</code></td>
           <td>MMCA.ADC.Identity.Application</td>
-          <td>17</td>
-          <td>AuthenticationResponse, AuthenticationServiceBase&lt;TUser&gt;, AuthenticationValidators, Email, IAuthenticationService, IIntegrationEventPublisher, ILoginProtectionService, IPasswordHasher, ITokenService, IUnitOfWork, RegisterRequest, Result, TokenService, UnitOfWork, User, UserRegistered, UserRole</td>
+          <td>18</td>
+          <td>AuthenticationResponse, AuthenticationServiceBase&lt;TUser&gt;, AuthenticationValidators, Email, Error, IAuthenticationService, IExternalLoginEmailVerifier, ILoginProtectionService, IPasswordHasher, ITokenService, IUnitOfWork, RegisterRequest, Result, TokenService, UnitOfWork, User, UserRegistered, UserRole</td>
           </tr>
           <tr>
           <td>9</td>
@@ -16104,52 +16272,10 @@
           </tr>
           <tr>
           <td>9</td>
-          <td><code>AttendeeQueryServiceTests</code></td>
+          <td><code>Fakes</code></td>
           <td>MMCA.ADC.Identity.Application.Tests</td>
-          <td>5</td>
-          <td>AttendeeQueryService, IReadRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, ServiceMocks, User</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>ChangePasswordHandlerTests</code></td>
-          <td>MMCA.ADC.Identity.Application.Tests</td>
-          <td>10</td>
-          <td>ChangePasswordCommand, ChangePasswordHandler, ChangePasswordRequest, ErrorType, IPasswordHasher, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, User, UserRole</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>ChangePreferencesHandlerTests</code></td>
-          <td>MMCA.ADC.Identity.Application.Tests</td>
-          <td>9</td>
-          <td>ChangePreferencesCommand, ChangePreferencesHandler, ChangePreferencesRequest, ErrorType, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, User, UserRole</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>DeleteUserHandlerTests</code></td>
-          <td>MMCA.ADC.Identity.Application.Tests</td>
-          <td>10</td>
-          <td>DeleteUserCommand, DeleteUserHandler, ErrorType, IFileStorageService, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Result, User, UserRole</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>ExportUserDataHandlerTests</code></td>
-          <td>MMCA.ADC.Identity.Application.Tests</td>
-          <td>13</td>
-          <td>ErrorType, ExportUserDataHandler, ExportUserDataQuery, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, IUserEngagementExportService, IUserNotificationExportService, User, UserEngagementBookmarkExportDTO, UserEngagementExportDTO, UserEngagementSubmittedQuestionExportDTO, UserNotificationExportItemDTO, UserRole</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>GetUserPreferencesHandlerTests</code></td>
-          <td>MMCA.ADC.Identity.Application.Tests</td>
-          <td>12</td>
-          <td>ChangePreferencesCommand, ChangePreferencesHandler, ChangePreferencesRequest, ErrorType, GetUserPreferencesHandler, GetUserPreferencesQuery, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, User, UserPreferencesResponse, UserRole</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>GetUsersHandlerTests</code></td>
-          <td>MMCA.ADC.Identity.Application.Tests</td>
-          <td>10</td>
-          <td>Email, GetUsersHandler, GetUsersQuery, IQueryableExecutor, IReadRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, User, UserListDTO, UserRole</td>
+          <td>3</td>
+          <td>InMemoryRepository&lt;TEntity, TIdentifierType&gt;, RecordingUnitOfWork, User</td>
           </tr>
           <tr>
           <td>9</td>
@@ -16164,20 +16290,6 @@
           <td>MMCA.ADC.Identity.Application.Tests</td>
           <td>4</td>
           <td>IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, SoftDeletedUserValidator, User</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>SpeakerLinkedToUserHandlerTests</code></td>
-          <td>MMCA.ADC.Identity.Application.Tests</td>
-          <td>7</td>
-          <td>IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, SpeakerLinkedToUser, SpeakerLinkedToUserHandler, User, UserRole</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>SpeakerUnlinkedFromUserHandlerTests</code></td>
-          <td>MMCA.ADC.Identity.Application.Tests</td>
-          <td>7</td>
-          <td>IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, SpeakerUnlinkedFromUser, SpeakerUnlinkedFromUserHandler, User, UserRole</td>
           </tr>
           <tr>
           <td>9</td>
@@ -16211,6 +16323,13 @@
           <td>9</td>
           <td><code>DependencyInjection</code></td>
           <td>MMCA.ADC.Notification.Application</td>
+          <td>5</td>
+          <td>ApplicationSettings, AttendeeNotificationRecipientProvider, INotificationRecipientProvider, IUserNotificationExportService, UserNotificationExportService</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>DependencyInjectionTests</code></td>
+          <td>MMCA.ADC.Notification.Application.Tests</td>
           <td>5</td>
           <td>ApplicationSettings, AttendeeNotificationRecipientProvider, INotificationRecipientProvider, IUserNotificationExportService, UserNotificationExportService</td>
           </tr>
@@ -16433,6 +16552,13 @@
           </tr>
           <tr>
           <td>9</td>
+          <td><code>DbContextFactoryTransactionTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>15</td>
+          <td>DataSource, DataSourceKey, DbContextFactory, Error, ICurrentUserService, IDataSourceResolver, IDomainEvent, IDomainEventDispatcher, IEntityDataSourceRegistry, IPhysicalDbContextFactory, OutboxMessage, Result, TestAggregate, TestLocalEvent, TransactionTestDbContext</td>
+          </tr>
+          <tr>
+          <td>9</td>
           <td><code>DependencyInjectionInfrastructureTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>16</td>
@@ -16505,8 +16631,8 @@
           <td>9</td>
           <td><code>OutboxProcessorTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>21</td>
-          <td>AuditSaveChangesInterceptor, DataSource, DataSourceKey, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDataSourceResolver, IDbContextFactory, IDomainEvent, IDomainEventDispatcher, IEntityConfigurationAssemblyProvider, IEntityDataSourceRegistry, IIntegrationEvent, IMessageBus, IOutboxSignal, OutboxCycleResult, OutboxMessage, OutboxProcessor, OutboxSettings, OutboxTestDbContext, TestDomainEvent …(+1)</td>
+          <td>22</td>
+          <td>AuditSaveChangesInterceptor, DataSource, DataSourceKey, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, FakeTimeProvider, IDataSourceResolver, IDbContextFactory, IDomainEvent, IDomainEventDispatcher, IEntityConfigurationAssemblyProvider, IEntityDataSourceRegistry, IIntegrationEvent, IMessageBus, IOutboxSignal, OutboxCycleResult, OutboxMessage, OutboxProcessor, OutboxSettings, OutboxTestDbContext …(+2)</td>
           </tr>
           <tr>
           <td>9</td>
@@ -16531,10 +16657,24 @@
           </tr>
           <tr>
           <td>9</td>
-          <td><code>GalleryE2ECollection</code></td>
+          <td><code>HandlerTestBase&lt;THandler&gt;</code></td>
+          <td>MMCA.Common.Testing</td>
+          <td>6</td>
+          <td>AuditableAggregateRootEntity&lt;TIdentifierType&gt;, AuditableBaseEntity&lt;TIdentifierType&gt;, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>DecoratorPipelineOrderTests</code></td>
+          <td>MMCA.Common.Testing.Tests</td>
+          <td>9</td>
+          <td>DecoratorPipelineOrderTests, DecoratorPipelineOrderTestsBase&lt;TCommand, TCommandResult, TQuery, TQueryResult&gt;, ICacheService, ICorrelationContext, IUnitOfWork, PingCommand, PingCommandHandler, PingQuery, Result</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>GalleryHostFixture</code></td>
           <td>MMCA.Common.UI.E2E.Tests</td>
           <td>2</td>
-          <td>GalleryHostFixture, PlaywrightFixture</td>
+          <td>E2ETestConfiguration, GalleryHost</td>
           </tr>
           <tr>
           <td>10</td>
@@ -16608,6 +16748,13 @@
           </tr>
           <tr>
           <td>10</td>
+          <td><code>HandlerResultConventionTests</code></td>
+          <td>MMCA.ADC.Architecture.Tests</td>
+          <td>3</td>
+          <td>AdcArchitectureMap, HandlerResultConventionTestsBase, IArchitectureMap</td>
+          </tr>
+          <tr>
+          <td>10</td>
           <td><code>ImmutabilityTests</code></td>
           <td>MMCA.ADC.Architecture.Tests</td>
           <td>3</td>
@@ -16661,6 +16808,13 @@
           <td>MMCA.ADC.Architecture.Tests</td>
           <td>3</td>
           <td>AdcArchitectureMap, IArchitectureMap, PiiConventionTestsBase</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>RawQueryableConventionTests</code></td>
+          <td>MMCA.ADC.Architecture.Tests</td>
+          <td>4</td>
+          <td>AdcArchitectureMap, ArchitectureMapBase, IArchitectureMap, RawQueryableConventionTestsBase</td>
           </tr>
           <tr>
           <td>10</td>
@@ -16762,38 +16916,325 @@
           </tr>
           <tr>
           <td>10</td>
+          <td><code>AddCategoryItemHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>8</td>
+          <td>AddCategoryItemCommand, AddCategoryItemHandler, Category, CategoryItemDTOMapper, ErrorType, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>AddEventQuestionAnswerHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>10</td>
+          <td>AddEventQuestionAnswerCommand, AddEventQuestionAnswerHandler, ErrorType, Event, EventQuestionAnswerDTOMapper, HandlerTestBase&lt;THandler&gt;, ICurrentUserService, IRepository&lt;TEntity, TIdentifierType&gt;, Question, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>AddEventSpeakerHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>8</td>
+          <td>AddEventSpeakerCommand, AddEventSpeakerHandler, ErrorType, Event, EventSpeakerDTOMapper, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>AddRoomHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>11</td>
+          <td>AddRoomCommand, AddRoomHandler, ErrorType, Event, EventInvariants, HandlerTestBase&lt;THandler&gt;, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, Room, RoomDTOMapper, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>AddSessionCategoryItemHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>8</td>
+          <td>AddSessionCategoryItemCommand, AddSessionCategoryItemHandler, ErrorType, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, Session, SessionCategoryItemDTOMapper, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>AddSessionQuestionAnswerHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>11</td>
+          <td>AddSessionQuestionAnswerCommand, AddSessionQuestionAnswerHandler, ErrorType, Event, HandlerTestBase&lt;THandler&gt;, ICurrentUserService, IRepository&lt;TEntity, TIdentifierType&gt;, Question, Session, SessionQuestionAnswerDTOMapper, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>AddSessionSpeakerHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>8</td>
+          <td>AddSessionSpeakerCommand, AddSessionSpeakerHandler, ErrorType, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, Session, SessionSpeakerDTOMapper, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>AddSpeakerCategoryItemHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>8</td>
+          <td>AddSpeakerCategoryItemCommand, AddSpeakerCategoryItemHandler, ErrorType, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, Speaker, SpeakerCategoryItemDTOMapper, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>CreateConferenceCategoryHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>11</td>
+          <td>Category, CategoryItemDTOMapper, ConferenceCategoryCreateRequest, ConferenceCategoryDTOMapper, CreateConferenceCategoryHandler, Error, HandlerTestBase&lt;THandler&gt;, IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, Result, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>CreateEventHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>13</td>
+          <td>CreateEventHandler, Error, Event, EventCreateRequest, EventDTOMapper, EventQuestionAnswerDTOMapper, EventSpeakerDTOMapper, HandlerTestBase&lt;THandler&gt;, IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, Result, RoomDTOMapper, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>CreateQuestionHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>10</td>
+          <td>CreateQuestionHandler, HandlerTestBase&lt;THandler&gt;, IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, Question, QuestionCreateRequest, QuestionDTOMapper, QuestionInvariants, Result, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
           <td><code>CreateSessionHandlerTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>15</td>
+          <td>CreateSessionHandler, Error, HandlerTestBase&lt;THandler&gt;, IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Result, Session, SessionCategoryItemDTOMapper, SessionCreateRequest, SessionDTOMapper, SessionInvariants, SessionQuestionAnswerDTOMapper, SessionSpeakerDTOMapper, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>CreateSpeakerHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>14</td>
-          <td>CreateSessionHandler, Error, IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Result, Session, SessionCategoryItemDTOMapper, SessionCreateRequest, SessionDTOMapper, SessionInvariants, SessionQuestionAnswerDTOMapper, SessionSpeakerDTOMapper</td>
+          <td>CreateSpeakerHandler, Email, Error, HandlerTestBase&lt;THandler&gt;, ICurrentUserService, IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, Result, Speaker, SpeakerCategoryItemDTOMapper, SpeakerCreateRequest, SpeakerDTOMapper, SpeakerQuestionAnswerDTOMapper, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>DeleteEventHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>9</td>
+          <td>DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, DeleteEventHandler, ErrorType, Event, EventCascadeDeletionDomainService, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, Session, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>EventLiveValidationServiceTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>8</td>
+          <td>ErrorType, Event, EventLiveValidationService, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, QuestionModerationDefault, Session, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>GetCategoryDistributionHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>8</td>
+          <td>Category, GetCategoryDistributionHandler, GetCategoryDistributionQuery, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, Session, SessionStatuses, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>GetContentSimilarityHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>8</td>
+          <td>Category, GetContentSimilarityHandler, GetContentSimilarityQuery, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, Session, SessionStatuses, UnitOfWork</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>GetPublicSessionFilterHandlerTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>8</td>
+          <td>Event, GetPublicSessionFilterHandler, GetPublicSessionFilterQuery, HandlerTestBase&lt;THandler&gt;, IReadRepository&lt;TEntity, TIdentifierType&gt;, Session, SessionStatuses, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>GetSessionSelectionDashboardHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>12</td>
+          <td>Category, ErrorType, Event, GetSessionSelectionDashboardHandler, GetSessionSelectionDashboardQuery, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, Session, SessionAiScore, SessionStatuses, Speaker, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>GetSpeakersByEventFilterHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>9</td>
-          <td>Event, GetPublicSessionFilterHandler, GetPublicSessionFilterQuery, IReadRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Mocks, Session, SessionStatuses</td>
+          <td>EventSpeaker, GetSpeakersByEventFilterHandler, GetSpeakersByEventFilterQuery, HandlerTestBase&lt;THandler&gt;, IReadRepository&lt;TEntity, TIdentifierType&gt;, Session, SessionSpeaker, Speaker, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>GetSpeakerSessionOverlapHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>9</td>
+          <td>Category, GetSpeakerSessionOverlapHandler, GetSpeakerSessionOverlapQuery, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, Session, SessionStatuses, Speaker, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>LinkUserToSpeakerHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>8</td>
+          <td>ErrorType, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, LinkUserToSpeakerCommand, LinkUserToSpeakerHandler, Speaker, SpeakerLinkedToUser, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>PublishEventHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>7</td>
+          <td>ErrorType, Event, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, PublishEventCommand, PublishEventHandler, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>RemoveCategoryItemHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>7</td>
+          <td>Category, ErrorType, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, RemoveCategoryItemCommand, RemoveCategoryItemHandler, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>RemoveEventQuestionAnswerHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>9</td>
+          <td>ErrorType, Event, HandlerTestBase&lt;THandler&gt;, ICurrentUserService, IRepository&lt;TEntity, TIdentifierType&gt;, RemoveEventQuestionAnswerCommand, RemoveEventQuestionAnswerHandler, RoleNames, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>RemoveEventSpeakerHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>7</td>
+          <td>ErrorType, Event, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, RemoveEventSpeakerCommand, RemoveEventSpeakerHandler, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>RemoveRoomHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>7</td>
+          <td>ErrorType, Event, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, RemoveRoomCommand, RemoveRoomHandler, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>RemoveSessionCategoryItemHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>7</td>
+          <td>ErrorType, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, RemoveSessionCategoryItemCommand, RemoveSessionCategoryItemHandler, Session, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>RemoveSessionQuestionAnswerHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>9</td>
+          <td>ErrorType, HandlerTestBase&lt;THandler&gt;, ICurrentUserService, IRepository&lt;TEntity, TIdentifierType&gt;, RemoveSessionQuestionAnswerCommand, RemoveSessionQuestionAnswerHandler, RoleNames, Session, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>RemoveSessionSpeakerHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>7</td>
+          <td>ErrorType, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, RemoveSessionSpeakerCommand, RemoveSessionSpeakerHandler, Session, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>RemoveSpeakerCategoryItemHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>7</td>
+          <td>ErrorType, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, RemoveSpeakerCategoryItemCommand, RemoveSpeakerCategoryItemHandler, Speaker, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>ScoreEventSessionsHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>12</td>
+          <td>HandlerTestBase&lt;THandler&gt;, IAiScoringService, IRepository&lt;TEntity, TIdentifierType&gt;, ScoreEventSessionsCommand, ScoreEventSessionsHandler, Session, SessionAiScore, SessionScoringInput, SessionScoringResult, SessionStatuses, Speaker, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>SessionBookmarkValidationServiceTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>6</td>
+          <td>ErrorType, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, Session, SessionBookmarkValidationService, UnitOfWork</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>SpeakerEntityQueryServiceTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>16</td>
-          <td>EntityQueryParameters&lt;TEntity&gt;, ErrorType, ICurrentUserService, IEntityQueryPipeline, INavigationMetadataProvider, INavigationPopulator&lt;in TEntity&gt;, InlineSpecification&lt;TEntity, TIdentifierType&gt;, IReadRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, NavigationMetadata, Speaker, SpeakerCategoryItemDTOMapper, SpeakerDTOMapper, SpeakerEntityQueryService, SpeakerQuestionAnswerDTOMapper</td>
+          <td>EntityQueryParameters&lt;TEntity&gt;, ErrorType, HandlerTestBase&lt;THandler&gt;, ICurrentUserService, IEntityQueryPipeline, INavigationMetadataProvider, INavigationPopulator&lt;in TEntity&gt;, InlineSpecification&lt;TEntity, TIdentifierType&gt;, IReadRepository&lt;TEntity, TIdentifierType&gt;, NavigationMetadata, Speaker, SpeakerCategoryItemDTOMapper, SpeakerDTOMapper, SpeakerEntityQueryService, SpeakerQuestionAnswerDTOMapper, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>UnlinkUserFromSpeakerHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>8</td>
+          <td>ErrorType, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, Speaker, SpeakerUnlinkedFromUser, UnitOfWork, UnlinkUserFromSpeakerCommand, UnlinkUserFromSpeakerHandler</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>UnpublishEventHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>7</td>
+          <td>ErrorType, Event, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, UnitOfWork, UnpublishEventCommand, UnpublishEventHandler</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>UpdateCategoryItemHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>7</td>
+          <td>Category, ErrorType, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, UnitOfWork, UpdateCategoryItemCommand, UpdateCategoryItemHandler</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>UpdateConferenceCategoryHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>10</td>
+          <td>Category, CategoryItemDTOMapper, ConferenceCategoryDTOMapper, ConferenceCategoryUpdateRequest, ErrorType, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, UnitOfWork, UpdateConferenceCategoryCommand, UpdateConferenceCategoryHandler</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>UpdateEventHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>13</td>
+          <td>ErrorType, Event, EventDTOMapper, EventQuestionAnswerDTOMapper, EventSpeakerDTOMapper, EventUpdateRequest, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, RoomDTOMapper, Session, UnitOfWork, UpdateEventCommand, UpdateEventHandler</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>UpdateEventQuestionAnswerHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>9</td>
+          <td>ErrorType, Event, HandlerTestBase&lt;THandler&gt;, ICurrentUserService, IRepository&lt;TEntity, TIdentifierType&gt;, RoleNames, UnitOfWork, UpdateEventQuestionAnswerCommand, UpdateEventQuestionAnswerHandler</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>UpdateQuestionHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>12</td>
+          <td>ErrorType, EventQuestionAnswer, HandlerTestBase&lt;THandler&gt;, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, Question, QuestionDTOMapper, QuestionUpdateRequest, SessionQuestionAnswer, UnitOfWork, UpdateQuestionCommand, UpdateQuestionHandler</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>UpdateRoomHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>7</td>
+          <td>ErrorType, Event, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, UnitOfWork, UpdateRoomCommand, UpdateRoomHandler</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>UpdateSessionHandlerTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>13</td>
-          <td>ErrorType, Event, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Session, SessionCategoryItemDTOMapper, SessionDTOMapper, SessionQuestionAnswerDTOMapper, SessionSpeakerDTOMapper, SessionUpdateRequest, UpdateSessionCommand, UpdateSessionHandler</td>
+          <td>ErrorType, Event, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, Session, SessionCategoryItemDTOMapper, SessionDTOMapper, SessionQuestionAnswerDTOMapper, SessionSpeakerDTOMapper, SessionUpdateRequest, UnitOfWork, UpdateSessionCommand, UpdateSessionHandler</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>UpdateSessionQuestionAnswerHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>10</td>
+          <td>ErrorType, Event, HandlerTestBase&lt;THandler&gt;, ICurrentUserService, IRepository&lt;TEntity, TIdentifierType&gt;, RoleNames, Session, UnitOfWork, UpdateSessionQuestionAnswerCommand, UpdateSessionQuestionAnswerHandler</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>UpdateSpeakerHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>13</td>
+          <td>Email, ErrorType, HandlerTestBase&lt;THandler&gt;, ICurrentUserService, IRepository&lt;TEntity, TIdentifierType&gt;, Speaker, SpeakerCategoryItemDTOMapper, SpeakerDTOMapper, SpeakerQuestionAnswerDTOMapper, SpeakerUpdateRequest, UnitOfWork, UpdateSpeakerCommand, UpdateSpeakerHandler</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>UserRegisteredHandlerTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>9</td>
-          <td>IIntegrationEvent, IIntegrationEventPublisher, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Mocks, Speaker, SpeakerLinkedToUser, UserRegistered, UserRegisteredHandler</td>
+          <td>10</td>
+          <td>Fakes, IIntegrationEventPublisher, InMemoryRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, RecordingIntegrationEventPublisher, RecordingUnitOfWork, Speaker, SpeakerLinkedToUser, UserRegistered, UserRegisteredHandler</td>
           </tr>
           <tr>
           <td>10</td>
@@ -16818,38 +17259,108 @@
           </tr>
           <tr>
           <td>10</td>
+          <td><code>BookmarkCountServiceTests</code></td>
+          <td>MMCA.ADC.Engagement.Application.Tests</td>
+          <td>5</td>
+          <td>BookmarkCountService, HandlerTestBase&lt;THandler&gt;, InMemoryQueryableExecutor, UnitOfWork, UserSessionBookmark</td>
+          </tr>
+          <tr>
+          <td>10</td>
           <td><code>CastVoteHandlerTests</code></td>
           <td>MMCA.ADC.Engagement.Application.Tests</td>
-          <td>15</td>
-          <td>CastVoteCommand, CastVoteHandler, ErrorType, FixedTimeProvider, HandlerMocks, ILiveChannelPublisher, InMemoryQueryableExecutor, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, LivePoll, LivePollChannel, LivePollResultsBuilder, LivePollResultsDTO, LivePollVote</td>
+          <td>16</td>
+          <td>CastVoteCommand, CastVoteHandler, ErrorType, FixedTimeProvider, HandlerMocks, HandlerTestBase&lt;THandler&gt;, ILiveChannelPublishQueue, InMemoryQueryableExecutor, IReadRepository&lt;TEntity, TIdentifierType&gt;, LiveChannelPublishWorkItem, LivePoll, LivePollChannel, LivePollResultsBuilder, LivePollResultsDTO, LivePollVote, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>CloseLivePollHandlerTests</code></td>
+          <td>MMCA.ADC.Engagement.Application.Tests</td>
+          <td>16</td>
+          <td>CloseLivePollCommand, CloseLivePollHandler, Error, ErrorType, HandlerMocks, HandlerTestBase&lt;THandler&gt;, IEventLiveValidationService, ILiveChannelPublishQueue, LiveChannelPublishWorkItem, LivePoll, LivePollChannel, LivePollStatus, QuestionModerationDefault, Result, SessionLiveInfo, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>CreateBookmarkHandlerTests</code></td>
+          <td>MMCA.ADC.Engagement.Application.Tests</td>
+          <td>12</td>
+          <td>BookmarkManagementDomainService, CreateBookmarkHandler, CreateBookmarkRequest, Error, ErrorType, HandlerMocks, HandlerTestBase&lt;THandler&gt;, ISessionBookmarkValidationService, Result, UnitOfWork, UserSessionBookmark, UserSessionBookmarkDTOMapper</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>CreateLivePollHandlerTests</code></td>
+          <td>MMCA.ADC.Engagement.Application.Tests</td>
+          <td>17</td>
+          <td>CreateLivePollCommand, CreateLivePollHandler, CreateLivePollRequest, Error, ErrorType, EventLiveInfo, HandlerMocks, HandlerTestBase&lt;THandler&gt;, IEventLiveValidationService, LivePoll, LivePollDTOMapper, LivePollStatus, Question, QuestionModerationDefault, Result, SessionLiveInfo, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>GetBookmarkedSessionIdsHandlerTests</code></td>
+          <td>MMCA.ADC.Engagement.Application.Tests</td>
+          <td>5</td>
+          <td>GetBookmarkedSessionIdsHandler, GetBookmarkedSessionIdsQuery, HandlerTestBase&lt;THandler&gt;, UnitOfWork, UserSessionBookmark</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>GetEventPollsHandlerTests</code></td>
+          <td>MMCA.ADC.Engagement.Application.Tests</td>
+          <td>7</td>
+          <td>GetEventPollsHandler, GetEventPollsQuery, HandlerTestBase&lt;THandler&gt;, LivePoll, LivePollDTOMapper, LivePollStatus, UnitOfWork</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>GetModerationQueueHandlerTests</code></td>
           <td>MMCA.ADC.Engagement.Application.Tests</td>
           <td>16</td>
-          <td>Error, ErrorType, GetModerationQueueHandler, GetModerationQueueQuery, HandlerMocks, IEventLiveValidationService, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, QuestionModerationDefault, QuestionStatus, Result, SessionLiveInfo, SessionQuestion, SessionQuestionUpvote, SessionQuestionViewBuilder</td>
+          <td>Error, ErrorType, GetModerationQueueHandler, GetModerationQueueQuery, HandlerMocks, HandlerTestBase&lt;THandler&gt;, IEventLiveValidationService, InMemoryQueryableExecutor, QuestionModerationDefault, QuestionStatus, Result, SessionLiveInfo, SessionQuestion, SessionQuestionUpvote, SessionQuestionViewBuilder, UnitOfWork</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>GetOpenPollsHandlerTests</code></td>
           <td>MMCA.ADC.Engagement.Application.Tests</td>
-          <td>10</td>
-          <td>ErrorType, GetOpenPollsHandler, GetOpenPollsQuery, InMemoryQueryableExecutor, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, LivePoll, LivePollResultsBuilder, LivePollVote</td>
+          <td>9</td>
+          <td>ErrorType, GetOpenPollsHandler, GetOpenPollsQuery, HandlerTestBase&lt;THandler&gt;, InMemoryQueryableExecutor, LivePoll, LivePollResultsBuilder, LivePollVote, UnitOfWork</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>GetSessionQuestionsHandlerTests</code></td>
           <td>MMCA.ADC.Engagement.Application.Tests</td>
           <td>9</td>
-          <td>GetSessionQuestionsHandler, GetSessionQuestionsQuery, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, QuestionStatus, SessionQuestion, SessionQuestionUpvote, SessionQuestionViewBuilder</td>
+          <td>GetSessionQuestionsHandler, GetSessionQuestionsQuery, HandlerTestBase&lt;THandler&gt;, InMemoryQueryableExecutor, QuestionStatus, SessionQuestion, SessionQuestionUpvote, SessionQuestionViewBuilder, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>GetUserBookmarksHandlerTests</code></td>
+          <td>MMCA.ADC.Engagement.Application.Tests</td>
+          <td>11</td>
+          <td>Error, GetUserBookmarksHandler, GetUserBookmarksQuery, HandlerMocks, HandlerTestBase&lt;THandler&gt;, IQueryableExecutor, ISessionBookmarkValidationService, Result, UnitOfWork, UserSessionBookmark, UserSessionBookmarkDTOMapper</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>ModerateQuestionHandlerTests</code></td>
+          <td>MMCA.ADC.Engagement.Application.Tests</td>
+          <td>16</td>
+          <td>Error, ErrorType, HandlerMocks, HandlerTestBase&lt;THandler&gt;, IEventLiveValidationService, ILiveChannelPublisher, ModerateQuestionCommand, ModerateQuestionHandler, ModerationAction, QuestionModerationDefault, QuestionStatus, Result, SessionLiveInfo, SessionQuestion, SessionQuestionChannel, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>OpenLivePollHandlerTests</code></td>
+          <td>MMCA.ADC.Engagement.Application.Tests</td>
+          <td>17</td>
+          <td>Error, ErrorType, EventLiveInfo, FixedTimeProvider, HandlerMocks, HandlerTestBase&lt;THandler&gt;, IEventLiveValidationService, ILiveChannelPublisher, LivePoll, LivePollChannel, LivePollStatus, OpenLivePollCommand, OpenLivePollHandler, QuestionModerationDefault, Result, SessionLiveInfo, UnitOfWork</td>
           </tr>
           <tr>
           <td>10</td>
           <td><code>SubmitQuestionHandlerTests</code></td>
           <td>MMCA.ADC.Engagement.Application.Tests</td>
-          <td>20</td>
-          <td>Error, FixedTimeProvider, HandlerMocks, IEventLiveValidationService, ILiveChannelPublisher, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, QuestionModerationDefault, QuestionStatus, Result, SessionLiveInfo, SessionQuestion, SessionQuestionApprovedPayload, SessionQuestionChannel, SessionQuestionPendingCountChangedPayload, SessionQuestionUpvote, SessionQuestionViewBuilder, SubmitQuestionCommand, SubmitQuestionHandler</td>
+          <td>22</td>
+          <td>Error, FixedTimeProvider, HandlerMocks, HandlerTestBase&lt;THandler&gt;, IEventLiveValidationService, ILiveChannelPublisher, InMemoryQueryableExecutor, IReadRepository&lt;TEntity, TIdentifierType&gt;, QuestionModerationDefault, QuestionStatus, Result, SessionLiveInfo, SessionQuestion, SessionQuestionApprovedPayload, SessionQuestionChannel, SessionQuestionInvariants, SessionQuestionPendingCountChangedPayload, SessionQuestionUpvote, SessionQuestionViewBuilder, SubmitQuestionCommand …(+2)</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>ToggleUpvoteHandlerTests</code></td>
+          <td>MMCA.ADC.Engagement.Application.Tests</td>
+          <td>12</td>
+          <td>ErrorType, FixedTimeProvider, HandlerMocks, HandlerTestBase&lt;THandler&gt;, ILiveChannelPublisher, QuestionStatus, SessionQuestion, SessionQuestionChannel, SessionQuestionUpvote, ToggleUpvoteCommand, ToggleUpvoteHandler, UnitOfWork</td>
           </tr>
           <tr>
           <td>10</td>
@@ -16874,10 +17385,73 @@
           </tr>
           <tr>
           <td>10</td>
+          <td><code>AttendeeQueryServiceTests</code></td>
+          <td>MMCA.ADC.Identity.Application.Tests</td>
+          <td>5</td>
+          <td>AttendeeQueryService, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, UnitOfWork, User</td>
+          </tr>
+          <tr>
+          <td>10</td>
           <td><code>AuthenticationServiceTests</code></td>
           <td>MMCA.ADC.Identity.Application.Tests</td>
-          <td>18</td>
-          <td>AuthenticationService, AuthenticationValidators, Error, ErrorType, IIntegrationEvent, IIntegrationEventPublisher, ILoginProtectionService, IPasswordHasher, IRepository&lt;TEntity, TIdentifierType&gt;, ITokenService, IUnitOfWork, LoginRequest, RefreshTokenRequest, RegisterRequest, Result, ServiceMocks, User, UserRole</td>
+          <td>19</td>
+          <td>AuthenticationResponse, AuthenticationService, AuthenticationValidators, Error, ErrorType, IExternalLoginEmailVerifier, ILoginProtectionService, IPasswordHasher, IRepository&lt;TEntity, TIdentifierType&gt;, ITokenService, IUnitOfWork, LoginRequest, RefreshTokenRequest, RegisterRequest, Result, ServiceMocks, User, UserRegistered, UserRole</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>ChangePasswordHandlerTests</code></td>
+          <td>MMCA.ADC.Identity.Application.Tests</td>
+          <td>10</td>
+          <td>ChangePasswordCommand, ChangePasswordHandler, ChangePasswordRequest, ErrorType, HandlerTestBase&lt;THandler&gt;, IPasswordHasher, IRepository&lt;TEntity, TIdentifierType&gt;, UnitOfWork, User, UserRole</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>ChangePreferencesHandlerTests</code></td>
+          <td>MMCA.ADC.Identity.Application.Tests</td>
+          <td>9</td>
+          <td>ChangePreferencesCommand, ChangePreferencesHandler, ChangePreferencesRequest, ErrorType, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, UnitOfWork, User, UserRole</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>DeleteUserHandlerTests</code></td>
+          <td>MMCA.ADC.Identity.Application.Tests</td>
+          <td>10</td>
+          <td>DeleteUserCommand, DeleteUserHandler, ErrorType, HandlerTestBase&lt;THandler&gt;, IFileStorageService, IRepository&lt;TEntity, TIdentifierType&gt;, Result, UnitOfWork, User, UserRole</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>ExportUserDataHandlerTests</code></td>
+          <td>MMCA.ADC.Identity.Application.Tests</td>
+          <td>14</td>
+          <td>ErrorType, ExportUserDataHandler, ExportUserDataQuery, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUserEngagementExportService, IUserNotificationExportService, UnitOfWork, User, UserEngagementBookmarkExportDTO, UserEngagementExportDTO, UserEngagementSubmittedQuestionExportDTO, UserNotificationExportItemDTO, UserRole</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>GetUserPreferencesHandlerTests</code></td>
+          <td>MMCA.ADC.Identity.Application.Tests</td>
+          <td>12</td>
+          <td>ChangePreferencesCommand, ChangePreferencesHandler, ChangePreferencesRequest, ErrorType, GetUserPreferencesHandler, GetUserPreferencesQuery, HandlerTestBase&lt;THandler&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, UnitOfWork, User, UserPreferencesResponse, UserRole</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>GetUsersHandlerTests</code></td>
+          <td>MMCA.ADC.Identity.Application.Tests</td>
+          <td>10</td>
+          <td>Email, GetUsersHandler, GetUsersQuery, HandlerTestBase&lt;THandler&gt;, IQueryableExecutor, IRepository&lt;TEntity, TIdentifierType&gt;, UnitOfWork, User, UserListDTO, UserRole</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>SpeakerLinkedToUserHandlerTests</code></td>
+          <td>MMCA.ADC.Identity.Application.Tests</td>
+          <td>8</td>
+          <td>Fakes, InMemoryRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, RecordingUnitOfWork, SpeakerLinkedToUser, SpeakerLinkedToUserHandler, User, UserRole</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>SpeakerUnlinkedFromUserHandlerTests</code></td>
+          <td>MMCA.ADC.Identity.Application.Tests</td>
+          <td>8</td>
+          <td>Fakes, InMemoryRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, RecordingUnitOfWork, SpeakerUnlinkedFromUser, SpeakerUnlinkedFromUserHandler, User, UserRole</td>
           </tr>
           <tr>
           <td>10</td>
@@ -16892,6 +17466,13 @@
           <td>MMCA.ADC.Identity.Infrastructure.Tests</td>
           <td>3</td>
           <td>IdentityTestDbContext, User, UserInvariants</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>UserNotificationExportServiceTests</code></td>
+          <td>MMCA.ADC.Notification.Application.Tests</td>
+          <td>7</td>
+          <td>HandlerTestBase&lt;THandler&gt;, InMemoryQueryableExecutor, IRepository&lt;TEntity, TIdentifierType&gt;, PushNotification, UnitOfWork, UserNotification, UserNotificationExportService</td>
           </tr>
           <tr>
           <td>10</td>
@@ -16988,8 +17569,8 @@
           <td>10</td>
           <td><code>OutboxProcessorExecuteAsyncTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>8</td>
-          <td>DataSource, DataSourceKey, DependencyInjection, IDataSourceResolver, IEntityDataSourceRegistry, IOutboxSignal, OutboxProcessor, OutboxSettings</td>
+          <td>9</td>
+          <td>DataSource, DataSourceKey, DependencyInjection, FakeTimeProvider, IDataSourceResolver, IEntityDataSourceRegistry, IOutboxSignal, OutboxProcessor, OutboxSettings</td>
           </tr>
           <tr>
           <td>10</td>
@@ -17007,10 +17588,17 @@
           </tr>
           <tr>
           <td>10</td>
-          <td><code>GalleryAxeTestBase</code></td>
+          <td><code>HandlerTestBaseTests</code></td>
+          <td>MMCA.Common.Testing.Tests</td>
+          <td>5</td>
+          <td>FakeHandler, HandlerTestBase&lt;THandler&gt;, TestAggregate, TestChildEntity, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>GalleryE2ECollection</code></td>
           <td>MMCA.Common.UI.E2E.Tests</td>
-          <td>4</td>
-          <td>E2ETestConfiguration, GalleryE2ECollection, GalleryHostFixture, PlaywrightFixture</td>
+          <td>2</td>
+          <td>GalleryHostFixture, PlaywrightFixture</td>
           </tr>
           <tr>
           <td>11</td>
@@ -17037,15 +17625,15 @@
           <td>11</td>
           <td><code>ConferenceCategoryNavigationPopulatorTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>5</td>
-          <td>Category, ConferenceCategoryNavigationPopulator, INavigationPopulator&lt;in TEntity&gt;, IUnitOfWork, NavigationMetadata</td>
+          <td>6</td>
+          <td>Category, ConferenceCategoryNavigationPopulator, HandlerTestBase&lt;THandler&gt;, INavigationPopulator&lt;in TEntity&gt;, NavigationMetadata, UnitOfWork</td>
           </tr>
           <tr>
           <td>11</td>
           <td><code>EventNavigationPopulatorTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>5</td>
-          <td>Event, EventNavigationPopulator, INavigationPopulator&lt;in TEntity&gt;, IUnitOfWork, NavigationMetadata</td>
+          <td>6</td>
+          <td>Event, EventNavigationPopulator, HandlerTestBase&lt;THandler&gt;, INavigationPopulator&lt;in TEntity&gt;, NavigationMetadata, UnitOfWork</td>
           </tr>
           <tr>
           <td>11</td>
@@ -17065,8 +17653,8 @@
           <td>11</td>
           <td><code>SessionNavigationPopulatorTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>5</td>
-          <td>INavigationPopulator&lt;in TEntity&gt;, IUnitOfWork, NavigationMetadata, Session, SessionNavigationPopulator</td>
+          <td>6</td>
+          <td>HandlerTestBase&lt;THandler&gt;, INavigationPopulator&lt;in TEntity&gt;, NavigationMetadata, Session, SessionNavigationPopulator, UnitOfWork</td>
           </tr>
           <tr>
           <td>11</td>
@@ -17079,8 +17667,8 @@
           <td>11</td>
           <td><code>SpeakerNavigationPopulatorTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>5</td>
-          <td>INavigationPopulator&lt;in TEntity&gt;, IUnitOfWork, NavigationMetadata, Speaker, SpeakerNavigationPopulator</td>
+          <td>6</td>
+          <td>HandlerTestBase&lt;THandler&gt;, INavigationPopulator&lt;in TEntity&gt;, NavigationMetadata, Speaker, SpeakerNavigationPopulator, UnitOfWork</td>
           </tr>
           <tr>
           <td>11</td>
@@ -17093,8 +17681,8 @@
           <td>11</td>
           <td><code>DependencyInjection</code></td>
           <td>MMCA.ADC.Engagement.Application</td>
-          <td>27</td>
-          <td>ApplicationSettings, BookmarkCountService, BookmarkManagementDomainService, ClassReference, ClassReference, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, DeleteEntityHandler&lt;TEntity, TIdentifierType&gt;, EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IBookmarkCountService, IBookmarkManagementDomainService, ICommandHandler&lt;in TCommand, TResult&gt;, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, INavigationPopulator&lt;in TEntity&gt;, IUserEngagementExportService, LivePoll, LivePollDTO, LivePollNavigationPopulator, LivePollResultsBuilder, LivePollVote, NullNavigationPopulator&lt;TEntity&gt; …(+7)</td>
+          <td>29</td>
+          <td>ApplicationSettings, BookmarkCountService, BookmarkManagementDomainService, ClassReference, ClassReference, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, DeleteEntityHandler&lt;TEntity, TIdentifierType&gt;, EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IBookmarkCountService, IBookmarkManagementDomainService, ICommandHandler&lt;in TCommand, TResult&gt;, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, ILiveChannelPublishQueue, INavigationPopulator&lt;in TEntity&gt;, IUserEngagementExportService, LiveChannelPublishQueue, LivePoll, LivePollDTO, LivePollNavigationPopulator, LivePollResultsBuilder …(+9)</td>
           </tr>
           <tr>
           <td>11</td>
@@ -17119,59 +17707,10 @@
           </tr>
           <tr>
           <td>11</td>
-          <td><code>ComponentsPageE2ETests</code></td>
+          <td><code>GalleryAxeTestBase</code></td>
           <td>MMCA.Common.UI.E2E.Tests</td>
           <td>4</td>
-          <td>AxeOptions, GalleryAxeTestBase, GalleryHostFixture, PlaywrightFixture</td>
-          </tr>
-          <tr>
-          <td>11</td>
-          <td><code>DarkModeE2ETests</code></td>
-          <td>MMCA.Common.UI.E2E.Tests</td>
-          <td>4</td>
-          <td>AxeOptions, GalleryAxeTestBase, GalleryHostFixture, PlaywrightFixture</td>
-          </tr>
-          <tr>
-          <td>11</td>
-          <td><code>LoginPageE2ETests</code></td>
-          <td>MMCA.Common.UI.E2E.Tests</td>
-          <td>5</td>
-          <td>AxeOptions, GalleryAxeTestBase, GalleryHostFixture, LoginPage, PlaywrightFixture</td>
-          </tr>
-          <tr>
-          <td>11</td>
-          <td><code>MobileTopRowE2ETests</code></td>
-          <td>MMCA.Common.UI.E2E.Tests</td>
-          <td>3</td>
-          <td>GalleryAxeTestBase, GalleryHostFixture, PlaywrightFixture</td>
-          </tr>
-          <tr>
-          <td>11</td>
-          <td><code>NotificationPagesE2ETests</code></td>
-          <td>MMCA.Common.UI.E2E.Tests</td>
-          <td>4</td>
-          <td>AxeOptions, GalleryAxeTestBase, GalleryHostFixture, PlaywrightFixture</td>
-          </tr>
-          <tr>
-          <td>11</td>
-          <td><code>PseudoLocalizationE2ETests</code></td>
-          <td>MMCA.Common.UI.E2E.Tests</td>
-          <td>4</td>
-          <td>GalleryAxeTestBase, GalleryHostFixture, PlaywrightFixture, SupportedCultures</td>
-          </tr>
-          <tr>
-          <td>11</td>
-          <td><code>RegisterPageE2ETests</code></td>
-          <td>MMCA.Common.UI.E2E.Tests</td>
-          <td>5</td>
-          <td>AxeOptions, GalleryAxeTestBase, GalleryHostFixture, PlaywrightFixture, RegisterPage</td>
-          </tr>
-          <tr>
-          <td>11</td>
-          <td><code>WebVitalsE2ETests</code></td>
-          <td>MMCA.Common.UI.E2E.Tests</td>
-          <td>4</td>
-          <td>GalleryAxeTestBase, GalleryHostFixture, PlaywrightFixture, WebVitalsCollector</td>
+          <td>E2ETestConfiguration, GalleryE2ECollection, GalleryHostFixture, PlaywrightFixture</td>
           </tr>
           <tr>
           <td>12</td>
@@ -17224,6 +17763,13 @@
           </tr>
           <tr>
           <td>12</td>
+          <td><code>RouteMapApplicationFactory</code></td>
+          <td>MMCA.ADC.Gateway.Tests</td>
+          <td>2</td>
+          <td>Program, RecordingHttpForwarder</td>
+          </tr>
+          <tr>
+          <td>12</td>
           <td><code>AuthControllerTests</code></td>
           <td>MMCA.ADC.Identity.API.Tests</td>
           <td>17</td>
@@ -17233,8 +17779,8 @@
           <td>12</td>
           <td><code>IdentityTestWebApplicationFactory</code></td>
           <td>MMCA.ADC.Identity.IntegrationTests</td>
-          <td>5</td>
-          <td>FakeUserEngagementExportService, FakeUserNotificationExportService, IUserEngagementExportService, IUserNotificationExportService, Program</td>
+          <td>6</td>
+          <td>FakeUserEngagementExportService, FakeUserNotificationExportService, IUserEngagementExportService, IUserNotificationExportService, PiiCaptureLoggerProvider, Program</td>
           </tr>
           <tr>
           <td>12</td>
@@ -17249,6 +17795,62 @@
           <td>MMCA.Common.API.Tests</td>
           <td>9</td>
           <td>AuthenticationResponse, Error, IAuthenticationService, ICurrentUserService, LoginRequest, RefreshTokenRequest, RegisterRequest, Result, TestAuthController</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>ComponentsPageE2ETests</code></td>
+          <td>MMCA.Common.UI.E2E.Tests</td>
+          <td>4</td>
+          <td>AxeOptions, GalleryAxeTestBase, GalleryHostFixture, PlaywrightFixture</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>DarkModeE2ETests</code></td>
+          <td>MMCA.Common.UI.E2E.Tests</td>
+          <td>4</td>
+          <td>AxeOptions, GalleryAxeTestBase, GalleryHostFixture, PlaywrightFixture</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>LoginPageE2ETests</code></td>
+          <td>MMCA.Common.UI.E2E.Tests</td>
+          <td>5</td>
+          <td>AxeOptions, GalleryAxeTestBase, GalleryHostFixture, LoginPage, PlaywrightFixture</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>MobileTopRowE2ETests</code></td>
+          <td>MMCA.Common.UI.E2E.Tests</td>
+          <td>3</td>
+          <td>GalleryAxeTestBase, GalleryHostFixture, PlaywrightFixture</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>NotificationPagesE2ETests</code></td>
+          <td>MMCA.Common.UI.E2E.Tests</td>
+          <td>4</td>
+          <td>AxeOptions, GalleryAxeTestBase, GalleryHostFixture, PlaywrightFixture</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>PseudoLocalizationE2ETests</code></td>
+          <td>MMCA.Common.UI.E2E.Tests</td>
+          <td>4</td>
+          <td>GalleryAxeTestBase, GalleryHostFixture, PlaywrightFixture, SupportedCultures</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>RegisterPageE2ETests</code></td>
+          <td>MMCA.Common.UI.E2E.Tests</td>
+          <td>5</td>
+          <td>AxeOptions, GalleryAxeTestBase, GalleryHostFixture, PlaywrightFixture, RegisterPage</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>WebVitalsE2ETests</code></td>
+          <td>MMCA.Common.UI.E2E.Tests</td>
+          <td>4</td>
+          <td>GalleryAxeTestBase, GalleryHostFixture, PlaywrightFixture, WebVitalsCollector</td>
           </tr>
           <tr>
           <td>13</td>
@@ -17277,6 +17879,13 @@
           <td>MMCA.ADC.Gateway.Tests</td>
           <td>1</td>
           <td>GatewayApplicationFactory</td>
+          </tr>
+          <tr>
+          <td>13</td>
+          <td><code>RouteMapTests</code></td>
+          <td>MMCA.ADC.Gateway.Tests</td>
+          <td>1</td>
+          <td>RouteMapApplicationFactory</td>
           </tr>
           <tr>
           <td>13</td>
@@ -17413,6 +18022,13 @@
           </tr>
           <tr>
           <td>15</td>
+          <td><code>OpenApiContractTests</code></td>
+          <td>MMCA.ADC.Identity.IntegrationTests</td>
+          <td>3</td>
+          <td>IdentityIntegrationTestCollection, IdentityIntegrationTestFixture, OpenApiContractTestsBase&lt;TFixture&gt;</td>
+          </tr>
+          <tr>
+          <td>15</td>
           <td><code>ProblemDetailsContractTests</code></td>
           <td>MMCA.ADC.Identity.IntegrationTests</td>
           <td>5</td>
@@ -17424,6 +18040,13 @@
           <td>MMCA.ADC.Notification.IntegrationTests</td>
           <td>4</td>
           <td>IntegrationTestBase&lt;TFixture&gt;, JwtTokenGenerator, NotificationIntegrationTestCollection, NotificationIntegrationTestFixture</td>
+          </tr>
+          <tr>
+          <td>15</td>
+          <td><code>OpenApiContractTests</code></td>
+          <td>MMCA.ADC.Notification.IntegrationTests</td>
+          <td>3</td>
+          <td>NotificationIntegrationTestCollection, NotificationIntegrationTestFixture, OpenApiContractTestsBase&lt;TFixture&gt;</td>
           </tr>
           <tr>
           <td>16</td>
@@ -17732,6 +18355,13 @@
           <td>MMCA.ADC.Identity.IntegrationTests</td>
           <td>8</td>
           <td>Email, IdentityIntegrationTestBase, IdentityIntegrationTestFixture, IIntegrationEvent, IIntegrationEventHandler&lt;in TIntegrationEvent&gt;, IUnitOfWork, SpeakerLinkedToUser, SpeakerUnlinkedFromUser</td>
+          </tr>
+          <tr>
+          <td>16</td>
+          <td><code>ErasureAndPiiLoggingTests</code></td>
+          <td>MMCA.ADC.Identity.IntegrationTests</td>
+          <td>4</td>
+          <td>Email, IdentityIntegrationTestBase, IdentityIntegrationTestFixture, PiiLogCapture</td>
           </tr>
           <tr>
           <td>16</td>

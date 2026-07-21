@@ -88,7 +88,7 @@ re-fetch so the rotated refresh token can be persisted through `SaveChangesAsync
 (`AuthenticationServiceBase.cs:110`). Soft-deleted accounts fall out through EF query filters and return
 the same generic 401 as a wrong password, so the API never reveals whether an email exists. Every failure
 path returns a [`Result`](group-01-result-error-handling.md#result) rather than throwing, matching the
-framework-wide Result pattern (see [primer](00-primer.md)). `RefreshTokenAsync`
+framework-wide Result pattern (see [primer](../00-primer.md)). `RefreshTokenAsync`
 (`AuthenticationServiceBase.cs:180`) extracts claims from the *expired* access token (signature still
 verified, only lifetime skipped), then compares the presented refresh token against the stored one; a
 mismatch is treated as token reuse and *revokes* the stored token to force re-authentication
@@ -564,7 +564,7 @@ live in later groups; this chapter is the engine those endpoints call into.
   (each module contributes only the permissions it owns, so an extracted module carries its own grants).
   The `extension(IServiceCollection services)` block
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:14`) is the
-  C# `extension(T)` DI idiom taught in the [primer](00-primer.md#c-extensiont-types--read-this-once):
+  C# `extension(T)` DI idiom taught in the [primer](../00-primer.md#c-extensiont-types--read-this-once):
   it adds `AddAuthorizationPolicies` and `AddPermissions` directly onto `IServiceCollection`.
 - **Walkthrough**
   - `AddAuthorizationPolicies()`
@@ -612,7 +612,7 @@ live in later groups; this chapter is the engine those endpoints call into.
 > MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ICurrentUserService.cs:9` · Level 0 · interface
 
 - **What it is**: the Application layer's read-only window into the authenticated caller: the raw `ClaimsPrincipal`, a strongly-typed `UserId`, the caller's `Role`, a generic typed-claim reader, and a default `IsInRole` helper. It answers "who is calling?" without any handler ever touching `HttpContext`.
-- **Depends on**: `System.Security.Claims.ClaimsPrincipal` and `IParsable<T>` (both BCL) and the solution-wide `UserIdentifierType` alias (an `int` today; see [primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to)). No first-party dependencies: this is a pure port. Its concrete adapter is [`CurrentUserService`](#currentuserservice) in Infrastructure.
+- **Depends on**: `System.Security.Claims.ClaimsPrincipal` and `IParsable<T>` (both BCL) and the solution-wide `UserIdentifierType` alias (an `int` today; see [primer §2](../00-primer.md#2-architectural-styles-this-codebase-commits-to)). No first-party dependencies: this is a pure port. Its concrete adapter is [`CurrentUserService`](#currentuserservice) in Infrastructure.
 - **Concept introduced: the caller-identity port. [Rubric §3, Clean Architecture]** assesses whether the inner layers stay free of framework/transport types; **[Rubric §1, SOLID]** (Interface Segregation) assesses whether a contract exposes only what its clients need. An Application handler must know the caller to run ownership checks and to stamp audit fields, but it must not depend on `IHttpContextAccessor`, which would drag ASP.NET into the Application project. `ICurrentUserService` is that inversion: Infrastructure reads `HttpContext.User` and exposes it through this clean, minimal contract. The default interface method on line 36 (`IsInRole(string) => string.Equals(Role, roleName, StringComparison.OrdinalIgnoreCase)`) means every implementer and every test double inherits the role check for free rather than re-implementing a trivial equality.
 - **Walkthrough**: line 12 `ClaimsPrincipal User { get; }` exposes the full principal for advanced claim inspection. Line 15 `UserIdentifierType? UserId { get; }` is the typed identifier, nullable because an unauthenticated request has no user. Line 18 `string? Role { get; }` is a single role (the codebase models one role per user). Lines 27-28 `T? GetClaimValue<T>(string claimType) where T : struct, IParsable<T>` parses a named claim into any parsable value struct (`int`, `Guid`, and so on) and returns `null` when the claim is absent or unparseable, so a module can read its own claim (for example `speaker_id`) without Common knowing that claim exists. Line 36 supplies the default `IsInRole`.
 - **Why it's built this way**: typing `UserId` as the per-module alias rather than a generic parameter keeps the interface concrete and mock-friendly while remaining correct for each app. Reading module claims through `GetClaimValue<T>` keeps Common decoupled from any specific module's claim vocabulary.
@@ -636,7 +636,7 @@ live in later groups; this chapter is the engine those endpoints call into.
 > MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ISoftDeletedUserValidator.cs:7` · Level 0 · interface
 
 - **What it is**: a single-method port (`IsUserSoftDeletedAsync`, line 15) that answers "has this account been soft-deleted?", called after JWT authentication to reject a soft-deleted user who still holds a valid, unexpired token (BR-133).
-- **Depends on**: BCL and the `UserIdentifierType` alias. Cross-reference ADR-005 (soft-delete versus erasure) and [primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to) for the soft-delete convention.
+- **Depends on**: BCL and the `UserIdentifierType` alias. Cross-reference ADR-005 (soft-delete versus erasure) and [primer §2](../00-primer.md#2-architectural-styles-this-codebase-commits-to) for the soft-delete convention.
 - **Concept introduced: closing the stateless-token window. [Rubric §11, Security]** assesses whether revocation is timely; a JWT is stateless and can outlive the account it names. This interface lets middleware re-check deletion on every authenticated request and return 401 when the account is gone, with no per-handler code. It is deliberately defined in Application and implemented by the Identity module so the middleware never takes a cross-module domain reference (the same dependency-inversion move as the other ports here).
 - **Walkthrough**: line 15 `Task<bool> IsUserSoftDeletedAsync(UserIdentifierType userId, CancellationToken cancellationToken = default)`. One question, one answer.
 - **Where it's used**: [`SoftDeletedUserMiddleware`](group-12-api-hosting-mapping.md#softdeletedusermiddleware), registered after authentication in the API pipeline; the Identity module supplies the concrete backed by its own query.
@@ -742,7 +742,7 @@ live in later groups; this chapter is the engine those endpoints call into.
 
 - **What it is**: a one-method registration helper (`UseCookieSessionRefresh`) that adds [`CookieSessionRefreshMiddleware`](#cookiesessionrefreshmiddleware) to the pipeline.
 - **Depends on**: `IApplicationBuilder` (ASP.NET) and [`CookieSessionRefreshMiddleware`](#cookiesessionrefreshmiddleware).
-- **Concept introduced**: the standard `UseXxx()` middleware-registration idiom; cross-reference the DI conventions in [primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to). Nothing new beyond hiding `UseMiddleware<T>` behind a named, documented call.
+- **Concept introduced**: the standard `UseXxx()` middleware-registration idiom; cross-reference the DI conventions in [primer §2](../00-primer.md#2-architectural-styles-this-codebase-commits-to). Nothing new beyond hiding `UseMiddleware<T>` behind a named, documented call.
 - **Walkthrough**: lines 42-46: null-check the builder, then `return app.UseMiddleware<CookieSessionRefreshMiddleware>()`. The XML comment (lines 38-41) states the load-bearing rule: register it immediately before `UseAuthentication()`.
 - **Where it's used**: the Blazor Server (UI.Web) host's pipeline configuration.
 
@@ -790,7 +790,7 @@ live in later groups; this chapter is the engine those endpoints call into.
 
 - **What it is**: the registration helper for [`SessionCookieAuthenticationHandler`](#sessioncookieauthenticationhandler): a single `AddSessionCookieAuthentication()` that wires the scheme into an `AuthenticationBuilder`.
 - **Depends on**: `AuthenticationBuilder` (ASP.NET) and [`SessionCookieAuthenticationHandler`](#sessioncookieauthenticationhandler).
-- **Concept introduced: `extension(T)` DI registration.** The method is declared inside an `extension(AuthenticationBuilder builder)` block (lines 92-101), the C# preview extension-member syntax this codebase uses throughout for fluent DI registration (see [primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to)). It reads as an instance method on `AuthenticationBuilder` without a static-class `this`-parameter signature.
+- **Concept introduced: `extension(T)` DI registration.** The method is declared inside an `extension(AuthenticationBuilder builder)` block (lines 92-101), the C# preview extension-member syntax this codebase uses throughout for fluent DI registration (see [primer §2](../00-primer.md#2-architectural-styles-this-codebase-commits-to)). It reads as an instance method on `AuthenticationBuilder` without a static-class `this`-parameter signature.
 - **Walkthrough**: lines 98-100: `AddSessionCookieAuthentication()` calls `builder.AddScheme<AuthenticationSchemeOptions, SessionCookieAuthenticationHandler>(SessionCookieAuthenticationHandler.SchemeName, displayName: null, configureOptions: null)`, so the scheme name comes from the handler's own constant rather than a duplicated literal.
 - **Where it's used**: the UI.Web host, after `AddAuthentication(SessionCookieAuthenticationHandler.SchemeName)`, as the comment on lines 94-97 directs.
 

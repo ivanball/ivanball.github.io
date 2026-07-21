@@ -8,8 +8,9 @@ families here, and they interlock:
    [`AuditableBaseEntity<TIdentifierType>`](#auditablebaseentitytidentifiertype) →
    [`AuditableAggregateRootEntity<TIdentifierType>`](#auditableaggregaterootentitytidentifiertype)) plus the
    contracts that describe each rung ([`IBaseEntity<TIdentifierType>`](#ibaseentitytidentifiertype),
-   [`IAuditableEntity`](#iauditableentity), [`IAggregateRoot`](#iaggregateroot)). Each rung adds exactly one
-   capability: identity, then audit/soft-delete, then domain-event collection and aggregate operations.
+   [`IAuditableEntity`](#iauditableentity), [`IRowVersioned`](#irowversioned),
+   [`IAggregateRoot`](#iaggregateroot)). Each rung adds exactly one capability: identity, then
+   audit/soft-delete/concurrency, then domain-event collection and aggregate operations.
 2. **The value-object family**, the [`ValueObject`](#valueobject) base and the concrete, immutable
    concepts built on it: [`Address`](#address), [`Money`](#money), [`Currency`](#currency),
    [`Email`](#email), [`PhoneNumber`](#phonenumber), [`DateRange`](#daterange), and
@@ -18,15 +19,17 @@ families here, and they interlock:
    [`PhoneNumberInvariants`](#phonenumberinvariants)) plus the shared [`CommonInvariants`](#commoninvariants)
    toolbox, and the [`CurrencyJsonConverter`](#currencyjsonconverter) that puts `Currency` on the wire.
 3. **The governance markers and helpers**, the attributes and small utilities that drive
-   metadata-based behavior across the stack: [`PiiAttribute`](#piiattribute) (erasure/log-masking),
+   metadata-based behavior across the stack: [`PiiAttribute`](#piiattribute) (erasure and log masking)
+   with its redaction half [`PiiRedactor`](#piiredactor) and that helper's cached
+   [`RedactableProperty`](#redactableproperty) descriptor,
    [`IdValueGeneratedAttribute`](#idvaluegeneratedattribute) + [`EntityTypeExtensions`](#entitytypeextensions)
    (database-generated IDs), [`IAnonymizable`](#ianonymizable) (GDPR/CCPA erasure), the
    [`DomainEntityState`](#domainentitystate) enum (state-change classification for domain events), and
    [`DomainHelper`](#domainhelper) (culture-invariant identifier parsing).
 
 All of these live in the two innermost layers, `MMCA.Common.Shared` (value objects, invariants,
-`DomainHelper`) and `MMCA.Common.Domain` (entities, interfaces, attributes, enums), so the whole
-group sits below Application and Infrastructure in the dependency flow (see
+`DomainHelper`) and `MMCA.Common.Domain` (entities, interfaces, attributes, enums, privacy helpers), so
+the whole group sits below Application and Infrastructure in the dependency flow (see
 [primer §1](00-primer.md#1-the-big-picture)). Nothing here references EF Core, ASP.NET, or a message
 broker; persistence and dispatch are *described* by these types and *implemented* by higher groups.
 That separation is the [Rubric §3, Clean Architecture] and [Rubric §4, Domain-Driven Design] story
@@ -36,46 +39,70 @@ in miniature: the model is framework-free, and the framework adapts to it.
 
 Read the chain bottom-up. [`BaseEntity<TIdentifierType>`](#baseentitytidentifiertype)
 (`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/BaseEntity.cs:14`) is almost nothing: a single
-`required init` identifier of the per-entity alias type (see
-[identifier aliases](00-primer.md#2-architectural-styles-this-codebase-commits-to)). `required init`
-is the load-bearing choice, a factory method sets `Id` once at construction and it is immutable
-thereafter, while EF Core still materializes the entity through the parameterless constructor.
+`required init` identifier of the per-entity alias type, constrained `where TIdentifierType : notnull`
+(`BaseEntity.cs:15-17`), and it implements
+[`IBaseEntity<TIdentifierType>`](#ibaseentitytidentifiertype)
+(`MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IBaseEntity.cs:7`), which declares `Id` with an
+`init` accessor so the contract itself forbids reassignment (`IBaseEntity.cs:11`). See
+[identifier aliases](00-primer.md#2-architectural-styles-this-codebase-commits-to) for where the alias
+types come from. `required init` is the load-bearing choice: a factory method sets `Id` once at
+construction and it is immutable thereafter, while EF Core still materializes the entity through the
+parameterless constructor.
 
 [`AuditableBaseEntity<TIdentifierType>`](#auditablebaseentitytidentifiertype)
-(`AuditableBaseEntity.cs:13`) adds the two cross-cutting facts every persisted row needs: **soft-delete**
-(`IsDeleted` plus a `Delete()`/`Undelete()` pair that return [`Result`](group-01-result-error-handling.md#result)
-and refuse to double-delete) and **audit fields** (`CreatedOn/By`, `LastModifiedOn/By`) with *private*
-setters. The domain never writes the audit fields, they are stamped centrally by
-[`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext)'s `SaveChangesAsync`
-via change-tracker reflection. It also carries the `RowVersion` optimistic-concurrency token. This is
-where [Rubric §8, Data Architecture] (soft-delete, audit, concurrency) and [Rubric §5, Vertical
-Slice]/[§10, Cross-Cutting] meet: three concerns that would otherwise be copy-pasted into every entity
-are inherited once and enforced centrally (ADR-005 for soft-delete-vs-erasure).
+(`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:13`) adds the
+cross-cutting facts every persisted row needs: **soft-delete** (`IsDeleted` at
+`AuditableBaseEntity.cs:20`, plus a `Delete()`/`Undelete()` pair at `AuditableBaseEntity.cs:47` and
+`AuditableBaseEntity.cs:67` that return [`Result`](group-01-result-error-handling.md#result) and refuse
+to double-delete or to undelete a live row), **audit fields** (`CreatedOn/By`, `LastModifiedOn/By` at
+`AuditableBaseEntity.cs:25-31`) with *private* setters, and the `RowVersion` optimistic-concurrency
+token (`AuditableBaseEntity.cs:39`). The domain never writes the audit fields: they are stamped
+centrally by [`AuditSaveChangesInterceptor`](group-07-persistence-ef-core.md#auditsavechangesinterceptor),
+which walks `ChangeTracker.Entries<IAuditableEntity>()` and assigns through
+`entry.Property(...).CurrentValue`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/AuditSaveChangesInterceptor.cs:43-57`),
+freezing `CreatedOn/By` as unmodified on updates. The class declares both
+[`IAuditableEntity`](#iauditableentity) and [`IRowVersioned`](#irowversioned)
+(`AuditableBaseEntity.cs:13`); the latter exists so a repository can accept *any* tracked child entity
+for a concurrency check without a second generic parameter for the child's identifier type
+(`MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IRowVersioned.cs:11`, rationale in ADR-035).
+This rung is where [Rubric §8, Data Architecture] (soft-delete, audit, concurrency) meets [Rubric §10,
+Cross-Cutting]: three concerns that would otherwise be copy-pasted into every entity are inherited once
+and enforced centrally (ADR-005 for soft-delete versus erasure).
 
 [`AuditableAggregateRootEntity<TIdentifierType>`](#auditableaggregaterootentitytidentifiertype)
-(`AuditableAggregateRootEntity.cs:13`) is the top rung and the one that earns the DDD name "aggregate
-root." It implements [`IAggregateRoot`](#iaggregateroot), so it owns a private domain-event list
-(`AddDomainEvent` / `ClearDomainEvents` / a read-only `DomainEvents` view), and it adds the two helpers
-that let a root police its own consistency boundary: `SetItems<T>` (replace a child collection, routed
-through an overridable `ValidateSetItems` hook so a root can veto, say, removing a shipped order line)
-and `GetChildOrNotFound<T>` (find an active child by id or return an
-[`Error.NotFound`](group-01-result-error-handling.md#error) failure). Only aggregate roots raise domain
-events, that is how the persistence layer knows where to look. This rung is the clearest [Rubric §4,
-Domain-Driven Design] and [Rubric §6, CQRS & Event-Driven] expression in the codebase: invariants are
-enforced *inside* the boundary, and state changes are announced as events rather than leaked as side
-effects.
+(`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableAggregateRootEntity.cs:13`) is the top
+rung and the one that earns the DDD name "aggregate root". It implements
+[`IAggregateRoot`](#iaggregateroot), so it owns a private domain-event list with `AddDomainEvent`,
+`ClearDomainEvents`, and a read-only `DomainEvents` view (`AuditableAggregateRootEntity.cs:16-34`), and
+it adds the two helpers that let a root police its own consistency boundary: `SetItems<TChildEntity>`
+(replace a child collection, routed through an overridable `ValidateSetItems` hook so a root can veto,
+say, removing a shipped order line, `AuditableAggregateRootEntity.cs:44-74`) and
+`GetChildOrNotFound<TChild, TChildId>` (find an *active*, non-soft-deleted child by id or return an
+[`Error.NotFound`](group-01-result-error-handling.md#error) failure,
+`AuditableAggregateRootEntity.cs:87-104`). Only aggregate roots raise domain events, and that is how
+the persistence layer knows where to look. This rung is the clearest [Rubric §4, Domain-Driven Design]
+and [Rubric §6, CQRS & Event-Driven] expression in the codebase: invariants are enforced *inside* the
+boundary, and state changes are announced as events rather than leaked as side effects.
 
 ## How a domain event leaves an aggregate
 
 The runtime flow ties this group to the events/outbox group. A command handler loads an aggregate,
-calls a business method, and that method calls `AddDomainEvent(...)`, the event sits in the aggregate's
-private list, doing nothing yet. When the handler saves, `SaveChangesAsync` (in
-[`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext)) walks every tracked
-[`IAggregateRoot`](#iaggregateroot), stamps audit fields, serializes the pending
-[`IDomainEvent`](group-04-events-outbox.md#idomainevent)s into
+calls a business method, and that method calls `AddDomainEvent(...)`; the event sits in the aggregate's
+private list, doing nothing yet. On save, EF Core interceptors take over.
+[`DomainEventSaveChangesInterceptor`](group-07-persistence-ef-core.md#domaineventsavechangesinterceptor)
+captures every tracked [`IAggregateRoot`](#iaggregateroot) via
+`context.ChangeTracker.Entries<IAggregateRoot>()`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:145`),
+serializes the pending [`IDomainEvent`](group-04-events-outbox.md#idomainevent)s into
 [`OutboxMessage`](group-04-events-outbox.md#outboxmessage) rows **in the same transaction** as the data,
-commits, dispatches in-process, then calls `ClearDomainEvents()` so nothing is delivered twice. The
-[`DomainEntityState`](#domainentitystate) enum (`Added`/`Updated`/`Deleted`) is the small vocabulary an
+then dispatches the local events in process and calls `ClearDomainEvents()` on each captured aggregate
+so nothing is delivered twice (`DomainEventSaveChangesInterceptor.cs:229-257`). Inside a transactional
+command the dispatch is deferred until after commit and re-queued through a `DeferredDispatch` record
+(`DomainEventSaveChangesInterceptor.cs:212-213`), so a handler never acts on state that could still roll
+back. The [`DomainEntityState`](#domainentitystate) enum (`Unchanged`/`Added`/`Updated`/`Deleted`, with
+explicit numeric values at
+`MMCA.Common/Source/Core/MMCA.Common.Domain/Enums/DomainEntityState.cs:9-12`) is the small vocabulary an
 event uses to say *what kind* of change happened. The aggregate base is the producer end of the
 at-least-once outbox pipeline (ADR-003); the consumer end lives in
 [Group 04](group-04-events-outbox.md).
@@ -84,74 +111,135 @@ at-least-once outbox pipeline (ADR-003); the consumer end lives in
 
 The second family models concepts with **no identity**: two `Money(10, USD)` are equal because their
 values match, not because they are the same row. [`ValueObject`](#valueobject) is the cheapest possible
-base, `public abstract record ValueObject;`, so every value object inherits compiler-generated
-structural equality and immutability for free (the canonical Value Object teaching is in
-[primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to)).
+base, `public abstract record ValueObject;`
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/ValueObject.cs:8`), so every value object
+inherits compiler-generated structural equality and immutability for free (the canonical Value Object
+teaching is in [primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to)).
 
 The shared shape across all of them is the **private-constructor + static `Create` factory returning
 [`Result<T>`](group-01-result-error-handling.md#result)** idiom: you cannot `new` a value object, and
 the only way in runs through validation, so an invalid `Email`, `Money`, `Address`, or `DateRange`
 simply cannot be constructed. The validation logic itself is factored out into static *invariants*
-classes, [`AddressInvariants`](#addressinvariants), [`EmailInvariants`](#emailinvariants),
-[`PhoneNumberInvariants`](#phonenumberinvariants), which also publish the `MaxLength` constants that EF
-entity configurations and FluentValidation validators reuse, so the field-length rules have **one source
-of truth**. [`CommonInvariants`](#commoninvariants) is the reusable lower layer that module-specific
-invariants delegate to (`EnsureStringIsNotEmpty`, `EnsureStringMaxLength`, `EnsureIdIsNotDefault`,
-`EnsureBytesAreNotEmpty`). This whole family is the [Rubric §4, Domain-Driven Design] and [Rubric §1,
-SOLID] (the factory enforces invariants; invariants are a single-responsibility unit) story.
+classes, [`AddressInvariants`](#addressinvariants)
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/AddressInvariants.cs:9`),
+[`EmailInvariants`](#emailinvariants)
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/EmailInvariants.cs:11`), and
+[`PhoneNumberInvariants`](#phonenumberinvariants)
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/PhoneNumberInvariants.cs:11`), which also
+publish the length constants that EF entity configurations and FluentValidation validators reuse
+(`Email` at 256 characters, `EmailInvariants.cs:14`; `PhoneNumber` between 7 and 20,
+`PhoneNumberInvariants.cs:14-17`; the six address field limits at `AddressInvariants.cs:12-27`), so the
+field-length rules have **one source of truth**. [`CommonInvariants`](#commoninvariants)
+(`MMCA.Common/Source/Core/MMCA.Common.Domain/Invariants/CommonInvariants.cs:10`) is the reusable lower
+layer that module-specific invariants delegate to: `EnsureStringIsNotEmpty`, `EnsureStringMaxLength`,
+`EnsureIdIsNotDefault<TId>`, and `EnsureBytesAreNotEmpty` (`CommonInvariants.cs:21-70`). Each returns a
+`Result`, and the calling invariants class folds them together with `Result.Combine` so one call reports
+every broken rule at once (`AddressInvariants.cs:40`). This whole family is the [Rubric
+§4, Domain-Driven Design] and [Rubric §1, SOLID] (the factory enforces invariants; invariants are a
+single-responsibility unit) story.
 
 The concrete value objects split into a few patterns worth knowing up front:
 
-- **Owned-type composites**: [`Address`](#address) and [`Money`](#money) are stored by EF as `OwnsOne`
-  nested columns; they carry `[DataContract]`/`[DataMember(Order = …)]` to pin the serialization shape.
-  `Money` is the richest: it pairs a `decimal Amount` with a [`Currency`](#currency), defines `+`/`*`
-  operators *and* a `Result`-returning `Add`, and treats `Currency.None` as an additive identity so
-  `Money.Zero()` works as an accumulator seed regardless of the eventual currency.
-- **Closed enumeration**: [`Currency`](#currency) is a record with a private constructor and a fixed
-  `All` set (`Usd`, `Eur`, plus the internal `None` sentinel); `FromCode` is the only public way to get
-  one, and [`CurrencyJsonConverter`](#currencyjsonconverter) serializes it as its bare ISO-4217 code on
-  the wire (and rejects unknown codes on read).
-- **Converted scalars**: [`Email`](#email) and [`PhoneNumber`](#phonenumber) are stored via EF
+- **Owned-type composites**: [`Address`](#address)
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Address.cs:16`) and [`Money`](#money)
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Money.cs:18`) are stored by EF as `OwnsOne`
+  nested columns; both carry `[DataContract]` with ordered `[DataMember(Order = n)]` properties to pin
+  the serialization shape (`Address.cs:15-40`, `Money.cs:17-32`). `Address` requires only
+  `AddressLine1` and leaves the other five fields optional for international formats. `Money` is the
+  richest: it pairs a `decimal Amount` with a [`Currency`](#currency), defines `+` and `*` operators
+  *and* a `Result`-returning `Add` (`Money.cs:68-102`), and treats `Currency.None` as an additive
+  identity so `Money.Zero()` works as an accumulator seed regardless of the eventual currency
+  (`Money.cs:115-126`). Note the asymmetry worth remembering: the `+` operator *throws*
+  `InvalidOperationException` on a currency mismatch (`Money.cs:73`) while `Add` returns a
+  `CurrencyMismatch` failure, so prefer `Add` in domain code.
+- **Closed enumeration**: [`Currency`](#currency)
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Currency.cs:14`) is a record with a private
+  constructor and a fixed `All` set of exactly `Usd` and `Eur` (`Currency.cs:54-58`), plus an
+  `internal` `None` sentinel that is deliberately *not* in `All` and never reaches API consumers
+  (`Currency.cs:23`). `FromCode` is the only public way to get one and matches case-insensitively
+  (`Currency.cs:41-51`), and [`CurrencyJsonConverter`](#currencyjsonconverter) (`Currency.cs:65`)
+  serializes it as its bare ISO-4217 code on the wire, throwing a `JsonException` on an unknown code
+  when reading (`Currency.cs:68-83`).
+- **Converted scalars**: [`Email`](#email)
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Email.cs:13`) and
+  [`PhoneNumber`](#phonenumber)
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/PhoneNumber.cs:13`) are stored via EF
   `HasConversion` (not `OwnsOne`), so the column stays a flat `nvarchar`. Both normalize on creation
-  (`Email` lowercases; `PhoneNumber` trims) and expose an implicit `string` conversion for ergonomics.
-- **Interval pairs**: [`DateRange`](#daterange) (date-only) and [`DateTimeRange`](#datetimerange)
-  (full precision) are near-identical: a validated start/end pair with `Overlaps`, `Contains`,
-  `Deconstruct`, and a length/duration accessor; `Create` rejects `end < start`.
+  (`Email` trims then lowercases with `ToLowerInvariant`, `Email.cs:29-36`; `PhoneNumber` trims,
+  `PhoneNumber.cs:33`) and expose an implicit `string` conversion plus a `ToString` override for
+  ergonomics (`Email.cs:42-45`, `PhoneNumber.cs:38-41`).
+- **Interval pairs**: [`DateRange`](#daterange)
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/DateRange.cs:9`, `DateOnly` based) and
+  [`DateTimeRange`](#datetimerange)
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/DateTimeRange.cs:10`, full precision) are
+  near-identical: a validated start/end pair with `Overlaps`, `Contains`, `Deconstruct`, and a
+  length/duration accessor (`LengthInDays` at `DateRange.cs:38`, `Duration` at `DateTimeRange.cs:39`);
+  `Create` rejects `end < start` (`DateRange.cs:30-35`). Read the boundary rules carefully: `Contains`
+  is inclusive on both ends while `Overlaps` compares half-open (`DateRange.cs:46-56`).
 
 ## Governance markers, metadata that other layers act on
 
 The last family is tiny attributes and helpers that carry *intent* the rest of the stack reads
-reflectively. [`PiiAttribute`](#piiattribute) tags a property as data-subject PII; two mechanisms watch
-for it, an architecture fitness test asserts any entity with a `[Pii]` property also implements
-[`IAnonymizable`](#ianonymizable) (so every piece of personal data has an erasure path), and a logging
-destructuring policy masks marked members so PII never reaches structured logs. [`IAnonymizable`](#ianonymizable)
-itself defines the erasure contract, an idempotent `Anonymize()` returning
-[`Result`](group-01-result-error-handling.md#result), that an application-layer handler invokes to
-overwrite personal fields in place while keeping the row for referential integrity. Together these are
-the [Rubric §11, Security] and [Rubric §30, Compliance/Privacy/Data Governance] story, and they are
-why soft-delete and erasure are *different* mechanisms (ADR-005): soft-delete hides a row but keeps its
-data; anonymize destroys the data but keeps the row.
+reflectively. [`PiiAttribute`](#piiattribute)
+(`MMCA.Common/Source/Core/MMCA.Common.Domain/Attributes/PiiAttribute.cs:19`) tags a property as
+data-subject PII, and it is a property-only, non-inherited, single-use attribute (`PiiAttribute.cs:18`).
+Two governance mechanisms rely on the marker. First, an architecture fitness test asserts that any
+entity declaring a `[Pii]` property also implements [`IAnonymizable`](#ianonymizable), so every piece of
+personal data has an erasure path (`PiiConventionTests`, driven by the shared `PiiConventionTestsBase`,
+at `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/PiiConventionTests.cs:13`; the scan is
+structurally vacuous inside the framework itself because no data-subject type lives in
+`MMCA.Common.Domain`, and its own doc comment says so). Second, [`PiiRedactor`](#piiredactor)
+(`MMCA.Common/Source/Core/MMCA.Common.Domain/Privacy/PiiRedactor.cs:24`) is the redaction half: it
+reflects over an object's public readable properties and replaces every `[Pii]` value wholesale with the
+`"[REDACTED]"` token (`PiiRedactor.cs:27`, `PiiRedactor.cs:42-57`), offering `Redact` (a property map),
+`RedactToString` (a single-line rendering, `PiiRedactor.cs:65`), and `HasPii` (a type probe,
+`PiiRedactor.cs:98`). Its per-type reflection metadata is cached in a `ConcurrentDictionary` of
+[`RedactableProperty`](#redactableproperty) descriptors (`PiiRedactor.cs:31`, `PiiRedactor.cs:112-121`),
+and a property getter that throws is caught and rendered as `"[unreadable]"` so a logging call site can
+never be broken by redaction (`PiiRedactor.cs:129-140`). Important scope note: `PiiRedactor` is an
+**opt-in helper you call**, not an automatic logging pipeline. Outside its own unit and fitness tests
+there is no production call site in `MMCA.Common` or `MMCA.ADC` today; the framework's stated posture is
+to log scalar identifiers rather than whole entities, and to route an entity through the redactor when
+one must be logged (`PiiRedactor.cs:10-16`).
 
-[`IdValueGeneratedAttribute`](#idvaluegeneratedattribute) marks an entity whose id the database
-generates (SQL Server `IDENTITY`); factory methods consult it at runtime through
-[`EntityTypeExtensions`](#entitytypeextensions)'s `IsIdValueGenerated` (a C# `extension(Type)` member) to
-decide whether to assign an explicit id or leave it `default` for the database to fill. Finally,
-[`DomainHelper`](#domainhelper) is the culture-invariant string→identifier parser controllers use to turn
-route parameters into strongly-typed ids without coupling to a concrete id type, its
-`CultureInfo.InvariantCulture` parsing is also the codebase's headline [Rubric §27,
-Internationalization] decision (deliberate culture-invariance where culture would otherwise introduce
-bugs; see [primer §6](00-primer.md#6-the-34-category-architecture-evaluation-lens)).
+[`IAnonymizable`](#ianonymizable)
+(`MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IAnonymizable.cs:22`) defines the erasure
+contract itself: an idempotent `Anonymize()` returning
+[`Result`](group-01-result-error-handling.md#result) (`IAnonymizable.cs:30`) that an application-layer
+handler invokes to overwrite personal fields in place while keeping the row for referential integrity
+and audit history. Together these are the [Rubric §11, Security] and [Rubric §30,
+Compliance/Privacy/Data Governance] story, and they are why soft-delete and erasure are *different*
+mechanisms (ADR-005, cited at `IAnonymizable.cs:19`): soft-delete hides a row but keeps its data,
+anonymize destroys the data but keeps the row.
+
+[`IdValueGeneratedAttribute`](#idvaluegeneratedattribute)
+(`MMCA.Common/Source/Core/MMCA.Common.Domain/Attributes/IdValueGeneratedAttribute.cs:9`) marks a class
+whose id the database generates (SQL Server `IDENTITY`); factory methods consult it at runtime through
+[`EntityTypeExtensions`](#entitytypeextensions)'s `IsIdValueGenerated`, a C# `extension(Type)` member
+that is a one-line `GetCustomAttribute` probe
+(`MMCA.Common/Source/Core/MMCA.Common.Domain/Extensions/EntityTypeExtensions.cs:11-20`), to decide
+whether to assign an explicit id or leave it `default` for the database to fill. Finally,
+[`DomainHelper`](#domainhelper)
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Extensions/DomainHelper.cs:8`) is the culture-invariant
+`string?`-to-identifier parser controllers use to turn route parameters into strongly-typed ids without
+coupling to a concrete id type; it handles `string`, `Guid`, `int`, `long`, `ulong`, `bool`, and enums,
+falls back to the type default on unparseable input, and throws `FormatException` for an unsupported
+identifier type (`DomainHelper.cs:21-63`). Its `CultureInfo.InvariantCulture` parsing is also the
+codebase's headline [Rubric §27, Internationalization] decision (deliberate culture-invariance where
+culture would otherwise introduce bugs; see
+[primer §6](00-primer.md#6-the-34-category-architecture-evaluation-lens)).
 
 ## Where this group sits
 
-Everything above is consumed by the layers that follow: every module entity (e.g. the
+Everything above is consumed by the layers that follow: every module entity (for example the
 [Conference domain](group-17-conference-domain.md), Engagement, and Identity modules) derives from one
-of the three entity base classes; the
-persistence group ([Group 07](group-07-persistence-ef-core.md)) maps value objects and stamps the audit
-fields these types declare; the events/outbox group ([Group 04](group-04-events-outbox.md)) drains the
-domain events aggregates raise; and the CQRS handlers throughout the application return the
-[`Result`](group-01-result-error-handling.md#result) values these factories produce. Read this group as
-the *grammar* of the domain, the rest of the guide is the sentences written in it.
+of the three entity base classes; the persistence group ([Group 07](group-07-persistence-ef-core.md))
+maps value objects, stamps the audit fields these types declare, and applies the global soft-delete
+query filter keyed off [`IAuditableEntity`](#iauditableentity); the events/outbox group
+([Group 04](group-04-events-outbox.md)) drains the domain events aggregates raise; and the CQRS handlers
+throughout the application return the [`Result`](group-01-result-error-handling.md#result) values these
+factories produce. Read this group as the *grammar* of the domain: the rest of the guide is the
+sentences written in it.
 
 ### DomainEntityState
 > MMCA.Common.Domain · `MMCA.Common.Domain.Enums` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Enums/DomainEntityState.cs:7` · Level 0 · enum
@@ -160,14 +248,24 @@ the *grammar* of the domain, the rest of the guide is the sentences written in i
   `Updated`, `Deleted`.
 - **Depends on**: nothing first-party.
 - **Concept**: a small payload enum for domain events. `[Rubric §6, CQRS & Event-Driven]` assesses
-  whether events carry enough context to be acted on; when an aggregate raises an event about a child,
-  this enum communicates *what kind* of change happened so consumers can react appropriately.
+  whether events carry enough context to be acted on; when an aggregate raises an event about itself or
+  a child, this enum communicates *what kind* of change happened so handlers can filter and react
+  appropriately.
 - **Walkthrough**: four explicitly-numbered members (`DomainEntityState.cs:9-12`); `Unchanged = 0` so
   the default value is the no-op state.
 - **Why it's built this way**: explicit numeric values make the enum stable across serialization (a
-  reordering won't change the wire meaning), relevant since these may travel inside events.
-- **Where it's used**: included in domain-event payloads that report per-child changes (see
-  [`IDomainEvent`](group-04-events-outbox.md#idomainevent) and the event base classes in G04).
+  reordering will not change the wire meaning), relevant since these values travel inside events. The
+  enum also collapses what would otherwise be three near-identical event types per entity
+  (`Added`/`Updated`/`Deleted`) into one, which is exactly the rationale recorded on
+  [`EntityChangedEvent<TIdentifierType>`](group-04-events-outbox.md#entitychangedeventtidentifiertype)
+  (`MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/EntityChangedEvent.cs:8-12`).
+- **Where it's used**: it is the `State` member of
+  [`EntityChangedEvent<TIdentifierType>`](group-04-events-outbox.md#entitychangedeventtidentifiertype)
+  (`EntityChangedEvent.cs:25`), so every derived per-entity change event carries it; aggregates pass
+  `DomainEntityState.Added` from factories, `Updated` from mutators and `Deleted` from `Delete()` (for
+  example `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/Category.cs:72,95,116`),
+  and handlers short-circuit on it (for example
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/DomainEventHandlers/SessionCreatedHandler.cs:17`).
 
 ### DomainHelper
 > MMCA.Common.Shared · `MMCA.Common.Shared.Extensions` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Extensions/DomainHelper.cs:8` · Level 0 · class (static)
@@ -176,21 +274,23 @@ the *grammar* of the domain, the rest of the guide is the sentences written in i
   `string?`, converting a route-parameter string into a strongly-typed identifier.
 - **Depends on**: BCL only (`System.Globalization`).
 - **Concept introduced, C# `extension(T)` members.** `[Rubric §15, Best Practices & Code Quality]`
-  (assesses idiomatic, modern-language use). This is the first concrete sighting of the C# 14 preview
+  (assesses idiomatic, modern-language use). This is the first concrete sighting of the C# preview
   feature described in
-  [primer §4](00-primer.md#c-extensiont-types--read-this-once). The block
+  [primer §4](00-primer.md#c-extensiont-types-read-this-once). The block
   `extension(string? id) { … }` (`DomainHelper.cs:13`) means any nullable string can call
   `someId.Parse<int>()`. The receiver `id` is the "this" value.
 - **Walkthrough**
   - `Parse<TIdentifier>()` (`DomainHelper.cs:21`): special-cases `string` (returns the value or
-    empty), short-circuits null/whitespace to `default`, then delegates to `ParseNonEmpty`.
+    empty, lines 25-26), short-circuits null/whitespace to `default` (lines 28-29), then delegates to
+    `ParseNonEmpty` (line 31).
   - `ParseNonEmpty<TIdentifier>` (line 37) and `ParseOtherTypes<TIdentifier>` (line 52): a chain of
-    `typeof(TIdentifier) == typeof(Guid|int|long|ulong|bool|enum)` checks using culture-invariant
-    `TryParse`; an unsupported type throws `FormatException` (line 63). Splitting into two private
-    methods keeps each within the analyzers' cyclomatic-complexity budget.
+    `typeof(TIdentifier) == typeof(Guid|int|long|ulong|bool)` plus `type.IsEnum` checks (lines 40-61)
+    using culture-invariant `TryParse`; an unsupported type throws `FormatException` (line 63). Each
+    failed `TryParse` falls back to the type's zero/empty value rather than throwing. Splitting into
+    two private methods keeps each within the analyzers' cyclomatic-complexity budget.
   - Note the `#pragma warning disable IDE0051` (lines 36-38) around `ParseNonEmpty` with a comment
-    explaining it's a false positive: the analyzer can't see that the method is called from inside the
-    `extension` block. A justified, scoped suppression.
+    (line 35) explaining it is a false positive: the analyzer cannot see that the method is called from
+    inside the `extension` block. A justified, scoped suppression.
 - **Why it's built this way**: controllers receive ids as `string` route values; this converts them
   to the entity's id alias type **without** the controller coupling to a specific id type, generic
   over `TIdentifier`. Culture-invariant parsing avoids locale-dependent bugs and is one of the few
@@ -205,7 +305,7 @@ the *grammar* of the domain, the rest of the guide is the sentences written in i
 
 - **What it is**: the contract for entities that support **soft-delete** and **audit tracking**:
   `IsDeleted`, `CreatedOn/By`, `LastModifiedOn/By`.
-- **Depends on**: nothing first-party (uses the `UserIdentifierType` alias → `int`).
+- **Depends on**: nothing first-party (uses the `UserIdentifierType` alias).
 - **Concept introduced, soft-delete + centralized audit.** `[Rubric §8, Data Architecture]`
   (assesses soft-delete + global query filters and audit fields stamped centrally, not per-handler).
   Entities are never hard-deleted; `IsDeleted` (`IAuditableEntity.cs:11`) flips to `true` and EF global
@@ -213,9 +313,9 @@ the *grammar* of the domain, the rest of the guide is the sentences written in i
   `LastModifiedOn?` line 20, `LastModifiedBy?` line 23) are **read-only from the domain's view**, the
   doc comment (lines 4-7) states infrastructure populates them in `SaveChangesAsync` via EF's
   `ChangeTracker`. So the domain *declares* the audit contract; the *stamping* happens centrally in
-  one interceptor (the `AuditSaveChangesInterceptor` in G07). This is also `[Rubric §30, Compliance,
-  Privacy & Data Governance]` (audit trail supports accountability) and ties to ADR-005 (soft-delete
-  vs. erasure).
+  one interceptor ([`AuditSaveChangesInterceptor`](group-07-persistence-ef-core.md#auditsavechangesinterceptor)).
+  This is also `[Rubric §30, Compliance, Privacy & Data Governance]` (an audit trail supports
+  accountability) and ties to ADR-005 (soft-delete vs. erasure).
 - **Walkthrough**: five getter-only properties. `CreatedBy` is `UserIdentifierType`;
   `LastModifiedBy` is `UserIdentifierType?` (nullable, null until first modified, matching
   `LastModifiedOn?`). No setters at all: the domain can *read* audit state but only infrastructure
@@ -223,10 +323,12 @@ the *grammar* of the domain, the rest of the guide is the sentences written in i
 - **Why it's built this way**: making audit a contract (not a base-class detail) lets the EF
   interceptor recognize "any `IAuditableEntity`" and stamp it uniformly; centralizing it is exactly the
   cross-cutting discipline §8/§10 reward. The identifier alias keeps "who" strongly named.
-- **Where it's used**: implemented by [`AuditableBaseEntity<TIdentifierType>`](#auditablebaseentitytidentifiertype);
-  recognized by the audit `SaveChanges` interceptor and the soft-delete query filter (G07). Its
-  `IsDeleted` flag is the counterpart that [`IAnonymizable`](#ianonymizable) deliberately does *not*
-  satisfy on its own (see ADR-005).
+- **Where it's used**: implemented by [`AuditableBaseEntity<TIdentifierType>`](#auditablebaseentitytidentifiertype)
+  (`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:13`, with private
+  setters populated by EF, lines 20-31); recognized by the audit `SaveChanges` interceptor and the
+  soft-delete query filter (G07). Its `IsDeleted` flag is the counterpart that
+  [`IAnonymizable`](#ianonymizable) deliberately does *not* satisfy on its own (see ADR-005, and the
+  explicit statement of that gap in `IAnonymizable.cs:11-13`).
 
 ### IBaseEntity<TIdentifierType>
 > MMCA.Common.Domain · `MMCA.Common.Domain.Interfaces` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IBaseEntity.cs:7` · Level 0 · interface
@@ -235,7 +337,7 @@ the *grammar* of the domain, the rest of the guide is the sentences written in i
   identifier.
 - **Depends on**: nothing first-party.
 - **Concept introduced, entity identity.** `[Rubric §4, DDD]` (assesses aggregates/entities with
-  clear identity). An **entity** (unlike a [value object](#valueobject)) *has* identity, it's the same
+  clear identity). An **entity** (unlike a [value object](#valueobject)) *has* identity, it is the same
   thing across changes because its `Id` is the same. This interface is the minimal expression of that:
   `TIdentifierType Id { get; init; }` with `where TIdentifierType : notnull` (`IBaseEntity.cs:7-11`).
 - **Walkthrough**: one `init` property. `init` (set at construction, immutable after) encodes "an
@@ -254,7 +356,7 @@ the *grammar* of the domain, the rest of the guide is the sentences written in i
 ### IdValueGeneratedAttribute
 > MMCA.Common.Domain · `MMCA.Common.Domain.Attributes` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Attributes/IdValueGeneratedAttribute.cs:9` · Level 0 · class (sealed attribute)
 
-- **What it is**: marks an entity whose `Id` is **generated by the database** (e.g. SQL Server
+- **What it is**: marks an entity whose `Id` is **generated by the database** (for example SQL Server
   `IDENTITY`) rather than assigned by the application.
 - **Depends on**: `System.Attribute` (BCL) only.
 - **Concept introduced, attribute-driven behavior in the domain.** `[Rubric §8, Data Architecture]`
@@ -266,13 +368,60 @@ the *grammar* of the domain, the rest of the guide is the sentences written in i
   this is a *domain-level* attribute (no EF reference), so the key-generation policy lives with the
   entity, not in infrastructure.
 - **Walkthrough**: `[AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]`
-  (line 8); the attribute body is empty (`sealed class IdValueGeneratedAttribute : Attribute;`, line 9)
- , it's a pure marker.
-- **Why it's built this way**: `Inherited = false` means a subclass doesn't silently inherit
+  (line 8); the attribute body is empty (`sealed class IdValueGeneratedAttribute : Attribute;`, line
+  9), it is a pure marker.
+- **Why it's built this way**: `Inherited = false` means a subclass does not silently inherit
   database-generated semantics; the marker keeps key-generation policy *declarative* and co-located with
   the entity.
 - **Where it's used**: read by [`EntityTypeExtensions`](#entitytypeextensions) (Level 1) and by entity
   factory methods deciding whether to set `Id`.
+
+### IRowVersioned
+> MMCA.Common.Domain · `MMCA.Common.Domain.Interfaces` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IRowVersioned.cs:11` · Level 0 · interface
+
+- **What it is**: a one-member contract for any entity that carries a database-managed
+  optimistic-concurrency token, exposing `byte[] RowVersion` (`IRowVersioned.cs:15`).
+- **Depends on**: nothing first-party; the property type is BCL `byte[]`, EF Core's native
+  `rowversion` shape.
+- **Concept introduced, optimistic concurrency as an entity-shape contract.** `[Rubric §8, Data
+  Architecture]` (assesses concurrency control on writes) and `[Rubric §9, API & Contract Design]`
+  (assesses how a stale-write conflict is surfaced to a client). Optimistic concurrency means the
+  database does not lock a row while a user edits it; instead every row carries a version token, the
+  client sends back the token it last read, and the `UPDATE` includes it in the `WHERE` clause. If
+  someone else changed the row in between, zero rows match, EF Core raises
+  `DbUpdateConcurrencyException`, and the API maps that to `409 Conflict`
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:166-169`).
+  The interesting design point is *why the token needs its own interface at all*: the repository's
+  aggregate-typed overload `SetOriginalRowVersion(TEntity, byte[]?)` (`IRepository.cs:173`) can only
+  reach the aggregate **root**, because `TEntity` is the root type. A child entity edit (a
+  `ProductVariant` under a `Product`) would otherwise need a second generic parameter for the child's
+  own identifier type. `IRowVersioned` erases that identifier type: the child overload
+  (`IRepository.cs:185`) accepts any `IRowVersioned`, so child-level edits get the same stale-token
+  protection as the root. The doc comment states this rationale and cites ADR-035
+  (`IRowVersioned.cs:3-10`).
+- **Walkthrough**: one getter, `byte[] RowVersion` (`IRowVersioned.cs:15`), wrapped in a scoped
+  `#pragma warning disable CA1819` (lines 14-16) with the justification that `byte[]` is EF Core's
+  native rowversion shape and mirrors `AuditableBaseEntity.RowVersion`. The interface is getter-only:
+  the domain never assigns the token, the database does.
+- **Why it's built this way**: an identifier-type-free contract is the smallest change that lets one
+  repository method serve both roots and children; the alternative (a second generic parameter, or a
+  non-generic `object` overload) would either leak type parameters through the whole repository surface
+  or lose type safety. ADR-035 records the decision.
+- **Where it's used**: implemented by
+  [`AuditableBaseEntity<TIdentifierType>`](#auditablebaseentitytidentifiertype)
+  (`MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:13`), whose
+  `RowVersion` property is a private-set `byte[]` defaulting to `[]` (`AuditableBaseEntity.cs:39`), so
+  every auditable entity (aggregate roots **and** their children) satisfies it. Consumed by
+  [`IRepository<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#irepositorytentity-tidentifiertype)
+  (`IRepository.cs:185`) and implemented in
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:84-93`,
+  which casts the child to `object`, walks to `_context.Entry(...).Property(nameof(AuditableBaseEntity<>.RowVersion))`
+  and assigns `OriginalValue`; the decorator forwards it
+  (`.../EFRepositoryDecorator.cs:45`).
+- **Caveats / not-in-source**: both `SetOriginalRowVersion` overloads are a **no-op** when the supplied
+  token is null or empty (`EFRepository.cs:75-76,87-88`), which the doc comment attributes to legacy
+  clients and first writes (`IRepository.cs:181`); a client that omits the token therefore silently
+  loses the conflict check rather than being rejected.
 
 ### PiiAttribute
 > MMCA.Common.Domain · `MMCA.Common.Domain.Attributes` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Attributes/PiiAttribute.cs:19` · Level 0 · class (sealed attribute)
@@ -290,31 +439,36 @@ the *grammar* of the domain, the rest of the guide is the sentences written in i
   separate anonymize path, the exact §30 red flag this avoids; ADR-005); and (2) [`PiiRedactor`](#piiredactor),
   the **redaction half** of the contract (`PiiAttribute.cs:10-12`), masks `[Pii]`-marked members with
   the literal `[REDACTED]` so an entity carrying personal data can be written to a structured log or
-  telemetry attribute without the data subject's PII leaking in clear text. Both halves now exist in
+  telemetry attribute without the data subject's PII leaking in clear text. Both halves exist in
   source: mechanism (1) is `[Rubric §34, Architecture Governance & Documentation]`, a rule enforced by
   an executable fitness function rather than prose; mechanism (2) ([`PiiRedactor`](#piiredactor)) is a
-  real, unit-tested helper. ⚠️ The redactor is **not auto-wired into a logging/destructuring policy**
-  (verified by search: only its own tests and definition reference it, no Serilog sink or call site
-  routes entities through it). So the `[Rubric §13]` "PII out of logs" control is *available and
-  tested* but *opt-in per call site*, not an automatic, enforced pipeline stage.
+  real, unit-tested helper. The redactor is **not auto-wired into a logging/destructuring policy**
+  (verified by search: only the attribute's own doc comment, the redactor definition, and three test
+  files reference it, no Serilog sink or production call site routes entities through it). So the
+  `[Rubric §13]` "PII out of logs" control is *available and tested* but *opt-in per call site*, not an
+  automatic, enforced pipeline stage.
 - **Walkthrough**: `[AttributeUsage(AttributeTargets.Property, Inherited = false, AllowMultiple =
   false)]` (line 18); empty body (`sealed class PiiAttribute : Attribute;`, line 19). The doc comment
   (lines 14-16) adds important *judgement*: apply only to genuine data-subject PII (an account holder's
-  email/name), **not** to public content that merely contains a name (e.g. a public conference speaker
-  profile), a nuance that prevents over-tagging.
+  email/name), **not** to public content that merely contains a name (for example a public conference
+  speaker profile, whose erasure obligation flows through the linked user account), a nuance that
+  prevents over-tagging.
 - **Why it's built this way**: marking PII declaratively at the property lets both the erasure fitness
   test and [`PiiRedactor`](#piiredactor) find it automatically by reflection; the alternative
   (a hand-maintained list of which fields are personal) drifts out of sync with the model.
-- **Where it's used**: applied to three properties of the Identity `User` aggregate
-  (`Email`/`FirstName`/`LastName`,
-  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:19,23,27`; `User` implements
-  [`IAnonymizable`](#ianonymizable), `:16`). The detection now lives **once** in the shared
-  `MMCA.Common.Testing.Architecture` package: the `EntitiesWithPiiImplementAnonymizable` rule
-  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Governance.cs:6`)
+- **Where it's used**: applied to four properties of the Identity `User` aggregate: `Email`,
+  `FirstName`, `LastName` and `AvatarUrl`
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:21,25,29,94`); `User`
+  implements [`IAnonymizable`](#ianonymizable) (`User.cs:18`). The detection lives **once** in the
+  shared `MMCA.Common.Testing.Architecture` package: the `EntitiesWithPiiImplementAnonymizable` rule
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Governance.cs:11`)
   scans every Domain-layer type for a `[Pii]` property via the `HasPiiProperty` helper (same file,
-  lines 43-45), which matches by attribute type *name* (`a.GetType().Name == "PiiAttribute"`), not a
+  lines 48-50), which matches by attribute type *name* (`a.GetType().Name == "PiiAttribute"`), not a
   typed `GetCustomAttribute<PiiAttribute>()`, because the rule library does not reference the Domain
-  attribute type. Each repo then supplies a thin sealed subclass of `PiiConventionTestsBase`
+  attribute type. The `IAnonymizable` side, by contrast, is matched on the **full** name
+  `MMCA.Common.Domain.Interfaces.IAnonymizable` (`ArchitectureRules.Governance.cs:7,16`) so a
+  same-named local interface cannot satisfy the rule. Each repo then supplies a thin sealed subclass of
+  `PiiConventionTestsBase`
   (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/PiiConventionTestsBase.cs:7`)
   that just passes its `IArchitectureMap`:
   `MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/PiiConventionTests.cs:13` (the *scan*
@@ -324,106 +478,9 @@ the *grammar* of the domain, the rest of the guide is the sentences written in i
   (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/PiiErasureContractFitnessTests.cs:19`),
   which forces a representative `[Pii]`-carrying sample through both halves end to end (recognized and
   masked by [`PiiRedactor`](#piiredactor), then erased idempotently via [`IAnonymizable`](#ianonymizable)).
-  The **redaction** half is [`PiiRedactor`](#piiredactor), which reads `[Pii]` reflectively via
+  The **redaction** half reads `[Pii]` reflectively via
   `IsDefined(typeof(PiiAttribute), inherit: false)`
-  (`MMCA.Common/Source/Core/MMCA.Common.Domain/Privacy/PiiRedactor.cs:119`); **no logging/destructuring
-  policy invokes it automatically**, Serilog is configured in the four ADC service hosts without a
-  PII-aware masking sink, so log-masking is an available helper a call site opts into, not an enforced
-  pipeline stage.
-
-### IAggregateRoot
-> MMCA.Common.Domain · `MMCA.Common.Domain.Interfaces` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IAggregateRoot.cs:9` · Level 1 · interface
-
-- **What it is**: the contract that marks a type as a DDD aggregate root and gives it the ability
-  to accumulate domain events for post-persistence dispatch.
-- **Depends on**: [`IDomainEvent`](group-04-events-outbox.md#idomainevent) (Level 0).
-- **Concept introduced, the Aggregate Root.** `[Rubric §4, DDD]` (aggregates as the sole
-  external-change entry point; transactional consistency boundary). An **aggregate root** owns a
-  cluster of related objects (the aggregate) and is the *only* entity in that cluster that
-  the rest of the system interacts with directly. DDD's rule is: "save or delete as a unit, never
-  reference internal entities from outside". By implementing `IAggregateRoot`, a class declares
-  itself as that transactional boundary. The doc comment (`IAggregateRoot.cs:5-8`) states the
-  contract explicitly: aggregates raise domain events; the infrastructure layer
-  (`ApplicationDbContext`) uses this interface to discover pending events across all tracked
-  aggregates during `SaveChangesAsync`, this is the hook that feeds the
-  [outbox pattern](group-04-events-outbox.md#outboxmessage) (ADR-003).
-- **Walkthrough**: three members (`IAggregateRoot.cs:12-19`):
-  `IReadOnlyCollection<IDomainEvent> DomainEvents { get; }`, the pending event queue (read-only
-  from outside); `void AddDomainEvent(IDomainEvent)`, called by the aggregate's own methods to
-  record that something happened; `void ClearDomainEvents()`, called by infrastructure after the
-  events have been serialized to the outbox. `[Rubric §8, Data Architecture]` (SaveChanges flow):
-  the sequence is aggregate mutates state → calls `AddDomainEvent` → EF saves data + serializes
-  events to outbox in same DB transaction → `ClearDomainEvents()` → dispatcher dispatches
-  in-process copies (for immediate reactions that don't need the outbox).
-- **Why it's built this way**: keeping the event queue behind a read-only collection plus
-  explicit add/clear methods means only the aggregate's own behavior can raise events and only
-  infrastructure can clear them after a successful save, preserving the at-least-once outbox
-  contract (ADR-003).
-- **Where it's used**: implemented by
-  [`AuditableAggregateRootEntity<TIdentifierType>`](#auditableaggregaterootentitytidentifiertype),
-  which adds the `_domainEvents` list and the `AddDomainEvent`/`ClearDomainEvents` implementations;
-  every aggregate in both apps inherits from that. Discovered by the
-  `DomainEventSaveChangesInterceptor` (G07) during persistence.
-
-### PiiRedactor
-> MMCA.Common.Domain · `MMCA.Common.Domain.Privacy` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Privacy/PiiRedactor.cs:24` · Level 1 · class (static)
-
-- **What it is**: a static helper that produces a log- and telemetry-safe view of any object by
-  masking every property marked with [`PiiAttribute`](#piiattribute), replacing each PII value with the
-  literal `[REDACTED]`. It is the **redaction half** of the [`PiiAttribute`](#piiattribute) contract.
-- **Depends on**: [`PiiAttribute`](#piiattribute) (the marker it reads, `PiiRedactor.cs:6,119`); BCL
-  only (`System.Reflection`, `System.Collections.Concurrent`, `System.Collections.ObjectModel`,
-  `System.Text`, `System.Globalization`).
-- **Concept introduced, value-erasing PII redaction for logs/telemetry.** `[Rubric §13, Observability
-  & Operability]` (assesses keeping personal data out of structured logs) and `[Rubric §30,
-  Compliance, Privacy & Data Governance]` (assesses a real data-minimization control, not just an
-  intent). This is the implementation that [`PiiAttribute`](#piiattribute)'s second mechanism refers to.
-  The framework's logging convention is to record scalar identifiers, not whole entities; but when an
-  aggregate that carries a data subject's personal data *must* be written to a structured log or a
-  telemetry attribute, route it through `Redact`/`RedactToString` so the PII never leaves the process
-  in clear text (the rationale is stated in the doc comment, `PiiRedactor.cs:10-22`). Masking is
-  deliberately **value-erasing** rather than truncating or hashing (`PiiRedactor.cs:19-22`): even a
-  value's length or hash can leak information about a data subject, so a `[Pii]` value is replaced
-  wholesale with `RedactedToken`. This is the log-side counterpart to [`IAnonymizable`](#ianonymizable)'s
-  storage-side erasure: together they are the two halves of the §30/ADR-005 story (`[Pii]` says *what*
-  is personal; `PiiRedactor` keeps it out of *logs*; `IAnonymizable` erases it from *storage*).
-- **Walkthrough**
-  - `RedactedToken` (`PiiRedactor.cs:27`): the public `const string = "[REDACTED]"` substituted for
-    every masked value, so callers and tests can assert against one constant. A private
-    `UnreadableToken = "[unreadable]"` (`PiiRedactor.cs:29`) is the fallback for a throwing getter.
-  - `Cache` (`PiiRedactor.cs:31`): a `ConcurrentDictionary<Type, IReadOnlyList<RedactableProperty>>`
-    holding the reflected, per-type property metadata so a hot logging path does not re-run reflection
-    on every call (this is what makes repeated redaction allocation-light).
-  - `Redact(object?)` (`PiiRedactor.cs:42`): the primary entry point. `null` yields the shared empty
-    map (`PiiRedactor.cs:33-34,44-47`); otherwise it walks the cached properties and builds a
-    `property-name → value` dictionary where each PII property is replaced by `RedactedToken` and every
-    other property passes through via `property.Read(value)` (`PiiRedactor.cs:49-56`).
-  - `RedactToString(object?)` (`PiiRedactor.cs:65`): renders a single-line
-    `TypeName { Prop = value, Pii = [REDACTED] }` string for a log-message argument; `null` yields the
-    literal `"null"`, and non-PII scalars are formatted with `CultureInfo.InvariantCulture`
-    (`PiiRedactor.cs:65-90`), keeping the rendering locale-stable (the same culture-invariance discipline
-    as [`DomainHelper`](#domainhelper)).
-  - `HasPii(Type)` (`PiiRedactor.cs:98`): throws on a null `type`, then returns whether the type
-    declares any `[Pii]` property, i.e. whether redaction would mask anything (`PiiRedactor.cs:98-110`).
-  - `GetProperties(Type)` (`PiiRedactor.cs:112`): the cache filler. `Cache.GetOrAdd` runs a `static`
-    lambda that reflects public, instance, readable, non-indexer properties and builds a
-    [`RedactableProperty`](#redactableproperty) for each, recording whether it carries the marker via
-    `p.IsDefined(typeof(PiiAttribute), inherit: false)` (`PiiRedactor.cs:112-121`). The `inherit: false`
-    mirrors [`PiiAttribute`](#piiattribute)'s `Inherited = false`.
-- **Why it's built this way**: a `static` pure helper has no DI dependency, so it can be called from
-  any layer, including a transport edge, without wiring. Per-type caching keeps the logging path cheap;
-  value-erasure (over truncation/hashing) is the conservative §30 choice; and routing personal data
-  through one named gate makes the redaction policy auditable in one place (ADR-005).
-- **Where it's used**: unit-verified by `PiiRedactorTests` (G25) and exercised end to end (composed
-  with [`IAnonymizable`](#ianonymizable)) by `PiiErasureContractFitnessTests`
-  (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/PiiErasureContractFitnessTests.cs:19`).
-  No production logging call site routes entities through it yet, so it is a *ready, tested* control
-  rather than an automatic one (see the caveat on [`PiiAttribute`](#piiattribute)).
-- **Caveats / not-in-source**: redaction is **shallow** (one level): a non-PII property whose value is
-  itself an object with nested `[Pii]` members is read and emitted as-is, not recursively masked. Only
-  public instance properties are inspected (fields and non-public members are ignored). A property
-  getter that throws `TargetInvocationException` yields `[unreadable]` instead of crashing the log call
-  (`PiiRedactor.cs:135-139`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Domain/Privacy/PiiRedactor.cs:119`).
 
 ### RedactableProperty
 > MMCA.Common.Domain · `MMCA.Common.Domain.Privacy` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Privacy/PiiRedactor.cs:123` · Level 0 · class (private sealed, nested)
@@ -445,6 +502,104 @@ the *grammar* of the domain, the rest of the guide is the sentences written in i
 - **Where it's used**: produced and consumed entirely within [`PiiRedactor`](#piiredactor)
   (`GetProperties`, `PiiRedactor.cs:112-121`); it has no independent consumers.
 
+### IAggregateRoot
+> MMCA.Common.Domain · `MMCA.Common.Domain.Interfaces` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IAggregateRoot.cs:9` · Level 1 · interface
+
+- **What it is**: the contract that marks a type as a DDD aggregate root and gives it the ability
+  to accumulate domain events for post-persistence dispatch.
+- **Depends on**: [`IDomainEvent`](group-04-events-outbox.md#idomainevent) (Level 0).
+- **Concept introduced, the Aggregate Root.** `[Rubric §4, DDD]` (aggregates as the sole
+  external-change entry point; transactional consistency boundary). An **aggregate root** owns a
+  cluster of related objects (the aggregate) and is the *only* entity in that cluster that
+  the rest of the system interacts with directly. DDD's rule is: "save or delete as a unit, never
+  reference internal entities from outside". By implementing `IAggregateRoot`, a class declares
+  itself as that transactional boundary. The doc comment (`IAggregateRoot.cs:4-7`) states the
+  contract explicitly: aggregates are the only entities that can raise domain events and they define
+  the transactional consistency boundary; the infrastructure layer (`ApplicationDbContext`) uses this
+  interface to discover pending events across all tracked aggregates during `SaveChangesAsync`, the
+  hook that feeds the [outbox pattern](group-04-events-outbox.md#outboxmessage) (ADR-003).
+- **Walkthrough**: three members (`IAggregateRoot.cs:12-19`):
+  `IReadOnlyCollection<IDomainEvent> DomainEvents { get; }`, the pending event queue (read-only
+  from outside); `void AddDomainEvent(IDomainEvent)`, called by the aggregate's own methods to
+  record that something happened; `void ClearDomainEvents()`, called by infrastructure after the
+  events have been dispatched. `[Rubric §8, Data Architecture]` (SaveChanges flow):
+  the sequence is aggregate mutates state → calls `AddDomainEvent` → EF saves data + serializes
+  events to the outbox in the same DB transaction → `ClearDomainEvents()` → dispatcher dispatches
+  in-process copies (for immediate reactions that do not need the outbox).
+- **Why it's built this way**: keeping the event queue behind a read-only collection plus
+  explicit add/clear methods means only the aggregate's own behavior can raise events and only
+  infrastructure can clear them after a successful save, preserving the at-least-once outbox
+  contract (ADR-003).
+- **Where it's used**: implemented by
+  [`AuditableAggregateRootEntity<TIdentifierType>`](#auditableaggregaterootentitytidentifiertype),
+  which adds the backing list and the `AddDomainEvent`/`ClearDomainEvents` implementations;
+  every aggregate in both apps inherits from that. Discovered by the
+  [`DomainEventSaveChangesInterceptor`](group-07-persistence-ef-core.md#domaineventsavechangesinterceptor)
+  during persistence.
+
+### PiiRedactor
+> MMCA.Common.Domain · `MMCA.Common.Domain.Privacy` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Privacy/PiiRedactor.cs:24` · Level 1 · class (static)
+
+- **What it is**: a static helper that produces a log- and telemetry-safe view of any object by
+  masking every property marked with [`PiiAttribute`](#piiattribute), replacing each PII value with the
+  literal `[REDACTED]`. It is the **redaction half** of the [`PiiAttribute`](#piiattribute) contract.
+- **Depends on**: [`PiiAttribute`](#piiattribute) (the marker it reads, `PiiRedactor.cs:6,119`); BCL
+  only (`System.Reflection`, `System.Collections.Concurrent`, `System.Collections.ObjectModel`,
+  `System.Text`, `System.Globalization`).
+- **Concept introduced, value-erasing PII redaction for logs/telemetry.** `[Rubric §13, Observability
+  & Operability]` (assesses keeping personal data out of structured logs) and `[Rubric §30,
+  Compliance, Privacy & Data Governance]` (assesses a real data-minimization control, not just an
+  intent). This is the implementation that [`PiiAttribute`](#piiattribute)'s second mechanism refers to.
+  The framework's logging convention is to record scalar identifiers, not whole entities; but when an
+  aggregate that carries a data subject's personal data *must* be written to a structured log or a
+  telemetry attribute, route it through `Redact`/`RedactToString` so the PII never leaves the process
+  in clear text (the rationale is stated in the doc comment, `PiiRedactor.cs:10-17`). Masking is
+  deliberately **value-erasing** rather than truncating or hashing (`PiiRedactor.cs:18-23`): even a
+  value's length or hash can leak information about a data subject, so a `[Pii]` value is replaced
+  wholesale with `RedactedToken`. This is the log-side counterpart to [`IAnonymizable`](#ianonymizable)'s
+  storage-side erasure: together they are the two halves of the §30/ADR-005 story (`[Pii]` says *what*
+  is personal; `PiiRedactor` keeps it out of *logs*; `IAnonymizable` erases it from *storage*).
+- **Walkthrough**
+  - `RedactedToken` (`PiiRedactor.cs:27`): the public `const string = "[REDACTED]"` substituted for
+    every masked value, so callers and tests can assert against one constant. A private
+    `UnreadableToken = "[unreadable]"` (`PiiRedactor.cs:29`) is the fallback for a throwing getter.
+  - `Cache` (`PiiRedactor.cs:31`): a `ConcurrentDictionary<Type, IReadOnlyList<RedactableProperty>>`
+    holding the reflected, per-type property metadata so a hot logging path does not re-run reflection
+    on every call (this is what makes repeated redaction allocation-light).
+  - `Redact(object?)` (`PiiRedactor.cs:42`): the primary entry point. `null` yields the shared empty
+    map (`PiiRedactor.cs:33-34,44-47`); otherwise it walks the cached properties and builds an
+    ordinal-comparer `property-name → value` dictionary where each PII property is replaced by
+    `RedactedToken` and every other property passes through via `property.Read(value)`
+    (`PiiRedactor.cs:49-56`).
+  - `RedactToString(object?)` (`PiiRedactor.cs:65`): renders a single-line
+    `TypeName { Prop = value, Pii = [REDACTED] }` string for a log-message argument; `null` yields the
+    literal `"null"` (line 69), and non-PII scalars are formatted with `CultureInfo.InvariantCulture`
+    (`PiiRedactor.cs:84-86`), keeping the rendering locale-stable (the same culture-invariance discipline
+    as [`DomainHelper`](#domainhelper)).
+  - `HasPii(Type)` (`PiiRedactor.cs:98`): throws on a null `type`, then returns whether the type
+    declares any `[Pii]` property, i.e. whether redaction would mask anything (`PiiRedactor.cs:98-110`).
+  - `GetProperties(Type)` (`PiiRedactor.cs:112`): the cache filler. `Cache.GetOrAdd` runs a `static`
+    lambda that reflects public, instance, readable, non-indexer properties and builds a
+    [`RedactableProperty`](#redactableproperty) for each, recording whether it carries the marker via
+    `p.IsDefined(typeof(PiiAttribute), inherit: false)` (`PiiRedactor.cs:112-121`). The `inherit: false`
+    mirrors [`PiiAttribute`](#piiattribute)'s `Inherited = false`.
+- **Why it's built this way**: a `static` pure helper has no DI dependency, so it can be called from
+  any layer, including a transport boundary, without wiring. Per-type caching keeps the logging path
+  cheap; value-erasure (over truncation/hashing) is the conservative §30 choice; and routing personal
+  data through one named gate makes the redaction policy auditable in one place (ADR-005).
+- **Where it's used**: unit-verified by `PiiRedactorTests`
+  (`MMCA.Common/Tests/Core/MMCA.Common.Domain.Tests/Privacy/PiiRedactorTests.cs`, G25) and exercised
+  end to end (composed with [`IAnonymizable`](#ianonymizable)) by `PiiErasureContractFitnessTests`
+  (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/PiiErasureContractFitnessTests.cs:19`).
+  No production logging call site routes entities through it, so it is a *ready, tested* control
+  rather than an automatic one (see the caveat on [`PiiAttribute`](#piiattribute)).
+- **Caveats / not-in-source**: redaction is **shallow** (one level), as the remarks state
+  (`PiiRedactor.cs:19`): a non-PII property whose value is itself an object with nested `[Pii]` members
+  is read and emitted as-is, not recursively masked. Only public instance properties are inspected
+  (`PiiRedactor.cs:115`), so fields and non-public members are ignored. A property getter that throws
+  `TargetInvocationException` yields `[unreadable]` instead of crashing the log call
+  (`PiiRedactor.cs:135-139`).
+
 ### IAnonymizable
 > MMCA.Common.Domain · `MMCA.Common.Domain.Interfaces` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IAnonymizable.cs:22` · Level 3 · interface
 
@@ -455,29 +610,34 @@ the *grammar* of the domain, the rest of the guide is the sentences written in i
 - **Concept reinforced, reconciling soft-delete with erasure.** `[Rubric §30, Compliance,
   Privacy & Data Governance]` (assesses a real erasure path, not just soft-delete). The doc comment
   (lines 5-21) explains the tension: soft-delete ([`IAuditableEntity.IsDeleted`](#iauditableentity))
-  keeps rows for referential integrity, but that means personal data survives. `IAnonymizable`
-  provides the erasure path: an application-layer erasure handler loads the aggregate, calls
-  `Anonymize()`, and saves, overwriting PII fields with non-identifying placeholders **in place**
-  rather than hard-deleting. The row stays (FKs and audit trail intact); the person's data is gone.
-  This is the second half of the [`PiiAttribute`](#piiattribute) story (ADR-005): `[Pii]` marks
-  *what* is PII; `IAnonymizable` defines *how* it is erased. `[Rubric §34, Architecture Governance &
-  Documentation]`: architecture tests assert that any entity with a `[Pii]` property implements
-  `IAnonymizable`, enforcing the contract at the type-system level rather than by review.
-- **Walkthrough**: `Anonymize()` (line 30): `Result` return type (not `void`) because anonymization
-  might fail (e.g. entity not found, or concurrent deletion). The doc comment mandates **idempotency**
-  (lines 24-28): calling `Anonymize()` on an already-anonymized entity must be a no-op returning
-  success, important under at-least-once erasure-event delivery. The remarks (lines 16-20) add the
-  storage guidance: fields that must remain retrievable after erasure are persisted through the
-  AES-256-GCM [`EncryptedStringConverter`](group-07-persistence-ef-core.md#encryptedstringconverter);
+  hides a row from queries but retains its personal data, so it does not by itself satisfy an erasure
+  request (`IAnonymizable.cs:11-13`). `IAnonymizable` provides the erasure path: an application-layer
+  erasure handler loads the aggregate, calls `Anonymize()`, and saves, overwriting PII fields with
+  non-identifying placeholders **in place** rather than hard-deleting (lines 13-15). The row stays (FKs
+  and audit trail intact); the person's data is gone. This is the second half of the
+  [`PiiAttribute`](#piiattribute) story (ADR-005): `[Pii]` marks *what* is PII; `IAnonymizable` defines
+  *how* it is erased. `[Rubric §34, Architecture Governance & Documentation]`: an architecture rule
+  asserts that any Domain type with a `[Pii]` property implements `IAnonymizable`
+  (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Governance.cs:11-21`),
+  enforcing the contract executably rather than by review.
+- **Walkthrough**: `Anonymize()` (line 30): a `Result` return type (not `void`) because anonymization
+  can fail, and the doc comment describes the failure case as "a failure describing why anonymization
+  could not be applied" (line 29). The summary mandates **idempotency** (lines 25-27): calling
+  `Anonymize()` on an already-anonymized entity must be a no-op returning success, important under
+  at-least-once erasure-event delivery. The remarks (lines 16-20) add the storage guidance: fields that
+  must remain retrievable after erasure are persisted through the AES-256-GCM
+  [`EncryptedStringConverter`](group-07-persistence-ef-core.md#encryptedstringconverter);
   fields that need not survive are overwritten with placeholders inside `Anonymize()`.
 - **Why it's built this way**: making erasure a one-method contract keeps the *policy* (which fields,
   what placeholders) inside the aggregate that owns the data, while the *trigger* lives in an
-  application handler, and the `[Pii] ⇒ IAnonymizable` fitness test guarantees no PII-holding entity
+  application handler, and the `[Pii] ⇒ IAnonymizable` fitness rule guarantees no PII-holding entity
   silently lacks an erasure path (ADR-005).
-- **Where it's used**: implemented by `User` in the Identity module (which holds `[Pii]` fields like
-  `Email`/`FirstName`/`LastName`,
-  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:16`); called by the
-  application-layer erasure handler and enforced by `PiiConventionTests` (G25).
+- **Where it's used**: implemented by `User` in the ADC Identity module (which holds the `[Pii]` fields
+  `Email`/`FirstName`/`LastName`/`AvatarUrl`,
+  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:18,21,25,29,94`); called by
+  the application-layer erasure handler, enforced by `PiiConventionTests` (G25), and exercised together
+  with [`PiiRedactor`](#piiredactor) by `PiiErasureContractFitnessTests`
+  (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/PiiErasureContractFitnessTests.cs:19`).
 
 ### ValueObject
 > MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/ValueObject.cs:8` · Level 0 · record

@@ -119,7 +119,7 @@
           transport seam</strong>: a tiny, transport-only package (<code>MMCA.Common.Grpc</code>) plus a per-consumer
           <code>*.Contracts</code> convention that together let a module be lifted out of the monolith and called over
           <strong>gRPC</strong> <em>without rewriting a line of application or domain code</em>. The governing decision is
-          <a href="../adr/007-grpc-extraction.html">ADR-007 (gRPC extraction)</a>, with the supporting topology in
+          <span class="doc-deadlink" title="Reference outside the published set">ADR-007 (gRPC extraction)</span>, with the supporting topology in
           ADR-008 (YARP service mesh), auth in ADR-004 (JWKS dual-fetch), and the concrete Kestrel/HTTP-2
           transport choices (h2c <code>Http2</code>-only for ADC vs <code>Http1AndHttp2</code> + ALPN for Store) in ADR-012. <code>[Rubric §7, Microservices Readiness]</code> is the headline lens here, it assesses whether modules can genuinely be extracted, with
           explicit, versioned contracts and transport kept at the edge, and <code>[Rubric §9, API &amp; Contract Design]</code> because the goal is that an error looks the same to a caller whether the answer came from an

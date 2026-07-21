@@ -1618,7 +1618,7 @@ are catalogued in `MMCA.ADC/specifications.md`.
     private validators, *what counts as a valid answer depends on the question's type*:
     - `ValidateRatingAnswer` (line 128): `int.TryParse` with `NumberStyles.Integer` +
       `CultureInfo.InvariantCulture`, must be `1..5`; otherwise `Error.Validation`. (Culture-invariant
-      parsing, see the [primer §27 note](00-primer.md#6-the-34-category-architecture-evaluation-lens).)
+      parsing, see the [primer §27 note](../00-primer.md#6-the-34-category-architecture-evaluation-lens).)
     - `ValidateTextAnswer` (line 142): length not exceeding `TextAnswerMaxLength` (2000).
     - `ValidateEmailAnswer` (line 156): constructs a `System.Net.Mail.MailAddress` and treats a
       `FormatException` as invalid, the BCL is the format authority.

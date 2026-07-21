@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>3. Querying: Specifications, Filtering &amp; the Entity Query Service · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Every read endpoint in MMCA.Common and ADC, &quot;list me the published events&quot;, &quot;get session 42&quot;, &quot;the speakers in Atlanta, page 3, sorted by name, with…">
+  <meta name="description" content="What this group covers. Every read in MMCA.Common and ADC (&quot;list the published events&quot;, &quot;get session 42&quot;, &quot;the speakers in Atlanta, page 3, sorted by…">
   <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/group-03-querying-specifications.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="article">
   <meta property="og:title" content="3. Querying: Specifications, Filtering &amp; the Entity Query Service">
-  <meta property="og:description" content="Every read endpoint in MMCA.Common and ADC, &quot;list me the published events&quot;, &quot;get session 42&quot;, &quot;the speakers in Atlanta, page 3, sorted by name, with…">
+  <meta property="og:description" content="What this group covers. Every read in MMCA.Common and ADC (&quot;list the published events&quot;, &quot;get session 42&quot;, &quot;the speakers in Atlanta, page 3, sorted by…">
   <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/group-03-querying-specifications.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -110,57 +110,78 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Onboarding guide</p>
           <h1 id="3-querying-specifications-filtering--the-entity-query-service">3. Querying: Specifications, Filtering &amp; the Entity Query Service</h1>
-          <p>Every read endpoint in MMCA.Common and ADC, &quot;list me the published events&quot;, &quot;get session 42&quot;, &quot;the speakers in Atlanta, page 3, sorted by name, with only the <code>name</code> and <code>bio</code> fields&quot;, flows through <strong>one</strong> reusable read engine. This chapter is the <em>read side</em> of CQRS (the <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer&#39;s §2</a> introduced the command/query split): side-effect-free queries that turn HTTP query-string knobs into translated-to-SQL <code>WHERE</code>/<code>ORDER BY</code>/<code>OFFSET</code>/<code>SELECT</code> clauses, run them once, and shape the rows down to exactly the fields the caller asked for. No per-entity repository method, no hand-rolled <code>IQueryable</code> plumbing in each controller. Add a new entity and it inherits filtering, sorting, paging, sparse-fieldset projection, and eager-loading of navigations <em>for free</em>. This whole read contract, the generic resource surface, OData-lite dynamic filtering, sparse fieldsets, per-type filter strategies, sort, pagination plus the <code>X-Pagination</code> header, the <code>MaxUnboundedResultLimit</code> ceiling, and the two-path include strategy, is recorded as a deliberate trade-off in ADR-034 (generic entity query layer), which also spells out how it composes with manual DTO mapping (ADR-001), navigation populators (ADR-002), the Result pattern at the edge (ADR-013), and request idempotency on the generic create (ADR-017).</p>
-          <p>There are three cooperating sub-systems here, and it helps to hold them apart from the start. <strong>The Specification pattern</strong> (Domain layer) is the <em>type-safe, programmer-authored</em> predicate, a compiled <code>Expression&lt;Func&lt;TEntity, bool&gt;&gt;</code> that usually carries an <strong>authorization or business scope</strong> the caller must not be able to override (e.g. &quot;only sessions belonging to <em>this</em> speaker&quot;). <strong>Dynamic filtering/sorting/field-selection</strong> (Application layer) is the <em>string-driven, user-authored</em> shaping, the <code>?filter=…&amp;sort=…&amp;fields=…</code> querystring, untrusted input that must be validated against the entity&#39;s real properties before it touches the database. <strong>The entity query pipeline + query service</strong> (Application layer) is the orchestrator that composes both, decides how to load navigations given the data source&#39;s JOIN capabilities, runs the query, and packages the result with pagination metadata. The separation matters: specifications are <em>trusted</em> and live with the domain; dynamic filters are <em>untrusted</em> and are validated, capped, and reflection-cached at the application boundary.</p>
-          <p><strong>The Specification pattern (the trusted predicate).</strong> <a href="group-03-querying-specifications.html#ispecificationtentity-tidentifiertype"><code>ISpecification&lt;TEntity, TIdentifierType&gt;</code></a> exposes two faces of the same rule: a <code>Criteria</code> expression tree that <strong>EF Core translates to SQL</strong> (so the filter runs <em>in the database</em>, not in memory after a full-table load) and an <code>IsSatisfiedBy(entity)</code> predicate for <strong>in-memory</strong> evaluation. The abstract base <a href="group-03-querying-specifications.html#specificationtentity-tidentifiertype"><code>Specification&lt;TEntity, TIdentifierType&gt;</code></a> lazy-compiles the expression once and caches the delegate, so repeated in-memory checks don&#39;t recompile the tree. The three combinators, <a href="group-03-querying-specifications.html#andspecificationtentity-tidentifiertype"><code>AndSpecification&lt;TEntity, TIdentifierType&gt;</code></a>, <a href="group-03-querying-specifications.html#orspecificationtentity-tidentifiertype"><code>OrSpecification&lt;TEntity, TIdentifierType&gt;</code></a>, and <a href="group-03-querying-specifications.html#notspecificationtentity-tidentifiertype"><code>NotSpecification&lt;TEntity, TIdentifierType&gt;</code></a>, compose two (or one) specifications into a new one using <code>Expression.AndAlso</code>/<code>OrElse</code>/<code>Not</code> over a <em>shared</em> parameter, deliberately rebuilding the lambda so the combined <code>Criteria</code> <strong>stays EF-translatable</strong> rather than degrading to client-side evaluation. ADC&#39;s own concrete specifications (e.g. <code>PublishedEventSpecification</code>, <code>OwnSessionQuestionAnswerSpecification</code> in the Conference module) are how a controller scopes a query to the current user&#39;s data without trusting the request to do it. This is <code>[Rubric §4, DDD]</code> (the rule lives in the domain as a first-class, reusable, composable object) and <code>[Rubric §2, Design Patterns]</code> (a textbook Specification, with <code>[Rubric §11, Security]</code> overtones: authorization predicates are server-supplied criteria the client cannot tamper with). Two newer members round out the family for <strong>polyglot persistence</strong> (ADR-018). <a href="group-03-querying-specifications.html#inlinespecificationtentity-tidentifiertype"><code>InlineSpecification&lt;TEntity, TIdentifierType&gt;</code></a> wraps an already-composed <code>Criteria</code> expression as a first-class specification, and the static <a href="group-03-querying-specifications.html#crosssourcespecification"><code>CrossSourceSpecification</code></a> builds a <em>cross-source</em> filter: when a dependent entity (say a Cosmos-stored <code>Session</code>) references a principal in a different physical data source (a SQL-Server <code>Event</code>), a navigating predicate like <code>s =&gt; s.Event.IsPublished</code> cannot be translated, so it resolves the matching principal keys first and filters by <code>foreignKey IN (...)</code> instead. That &quot;resolve-then-filter-by-FK&quot; shape is guarded by an opt-in fitness rule (<a href="group-27-testing-infrastructure.html#specificationconventiontestsbase">G25</a>).</p>
-          <p><strong>Dynamic filtering, Strategy-per-type.</strong> User filters arrive as a <code>Dictionary&lt;string, (string Operator, string Value)&gt;</code>, property name → operator key + raw string value, parsed from the querystring by the <a href="group-12-api-hosting-mapping.html#queryfiltermodelbinder"><code>QueryFilterModelBinder</code></a> at the API edge. Translating <code>(&quot;Name&quot;, &quot;CONTAINS&quot;, &quot;blazor&quot;)</code> into a <code>.Where()</code> clause depends entirely on the property&#39;s CLR type: strings support <code>CONTAINS</code>/<code>STARTS WITH</code>; numbers and dates support <code>GT</code>/<code>LT</code>/range operators; bools and Guids support equality. Rather than one giant <code>switch(type)</code>, each type gets a dedicated <a href="group-03-querying-specifications.html#ifilterstrategy"><code>IFilterStrategy</code></a>, <a href="group-03-querying-specifications.html#stringfilterstrategy"><code>StringFilterStrategy</code></a>, <a href="group-03-querying-specifications.html#intfilterstrategy"><code>IntFilterStrategy</code></a>, <a href="group-03-querying-specifications.html#decimalfilterstrategy"><code>DecimalFilterStrategy</code></a>, <a href="group-03-querying-specifications.html#datetimefilterstrategy"><code>DateTimeFilterStrategy</code></a>, <a href="group-03-querying-specifications.html#boolfilterstrategy"><code>BoolFilterStrategy</code></a>, and <a href="group-03-querying-specifications.html#guidfilterstrategy"><code>GuidFilterStrategy</code></a>, each declaring the operator set it supports and building expressions via <strong>System.Linq.Dynamic.Core</strong> (string-based LINQ, the <a href="00-primer.html#3-the-external-stack-bcl--nuget--external-level-0">primer&#39;s external</a> for dynamic <code>OrderBy</code>/<code>Where</code>). The static <a href="group-03-querying-specifications.html#queryfilterservice"><code>QueryFilterService</code></a> is the registry-and-dispatcher: it holds a <code>ConcurrentDictionary&lt;Type, IFilterStrategy&gt;</code> seeded with the built-ins, exposes <code>RegisterStrategy</code> so a module can add a custom type without modifying the framework (<code>[Rubric §1, SOLID]</code>, the open/closed principle made literal), caches <code>PropertyInfo</code> lookups per <code>(entity, property)</code> to dodge per-request reflection, and routes nested paths like <code>&quot;Category.Name&quot;</code> through the string strategy. Crucially it has <strong>two phases</strong>: <code>ValidateFilters</code> (does the property exist on the entity? is the operator supported for its type?) runs <em>before</em> the query, returning a <a href="group-01-result-error-handling.html#result"><code>Result</code></a> of <a href="group-01-result-error-handling.html#error"><code>Error</code></a>s, so a bad filter is a <code>400</code>, not a SQL exception, and <code>ApplyFilters</code> builds the actual <code>.Where()</code> chain. This is <code>[Rubric §2, Design Patterns]</code> (Strategy) and <code>[Rubric §11, Security]</code> (untrusted input is allow-listed against real entity metadata, never concatenated blindly).</p>
-          <p><strong>Dynamic sorting &amp; sparse fieldsets, <code>QueryFieldService</code>.</strong> The companion static <a href="group-03-querying-specifications.html#queryfieldservice"><code>QueryFieldService</code></a> owns three more pieces of read-shaping. <code>ApplySorting</code> turns a <code>sort</code>/<code>direction</code> pair into a LINQ-Dynamic <code>OrderBy</code> (again resolving DTO names to entity paths). <code>ApplyFieldSelection</code> builds a <code>MemberInit</code> <code>Select</code> expression so a <code>fields=name,bio</code> request pulls <strong>only those columns from the database</strong> (less data over the wire and off disk, <code>[Rubric §12, Performance &amp; Scalability]</code>), restricted to <em>writable</em> properties because the <code>MemberInit</code> projection needs setters. And <code>ShapeData</code>/<code>ShapeCollectionData</code> produce the final wire shape: an <code>ExpandoObject</code> (or list of them) containing only the requested fields, camelCased. To make that last step fast on large result sets, <code>QueryFieldService</code> caches a per-type array of <a href="group-03-querying-specifications.html#propertyaccessor"><code>PropertyAccessor</code></a>, a private <code>readonly record struct</code> bundling each property&#39;s name, its precomputed camelCase JSON key, and a <em>compiled</em> <code>Func&lt;object, object?&gt;</code> getter (an <code>Expression.Lambda</code>, not <code>PropertyInfo.GetValue</code>) so shaping thousands of rows is a delegate invocation per field, not reflection. The <code>ExpandoObject</code> return type is <em>why</em> the read controllers traffic in <code>dynamic</code>: field projection yields a runtime-shaped object, not a statically-typed DTO. Validation here mirrors the filter side, <code>Validate&lt;TEntity&gt;</code> and <code>ValidateSortDirection</code> reject unknown field names and bad directions up front.</p>
-          <p><strong>The pipeline, two paths, one contract.</strong> <a href="group-03-querying-specifications.html#ientityquerypipeline"><code>IEntityQueryPipeline</code></a> (implemented by the sealed <a href="group-03-querying-specifications.html#entityquerypipeline"><code>EntityQueryPipeline</code></a>) is where it all executes, against an <code>IQueryable&lt;TEntity&gt;</code> and a bundle of inputs packaged as <a href="group-03-querying-specifications.html#entityqueryparameterstentity"><code>EntityQueryParameters&lt;TEntity&gt;</code></a>, an immutable record carrying the specification <code>Criteria</code>, the dynamic <code>Filters</code>, sort, fields, paging, include flags, and the DTO→entity name map. The pipeline branches on the data source&#39;s JOIN capability. <strong>Path 1 (server-side includes):</strong> when every requested navigation can be <code>.Include()</code>-ed in SQL (the universal case for ADC, which runs SQL Server only), it adds the includes, forcing <code>AsSplitQuery()</code> when a <em>child collection</em> is included, because EF&#39;s single-query <code>Skip</code>/<code>Take</code> over a JOIN-expanded set truncates child rows and silently returns empty collections on list reads (a real, hard-won fix annotated <code>R24/§8</code> in the source), then applies criteria, filters, sort, count-before-paging, <code>Skip</code>/<code>Take</code>, and the field-selection <code>Select</code>, all translated to one (or, with split-query, a few) round trips. <strong>Path 2 (manual navigation):</strong> when a navigation crosses a physical data source (database-per-service, ADR-006) EF <em>cannot</em> JOIN it, so the pipeline materializes the paged-and-sorted page first, then invokes a <code>navigationPopulator</code> callback to <strong>batch-load</strong> those navigations in a second query, the <a href="group-11-navigation-populators.html#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;in TEntity&gt;</code></a> escape hatch (ADR-002, the navigation-populators chapter). Both paths share a <code>[Rubric §12, Performance]</code> safety ceiling: an unpaginated query is capped at <code>MaxUnboundedResultLimit</code> (1000) so a service caller who forgets paging can never trigger an unbounded full-table load. Which navigations are even <em>eligible</em>, and which path a given navigation takes, is decided by <a href="group-03-querying-specifications.html#navigationmetadataprovider"><code>NavigationMetadataProvider</code></a> (behind <a href="group-03-querying-specifications.html#inavigationmetadataprovider"><code>INavigationMetadataProvider</code></a>), which reflects <code>NavigationAttribute</code>-marked properties into <a href="group-11-navigation-populators.html#navigationmetadata"><code>NavigationMetadata</code></a> of supported vs. unsupported includes by asking <a href="group-07-persistence-ef-core.html#idatasourceservice"><code>IDataSourceService</code></a> whether the two ends share a JOIN-capable source, caching the answer per <code>(entity, NavigationType)</code>.</p>
-          <p><strong>The query service, the public face.</strong> <a href="group-03-querying-specifications.html#ientityqueryservicetentity-tentitydto-tidentifiertype"><code>IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a> and its concrete <a href="group-03-querying-specifications.html#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a> are what controllers actually inject. The service ties the whole chapter together in a four-step orchestration (visible in its <code>GetAllAsync</code>): <strong>(1) Validate</strong> all parameters up front via <code>Result.Combine</code> of the field, sort, sort-direction, and filter validators, a bad <code>fields</code> is a <code>400</code> before any DB hit; <strong>(2) Build the query</strong>: pick <code>Repository.Table</code> or <code>TableNoTracking</code> (from the read repository, <a href="group-07-persistence-ef-core.html#ireadrepositorytentity-tidentifiertype"><code>IReadRepository&lt;TEntity, TIdentifierType&gt;</code></a>), ask <code>NavigationMetadataProvider</code> which includes are supported, pack everything into <code>EntityQueryParameters</code>, and hand off to <code>IEntityQueryPipeline.ExecuteAsync</code> (passing the populator callback); <strong>(3) Map &amp; shape</strong>, convert entities to DTOs through the injected <a href="group-12-api-hosting-mapping.html#ientitydtomappertentity-tentitydto-tidentifiertype"><code>IEntityDTOMapper&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a> (ADR-001, manual/Mapperly mapping) then <code>ShapeCollectionData</code> to the requested fields, yielding a <a href="group-01-result-error-handling.html#pagedcollectionresultt"><code>PagedCollectionResult&lt;ExpandoObject&gt;</code></a>; <strong>(4) Wrap</strong> in <a href="group-01-result-error-handling.html#paginationmetadata"><code>PaginationMetadata</code></a>. <code>GetByIdAsync</code> reuses the <em>same</em> pipeline through a synthetic <code>Id EQUALS</code> filter and returns <code>Error.NotFound</code> if empty; <code>GetAllForLookupAsync</code> returns lightweight <code>BaseLookup</code> id/name pairs for dropdowns. The service is built for <code>[Rubric §1, SOLID]</code> extension-over-modification: <code>Repository</code>, the <code>DTOToEntityPropertyMap</code> (e.g. <code>&quot;CategoryName&quot; → &quot;Category.Name&quot;</code>), and the methods themselves are <code>virtual</code>, so a module subclass like <a href="group-18-conference-application.html#speakerentityqueryservice"><code>SpeakerEntityQueryService</code></a> overrides one behavior without reimplementing the engine. Generic constraints (<code>TEntity : AuditableBaseEntity&lt;TIdentifierType&gt;</code>, <code>TEntityDTO : IBaseDTO&lt;TIdentifierType&gt;</code>) keep it usable only with the framework&#39;s <a href="group-02-domain-building-blocks.html#auditablebaseentitytidentifiertype">entity</a> and DTO contracts.</p>
-          <p><strong>End-to-end, the runtime flow of one list request:</strong> the request hits a read controller, <a href="group-12-api-hosting-mapping.html#entitycontrollerbasetentity-tentitydto-tidentifiertype"><code>EntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a> or <a href="group-12-api-hosting-mapping.html#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest"><code>AggregateRootEntityControllerBase&lt;…&gt;</code></a> (the API chapter, G12), which clamps <code>pageSize</code> to <code>MaxPageSize</code> from <a href="group-14-module-system-composition.html#iapplicationsettings"><code>IApplicationSettings</code></a> (falling back to 500), binds the <code>?filter=</code> querystring through <code>QueryFilterModelBinder</code>, and may supply a server-authored <code>Specification</code> for authorization scope. It calls <code>IEntityQueryService.GetAllAsync</code>. The service validates fields/sort/filters (early <code>400</code> on failure), asks <code>NavigationMetadataProvider</code> to classify the requested includes, and packages an <code>EntityQueryParameters</code>. <code>EntityQueryPipeline</code> then chooses Path 1 or Path 2, applies the specification&#39;s <code>Criteria</code> plus the user&#39;s dynamic filters as translated SQL <code>WHERE</code> clauses, sorts, takes a <code>COUNT</code> for the page total, applies <code>Skip</code>/<code>Take</code>, projects the requested columns, materializes, batch-loads any cross-source navigations, maps entities to DTOs, shapes to the requested fields, and returns a <code>Result&lt;PagedCollectionResult&lt;ExpandoObject&gt;&gt;</code>, which the controller unwraps into the HTTP body plus an <code>X-Pagination</code> header. One pipeline, every entity, validated input, server-side execution, and a clean extraction seam for navigations that cross a service boundary.</p>
-          <h3 id="entityqueryparameterstentity">EntityQueryParameters&lt;TEntity&gt;</h3>
+          <p><strong>What this group covers.</strong> Every read in MMCA.Common and ADC (&quot;list the published events&quot;, &quot;get session 42&quot;, &quot;the speakers in Atlanta, page 3, sorted by name, with only the <code>name</code> and <code>bio</code> fields&quot;) flows through one reusable read engine. This chapter is the read side of CQRS (the command/query split is introduced in <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a>): side-effect-free queries that turn query-string knobs into <code>WHERE</code>, <code>ORDER BY</code>, <code>OFFSET</code>, and <code>SELECT</code> clauses the database executes, then shape the rows down to the fields the caller asked for. There is no per-entity repository method and no hand-rolled <code>IQueryable</code> plumbing in each controller: add an entity and it inherits filtering, sorting, paging, sparse-fieldset projection, and eager loading of navigations. The trade-offs behind that generic read surface (dynamic filtering, sparse fieldsets, per-type filter strategies, the pagination header, the unbounded-result ceiling, and the two-path include strategy) are recorded in ADR-034, which also explains how it composes with manual DTO mapping (ADR-001), navigation populators (ADR-002), and the Result pattern at the edge (ADR-013).</p>
+          <p>Three sub-systems cooperate here, and it pays to hold them apart from the start:</p>
+          <ol>
+          <li><strong>The Specification pattern</strong> (Domain layer): the type-safe, programmer-authored predicate. A compiled <code>Expression&lt;Func&lt;TEntity, bool&gt;&gt;</code> that usually carries an authorization or business scope the caller must not be able to override (&quot;only sessions belonging to this speaker&quot;).</li>
+          <li><strong>Dynamic filtering, sorting, and field selection</strong> (Application layer): the string-driven, user-authored shaping behind <code>?filter=...&amp;sort=...&amp;fields=...</code>. Untrusted input that must be validated against the entity&#39;s real properties before it reaches the database.</li>
+          <li><strong>The query pipeline and the entity query service</strong> (Application layer): the orchestrator that composes both, decides how to load navigations given the data source&#39;s JOIN capabilities, runs the query, and packages the result with pagination metadata.</li>
+          </ol>
+          <p>The split matters: specifications are trusted and live with the domain, dynamic filters are untrusted and are validated, capped, and reflection-cached at the application boundary.</p>
+          <h2 id="the-specification-pattern-the-trusted-predicate">The Specification pattern, the trusted predicate</h2>
+          <p><a href="#ispecificationtentity-tidentifiertype"><code>ISpecification&lt;TEntity, TIdentifierType&gt;</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/ISpecification.cs:12</code>) exposes two faces of one rule: a <code>Criteria</code> expression tree that EF Core translates to SQL, so the filter runs in the database rather than in memory after a full-table load (<code>ISpecification.cs:17</code>), and <code>IsSatisfiedBy(entity)</code> for in-memory evaluation (<code>ISpecification.cs:22</code>). The abstract base <a href="#specificationtentity-tidentifiertype"><code>Specification&lt;TEntity, TIdentifierType&gt;</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Specifications/Specification.cs:15</code>) compiles the expression lazily and caches the delegate in a private field (<code>Specification.cs:27</code>, <code>Specification.cs:32</code>), so repeated in-memory checks do not recompile the tree.</p>
+          <p>The three combinators, <a href="#andspecificationtentity-tidentifiertype"><code>AndSpecification&lt;TEntity, TIdentifierType&gt;</code></a> (<code>Specification.cs:62</code>), <a href="#orspecificationtentity-tidentifiertype"><code>OrSpecification&lt;TEntity, TIdentifierType&gt;</code></a> (<code>Specification.cs:88</code>), and <a href="#notspecificationtentity-tidentifiertype"><code>NotSpecification&lt;TEntity, TIdentifierType&gt;</code></a> (<code>Specification.cs:114</code>), each build a fresh lambda over a single shared <code>ParameterExpression</code> and embed the operands with <code>Expression.Invoke</code>, combined by <code>Expression.AndAlso</code>, <code>Expression.OrElse</code>, or <code>Expression.Not</code> (<code>Specification.cs:75</code>, <code>Specification.cs:101</code>, <code>Specification.cs:126</code>). Rebuilding the lambda, rather than composing delegates, is what keeps the combined <code>Criteria</code> a single translatable tree. ADC&#39;s concrete specifications (<code>PublishedEventSpecification</code> and <code>OwnEventQuestionAnswerSpecification</code> under <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Specifications/</code>, plus <code>OwnSessionQuestionAnswerSpecification</code> under <code>.../Sessions/Specifications/</code>) are how a controller scopes a query to the current user&#39;s data without trusting the request to do it. This is [Rubric §4, Domain-Driven Design] (the rule is a first-class, reusable domain object) and [Rubric §2, Design Patterns] (a textbook Specification), with a [Rubric §11, Security] overtone: an authorization predicate is server-supplied criteria the client cannot tamper with.</p>
+          <p>Two members round the family out for polyglot persistence (ADR-018). <a href="#inlinespecificationtentity-tidentifiertype"><code>InlineSpecification&lt;TEntity, TIdentifierType&gt;</code></a> (<code>Specification.cs:45</code>) wraps an already-composed <code>Criteria</code> expression as a first-class specification, for predicates built at runtime where no hand-written class exists. The static <a href="#crosssourcespecification"><code>CrossSourceSpecification</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Specifications/CrossSourceSpecification.cs:22</code>) builds the cross-source filter: when a dependent entity references a principal that lives in a different physical data source (database-per-service, ADR-006), a navigating predicate like <code>s =&gt; s.Event.IsPublished</code> cannot be translated, so <code>BuildAsync</code> first projects the matching principal keys from the principal&#39;s own source (<code>CrossSourceSpecification.cs:55</code>), materializes them once (<code>CrossSourceSpecification.cs:60</code>), and returns an <code>InlineSpecification</code> whose body is an <code>Enumerable.Contains(keys, dependent.ForeignKey)</code> call that translates to <code>IN</code> or <code>ARRAY_CONTAINS</code> (<code>CrossSourceSpecification.cs:74</code>). An optional local predicate on the dependent&#39;s own columns is rebound onto the foreign-key selector&#39;s parameter by the nested <a href="#parameterreplacer"><code>ParameterReplacer</code></a> visitor (<code>CrossSourceSpecification.cs:85</code>, class at <code>CrossSourceSpecification.cs:93</code>) and ANDed in, deliberately without <code>Expression.Invoke</code> so the combined predicate stays translatable on every provider. The doc comment is explicit about the limit: the keys are embedded in the predicate, so the shape fits bounded principal sets (<code>CrossSourceSpecification.cs:17</code>). The convention is guarded by an opt-in fitness rule, <a href="group-27-testing-infrastructure.html#specificationconventiontestsbase"><code>SpecificationConventionTestsBase</code></a>.</p>
+          <h2 id="dynamic-filtering-one-strategy-per-clr-type">Dynamic filtering, one Strategy per CLR type</h2>
+          <p>User filters arrive as a <code>Dictionary&lt;string, (string Operator, string Value)&gt;</code>, property name to operator key plus raw string value, parsed from the query string by <a href="group-12-api-hosting-mapping.html#queryfiltermodelbinder"><code>QueryFilterModelBinder</code></a> at the API edge. Turning <code>(&quot;Name&quot;, &quot;CONTAINS&quot;, &quot;blazor&quot;)</code> into a <code>.Where()</code> clause depends entirely on the property&#39;s CLR type, so instead of one large <code>switch</code> each type gets an <a href="#ifilterstrategy"><code>IFilterStrategy</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/IFilterStrategy.cs:6</code>) declaring an <code>Apply</code> method and the operator set it supports (<code>IFilterStrategy.cs:17</code>, <code>IFilterStrategy.cs:24</code>, where the default <code>SupportedOperators</code> is <code>null</code>, meaning validation is skipped for custom strategies). The built-ins are <a href="#stringfilterstrategy"><code>StringFilterStrategy</code></a> (<code>StringFilterStrategy.cs:12</code>: <code>CONTAINS</code>, <code>NOT CONTAINS</code>, <code>EQUALS</code>, <code>NOT EQUALS</code>, <code>STARTS WITH</code>, <code>ENDS WITH</code>, <code>IS EMPTY</code>, <code>IS NOT EMPTY</code>, <code>IN</code>), <a href="#intfilterstrategy"><code>IntFilterStrategy</code></a> (<code>IntFilterStrategy.cs:11</code>: equality plus the four comparisons plus <code>IN</code>), <a href="#decimalfilterstrategy"><code>DecimalFilterStrategy</code></a> (<code>DecimalFilterStrategy.cs:12</code>: the same comparisons, no <code>IN</code>, invariant-culture parsing), <a href="#datetimefilterstrategy"><code>DateTimeFilterStrategy</code></a> (<code>DateTimeFilterStrategy.cs:13</code>: <code>IS</code>, <code>IS NOT</code>, <code>IS AFTER</code>, <code>IS ON OR AFTER</code>, <code>IS BEFORE</code>, <code>IS ON OR BEFORE</code>, plus the two presence checks), <a href="#boolfilterstrategy"><code>BoolFilterStrategy</code></a> (<code>BoolFilterStrategy.cs:11</code>: <code>IS</code> only), and <a href="#guidfilterstrategy"><code>GuidFilterStrategy</code></a> (<code>GuidFilterStrategy.cs:11</code>: <code>EQUALS</code>, <code>NOT EQUALS</code>, <code>IN</code>). Each builds its clause through <strong>System.Linq.Dynamic.Core</strong> string predicates with parameter placeholders (<code>@0</code>), never string-concatenated values, and each silently returns the unfiltered query when the raw value fails to parse. The comma-separated <code>IN</code> list is split by the internal <a href="#filtervalueparser"><code>FilterValueParser</code></a> (<code>FilterValueParser.cs:8</code>): its <code>ParseList&lt;T&gt;</code> for numeric/Guid lists skips unparseable entries rather than failing the request (<code>FilterValueParser.cs:17</code>, the <code>if (parse(part) is { } parsed)</code> guard), while its <code>ParseStringList</code> simply splits on comma and drops empty/whitespace entries with no per-item parse step (<code>FilterValueParser.cs:34</code>).</p>
+          <p>The static <a href="#queryfilterservice"><code>QueryFilterService</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:19</code>) is the registry and dispatcher. It seeds a <code>ConcurrentDictionary&lt;Type, IFilterStrategy&gt;</code> with the built-ins, registering both the value type and its <code>Nullable&lt;&gt;</code> form (<code>QueryFilterService.cs:26</code>), exposes <code>RegisterStrategy</code> so a module can add a custom type without touching framework code (<code>QueryFilterService.cs:55</code>, the open/closed principle made literal, [Rubric §1, SOLID]), caches <code>PropertyInfo</code> lookups per (entity type, property name) to avoid per-request reflection (<code>QueryFilterService.cs:24</code>), and routes nested paths like <code>&quot;Category.Name&quot;</code> through a dedicated string strategy instance because Dynamic LINQ traverses the chain as a string expression (<code>QueryFilterService.cs:47</code>, <code>QueryFilterService.cs:102</code>). It has two phases, and the ordering is the security story: <code>ValidateFilters</code> (<code>QueryFilterService.cs:124</code>) runs before the query and returns a <a href="group-01-result-error-handling.html#result"><code>Result</code></a> carrying every <a href="group-01-result-error-handling.html#error"><code>Error</code></a> it found (<code>Filter.Property.NotFound</code> at <code>QueryFilterService.cs:155</code>, <code>Filter.Type.NotSupported</code> at <code>QueryFilterService.cs:176</code>, <code>Filter.Operator.NotSupported</code> at <code>QueryFilterService.cs:216</code>), so a bad filter is a validation failure and not a SQL exception; <code>ApplyFilters</code> (<code>QueryFilterService.cs:71</code>) then builds the actual <code>.Where()</code> chain, skipping any property it cannot resolve (<code>QueryFilterService.cs:95</code>). This is [Rubric §2, Design Patterns] (Strategy) and [Rubric §11, Security] (untrusted input allow-listed against real entity metadata).</p>
+          <h2 id="sorting-and-sparse-fieldsets-queryfieldservice">Sorting and sparse fieldsets, QueryFieldService</h2>
+          <p><a href="#queryfieldservice"><code>QueryFieldService</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:16</code>) owns the other three pieces of read shaping. <code>ApplySorting</code> (<code>QueryFieldService.cs:120</code>) resolves a DTO sort name through the server-authored map, and otherwise accepts the column <strong>only</strong> when it names a real public property of the entity, falling back to the optional default sort when it does not (<code>QueryFieldService.cs:129</code>, <code>QueryFieldService.cs:142</code>). That guard is deliberate and documented in the summary (<code>QueryFieldService.cs:109</code>): a client-supplied string can never reach Dynamic LINQ to order by nested paths or expressions the DTO does not expose. <code>ApplyFieldSelection</code> (<code>QueryFieldService.cs:154</code>) builds a <code>MemberInit</code> <code>Select</code> expression so a <code>fields=name,bio</code> request pulls only those columns from the database ([Rubric §12, Performance &amp; Scalability]), restricted to writable properties because the projection needs setters (<code>QueryFieldService.cs:167</code>). <code>ShapeData</code> and <code>ShapeCollectionData</code> (<code>QueryFieldService.cs:52</code>, <code>QueryFieldService.cs:77</code>) produce the wire shape: an <code>ExpandoObject</code> (or a list of them) holding only the requested fields under camelCase keys.</p>
+          <p>To make that last step cheap on large result sets, the service caches a per-type array of <a href="#propertyaccessor"><code>PropertyAccessor</code></a> (<code>QueryFieldService.cs:23</code>), a private <code>readonly record struct</code> bundling each property&#39;s name, its precomputed camelCase key, and a compiled <code>Func&lt;object, object?&gt;</code> getter built with <code>Expression.Lambda(...).Compile()</code> rather than <code>PropertyInfo.GetValue</code> (<code>QueryFieldService.cs:25</code> to <code>QueryFieldService.cs:42</code>). Shaping a thousand rows is then a delegate call per field. Validation mirrors the filter side: <code>Validate&lt;TEntity&gt;</code> rejects unknown field names and (when shaping) read-only properties (<code>QueryFieldService.cs:197</code>), and <code>ValidateSortDirection</code> accepts only <code>asc</code> or <code>desc</code> (<code>QueryFieldService.cs:243</code>).</p>
+          <h2 id="the-pipeline-two-paths-and-one-contract">The pipeline, two paths and one contract</h2>
+          <p><a href="#ientityquerypipeline"><code>IEntityQueryPipeline</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/IEntityQueryPipeline.cs:10</code>) is the execution contract, implemented by the sealed <a href="#entityquerypipeline"><code>EntityQueryPipeline</code></a> (<code>.../Services/Query/EntityQueryPipeline.cs:13</code>), which talks to the database through the <a href="group-07-persistence-ef-core.html#iqueryableexecutor"><code>IQueryableExecutor</code></a> abstraction rather than referencing EF Core from the Application layer ([Rubric §3, Clean Architecture]). Its inputs are bundled into <a href="#entityqueryparameterstentity"><code>EntityQueryParameters&lt;TEntity&gt;</code></a> (<code>.../Services/Query/EntityQueryParameters.cs:11</code>), an immutable record carrying the specification <code>Criteria</code>, the dynamic <code>Filters</code>, sort column and direction, <code>Fields</code>, page number and size, the two include flags, and the DTO-to-entity property map (defaulting to an empty <code>FrozenDictionary</code>, <code>EntityQueryParameters.cs:44</code>).</p>
+          <p><code>ExecuteAsync</code> (<code>EntityQueryPipeline.cs:25</code>) first adds every supported navigation as an <code>.Include()</code> (<code>EntityQueryPipeline.cs:41</code>), forcing <code>AsSplitQuery()</code> when a child collection is among them (<code>EntityQueryPipeline.cs:48</code>). The comment above that line records the hard-won reason, annotated <code>R24/§8</code>: paginating a single-query collection include truncates child rows because EF applies <code>Skip</code>/<code>Take</code> to the JOIN-expanded set, so list reads returned empty child collections while by-id reads worked (<code>EntityQueryPipeline.cs:44</code>). It then applies the specification criteria and the dynamic filters <strong>before</strong> materializing anything (<code>EntityQueryPipeline.cs:55</code>, <code>EntityQueryPipeline.cs:58</code>), so the data source does as much of the work as possible. From there it branches. <strong>Path 1, server-side includes</strong> (<code>EntityQueryPipeline.cs:121</code>): sort, count before paging, <code>Skip</code>/<code>Take</code>, field-selection <code>Select</code>, materialize. <strong>Path 2, manual navigation</strong> (<code>EntityQueryPipeline.cs:75</code>), taken when any requested navigation crosses a physical data source and cannot be joined: sort and page at the database first, materialize the page, then invoke the <code>navigationPopulator</code> callback to batch-load those navigations in a second query (<code>EntityQueryPipeline.cs:106</code>), the <a href="group-11-navigation-populators.html#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;in TEntity&gt;</code></a> escape hatch of ADR-002, and apply field selection in memory afterwards (<code>EntityQueryPipeline.cs:113</code>). Both paths share one [Rubric §12, Performance] safety ceiling: an unpaginated query is capped at <code>MaxUnboundedResultLimit</code>, a public <code>const int</code> of 1000 (<code>EntityQueryPipeline.cs:22</code>, applied at <code>EntityQueryPipeline.cs:100</code> and <code>EntityQueryPipeline.cs:144</code>), so a service caller who forgets paging can never trigger an unbounded full-table load.</p>
+          <p>Which navigations are eligible, and which path each takes, is decided by <a href="#navigationmetadataprovider"><code>NavigationMetadataProvider</code></a> (<code>.../Services/Query/NavigationMetadataProvider.cs:20</code>) behind <a href="#inavigationmetadataprovider"><code>INavigationMetadataProvider</code></a> (<code>.../Services/Query/INavigationMetadataProvider.cs:9</code>). It reflects over the entity&#39;s public properties looking for <a href="group-11-navigation-populators.html#navigationattribute"><code>NavigationAttribute</code></a> (<code>NavigationMetadataProvider.cs:74</code>), unwraps collection types to find the target entity (<code>NavigationMetadataProvider.cs:106</code>), and asks <a href="group-07-persistence-ef-core.html#idatasourceservice"><code>IDataSourceService</code></a> whether the two ends share a JOIN-capable source, sorting each into the supported or unsupported bucket of <a href="group-11-navigation-populators.html#navigationmetadata"><code>NavigationMetadata</code></a> (<code>NavigationMetadataProvider.cs:96</code>). Results are cached per (entity type, <a href="group-11-navigation-populators.html#navigationtype"><code>NavigationType</code></a>) in an <strong>instance-level</strong> dictionary, not a static one, precisely so that a process hosting more than one data-source configuration (integration tests, for example) cannot share classifications across hosts (<code>NavigationMetadataProvider.cs:28</code>).</p>
+          <h2 id="the-query-service-the-public-face">The query service, the public face</h2>
+          <p><a href="#ientityqueryservicetentity-tentitydto-tidentifiertype"><code>IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a> (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IEntityQueryService.cs:19</code>) and its concrete <a href="#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a> (<code>.../Services/EntityQueryService.cs:31</code>) are what controllers and handlers inject. The service is constructed from <a href="group-07-persistence-ef-core.html#iunitofwork"><code>IUnitOfWork</code></a>, the metadata provider, the pipeline, an <a href="group-12-api-hosting-mapping.html#ientitydtomappertentity-tentitydto-tidentifiertype"><code>IEntityDTOMapper&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a> (ADR-001), and an <code>INavigationPopulator&lt;TEntity&gt;</code> (<code>EntityQueryService.cs:32</code> to <code>EntityQueryService.cs:36</code>), and it resolves its <a href="group-07-persistence-ef-core.html#ireadrepositorytentity-tidentifiertype"><code>IReadRepository&lt;TEntity, TIdentifierType&gt;</code></a> from the unit of work through a <code>virtual</code> property (<code>EntityQueryService.cs:48</code>).</p>
+          <p><code>GetAllAsync</code> is the four-step orchestration. <strong>(1) Validate</strong> every parameter up front with <code>Result.Combine</code> over the fields, sort-column, sort-direction, and filter validators, so a bad <code>fields</code> fails before any database hit (<code>EntityQueryService.cs:183</code>). <strong>(2) Build the query</strong> in <code>BuildQueryAsync</code> (<code>EntityQueryService.cs:366</code>): pick <code>Repository.Table</code> or <code>TableNoTracking</code> from the <code>asTracking</code> flag (<code>EntityQueryService.cs:379</code>), ask the metadata provider which includes are supported, pack everything into <code>EntityQueryParameters</code>, and hand off to <code>IEntityQueryPipeline.ExecuteAsync</code> with the populator callback (<code>EntityQueryService.cs:399</code>). <strong>(3) Map and shape</strong>: convert entities to DTOs through <code>DTOMapper.MapToDTOs</code>, then shape <strong>only when a field subset was requested</strong>, otherwise return the typed DTOs as-is to avoid a per-row <code>ExpandoObject</code> allocation and boxing (<code>EntityQueryService.cs:222</code> to <code>EntityQueryService.cs:226</code>); both forms serialize to the same camelCase JSON, which is why the return type is <code>PagedCollectionResult&lt;object&gt;</code> rather than a typed collection. <strong>(4) Wrap</strong> in <a href="group-01-result-error-handling.html#paginationmetadata"><code>PaginationMetadata</code></a>, which for an unpaginated call reports the total count as the page size and page 1 (<code>EntityQueryService.cs:407</code>).</p>
+          <p>The by-id path has a fast lane worth knowing. <code>GetEntityByIdAsync</code> (<code>EntityQueryService.cs:266</code>) validates the fields, then tries <code>TryGetByIdFastPathAsync</code> (<code>EntityQueryService.cs:80</code>): when the request is a plain primary-key lookup (no projection, no includes, no specification, default <code>Id</code> field, per <code>IsPrimaryKeyOnlyLookup</code> at <code>EntityQueryService.cs:102</code>) and the string id converts to the identifier type via a cached <code>TypeConverter</code> (<code>EntityQueryService.cs:68</code>, <code>EntityQueryService.cs:119</code>), it issues a single keyed repository read on the filtered <code>TableNoTracking</code>, so soft-delete query filters still apply, instead of running the dynamic-filter pipeline. Anything else falls through to the pipeline with a synthetic <code>Id EQUALS &lt;value&gt;</code> filter (<code>EntityQueryService.cs:298</code>) and returns <code>Error.NotFound</code> when the page is empty (<code>EntityQueryService.cs:317</code>). <code>GetByIdAsync</code> (<code>EntityQueryService.cs:327</code>) layers DTO mapping and the same shape-only-if-fields rule on top; <code>GetAllForLookupAsync</code> (<code>EntityQueryService.cs:238</code>) returns lightweight <a href="group-12-api-hosting-mapping.html#baselookuptidentifiertype"><code>BaseLookup&lt;TIdentifierType&gt;</code></a> id/name pairs for dropdowns; <code>ExistsAsync</code> (<code>EntityQueryService.cs:357</code>) delegates straight to the repository. The class is built for extension over modification ([Rubric §1, SOLID]): <code>Repository</code>, <code>DTOToEntityPropertyMap</code> (<code>EntityQueryService.cs:61</code>, where a module maps <code>&quot;CategoryName&quot;</code> to <code>&quot;Category.Name&quot;</code>), and every query method are <code>virtual</code>, so a module subclass such as <a href="group-18-conference-application.html#speakerentityqueryservice"><code>SpeakerEntityQueryService</code></a> overrides one behavior without reimplementing the engine.</p>
+          <h2 id="end-to-end-one-list-request">End to end, one list request</h2>
+          <p>The request reaches a read controller, <a href="group-12-api-hosting-mapping.html#entitycontrollerbasetentity-tentitydto-tidentifiertype"><code>EntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a> or <a href="group-12-api-hosting-mapping.html#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest"><code>AggregateRootEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest&gt;</code></a> (Group 12), which clamps <code>pageSize</code> to <code>MaxPageSize</code> from <a href="group-14-module-system-composition.html#iapplicationsettings"><code>IApplicationSettings</code></a>, falling back to 500 when unset (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:55</code>, clamp at <code>EntityControllerBase.cs:127</code>), binds <code>?filter=</code> through <code>QueryFilterModelBinder</code>, and may supply a server-authored specification for authorization scope. It calls <code>IEntityQueryService.GetAllAsync</code>. The service validates fields, sort, and filters (an early failure short-circuits to an error result), classifies the requested includes, and packages an <code>EntityQueryParameters</code>. <code>EntityQueryPipeline</code> chooses Path 1 or Path 2, applies the specification criteria plus the dynamic filters as translated <code>WHERE</code> clauses, sorts, counts, pages, projects the requested columns, materializes, batch-loads any cross-source navigations, and returns the entities plus the total. The service maps to DTOs, shapes if a field subset was asked for, and returns a <code>Result&lt;PagedCollectionResult&lt;object&gt;&gt;</code> that the controller unwraps into the HTTP body plus an <code>X-Pagination</code> header carrying the serialized metadata (<code>EntityControllerBase.cs:144</code>). One pipeline, every entity, validated input, server-side execution, and a clean extension point for navigations that cross a service boundary.</p>
+          <h3 id="filtervalueparser">FilterValueParser</h3>
           <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services.Query</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/EntityQueryParameters.cs:11</code> · Level 0 · record (sealed)</p>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services.Filtering</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/FilterValueParser.cs:8</code> · Level 0 · class (internal, static)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: an immutable parameter object that bundles <em>every</em> input the read-side query
-          pipeline needs for one list query: a LINQ criteria expression, a dynamic filter map, sort
-          column/direction, field projection, pagination, navigation include flags, and a DTO-to-entity
-          property-name map.</li>
-          <li><strong>Depends on</strong>: <code>System.Linq.Expressions</code>, <code>System.Collections.Frozen</code> (BCL). No first-party
-          dependencies, it sits at Level 0, below everything that consumes it.</li>
-          <li><strong>Concept introduced, the Parameter Object pattern + FrozenDictionary default.</strong> <code>[Rubric §2, Design Patterns]</code> (assesses whether patterns solve real problems): grouping all query inputs into
-          one record avoids a combinatorial explosion of method overloads on
-          <a href="#ientityqueryservicetentity-tentitydto-tidentifiertype"><code>IEntityQueryService</code></a> and
-          <a href="#ientityquerypipeline"><code>IEntityQueryPipeline</code></a>. <code>[Rubric §12, Performance &amp; Scalability]</code>
-          (assesses query efficiency): the <code>FrozenDictionary&lt;string, string&gt;.Empty</code> default for
-          <code>DTOToEntityPropertyMap</code> (line 44) avoids a null check at every usage site, <code>FrozenDictionary</code> is
-          the .NET 8+ immutable dictionary optimised for the build-once/read-many shape these maps have.</li>
-          <li><strong>Walkthrough</strong>: all properties are <code>init</code>-only:<ul>
-          <li><code>Criteria</code> (line 14): an <code>Expression&lt;Func&lt;TEntity, bool&gt;&gt;?</code> applied <em>before</em> dynamic filters,
-          typically carrying the caller&#39;s authorization scope. It is populated from a
-          <a href="#specificationtentity-tidentifiertype"><code>Specification&lt;TEntity, TIdentifierType&gt;</code></a><code>.Criteria</code> by
-          the query service.</li>
-          <li><code>Filters</code> (line 17): the parsed user filter map, keyed by property name, value a
-          <code>(string Operator, string Value)</code> tuple, the shape produced by
-          <a href="group-12-api-hosting-mapping.html#queryfiltermodelbinder"><code>QueryFilterModelBinder</code></a> at the API edge.</li>
-          <li><code>SortColumn</code> / <code>SortDirection</code> (lines 20, 23): the property name and <code>&quot;asc&quot;</code>/<code>&quot;desc&quot;</code> string.</li>
-          <li><code>Fields</code> (line 26): comma-separated field names for sparse-fieldset projection.</li>
-          <li><code>PageNumber</code> / <code>PageSize</code> (lines 29, 32): nullable, null means &quot;no pagination&quot; (the pipeline
-          then applies a safety cap, see <a href="#entityquerypipeline"><code>EntityQueryPipeline</code></a>).</li>
-          <li><code>IncludeFKs</code> (line 35) / <code>IncludeChildren</code> (line 38): whether FK reference / child collection
-          navigations were requested.</li>
-          <li><code>DTOToEntityPropertyMap</code> (line 44): translates DTO column names to entity property paths
-          (e.g. <code>&quot;CategoryName&quot; → &quot;Category.Name&quot;</code>), defaulting to <code>FrozenDictionary.Empty</code>.</li>
+          <li><strong>What it is</strong>: a tiny internal helper that splits the comma-separated value list carried by the
+          <code>IN</code> filter operator into a typed list, skipping any entry that fails to parse.</li>
+          <li><strong>Depends on</strong>: nothing first-party. BCL only (<code>string.Split</code>, <code>StringSplitOptions</code>).</li>
+          <li><strong>Concept introduced, set membership in a URL filter, and lenient parsing as a contract.</strong> The
+          dynamic-filter vocabulary is one operator string plus one value string per property (see
+          <a href="#ifilterstrategy"><code>IFilterStrategy</code></a>), so an <code>IN</code> filter has to smuggle a <em>set</em> through a single
+          string. This class is the one place that decodes that convention:
+          <code>value.Split(Separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)</code>
+          (<code>FilterValueParser.cs:24</code>, <code>:39</code>), so <code>&quot;1, 2 ,3&quot;</code> and <code>&quot;1,2,3&quot;</code> behave identically and empty slots
+          vanish. <code>[Rubric §9, API &amp; Contract Design]</code> (assesses whether the query conventions are uniform
+          and predictable): every strategy that supports <code>IN</code> decodes the list the same way, so the client
+          never has to learn a per-type list syntax. <code>[Rubric §15, Best Practices &amp; Code Quality]</code> (assesses
+          defensive, exception-free handling of untrusted input): the doc comment (<code>:3-7</code>) states the rule
+          explicitly, an unparseable entry is <em>skipped</em>, matching the single-value strategies which silently
+          return the unfiltered query rather than throwing, so one malformed entry never fails the request.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>Separator</code> (<code>:10</code>): a <code>static readonly char[]</code> holding a single comma, hoisted to a field so the
+          array is allocated once rather than per call.</li>
+          <li><code>ParseList&lt;T&gt;(string value, Func&lt;string, T?&gt; parse)</code> (<code>:17-31</code>), constrained <code>where T : struct</code>.
+          The caller supplies the per-item parse delegate, so the parser stays type-agnostic. A
+          null/whitespace input returns an empty list (<code>:21-22</code>); each part is run through <code>parse</code> and
+          added only when the nullable result has a value (<code>if (parse(part) is { } parsed)</code>, <code>:26-27</code>).</li>
+          <li><code>ParseStringList(string value)</code> (<code>:34-40</code>): the string overload, no per-item parse needed, just
+          the split with the same options, returning <code>[]</code> for empty input (<code>:37</code>).</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: the sealed record gives immutability (safe to pass across layers) and
-          <code>with</code>-expression construction (handy in tests); the empty-map default means callers that don&#39;t need
-          translation pass nothing and the lookup branch is simply skipped.</li>
-          <li><strong>Where it&#39;s used</strong>: constructed inside
-          <a href="#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService</code></a><code>.BuildQueryAsync</code>
-          (<code>EntityQueryService.cs:283-295</code>) and handed to
-          <a href="#ientityquerypipeline"><code>IEntityQueryPipeline</code></a><code>.ExecuteAsync</code>.</li>
+          <li><strong>Why it&#39;s built this way</strong>: the <code>Func&lt;string, T?&gt;</code> shape lets each caller pass its own
+          <code>TryParse</code> in a <code>static</code> lambda, so no closure is allocated (see
+          <a href="#intfilterstrategy"><code>IntFilterStrategy</code></a><code>.ApplyIn</code>, <code>IntFilterStrategy.cs:42</code>). Returning a
+          <code>List&lt;T&gt;</code> rather than an array matters downstream: LINQ Dynamic binds it as the receiver of a
+          <code>Contains</code> call.</li>
+          <li><strong>Where it&#39;s used</strong>: the three strategies that support <code>IN</code>,
+          <a href="#guidfilterstrategy"><code>GuidFilterStrategy</code></a> (<code>GuidFilterStrategy.cs:36</code>),
+          <a href="#intfilterstrategy"><code>IntFilterStrategy</code></a> (<code>IntFilterStrategy.cs:42</code>), and
+          <a href="#stringfilterstrategy"><code>StringFilterStrategy</code></a> (<code>StringFilterStrategy.cs:45</code>).</li>
+          <li><strong>Caveats / not-in-source</strong>: <code>internal</code>, so a consumer writing a custom
+          <a href="#ifilterstrategy"><code>IFilterStrategy</code></a> outside this assembly cannot reuse it and must decode its own
+          list syntax. There is no size cap on the parsed list in this class; nothing here bounds how many
+          values an <code>IN</code> filter may carry.</li>
           </ul>
           <hr>
           <h3 id="ifilterstrategy">IFilterStrategy</h3>
@@ -168,80 +189,93 @@
           <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services.Filtering</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/IFilterStrategy.cs:6</code> · Level 0 · interface</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: the Strategy-pattern interface for dynamic query filtering. Each implementation
-          handles one CLR property-type family (string, int, DateTime, bool, decimal, Guid) and translates an
-          operator key + raw string value into a <code>.Where()</code> clause on an <code>IQueryable&lt;T&gt;</code>.</li>
-          <li><strong>Depends on</strong>: <code>System.Linq</code> (BCL). No first-party dependencies.</li>
-          <li><strong>Concept introduced, the Strategy pattern for open-ended extensibility.</strong> <code>[Rubric §2, Design Patterns]</code> (assesses idiomatic, problem-solving patterns): instead of one giant <code>switch (type)</code> in a
-          single filtering class, each filterable type gets its own strategy class, and
-          <a href="#queryfilterservice"><code>QueryFilterService</code></a> holds a <code>Type → IFilterStrategy</code> dictionary. Adding a new
-          filterable type means adding a strategy and registering it, no edit to existing code, the textbook
-          Open/Closed shape (<code>[Rubric §1, SOLID]</code>). <code>[Rubric §9, API &amp; Contract Design]</code> (assesses
-          consistent dynamic-query conventions): a uniform operator vocabulary across the whole API surface
-          flows from this one contract.</li>
+          <li><strong>What it is</strong>: the Strategy-pattern contract for dynamic query filtering. Each implementation
+          handles one CLR property-type family (string, int, DateTime, bool, decimal, Guid) and turns an
+          operator key plus a raw string value into a <code>.Where()</code> clause on an <code>IQueryable&lt;T&gt;</code>.</li>
+          <li><strong>Depends on</strong>: nothing first-party. <code>System.Linq</code> (BCL).</li>
+          <li><strong>Concept introduced, the Strategy pattern for open-ended extensibility.</strong> <code>[Rubric §2, Design Patterns]</code> (assesses whether patterns are applied idiomatically to real problems): instead of one
+          growing <code>switch (propertyType)</code> inside a single filtering class, every filterable type gets its own
+          strategy object and <a href="#queryfilterservice"><code>QueryFilterService</code></a> holds a <code>Type -&gt; IFilterStrategy</code>
+          dictionary. Adding a filterable type means adding a class and registering it, with no edit to
+          existing code, the textbook Open/Closed shape (<code>[Rubric §1, SOLID]</code>). <code>[Rubric §9, API &amp; Contract Design]</code> (assesses consistent query conventions across the API surface): a single operator
+          vocabulary for every entity in both apps flows from this one contract.</li>
           <li><strong>Walkthrough</strong><ul>
-          <li><code>IQueryable&lt;T&gt; Apply&lt;T&gt;(IQueryable&lt;T&gt; query, string property, string op, string value)</code> (line 17)
-           , <code>property</code> is the entity property name or dotted path, <code>op</code> is the operator string <strong>already
-          uppercased by the caller</strong> (per the doc comment, line 14), <code>value</code> is the raw string. The contract
-          is to return the <em>original</em> query unchanged when the operator is unrecognized, filtering is
-          best-effort, never throwing.</li>
-          <li><code>IReadOnlySet&lt;string&gt;? SupportedOperators =&gt; null</code> (line 24), a <strong>default interface member</strong>:
-          returns <code>null</code> by default (so a custom third-party strategy can skip operator validation), but the
-          built-in strategies override it with a <code>FrozenSet</code> of the operators they accept, so
-          <a href="#queryfilterservice"><code>QueryFilterService</code></a> can reject an invalid operator <em>up front</em> as a 400
-          rather than letting it become a silent no-op or a 500.</li>
+          <li><code>IQueryable&lt;T&gt; Apply&lt;T&gt;(IQueryable&lt;T&gt; query, string property, string op, string value)</code>
+          (<code>IFilterStrategy.cs:17</code>). <code>property</code> is the entity property name or dotted path, <code>op</code> is the
+          operator string <strong>already uppercased by the caller</strong> (stated in the doc comment, <code>:14</code>), and
+          <code>value</code> is the raw string. The documented return contract (<code>:16</code>) is to hand back the <em>original</em>
+          query when the operator is unrecognized: filtering is best-effort and never throws.</li>
+          <li><code>IReadOnlySet&lt;string&gt;? SupportedOperators =&gt; null</code> (<code>:24</code>), a <strong>default interface member</strong>. A
+          default interface member supplies a body on the interface itself, so an implementer can ignore it
+          entirely. Returning <code>null</code> means &quot;skip operator validation&quot; (<code>:21</code>), the tolerant default for a
+          third-party strategy; the six built-in strategies override it with a <code>FrozenSet</code> so
+          <a href="#queryfilterservice"><code>QueryFilterService</code></a> can reject an unknown operator up front as a
+          validation failure instead of letting it degrade into a silent no-op.</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: string operator names (rather than an enum) let a consumer extend the
-          operator vocabulary without changing a framework enum; the per-type strategy split keeps each type&#39;s
-          parsing/comparison rules isolated and testable.</li>
-          <li><strong>Where it&#39;s used</strong>: implemented by the six built-in strategies below; the registry and dispatch
-          live in <a href="#queryfilterservice"><code>QueryFilterService</code></a>.</li>
+          <li><strong>Why it&#39;s built this way</strong>: operators are plain strings rather than an enum, so a consumer can
+          extend the vocabulary without a framework change; splitting per type keeps each type&#39;s parsing and
+          comparison rules isolated and unit-testable.</li>
+          <li><strong>Where it&#39;s used</strong>: implemented by the six built-in strategies below; the registry, the dispatch,
+          and the up-front validation all live in <a href="#queryfilterservice"><code>QueryFilterService</code></a>.</li>
           </ul>
           <hr>
           <h3 id="propertyaccessor">PropertyAccessor</h3>
           <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services</code> (private nested in <code>QueryFieldService</code>) · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:23</code> · Level 0 · record struct (readonly, private)</p>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services</code> (private, nested in <code>QueryFieldService</code>) · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:23</code> · Level 0 · record struct (readonly, private)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: a tiny private <code>readonly record struct</code> declared inside
+          <li><strong>What it is</strong>: a tiny <code>private readonly record struct</code> declared inside
           <a href="#queryfieldservice"><code>QueryFieldService</code></a> that bundles a property&#39;s CLR name, its pre-computed
-          camelCase JSON name, and a compiled <code>Func&lt;object, object?&gt;</code> getter delegate, so a property&#39;s value
-          can be read without per-call reflection.</li>
-          <li><strong>Depends on</strong>: <code>System.Reflection</code>, <code>System.Linq.Expressions</code> (BCL). No first-party dependencies.</li>
-          <li><strong>Concept introduced, compile-once expression delegates vs. per-call reflection.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code> (assesses avoiding per-request reflection on hot paths): calling
-          <code>PropertyInfo.GetValue</code> allocates an <code>object[]</code> args array on <em>every</em> invocation; compiling a
-          <code>Func&lt;object, object?&gt;</code> once per type from an <code>Expression.Lambda</code> (done in
-          <a href="#queryfieldservice"><code>QueryFieldService</code></a><code>.GetAccessors</code>, lines 25-42, then cached) collapses the
-          per-property/per-row cost to a delegate call. The <code>readonly record struct</code> shape is the idiomatic
-          .NET choice for a small, allocation-free value carrier, cross-reference
-          <a href="group-08-auth.html#loginrequest"><code>LoginRequest</code></a> for the <code>readonly record struct</code> pattern.</li>
-          <li><strong>Walkthrough</strong>: <code>private readonly record struct PropertyAccessor(string PropertyName, string CamelCaseName, Func&lt;object, object?&gt; GetValue)</code> (line 23). <code>PropertyName</code> is used to match requested
-          fields; <code>CamelCaseName</code> becomes the <code>ExpandoObject</code> key; <code>GetValue</code> is the compiled getter invoked
-          per entity in <code>ShapeData</code>/<code>ShapeCollectionData</code>.</li>
-          <li><strong>Why it&#39;s built this way</strong>: <code>private</code> keeps this hot-path helper unexposed; the struct + record
-          combination gives zero-allocation storage with structural equality, suitable for caching in arrays.</li>
-          <li><strong>Where it&#39;s used</strong>: exclusively inside <a href="#queryfieldservice"><code>QueryFieldService</code></a>: the <code>AccessorCache</code>
-          (<code>ConcurrentDictionary&lt;Type, PropertyAccessor[]&gt;</code>) is built once per entity type and iterated by the
-          data-shaping methods.</li>
+          camelCase JSON name, and a compiled <code>Func&lt;object, object?&gt;</code> getter, so a property value can be read
+          without per-call reflection.</li>
+          <li><strong>Depends on</strong>: nothing first-party. <code>System.Reflection</code>, <code>System.Linq.Expressions</code> (BCL).</li>
+          <li><strong>Concept introduced, compile-once expression delegates instead of per-call reflection.</strong>
+          <code>[Rubric §12, Performance &amp; Scalability]</code> (assesses whether hot paths avoid avoidable per-request
+          work): <code>PropertyInfo.GetValue</code> allocates an argument array on <em>every</em> invocation, and shaping a
+          1,000-row page with 20 properties would pay that cost 20,000 times. Building a
+          <code>Func&lt;object, object?&gt;</code> once per type from an <code>Expression.Lambda</code> (<code>QueryFieldService.cs:33-37</code>) and
+          caching it collapses each read to a delegate call. The <code>readonly record struct</code> shape is the
+          idiomatic .NET carrier for a small immutable tuple of values: no heap allocation per element,
+          structural equality for free.</li>
+          <li><strong>Walkthrough</strong>: the whole type is one positional declaration,
+          <code>private readonly record struct PropertyAccessor(string PropertyName, string CamelCaseName, Func&lt;object, object?&gt; GetValue)</code> (<code>QueryFieldService.cs:23</code>).<ul>
+          <li><code>PropertyName</code> matches a requested <code>?fields=</code> entry, case-insensitively
+          (<code>QueryFieldService.cs:280</code>).</li>
+          <li><code>CamelCaseName</code> is computed once at construction with <code>JsonNamingPolicy.CamelCase.ConvertName</code>
+          (<code>:38</code>, policy held at <code>:20</code>) and becomes the <code>ExpandoObject</code> key, so the shaped payload matches
+          the JSON casing a typed DTO would produce.</li>
+          <li><code>GetValue</code> is the compiled getter, invoked once per property per row inside <code>ShapeData</code> (<code>:64</code>)
+          and <code>ShapeCollectionData</code> (<code>:95</code>).</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: <code>private</code> keeps a hot-path implementation detail out of the public
+          surface; the struct plus record combination gives an allocation-free value carrier that is cheap to
+          store in the cached array.</li>
+          <li><strong>Where it&#39;s used</strong>: exclusively inside <a href="#queryfieldservice"><code>QueryFieldService</code></a>. The
+          <code>AccessorCache</code> (<code>ConcurrentDictionary&lt;Type, PropertyAccessor[]&gt;</code>, <code>:19</code>) is populated once per
+          entity/DTO type by <code>GetAccessors&lt;TEntity&gt;</code> (<code>:25-42</code>) and iterated by the two shaping methods.</li>
           </ul>
           <blockquote>
-          <p>The <strong>six built-in filter strategies</strong> that follow are structurally identical: each is an
-          <code>internal sealed</code> class implementing <a href="#ifilterstrategy"><code>IFilterStrategy</code></a> for one CLR type family,
-          declaring its <code>SupportedOperators</code> as a <code>FrozenSet&lt;string&gt;</code> and a <code>switch</code> over the operator that
-          builds a LINQ-Dynamic <code>.Where()</code> string. They are grouped into one section that teaches the shared
-          shape once.</p>
-          </blockquote>
-          <h3 id="boolfilterstrategy-datetimefilterstrategy-decimalfilterstrategy-guidfilterstrategy-intfilterstrategy-stringfilterstrategy">BoolFilterStrategy, DateTimeFilterStrategy, DecimalFilterStrategy, GuidFilterStrategy, IntFilterStrategy, StringFilterStrategy</h3>
-          <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services.Filtering</code> · Level 1 · class (internal, sealed)</p>
-          </blockquote>
+          <p>The <strong>six built-in filter strategies</strong> that follow share one shape: each is an <code>internal sealed</code>
+          class implementing <a href="#ifilterstrategy"><code>IFilterStrategy</code></a> for one CLR type family, declaring its
+          <code>SupportedOperators</code> as a <code>HashSet</code> built with <code>StringComparer.Ordinal</code> and frozen with
+          <code>.ToFrozenSet(StringComparer.Ordinal)</code> (a <code>FrozenSet</code> is the read-optimised immutable set the
+          framework reaches for whenever a lookup table is built once and read many times), then switching on
+          the operator to build a LINQ Dynamic <code>.Where()</code> string. Three rules hold across all six and are not
+          repeated in every section below: values are passed as the positional parameter <code>@0</code> rather than
+          concatenated into the expression text, so they cross into EF Core as SQL parameters and not as
+          interpolated SQL (<code>[Rubric §11, Security]</code>, which assesses injection resistance); a value that
+          fails to parse returns the <strong>unfiltered</strong> query rather than throwing; and the <code>_ =&gt;</code> default arm
+          returns the original query for an unrecognized operator, exactly the no-op the
+          <a href="#ifilterstrategy"><code>IFilterStrategy</code></a> contract promises. The complete operator matrix, verbatim from
+          source:</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
-          <th>Type</th>
+          <th>Strategy</th>
           <th>File:Line</th>
-          <th>Supported operators (verbatim from source)</th>
+          <th>Supported operators</th>
           </tr>
           </thead>
           <tbody><tr>
@@ -262,382 +296,431 @@
           <tr>
           <td><code>GuidFilterStrategy</code></td>
           <td><code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/GuidFilterStrategy.cs:11</code></td>
-          <td><code>EQUALS</code>, <code>NOT EQUALS</code></td>
+          <td><code>EQUALS</code>, <code>NOT EQUALS</code>, <code>IN</code></td>
           </tr>
           <tr>
           <td><code>IntFilterStrategy</code></td>
           <td><code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/IntFilterStrategy.cs:11</code></td>
-          <td><code>EQUALS</code>, <code>NOT EQUALS</code>, <code>GREATER THAN</code>, <code>LESS THAN</code>, <code>GREATER THAN OR EQUAL</code>, <code>LESS THAN OR EQUAL</code></td>
+          <td><code>EQUALS</code>, <code>NOT EQUALS</code>, <code>GREATER THAN</code>, <code>LESS THAN</code>, <code>GREATER THAN OR EQUAL</code>, <code>LESS THAN OR EQUAL</code>, <code>IN</code></td>
           </tr>
           <tr>
           <td><code>StringFilterStrategy</code></td>
           <td><code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/StringFilterStrategy.cs:12</code></td>
-          <td><code>CONTAINS</code>, <code>NOT CONTAINS</code>, <code>EQUALS</code>, <code>NOT EQUALS</code>, <code>STARTS WITH</code>, <code>ENDS WITH</code>, <code>IS EMPTY</code>, <code>IS NOT EMPTY</code></td>
+          <td><code>CONTAINS</code>, <code>NOT CONTAINS</code>, <code>EQUALS</code>, <code>NOT EQUALS</code>, <code>STARTS WITH</code>, <code>ENDS WITH</code>, <code>IS EMPTY</code>, <code>IS NOT EMPTY</code>, <code>IN</code></td>
           </tr>
           </tbody></table></div>
+          </blockquote>
+          <h3 id="boolfilterstrategy">BoolFilterStrategy</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services.Filtering</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/BoolFilterStrategy.cs:11</code> · Level 1 · class (internal, sealed)</p>
+          </blockquote>
           <ul>
-          <li><strong>What they are</strong>: the concrete <a href="#ifilterstrategy"><code>IFilterStrategy</code></a> implementations, one per CLR
-          type family, that turn a <code>(property, operator, value)</code> triple into a <code>.Where()</code> clause.</li>
-          <li><strong>Depends on</strong>: <a href="#ifilterstrategy"><code>IFilterStrategy</code></a> (Level 0); <code>System.Linq.Dynamic.Core</code> (the
-          <code>query.Where(&quot;expr&quot;, args)</code> string-expression API); <code>System.Collections.Frozen</code>. The numeric/date
-          strategies also use <code>System.Globalization</code> (see below).</li>
-          <li><strong>Concept introduced, the Filter Strategy pattern in concrete form.</strong> <code>[Rubric §2, Design Patterns]</code> (Strategy) and <code>[Rubric §9, API &amp; Contract Design]</code> (URL-driven filtering with a uniform
-          operator set). Each strategy declares its operator set as an <code>IReadOnlySet&lt;string&gt;</code> built from a
-          <code>HashSet</code> with <code>StringComparer.Ordinal</code>, then <code>.ToFrozenSet(StringComparer.Ordinal)</code>, a <code>FrozenSet</code>
-          is the read-optimised immutable set the framework reaches for whenever a lookup table is built once
-          and read many times.</li>
-          <li><strong>Walkthrough, the shared shape</strong><ul>
-          <li><code>Apply&lt;T&gt;</code> is an operator <code>switch</code>. The match arm builds a LINQ-Dynamic string like
-          <code>query.Where(&quot;{property} == @0&quot;, value)</code>, <code>@0</code> is a positional, parameterised placeholder, so the
-          value is <em>not</em> string-concatenated into the expression (it crosses into EF as a SQL parameter, not
-          interpolated text, relevant to <code>[Rubric §11, Security]</code>, which assesses injection resistance).
-          <code>StringFilterStrategy</code> instead emits method calls like <code>{property}.Contains(@0)</code> and
-          <code>string.IsNullOrEmpty({property})</code> (<code>StringFilterStrategy.cs:23-30</code>).</li>
-          <li><strong>Defensive parsing.</strong> The value strategies (<code>Bool</code>, <code>Decimal</code>, <code>Guid</code>, <code>Int</code>) <code>TryParse</code> the
-          value and <em>return the unfiltered query</em> on failure (e.g. <code>BoolFilterStrategy.cs:20-21</code>,
-          <code>IntFilterStrategy.cs:21-22</code>) rather than throwing, a bad client value yields an unfiltered result
-          instead of a 500. The <code>_ =&gt;</code> default arm of every <code>switch</code> returns the original query for an
-          unrecognized operator, the same silent no-op the <a href="#ifilterstrategy"><code>IFilterStrategy</code></a> contract
-          promises.</li>
-          <li><strong>Culture-invariance.</strong> <code>DateTimeFilterStrategy</code> and <code>DecimalFilterStrategy</code> parse with
-          <code>CultureInfo.InvariantCulture</code> (<code>DateTimeFilterStrategy.cs:15</code>, <code>DecimalFilterStrategy.cs:22</code>) so a
-          date or decimal separator parses identically across server locales, the single-locale, culture-safe
-          posture described in <a href="00-primer.html#6-the-34-category-architecture-evaluation-lens">primer §6, §27</a>.</li>
-          <li><strong>Null operators.</strong> <code>DateTime</code> and <code>String</code> support <code>IS EMPTY</code> / <code>IS NOT EMPTY</code>, which emit
-          <code>{property} == null</code> / <code>string.IsNullOrEmpty({property})</code> and take no value.</li>
+          <li><strong>What it is</strong>: the <a href="#ifilterstrategy"><code>IFilterStrategy</code></a> for <code>bool</code> and <code>bool?</code> properties, and the
+          smallest member of the family: one operator, one comparison.</li>
+          <li><strong>Depends on</strong>: <a href="#ifilterstrategy"><code>IFilterStrategy</code></a>; <code>System.Collections.Frozen</code>,
+          <code>System.Linq.Dynamic.Core</code> (the <code>query.Where(&quot;expr&quot;, args)</code> string-expression API taught in
+          <a href="00-primer.html#3-the-external-stack-bcl--nuget-external-level-0">primer §3</a>).</li>
+          <li><strong>Walkthrough</strong>: <code>SupportedOperators</code> is the single-entry frozen set <code>{ &quot;IS&quot; }</code> (<code>:13-16</code>).
+          <code>Apply&lt;T&gt;</code> (<code>:18-28</code>) parses first and bails out before the switch: <code>if (!bool.TryParse(value, out var boolValue)) return query;</code> (<code>:20-21</code>), so <code>?isActive=IS:maybe</code> yields an unfiltered result
+          rather than a 500. The single arm emits <code>query.Where($&quot;{property} == @0&quot;, boolValue)</code> (<code>:25</code>).</li>
+          <li><strong>Why it&#39;s built this way</strong>: <code>IS</code> (rather than <code>EQUALS</code>) reads naturally for a boolean in a URL
+          filter, and a boolean has no ordering, so no comparison operators exist to support.</li>
+          <li><strong>Where it&#39;s used</strong>: registered against both <code>typeof(bool)</code> and <code>typeof(bool?)</code> in
+          <a href="#queryfilterservice"><code>QueryFilterService</code></a> (<code>QueryFilterService.cs:30-31</code>). Note that the two keys
+          get <strong>two separate instances</strong>, not one shared instance.</li>
+          <li><strong>Caveats / not-in-source</strong>: there is no <code>IS EMPTY</code> / <code>IS NOT EMPTY</code> arm, so a <code>bool?</code> property
+          cannot be filtered for null through this strategy.</li>
           </ul>
-          </li>
-          <li><strong>Why they&#39;re built this way</strong>: one type per strategy keeps each type&#39;s parse + comparison rules in
-          isolation; <code>internal sealed</code> means they&#39;re registered by the framework and never referenced directly
-          by consumers, extension happens through
-          <a href="#queryfilterservice"><code>QueryFilterService.RegisterStrategy</code></a>, not subclassing.</li>
-          <li><strong>Where they&#39;re used</strong>: instantiated and registered in the static <code>Strategies</code> table of
-          <a href="#queryfilterservice"><code>QueryFilterService</code></a> (one instance per type, with the nullable variant
-          sharing the same instance, <code>QueryFilterService.cs:26-40</code>).</li>
-          <li><strong>Caveats / not-in-source</strong>: there is <strong>no</strong> <code>BETWEEN</code> operator on any strategy (a prior edition of
-          this guide listed one; the current source has none). <code>Bool</code>, <code>Guid</code>, <code>Int</code> and <code>Decimal</code> have <em>no</em>
-          <code>IS EMPTY</code>/<code>IS NOT EMPTY</code> arm, only <code>String</code> and <code>DateTime</code> do.</li>
+          <hr>
+          <h3 id="datetimefilterstrategy">DateTimeFilterStrategy</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services.Filtering</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/DateTimeFilterStrategy.cs:13</code> · Level 1 · class (internal, sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the <a href="#ifilterstrategy"><code>IFilterStrategy</code></a> for <code>DateTime</code> and <code>DateTime?</code>, covering
+          the six temporal comparisons plus the two null checks.</li>
+          <li><strong>Depends on</strong>: <a href="#ifilterstrategy"><code>IFilterStrategy</code></a>; <code>System.Globalization</code>,
+          <code>System.Collections.Frozen</code>, <code>System.Linq.Dynamic.Core</code>.</li>
+          <li><strong>Concept introduced, culture-invariant parsing of untrusted input.</strong> <code>FormatProvider</code> is a static
+          <code>CultureInfo.InvariantCulture</code> (<code>:15</code>) used by every <code>DateTime.TryParse</code> call, so <code>&quot;2026-07-21&quot;</code>
+          parses identically regardless of the server&#39;s locale. That is the single-locale, culture-safe
+          posture described in <a href="00-primer.html#4-c-build-and-code-style-conventions">primer §4</a>, and it is what
+          keeps a filter from meaning different things on two hosts in the same cluster.</li>
+          <li><strong>Walkthrough</strong>: <code>SupportedOperators</code> (<code>:17-21</code>) is the eight-entry frozen set. <code>Apply&lt;T&gt;</code>
+          (<code>:23-41</code>) is a single expression-bodied <code>switch</code>, and unlike the other value strategies it parses
+          <strong>inside</strong> each arm via a <code>when</code> clause, for example
+          <code>&quot;IS AFTER&quot; when DateTime.TryParse(value, FormatProvider, DateTimeStyles.None, out var dt) =&gt; query.Where($&quot;{property} &gt; @0&quot;, dt)</code> (<code>:30-31</code>). A failed parse means the <code>when</code> guard is false and
+          the arm does not match, so control falls to <code>_ =&gt; query</code> (<code>:40</code>), the same unfiltered result the
+          other strategies produce with an early return. The two null operators need no value at all:
+          <code>&quot;IS EMPTY&quot; =&gt; query.Where($&quot;{property} == null&quot;)</code> and
+          <code>&quot;IS NOT EMPTY&quot; =&gt; query.Where($&quot;{property} != null&quot;)</code> (<code>:38-39</code>).</li>
+          <li><strong>Why it&#39;s built this way</strong>: parsing per arm keeps the value-taking and the value-free operators in
+          one switch without a pre-parse that would reject <code>IS EMPTY</code> for having no parsable value.</li>
+          <li><strong>Where it&#39;s used</strong>: registered against <code>typeof(DateTime)</code> and <code>typeof(DateTime?)</code> in
+          <a href="#queryfilterservice"><code>QueryFilterService</code></a> (<code>QueryFilterService.cs:34-35</code>), as two instances.</li>
+          <li><strong>Caveats / not-in-source</strong>: there is no <code>BETWEEN</code> operator and no range shorthand; a date range is
+          expressed as two filters (<code>IS ON OR AFTER</code> plus <code>IS ON OR BEFORE</code>). Nothing here normalizes to UTC:
+          the parsed value is used as given (<code>DateTimeStyles.None</code>).</li>
+          </ul>
+          <hr>
+          <h3 id="decimalfilterstrategy">DecimalFilterStrategy</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services.Filtering</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/DecimalFilterStrategy.cs:12</code> · Level 1 · class (internal, sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the <a href="#ifilterstrategy"><code>IFilterStrategy</code></a> for <code>decimal</code> and <code>decimal?</code>, supporting
+          equality and the four ordering comparisons.</li>
+          <li><strong>Depends on</strong>: <a href="#ifilterstrategy"><code>IFilterStrategy</code></a>; <code>System.Globalization</code>,
+          <code>System.Collections.Frozen</code>, <code>System.Linq.Dynamic.Core</code>.</li>
+          <li><strong>Walkthrough</strong>: <code>SupportedOperators</code> (<code>:14-18</code>) lists the six operators. <code>Apply&lt;T&gt;</code> (<code>:20-35</code>)
+          parses once up front with the invariant culture,
+          <code>decimal.TryParse(value, CultureInfo.InvariantCulture, out var decimalValue)</code> (<code>:22</code>), returning the
+          unfiltered query on failure (<code>:23</code>), then switches to one of six <code>@0</code> comparisons (<code>:27-32</code>). The
+          invariant culture is the load-bearing detail: it fixes <code>.</code> as the decimal separator, so a price
+          filter cannot silently change meaning on a host with a different locale.</li>
+          <li><strong>Why it&#39;s built this way</strong>: <code>decimal</code> (not <code>double</code>) is the money/quantity type across the
+          codebase, so the filter type matches the storage type exactly and no precision is lost at the
+          boundary.</li>
+          <li><strong>Where it&#39;s used</strong>: registered against <code>typeof(decimal)</code> and <code>typeof(decimal?)</code> in
+          <a href="#queryfilterservice"><code>QueryFilterService</code></a> (<code>QueryFilterService.cs:36-37</code>).</li>
+          <li><strong>Caveats / not-in-source</strong>: no <code>IN</code> arm (unlike <code>Int</code> and <code>Guid</code>) and no null-check operators.</li>
+          </ul>
+          <hr>
+          <h3 id="guidfilterstrategy">GuidFilterStrategy</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services.Filtering</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/GuidFilterStrategy.cs:11</code> · Level 1 · class (internal, sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the <a href="#ifilterstrategy"><code>IFilterStrategy</code></a> for <code>Guid</code> and <code>Guid?</code>, supporting
+          equality plus set membership.</li>
+          <li><strong>Depends on</strong>: <a href="#ifilterstrategy"><code>IFilterStrategy</code></a>,
+          <a href="#filtervalueparser"><code>FilterValueParser</code></a>; <code>System.Collections.Frozen</code>,
+          <code>System.Linq.Dynamic.Core</code>.</li>
+          <li><strong>Concept introduced, the <code>IN</code> set-membership operator.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code> (assesses whether a client can express a batch read as one query): without <code>IN</code>, a UI
+          that has to fetch fifty entities by id issues fifty round trips or a chain of <code>OR</code>s. <code>ApplyIn</code>
+          (<code>:34-38</code>) parses the comma list through
+          <a href="#filtervalueparser"><code>FilterValueParser.ParseList</code></a> with a <code>static</code> lambda over <code>Guid.TryParse</code>
+          (<code>:36</code>), then emits <code>query.Where($&quot;@0.Contains({property})&quot;, values)</code> (<code>:37</code>). Note the inversion:
+          the parsed <code>List&lt;Guid&gt;</code> is the <em>receiver</em> <code>@0</code> and the entity property is the argument, which is how
+          LINQ Dynamic expresses <code>list.Contains(e.Prop)</code>, the shape EF Core translates to SQL <code>IN (...)</code>. An
+          empty parsed list short-circuits to the unfiltered query (<code>:37</code>), so <code>IN</code> with no usable value is a
+          no-op rather than a query that matches nothing.</li>
+          <li><strong>Walkthrough</strong>: <code>SupportedOperators</code> (<code>:13-16</code>) is <code>{ EQUALS, NOT EQUALS, IN }</code>. <code>Apply&lt;T&gt;</code>
+          (<code>:18-32</code>) routes <code>IN</code> out first (<code>:20-21</code>) <em>before</em> the single-value <code>Guid.TryParse</code> (<code>:23</code>),
+          because a comma-separated list would never parse as one GUID; the remaining two arms are the
+          standard <code>@0</code> comparisons (<code>:28-29</code>).</li>
+          <li><strong>Where it&#39;s used</strong>: registered against <code>typeof(Guid)</code> and <code>typeof(Guid?)</code> in
+          <a href="#queryfilterservice"><code>QueryFilterService</code></a> (<code>QueryFilterService.cs:38-39</code>). It is the strategy that
+          serves by-id filtering wherever an entity&#39;s identifier alias resolves to <code>Guid</code>.</li>
+          <li><strong>Caveats / not-in-source</strong>: no ordering operators (GUIDs are compared for equality only) and no
+          null-check operators.</li>
+          </ul>
+          <hr>
+          <h3 id="intfilterstrategy">IntFilterStrategy</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services.Filtering</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/IntFilterStrategy.cs:11</code> · Level 1 · class (internal, sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the <a href="#ifilterstrategy"><code>IFilterStrategy</code></a> for <code>int</code> and <code>int?</code>, the widest numeric
+          surface: equality, the four ordering comparisons, and <code>IN</code>.</li>
+          <li><strong>Depends on</strong>: <a href="#ifilterstrategy"><code>IFilterStrategy</code></a>,
+          <a href="#filtervalueparser"><code>FilterValueParser</code></a>; <code>System.Collections.Frozen</code>,
+          <code>System.Linq.Dynamic.Core</code>.</li>
+          <li><strong>Walkthrough</strong>: <code>SupportedOperators</code> (<code>:13-17</code>) holds the seven operators. <code>Apply&lt;T&gt;</code> (<code>:19-38</code>)
+          opens with the <code>IN</code> route and an inline comment stating the rule, &quot;IN takes a comma-separated set;
+          every other operator takes a single value&quot; (<code>:21-23</code>), then the single-value <code>int.TryParse</code> guard
+          (<code>:25-26</code>) and the six comparison arms (<code>:30-35</code>). <code>ApplyIn</code> (<code>:40-44</code>) mirrors
+          <a href="#guidfilterstrategy"><code>GuidFilterStrategy</code></a>: parse through
+          <a href="#filtervalueparser"><code>FilterValueParser.ParseList</code></a> (<code>:42</code>), short-circuit on an empty list, and
+          emit <code>@0.Contains({property})</code> (<code>:43</code>).</li>
+          <li><strong>Why it&#39;s built this way</strong>: <code>int</code> is the default identifier alias across most modules, so this
+          strategy carries the by-id and by-parent-id filtering for the majority of entities, which is why it
+          gets the <code>IN</code> batch operator that <code>Decimal</code> does not.</li>
+          <li><strong>Where it&#39;s used</strong>: registered against <code>typeof(int)</code> and <code>typeof(int?)</code> in
+          <a href="#queryfilterservice"><code>QueryFilterService</code></a> (<code>QueryFilterService.cs:32-33</code>); reached indirectly by
+          <a href="#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService</code></a>&#39;s synthetic
+          <code>Id EQUALS</code> filter (<code>EntityQueryService.cs:298-301</code>) whenever the identifier alias is <code>int</code>.</li>
+          <li><strong>Caveats / not-in-source</strong>: there is no <code>long</code> strategy in the built-in table; a <code>long</code> key would
+          need <code>QueryFilterService.RegisterStrategy</code> at startup (<code>QueryFilterService.cs:55</code>).</li>
+          </ul>
+          <hr>
+          <h3 id="stringfilterstrategy">StringFilterStrategy</h3>
+          <blockquote>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services.Filtering</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/StringFilterStrategy.cs:12</code> · Level 1 · class (internal, sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the <a href="#ifilterstrategy"><code>IFilterStrategy</code></a> for <code>string</code> properties, and, because of a
+          routing rule in <a href="#queryfilterservice"><code>QueryFilterService</code></a>, the strategy used for <strong>every nested
+          property path</strong> regardless of the target type.</li>
+          <li><strong>Depends on</strong>: <a href="#ifilterstrategy"><code>IFilterStrategy</code></a>,
+          <a href="#filtervalueparser"><code>FilterValueParser</code></a>; <code>System.Collections.Frozen</code>,
+          <code>System.Linq.Dynamic.Core</code>.</li>
+          <li><strong>Concept introduced, method-call expressions in LINQ Dynamic.</strong> Where the value strategies emit
+          operator comparisons, the text operators emit <em>method calls</em> on the property:
+          <code>{property}.Contains(@0)</code>, <code>!{property}.Contains(@0)</code>, <code>{property}.StartsWith(@0)</code>,
+          <code>{property}.EndsWith(@0)</code> (<code>:23-28</code>), and <code>string.IsNullOrEmpty({property})</code> /
+          <code>!string.IsNullOrEmpty({property})</code> for the presence checks (<code>:37-38</code>). LINQ Dynamic parses the
+          string into an expression tree, and EF Core then translates those calls into <code>LIKE</code> predicates, so
+          the match still runs in the database. <code>[Rubric §12, Performance &amp; Scalability]</code>: <code>CONTAINS</code>
+          translates to a leading-wildcard <code>LIKE</code>, which cannot use a normal B-tree index, that is a known
+          cost of the convenience, not a defect of this class.</li>
+          <li><strong>Walkthrough</strong>: <code>SupportedOperators</code> (<code>:14-18</code>) is the nine-entry frozen set, the largest in the
+          family. <code>Apply&lt;T&gt;</code> (<code>:20-30</code>) handles the six value-taking text operators, then delegates the rest
+          to <code>ApplyPresenceOrSet</code> (<code>:34-41</code>); the inline comment (<code>:32-33</code>) records why, the split keeps each
+          method under the cyclomatic-complexity ceiling the analyzers enforce as errors. <code>ApplyPresenceOrSet</code>
+          covers <code>IS EMPTY</code>, <code>IS NOT EMPTY</code>, and routes <code>IN</code> to <code>ApplyIn</code> (<code>:43-47</code>), which uses
+          <a href="#filtervalueparser"><code>FilterValueParser.ParseStringList</code></a> (<code>:45</code>) and emits the same
+          <code>@0.Contains({property})</code> receiver-inverted form as the other two <code>IN</code> strategies.</li>
+          <li><strong>Why it&#39;s built this way</strong>: the class doc comment (<code>:6-11</code>) states the dual role explicitly, this
+          strategy also serves nested paths such as <code>&quot;Category.Name&quot;</code> &quot;since LINQ Dynamic evaluates the full
+          path as a string expression.&quot; That is why a nested filter is always validated against <em>this</em>
+          operator set, even when the leaf property is an <code>int</code>.</li>
+          <li><strong>Where it&#39;s used</strong>: registered against <code>typeof(string)</code> in
+          <a href="#queryfilterservice"><code>QueryFilterService</code></a> (<code>QueryFilterService.cs:29</code>), and held a second time as
+          the dedicated <code>StringStrategy</code> field (<code>QueryFilterService.cs:47</code>) used for the string and
+          nested-path routes in both <code>ApplyFilters</code> (<code>:105</code>) and validation (<code>:168</code>, <code>:203</code>).</li>
+          <li><strong>Caveats / not-in-source</strong>: nothing here escapes LIKE wildcards, so a <code>%</code> inside a <code>CONTAINS</code>
+          value reaches the database as part of the pattern. The value is still a bound parameter, so this is
+          a matching-semantics detail, not an injection vector.</li>
           </ul>
           <hr>
           <h3 id="queryfieldservice">QueryFieldService</h3>
           <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:16</code> · Level 3 · class (sealed)</p>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:16</code> · Level 3 · class (sealed, all members static)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: a stateless utility (all methods static) that provides <strong>field validation</strong>,
-          <strong>data shaping</strong> (sparse-fieldset projection onto <code>ExpandoObject</code>), <strong>dynamic sorting</strong>, and
-          <strong>server-side field selection</strong> (building EF <code>Select</code> expressions). It caches reflected metadata per
-          type so reflection happens once.</li>
-          <li><strong>Depends on</strong>: <a href="group-01-result-error-handling.html#error"><code>Error</code></a>,
-          <a href="group-01-result-error-handling.html#result"><code>Result</code></a> (both Level 1/2),
-          <a href="#propertyaccessor"><code>PropertyAccessor</code></a> (its own private nested struct);
-          <code>System.Linq.Dynamic.Core</code>, <code>System.Dynamic</code> (<code>ExpandoObject</code>), <code>System.Reflection</code>,
-          <code>System.Text.Json</code> (camelCase naming policy).</li>
-          <li><strong>Concept introduced, compiled-getter cache + sparse fieldsets + dynamic sort.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code> (assesses avoiding per-request reflection and moving less data):
-          <code>GetAccessors&lt;TEntity&gt;</code> (lines 25-42) builds one <a href="#propertyaccessor"><code>PropertyAccessor</code></a> array per
-          type, each with a compiled getter, and caches it in <code>AccessorCache</code>; later requests reuse it with
-          no reflection. <code>[Rubric §9, API &amp; Contract Design]</code> (assesses sparse-fieldset / projection APIs):
-          a <code>?fields=...</code> request shapes the response to only the named fields, letting a client ask for
-          exactly the data it needs.</li>
+          <li><strong>What it is</strong>: the read-side utility that owns four jobs: <strong>field validation</strong>, <strong>data shaping</strong>
+          (sparse-fieldset projection onto <code>ExpandoObject</code>), <strong>dynamic sorting</strong>, and <strong>server-side field
+          selection</strong> (building an EF <code>Select</code> expression). It caches reflected metadata per type so
+          reflection is paid once per process, not once per request.</li>
+          <li><strong>Depends on</strong>: <a href="group-01-result-error-handling.html#result"><code>Result</code></a>,
+          <a href="group-01-result-error-handling.html#error"><code>Error</code></a>,
+          <a href="#propertyaccessor"><code>PropertyAccessor</code></a> (its own nested struct); <code>System.Linq.Dynamic.Core</code>,
+          <code>System.Dynamic</code> (<code>ExpandoObject</code>), <code>System.Reflection</code>, <code>System.Text.Json</code>,
+          <code>System.Collections.Concurrent</code>.</li>
+          <li><strong>Concept introduced, sparse fieldsets and the two-level metadata cache.</strong> <code>[Rubric §9, API &amp; Contract Design]</code> (assesses whether clients can ask for exactly the data they need): a
+          <code>?fields=id,name</code> request narrows both the SQL <code>SELECT</code> and the JSON payload. <code>[Rubric §12, Performance &amp; Scalability]</code>: two static <code>ConcurrentDictionary</code> caches back everything,
+          <code>PropertiesCache</code> (<code>Type -&gt; PropertyInfo[]</code>, <code>:18</code>) for the validation/projection paths and
+          <code>AccessorCache</code> (<code>Type -&gt; PropertyAccessor[]</code>, <code>:19</code>) for the shaping path.
+          <code>GetAccessors&lt;TEntity&gt;</code> (<code>:25-42</code>) builds the second from the first, compiling one
+          <code>Expression.Lambda&lt;Func&lt;object, object?&gt;&gt;</code> per property (<code>:33-37</code>) and pre-computing the camelCase
+          name (<code>:38</code>). Both <code>GetOrAdd</code> calls use <code>static</code> lambdas, so no closure is allocated on the hot
+          path.</li>
           <li><strong>Walkthrough</strong> (members in teaching order)<ul>
-          <li><code>ShapeData&lt;TEntity&gt;</code> (line 52) / <code>ShapeCollectionData&lt;TEntity&gt;</code> (line 77): produce
-          <code>ExpandoObject</code>(s) holding only the requested fields, keyed by camelCase name. <code>ParseFields</code>
-          (line 250) splits the comma list into a case-insensitive <code>HashSet</code>; <code>FilterAccessorsByFields</code>
-          (line 261) narrows the cached accessor array.</li>
-          <li><code>ApplySorting&lt;TEntity&gt;</code> (line 115): builds a LINQ-Dynamic <code>OrderBy(&quot;col ascending/descending&quot;)</code>
-          expression, first translating the DTO column name through the <code>dtoToEntityPropertyMap</code> (line 124).
-          Falls back to an optional <code>defaultSort</code> lambda when no column is given.</li>
-          <li><code>ApplyFieldSelection&lt;TEntity&gt;</code> (line 140): constructs a <code>MemberInit</code> expression
-          (<code>new TEntity { Prop = e.Prop, ... }</code>) to push field projection <em>into the SQL <code>SELECT</code></em>, only
-          <strong>writable</strong> properties are projected (line 153), since a read-only/computed property would break
-          EF&#39;s translation of the <code>MemberInit</code>.</li>
-          <li><code>Validate&lt;TEntity&gt;</code> (line 183): checks every requested field exists on the type, and (when
-          <code>allowWriteableFields</code> is false) rejects read-only fields; returns a
-          <a href="group-01-result-error-handling.html#result"><code>Result</code></a> carrying one
-          <a href="group-01-result-error-handling.html#error"><code>Error</code></a> per offending field, built from
-          <code>Error.InvalidEntityField</code>.</li>
-          <li><code>ValidateSortDirection</code> (line 229): accepts only <code>&quot;asc&quot;</code>, <code>&quot;desc&quot;</code>, or null/empty.</li>
+          <li><code>ShapeData&lt;TEntity&gt;(entity, fields)</code> (<code>:52-68</code>) and
+          <code>ShapeCollectionData&lt;TEntity&gt;(entities, fields)</code> (<code>:77-102</code>): parse the field list, fetch the
+          cached accessors, narrow them when a subset was requested (<code>:57-58</code>, <code>:84-85</code>), then fill an
+          <code>ExpandoObject</code> keyed by <code>CamelCaseName</code> (<code>:64</code>, <code>:95</code>). An empty field list means all properties.</li>
+          <li><code>ApplySorting&lt;TEntity&gt;</code> (<code>:120-143</code>): resolves the sort column, then emits
+          <code>query.OrderBy($&quot;{sortExpr} {(descending ? &quot;descending&quot; : &quot;ascending&quot;)}&quot;)</code> (<code>:138</code>), falling back
+          to the optional <code>defaultSort</code> lambda when nothing valid was supplied (<code>:142</code>).</li>
+          <li><code>ApplyFieldSelection&lt;TEntity&gt;</code> (<code>:154-186</code>): builds a <code>MemberInit</code> expression
+          (<code>new TEntity { Prop = e.Prop, ... }</code>, <code>:173-183</code>) so the projection is pushed into the SQL
+          <code>SELECT</code>. Only <strong>writable</strong> properties are eligible (<code>p.CanWrite</code>, <code>:167</code>), since EF cannot
+          translate a <code>MemberInit</code> that assigns a read-only member; if nothing survives the filter the query
+          is returned unprojected (<code>:170-171</code>).</li>
+          <li><code>Validate&lt;TEntity&gt;(fields, allowWriteableFields)</code> (<code>:197-236</code>): checks every requested field
+          exists on the type, case-insensitively (<code>:209-210</code>), and, when <code>allowWriteableFields</code> is false,
+          additionally rejects read-only properties (<code>:223-230</code>). It accumulates <strong>all</strong> offenders into a
+          list of <a href="group-01-result-error-handling.html#error"><code>Error</code></a> built from <code>Error.InvalidEntityField</code>
+          with a <code>with</code> expression, then returns one aggregate
+          <a href="group-01-result-error-handling.html#result"><code>Result</code></a> (<code>:233-235</code>).</li>
+          <li><code>ValidateSortDirection</code> (<code>:243-262</code>): accepts only <code>&quot;asc&quot;</code>, <code>&quot;desc&quot;</code>, or null/empty, and returns
+          an <code>Error.InvalidSortDirection</code> validation failure otherwise (<code>:256-258</code>).</li>
+          <li>Private helpers: <code>ParseFields</code> (<code>:264-268</code>) splits the comma list into a case-insensitive
+          <code>HashSet</code>; <code>GetProperties&lt;TEntity&gt;</code> (<code>:270-273</code>) reads through <code>PropertiesCache</code>;
+          <code>FilterAccessorsByFields</code> (<code>:275-281</code>) narrows the cached accessor array.</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: sparse fieldsets cut payload size on collection endpoints; dynamic
-          sort avoids a hand-written <code>OrderBy</code> switch per sortable column; the compiled-delegate cache
-          eliminates <code>PropertyInfo.GetValue</code> overhead on every shaped row.</li>
-          <li><strong>Where it&#39;s used</strong>: called by
-          <a href="#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService</code></a> (validation + shaping)
-          and inside <a href="#entityquerypipeline"><code>EntityQueryPipeline</code></a> (sorting + field selection).</li>
+          <li><strong>Why it&#39;s built this way</strong>: the sort path is the security-relevant one. A sort column with no
+          entry in <code>dtoToEntityPropertyMap</code> is accepted <strong>only</strong> when it names a real public property of the
+          entity, resolved by reflection (<code>:129-133</code>); anything else is null and falls through to
+          <code>defaultSort</code> without ever reaching Dynamic LINQ. The doc comment (<code>:108-111</code>) spells out the three
+          risks that guard closes: inferring hidden-column data through a nested path, forcing an unindexed
+          sort, and turning a parse error into a 500. Server-authored map entries may still be navigation
+          paths or expressions, client-supplied strings may not. <code>[Rubric §11, Security]</code> (assesses whether
+          untrusted input can reach an expression evaluator) and <code>[Rubric §12, Performance &amp; Scalability]</code>.</li>
+          <li><strong>Where it&#39;s used</strong>: <code>Validate</code> and <code>ValidateSortDirection</code> are called by
+          <a href="#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService</code></a> before the database is
+          touched (<code>EntityQueryService.cs:183-188</code>, <code>:245</code>, <code>:276</code>); <code>ShapeData</code> / <code>ShapeCollectionData</code> are
+          called after mapping (<code>EntityQueryService.cs:226</code>, <code>:353</code>); <code>ApplySorting</code> and
+          <code>ApplyFieldSelection</code> are called inside <a href="#entityquerypipeline"><code>EntityQueryPipeline</code></a>.</li>
+          <li><strong>Caveats / not-in-source</strong>: the class is <code>sealed</code> but every member is <code>static</code>, so it is never
+          instantiated or injected; treat it as a static utility despite the shape.</li>
           </ul>
           <hr>
           <h3 id="queryfilterservice">QueryFilterService</h3>
           <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services.Filtering</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:19</code> · Level 3 · class (static)</p>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services.Filtering</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:19</code> · Level 3 · class (public, static)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: the static registry + dispatcher that applies and validates dynamic query filters
-          using the strategy-per-type pattern. It owns the <code>Type → IFilterStrategy</code> table and a <code>PropertyInfo</code>
-          cache, and is the single point where filters meet the query.</li>
-          <li><strong>Depends on</strong>: <a href="#ifilterstrategy"><code>IFilterStrategy</code></a> and the six concrete strategies
-          (<a href="#boolfilterstrategy-datetimefilterstrategy-decimalfilterstrategy-guidfilterstrategy-intfilterstrategy-stringfilterstrategy"><code>BoolFilterStrategy</code> … <code>StringFilterStrategy</code></a>),
-          <a href="group-01-result-error-handling.html#error"><code>Error</code></a>,
-          <a href="group-01-result-error-handling.html#result"><code>Result</code></a>; <code>System.Reflection</code>,
+          <li><strong>What it is</strong>: the static registry plus dispatcher that applies and validates dynamic filters. It
+          owns the <code>Type -&gt; IFilterStrategy</code> table and a <code>PropertyInfo</code> cache, and it is the single point
+          where a parsed URL filter meets an <code>IQueryable</code>.</li>
+          <li><strong>Depends on</strong>: <a href="#ifilterstrategy"><code>IFilterStrategy</code></a> and the six built-in strategies
+          (<a href="#boolfilterstrategy"><code>BoolFilterStrategy</code></a>, <a href="#datetimefilterstrategy"><code>DateTimeFilterStrategy</code></a>,
+          <a href="#decimalfilterstrategy"><code>DecimalFilterStrategy</code></a>, <a href="#guidfilterstrategy"><code>GuidFilterStrategy</code></a>,
+          <a href="#intfilterstrategy"><code>IntFilterStrategy</code></a>, <a href="#stringfilterstrategy"><code>StringFilterStrategy</code></a>),
+          <a href="group-01-result-error-handling.html#result"><code>Result</code></a>,
+          <a href="group-01-result-error-handling.html#error"><code>Error</code></a>; <code>System.Reflection</code>,
           <code>System.Collections.Concurrent</code>.</li>
-          <li><strong>Concept introduced, the strategy registry + validate-before-execute boundary.</strong> <code>[Rubric §2, Design Patterns]</code> / <code>[Rubric §1, SOLID]</code> (OCP): the <code>Strategies</code> <code>ConcurrentDictionary</code>
-          (lines 26-40) seeds one instance per CLR type (with each nullable variant sharing the same
-          instance), and <code>RegisterStrategy(Type, IFilterStrategy)</code> (line 55) lets a consumer add a type
-          without editing this file. <code>[Rubric §9, API &amp; Contract Design]</code> (assesses validation at the right
-          boundary): <code>ValidateFilters</code> runs operator-support checks <em>before</em> the query executes, so an
-          unsupported operator becomes a 400 validation error rather than a LINQ-Dynamic runtime exception
-          (a 500).</li>
+          <li><strong>Concept introduced, the strategy registry plus a validate-before-execute boundary.</strong> <code>[Rubric §2, Design Patterns]</code> and <code>[Rubric §1, SOLID]</code> (Open/Closed): the <code>Strategies</code>
+          <code>ConcurrentDictionary</code> (<code>:26-40</code>) seeds eleven entries, one per supported CLR type including each
+          nullable variant, and <code>RegisterStrategy(Type, IFilterStrategy)</code> (<code>:55-60</code>) lets a host add a type at
+          startup without editing this file. <code>[Rubric §9, API &amp; Contract Design]</code> (assesses validation at the
+          right boundary): <code>ValidateFilters</code> runs the property and operator checks <em>before</em> the query is
+          built, so an unsupported operator becomes a precise validation failure rather than a LINQ Dynamic
+          parse exception at execution time.</li>
           <li><strong>Walkthrough</strong><ul>
-          <li><code>ApplyFilters&lt;TEntity&gt;</code> (line 71): for each filter, resolves the entity property path through the
-          <code>dtoToEntityPropertyMap</code>, resolves the root <code>PropertyInfo</code> (cached per <code>(Type, name)</code> in
-          <code>PropertyCache</code>, line 24), and dispatches. <strong>Nested paths</strong> like <code>&quot;Category.Name&quot;</code> <em>and</em> string
-          properties always route to a dedicated <code>StringStrategy</code> (lines 47, 102-106), because LINQ-Dynamic
-          traverses a dotted path as a string expression, otherwise the per-type strategy from <code>Strategies</code>
-          is used (line 109). An unresolvable property is silently skipped (line 95).</li>
-          <li><code>ValidateFilters&lt;TEntity&gt;</code> (line 124): collects <strong>all</strong> errors (not just the first) into a
-          <a href="group-01-result-error-handling.html#result"><code>Result</code></a>; per filter it checks the property exists
-          (<code>Filter.Property.NotFound</code>), a strategy exists for its type (<code>Filter.Type.NotSupported</code>), and the
-          operator is in that strategy&#39;s <code>SupportedOperators</code> (<code>Filter.Operator.NotSupported</code>,
-          lines 206-221). A strategy whose <code>SupportedOperators</code> is <code>null</code> skips the operator check.</li>
+          <li><code>PropertyCache</code> (<code>:24</code>): <code>ConcurrentDictionary&lt;(Type EntityType, string PropertyName), PropertyInfo?&gt;</code>, so a reflected lookup is paid once per entity/property pair. It caches the
+          <em>negative</em> result too (the value is nullable), so a repeatedly bogus filter name does not
+          re-reflect.</li>
+          <li><code>StringStrategy</code> (<code>:47</code>): a dedicated <a href="#stringfilterstrategy"><code>StringFilterStrategy</code></a> instance
+          held apart from the table, used for both string properties and nested paths.</li>
+          <li><code>ApplyFilters&lt;TEntity&gt;</code> (<code>:71-114</code>): for each <code>(property, (op, value))</code> it translates the DTO name
+          through <code>dtoToEntityPropertyMap</code> (<code>:79-81</code>), derives the <strong>root</strong> property name from a dotted path
+          (<code>:84-86</code>), resolves the <code>PropertyInfo</code> through the cache (falling back from the DTO name to the
+          root name, <code>:88-93</code>), and <strong>silently skips</strong> an unresolvable property (<code>:95-96</code>). The operator is
+          uppercased once here (<code>:98</code>), which is the caller-side half of the
+          <a href="#ifilterstrategy"><code>IFilterStrategy</code></a> contract. A string property or any dotted path routes to
+          <code>StringStrategy</code> (<code>:102-107</code>); otherwise the per-type strategy is looked up and applied
+          (<code>:109-110</code>).</li>
+          <li><code>ValidateFilters&lt;TEntity&gt;</code> (<code>:124-139</code>): returns success for a null/empty filter map (<code>:128-129</code>),
+          otherwise runs <code>ValidateSingleFilter</code> per entry and collects <strong>all</strong> errors into one
+          <a href="group-01-result-error-handling.html#result"><code>Result</code></a> (<code>:136-138</code>), so a client sees every problem
+          at once rather than one per round trip.</li>
+          <li><code>ValidateSingleFilter&lt;TEntity&gt;</code> (<code>:141-185</code>) emits three distinct error codes:
+          <code>Filter.Property.NotFound</code> when reflection cannot resolve the property (<code>:155-159</code>),
+          <code>Filter.Type.NotSupported</code> when no strategy is registered for its CLR type (<code>:176-180</code>), and,
+          via <code>ValidateOperatorSupported</code> (<code>:206-222</code>), <code>Filter.Operator.NotSupported</code> when the operator is
+          outside the strategy&#39;s set (<code>:216-220</code>). A nested path is validated against the string operator
+          set (<code>:166-169</code>). A strategy whose <code>SupportedOperators</code> is <code>null</code> skips the operator check
+          entirely (<code>:214</code>).</li>
+          <li><code>ResolvePropertyInfo</code> (<code>:187-199</code>) and <code>ResolveStrategy</code> (<code>:201-204</code>) are the small shared helpers
+          behind both paths; note <code>ResolveStrategy</code> special-cases <code>typeof(string)</code> to the dedicated
+          <code>StringStrategy</code> rather than the table entry.</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: validating up front turns would-be 500s into precise 400s at the API
-          boundary; the <code>PropertyCache</code> and a static strategy table mean per-request reflection is amortised
-          to first use.</li>
-          <li><strong>Where it&#39;s used</strong>: <code>ValidateFilters</code> is called by
-          <a href="#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService.GetAllAsync</code></a>; <code>ApplyFilters</code>
-          is called inside <a href="#entityquerypipeline"><code>EntityQueryPipeline.ExecuteAsync</code></a> before materialization.</li>
-          <li><strong>Caveats / not-in-source</strong>: <code>QueryFilterService</code> is a <strong>static class</strong>, not a DI-resolved service;
-          there is no <code>FilteringService</code> type in the codebase (an earlier edition named it that). Strategy
-          registration is process-global mutable state (<code>RegisterStrategy</code> writes the shared <code>Strategies</code> map).</li>
-          </ul>
-          <hr>
-          <h3 id="ientityquerypipeline">IEntityQueryPipeline</h3>
-          <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services.Query</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/IEntityQueryPipeline.cs:10</code> · Level 4 · interface</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: the orchestration contract for the full read pipeline: navigation includes,
-          criteria, dynamic filters, sorting, pagination, and field projection, returning the materialized
-          page plus the total matching count.</li>
-          <li><strong>Depends on</strong>: <a href="group-02-domain-building-blocks.html#auditablebaseentitytidentifiertype"><code>AuditableBaseEntity&lt;TIdentifierType&gt;</code></a>
-          (the entity constraint), <a href="#entityqueryparameterstentity"><code>EntityQueryParameters&lt;TEntity&gt;</code></a>,
-          <a href="group-11-navigation-populators.html#navigationmetadata"><code>NavigationMetadata</code></a>.</li>
-          <li><strong>Concept</strong>: the pipeline is the seam that converts a handler&#39;s base <code>IQueryable&lt;TEntity&gt;</code> plus an
-          <a href="#entityqueryparameterstentity"><code>EntityQueryParameters</code></a> into a fully filtered/sorted/paged/projected
-          collection. The <code>navigationPopulator</code> parameter (line 27) is a delegate whose signature mirrors
-          <a href="group-11-navigation-populators.html#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;TEntity&gt;</code></a><code>.PopulateAsync</code>
-           , the pipeline calls it <em>after</em> EF materialization to batch-load cross-source navigations. <code>[Rubric §12, Performance &amp; Scalability]</code> (single-pass pipeline; pagination at the database). <code>[Rubric §3, Clean Architecture]</code> (an Application-layer interface; the EF implementation is injected, not
-          referenced).</li>
-          <li><strong>Walkthrough</strong>: one method, <code>ExecuteAsync&lt;TEntity, TIdentifierType&gt;</code> (lines 23-30), constrained
-          <code>where TEntity : AuditableBaseEntity&lt;TIdentifierType&gt;</code> and <code>where TIdentifierType : notnull</code>,
-          returning <code>Task&lt;(IReadOnlyCollection&lt;TEntity&gt; Items, int TotalCount)&gt;</code>, the tuple carries both the
-          page and the count needed to build <a href="group-01-result-error-handling.html#paginationmetadata"><code>PaginationMetadata</code></a>.</li>
-          <li><strong>Where it&#39;s used</strong>: implemented by <a href="#entityquerypipeline"><code>EntityQueryPipeline</code></a>; injected into
-          <a href="#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService</code></a>.</li>
-          </ul>
-          <hr>
-          <h3 id="inavigationmetadataprovider">INavigationMetadataProvider</h3>
-          <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services.Query</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/INavigationMetadataProvider.cs:9</code> · Level 4 · interface</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: classifies an entity type&#39;s navigation properties into &quot;supported&quot; (EF
-          <code>Include()</code>-able) and &quot;unsupported&quot; (need manual population), based on data-source compatibility.</li>
-          <li><strong>Depends on</strong>: <a href="group-11-navigation-populators.html#navigationmetadata"><code>NavigationMetadata</code></a>
-          (its return type).</li>
-          <li><strong>Concept</strong>: the metadata-discovery half of ADR-002 (navigation populators). It inspects an
-          entity&#39;s <code>[Navigation]</code> attributes and configured data source and decides which navigations EF can
-          <code>Include</code> (same database) and which require batch loading (cross-source). <code>[Rubric §2, Design Patterns]</code> (Strategy: callers just call <code>BuildIncludes</code>, the classification mechanism is hidden).
-          <code>[Rubric §8, Data Architecture]</code> (the include strategy is data-source-aware).</li>
-          <li><strong>Walkthrough</strong>: one method, <code>BuildIncludes&lt;TEntity&gt;(bool includeFKs, bool includeChildren)</code>
-          (line 19), returning <a href="group-11-navigation-populators.html#navigationmetadata"><code>NavigationMetadata</code></a>.
-          The boolean pair lets a caller request FK references and/or child collections independently.</li>
-          <li><strong>Where it&#39;s used</strong>: implemented by <a href="#navigationmetadataprovider"><code>NavigationMetadataProvider</code></a>;
-          injected into <a href="#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService</code></a>, whose
-          result is forwarded to <a href="#ientityquerypipeline"><code>IEntityQueryPipeline</code></a>.</li>
-          </ul>
-          <hr>
-          <h3 id="entityquerypipeline">EntityQueryPipeline</h3>
-          <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services.Query</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:13</code> · Level 5 · class (sealed)</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: the execution engine implementing <a href="#ientityquerypipeline"><code>IEntityQueryPipeline</code></a>:
-          it applies EF includes, criteria and dynamic filters, sorting, pagination, and field selection, and
-          for cross-source navigations calls the populator callback after materialization.</li>
-          <li><strong>Depends on</strong>: <a href="#ientityquerypipeline"><code>IEntityQueryPipeline</code></a> (implements),
-          <a href="group-11-navigation-populators.html#navigationmetadata"><code>NavigationMetadata</code></a>,
-          <a href="group-11-navigation-populators.html#navigationtype"><code>NavigationType</code></a>,
-          <a href="#entityqueryparameterstentity"><code>EntityQueryParameters&lt;TEntity&gt;</code></a>,
-          <a href="group-02-domain-building-blocks.html#auditablebaseentitytidentifiertype"><code>AuditableBaseEntity&lt;TIdentifierType&gt;</code></a>,
-          <a href="#queryfilterservice"><code>QueryFilterService</code></a>, <a href="#queryfieldservice"><code>QueryFieldService</code></a>, and
-          <a href="group-07-persistence-ef-core.html#iqueryableexecutor"><code>IQueryableExecutor</code></a> (the EF-facing abstraction
-          it is constructed with, line 13).</li>
-          <li><strong>Concept introduced, two-path query execution for multi-database environments.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code> (server-side filtering, paginate before materializing, a safety ceiling)
-          and <code>[Rubric §8, Data Architecture]</code> (the cross-source query strategy, ADR-006). <code>ExecuteAsync</code>
-          applies supported includes via <code>queryableExecutor.Include</code> (lines 39-50), applies <code>Criteria</code>
-          (line 56) and <code>Filters</code> via <a href="#queryfilterservice"><code>QueryFilterService.ApplyFilters</code></a> (line 59), all
-          <em>before</em> materializing so the database does as much work as possible, then routes down one of two
-          paths:<ul>
-          <li><strong>PATH 1, server-side includes</strong> (<code>ExecuteWithServerSideIncludesAsync</code>, lines 121-155): every
-          navigation is EF <code>Include</code>-able, so sort, pagination, and field selection are all applied on the
-          <code>IQueryable</code> before a single <code>ToListAsync</code>, minimal data crosses the wire.</li>
-          <li><strong>PATH 2, manual navigation loading</strong> (<code>ExecuteWithManualNavigationAsync</code>, lines 75-115): some
-          navigations are cross-source (e.g. a Cosmos container or another physical source); the page is
-          sorted and paginated server-side, materialized, then <code>navigationPopulator(entities, ...)</code> (line<ol start="106">
-          <li>fills in the cross-source relationships on just that page.</li>
-          </ol>
-          </li>
-          </ul>
-          </li>
-          <li><strong>Walkthrough, two details worth knowing</strong><ul>
-          <li><strong>Split-query guard</strong> (lines 44-49): when a <em>child collection</em> is among the supported includes the
-          pipeline forces <code>AsSplitQuery</code>. The inline comment (R24/§8) records why, paginating a single-query
-          collection <code>Include</code> makes EF apply <code>Skip</code>/<code>Take</code> to the JOIN-expanded row set, truncating child
-          rows so list reads return empty collections while by-id reads work; split query is EF&#39;s documented
-          remedy. (See the memory note &quot;Session list omits SessionSpeakers&quot; for the live bug this prevents.)</li>
-          <li><strong>Unbounded-result safety ceiling</strong> (<code>MaxUnboundedResultLimit = 1000</code>, line 22): an <em>unpaginated</em>
-          query is capped with <code>.Take(1000)</code> on both paths (lines 100, 144) so a direct service caller that
-          forgets pagination can never trigger an unbounded full-table load, the comments cite &quot;rubric §12&quot;
-          explicitly. <code>Skip</code> math is <code>checked</code> (lines 93, 137) to fail loudly on overflow.</li>
-          </ul>
-          </li>
-          <li><strong>Why it&#39;s built this way</strong>: pushing filter/sort/page to the database is the §12 win; the two-path
-          split is what makes the same pipeline correct whether an entity&#39;s navigations live in one database or
-          across physical sources (ADR-002/006). Talking to
-          <a href="group-07-persistence-ef-core.html#iqueryableexecutor"><code>IQueryableExecutor</code></a> instead of <code>DbContext</code>
-          keeps this Application-layer type free of an EF reference (<code>[Rubric §3, Clean Architecture]</code>).</li>
-          <li><strong>Where it&#39;s used</strong>: injected into
-          <a href="#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService</code></a>; one <code>ExecuteAsync</code>
-          call per read request.</li>
-          </ul>
-          <hr>
-          <h3 id="navigationmetadataprovider">NavigationMetadataProvider</h3>
-          <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services.Query</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/Query/NavigationMetadataProvider.cs:20</code> · Level 5 · class (sealed)</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: the implementation of <a href="#inavigationmetadataprovider"><code>INavigationMetadataProvider</code></a>:
-          it reflects over an entity&#39;s <code>[Navigation]</code>-tagged properties and classifies each as a supported EF
-          <code>Include</code> or an unsupported (manual-load) navigation, caching the result per (entity type, navigation
-          kind).</li>
-          <li><strong>Depends on</strong>: <a href="#inavigationmetadataprovider"><code>INavigationMetadataProvider</code></a> (implements),
-          <a href="group-07-persistence-ef-core.html#idatasourceservice"><code>IDataSourceService</code></a> (constructor, line 20),
-          <a href="group-11-navigation-populators.html#navigationattribute"><code>NavigationAttribute</code></a>,
-          <a href="group-11-navigation-populators.html#navigationmetadata"><code>NavigationMetadata</code></a>,
-          <a href="group-11-navigation-populators.html#navigationpropertyinfo"><code>NavigationPropertyInfo</code></a>,
-          <a href="group-11-navigation-populators.html#navigationtype"><code>NavigationType</code></a>; <code>System.Reflection</code>,
-          <code>System.Collections.Concurrent</code>.</li>
-          <li><strong>Concept introduced, reflection-based navigation discovery with data-source awareness.</strong> <code>[Rubric §2, Design Patterns]</code> (metadata-driven behavior) and <code>[Rubric §3, Clean Architecture]</code> (ADR-002:
-          the Application layer classifies includes without referencing EF). The decision hinges on one call,
-          <code>dataSourceService.HaveIncludeSupport(declaringEntityFullName, targetEntityFullName)</code> (line 96):
-          if both ends share a database the navigation is <em>supported</em> (EF <code>Include</code>), otherwise it is
-          <em>unsupported</em> and must flow through
-          <a href="group-11-navigation-populators.html#inavigationpopulatorin-tentity"><code>INavigationPopulator</code></a> after
-          materialization.</li>
-          <li><strong>Walkthrough</strong><ul>
-          <li><code>_cache</code> (line 28): <code>ConcurrentDictionary&lt;(Type, NavigationType), NavigationMetadata&gt;</code>. The doc
-          comment (lines 22-27) explains why it is <strong>instance-level, not static</strong>: classification depends on
-          the host&#39;s data-source configuration, so two service hosts in one process (integration tests) must
-          not share results.</li>
-          <li><code>BuildIncludes&lt;TEntity&gt;</code> (lines 31-50): public entry, collects FK navigations if <code>includeFKs</code>,
-          child collections if <code>includeChildren</code>, merges both into one
-          <a href="group-11-navigation-populators.html#navigationmetadata"><code>NavigationMetadata</code></a>.</li>
-          <li><code>BuildNavigationMetadata</code> (lines 60-70) reflects over all public instance properties;
-          <code>ClassifyNavigationProperty</code> (lines 72-100) skips properties without <code>[Navigation]</code>, matches the
-          attribute&#39;s <code>IsCollection</code> flag to the requested
-          <a href="group-11-navigation-populators.html#navigationtype"><code>NavigationType</code></a>, <code>UnwrapCollectionType</code>
-          (lines 106-116) strips <code>ICollection&lt;T&gt;</code>/<code>IReadOnlyCollection&lt;T&gt;</code> to the element type, then routes
-          via <code>HaveIncludeSupport</code>.</li>
-          </ul>
-          </li>
-          <li><strong>Why it&#39;s built this way</strong>: keeping classification out of EF means the Application layer computes
-          &quot;what should be included&quot; with no <code>Microsoft.EntityFrameworkCore</code> reference; the EF knowledge is
-          supplied at the boundary by <a href="group-07-persistence-ef-core.html#idatasourceservice"><code>IDataSourceService</code></a>.</li>
-          <li><strong>Where it&#39;s used</strong>: injected into
-          <a href="#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService</code></a>; its output drives the
-          include strategy inside <a href="#entityquerypipeline"><code>EntityQueryPipeline</code></a>.</li>
+          <li><strong>Why it&#39;s built this way</strong>: validating up front converts would-be runtime exceptions into precise
+          validation errors at the API boundary, and the two caches amortise all reflection to first use per
+          process.</li>
+          <li><strong>Where it&#39;s used</strong>: <code>ValidateFilters</code> is called from
+          <a href="#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService.GetAllAsync</code></a>
+          (<code>EntityQueryService.cs:187</code>); <code>ApplyFilters</code> is called inside
+          <a href="#entityquerypipeline"><code>EntityQueryPipeline</code></a> before materialization. The filter map itself is
+          produced at the API edge by
+          <a href="group-12-api-hosting-mapping.html#queryfiltermodelbinder"><code>QueryFilterModelBinder</code></a>.</li>
+          <li><strong>Caveats / not-in-source</strong>: this is a <strong>static class</strong>, not a DI-resolved service, so
+          <code>RegisterStrategy</code> mutates process-global state and is only safe at startup. Nullable variants are
+          registered as separate instances rather than a shared one (<code>:30-39</code>), which costs a few extra
+          objects but keeps the table declaration flat.</li>
           </ul>
           <hr>
           <h3 id="entityqueryservicetentity-tentitydto-tidentifiertype">EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</h3>
           <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:29</code> · Level 8 · class</p>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:31</code> · Level 8 · class</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: the concrete, reusable engine behind <em>every</em> read endpoint in both apps: filtered,
-          sorted, paginated, field-projected reads for any entity. It implements
+          <li><strong>What it is</strong>: the reusable engine behind essentially every read endpoint in both apps: filtered,
+          sorted, paginated, field-projected list and by-id reads for any entity. It implements
           <a href="#ientityqueryservicetentity-tentitydto-tidentifiertype"><code>IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a>.</li>
-          <li><strong>Depends on</strong>: <a href="group-07-persistence-ef-core.html#iunitofwork"><code>IUnitOfWork</code></a>,
+          <li><strong>Depends on</strong>: injected through a primary constructor (<code>:31-36</code>),
+          <a href="group-07-persistence-ef-core.html#iunitofwork"><code>IUnitOfWork</code></a>,
           <a href="#inavigationmetadataprovider"><code>INavigationMetadataProvider</code></a>,
           <a href="#ientityquerypipeline"><code>IEntityQueryPipeline</code></a>,
           <a href="group-12-api-hosting-mapping.html#ientitydtomappertentity-tentitydto-tidentifiertype"><code>IEntityDTOMapper&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a>,
-          <a href="group-11-navigation-populators.html#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;TEntity&gt;</code></a>,
-          <a href="group-07-persistence-ef-core.html#ireadrepositorytentity-tidentifiertype"><code>IReadRepository&lt;TEntity, TIdentifierType&gt;</code></a>,
+          and <a href="group-11-navigation-populators.html#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;TEntity&gt;</code></a>;
+          plus <a href="group-07-persistence-ef-core.html#ireadrepositorytentity-tidentifiertype"><code>IReadRepository&lt;TEntity, TIdentifierType&gt;</code></a>,
           <a href="#specificationtentity-tidentifiertype"><code>Specification&lt;TEntity, TIdentifierType&gt;</code></a>,
-          <a href="#queryfieldservice"><code>QueryFieldService</code></a>, <a href="#queryfilterservice"><code>QueryFilterService</code></a>,
           <a href="#entityqueryparameterstentity"><code>EntityQueryParameters&lt;TEntity&gt;</code></a>,
+          <a href="#queryfieldservice"><code>QueryFieldService</code></a>, <a href="#queryfilterservice"><code>QueryFilterService</code></a>,
           <a href="group-01-result-error-handling.html#paginationmetadata"><code>PaginationMetadata</code></a>,
           <a href="group-01-result-error-handling.html#pagedcollectionresultt"><code>PagedCollectionResult&lt;T&gt;</code></a>,
-          <a href="group-12-api-hosting-mapping.html#baselookuptidentifiertype"><code>BaseLookup&lt;TIdentifierType&gt;</code></a>;
-          constrained <code>where TEntity : AuditableBaseEntity&lt;TIdentifierType&gt;</code>, <code>where TEntityDTO : IBaseDTO&lt;TIdentifierType&gt;</code>, <code>where TIdentifierType : notnull</code>.</li>
-          <li><strong>Concept introduced, the generic query service: one pipeline, every entity, dynamic shaping.</strong>
-          <code>[Rubric §1, SOLID]</code> (OCP, extend via subclass/override, not modification), <code>[Rubric §9, API &amp; Contract Design]</code> (one uniform filter/sort/page/fields convention across all read endpoints), and
-          <code>[Rubric §12, Performance &amp; Scalability]</code> (everything pushed to the database via the pipeline). The
-          orchestration is a four-step pipeline, visible in <code>GetAllAsync</code> (lines 85-144):<ol>
-          <li><strong>Validate</strong> all parameters <em>before</em> touching the DB, <code>Result.Combine</code> of field validation, sort
-          validation, sort-direction validation, and <a href="#queryfilterservice"><code>QueryFilterService.ValidateFilters</code></a>
-          (lines 99-104); on failure it rewrites each
-          <a href="group-01-result-error-handling.html#error"><code>Error</code></a>&#39;s <code>Source</code>/<code>Target</code> with a <code>with</code> expression
-          and returns a typed failure (lines 107-115).</li>
-          <li><strong>Build the query</strong> via <code>BuildQueryAsync</code> (lines 264-303): pick <code>Repository.Table</code> (tracking) or
-          <code>TableNoTracking</code>, ask <a href="#navigationmetadataprovider"><code>NavigationMetadataProvider.BuildIncludes</code></a>
-          which navigations are supported, pack everything into an
-          <a href="#entityqueryparameterstentity"><code>EntityQueryParameters</code></a> (pulling
-          <code>Criteria</code> from the optional
-          <a href="#specificationtentity-tidentifiertype"><code>Specification</code></a>), and hand off to
-          <a href="#ientityquerypipeline"><code>IEntityQueryPipeline.ExecuteAsync</code></a>, passing
-          <code>NavigationPopulator.PopulateAsync</code> so cross-source navigations EF can&#39;t <code>Include</code> are batch-loaded
-          afterward (ADR-002).</li>
-          <li><strong>Map</strong> the entities to DTOs via the injected
-          <a href="group-12-api-hosting-mapping.html#ientitydtomappertentity-tentitydto-tidentifiertype"><code>IEntityDTOMapper</code></a>
-          and <strong>shape</strong> them to the requested <code>fields</code> with
-          <a href="#queryfieldservice"><code>QueryFieldService.ShapeCollectionData</code></a>, yielding
-          <code>PagedCollectionResult&lt;ExpandoObject&gt;</code>. The <code>ExpandoObject</code> return type is <em>why</em> field projection
-          produces a runtime-shaped object rather than a statically-typed DTO.</li>
-          <li><strong>Wrap</strong> in <a href="group-01-result-error-handling.html#paginationmetadata"><code>PaginationMetadata</code></a>
-          (<code>BuildPaginationMetadata</code>, lines 305-323, when no page is requested, page size = total count and
-          current page = 1).</li>
+          <a href="group-12-api-hosting-mapping.html#baselookuptidentifiertype"><code>BaseLookup&lt;TIdentifierType&gt;</code></a>.
+          Constrained <code>where TEntity : AuditableBaseEntity&lt;TIdentifierType&gt;</code>,
+          <code>where TEntityDTO : IBaseDTO&lt;TIdentifierType&gt;</code>, <code>where TIdentifierType : notnull</code> (<code>:38-40</code>).</li>
+          <li><strong>Concept introduced, one generic read pipeline for every entity.</strong> <code>[Rubric §1, SOLID]</code>
+          (Open/Closed: extend by subclassing and overriding, not by editing), <code>[Rubric §9, API &amp; Contract Design]</code> (one filter/sort/page/fields convention across every read endpoint), <code>[Rubric §12, Performance &amp; Scalability]</code> (all shaping is pushed down to the database through the pipeline), and
+          <code>[Rubric §16, Maintainability]</code> (a new entity inherits the full read surface with no new code). The
+          list path, <code>GetAllAsync</code> (<code>:169-235</code>), is four steps:<ol>
+          <li><strong>Validate before touching the database</strong> (<code>:183-188</code>): <code>Result.Combine</code> of
+          <a href="#queryfieldservice"><code>QueryFieldService.Validate</code></a> for <code>fields</code> (read-only fields rejected) and
+          for <code>sortColumn</code> (<code>allowWriteableFields: true</code>, since a computed column may still be sortable),
+          <code>ValidateSortDirection</code>, and
+          <a href="#queryfilterservice"><code>QueryFilterService.ValidateFilters</code></a>. On failure every
+          <a href="group-01-result-error-handling.html#error"><code>Error</code></a> is re-stamped with
+          <code>Source = nameof(GetAllAsync)</code> and <code>Target = typeof(TEntity).Name</code> via a <code>with</code> expression
+          (<code>:191-199</code>), so the caller sees which operation and which entity produced each problem.</li>
+          <li><strong>Build and execute</strong> through <code>BuildQueryAsync</code> (<code>:366-405</code>): pick <code>Repository.Table</code> when
+          tracking is requested or <code>TableNoTracking</code> otherwise (<code>:379-381</code>), ask
+          <a href="#navigationmetadataprovider"><code>NavigationMetadataProvider.BuildIncludes</code></a> which navigations EF
+          can <code>Include</code> (<code>:383</code>), pack everything (including <code>specification?.Criteria</code>, <code>:387</code>) into an
+          <a href="#entityqueryparameterstentity"><code>EntityQueryParameters&lt;TEntity&gt;</code></a> (<code>:385-397</code>), and hand off to
+          <a href="#ientityquerypipeline"><code>IEntityQueryPipeline.ExecuteAsync</code></a> passing
+          <code>NavigationPopulator.PopulateAsync</code> as the callback (<code>:399-404</code>) so cross-source navigations EF
+          cannot join are batch-loaded after materialization (ADR-002).</li>
+          <li><strong>Map, then shape only when asked</strong> (<code>:222-226</code>): the entities go through the injected
+          <a href="group-12-api-hosting-mapping.html#ientitydtomappertentity-tentitydto-tidentifiertype"><code>IEntityDTOMapper</code></a>,
+          and the result is cast to <code>object</code> as-is unless a <code>fields</code> subset was requested, in which case
+          <a href="#queryfieldservice"><code>QueryFieldService.ShapeCollectionData</code></a> produces <code>ExpandoObject</code>s. The
+          comment (<code>:216-219</code>) explains the rule: typed DTOs already serialize to the same camelCase JSON,
+          so paying the per-row <code>ExpandoObject</code> allocation and boxing only makes sense when it actually
+          removes fields.</li>
+          <li><strong>Wrap</strong> in a <code>PagedCollectionResult&lt;object&gt;</code> with
+          <a href="group-01-result-error-handling.html#paginationmetadata"><code>PaginationMetadata</code></a> from
+          <code>BuildPaginationMetadata</code> (<code>:407-425</code>); when no page was requested, page size equals the total
+          count and the current page is 1 (<code>:409-417</code>).</li>
           </ol>
           </li>
           <li><strong>Walkthrough, the other read paths</strong><ul>
-          <li><code>GetByIdAsync</code> (lines 228-252) reuses the pipeline via a synthetic <code>Id EQUALS</code> filter through
-          <code>GetEntityByIdAsync</code> (lines 175-225), maps the single entity, shapes it, and returns
-          <code>Error.NotFound</code> if empty.</li>
-          <li><code>GetAllForLookupAsync</code> (lines 147-172) validates a single <code>nameProperty</code> then delegates to the
-          repository&#39;s <code>GetAllForLookupAsync</code>, returning
+          <li><strong>The by-id fast path</strong> (<code>TryGetByIdFastPathAsync</code>, <code>:80-100</code>). For a plain primary-key lookup it
+          issues a single keyed read through <code>Repository.GetByIdAsync</code> (<code>:96</code>) and skips the dynamic-filter
+          pipeline entirely. The doc comment (<code>:70-79</code>) states why this exists: the pipeline would parse a
+          string predicate and emit a <code>TOP 1000</code> plus a client-side <code>FirstOrDefault</code>, and it notes that the
+          repository overload runs on the filtered <code>TableNoTracking</code>, so soft-delete query filters still
+          apply (unlike EF&#39;s <code>FindAsync</code>, which bypasses them). <code>IsPrimaryKeyOnlyLookup</code> (<code>:102-112</code>) gates
+          it: no <code>fields</code>, no includes, no
+          <a href="#specificationtentity-tidentifiertype"><code>Specification</code></a>, and either no <code>idField</code> or the default
+          <code>&quot;Id&quot;</code>. <code>TryConvertId</code> (<code>:119-145</code>) converts the string id via a <code>TypeConverter</code> cached per
+          identifier type in <code>IdConverterCache</code> (<code>:68</code>), catching only <code>FormatException</code>,
+          <code>NotSupportedException</code>, and <code>ArgumentException</code> (<code>:139</code>) and returning <code>false</code> so a malformed id
+          falls back to the pipeline rather than failing. This is a targeted <code>[Rubric §12, Performance &amp; Scalability]</code> optimization on the single hottest read shape in the system.</li>
+          <li><code>GetEntityByIdAsync</code> (<code>:266-324</code>): validates <code>fields</code>, tries the fast path (<code>:292-296</code>), and
+          otherwise reuses the list pipeline through a synthetic <code>Id EQUALS</code> filter built with an
+          <code>OrdinalIgnoreCase</code> comparer (<code>:298-301</code>), returning
+          <code>Error.NotFound.WithSource(nameof(GetByIdAsync)).WithTarget(...)</code> when nothing came back
+          (<code>:317-321</code>).</li>
+          <li><code>GetByIdAsync</code> (<code>:327-354</code>): stringifies the typed id (throwing <code>InvalidOperationException</code> if
+          <code>ToString()</code> returns null, <code>:336</code>), delegates to <code>GetEntityByIdAsync</code>, maps the single entity, and
+          applies the same shape-only-when-asked rule as the list path (<code>:351-353</code>).</li>
+          <li><code>GetAllForLookupAsync</code> (<code>:238-263</code>): validates one <code>nameProperty</code>, then delegates to the
+          repository&#39;s lookup query, returning
           <a href="group-12-api-hosting-mapping.html#baselookuptidentifiertype"><code>BaseLookup&lt;TIdentifierType&gt;</code></a>
           id/name pairs for dropdowns.</li>
-          <li><code>ExistsAsync</code> (lines 255-259) is a thin pass-through to the repository.</li>
-          <li><strong>Extensibility points</strong>: <code>Repository</code>, <code>DTOToEntityPropertyMap</code> (override to map DTO field names
-          to entity paths, e.g. <code>&quot;CategoryName&quot; → &quot;Category.Name&quot;</code>, lines 54-59), and the read methods
-          themselves are <code>virtual</code>, so a module subclass (e.g. a speaker-specific query service) can override
-          one behavior without reimplementing the pipeline. Note the class is <strong>not</strong> <code>sealed</code> precisely to
-          allow this.</li>
+          <li><code>ExistsAsync</code> (<code>:357-361</code>): a thin non-virtual pass-through to the repository.</li>
+          <li><strong>Extensibility points</strong>: <code>Repository</code> (<code>:48</code>) and <code>DTOToEntityPropertyMap</code> (<code>:61</code>) are
+          <code>virtual</code>, as are all the read methods, and the class is deliberately <strong>not</strong> <code>sealed</code>, so a
+          module subclass can override one behavior (a scoped repository, a
+          <code>&quot;CategoryName&quot; -&gt; &quot;Category.Name&quot;</code> mapping) without reimplementing the pipeline. <code>UnitOfWork</code> is
+          <code>protected</code> (<code>:43</code>) for subclasses that need a custom query.</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: centralizing read mechanics means a new entity gets full
-          filter/sort/page/projection support for free with identical conventions everywhere (<code>[Rubric §16, Maintainability]</code>). Validate-before-DB makes a bad <code>fields</code> parameter a 400, not a SQL error. The
-          <a href="group-11-navigation-populators.html#inavigationpopulatorin-tentity"><code>INavigationPopulator</code></a> hook is
-          the database-per-service escape hatch (ADR-002): EF can&#39;t join across physical sources, so those
-          navigations are filled in a second batch query.</li>
-          <li><strong>Where it&#39;s used</strong>: injected as the <code>queryService</code> of the read controllers
-          (<code>EntityControllerBase</code>) in both apps; subclassed per module where a default behavior must change.</li>
-          <li><strong>Caveats / not-in-source</strong>: the per-request <code>PageSize</code> clamp against
-          <code>IApplicationSettings.MaxPageSize</code> happens at the API boundary, not in this class; the
-          <code>MaxUnboundedResultLimit = 1000</code> ceiling inside <a href="#entityquerypipeline"><code>EntityQueryPipeline</code></a> is the
-          only bound visible here. <code>GetEntityByIdAsync</code> rewrites errors with <code>Source = nameof(GetByIdAsync)</code>
-          (lines 191, 219) even when called on its own, a cosmetic source label, not a bug.</li>
+          <li><strong>Why it&#39;s built this way</strong>: centralizing read mechanics means every entity gets identical
+          filter/sort/page/projection semantics for free, and validate-before-database turns a bad <code>fields</code> or
+          operator into a validation failure rather than a SQL or expression-parser error. The
+          <a href="group-11-navigation-populators.html#inavigationpopulatorin-tentity"><code>INavigationPopulator</code></a> callback
+          is the database-per-service escape hatch (ADR-002 and ADR-006): EF cannot join across physical
+          sources, so those navigations are filled by a second batch query against the page that was actually
+          returned.</li>
+          <li><strong>Where it&#39;s used</strong>: injected as the query service of the read controllers
+          (<a href="group-12-api-hosting-mapping.html#entitycontrollerbasetentity-tentitydto-tidentifiertype"><code>EntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a>)
+          in both apps, and subclassed per module wherever a default must change.</li>
+          <li><strong>Caveats / not-in-source</strong>: no page-size clamp lives in this class; the
+          <a href="group-14-module-system-composition.html#iapplicationsettings"><code>IApplicationSettings</code></a> maximum is
+          applied at the API boundary, and the only bound visible from here is the unbounded-result ceiling
+          inside <a href="#entityquerypipeline"><code>EntityQueryPipeline</code></a>. Error stamping in the by-id path always uses
+          <code>Source = nameof(GetByIdAsync)</code> (<code>:282</code>, <code>:319</code>) even when <code>GetEntityByIdAsync</code> is called directly,
+          a cosmetic label, not a behavior difference.</li>
           </ul>
           <h3 id="ispecificationtentity-tidentifiertype">ISpecification&lt;TEntity, TIdentifierType&gt;</h3>
           <blockquote>

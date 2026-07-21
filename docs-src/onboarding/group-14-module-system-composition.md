@@ -102,7 +102,7 @@ is built and a real `IServiceProvider` exists.
 
 Service registration itself lives in two static [`DependencyInjection`](#dependencyinjection) classes,
 each using a C# `extension(IServiceCollection services)` block (see
-[primer §4](00-primer.md#4-c-build-and-code-style-conventions) for the `extension(T)` syntax). The
+[primer §4](../00-primer.md#4-c-build-and-code-style-conventions) for the `extension(T)` syntax). The
 **Application** root
 (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:21`) exposes `AddApplication()`
 (core services: the domain-event dispatcher, navigation-metadata provider, query pipeline, and the
@@ -202,7 +202,7 @@ the database-per-service strategy (ADR-006).
 **engine** ([`DataSource`](group-07-persistence-ef-core.md#datasource): SQL Server / Cosmos / SQLite)
 and is carried by the provider-specific configuration base classes, so choosing a base class chooses
 the engine with no change to the entity (see
-[primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to)).
+[primer §2](../00-primer.md#2-architectural-styles-this-codebase-commits-to)).
 [`UseDatabaseAttribute`](#usedatabaseattribute) (`UseDatabaseAttribute.cs:22-26`) names the **logical
 database** *on* that engine; its documented resolution order (`UseDatabaseAttribute.cs:9-14`) is the
 attribute value, then the module name derived from the entity's namespace (the segment before
@@ -294,7 +294,7 @@ gRPC clients, which is precisely the reversibility ADR-008 is after.
 
 - **Walkthrough**: three `{ get; init; }` members (lines 10, 13, 23). `init`-only accessors mean the binder sets them once at startup and the object is immutable thereafter (safe to share as a singleton). The XML doc on `DatabaseInitStrategy` (lines 15–23) enumerates the three accepted string values and their intent.
 
-- **Why it's built this way**: separating the interface (Application layer) from the concrete class lets higher layers inject the abstraction while only the composition root knows the implementation, the dependency-inversion shape the primer describes for ports/adapters ([primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to)).
+- **Why it's built this way**: separating the interface (Application layer) from the concrete class lets higher layers inject the abstraction while only the composition root knows the implementation, the dependency-inversion shape the primer describes for ports/adapters ([primer §2](../00-primer.md#2-architectural-styles-this-codebase-commits-to)).
 
 - **Where it's used**: the root [`AddApplication()`](#dependencyinjection) registers it via `TryAddSingleton<IApplicationSettings>(sp => sp.GetRequiredService<IOptions<ApplicationSettings>>().Value)` (`DependencyInjection.cs:31`); consumed by the query pipeline (`MaxPageSize` clamping), the startup database-initialization path (`DatabaseInitStrategy`), and the profiling-decorator registration (`UseMiniProfiler`).
 
@@ -433,7 +433,7 @@ gRPC clients, which is precisely the reversibility ADR-008 is after.
   - `ScanModuleApplicationServices<TAssemblyMarker>()` (line 115): the seven-pass scanner described above.
   - `AddApplicationProfiling()` (line 186): optional, `TryDecorate`s `ProfilingCommandDecorator<,>`/`ProfilingQueryDecorator<,>` on top, used when `IApplicationSettings.UseMiniProfiler` is on.
 
-- **Why it's built this way**: `[Rubric §3, Clean Architecture]`: registration lives in a static `DependencyInjection.cs` at the composition root, so domain and Application types never reference the container. The pervasive `TryAdd*` / `TryDecorate` pattern lets a consuming app override any framework default simply by registering its own implementation first. The `extension(IServiceCollection services)` block (line 23) is the C# 14 preview extension-member syntax the framework uses for all DI registration, see [primer §4](00-primer.md#c-extensiont-types-read-this-once).
+- **Why it's built this way**: `[Rubric §3, Clean Architecture]`: registration lives in a static `DependencyInjection.cs` at the composition root, so domain and Application types never reference the container. The pervasive `TryAdd*` / `TryDecorate` pattern lets a consuming app override any framework default simply by registering its own implementation first. The `extension(IServiceCollection services)` block (line 23) is the C# 14 preview extension-member syntax the framework uses for all DI registration, see [primer §4](../00-primer.md#c-extensiont-types-read-this-once).
 
 - **Where it's used**: called from every consuming host (`MMCA.ADC.*.Service/Program.cs`, the Gateway, test fixtures) following the canonical sequence in MMCA.Common `CLAUDE.md`: `AddApplication()` → one `ScanModuleApplicationServices<…ClassReference>()` per module → `AddApplicationDecorators()` (last) → Infrastructure → API. Module-level `DependencyInjection` classes (e.g. the ADC Conference/Engagement/Identity composition roots) are the callers of `ScanModuleApplicationServices<ClassReference>()`.
 
