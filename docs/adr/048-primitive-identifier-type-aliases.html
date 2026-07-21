@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ADR-048: Primitive Identifier Type Aliases over Strongly-Typed ID Structs · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-15).">
+  <meta name="description" content="Accepted (2026-07-15). Revised 2026-07-21 (corrected the empty-placeholder-folder inventory and the Directory.Build.props and ADC User source citations).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/048-primitive-identifier-type-aliases.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="article">
   <meta property="og:title" content="ADR-048: Primitive Identifier Type Aliases over Strongly-Typed ID Structs">
-  <meta property="og:description" content="Accepted (2026-07-15).">
+  <meta property="og:description" content="Accepted (2026-07-15). Revised 2026-07-21 (corrected the empty-placeholder-folder inventory and the Directory.Build.props and ADC User source citations).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/048-primitive-identifier-type-aliases.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 49 ADRs</summary>
+        <summary>All 50 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -114,6 +114,7 @@
         <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
         <li><a href="048-primitive-identifier-type-aliases.html" aria-current="page">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
           </ol>
         </nav>
       </details>
@@ -122,7 +123,8 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-048-primitive-identifier-type-aliases-over-strongly-typed-id-structs">ADR-048: Primitive Identifier Type Aliases over Strongly-Typed ID Structs</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-15).</p>
+          <p>Accepted (2026-07-15). Revised 2026-07-21 (corrected the empty-placeholder-folder inventory and the
+          <code>Directory.Build.props</code> and ADC <code>User</code> source citations).</p>
           <h2 id="context">Context</h2>
           <p>Every entity needs an identity type. The framework&#39;s base entity is generic over that type:
           <code>BaseEntity&lt;TIdentifierType&gt;</code> constrains it to <code>notnull</code> and exposes a single <code>required init Id</code>
@@ -135,10 +137,12 @@
           prescribes, to make identifiers non-interchangeable at compile time.</li>
           </ol>
           <p>The codebase chose the first, but until now that choice lived only as a CLAUDE.md convention with no
-          recorded trade-off. The wrapper-struct alternative was scaffolded, not written: a <code>StronglyTypedIds</code>
-          folder exists in <code>MMCA.Common.Shared</code> and in every module&#39;s <code>.Shared</code> project (for example
-          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/StronglyTypedIds</code>,
-          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/StronglyTypedIds</code>) and each contains <strong>no
+          recorded trade-off. The wrapper-struct alternative was scaffolded, not written: an empty <code>StronglyTypedIds</code>
+          folder survives in five module <code>.Shared</code> projects (Store Catalog, Sales, and Identity, plus ADC
+          Conference and Engagement, for example
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/StronglyTypedIds</code> and
+          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/StronglyTypedIds</code>), while no such folder
+          exists under <code>MMCA.Common.Shared</code> or <code>MMCA.ADC.Identity.Shared</code>. Every surviving folder holds <strong>no
           types</strong>. This ADR records the primitive-alias decision and its cost so the deferral is deliberate and
           legible.</p>
           <h2 id="decision">Decision</h2>
@@ -164,13 +168,13 @@
           <li><strong>Aliases are linked solution-wide via <code>Directory.Build.props</code>.</strong> Each <code>GlobalUsings.*.cs</code> file is
           pulled into every project with a <code>&lt;Compile Include ... Link=... /&gt;</code> block, so the alias is visible
           everywhere without a project reference: Common
-          (<code>MMCA.Common/Directory.Build.props:76-77,82-83</code>), ADC
-          (<code>MMCA.ADC/Directory.Build.props:66-76</code>), Store (<code>MMCA.Store/Directory.Build.props:66-73</code>). Adding a
+          (<code>MMCA.Common/Directory.Build.props:70-79</code>), ADC
+          (<code>MMCA.ADC/Directory.Build.props:77-87</code>), Store (<code>MMCA.Store/Directory.Build.props:75-86</code>). Adding a
           solution-wide alias is a new <code>GlobalUsings.*.cs</code> plus a matching <code>&lt;Compile Include&gt;</code> line, nothing more.</li>
           <li><strong>The alias flows unchanged through every layer.</strong> Tracing the ADC <code>User</code> aggregate: the domain
           entity is <code>User : AuditableAggregateRootEntity&lt;UserIdentifierType&gt;</code>
-          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:17</code>); the cross-context
-          reference to a speaker is typed <code>SpeakerIdentifierType? LinkedSpeakerId</code> (same file, line 53); the EF
+          (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:18</code>); the cross-context
+          reference to a speaker is typed <code>SpeakerIdentifierType? LinkedSpeakerId</code> (same file, line 54); the EF
           configuration is <code>EntityTypeConfigurationSQLServer&lt;User, UserIdentifierType&gt;</code>
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/EntityConfiguration/UserConfiguration.cs:13</code>);
           the repository handle is <code>GetRepository&lt;User, UserIdentifierType&gt;()</code>

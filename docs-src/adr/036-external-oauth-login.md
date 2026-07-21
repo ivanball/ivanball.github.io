@@ -1,7 +1,7 @@
 # ADR-036: External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange
 
 ## Status
-Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043).
+Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043, email-verified account-takeover guard before linking added 2026-07-21).
 
 ## Context
 The framework's Identity story so far is entirely first-party: a user registers with an email and
@@ -54,14 +54,22 @@ a local `User`.
   code is burned on first use, and a missing, replayed, or expired code yields HTTP 400. Access and
   refresh tokens therefore never land in the address bar, browser history, the `Referer` header, or
   upstream access logs.
-- **The exchange resolves to a local `User`, three ways.** `ExternalLoginAsync` (app-level) first
-  looks the user up by `LoginProvider` + `ProviderKey`. Missing, it looks up by email and, if a local
-  or other-provider account already owns that email, **links** the external provider to it
-  (`User.LinkExternalProvider`) rather than rejecting the sign-in. Only when no account owns the email
-  does it **create** a new `Attendee` via `User.CreateExternal` (an external user has empty password
-  hash/salt and carries `LoginProvider` / `ProviderKey`). Either way it rotates the refresh token,
-  saves, and mints the access token, so the caller receives the same `AuthenticationResponse` shape as
-  a local login.
+- **The exchange resolves to a local `User`, three ways, and guards the by-email link.**
+  `ExternalLoginAsync` (app-level,
+  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:123`)
+  first looks the user up by `LoginProvider` + `ProviderKey` (`AuthenticationService.cs:144`). Missing,
+  it looks up by email (`AuthenticationService.cs:158`) and, when a local or other-provider account
+  already owns that email, applies an account-takeover guard before linking: it asks
+  `IExternalLoginEmailVerifier.IsCurrentExternalLoginEmailVerifiedAsync` (`AuthenticationService.cs:173`)
+  whether the provider asserted the incoming email as verified, and when it did not it **rejects** the
+  sign-in with `Auth.ExternalEmailNotVerified` (defined inline at `AuthenticationService.cs:179`)
+  instead of linking, so an unverified provider assertion cannot claim an existing local account. Only
+  when the provider did assert a verified email does it **link** the external provider to that account
+  (`User.LinkExternalProvider`, `AuthenticationService.cs:184`). When no account owns the email it
+  **creates** a new `Attendee` via `User.CreateExternal` (`AuthenticationService.cs:190`; an external
+  user has empty password hash/salt and carries `LoginProvider` / `ProviderKey`). In the link and
+  create cases it rotates the refresh token, saves, and mints the access token, so the caller receives
+  the same `AuthenticationResponse` shape as a local login.
 - **The linkage is two nullable columns and a filtered unique index.** `User.LoginProvider`
   (`varchar(50)`) and `User.ProviderKey` (`varchar(256)`) are null for local accounts;
   `IsExternalLogin` is derived from `LoginProvider is not null`. In ADC's per-service Identity database
@@ -119,10 +127,22 @@ Identity story stays local-credential + RS256 only.
   target). A host that registers schemes but forgets the controller, or configures a `ClientId`
   without the matching UI flags, gets a broken or invisible button, the same audit-the-inventory
   caveat as ADR-020. Adopting it also requires the migration that adds the provider columns.
-- **Email trust is inherited from the provider.** Link-by-email assumes the provider returns a
-  verified email; a provider that returns an unverified address would let an external sign-in attach
-  to an existing account. GitHub's `user:email` scope and Google's verified email are the mitigation,
-  not a check the framework performs.
+- **The verified-email guard is ADC-level, not framework-provided.** Link-by-email would let an
+  unverified address attach to an existing account, so ADC gates the auto-link on a provider-asserted
+  verified email rather than trusting the address outright. The gate is `IExternalLoginEmailVerifier`
+  (interface in the Identity Application layer,
+  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/IExternalLoginEmailVerifier.cs:11`),
+  implemented at the API edge over the short-lived `ExternalLogin` cookie principal by
+  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Authentication/HttpContextExternalLoginEmailVerifier.cs:17`,
+  which reads the provider's `email_verified` claim (`HttpContextExternalLoginEmailVerifier.cs:33`) and
+  is wired at `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/DependencyInjection.cs:55`. Google's
+  `email_verified` claim passes the guard; GitHub's OAuth flow asserts nothing, so a GitHub sign-in
+  whose email matches an existing account is rejected with `Auth.ExternalEmailNotVerified`, not linked.
+  The framework itself still performs no such check: `Auth.ExternalEmailNotVerified` is defined inline
+  in ADC's override (`AuthenticationService.cs:179`), and a non-adopting host (Store, Helpdesk) gets only
+  the framework's not-supported default (`Auth.ExternalLoginNotSupported`,
+  `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/IAuthenticationService.cs:74`), so the guard is
+  ADC's own edge, not a framework guarantee.
 - **Not exactly-once account creation across the redirect.** The exchange commits the `User` before
   the UI redeems the code; an abandoned redemption still creates (or links) the account. That is the
   intended tradeoff (the identity is real once the provider vouched for it), but it means a completed

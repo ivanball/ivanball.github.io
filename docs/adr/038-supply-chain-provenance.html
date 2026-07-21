@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ADR-038: Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-06).">
+  <meta name="description" content="Accepted (2026-07-06; revised 2026-07-21).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/038-supply-chain-provenance.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="article">
   <meta property="og:title" content="ADR-038: Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)">
-  <meta property="og:description" content="Accepted (2026-07-06).">
+  <meta property="og:description" content="Accepted (2026-07-06; revised 2026-07-21).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/038-supply-chain-provenance.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 49 ADRs</summary>
+        <summary>All 50 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -114,6 +114,7 @@
         <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
           </ol>
         </nav>
       </details>
@@ -122,7 +123,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-038-supply-chain-provenance-sbom-release-gate--lock-files--vulnerability-audit">ADR-038: Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-06).</p>
+          <p>Accepted (2026-07-06; revised 2026-07-21).</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common is a published framework: it packs its NuGet packages and pushes them to GitHub Packages
           on every <code>v*</code> tag (release.yml:59-60), where the two production apps and the reference seed consume
@@ -159,15 +160,16 @@
           </li>
           <li><p><strong>CI fails on any non-suppressed vulnerable package.</strong> The audit step runs
           <code>dotnet list MMCA.Common.slnx package --vulnerable --include-transitive</code> (ci.yml:36-38) and fails the
-          build (<code>exit 1</code>) on any vulnerable-package row (ci.yml:45-51). Accepted advisories are the sole
+          build (<code>exit 1</code>) on any vulnerable-package row (ci.yml:45-52). Accepted advisories are the sole
           exception, and their single source of truth is the <code>NuGetAuditSuppress</code> list in
           <code>Directory.Build.props</code>. Because <code>dotnet list --vulnerable</code> ignores <code>NuGetAuditSuppress</code>, the step
           re-derives that accept-list itself by reading the <code>GHSA-*</code> ids out of <code>Directory.Build.props</code>
           (ci.yml:40-48). The accepted-advisory list is currently empty: the one prior entry, the SQLite
           advisory GHSA-2m69-gcr7-jv3q (CVE-2025-6965), was suppressed from 2026-06-19 while SQLitePCLRaw
-          shipped no patched build. SQLitePCLRaw 2.1.12 (published 2026-07-14) fixed it, so the suppression
-          was removed on 2026-07-20 and replaced with a direct fix: a <code>SQLitePCLRaw.bundle_e_sqlite3</code> pin at
-          2.1.12 in <code>Directory.Packages.props</code>, referenced directly by <code>MMCA.Common.Infrastructure</code> so the
+          shipped no patched build. SQLitePCLRaw 2.1.12 (published 2026-07-14) delivered the patched build, so
+          the suppression was removed on 2026-07-20 and replaced with a direct fix: a
+          <code>SQLitePCLRaw.bundle_e_sqlite3</code> pin tracked in <code>Directory.Packages.props</code> (Directory.Packages.props:42),
+          referenced directly by <code>MMCA.Common.Infrastructure</code> (MMCA.Common.Infrastructure.csproj:23-25) so the
           patched version flows to consumers through the published package graph, the same pattern used for
           the MessagePack pin. This complements the build-time audit: <code>NuGetAudit</code> with <code>NuGetAuditMode=all</code>
           (Directory.Build.props:9-10)
@@ -192,9 +194,10 @@
           (ArchitectureEvaluationCriteria.md:808).</li>
           <li><strong>One accept-list, re-applied where the tool ignores it.</strong> The audit keeps <code>Directory.Build.props</code>
           as the only place an advisory is accepted, and re-reads that file in CI precisely because
-          <code>dotnet list --vulnerable</code> does not honor <code>NuGetAuditSuppress</code> (ci.yml:40-42). A reviewer sees every
-          accepted advisory in one place, with a dated rationale (Directory.Build.props:19-25), rather than a
-          blanket suppression.</li>
+          <code>dotnet list --vulnerable</code> does not honor <code>NuGetAuditSuppress</code> (ci.yml:40-42). A <code>NuGetAuditSuppress</code>
+          item is the sanctioned way to accept an advisory, paired with a dated rationale in an adjacent
+          comment, so a reviewer sees every accepted advisory in one place rather than a blanket suppression.
+          No suppressions are active today: the accept-list is empty after the 2026-07-20/21 SQLite fix.</li>
           <li><strong>Build-gates-invariants, at the supply-chain layer.</strong> SBOM, audit, and source mapping turn
           &quot;remember to check the dependencies&quot; into red builds, the same lever ADR-015 uses for the layer and
           event rules and ADR-016 uses for the MassTransit pin.</li>
@@ -207,9 +210,10 @@
           <li><strong>The SBOM is generated and archived, not yet signed or attested.</strong> The gate proves a bill of
           materials exists for each release (release.yml:50); it does not add cryptographic attestation or
           signature verification of the pushed packages. That is a possible follow-up, not a claim made here.</li>
-          <li><strong>Accept-list drift is possible.</strong> A suppressed advisory (Directory.Build.props:26-27) silences the
-          audit for that id until someone removes it; the inline &quot;re-check periodically&quot; note
-          (Directory.Build.props:24-25) is a review reminder, not an automated expiry.</li>
+          <li><strong>Accept-list drift is possible.</strong> A <code>NuGetAuditSuppress</code> entry silences the audit for that id until
+          someone removes it, and its accompanying rationale comment is a review reminder, not an automated
+          expiry. No entries are active today, but the mechanism carries this cost whenever an advisory is
+          accepted.</li>
           <li><strong>Audit granularity is text-matched.</strong> The CI step matches vulnerable rows and <code>GHSA-*</code> ids by
           parsing tool output (ci.yml:43-48). It is deliberately simple and depends on the <code>dotnet list</code>
           output shape rather than a structured feed.</li>

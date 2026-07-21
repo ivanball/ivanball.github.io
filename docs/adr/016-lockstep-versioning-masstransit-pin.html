@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 49 ADRs</summary>
+        <summary>All 50 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -114,6 +114,7 @@
         <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
           </ol>
         </nav>
       </details>
@@ -124,7 +125,7 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-07-15).</p>
           <h2 id="context">Context</h2>
-          <p>MMCA.Common publishes its <code>MMCA.Common.*</code> NuGet package set (see <code>../FACTS.md</code> for the authoritative
+          <p>MMCA.Common publishes its <code>MMCA.Common.*</code> NuGet package set (see <code>FACTS.md</code> for the authoritative
           list and count) consumed by three downstream repos: the two
           production apps (Store, ADC) and the reference seed Helpdesk (which defaults to local-source mode but
           declares the same <code>MMCA.Common.*</code> package versions in its own <code>Directory.Packages.props</code>).
@@ -141,9 +142,9 @@
           <h2 id="decision">Decision</h2>
           <ol>
           <li><strong>Version the whole <code>MMCA.Common.*</code> package set in lockstep.</strong> All packages share one version (MinVer, derived from
-          a single <code>vX.Y.Z</code> git tag); a release tags every package (see <code>../FACTS.md</code> for the authoritative list and count)
+          a single <code>vX.Y.Z</code> git tag); a release tags every package (see <code>FACTS.md</code> for the authoritative list and count)
           at the same version. SemVer and the
-          breaking-change policy live in <code>VERSIONING.md</code>.</li>
+          breaking-change policy live in <code>common-VERSIONING.md</code> in <code>docs-src/guides/</code>.</li>
           <li><strong>Sweep every consumer in one pass, with no phased rollout.</strong> A framework change ships and all
           consumers bump every <code>MMCA.Common.*</code> entry in their <code>Directory.Packages.props</code> together.
           The two production apps (Store, ADC) now <strong>commit NuGet lock files</strong> (<code>RestorePackagesWithLockFile</code>,

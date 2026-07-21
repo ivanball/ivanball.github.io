@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ADR-013: Result Pattern over Exceptions for Flow Control · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted">
+  <meta name="description" content="Accepted. Revised 2026-07-21 (exception-handler chain / ProblemDetails edge contract documented).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/013-result-pattern.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="article">
   <meta property="og:title" content="ADR-013: Result Pattern over Exceptions for Flow Control">
-  <meta property="og:description" content="Accepted">
+  <meta property="og:description" content="Accepted. Revised 2026-07-21 (exception-handler chain / ProblemDetails edge contract documented).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/013-result-pattern.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 49 ADRs</summary>
+        <summary>All 50 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -114,6 +114,7 @@
         <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
           </ol>
         </nav>
       </details>
@@ -122,7 +123,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-013-result-pattern-over-exceptions-for-flow-control">ADR-013: Result Pattern over Exceptions for Flow Control</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted</p>
+          <p>Accepted. Revised 2026-07-21 (exception-handler chain / ProblemDetails edge contract documented).</p>
           <h2 id="context">Context</h2>
           <p>Operations at every layer fail in <em>expected</em> ways: input is invalid, a domain invariant is broken, a
           requested entity is missing, a uniqueness conflict occurs, the caller lacks permission. There are two
@@ -148,6 +149,34 @@
           <li>Exceptions are reserved for the genuinely exceptional: programming errors (null-argument guards) and
           infrastructure faults (DB / transaction failures) that should abort the request rather than be
           modeled as a business outcome.</li>
+          <li>When an exception does escape to the HTTP edge, the API layer converges it onto the same RFC 9457
+          ProblemDetails shape via an ordered <code>IExceptionHandler</code> chain, so both channels (Result and
+          exception) return one wire contract. <code>AddCommonExceptionHandlers()</code> first registers <code>AddProblemDetails</code>
+          (which stamps a <code>requestId</code> extension from the request&#39;s trace identifier), then registers the handlers
+          in a load-bearing order; ASP.NET Core runs them in registration order and stops at the first handler
+          that reports the exception handled, so most-specific-first placement is the mechanism, not a comment
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:116-127</code>, registrations at
+          lines 121-125):<ul>
+          <li><code>OperationCanceledExceptionHandler</code> (registered first) maps a client-disconnect
+          <code>OperationCanceledException</code> to the non-standard HTTP 499 Client Closed Request, so monitoring can
+          tell an abandoned request apart from a server fault
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/OperationCanceledExceptionHandler.cs:27,32</code>).</li>
+          <li><code>DomainExceptionHandler</code> maps a <code>DomainException</code> (a business-rule violation reaching the edge as an
+          exception rather than a <code>Result</code>) to HTTP 400 Bad Request
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DomainExceptionHandler.cs:27,32</code>).</li>
+          <li><code>DbUpdateExceptionHandler</code> maps an EF Core <code>DbUpdateException</code> (concurrency, unique-constraint, or
+          foreign-key failure) to HTTP 409 Conflict, returning a generic detail so no database schema detail
+          leaks to the client
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DbUpdateExceptionHandler.cs:28,33,37</code>).</li>
+          <li><code>ValidationExceptionHandler</code> maps a FluentValidation <code>ValidationException</code> to HTTP 400, grouping the
+          failures by property name into an <code>errors</code> extension that matches ASP.NET Core&#39;s model-validation
+          shape
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ValidationExceptionHandler.cs:28,33,48-54</code>).</li>
+          <li><code>GlobalExceptionHandler</code> (registered last) is the catch-all that turns any remaining unhandled
+          exception into HTTP 500
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/GlobalExceptionHandler.cs:26-28</code>).</li>
+          </ul>
+          </li>
           </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -158,6 +187,10 @@
           <li><strong>Composable.</strong> The railway-oriented combinators chain steps without an <code>IsFailure</code> check at every
           line, and short-circuit on the first failure.</li>
           <li><strong>Cheap and predictable.</strong> No throw/catch on the common &quot;won&#39;t do it&quot; path.</li>
+          <li><strong>One wire contract for both channels.</strong> Whether a request ends in a <code>Result.Failure</code> mapped by
+          <code>HandleFailure()</code> or an escaped exception caught by the handler chain, the client receives the same
+          RFC 9457 ProblemDetails body (carrying the shared <code>requestId</code> extension), so consumers parse one error
+          shape regardless of which channel produced it.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
@@ -167,6 +200,11 @@
           otherwise throw.</li>
           <li>The <code>ErrorType</code> to HTTP mapping is one-directional and first-error-wins for the <em>status code</em> (all
           errors still serialize into the ProblemDetails body).</li>
+          <li>The exception-handler registration order is load-bearing. Because ASP.NET Core stops at the first
+          handler that reports the exception handled, a mis-ordered registration (for example the catch-all
+          <code>GlobalExceptionHandler</code> ahead of a specific handler) would swallow the more precise status;
+          <code>GlobalExceptionHandler</code> must stay registered last
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:121-125</code>).</li>
           </ul>
           <h2 id="related">Related</h2>
           <p>ADR-007 (Result over the wire via gRPC), ADR-014 (the decorator pipeline returns <code>Result.Failure</code> to

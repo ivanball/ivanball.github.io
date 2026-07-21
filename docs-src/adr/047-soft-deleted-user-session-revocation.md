@@ -49,8 +49,8 @@ by a short cache so the account-status lookup is not paid on every request.
   (ADC: `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/SoftDeletedUserValidator.cs:10,21-24`;
   Store: `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Application/Users/SoftDeletedUserValidator.cs:10,21-24`),
   registered scoped in each Identity module's DI
-  (`MMCA.ADC.Identity.Application/DependencyInjection.cs:33`,
-  `MMCA.Store.Identity.Application/DependencyInjection.cs:40`). The query bypasses the soft-delete
+  (`MMCA.ADC.Identity.Application/DependencyInjection.cs:32`,
+  `MMCA.Store.Identity.Application/DependencyInjection.cs:39`). The query bypasses the soft-delete
   global query filter deliberately, because a plain read would hide the very row it needs to find.
 - **A 30-second cache amortizes the lookup.** `CacheDuration` is
   `TimeSpan.FromSeconds(30)` (`SoftDeletedUserMiddleware.cs:17`). The middleware reads

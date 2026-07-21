@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 49 ADRs</summary>
+        <summary>All 50 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html" aria-current="page">Overview</a></li>
@@ -114,6 +114,7 @@
         <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
           </ol>
         </nav>
       </details>
@@ -194,7 +195,7 @@
           <tr>
           <td><a href="013-result-pattern.html">013</a></td>
           <td>Result pattern over exceptions</td>
-          <td>Expected failures are <code>Result</code>/<code>Result&lt;T&gt;</code> values with a transport-agnostic <code>ErrorType</code>; only the edge maps to HTTP/gRPC. Exceptions stay for the genuinely exceptional.</td>
+          <td>Expected failures are <code>Result</code>/<code>Result&lt;T&gt;</code> values with a transport-agnostic <code>ErrorType</code>; only the edge maps to HTTP/gRPC. Exceptions stay for the genuinely exceptional, and the exceptional path has its own edge contract: an ordered <code>IExceptionHandler</code> chain (OperationCanceled, Domain, DbUpdate, Validation, Global; registration order load-bearing) emitting RFC 9457 ProblemDetails (revised 2026-07-21).</td>
           </tr>
           <tr>
           <td><a href="014-cqrs-decorator-pipeline.html">014</a></td>
@@ -309,7 +310,7 @@
           <tr>
           <td><a href="036-external-oauth-login.html">036</a></td>
           <td>External OAuth login (Google/GitHub)</td>
-          <td><code>AddExternalAuthProviders</code> federates third-party sign-in behind a short-lived <code>ExternalLogin</code> cookie; <code>OAuthControllerBase</code> completes the handshake and swaps a single-use, 2-minute cached code for the app&#39;s local JWT pair (tokens never ride the redirect URL). The local <code>User</code> links by provider+key, by email, or is created externally (<code>CreateExternal</code>, <code>LoginProvider</code>/<code>ProviderKey</code> fields). Config-gated per provider (<code>OAuth:&lt;Provider&gt;:ClientId</code>), inert until configured; adopted by MMCA.ADC only (MMCA.Store does not wire it).</td>
+          <td><code>AddExternalAuthProviders</code> federates third-party sign-in behind a short-lived <code>ExternalLogin</code> cookie; <code>OAuthControllerBase</code> completes the handshake and swaps a single-use, 2-minute cached code for the app&#39;s local JWT pair (tokens never ride the redirect URL). The local <code>User</code> links by provider+key, by email (guarded since 2026-07-19: ADC rejects the link with <code>ExternalEmailNotVerified</code> when the provider did not assert the email verified), or is created externally (<code>CreateExternal</code>, <code>LoginProvider</code>/<code>ProviderKey</code> fields). Config-gated per provider (<code>OAuth:&lt;Provider&gt;:ClientId</code>), inert until configured; adopted by MMCA.ADC only (MMCA.Store does not wire it).</td>
           </tr>
           <tr>
           <td><a href="037-field-level-encryption-at-rest.html">037</a></td>
@@ -319,7 +320,7 @@
           <tr>
           <td><a href="038-supply-chain-provenance.html">038</a></td>
           <td>Supply-chain provenance (SBOM gate + lock files + vuln audit)</td>
-          <td>Four build-gating controls for a published framework: a CycloneDX SBOM as a hard release gate, committed NuGet lock files, a CI <code>--vulnerable --include-transitive</code> audit that fails on any row except <code>NuGetAuditSuppress</code>-accepted advisories (single source of truth, re-applied in CI; today only the SQLite <code>GHSA-2m69-gcr7-jv3q</code>), and <code>packageSourceMapping</code> pinning every package to nuget.org. Extends ADR-016 from versioning/licensing into provenance.</td>
+          <td>Four build-gating controls for a published framework: a CycloneDX SBOM as a hard release gate, committed NuGet lock files, a CI <code>--vulnerable --include-transitive</code> audit that fails on any row except <code>NuGetAuditSuppress</code>-accepted advisories (single source of truth, re-applied in CI; zero suppressions active since the 2026-07-20/21 SQLite direct-pin fix), and <code>packageSourceMapping</code> pinning every package to nuget.org. Extends ADR-016 from versioning/licensing into provenance.</td>
           </tr>
           <tr>
           <td><a href="039-live-channel-push.html">039</a></td>
@@ -367,14 +368,19 @@
           <td><code>SoftDeletedUserMiddleware</code> (BR-133, after authentication, before authorization) returns 401 for authenticated callers whose <code>User.IsDeleted</code>, via <code>ISoftDeletedUserValidator</code> behind a 30-second cached check; the validator is lazily resolved so hosts that do not register one (non-Identity services, Helpdesk) no-op. Bounds the stateless-JWT revocation window (ADR-004) to roughly the cache duration instead of the token lifetime.</td>
           </tr>
           <tr>
+          <td><a href="048-primitive-identifier-type-aliases.html">048</a></td>
+          <td>Primitive identifier type aliases</td>
+          <td>Entity IDs are primitives behind per-module <code>global using {Entity}IdentifierType = ...</code> aliases, linked solution-wide via <code>Directory.Build.props</code>, chosen over DDD strongly-typed ID structs: readable signatures with zero EF/serializer/OpenAPI friction, at the cost of no compile-time protection against swapping two same-typed IDs. Wrapper structs were considered and deferred (empty <code>StronglyTypedIds</code> placeholder folders survive in five module <code>.Shared</code> projects).</td>
+          </tr>
+          <tr>
           <td><a href="049-library-configureawait-policy.html">049</a></td>
           <td>Library-scoped ConfigureAwait(false) policy</td>
           <td>Packaged non-UI framework code awaits with <code>ConfigureAwait(false)</code>, enforced as a build gate (CA2007 = warning for <code>Source/**</code> in MMCA.Common&#39;s .editorconfig repo-delta, UI component packages excluded); the application repos keep ConfigureAwait analyzers off. Protects the MAUI head (ADR-042) and any non-ASP.NET consumer from library context-capture deadlocks.</td>
           </tr>
           <tr>
-          <td><a href="048-primitive-identifier-type-aliases.html">048</a></td>
-          <td>Primitive identifier type aliases</td>
-          <td>Entity IDs are primitives behind per-module <code>global using {Entity}IdentifierType = ...</code> aliases, linked solution-wide via <code>Directory.Build.props</code>, chosen over DDD strongly-typed ID structs: readable signatures with zero EF/serializer/OpenAPI friction, at the cost of no compile-time protection against swapping two same-typed IDs. Wrapper structs were considered and deferred (the empty <code>StronglyTypedIds</code> folders).</td>
+          <td><a href="050-jwt-refresh-token-rotation.html">050</a></td>
+          <td>JWT + single rotating refresh token</td>
+          <td>One issuance workflow in <code>AuthenticationServiceBase&lt;TUser&gt;</code>: a short-lived stateless JWT access token (default 15 min) plus one server-stored, opaque refresh token per user that rotates on every use; a presented token that mismatches the stored one (or is expired) triggers <code>RevokeRefreshToken</code> and 401. Absolute 7-day refresh lifetime (hardcoded base property; <code>JwtSettings.RefreshTokenExpirationDays</code> binds but is unread), refresh bound to the same principal via <code>GetPrincipalFromExpiredToken</code>. Single-token-per-user means a new login signs out other devices&#39; refresh chains.</td>
           </tr>
           </tbody></table></div>
           <h2 id="writing-a-new-adr">Writing a new ADR</h2>

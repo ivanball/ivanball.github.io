@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 49 ADRs</summary>
+        <summary>All 50 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -114,6 +114,7 @@
         <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
           </ol>
         </nav>
       </details>
@@ -134,7 +135,7 @@
           in it would break the web heads at compile time.</p>
           <p>Two constraints shape the packaging. First, per-head service selection already has a working
           precedent: <code>ITokenStorageService</code> is implemented by each host and registered after <code>AddUIShared</code>
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:99</code>). Second, MMCA.Common&#39;s CI and release
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:98</code>). Second, MMCA.Common&#39;s CI and release
           pipelines run on ubuntu-latest, which cannot build MAUI target frameworks at all, while the
           framework&#39;s packages release in lockstep (ADR-016).</p>
           <h2 id="decision">Decision</h2>
@@ -216,7 +217,7 @@
           their UI and surface the gap visibly.</li>
           <li>Biometrics, speech-to-text, and the external-auth broker now ship native MAUI implementations,
           all three registered by <code>AddMauiDeviceCapabilities()</code>
-          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:44</code>, <code>:45</code>, <code>:59</code>). The residual
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:43</code>, <code>:44</code>, <code>:58</code>). The residual
           trade-off is configuration, not code: <code>MauiExternalAuthBroker</code> registers unconditionally but
           reports <code>IsAvailable == false</code> (<code>Source/Presentation/MMCA.Common.UI.Maui/Capabilities/MauiExternalAuthBroker.cs:39</code>)
           until the head supplies <code>OAuth:MobileRedirectScheme</code>, so a misconfigured head quietly keeps the web

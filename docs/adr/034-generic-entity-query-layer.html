@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 49 ADRs</summary>
+        <summary>All 50 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -114,6 +114,7 @@
         <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
           </ol>
         </nav>
       </details>
@@ -162,7 +163,7 @@
           <li><p><strong>Sparse fieldsets via <code>fields</code>.</strong> A comma-separated <code>fields</code> query parameter
           (<code>EntityControllerBase.cs:77</code>, <code>:121</code>, <code>:193</code>) drives a server-side projection:
           <code>QueryFieldService.ApplyFieldSelection</code>
-          (<code>Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:140</code>) builds a
+          (<code>Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:154</code>) builds a
           <code>MemberInit</code> expression that selects only the requested writable properties so
           only those columns leave the database.</p>
           </li>
@@ -219,25 +220,25 @@
           not unbounded in the engine: each property is filtered only by a registered
           <code>IFilterStrategy</code> whose <code>SupportedOperators</code> are validated before the database is
           touched (<code>QueryFilterService.ValidateFilters</code>, <code>QueryFilterService.cs:124</code>,
-          invoked at <code>Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:102</code>),
+          invoked at <code>Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:187</code>),
           and <code>MaxUnboundedResultLimit</code> (<code>EntityQueryPipeline.cs:22</code>) plus the <code>MaxPageSize</code>
           clamp (<code>EntityControllerBase.cs:127</code>) bound the result size.</li>
           <li><strong>Composes with manual DTO mapping (ADR-001).</strong> Entities are projected to DTOs by
-          an injected <code>IEntityDTOMapper</code> (<code>EntityQueryService.cs:32</code>, <code>:48</code>) via
-          <code>DTOMapper.MapToDTOs</code> (<code>EntityQueryService.cs:137</code>); a <code>DTOToEntityPropertyMap</code>
-          (<code>EntityQueryService.cs:58</code>) translates DTO field names to entity property paths
+          an injected <code>IEntityDTOMapper</code> (<code>EntityQueryService.cs:35</code>, <code>:51</code>) via
+          <code>DTOMapper.MapToDTOs</code> (<code>EntityQueryService.cs:222</code>); a <code>DTOToEntityPropertyMap</code>
+          (<code>EntityQueryService.cs:61</code>) translates DTO field names to entity property paths
           for filter and sort, so the wire contract speaks DTO names while the engine speaks
           entity names.</li>
           <li><strong>Composes with populators (ADR-002).</strong> The unsupported-include path delegates to
-          <code>INavigationPopulator</code> (<code>EntityQueryService.cs:33</code>), the same cross-source batch
+          <code>INavigationPopulator</code> (<code>EntityQueryService.cs:36</code>), the same cross-source batch
           loader that bridges relationships EF cannot JOIN.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>The wire contract tracks the entity model.</strong> Filterable, sortable, and
           projectable surface is the entity&#39;s property set. A model change is an API change
-          unless mediated by the DTO and <code>DTOToEntityPropertyMap</code> (<code>EntityQueryService.cs:58</code>),
-          which is the seam that decouples the two when needed.</li>
+          unless mediated by the DTO and <code>DTOToEntityPropertyMap</code> (<code>EntityQueryService.cs:61</code>),
+          which is the boundary that decouples the two when needed.</li>
           <li><strong>Dynamic filtering is an injection and over-fetch surface.</strong> Arbitrary
           client-supplied property/operator/value triples are an attack surface; it is
           bounded by validating properties and operators up front
@@ -245,7 +246,7 @@
           type through its registered <code>IFilterStrategy</code> rather than free-form expression
           evaluation, and capping rows with <code>MaxUnboundedResultLimit</code>
           (<code>EntityQueryPipeline.cs:22</code>). Sparse fieldsets reject non-writable properties at
-          projection (<code>QueryFieldService.cs:140</code>).</li>
+          projection (<code>QueryFieldService.cs:167</code>).</li>
           <li><strong>Generic endpoints are less self-documenting than bespoke ones.</strong> One generic
           shape per entity is consistent but conveys less domain intent than a named,
           purpose-built endpoint; the query contract (filter key syntax, operators) must be
