@@ -39,12 +39,12 @@ Single edit points:
 
 `docs-src/` holds the **canonical markdown** for the MMCA workspace documentation (centralized here 2026-07-20; the .NET repos link to it, they do not own copies):
 
-- `docs-src/adr/` — Architecture Decision Records (`NNN-*.md`); its `README.md` is the source of truth for ADR count/range. Add or edit ADRs ONLY here.
-- `docs-src/governance/` — evaluation rubric + repo-prefixed scorecards/backlogs (e.g. `store-ArchitectureScorecard.md`).
-- `docs-src/guides/` — public-safe narrative docs (getting-started, specs, workflows).
-- `docs-src/onboarding/` — the onboarding chapters, their ONLY home; the workspace `Tools/invtool` pipeline writes here directly. Underscore-prefixed files are working files and are skipped by the build.
+- `docs-src/adr/`: Architecture Decision Records (`NNN-*.md`); its `README.md` is the source of truth for ADR count/range. Add or edit ADRs ONLY here.
+- `docs-src/governance/`: evaluation rubric + repo-prefixed scorecards/backlogs (e.g. `store-ArchitectureScorecard.md`).
+- `docs-src/guides/`: public-safe narrative docs (getting-started, specs, workflows).
+- `docs-src/onboarding/`: the onboarding chapters, their ONLY home; the workspace `Tools/invtool` pipeline writes here directly. Underscore-prefixed files are working files and are skipped by the build.
 
-`tools/build-docs.mjs` renders each markdown file into a full page in the site shell (sidebar, breadcrumb, canonical/OG meta) under `docs/`. **The generated HTML in `docs/` is committed — never hand-edit it; edit `docs-src/` and rebuild.** A docs-src edit is not done until the rebuild ran and both the source and regenerated output are committed together.
+`tools/build-docs.mjs` renders each markdown file into a full page in the site shell (sidebar, breadcrumb, canonical/OG meta) under `docs/`. **The generated HTML in `docs/` is committed: never hand-edit it; edit `docs-src/` and rebuild.** A docs-src edit is not done until the rebuild ran and both the source and regenerated output are committed together.
 
 Generator behaviors worth knowing before touching it or the markdown:
 
@@ -55,5 +55,5 @@ Generator behaviors worth knowing before touching it or the markdown:
 
 ## Conventions
 
-- Never use accents, tildes, or em-dashes in prose or drafted content; use parentheses, colons, or plain characters. Avoid the word "seem". (Workspace-wide rule; applies to page copy and docs-src markdown.)
+- Never use accents, tildes, or em-dashes in prose or drafted content; use parentheses, colons, or plain characters. Avoid the words "seam" and "seams" (use boundary, extension point, pipeline, or layer instead). (Workspace-wide rule; applies to page copy and docs-src markdown.)
 - This repo sits inside the MMCA workspace (`C:\Projects\MMCA\`) whose root CLAUDE.md governs cross-repo workflow; governance commands like `/update-adrs` and `/update-scorecard` land their edits here in `docs-src/`.
