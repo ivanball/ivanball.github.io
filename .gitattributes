@@ -1,0 +1,26 @@
+# Normalize line endings: store text as LF in the repo AND check it out as LF
+# in the working tree. The docs build (tools/build-docs.mjs) writes LF, so
+# forcing eol=lf keeps rendered output churn-free instead of flip-flopping to
+# CRLF under core.autocrlf=true on Windows checkouts.
+* text=auto eol=lf
+
+# Explicit text types (documentation source + rendered site)
+*.html  text eol=lf
+*.md    text eol=lf
+*.css   text eol=lf
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.json  text eol=lf
+*.svg   text eol=lf
+*.xml   text eol=lf
+*.txt   text eol=lf
+
+# Binary assets: never touch line endings
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.pdf   binary
+*.woff  binary
+*.woff2 binary
