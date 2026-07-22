@@ -436,7 +436,7 @@ the real id exists:
 public sealed class CreateTicketHandler(
     IUnitOfWork unitOfWork,
     IEntityRequestMapper<Ticket, TicketCreateRequest, TicketIdentifierType> requestMapper,
-    IIntegrationEventPublisher integrationEventPublisher,
+    IEventBus eventBus,
     TicketDTOMapper dtoMapper) : ICommandHandler<TicketCreateRequest, Result<TicketDTO>>
 {
     public async Task<Result<TicketDTO>> HandleAsync(TicketCreateRequest command, CancellationToken cancellationToken = default)
@@ -451,7 +451,7 @@ public sealed class CreateTicketHandler(
 
         // After commit: the DB-generated entity.Id is now populated. PublishAsync writes to the outbox
         // and dispatches in-process now, over the broker once Tickets is extracted (no handler change).
-        await integrationEventPublisher.PublishAsync(
+        await eventBus.PublishAsync(
             new TicketOpenedIntegrationEvent(entity.Id, entity.RequesterUserId), cancellationToken);
 
         return Result.Success(dtoMapper.MapToDTO(entity));
