@@ -119,13 +119,13 @@
           <h2 id="1-the-big-picture">1. The big picture</h2>
           <p>Two codebases are in scope:</p>
           <ul>
-          <li><strong><code>MMCA.Common</code></strong>: a <strong>framework</strong>, published as <strong>fourteen NuGet packages</strong> to GitHub Packages
-          (four core: <code>.Shared</code>, <code>.Domain</code>, <code>.Application</code>, <code>.Infrastructure</code>; four presentation: <code>.API</code>,
-          <code>.Grpc</code>, <code>.UI</code>, <code>.UI.Web</code>; two Aspire: <code>.Aspire</code>, <code>.Aspire.Hosting</code>; four testing: <code>.Testing</code>, <code>.Testing.E2E</code>,
+          <li><strong><code>MMCA.Common</code></strong>: a <strong>framework</strong>, published as <strong>fifteen NuGet packages</strong> to GitHub Packages
+          (four core: <code>.Shared</code>, <code>.Domain</code>, <code>.Application</code>, <code>.Infrastructure</code>; five presentation: <code>.API</code>,
+          <code>.Grpc</code>, <code>.UI</code>, <code>.UI.Maui</code>, <code>.UI.Web</code>; two Aspire: <code>.Aspire</code>, <code>.Aspire.Hosting</code>; four testing: <code>.Testing</code>, <code>.Testing.E2E</code>,
           <code>.Testing.UI</code>, <code>.Testing.Architecture</code>). It is <em>not</em> a runnable app; it ships the base classes and
           infrastructure for building modular monoliths with DDD + Clean Architecture + CQRS, plus the seams
-          to extract a module into its own microservice later. The fourteen packages release <strong>in lockstep</strong>
-          (one version tags all fourteen).</li>
+          to extract a module into its own microservice later. The fifteen packages release <strong>in lockstep</strong>
+          (one version tags all fifteen).</li>
           <li><strong><code>MMCA.ADC</code></strong>: the <strong>Atlanta Developers Conference</strong> application, a consumer of those packages.
           It has modules (Conference, Engagement, Identity, Notification), a Blazor UI, a YARP gateway, and
           Azure infrastructure.</li>
@@ -247,10 +247,11 @@
           </li>
           </ul>
           <h3 id="the-decision-records-adrs-this-guide-tags">The decision records (ADRs) this guide tags</h3>
-          <p>The <em>why</em> behind these patterns lives in <strong>forty-eight accepted ADRs</strong> (001-048; <code>FACTS.md</code> /
-          <code>ADRs/README.md</code> own the count), version-controlled in
-          <code>MMCA.Common/ADRs/</code> (<code>ADRs/README.md</code> is the canonical index with one-line summaries). Group chapters
-          tag the relevant one inline (e.g. &quot;ADR-003&quot;); the full set, for orientation:</p>
+          <p>The <em>why</em> behind these patterns lives in <strong>fifty accepted ADRs</strong> (001-050; the Website repo&#39;s
+          <code>docs-src/adr/README.md</code> owns the count and range), version-controlled in
+          <code>Website/docs-src/adr/</code> and published at <a href="https://ivanball.github.io/docs/adr/" target="_blank" rel="noopener">https://ivanball.github.io/docs/adr/</a> (its <code>README.md</code> is the
+          canonical index with one-line summaries). Group chapters tag the relevant one inline (e.g. &quot;ADR-003&quot;);
+          the full set, for orientation:</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -499,14 +500,26 @@
           <td>Primitive identifier type aliases: entity IDs are primitives behind per-module <code>global using {Entity}IdentifierType</code>, chosen over strongly-typed ID structs (readability + zero EF/serializer friction)</td>
           <td><a href="group-02-domain-building-blocks.html">g02</a>/<a href="group-14-module-system-composition.html">g14</a></td>
           </tr>
+          <tr>
+          <td>049</td>
+          <td>Library-scoped <code>ConfigureAwait(false)</code> policy: packaged non-UI framework code is build-gated (CA2007 warning for <code>Source/**</code> in Common&#39;s <code>.editorconfig</code> delta, UI packages excluded); protects the MAUI head and any non-ASP.NET consumer from context-capture deadlocks</td>
+          <td><a href="devops-cicd.html">devops-cicd</a></td>
+          </tr>
+          <tr>
+          <td>050</td>
+          <td>JWT + single rotating refresh token: a short-lived stateless access token plus one server-stored opaque refresh token per user that rotates on every use (mismatch/expiry revokes + 401); the sliding expiry re-stamps on rotation, and single-token-per-user signs other devices out</td>
+          <td><a href="group-08-auth.html">g08</a></td>
+          </tr>
           </tbody></table></div>
-          <p>ADRs 011–048 were authored after this guide&#39;s first build; their patterns were already documented here,
-          and the chapters now cross-reference the ADR numbers. The most recent framework additions are the
+          <p>ADRs 011–050 were authored after this guide&#39;s first build; their patterns were already documented here,
+          and the chapters now cross-reference the ADR numbers. Recent framework additions include the
           <strong>device capability abstraction layer</strong> (ADR-042/043/044/045: per-capability contracts with MAUI-native,
           browser, and inert-fallback adapters, mobile deep links, native OS push, managed file storage + user
           avatars), taught in the new <a href="group-26-device-capability-layer.html">g26</a> chapter and cross-referenced in
-          g07/g10/g12/g24, all released in the v1.112.0-v1.116.0 train; the canonical index for the full set is
-          <code>MMCA.Common/ADRs/README.md</code>.</p>
+          g07/g10/g12/g24; the newest records are the library-scoped <code>ConfigureAwait(false)</code> build policy (ADR-049)
+          and the rotating-refresh-token auth workflow (ADR-050). The canonical index for the full set is the
+          Website repo&#39;s <code>docs-src/adr/README.md</code> (published at <a href="https://ivanball.github.io/docs/adr/" target="_blank" rel="noopener">https://ivanball.github.io/docs/adr/</a>), which owns
+          the count and range.</p>
           <hr>
           <h2 id="3-the-external-stack-bcl--nuget-external-level-0">3. The external stack (BCL / NuGet, &quot;external Level 0&quot;)</h2>
           <p><a id="3-the-external-stack-bcl--nuget--external-level-0"></a></p>

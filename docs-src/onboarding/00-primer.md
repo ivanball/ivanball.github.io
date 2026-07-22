@@ -12,13 +12,13 @@ architecture-evaluation lens the guide tags against. Later sections cross-refere
 
 Two codebases are in scope:
 
-- **`MMCA.Common`**: a **framework**, published as **fourteen NuGet packages** to GitHub Packages
-  (four core: `.Shared`, `.Domain`, `.Application`, `.Infrastructure`; four presentation: `.API`,
-  `.Grpc`, `.UI`, `.UI.Web`; two Aspire: `.Aspire`, `.Aspire.Hosting`; four testing: `.Testing`, `.Testing.E2E`,
+- **`MMCA.Common`**: a **framework**, published as **fifteen NuGet packages** to GitHub Packages
+  (four core: `.Shared`, `.Domain`, `.Application`, `.Infrastructure`; five presentation: `.API`,
+  `.Grpc`, `.UI`, `.UI.Maui`, `.UI.Web`; two Aspire: `.Aspire`, `.Aspire.Hosting`; four testing: `.Testing`, `.Testing.E2E`,
   `.Testing.UI`, `.Testing.Architecture`). It is *not* a runnable app; it ships the base classes and
   infrastructure for building modular monoliths with DDD + Clean Architecture + CQRS, plus the seams
-  to extract a module into its own microservice later. The fourteen packages release **in lockstep**
-  (one version tags all fourteen).
+  to extract a module into its own microservice later. The fifteen packages release **in lockstep**
+  (one version tags all fifteen).
 - **`MMCA.ADC`**: the **Atlanta Developers Conference** application, a consumer of those packages.
   It has modules (Conference, Engagement, Identity, Notification), a Blazor UI, a YARP gateway, and
   Azure infrastructure.
@@ -150,10 +150,11 @@ chapter; here is the orientation so the vocabulary is familiar.
 
 ### The decision records (ADRs) this guide tags
 
-The *why* behind these patterns lives in **forty-eight accepted ADRs** (001-048; `FACTS.md` /
-`ADRs/README.md` own the count), version-controlled in
-`MMCA.Common/ADRs/` (`ADRs/README.md` is the canonical index with one-line summaries). Group chapters
-tag the relevant one inline (e.g. "ADR-003"); the full set, for orientation:
+The *why* behind these patterns lives in **fifty accepted ADRs** (001-050; the Website repo's
+`docs-src/adr/README.md` owns the count and range), version-controlled in
+`Website/docs-src/adr/` and published at <https://ivanball.github.io/docs/adr/> (its `README.md` is the
+canonical index with one-line summaries). Group chapters tag the relevant one inline (e.g. "ADR-003");
+the full set, for orientation:
 
 | ADR | Decision (one line) | First/most relevant chapter |
 |-----|---------------------|------------------------------|
@@ -205,14 +206,18 @@ tag the relevant one inline (e.g. "ADR-003"); the full set, for orientation:
 | 046 | HTTP API versioning: one `AddCommonApiVersioning` (header `api-version`, default 1.0); `ServiceInfoControllerBase` v1.0-deprecated + v2.0 exemplar, fitness-asserted per repo | [g12](group-12-api-hosting-mapping.md)/[g20](group-20-conference-api-grpc.md) |
 | 047 | Soft-deleted-user session revocation: `SoftDeletedUserMiddleware` 401s an authenticated caller whose `User.IsDeleted`, via a 30s-cached `ISoftDeletedUserValidator`, bounding the stateless-JWT revocation window | [g12](group-12-api-hosting-mapping.md) |
 | 048 | Primitive identifier type aliases: entity IDs are primitives behind per-module `global using {Entity}IdentifierType`, chosen over strongly-typed ID structs (readability + zero EF/serializer friction) | [g02](group-02-domain-building-blocks.md)/[g14](group-14-module-system-composition.md) |
+| 049 | Library-scoped `ConfigureAwait(false)` policy: packaged non-UI framework code is build-gated (CA2007 warning for `Source/**` in Common's `.editorconfig` delta, UI packages excluded); protects the MAUI head and any non-ASP.NET consumer from context-capture deadlocks | [devops-cicd](devops-cicd.md) |
+| 050 | JWT + single rotating refresh token: a short-lived stateless access token plus one server-stored opaque refresh token per user that rotates on every use (mismatch/expiry revokes + 401); the sliding expiry re-stamps on rotation, and single-token-per-user signs other devices out | [g08](group-08-auth.md) |
 
-ADRs 011–048 were authored after this guide's first build; their patterns were already documented here,
-and the chapters now cross-reference the ADR numbers. The most recent framework additions are the
+ADRs 011–050 were authored after this guide's first build; their patterns were already documented here,
+and the chapters now cross-reference the ADR numbers. Recent framework additions include the
 **device capability abstraction layer** (ADR-042/043/044/045: per-capability contracts with MAUI-native,
 browser, and inert-fallback adapters, mobile deep links, native OS push, managed file storage + user
 avatars), taught in the new [g26](group-26-device-capability-layer.md) chapter and cross-referenced in
-g07/g10/g12/g24, all released in the v1.112.0-v1.116.0 train; the canonical index for the full set is
-`MMCA.Common/ADRs/README.md`.
+g07/g10/g12/g24; the newest records are the library-scoped `ConfigureAwait(false)` build policy (ADR-049)
+and the rotating-refresh-token auth workflow (ADR-050). The canonical index for the full set is the
+Website repo's `docs-src/adr/README.md` (published at <https://ivanball.github.io/docs/adr/>), which owns
+the count and range.
 
 ---
 
