@@ -478,7 +478,7 @@
           <pre class="doc-pre"><code class="language-csharp">public sealed class CreateTicketHandler(
               IUnitOfWork unitOfWork,
               IEntityRequestMapper&lt;Ticket, TicketCreateRequest, TicketIdentifierType&gt; requestMapper,
-              IIntegrationEventPublisher integrationEventPublisher,
+              IEventBus eventBus,
               TicketDTOMapper dtoMapper) : ICommandHandler&lt;TicketCreateRequest, Result&lt;TicketDTO&gt;&gt;
           {
               public async Task&lt;Result&lt;TicketDTO&gt;&gt; HandleAsync(TicketCreateRequest command, CancellationToken cancellationToken = default)
@@ -493,7 +493,7 @@
           
                   // After commit: the DB-generated entity.Id is now populated. PublishAsync writes to the outbox
                   // and dispatches in-process now, over the broker once Tickets is extracted (no handler change).
-                  await integrationEventPublisher.PublishAsync(
+                  await eventBus.PublishAsync(
                       new TicketOpenedIntegrationEvent(entity.Id, entity.RequesterUserId), cancellationToken);
           
                   return Result.Success(dtoMapper.MapToDTO(entity));
