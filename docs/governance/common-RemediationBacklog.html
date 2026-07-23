@@ -98,7 +98,7 @@
           <li>✅ <strong>#32 / #16 — MassTransit v8 fitness test.</strong> <code>DependencyVersionTests</code> parses <code>Directory.Packages.props</code> and fails if the MassTransit major hits 9. <em>Remaining in #32: lock files, SBOM, CHANGELOG/versioning policy.</em></li>
           <li>✅ <strong>#29 / #6 — broker retry policy.</strong> <code>ConfigureBrokerTransport</code> applies <code>UseMessageRetry</code> (exponential) on both RabbitMQ and Azure Service Bus, configurable via new <code>MessageBusSettings.RetryLimit</code> / <code>RetryMinIntervalSeconds</code> / <code>RetryMaxIntervalSeconds</code>; <code>IntegrationEventConsumer</code> comment + log corrected. <em>Delayed redelivery deliberately omitted (needs the RabbitMQ delayed-exchange plugin absent from the Aspire container). Remaining in #29: RTO/RPO, restore drill, alerting. Remaining in #6: consumer inbox/dedup + event Id.</em></li>
           <li>🟡 <strong>#28 / #18 — bUnit harness.</strong> Added <code>bunit</code> (pinned <strong>2.0.66</strong> — v2 <code>BunitContext</code>/<code>Render</code> for xUnit v3), <code>BunitTestBase</code> (MudServices + loose JSInterop), and 6 passing tests for <code>EmptyState</code> + <code>MobileCardList</code>. <em>Remaining: MobileInfiniteScrollList + UnsavedChangesGuard tests, axe-core a11y, E2E-in-CI.</em></li>
-          <li>✅ <strong>#30 — compliance seam (partial).</strong> <code>IAnonymizable</code> erasure seam (Domain), <code>OutboxCleanupService</code> purging processed rows older than <code>Outbox:RetentionDays</code> (default 7), and <strong>ADR-005</strong>. <em>Remaining (consumer-side): make PII entities <code>IAnonymizable</code>, add erasure/DSR + export endpoints, stop logging PII.</em></li>
+          <li>✅ <strong>#30 — compliance boundary (partial).</strong> <code>IAnonymizable</code> erasure extension point (Domain), <code>OutboxCleanupService</code> purging processed rows older than <code>Outbox:RetentionDays</code> (default 7), and <strong>ADR-005</strong>. <em>Remaining (consumer-side): make PII entities <code>IAnonymizable</code>, add erasure/DSR + export endpoints, stop logging PII.</em></li>
           </ul>
           <h2 id="progress--second-wave-2026-06-09">Progress — second wave (2026-06-09)</h2>
           <p>✅ <strong>Verified</strong>: <code>dotnet build -c Release</code> clean (0/0) and all 9 test projects pass (1,511 tests, 0 failures).</p>
@@ -235,7 +235,7 @@
           §13 holds at I9 and §29 holds at 3/7 because the subsystem ships <strong>without unit tests</strong> and the §29
           recovery gaps (restore drill, RTO/RPO, SLOs) are unchanged. <em>(See the new #29 follow-up below.)</em></li>
           <li>✅ <strong>#6 — two-channel notifications documented (ADR-024).</strong> The pre-existing SignalR-push + durable
-          <code>UserNotification</code>-inbox seams (<code>IPushNotificationSender</code>/<code>INotificationRecipientProvider</code>, no-op
+          <code>UserNotification</code>-inbox extension points (<code>IPushNotificationSender</code>/<code>INotificationRecipientProvider</code>, no-op
           defaults) are now formally recorded. §6 evidence enriched, no move.</li>
           </ul>
           <p><strong>Framework-side follow-ups surfaced this cycle:</strong></p>
@@ -663,7 +663,7 @@
           <code>*StateService</code>/<code>*StateContainer</code> source scan). Both subclassed in-repo (dog-food): the §19 gate
           caught and fixed two real §18 violations (<code>MobileInfiniteScrollList</code> ~205 and <code>NotificationBell</code>
           ~135 inline <code>@code</code> lines, both split to code-behind partials, snapshots/bUnit green) and surfaced
-          <code>ErrorMessages._localizer</code> (recorded as the one allowed static: write-once wiring seam, ADR-027).</li>
+          <code>ErrorMessages._localizer</code> (recorded as the one allowed static: write-once wiring extension point, ADR-027).</li>
           <li>✅ <strong>#20 dark-mode palette contrast RESOLVED + GATED (§20/§21).</strong> Dark <code>PrimaryContrastText</code>/
           <code>ErrorContrastText</code> now <code>rgba(0,0,0,0.87)</code>; <code>DarkModeE2ETests</code> (Login + Components, dark palette via
           the <code>mmca_theme</code> cookie) reproduced both documented AA failures pre-fix and now gates them in the
@@ -923,13 +923,13 @@
           </blockquote>
           <p>Soft-delete is the only deletion model — no lawful erasure path. <em>(All three fix items shipped; see the wave-1 progress entry above and the 2026-06-27 closeout below.)</em></p>
           <ul>
-          <li><del><strong>(medium)</strong> <code>AuditableBaseEntity.Delete()</code> sets <code>IsDeleted=true</code> … the exact GDPR/CCPA conflict the rubric names.</del> — <strong>RESOLVED:</strong> <code>IAnonymizable</code> erasure seam (<code>Domain/Interfaces/IAnonymizable.cs</code>), enforced by the <code>PiiConventionTests</code> fitness rule (a <code>[Pii]</code>-marked property obliges <code>IAnonymizable</code>); the AES-256-GCM <code>EncryptedStringConverter</code> ships for retrievable PII.</li>
+          <li><del><strong>(medium)</strong> <code>AuditableBaseEntity.Delete()</code> sets <code>IsDeleted=true</code> … the exact GDPR/CCPA conflict the rubric names.</del> — <strong>RESOLVED:</strong> <code>IAnonymizable</code> erasure extension point (<code>Domain/Interfaces/IAnonymizable.cs</code>), enforced by the <code>PiiConventionTests</code> fitness rule (a <code>[Pii]</code>-marked property obliges <code>IAnonymizable</code>); the AES-256-GCM <code>EncryptedStringConverter</code> ships for retrievable PII.</li>
           <li><del><strong>(low)</strong> Processed outbox rows … are never purged</del> — <strong>RESOLVED:</strong> <code>OutboxCleanupService</code> purges processed outbox (and inbox) rows older than <code>Outbox:RetentionDays</code> (default 7) from every relational source.</li>
-          <li><del><strong>(low)</strong> No PII/consent/DSR machinery</del> — <strong>RESOLVED (framework seam):</strong> <code>[Pii]</code> marker + <code>PiiConventionTests</code> + <code>EncryptedStringConverter</code>, and now <code>PiiRedactor</code> masks <code>[Pii]</code> members before they reach a structured log / telemetry attribute (closing the documented-but-missing log-redaction half of the <code>[Pii]</code> contract). DSR/erasure <em>endpoints</em> remain consumer-owned (ADC ships them — see ADC #30).</li>
+          <li><del><strong>(low)</strong> No PII/consent/DSR machinery</del> — <strong>RESOLVED (framework extension point):</strong> <code>[Pii]</code> marker + <code>PiiConventionTests</code> + <code>EncryptedStringConverter</code>, and now <code>PiiRedactor</code> masks <code>[Pii]</code> members before they reach a structured log / telemetry attribute (closing the documented-but-missing log-redaction half of the <code>[Pii]</code> contract). DSR/erasure <em>endpoints</em> remain consumer-owned (ADC ships them — see ADC #30).</li>
           </ul>
           <p><strong>Fix</strong></p>
           <ul>
-          <li><input checked="" disabled="" type="checkbox"> Add an <strong><code>IAnonymizable</code> / erasure-orchestration seam</strong> that reconciles soft-delete with subject deletion (anonymize-in-place, preserve audit trail). → <code>IAnonymizable</code> + ADR-005 + <code>PiiConventionTests</code> guard.</li>
+          <li><input checked="" disabled="" type="checkbox"> Add an <strong><code>IAnonymizable</code> / erasure-orchestration extension point</strong> that reconciles soft-delete with subject deletion (anonymize-in-place, preserve audit trail). → <code>IAnonymizable</code> + ADR-005 + <code>PiiConventionTests</code> guard.</li>
           <li><input checked="" disabled="" type="checkbox"> Add an <strong>outbox-purge</strong> background option with configurable retention. → <code>OutboxCleanupService</code> (<code>Outbox:RetentionDays</code>).</li>
           <li><input checked="" disabled="" type="checkbox"> Write an <strong>ADR</strong> framing the soft-delete-vs-erasure tradeoff and the consumer&#39;s data-controller obligations. → <code>ADRs/005-soft-delete-vs-erasure.md</code>.</li>
           <li><input checked="" disabled="" type="checkbox"> <strong>(2026-06-27) Make the <code>[Pii]</code> log-masking real</strong> — <code>PiiRedactor</code> (<code>Domain/Privacy/PiiRedactor.cs</code>) masks every <code>[Pii]</code>-marked member (shallow, value-erasing) so an entity carrying personal data can be logged without leaking clear-text PII; the <code>PiiAttribute</code> doc previously <em>advertised</em> this policy but no implementation existed. Covered by 7 <code>PiiRedactorTests</code>.</li>
@@ -1087,9 +1087,9 @@
           <h3 id="suggested-sequencing">Suggested sequencing</h3>
           <ol>
           <li><strong>MassTransit v8 fitness test</strong> (#32 + #16) — one small test, closes two mediums, prevents a recurring prod crash.</li>
-          <li><strong>Broker retry policy</strong> (#29 + #6) — the async path is the system&#39;s weakest seam.</li>
+          <li><strong>Broker retry policy</strong> (#29 + #6) — the async path is the system&#39;s weakest boundary.</li>
           <li><strong>bUnit harness</strong> (#28 + #18 + #19 guard) — unlocks the whole front-end tier.</li>
-          <li><strong>Erasure seam + outbox purge</strong> (#30) — the only score-1 category; real compliance exposure.</li>
+          <li><strong>Erasure boundary + outbox purge</strong> (#30) — the only score-1 category; real compliance exposure.</li>
           <li>Sweep the <strong>fitness-function gaps</strong> (#4, #11, #5) and <strong>doc/CI hygiene</strong> (#34, #17, #9, #13) as steady cleanup.</li>
           </ol>
           

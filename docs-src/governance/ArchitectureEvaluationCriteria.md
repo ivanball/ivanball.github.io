@@ -171,7 +171,7 @@ large gap between the two axes is itself a finding worth a note.
 
 ## 4. Domain-Driven Design
 
-**Intent:** The model reflects the business; boundaries follow capability seams, not technical layers.
+**Intent:** The model reflects the business; boundaries follow capability boundaries, not technical layers.
 
 **Criteria**
 - **Ubiquitous language** — type/method names match business terms used by stakeholders.

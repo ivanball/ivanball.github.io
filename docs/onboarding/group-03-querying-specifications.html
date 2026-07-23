@@ -1067,7 +1067,7 @@
           <a href="group-11-navigation-populators.html#navigationmetadata"><code>NavigationMetadata</code></a> (supported vs unsupported
           includes), <a href="group-02-domain-building-blocks.html#auditablebaseentitytidentifiertype"><code>AuditableBaseEntity&lt;TIdentifierType&gt;</code></a>
           (the <code>TEntity</code> constraint); <code>System.Linq</code> (<code>IQueryable</code>).</li>
-          <li><strong>Concept introduced, the query pipeline as a single seam-free step.</strong> <code>[Rubric §5, Vertical Slice]</code>
+          <li><strong>Concept introduced, the query pipeline as a single boundary-free step.</strong> <code>[Rubric §5, Vertical Slice]</code>
           assesses whether a capability lives behind one focused abstraction rather than smeared across
           callers; every read endpoint&#39;s list logic funnels through this one method. The single method&#39;s return
           type, <code>Task&lt;(IReadOnlyCollection&lt;TEntity&gt; Items, int TotalCount)&gt;</code> (line 23), returns both the page

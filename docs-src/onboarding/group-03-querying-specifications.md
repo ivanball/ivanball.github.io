@@ -906,7 +906,7 @@ The request reaches a read controller, [`EntityControllerBase<TEntity, TEntityDT
   [`NavigationMetadata`](group-11-navigation-populators.md#navigationmetadata) (supported vs unsupported
   includes), [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype)
   (the `TEntity` constraint); `System.Linq` (`IQueryable`).
-- **Concept introduced, the query pipeline as a single seam-free step.** `[Rubric §5, Vertical Slice]`
+- **Concept introduced, the query pipeline as a single boundary-free step.** `[Rubric §5, Vertical Slice]`
   assesses whether a capability lives behind one focused abstraction rather than smeared across
   callers; every read endpoint's list logic funnels through this one method. The single method's return
   type, `Task<(IReadOnlyCollection<TEntity> Items, int TotalCount)>` (line 23), returns both the page

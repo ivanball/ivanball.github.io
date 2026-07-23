@@ -34,7 +34,7 @@ in the Common framework. That base carries the `[UseDataSource(SQLServer)]` mark
 just that one base class would re-point the same `Session` to Cosmos or SQLite with zero change to the
 domain, the application handlers, or the entity, this is the per-entity half of the
 **database-per-service** strategy (ADR-006). In practice all 15 Conference configs use the `…SQLServer`
-base (the primer's adoption note explains why Cosmos/SQLite are supported-but-dormant seams).
+base (the primer's adoption note explains why Cosmos/SQLite are supported-but-dormant extension points).
 `[Rubric §8, Data Architecture]` (deliberate persistence: transactions, migrations, soft-delete,
 audit, concurrency) is the dominant lens for the whole persistence half of this chapter.
 
@@ -94,7 +94,7 @@ they never collide with imported data). It conditionally seeds two sample **`Spe
 AppHost and the E2E CI workflow but left unset in production. The reason is concrete and documented in
 the seeder's own remarks (`ConferenceModuleDbSeeder.cs:14-21`): the public-browse E2E tests need at
 least one session and one speaker row to exist deterministically, while production's real sessions and
-speakers arrive through the Sessionize import, not the seeder. This is the seam that the
+speakers arrive through the Sessionize import, not the seeder. This is the extension point that the
 `ConferenceModuleDbSeederTests` in [Group 25](group-27-testing-infrastructure.md) exercise.
 
 ## The Sessionize adapter
@@ -166,7 +166,7 @@ Polly pipeline, and the result flows back as either a parsed `SessionizeResponse
 [`AssemblyReference`](group-19-conference-infrastructure.md#assemblyreference) /
 [`ClassReference`](group-19-conference-infrastructure.md#classreference) marker types in this assembly
 exist purely so the module loader and Scrutor can scan this assembly to discover the configurations,
-seeder, and services without a hard-coded type list, the same scanning seam every module assembly
+seeder, and services without a hard-coded type list, the same scanning extension point every module assembly
 provides.
 
 ### AiScoreResponse, AnthropicContentBlock, AnthropicMessage

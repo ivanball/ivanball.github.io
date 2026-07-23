@@ -142,7 +142,7 @@
           just that one base class would re-point the same <code>Session</code> to Cosmos or SQLite with zero change to the
           domain, the application handlers, or the entity, this is the per-entity half of the
           <strong>database-per-service</strong> strategy (ADR-006). In practice all 15 Conference configs use the <code>…SQLServer</code>
-          base (the primer&#39;s adoption note explains why Cosmos/SQLite are supported-but-dormant seams).
+          base (the primer&#39;s adoption note explains why Cosmos/SQLite are supported-but-dormant extension points).
           <code>[Rubric §8, Data Architecture]</code> (deliberate persistence: transactions, migrations, soft-delete,
           audit, concurrency) is the dominant lens for the whole persistence half of this chapter.</p>
           <h2 id="each-config-inherits-the-cross-cutting-behavior-then-adds-entity-specifics">Each config inherits the cross-cutting behavior, then adds entity specifics</h2>
@@ -196,7 +196,7 @@
           AppHost and the E2E CI workflow but left unset in production. The reason is concrete and documented in
           the seeder&#39;s own remarks (<code>ConferenceModuleDbSeeder.cs:14-21</code>): the public-browse E2E tests need at
           least one session and one speaker row to exist deterministically, while production&#39;s real sessions and
-          speakers arrive through the Sessionize import, not the seeder. This is the seam that the
+          speakers arrive through the Sessionize import, not the seeder. This is the extension point that the
           <code>ConferenceModuleDbSeederTests</code> in <a href="group-27-testing-infrastructure.html">Group 25</a> exercise.</p>
           <h2 id="the-sessionize-adapter">The Sessionize adapter</h2>
           <p><a href="group-19-conference-infrastructure.html#sessionizeservice"><code>SessionizeService</code></a> is a deliberately thin
@@ -260,7 +260,7 @@
           <a href="group-19-conference-infrastructure.html#assemblyreference"><code>AssemblyReference</code></a> /
           <a href="group-19-conference-infrastructure.html#classreference"><code>ClassReference</code></a> marker types in this assembly
           exist purely so the module loader and Scrutor can scan this assembly to discover the configurations,
-          seeder, and services without a hard-coded type list, the same scanning seam every module assembly
+          seeder, and services without a hard-coded type list, the same scanning extension point every module assembly
           provides.</p>
           <h3 id="aiscoreresponse-anthropiccontentblock-anthropicmessage">AiScoreResponse, AnthropicContentBlock, AnthropicMessage</h3>
           <blockquote>

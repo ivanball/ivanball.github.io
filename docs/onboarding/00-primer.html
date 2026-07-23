@@ -123,7 +123,7 @@
           (four core: <code>.Shared</code>, <code>.Domain</code>, <code>.Application</code>, <code>.Infrastructure</code>; five presentation: <code>.API</code>,
           <code>.Grpc</code>, <code>.UI</code>, <code>.UI.Maui</code>, <code>.UI.Web</code>; two Aspire: <code>.Aspire</code>, <code>.Aspire.Hosting</code>; four testing: <code>.Testing</code>, <code>.Testing.E2E</code>,
           <code>.Testing.UI</code>, <code>.Testing.Architecture</code>). It is <em>not</em> a runnable app; it ships the base classes and
-          infrastructure for building modular monoliths with DDD + Clean Architecture + CQRS, plus the seams
+          infrastructure for building modular monoliths with DDD + Clean Architecture + CQRS, plus the extension points
           to extract a module into its own microservice later. The fifteen packages release <strong>in lockstep</strong>
           (one version tags all fifteen).</li>
           <li><strong><code>MMCA.ADC</code></strong>: the <strong>Atlanta Developers Conference</strong> application, a consumer of those packages.
@@ -228,8 +228,8 @@
           Server only, 4 SQL databases), but the ADR-018 work shipped the full polyglot machinery (unified base,
           cross-source spec + fitness rule, Cosmos-index skip, SQLite <code>EnsureCreated</code>, Cosmos/SQLite Aspire
           helpers, portability tests) and ADC Conference&#39;s <code>Session</code>→Cosmos / <code>Room</code>→SQLite move is the
-          staged-but-not-yet-deployed first use. Treat Cosmos/SQLite as supported, exercised seams, see the
-          coverage audit&#39;s seam inventory.</p>
+          staged-but-not-yet-deployed first use. Treat Cosmos/SQLite as supported, exercised extension points, see the
+          coverage audit&#39;s extension-point inventory.</p>
           </li>
           <li><p><strong>The Result pattern.</strong> Expected error paths use a <code>Result</code>/<code>Result&lt;T&gt;</code> return value carrying
           <code>Error</code>s, <strong>not</strong> exceptions. This is the single most pervasive idiom in the codebase, taught in

@@ -585,7 +585,7 @@ service's `Program.cs` reads `MessageBus:Provider` and branches accordingly. Thi
 in-process dispatch + background processor) combined with the infrastructure flexibility of
 `MessageBusProvider` selection.
 
-[Rubric §7, Microservices Architecture] is directly served by the fact that the extraction seams
+[Rubric §7, Microservices Architecture] is directly served by the fact that the extraction boundaries
 (gRPC contracts, broker interfaces, JWKS discovery) are identical in both environments. An engineer can
 validate a cross-service event flow locally against RabbitMQ before it reaches the Azure Service Bus in
 production.

@@ -905,7 +905,7 @@
           <em>contract</em> and implementations are in <code>MMCA.Common</code>, but the <code>IHostedService</code>/startup invoker that
           actually runs seeding at boot lives in <strong>consuming-app host code</strong>, not in <code>MMCA.Common</code> source, so
           its exact wiring is noted as out-of-scope-for-source rather than asserted.</li>
-          <li><strong>Engine seams (Cosmos / SQLite) are supported, with a staged first adoption (ADR-018).</strong> All
+          <li><strong>Engine extension points (Cosmos / SQLite) are supported, with a staged first adoption (ADR-018).</strong> All
           <em>current</em> production entity configs use the <code>…SQLServer</code> base, so in deployed ADC the polyglot paths
           are not yet live. But the polyglot-persistence framework work (ADR-018) added the unified engine-aware
           <a href="group-07-persistence-ef-core.html#entitytypeconfigurationtentity-tidentifiertype"><code>EntityTypeConfiguration&lt;T,TId&gt;</code></a>
