@@ -114,8 +114,8 @@
           <code>MMCA.Common/Source</code>, <code>MMCA.Common/Tests</code>, <code>MMCA.ADC/Source</code>, <code>MMCA.ADC/Tests</code>.</p>
           <ul>
           <li>Files scanned: <strong>2210</strong> (in-scope <strong>2132</strong>, generated/excluded <strong>78</strong>)</li>
-          <li>Type declaration rows (including partial-class fragments): <strong>2674</strong></li>
-          <li>Distinct type nodes (partials collapsed): <strong>2587</strong></li>
+          <li>Type declaration rows (including partial-class fragments): <strong>2676</strong></li>
+          <li>Distinct type nodes (partials collapsed): <strong>2588</strong></li>
           <li><code>extension(T)</code> blocks: <strong>70</strong></li>
           </ul>
           <h2 id="counts-by-kind">Counts by kind</h2>
@@ -128,7 +128,7 @@
           </thead>
           <tbody><tr>
           <td>class</td>
-          <td>2087</td>
+          <td>2090</td>
           </tr>
           <tr>
           <td>record</td>
@@ -136,7 +136,7 @@
           </tr>
           <tr>
           <td>interface</td>
-          <td>168</td>
+          <td>167</td>
           </tr>
           <tr>
           <td>enum</td>
@@ -177,7 +177,7 @@
           </tr>
           <tr>
           <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>133</td>
+          <td>134</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Conference.Contracts</td>
@@ -413,7 +413,7 @@
           </tr>
           <tr>
           <td>MMCA.Common.Application.Tests</td>
-          <td>160</td>
+          <td>161</td>
           </tr>
           <tr>
           <td>MMCA.Common.Architecture.Tests</td>
@@ -453,7 +453,7 @@
           </tr>
           <tr>
           <td>MMCA.Common.Infrastructure</td>
-          <td>127</td>
+          <td>126</td>
           </tr>
           <tr>
           <td>MMCA.Common.Infrastructure.Tests</td>
@@ -2163,7 +2163,7 @@
           <td>record</td>
           <td>MMCA.ADC.Conference.Application</td>
           <td><code>MMCA.ADC.Conference.Application.Sessions.UseCases.NowNext</code></td>
-          <td><code>MMCA.ADC.Conference.Application/Sessions/UseCases/NowNext/GetNowNextQuery.cs:11</code></td>
+          <td><code>MMCA.ADC.Conference.Application/Sessions/UseCases/NowNext/GetNowNextQuery.cs:23</code></td>
           </tr>
           <tr>
           <td><code>RemoveSessionCategoryItemCommand</code></td>
@@ -3195,6 +3195,13 @@
           <td><code>MMCA.ADC.Conference.Application.Tests/Sessions/UseCases/NowNext/GetNowNextHandlerTests.cs:17</code></td>
           </tr>
           <tr>
+          <td><code>GetNowNextQueryCacheTests</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td><code>MMCA.ADC.Conference.Application.Tests.Sessions.UseCases.NowNext</code></td>
+          <td><code>MMCA.ADC.Conference.Application.Tests/Sessions/UseCases/NowNext/GetNowNextQueryCacheTests.cs:14</code></td>
+          </tr>
+          <tr>
           <td><code>AddSessionCategoryItemCommandValidatorTests</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
@@ -3426,7 +3433,7 @@
           <td><code>MMCA.ADC.Conference.Application.Tests/Support/TestSupport.cs:17</code></td>
           </tr>
           <tr>
-          <td><code>RecordingIntegrationEventPublisher</code></td>
+          <td><code>RecordingEventBus</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td><code>MMCA.ADC.Conference.Application.Tests.Support</code></td>
@@ -10622,13 +10629,6 @@
           <td><code>MMCA.Common.Application/Interfaces/IIntegrationEventHandler.cs:15</code></td>
           </tr>
           <tr>
-          <td><code>IIntegrationEventPublisher</code></td>
-          <td>interface</td>
-          <td>MMCA.Common.Application</td>
-          <td><code>MMCA.Common.Application.Interfaces</code></td>
-          <td><code>MMCA.Common.Application/Interfaces/IIntegrationEventPublisher.cs:15</code></td>
-          </tr>
-          <tr>
           <td><code>INavigationMetadata</code></td>
           <td>interface</td>
           <td>MMCA.Common.Application</td>
@@ -11018,7 +11018,7 @@
           <td>class</td>
           <td>MMCA.Common.Application</td>
           <td><code>MMCA.Common.Application.Services.Filtering</code></td>
-          <td><code>MMCA.Common.Application/Services/Filtering/BoolFilterStrategy.cs:11</code></td>
+          <td><code>MMCA.Common.Application/Services/Filtering/BoolFilterStrategy.cs:12</code></td>
           </tr>
           <tr>
           <td><code>DateTimeFilterStrategy</code></td>
@@ -11032,7 +11032,7 @@
           <td>class</td>
           <td>MMCA.Common.Application</td>
           <td><code>MMCA.Common.Application.Services.Filtering</code></td>
-          <td><code>MMCA.Common.Application/Services/Filtering/DecimalFilterStrategy.cs:12</code></td>
+          <td><code>MMCA.Common.Application/Services/Filtering/DecimalFilterStrategy.cs:14</code></td>
           </tr>
           <tr>
           <td><code>FilterValueParser</code></td>
@@ -11046,7 +11046,7 @@
           <td>class</td>
           <td>MMCA.Common.Application</td>
           <td><code>MMCA.Common.Application.Services.Filtering</code></td>
-          <td><code>MMCA.Common.Application/Services/Filtering/GuidFilterStrategy.cs:11</code></td>
+          <td><code>MMCA.Common.Application/Services/Filtering/GuidFilterStrategy.cs:13</code></td>
           </tr>
           <tr>
           <td><code>IFilterStrategy</code></td>
@@ -11060,7 +11060,14 @@
           <td>class</td>
           <td>MMCA.Common.Application</td>
           <td><code>MMCA.Common.Application.Services.Filtering</code></td>
-          <td><code>MMCA.Common.Application/Services/Filtering/IntFilterStrategy.cs:11</code></td>
+          <td><code>MMCA.Common.Application/Services/Filtering/IntFilterStrategy.cs:12</code></td>
+          </tr>
+          <tr>
+          <td><code>LongFilterStrategy</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Application</td>
+          <td><code>MMCA.Common.Application.Services.Filtering</code></td>
+          <td><code>MMCA.Common.Application/Services/Filtering/LongFilterStrategy.cs:14</code></td>
           </tr>
           <tr>
           <td><code>QueryFilterService</code></td>
@@ -12488,7 +12495,21 @@
           <td>class</td>
           <td>MMCA.Common.Application.Tests</td>
           <td><code>MMCA.Common.Application.Tests.Services.Filtering</code></td>
+          <td><code>MMCA.Common.Application.Tests/Services/Filtering/LongFilterStrategyTests.cs:8</code></td>
+          </tr>
+          <tr>
+          <td><code>Item</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Application.Tests</td>
+          <td><code>MMCA.Common.Application.Tests.Services.Filtering</code></td>
           <td><code>MMCA.Common.Application.Tests/Services/Filtering/StringFilterStrategyTests.cs:8</code></td>
+          </tr>
+          <tr>
+          <td><code>LongFilterStrategyTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Application.Tests</td>
+          <td><code>MMCA.Common.Application.Tests.Services.Filtering</code></td>
+          <td><code>MMCA.Common.Application.Tests/Services/Filtering/LongFilterStrategyTests.cs:6</code></td>
           </tr>
           <tr>
           <td><code>Product</code></td>
@@ -12530,7 +12551,7 @@
           <td>class</td>
           <td>MMCA.Common.Application.Tests</td>
           <td><code>MMCA.Common.Application.Tests.Services.Filtering</code></td>
-          <td><code>MMCA.Common.Application.Tests/Services/Filtering/QueryFilterServiceTests.cs:212</code></td>
+          <td><code>MMCA.Common.Application.Tests/Services/Filtering/QueryFilterServiceTests.cs:225</code></td>
           </tr>
           <tr>
           <td><code>ApplicationSettingsTests</code></td>
@@ -13762,7 +13783,7 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure</td>
           <td><code>MMCA.Common.Infrastructure</code></td>
-          <td><code>MMCA.Common.Infrastructure/DependencyInjection.cs:35</code></td>
+          <td><code>MMCA.Common.Infrastructure/DependencyInjection.cs:37</code></td>
           </tr>
           <tr>
           <td><code>UseDatabaseAttribute</code></td>
@@ -13818,7 +13839,7 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure</td>
           <td><code>MMCA.Common.Infrastructure.Caching</code></td>
-          <td><code>MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:14</code></td>
+          <td><code>MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:17</code></td>
           </tr>
           <tr>
           <td><code>MemoryCacheService</code></td>
@@ -14413,7 +14434,7 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure</td>
           <td><code>MMCA.Common.Infrastructure.Services</code></td>
-          <td><code>MMCA.Common.Infrastructure/Services/InProcessMessageBus.cs:20</code></td>
+          <td><code>MMCA.Common.Infrastructure/Services/InProcessMessageBus.cs:19</code></td>
           </tr>
           <tr>
           <td><code>IntegrationEventConsumer&lt;TEvent&gt;</code></td>
@@ -14428,13 +14449,6 @@
           <td>MMCA.Common.Infrastructure</td>
           <td><code>MMCA.Common.Infrastructure.Services</code></td>
           <td><code>MMCA.Common.Infrastructure/Services/IntegrationEventConsumerExtensions.cs:11</code></td>
-          </tr>
-          <tr>
-          <td><code>IntegrationEventPublisher</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure</td>
-          <td><code>MMCA.Common.Infrastructure.Services</code></td>
-          <td><code>MMCA.Common.Infrastructure/Services/IntegrationEventPublisher.cs:12</code></td>
           </tr>
           <tr>
           <td><code>NativePushPayloads</code></td>
@@ -14700,7 +14714,7 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Caching</code></td>
-          <td><code>MMCA.Common.Infrastructure.Tests/Caching/DistributedCacheServiceTests.cs:10</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Caching/DistributedCacheServiceTests.cs:12</code></td>
           </tr>
           <tr>
           <td><code>MemoryCacheServiceTests</code></td>
@@ -14708,6 +14722,13 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Caching</code></td>
           <td><code>MMCA.Common.Infrastructure.Tests/Caching/MemoryCacheServiceTests.cs:7</code></td>
+          </tr>
+          <tr>
+          <td><code>WarningCountingLogger</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td><code>MMCA.Common.Infrastructure.Tests.Caching</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Caching/DistributedCacheServiceTests.cs:116</code></td>
           </tr>
           <tr>
           <td><code>NotificationHubTests</code></td>
@@ -15821,13 +15842,6 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Services</code></td>
           <td><code>MMCA.Common.Infrastructure.Tests/Services/IntegrationEventConsumerTests.cs:11</code></td>
-          </tr>
-          <tr>
-          <td><code>IntegrationEventPublisherTests</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Tests</td>
-          <td><code>MMCA.Common.Infrastructure.Tests.Services</code></td>
-          <td><code>MMCA.Common.Infrastructure.Tests/Services/IntegrationEventPublisherTests.cs:8</code></td>
           </tr>
           <tr>
           <td><code>Mocks</code></td>
@@ -19513,7 +19527,7 @@
           <tr>
           <td><code>IServiceCollection services</code></td>
           <td>MMCA.Common.Infrastructure</td>
-          <td><code>MMCA.Common.Infrastructure/DependencyInjection.cs:37</code></td>
+          <td><code>MMCA.Common.Infrastructure/DependencyInjection.cs:39</code></td>
           </tr>
           <tr>
           <td><code>ModelBuilder modelBuilder</code></td>

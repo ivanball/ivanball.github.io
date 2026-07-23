@@ -99,7 +99,7 @@ extension member (`:21`) that builds an in-memory `FeatureManagement:*` configur
 `WebApplicationFactory` can flip a gate without touching `appsettings.json`.
 [`EntityBuilderBase<TBuilder, TEntity>`](#entitybuilderbasetbuilder-tentity)
 (`MMCA.Common.Testing/Builders/EntityBuilderBase.cs:9`) is a minimal fluent-builder base whose single
-abstract `Build()` (`:18`) returns the entity through its domain factory, so test setup specifies only
+abstract `Build()` (`:17`) returns the entity through its domain factory, so test setup specifies only
 what a test cares about. Together these embody [Rubric §11, Security] (real token validation rather than
 bypassed auth middleware) and [Rubric §14, Testability].
 
@@ -119,9 +119,11 @@ varies. `Layer` deliberately includes optional layers (`Ui`, `Grpc`, `Contracts`
 `IArchitectureMap.cs:16-19`) that a repo simply omits, so a rule iterating them is vacuously satisfied
 with no compile dependency on an absent assembly (`IArchitectureMap.cs:3-8`).
 
-The rule bodies are split across eighteen `ArchitectureRules.*` partial files (layers, purity, handlers,
-handler results, entities, aggregates, events, modules, slices, naming, transport, controllers,
-immutability, governance, localization, localized text, and specifications), and the thirty abstract
+The rule bodies are split across sixteen `ArchitectureRules.*` partial files (layers, purity, handlers,
+handler results, entities, events, modules, slices, naming, transport, controllers,
+immutability, governance, localization, localized text, and specifications; aggregate-convention
+rules live inside `ArchitectureRules.Entities.cs` and are exercised through
+`Bases/AggregateConventionTestsBase.cs`, not a dedicated partial), and the thirty abstract
 `*TestsBase` classes under `Bases/` (`LayerDependencyTestsBase`, `DomainPurityTestsBase`,
 `MicroserviceExtractionTestsBase`, `ModuleIsolationTestsBase`, `PiiConventionTestsBase`,
 `DependencyVersionTestsBase`, `IntegrationEventContractTestsBase`, `DataResidencyTestsBase`, and more)
@@ -150,7 +152,7 @@ remarks, [Rubric §25, Navigation & IA]) reflects over routable Blazor pages and
 page keeps its `[Authorize(Roles = "...")]` gate, so an admin route cannot regress to a bare
 `[Authorize]`. It detects `RouteAttribute` and `AuthorizeAttribute` by full-name reflection
 (`RouteAuthorizationTestsBase.cs:24-25`) so the package stays free of ASP.NET references, and a
-`MinimumGovernedPages` floor (`:41-45`) guards against a moved namespace silently emptying the scan.
+`MinimumGovernedPages` floor (`:47`) guards against a moved namespace silently emptying the scan.
 [`BrandColorTokenTestsBase`](#brandcolortokentestsbase)
 (`MMCA.Common.Testing.Architecture/Bases/BrandColorTokenTestsBase.cs:13`, [Rubric §20, Design System &
 Theming]) reads landing-page stylesheets embedded as manifest resources and fails the build if a host
@@ -253,7 +255,7 @@ page objects [`LoginPage`](#loginpage) (`MMCA.Common.Testing.E2E/PageObjects/Log
 [`RegisterPage`](#registerpage) (`MMCA.Common.Testing.E2E/PageObjects/RegisterPage.cs:6`), and
 [`ProfilePage`](#profilepage) (`MMCA.Common.Testing.E2E/PageObjects/ProfilePage.cs:6`) wrap the framework's
 real auth surfaces with role- and label-based locators (`LoginPage.cs:12-18`) and route their own fills
-through the anti-race helper (`LoginPage.cs:29`); downstream apps add their own family, for example the
+through the anti-race helper (`LoginPage.cs:31-32`, invoked at `:25-26`); downstream apps add their own family, for example the
 `MMCA.ADC.E2E.Tests` page objects for events, sessions, speakers, rooms, questions, and feedback.
 
 ## The Gallery harness
@@ -2429,9 +2431,9 @@ These twelve sealed classes share one shape: each is a **thin subclass of a shar
 This guide treats **tests as grouped, not sectioned per `[Fact]`** (the logged exception in the
 charter): the reusable test *bases*, the shared architecture-fitness library and its per-repo thin
 subclasses, and the component **Gallery** harness each get their own `###` treatment in the earlier parts
-of this chapter, but the bulk of the suite, **1,092 individual test types across 40 projects**, is rolled
+of this chapter, but the bulk of the suite, **1,094 individual test types across 40 projects**, is rolled
 up here. Each row below names a test project (assembly), the count of test types it contributes to the
-1,092, **what** it covers, and its **style** (unit / integration / component / E2E / performance-smoke).
+1,094, **what** it covers, and its **style** (unit / integration / component / E2E / performance-smoke).
 Counts reconcile exactly to the unit input.
 
 A few cross-cutting facts hold for every row, so they are stated once here rather than repeated:
@@ -2477,7 +2479,7 @@ A few cross-cutting facts hold for every row, so they are stated once here rathe
 |--------------------------|-------|------------------------|
 | `MMCA.Common.Shared.Tests` | 22 | The innermost layer: the `Result`/`Error`/`ErrorType` pattern, value objects (`Money`, `Email`, `Address`, `DateRange`, …) and their factory-method invariants, and DTO/paging contracts. Pure **unit** tests, no DI or DB. |
 | `MMCA.Common.Domain.Tests` | 43 | The entity hierarchy (`BaseEntity`→`AuditableBaseEntity`→`AuditableAggregateRootEntity`), domain-event collection, `SetItems<T>`/`GetChildOrNotFound<T>`, specifications, and the `PiiAttribute`/anonymization boundary plus the logging/telemetry redaction half of the `[Pii]` contract (masks marked members so a data subject's values never reach logs, ADR-005 / §30). Pure **unit** tests over the framework domain primitives. |
-| `MMCA.Common.Application.Tests` | 160 | The CQRS engine: the decorator pipeline in its registered nesting order (FeatureGate→Logging→Caching→Validating→Transactional→handler, `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:88`), the opt-in MiniProfiler decorators added by `AddApplicationProfiling` (`.../DependencyInjection.cs:185`) and the `CqrsMetrics` counters/histograms (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Decorators/CqrsMetricsTests.cs:20`), `ModuleLoader` topological ordering, `DomainEventDispatcher` plus the swallow-and-log `SafeDomainEventHandler` base (`.../DomainEvents/SafeDomainEventHandlerTests.cs:9`), validation, the [`IMessageBus`](group-04-events-outbox.md#imessagebus) abstraction, entity-query projection/paging and the per-type filter strategies, the cross-source [`CrossSourceSpecification`](group-03-querying-specifications.md#crosssourcespecification) helper (ADR-018), the magic-byte upload sniffer behind [`ImageContentSniffer`](group-07-persistence-ef-core.md#imagecontentsniffer) (`.../ImageContentSnifferTests.cs:12`, ADR-045), and the notification read handlers driven by an injected `TimeProvider` test clock. The framework's largest suite; fast **unit** tests with mocked infrastructure. |
+| `MMCA.Common.Application.Tests` | 161 | The CQRS engine: the decorator pipeline in its registered nesting order (FeatureGate→Logging→Caching→Validating→Transactional→handler, `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:88`), the opt-in MiniProfiler decorators added by `AddApplicationProfiling` (`.../DependencyInjection.cs:185`) and the `CqrsMetrics` counters/histograms (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Decorators/CqrsMetricsTests.cs:20`), `ModuleLoader` topological ordering, `DomainEventDispatcher` plus the swallow-and-log `SafeDomainEventHandler` base (`.../DomainEvents/SafeDomainEventHandlerTests.cs:9`), validation, the [`IMessageBus`](group-04-events-outbox.md#imessagebus) abstraction, entity-query projection/paging and the per-type filter strategies, the cross-source [`CrossSourceSpecification`](group-03-querying-specifications.md#crosssourcespecification) helper (ADR-018), the magic-byte upload sniffer behind [`ImageContentSniffer`](group-07-persistence-ef-core.md#imagecontentsniffer) (`.../ImageContentSnifferTests.cs:12`, ADR-045), and the notification read handlers driven by an injected `TimeProvider` test clock. The framework's largest suite; fast **unit** tests with mocked infrastructure. |
 | `MMCA.Common.Infrastructure.Tests` | 171 | The widest layer: EF repositories + Unit of Work, the multi-database resolver/registry (`DataSourceResolver`, `EntityDataSourceRegistry`, `DbContextFactory`) and the cross-data-source degrade convention (`.../Persistence/DataSources/CrossDataSourceDegradeConventionTests.cs:24`), the **outbox** processor (eligibility/smart-wait/retry) and the consumer-side [`EfInboxStore`](group-04-events-outbox.md#efinboxstore) idempotency ledger (`.../Persistence/Inbox/EfInboxStoreTests.cs:27`, ADR-021), caching, JWT issuance + JWKS + the login-attempt lockout service (`.../Auth/LoginProtectionServiceTests.cs:14`), column-level encryption (`.../Persistence/EncryptedStringConverterTests.cs:6`), the filtered-unique-index soft-delete convention (`.../Persistence/Conventions/SoftDeleteUniqueIndexConventionTests.cs:23`), image processing (`.../Services/ImageSharpImageProcessorTests.cs:15`, ADR-045), the SignalR push + live-channel plumbing, the message-bus implementations, the polyglot Cosmos-config portability suite (ADR-018), and the in-repo disaster-recovery database-restore drill (`.../Resilience/DatabaseRestoreDrillTests.cs`, a CI-gated RTO baseline, ADR-009 / §29). Mostly **unit** with EF-InMemory/SQLite boundaries (no real SQL Server here). |
 | `MMCA.Common.API.Tests` | 65 | The presentation pipeline: `ApiControllerBase.HandleFailure` `ErrorType`→HTTP mapping, the exception-handler chain, the `[Idempotent]` filter + `Idempotency-Key` replay, the authenticated-only global rate limiter's partition logic (`.../Startup/RateLimitPartitionTests.cs`, ADR-019), permission policies/ownership filters, correlation, the JWKS and OIDC-discovery endpoints, the session-cookie auth handler/refresher/jar, the shared notification + device controllers, the public-endpoint output-cache policy, the database-initialization startup (the SQLite-`EnsureCreated`-under-`Migrate` path, ADR-018), and the error-message **localization** edge (localizes the human-readable message while leaving the machine `Code`/ProblemDetails `title` untouched and degrading to English when no localizer is present, ADR-027 / §27). **Unit** tests of middleware/filters/controllers in isolation. |
 | `MMCA.Common.Grpc.Tests` | 13 | The gRPC transport boundary: `Result`↔`RpcException` round-tripping, the JWT-forwarding client interceptor, and the Polly **resilience** pipeline on typed clients (retry, circuit-breaker, and fault-injection). **Unit** tests asserting ADR-007 / ADR-009 behavior. |
@@ -2494,7 +2496,7 @@ A few cross-cutting facts hold for every row, so they are stated once here rathe
 |--------------------------|-------|------------------------|
 | `MMCA.ADC.Conference.Shared.Tests` | 17 | Conference DTOs, requests, enums, and DTO/request mappers (the manual-mapping/Mapperly boundary, ADR-001). Pure **unit** tests. |
 | `MMCA.ADC.Conference.Domain.Tests` | 22 | The Conference aggregates (Event, Session, Speaker, Room, Category, Question/Answer): factory-method `Result<T>` outcomes, invariants, state transitions, and emitted domain events. **Unit** tests. |
-| `MMCA.ADC.Conference.Application.Tests` | 133 | The command/query handlers for the Conference controllers, validators, navigation populators, the **Sessionize import** orchestrator + sync strategies (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Application.Tests/Events/UseCases/RefreshFromSessionizeHandlerTests.cs`), and the event/session live-window validation served to the live layer over gRPC (`.../Events/EventLiveValidationServiceTests.cs`, [`GetPublicSessionFilterHandler`](group-18-conference-application.md#getpublicsessionfilterhandler) and its cross-source filter query, ADR-018). The biggest application suite in ADC; fast **unit** tests with mocked repositories/services. |
+| `MMCA.ADC.Conference.Application.Tests` | 134 | The command/query handlers for the Conference controllers, validators, navigation populators, the **Sessionize import** orchestrator + sync strategies (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Application.Tests/Events/UseCases/RefreshFromSessionizeHandlerTests.cs`), and the event/session live-window validation served to the live layer over gRPC (`.../Events/EventLiveValidationServiceTests.cs`, [`GetPublicSessionFilterHandler`](group-18-conference-application.md#getpublicsessionfilterhandler) and its cross-source filter query, ADR-018). The biggest application suite in ADC; fast **unit** tests with mocked repositories/services. |
 | `MMCA.ADC.Conference.Infrastructure.Tests` | 7 | Conference-specific EF configurations, the module DB seeder, the Sessionize HTTP client, and the Anthropic-backed session-scoring service (`.../MMCA.ADC.Conference.Infrastructure.Tests/Services/AnthropicScoringServiceTests.cs:12`). Small **unit** suite over faked HTTP handlers. |
 | `MMCA.ADC.Conference.API.Tests` | 16 | Conference REST controllers (events, sessions, speakers, rooms, categories, questions/answers, session selection), the module's permission grants, and the Conference error-resource localization completeness check (`.../MMCA.ADC.Conference.API.Tests/Localization/ConferenceErrorResourcesTests.cs:15`, §27). **Unit** tests of the API layer. |
 | `MMCA.ADC.Conference.UI.Tests` | 27 | Conference Blazor pages and components: the public event/session/speaker detail + filtered list pages, the management CRUD forms and management-route authorization, the organizer feedback dashboards, the speaker dashboard, the session-selection dashboard with its AI-score and speaker-overlap views (`.../Pages/SessionSelection/SessionSelectionAiScoresTests.cs:15`), and the share/QR/add-to-calendar buttons (`.../Components/QrCodeButtonTests.cs:14`). Rendered with **bUnit** (`BunitTestBase` over the shared [`BunitComponentTestBase`](#bunitcomponenttestbase)). **Component** tests. |
@@ -2541,11 +2543,11 @@ A few cross-cutting facts hold for every row, so they are stated once here rathe
 | `MMCA.ADC.ServiceBusEmulator.IntegrationTests` | 3 | **Broker-parity smoke** (§33): production runs on Azure Service Bus while local development runs RabbitMQ, so Service-Bus-specific transport behavior used to be observable only in the deployed environment. This tier runs MassTransit v8 against the official **Service Bus emulator** container with ADC's real integration-event contracts and proves the two transport-specific behaviors: admin-plane topology provisioning (topic per message type, subscription, receive-endpoint queue) and the AMQP publish → topic → subscription → consume round-trip (`MMCA.ADC/Tests/Integration/MMCA.ADC.ServiceBusEmulator.IntegrationTests/ServiceBusRoundTripSmokeTests.cs:22`). One warm collection-scoped emulator serves the whole tier because of the emulator's 10-connection and roughly one-admin-operation-per-second quotas, the image is pinned to `2.0.1` (the admin plane arrived in 2.0.0 and is the tier's whole premise), and the fixture's static constructor lowers MassTransit's process-global TTL/auto-delete defaults beneath the emulator's one-hour maximum, which is why this tier lives in its **own** test process (`.../Infrastructure/ServiceBusEmulatorFixture.cs:22`). **Integration** style; needs **Docker**, runs in the same nightly workflow. |
 | `MMCA.ADC.E2E.Tests` | 60 | **Playwright** end-to-end against the running Aspire stack, using a Page-Object model (`PageObjects/`) and `E2ETestBase` login helpers, organized by actor workflow (Organizer/Speaker/Attendee/Identity/Preferences) plus the Engagement live-poll and feedback flows, real-time notification push, a Web-Vitals budget check, and an `AccessibilityTests` axe sweep. Runs once per engine via `E2E_BROWSER` (chromium/firefox/webkit). The largest single project here and the source of most of the chapter's recorded E2E debugging history. `[Rubric §28, Front-End Testing]` + `[Rubric §22, Responsive/Cross-Browser]`: this suite is the cross-browser, real-user-flow safety net. **E2E** style. |
 
-**Reconciliation.** Common: 22+43+160+171+65+13+11+9+71+4+11+4 = **584** (12 projects).
-ADC Conference: 17+22+133+7+16+27+36 = **258** (7). ADC Engagement: 2+6+27+4+6+19+13 = **77** (7).
+**Reconciliation.** Common: 22+43+161+171+65+13+11+9+71+4+11+4 = **585** (12 projects).
+ADC Conference: 17+22+134+7+16+27+36 = **259** (7). ADC Engagement: 2+6+27+4+6+19+13 = **77** (7).
 ADC Identity: 3+4+21+4+7+6+33 = **78** (7). ADC Notification: 1+5+8 = **14** (3).
 ADC host/cross-service/E2E: 6+12+3+60 = **81** (4).
-**Total = 584+258+77+78+14+81 = 1,092**, across **40 projects**, matching the unit input exactly.
+**Total = 585+259+77+78+14+81 = 1,094**, across **40 projects**, matching the unit input exactly.
 
 
 ---

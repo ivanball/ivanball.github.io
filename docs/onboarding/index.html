@@ -156,7 +156,7 @@
           are resolved by <strong>namespace-aware name matching</strong>; ~96% bind by namespace visibility, the rest by a
           globally-unique-name fallback (331 edges), and 27 references are dropped as ambiguous. The functional grouping is
           then applied mechanically (<code>Tools/invtool/classify.ps1</code> → <code>00-group-taxonomy.md</code>), so every one of the
-          <strong>2,587</strong> distinct type nodes maps to exactly one group with no silent drops. See the
+          <strong>2,588</strong> distinct type nodes maps to exactly one group with no silent drops. See the
           <a href="00-dependency-manifest.html#edge-resolution--accuracy">manifest&#39;s accuracy note</a> for residual caveats.</p>
           <hr>
           <h2 id="chapters">Chapters</h2>
@@ -174,7 +174,7 @@
           </tr>
           <tr>
           <td><a href="00-inventory.html"><code>00-inventory.md</code></a></td>
-          <td>Phase 0, every in-scope type (2,587 distinct), mechanically extracted, with <code>file:line</code></td>
+          <td>Phase 0, every in-scope type (2,588 distinct), mechanically extracted, with <code>file:line</code></td>
           </tr>
           <tr>
           <td><a href="00-dependency-manifest.html"><code>00-dependency-manifest.md</code></a></td>
@@ -210,13 +210,13 @@
           <tr>
           <td>3</td>
           <td><a href="group-03-querying-specifications.html">Querying: Specifications, Filtering &amp; the Entity Query Service</a></td>
-          <td>26</td>
+          <td>27</td>
           <td>Specification pattern (incl. cross-source), dynamic filter/sort/page (incl. IN-list value parsing), the generic query pipeline</td>
           </tr>
           <tr>
           <td>4</td>
           <td><a href="group-04-events-outbox.html">Domain &amp; Integration Events + Outbox Dual-Dispatch</a></td>
-          <td>31</td>
+          <td>29</td>
           <td>Event contracts, dispatcher, transactional outbox/inbox (incl. the async <code>OutboxFinalizer</code>), message buses</td>
           </tr>
           <tr>
@@ -354,7 +354,7 @@
           <tr>
           <td>27</td>
           <td><a href="group-27-testing-infrastructure.html">Testing &amp; Quality Infrastructure</a></td>
-          <td>1242</td>
+          <td>1244</td>
           <td>All test projects + reusable Testing/Testing.E2E/Testing.UI/<strong>Testing.Architecture</strong> bases (incl. the handler + decorator-pipeline test bases and the Gallery auth stubs) + architecture-fitness tests + Gallery + the BenchmarkDotNet perf-smoke suite</td>
           </tr>
           </tbody></table></div>
