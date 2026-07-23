@@ -45,7 +45,7 @@ Adopt **database-per-service**: each service owns its own physical database with
   filter — physical isolation is simpler and stronger than a logical filter.
 - **Real data autonomy** — each service can evolve and scale its schema independently; lifts the
   former single-database scaling ceiling.
-- **Reuses existing framework seams** — no new DbContext classes, no business-logic rewrite.
+- **Reuses existing framework extension points** — no new DbContext classes, no business-logic rewrite.
 
 ## Trade-offs
 - **No cross-database FKs or transactions.** Relationships that span services degrade to scalar IDs;

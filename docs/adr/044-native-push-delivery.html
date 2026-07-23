@@ -164,11 +164,11 @@
           client-generated GUIDs (not enumerable). DELETE is idempotent (unknown id = success).</li>
           <li><strong>Client orchestration behind two UI capability contracts</strong> (ADR-042 pattern):
           <code>IPushRegistrationService</code> (register after sign-in, unregister BEFORE sign-out - the delete
-          call is authenticated) and <code>IPushDeviceTokenProvider</code> (the platform token seam). UI.Maui
+          call is authenticated) and <code>IPushDeviceTokenProvider</code> (the platform token extension point). UI.Maui
           ships <code>MauiPushRegistrationService</code> (stable installation id in <code>IDevicePreferences</code>, sync
           over the named API client); the token provider defaults to <code>NullPushDeviceTokenProvider</code>
           everywhere, so a build WITHOUT push credentials is wired but inert end to end.
-          <code>PushRegistrationListener</code> (rendered through the host layout seam) re-registers on
+          <code>PushRegistrationListener</code> (rendered through the host layout extension point) re-registers on
           auth-state changes; <code>AuthUIService.LogoutAsync</code> owns the unregister leg.</li>
           </ul>
           <h2 id="consequences">Consequences</h2>

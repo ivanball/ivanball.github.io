@@ -163,7 +163,7 @@
           Application/Domain/Shared, so the choice is reversible and the core stays clean.</li>
           <li><strong>Strong contracts</strong> — the <code>.proto</code> definitions plus the in-process interface the adapter
           implements are the wire surface. A <code>[ServiceContract(version)]</code> attribute (MMCA.Common.Shared) is
-          provided to mark and version contract types explicitly, but it is an <strong>available seam, not yet
+          provided to mark and version contract types explicitly, but it is an <strong>available extension point, not yet
           applied</strong> — no contract type carries it today, and no fitness rule enforces it; the wire surface is
           currently defined by the <code>.proto</code> files alone.</li>
           </ul>

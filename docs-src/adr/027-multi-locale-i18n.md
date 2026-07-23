@@ -129,7 +129,7 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
    MudBlazor version, en + es), registered in `AddUIShared` and covered by the same completeness gate.
 
 ## Rationale
-- **Keying error localization on the existing `Error.Code` is the cheapest correct seam.** The codes are
+- **Keying error localization on the existing `Error.Code` is the cheapest correct extension point.** The codes are
   already stable and already cross the wire; localizing at the edge keeps the Result pattern pure and means
   an untranslated code degrades gracefully to its English message instead of throwing.
 - **A single cookie avoids the InteractiveAuto split-brain.** SSR and WASM run in different runtimes; the

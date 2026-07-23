@@ -246,7 +246,7 @@
           </ol>
           <h2 id="rationale">Rationale</h2>
           <ul>
-          <li><strong>Keying error localization on the existing <code>Error.Code</code> is the cheapest correct seam.</strong> The codes are
+          <li><strong>Keying error localization on the existing <code>Error.Code</code> is the cheapest correct extension point.</strong> The codes are
           already stable and already cross the wire; localizing at the edge keeps the Result pattern pure and means
           an untranslated code degrades gracefully to its English message instead of throwing.</li>
           <li><strong>A single cookie avoids the InteractiveAuto split-brain.</strong> SSR and WASM run in different runtimes; the

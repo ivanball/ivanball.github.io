@@ -29,7 +29,7 @@ Three mobile flows all need a URL to leave the web world and land inside the MAU
    Android App Links (`assetlinks.json`) and iOS Universal Links (`apple-app-site-association`),
    the OS opens those URLs in the installed app instead of the browser.
 2. **Notification taps and app actions**, which are app-internal and covered by the
-   `IDeepLinkDispatcher` seam (ADR-042).
+   `IDeepLinkDispatcher` boundary (ADR-042).
 3. **External OAuth on a native head.** Google and GitHub reject OAuth inside embedded WebViews, so
    the MAUI head must run the provider flow in the system browser (`WebAuthenticator`) and needs
    the API to redirect its completion BACK to the app. Today `OAuthControllerBase.CompleteAsync`

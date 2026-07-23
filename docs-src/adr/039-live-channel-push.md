@@ -19,7 +19,7 @@ auth, reconnect, and backplane story, and split the client-side connection manag
 
 ## Decision
 
-One realtime transport, two publisher seams:
+One realtime transport, two publisher boundaries:
 
 - `NotificationHub` stays the single hub and gains its first client-invokable methods:
   `JoinChannel` / `LeaveChannel` map the calling connection into a SignalR group named by a channel
@@ -41,7 +41,7 @@ One realtime transport, two publisher seams:
   concurrently), and every tracked channel is re-joined on `Reconnected`, because SignalR group
   membership does not survive an automatic reconnect.
 
-The durable-vs-ephemeral split is decided at the publisher seam, not the transport:
+The durable-vs-ephemeral split is decided at the publisher boundary, not the transport:
 `IPushNotificationSender` for anything a user must be able to find later (inbox-backed),
 `ILiveChannelPublisher` for anything that only matters while it is on screen (no persistence, no
 delivery guarantee).

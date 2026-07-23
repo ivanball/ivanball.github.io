@@ -173,7 +173,7 @@
           <ul>
           <li><code>SchemaVersion</code> is a <strong>signal, not a mechanism</strong>: by itself it does not stop a consumer breaking on a
           real reshape. The load-bearing half is the discipline (new type + upcaster); the framework does not
-          yet ship an upcaster registration seam — building one is follow-up work, and until then the policy is
+          yet ship an upcaster registration extension point — building one is follow-up work, and until then the policy is
           enforced by convention + review, not by an upcaster pipeline.</li>
           <li>The convention test is <strong>vacuous in MMCA.Common today</strong> (the framework ships no concrete integration
           event): <code>EventVersioningConventionTests</code> runs the shared base against <code>CommonArchitectureMap</code> but has

@@ -41,7 +41,7 @@ Use **gRPC**, exposed through `MMCA.Common.Grpc`, with a contract-package conven
   Application/Domain/Shared, so the choice is reversible and the core stays clean.
 - **Strong contracts** — the `.proto` definitions plus the in-process interface the adapter
   implements are the wire surface. A `[ServiceContract(version)]` attribute (MMCA.Common.Shared) is
-  provided to mark and version contract types explicitly, but it is an **available seam, not yet
+  provided to mark and version contract types explicitly, but it is an **available extension point, not yet
   applied** — no contract type carries it today, and no fitness rule enforces it; the wire surface is
   currently defined by the `.proto` files alone.
 

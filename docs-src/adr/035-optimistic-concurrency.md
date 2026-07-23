@@ -35,7 +35,7 @@ update fails as a conflict.
   `RowVersion` so a client can echo it back, and each `*UpdateRequest` implements `IConcurrencyAware`
   to carry the client's last-observed value. A null or empty `RowVersion` (creation, or a legacy
   client that never read one) skips the check by design.
-- **`SetOriginalRowVersion` is the persistence seam.** `IWriteRepository.SetOriginalRowVersion`
+- **`SetOriginalRowVersion` is the persistence extension point.** `IWriteRepository.SetOriginalRowVersion`
   applies the client-supplied token as the tracked entity's **original** `RowVersion` value; the
   `EFRepository` implementation writes it to `Entry(entity).Property(nameof(RowVersion)).OriginalValue`
   and no-ops when the value is null or empty. The update handler calls it right after loading the
@@ -74,7 +74,7 @@ update fails as a conflict.
 - **Round-trip over a server-side reload.** Reloading and re-saving on the server hides the collision
   (both writes succeed against the freshest row). Forcing the client to echo the token it last read
   is what makes a competing edit a real conflict instead of a silent overwrite.
-- **One seam over a per-handler compare.** `SetOriginalRowVersion` plus EF's `WHERE`-clause check does
+- **One extension point over a per-handler compare.** `SetOriginalRowVersion` plus EF's `WHERE`-clause check does
   the comparison in the database, atomically with the UPDATE. A hand-rolled "read the current token,
   compare, then save" would reintroduce the exact race it is meant to close.
 - **Invariant over discipline (ADR-015).** The `*UpdateRequest` naming convention is enforced

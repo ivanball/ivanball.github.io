@@ -147,7 +147,7 @@
           (<code>max-age=31536000; includeSubDomains</code>, emitted only outside Development and only when <code>EnableHsts</code>).
           All values are overridable via the <code>&quot;SecurityHeaders&quot;</code> configuration section or the <code>configure</code>
           delegate (<code>SecurityHeadersSettings</code>).</li>
-          <li><strong>The CSP is resolved through an <code>ICspPolicyProvider</code> seam</strong>, not stamped as a constant. The provider
+          <li><strong>The CSP is resolved through an <code>ICspPolicyProvider</code> extension point</strong>, not stamped as a constant. The provider
           returns a <code>CspPolicy(string Value, bool Enforce)</code>: when <code>Enforce</code> is true the middleware writes
           <code>Content-Security-Policy</code>, otherwise <code>Content-Security-Policy-Report-Only</code>. Returning <code>null</code> emits no
           CSP.</li>
@@ -176,7 +176,7 @@
           <ul>
           <li><strong>One hardened default, defined once.</strong> Centralizing the header set removes per-host drift and makes a
           new edge host secure by default rather than by remembering to copy headers.</li>
-          <li><strong>A seam, because one CSP cannot fit all hosts.</strong> The <code>ICspPolicyProvider</code> indirection is the minimum
+          <li><strong>An extension point, because one CSP cannot fit all hosts.</strong> The <code>ICspPolicyProvider</code> indirection is the minimum
           needed to let a Blazor host inject a runtime, origin-pinned policy while API/Gateway hosts keep the
           strict static one, without the framework guessing either app&#39;s origins.</li>
           <li><strong>Fail-safe over fail-secure for the default.</strong> Omitting <code>script-src</code>/<code>style-src</code> from the baseline

@@ -160,7 +160,7 @@
           <li><strong>Invariant over discipline.</strong> Turning &quot;do not do X&quot; into a red build is the only enforcement that
           scales. It is the same lever used by the layer rules, the resilience gate (ADR-009), the
           event-version gate (ADR-010), and the MassTransit pin (ADR-016).</li>
-          <li><strong>Write once, run everywhere.</strong> The <code>IArchitectureMap</code> seam keeps the four repos&#39; rules in lockstep
+          <li><strong>Write once, run everywhere.</strong> The <code>IArchitectureMap</code> extension point keeps the four repos&#39; rules in lockstep
           with zero duplication; a rule change lands for all consumers at once.</li>
           <li><strong>Two layers, two speeds.</strong> The MSBuild guard fails at compile time on the common case; the
           NetArchTest suite catches the subtler assembly-level violations a project-reference check cannot see.</li>

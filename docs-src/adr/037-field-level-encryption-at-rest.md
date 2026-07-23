@@ -23,7 +23,7 @@ capability is referenced across the docs but was never recorded as a decision.
 The framework ships the plumbing for this, an EF Core value converter that encrypts and decrypts string
 columns transparently, and it is covered by unit tests. It is **not yet adopted**: no entity
 configuration in any of the four repositories wires it, so zero production columns are encrypted today.
-This ADR records the decision and the seam while being explicit about that posture, the same
+This ADR records the decision and the extension point while being explicit about that posture, the same
 "shipped in the framework, tested, but latent until the first adoption" honesty ADR-018 records for
 polyglot persistence.
 

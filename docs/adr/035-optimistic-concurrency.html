@@ -155,7 +155,7 @@
           <code>RowVersion</code> so a client can echo it back, and each <code>*UpdateRequest</code> implements <code>IConcurrencyAware</code>
           to carry the client&#39;s last-observed value. A null or empty <code>RowVersion</code> (creation, or a legacy
           client that never read one) skips the check by design.</li>
-          <li><strong><code>SetOriginalRowVersion</code> is the persistence seam.</strong> <code>IWriteRepository.SetOriginalRowVersion</code>
+          <li><strong><code>SetOriginalRowVersion</code> is the persistence extension point.</strong> <code>IWriteRepository.SetOriginalRowVersion</code>
           applies the client-supplied token as the tracked entity&#39;s <strong>original</strong> <code>RowVersion</code> value; the
           <code>EFRepository</code> implementation writes it to <code>Entry(entity).Property(nameof(RowVersion)).OriginalValue</code>
           and no-ops when the value is null or empty. The update handler calls it right after loading the
@@ -195,7 +195,7 @@
           <li><strong>Round-trip over a server-side reload.</strong> Reloading and re-saving on the server hides the collision
           (both writes succeed against the freshest row). Forcing the client to echo the token it last read
           is what makes a competing edit a real conflict instead of a silent overwrite.</li>
-          <li><strong>One seam over a per-handler compare.</strong> <code>SetOriginalRowVersion</code> plus EF&#39;s <code>WHERE</code>-clause check does
+          <li><strong>One extension point over a per-handler compare.</strong> <code>SetOriginalRowVersion</code> plus EF&#39;s <code>WHERE</code>-clause check does
           the comparison in the database, atomically with the UPDATE. A hand-rolled &quot;read the current token,
           compare, then save&quot; would reintroduce the exact race it is meant to close.</li>
           <li><strong>Invariant over discipline (ADR-015).</strong> The <code>*UpdateRequest</code> naming convention is enforced

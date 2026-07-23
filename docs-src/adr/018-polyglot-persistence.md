@@ -7,9 +7,9 @@ Accepted. The framework plumbing is complete, covered by unit and integration te
 production (the engine-agnostic plumbing released in Common v1.79.0; see `FACTS.md` for the current
 framework version). No production entity routes to a non-SQL-Server engine today. An end-to-end
 trial (ADC's Conference `Session` to Cosmos DB and `Room` to SQLite, with its child entities) was built
-and tested locally, then deliberately reverted to all-SQL-Server while every framework seam was kept.
+and tested locally, then deliberately reverted to all-SQL-Server while every framework extension point was kept.
 Moving an aggregate to another engine later is a config-base-class change plus connection strings (and
-one AppHost helper line), not a rewrite. This ADR records the decision and the seam, because the
+one AppHost helper line), not a rewrite. This ADR records the decision and the extension point, because the
 machinery is load-bearing and already in production.
 
 ## Context
@@ -68,7 +68,7 @@ per entity configuration.
 - **Right store per access pattern, as a configuration decision.** The engine becomes an attribute on a
   configuration class, not a rewrite. The same domain entity, application handler, and repository code
   run unchanged whichever engine backs the aggregate.
-- **One mental model, one set of seams.** Polyglot persistence reuses the exact resolver, registry,
+- **One mental model, one set of extension points.** Polyglot persistence reuses the exact resolver, registry,
   context-factory, and degrade-convention machinery that database-per-service already needed, so there
   is no parallel data layer to maintain.
 - **Portability lowers the cost of being wrong.** Because the configuration body is engine-agnostic, an

@@ -136,7 +136,7 @@
           <p>A second WebSocket/hub for live traffic would double the connection count per client, need its own
           auth, reconnect, and backplane story, and split the client-side connection management in two.</p>
           <h2 id="decision">Decision</h2>
-          <p>One realtime transport, two publisher seams:</p>
+          <p>One realtime transport, two publisher boundaries:</p>
           <ul>
           <li><code>NotificationHub</code> stays the single hub and gains its first client-invokable methods:
           <code>JoinChannel</code> / <code>LeaveChannel</code> map the calling connection into a SignalR group named by a channel
@@ -158,7 +158,7 @@
           concurrently), and every tracked channel is re-joined on <code>Reconnected</code>, because SignalR group
           membership does not survive an automatic reconnect.</li>
           </ul>
-          <p>The durable-vs-ephemeral split is decided at the publisher seam, not the transport:
+          <p>The durable-vs-ephemeral split is decided at the publisher boundary, not the transport:
           <code>IPushNotificationSender</code> for anything a user must be able to find later (inbox-backed),
           <code>ILiveChannelPublisher</code> for anything that only matters while it is on screen (no persistence, no
           delivery guarantee).</p>

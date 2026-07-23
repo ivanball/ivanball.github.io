@@ -49,7 +49,7 @@ a shape may evolve. Rubric §6 flags this as the one substantive CQRS/event gap.
 ## Trade-offs
 - `SchemaVersion` is a **signal, not a mechanism**: by itself it does not stop a consumer breaking on a
   real reshape. The load-bearing half is the discipline (new type + upcaster); the framework does not
-  yet ship an upcaster registration seam — building one is follow-up work, and until then the policy is
+  yet ship an upcaster registration extension point — building one is follow-up work, and until then the policy is
   enforced by convention + review, not by an upcaster pipeline.
 - The convention test is **vacuous in MMCA.Common today** (the framework ships no concrete integration
   event): `EventVersioningConventionTests` runs the shared base against `CommonArchitectureMap` but has
