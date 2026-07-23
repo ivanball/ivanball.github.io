@@ -1,5 +1,5 @@
 /* ============================================================================
-   Writing data: the MMCA.Common deep-dive series (41 articles).
+   Writing data: the MMCA.Common deep-dive series (49 articles).
    This is the SINGLE edit point for the Writing page.
 
    Each entry:
@@ -51,19 +51,27 @@ window.ARTICLES = [
   { n: 24, cat: "auth", adr: "ADR 020", title: "Permission-based authorization over roles", summary: "A capability layer over RBAC: permission policies that resolve on demand from a central registry.", url: "" },
   { n: 25, cat: "auth", adr: "ADR 022", title: "Browser session-cookie auth for Blazor SSR", summary: "HttpOnly session cookies and an SSR-time scheme so [Authorize] passes during prerender, with the API still the boundary.", url: "" },
   { n: 26, cat: "auth", adr: "ADR 036", title: "External OAuth login behind your own JWTs", summary: "Sign in with Google or GitHub without leaking provider tokens: external identity exchanged for your own JWTs at the boundary.", url: "" },
-  { n: 27, cat: "auth", adr: "ADR 034", title: "Generic entity controllers", summary: "A write-once REST surface every entity inherits, plus a bounded dynamic query contract that is never open SQL.", url: "" },
-  { n: 28, cat: "auth", adr: "ADR 033", title: "Resource-ownership authorization", summary: "Beyond roles and permissions: which rows you may touch, enforced per resource.", url: "" },
-  { n: 29, cat: "auth", adr: "ADR 019/029", title: "Rate limiting and brute-force protection", summary: "Two layers that cover the whole API edge: endpoint rate limits plus lockout-based brute-force defense on identity.", url: "" },
-  { n: 30, cat: "run", adr: "ADR 023/025/041", title: "Aspire: one command", summary: "Model services, databases, and the broker as one Aspire graph that runs from laptop to Azure with one command.", url: "" },
-  { n: 31, cat: "run", adr: "ADR 007/008/012", title: "Extracting a module to a gRPC service", summary: "A step-by-step extraction of an in-process module into its own gRPC service, database, and auth.", url: "" },
-  { n: 32, cat: "run", adr: "ADR 009", title: "Resilience and recovery objectives", summary: "Standard resilience on every outbound client, plus declared RTO/RPO and a drilled restore.", url: "" },
-  { n: 33, cat: "proof", adr: "ADR 015", title: "Architecture fitness functions", summary: "Architecture rules that fail the build: a compile-time layer guard plus a shared NetArchTest rule library.", url: "" },
-  { n: 34, cat: "proof", title: "The test pyramid", summary: "How the framework's tests stack up: fast unit and architecture tests at the base, E2E at the tip.", url: "" },
-  { n: 35, cat: "proof", adr: "ADR 005", title: "Soft-delete vs the right to erasure", summary: "Soft-delete for lifecycle, anonymization plus outbox purge for GDPR/CCPA erasure, and why both exist.", url: "" },
-  { n: 36, cat: "proof", title: "A reusable Blazor UI framework", summary: "A shared Blazor and MudBlazor UI layer with accessibility enforced by axe in CI.", url: "" },
-  { n: 37, cat: "proof", adr: "ADR 027/028", title: "i18n and theming on one preference pipeline", summary: "A culture choice and a theme choice ride the same cookie, profile column, and login reconciliation: one persistence path, two switches.", url: "" },
-  { n: 38, cat: "proof", title: "Build your first module", summary: "A hands-on walkthrough of building a new module across all five layers.", url: "" },
-  { n: 39, cat: "proof", adr: "ADR 015", title: "Write your first fitness test", summary: "Author your first architecture fitness test and watch it fail the build on a violation.", url: "" },
-  { n: 40, cat: "proof", title: "Two real apps on one framework", summary: "A case study: a conference platform and an e-commerce store built on the same kernel.", url: "" },
-  { n: 41, cat: "proof", title: "The series index", summary: "The full series index and recommended reading order.", url: "" }
+  { n: 27, cat: "auth", adr: "ADR 050", title: "One rotating refresh token", summary: "A short-lived JWT plus one server-stored refresh token that rotates on every use, with reuse detection that makes a stolen token end its own session.", url: "" },
+  { n: 28, cat: "auth", adr: "ADR 034", title: "Generic entity controllers", summary: "A write-once REST surface every entity inherits, plus a bounded dynamic query contract that is never open SQL.", url: "" },
+  { n: 29, cat: "auth", adr: "ADR 033", title: "Resource-ownership authorization", summary: "Beyond roles and permissions: which rows you may touch, enforced per resource.", url: "" },
+  { n: 30, cat: "auth", adr: "ADR 019/029", title: "Rate limiting and brute-force protection", summary: "Two layers that cover the whole API edge: endpoint rate limits plus lockout-based brute-force defense on identity.", url: "" },
+  { n: 31, cat: "run", adr: "ADR 023/025/041", title: "Aspire: one command", summary: "Model services, databases, and the broker as one Aspire graph that runs from laptop to Azure with one command.", url: "" },
+  { n: 32, cat: "run", adr: "ADR 007/008/012", title: "Extracting a module to a gRPC service", summary: "A step-by-step extraction of an in-process module into its own gRPC service, database, and auth.", url: "" },
+  { n: 33, cat: "run", adr: "ADR 009", title: "Resilience and recovery objectives", summary: "Standard resilience on every outbound client, plus declared RTO/RPO and a drilled restore.", url: "" },
+  { n: 34, cat: "proof", adr: "ADR 015", title: "Architecture fitness functions", summary: "Architecture rules that fail the build: a compile-time layer guard plus a shared NetArchTest rule library.", url: "" },
+  { n: 35, cat: "proof", title: "The test pyramid", summary: "How the framework's tests stack up: fast unit and architecture tests at the base, E2E at the tip.", url: "" },
+  { n: 36, cat: "proof", adr: "ADR 005", title: "Soft-delete vs the right to erasure", summary: "Soft-delete for lifecycle, anonymization plus outbox purge for GDPR/CCPA erasure, and why both exist.", url: "" },
+  { n: 37, cat: "proof", title: "A reusable Blazor UI framework", summary: "A shared Blazor and MudBlazor UI layer with accessibility enforced by axe in CI.", url: "" },
+  { n: 38, cat: "proof", adr: "ADR 027/028", title: "i18n and theming on one preference pipeline", summary: "A culture choice and a theme choice ride the same cookie, profile column, and login reconciliation: one persistence path, two switches.", url: "" },
+  { n: 39, cat: "proof", title: "Build your first module", summary: "A hands-on walkthrough of building a new module across all five layers.", url: "" },
+  { n: 40, cat: "proof", adr: "ADR 015", title: "Write your first fitness test", summary: "Author your first architecture fitness test and watch it fail the build on a violation.", url: "" },
+  { n: 41, cat: "proof", title: "Two real apps on one framework", summary: "A case study: a conference platform and an e-commerce store built on the same kernel.", url: "" },
+  { n: 42, cat: "proof", adr: "ADR 042/043", title: "One Blazor UI, two hosts", summary: "The same Blazor components run in a browser and inside a MAUI hybrid app; small per-capability contracts reach native hardware without ever asking 'am I on mobile?'.", url: "" },
+  { n: 43, cat: "data", adr: "ADR 045", title: "Managed file storage: uploads you don't have to trust", summary: "Attacker-controlled bytes become safe avatars: content sniffing, metadata stripping, re-encoding, and pluggable blob storage.", url: "" },
+  { n: 44, cat: "auth", adr: "ADR 046", title: "HTTP API versioning, proven not just claimed", summary: "Header-based versioning introduced without breaking a single caller, plus a fitness contract that proves two live versions coexist.", url: "" },
+  { n: 45, cat: "core", adr: "ADR 031", title: "Feature flags in the CQRS pipeline", summary: "Gate commands and queries at the outermost decorator, so a handler never checks a flag and a disabled feature is rejected before any work runs.", url: "" },
+  { n: 46, cat: "data", adr: "ADR 037", title: "Field-level encryption in EF Core", summary: "An AES-256-GCM value converter that keeps a PII column ciphertext even for someone who can query the database.", url: "" },
+  { n: 47, cat: "auth", adr: "ADR 023", title: "Security headers and CSP for Blazor", summary: "One middleware stamps hardened response headers on every host, with the Blazor CSP resolved through a pluggable provider.", url: "" },
+  { n: 48, cat: "run", adr: "ADR 041", title: "Observability by default", summary: "A shared OpenTelemetry baseline with CQRS duration metrics, correlation IDs, and outbox-poll span filtering, exported to Azure Monitor.", url: "" },
+  { n: 49, cat: "proof", title: "The series index", summary: "The full series index and recommended reading order.", url: "" }
 ];
