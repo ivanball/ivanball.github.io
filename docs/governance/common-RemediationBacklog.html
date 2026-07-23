@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MMCA.Common — Architecture Remediation Backlog · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Derived from ArchitectureScorecard.md (canonical two-axis scoring: Maturity 96.9% / Implementation 84.6%, framework v1.121.0; the 2026-07-21…">
+  <meta name="description" content="Derived from ArchitectureScorecard.md (canonical two-axis scoring: Maturity 96.9% / Implementation 84.6%, framework v1.123.0; the 2026-07-23…">
   <link rel="canonical" href="https://ivanball.github.io/docs/governance/common-RemediationBacklog.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="article">
   <meta property="og:title" content="MMCA.Common — Architecture Remediation Backlog">
-  <meta property="og:description" content="Derived from ArchitectureScorecard.md (canonical two-axis scoring: Maturity 96.9% / Implementation 84.6%, framework v1.121.0; the 2026-07-21…">
+  <meta property="og:description" content="Derived from ArchitectureScorecard.md (canonical two-axis scoring: Maturity 96.9% / Implementation 84.6%, framework v1.123.0; the 2026-07-23…">
   <meta property="og:url" content="https://ivanball.github.io/docs/governance/common-RemediationBacklog.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -79,7 +79,7 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture governance</p>
           <h1 id="mmcacommon--architecture-remediation-backlog">MMCA.Common — Architecture Remediation Backlog</h1>
-          <p>Derived from <code>ArchitectureScorecard.md</code> (canonical two-axis scoring: <strong>Maturity 96.9% / Implementation 84.6%</strong>, framework v1.121.0; the 2026-07-21 twenty-first-wave two-pass re-score at HEAD <code>4a4fc05</code>, working tree clean, moved exactly one score: <strong>§12 Performance &amp; Scalability Maturity 3→4</strong>, because the <code>Performance gate (BenchmarkDotNet Short + baseline verify)</code> context is now present in live <code>required_status_checks</code> on <code>main</code> (8 required contexts), refuting the twentieth wave&#39;s sole basis for holding it at 3. Seven first-pass lifts (§4, §9, §11, §19, §20, §26, §29) were refuted on adversarial re-verification and held at prior, and the remaining 26 categories were re-confirmed. <strong>Categories still below Maturity 4: #9, #17, #30 (M3) and #31 (M2)</strong>, so 30 of 34 now sit at Maturity 4. The prior twentieth-wave entry, retained for provenance: the 2026-07-17 re-score at HEAD <code>76d70cf</code> moved four scores: §25 Navigation Maturity 3→4 (the <code>NavigationContractTests</code> drift gate in the CI-gated <code>.slnx</code> unit tier), §33 Developer Experience Maturity 3→4 + Implementation 8→9 (the <code>consumer-source-build</code> canary promoted to a required merge gate 2026-07-16), §22 Responsive Implementation 8→9 (webkit promoted to a required merge gate 2026-07-16; all three engines now block), and §13 Observability Implementation 9→8 (band recalibration: alerting/dashboards/runbooks are deployer-owned). It refuted three first-pass lifts (§9 and §17 maturity, §31 both axes, all held at prior), declined the §12 maturity candidacy on live branch-protection evidence (the shipped perf gate&#39;s context is not in <code>required_status_checks</code>), and re-confirmed all 28 other categories.)
+          <p>Derived from <code>ArchitectureScorecard.md</code> (canonical two-axis scoring: <strong>Maturity 96.9% / Implementation 84.6%</strong>, framework v1.123.0; the 2026-07-23 twenty-second-wave two-pass re-score at HEAD <code>c911480</code>, working tree clean, moved <strong>no scores</strong>: all 34 categories re-confirmed at their twenty-first-wave values. Five first-pass proposals were refuted on adversarial re-verification and held at prior: three lifts (§9 Maturity 3→4, §10 Implementation 8→9, §30 Maturity 3→4) and two downgrades (§23 and §24, each Implementation 8→7). <strong>Categories still below Maturity 4: #9, #17, #30 (M3) and #31 (M2)</strong>, so 30 of 34 sit at Maturity 4. The prior twenty-first-wave entry, retained for provenance: the 2026-07-21 re-score at HEAD <code>4a4fc05</code> moved exactly one score, <strong>§12 Performance &amp; Scalability Maturity 3→4</strong>, because the <code>Performance gate (BenchmarkDotNet Short + baseline verify)</code> context is present in live <code>required_status_checks</code> on <code>main</code> (8 required contexts), refuting the twentieth wave&#39;s sole basis for holding it at 3; seven first-pass lifts (§4, §9, §11, §19, §20, §26, §29) were refuted and the remaining 26 categories re-confirmed.)
           The wave-by-wave priority ranking below is the <strong>historical single-axis review</strong> (index 80%, 218/272, 2026-06-08/09); it is retained for provenance and is <strong>superseded by the in-repo two-axis scorecard</strong>, which is the live source of scores.
           Tasks are every applicable category scoring <strong>&lt; 4</strong>, ranked by <strong>priority = (4 − score) × weight</strong>.
           Higher priority = bigger weighted gap = more index points per unit of effort.</p>
@@ -819,6 +819,40 @@
           cited by historical entries moved to <code>Website/docs-src/</code> in the 2026-07-20 centralization.</li>
           <li>✅ <strong>Counts refresh.</strong> The source-generated, CI-gated <code>FACTS.md</code> reports <strong>15 packages / 91 fitness
           methods across 30 bases (Common runs 55) / coverage floor 68.3%</strong>.</li>
+          </ul>
+          <hr>
+          <h2 id="progress---twenty-second-wave-evidence-re-score-at-v11230-2026-07-23">Progress - twenty-second wave (evidence re-score at v1.123.0, 2026-07-23)</h2>
+          <blockquote>
+          <p>A full 34-category, two-pass evidence re-score (per-category scorer plus adversarial verifier) at framework
+          <strong>v1.123.0</strong> (HEAD <code>c911480</code>, working tree <strong>clean</strong>). <strong>No score moves.</strong> Canonical scoring holds at
+          <strong>Maturity 96.9% (314/324) / Implementation 84.6% (685/810)</strong> per
+          <a href="common-ArchitectureScorecard.html"><code>ArchitectureScorecard.md</code></a>. The cycle&#39;s value is entirely in what it
+          refused to move: five first-pass proposals (three lifts, two downgrades) were refuted against source.</p>
+          </blockquote>
+          <ul>
+          <li>◐ <strong>Three adversarially-refuted lift proposals, no score move.</strong> §9 API &amp; Contracts (M3→4 rejected
+          again: <code>OpenApiContractTestsBase</code> is subclassed only in consumer hosts, never in Common&#39;s own tests, and
+          <code>OpenApiEndpointExtensions.cs:13</code> records the delegation as deliberate, so no in-repo CI gate enforces
+          the contract); §10 Cross-Cutting Concerns (I8→9 rejected: the three documented hold-reasons are still in
+          source: the distributed cache path is a no-op without a real <code>IConnectionMultiplexer</code>
+          (<code>DependencyInjection.cs:158</code>), the idempotency semaphore is in-memory rather than
+          cross-instance-exclusive, and resilience config is partly literal); §30 Compliance (M3→4 rejected: the
+          only automatic gate, <code>PiiErasureContractFitnessTests</code>, proves the erasure mechanism, while the
+          structural <code>[Pii]</code> scan stays vacuous in-repo and the governing process (inventory, DSAR, consent,
+          residency, retention) is consumer-resident).</li>
+          <li>◐ <strong>Two adversarially-refuted downgrade proposals, no score move.</strong> §23 Front-End Performance and §24
+          Forms, Validation &amp; UX Safety (each I8→7 rejected on a fresh re-read of every cited file): no
+          regression exists. §23&#39;s web-vitals budget gate is in fact stronger than when its 8 was set (all three
+          browser engines now required, <code>ci.yml:107</code>), and §24&#39;s auth-form surface (Register/Login <code>EditForm</code> +
+          DataAnnotations, <code>PasswordComplexityAttribute</code>, <code>UnsavedChangesGuard.IsDirtyAccessor</code>, the CI-gated
+          bUnit/model tests) is intact.</li>
+          <li>📎 <strong>Evidence enrichment, no band move.</strong> The v1.122.0-v1.123.0 capability train (typed filter DSL
+          operators, the <code>EntityQueryPipeline</code> page-size clamp, cache-observability warnings, the
+          <code>IIntegrationEventPublisher</code> removal with callers moved to <code>IEventBus</code>) lands in categories already
+          scored 8-9.</li>
+          <li>✅ <strong>Open set and rankings unchanged.</strong> #9, #17, #30 (M3, priority 2 each) and #31 (M2, computed
+          priority 4, documented accepted cap); the <em>Deliberate / accepted</em> section stands as written. <code>FACTS.md</code>
+          reports <strong>15 packages / 91 fitness methods across 30 bases (Common runs 55)</strong>.</li>
           </ul>
           <hr>
           <h2 id="deferred---2026-07-19-full-review-recorded-not-scheduled">Deferred - 2026-07-19 full review (recorded, not scheduled)</h2>
