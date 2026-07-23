@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ADR-026: Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-06-27, amended 2026-07-10).">
+  <meta name="description" content="Accepted (2026-06-27, amended 2026-07-10, 2026-07-23).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/026-caching-strategy.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="article">
   <meta property="og:title" content="ADR-026: Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge">
-  <meta property="og:description" content="Accepted (2026-06-27, amended 2026-07-10).">
+  <meta property="og:description" content="Accepted (2026-06-27, amended 2026-07-10, 2026-07-23).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/026-caching-strategy.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 50 ADRs</summary>
+        <summary>All 51 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -115,6 +115,7 @@
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
         <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
           </ol>
         </nav>
       </details>
@@ -123,7 +124,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-026-two-tier-caching-a-swappable-icacheservice-substrate-plus-an-http-output-cache-edge">ADR-026: Two-Tier Caching: a Swappable <code>ICacheService</code> Substrate plus an HTTP Output-Cache Edge</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-27, amended 2026-07-10).</p>
+          <p>Accepted (2026-06-27, amended 2026-07-10, 2026-07-23).</p>
           <h2 id="context">Context</h2>
           <p>The framework needs caching in two distinct places. Inside the application pipeline, query results
           are memoized and invalidated on mutation (the Caching decorators of ADR-014, keyed by
@@ -152,7 +153,7 @@
           <code>MemoryDistributedCache</code>, i.e. Aspire registered Redis), and otherwise <code>MemoryCacheService</code>. The
           monolith with no distributed cache gets in-process caching for free; a host that wires Redis gets the
           distributed store with no application-code change. This is the same &quot;monolith now, scale or extract
-          later&quot; seam as <code>InProcessMessageBus</code> vs <code>BrokerMessageBus</code> (ADR-003/006/008).</li>
+          later&quot; extension point as <code>InProcessMessageBus</code> vs <code>BrokerMessageBus</code> (ADR-003/006/008).</li>
           <li><strong>Prefix invalidation, implemented per store.</strong> <code>IMemoryCache</code> has no key-enumeration API, so
           <code>MemoryCacheService</code> tracks live keys in a <code>ConcurrentDictionary</code> (kept in sync by a post-eviction
           callback) to support <code>RemoveByPrefixAsync</code>. <code>DistributedCacheService</code> serializes values as UTF-8 JSON
@@ -209,12 +210,21 @@
           <li><strong>Memory mode is per-replica.</strong> In the in-process store each replica caches independently; a
           scaled-out deployment that did not wire Redis would see cross-replica staleness bounded only by the
           TTL. The framework&#39;s answer is to register a distributed cache once scaled out (both apps do).</li>
-          <li><strong>Distributed prefix invalidation is conditional.</strong> <code>DistributedCacheService</code> can only scan-and-delete
-          by prefix when an <code>IConnectionMultiplexer</code> is in the container. The services register
-          <code>AddRedisDistributedCache</code> (which provides <code>IDistributedCache</code>), not <code>AddRedisClient</code> (which would
-          provide the multiplexer), so prefix-based invalidation against Redis is currently a no-op and staleness
-          is bounded by the 30s TTL rather than evicted on write. Single-key <code>RemoveAsync</code> is unaffected.
-          Registering the Redis client (or a multiplexer) would close this; until then the TTL is the backstop.</li>
+          <li><strong>Distributed prefix invalidation needs the multiplexer, and every service now registers it.</strong>
+          <code>DistributedCacheService</code> can only scan-and-delete by prefix when an <code>IConnectionMultiplexer</code> is in the
+          container. All seven services now register <code>AddRedisClient(&quot;redis&quot;)</code> immediately alongside
+          <code>AddRedisDistributedCache(&quot;redis&quot;)</code>, gated by the same redis-connection-string conditional, precisely so
+          the multiplexer is present for SCAN-based prefix eviction (ADC Conference
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:112,117</code>, Notification
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:99,104</code>, Engagement
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:88,93</code>, Identity
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:109,114</code>; Store Catalog
+          <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:72,77</code>, Sales
+          <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:76,81</code>, Identity
+          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:77,82</code>). So whenever Redis is
+          configured, prefix-based invalidation against Redis is live and cached entries are evicted on write; the
+          30s TTL is now the backstop only for the no-Redis case (memory mode), where prefix removal self-heals
+          within seconds instead. Single-key <code>RemoveAsync</code> is unaffected in either mode.</li>
           <li><strong>Distributed mode pays serialization and a network hop.</strong> Values cross the wire as JSON; large or
           hot objects cost more than the in-process path.</li>
           <li><strong>Output caching is opt-in per service.</strong> A read-heavy service that forgets to register a real
@@ -224,7 +234,7 @@
           <h2 id="related">Related</h2>
           <p>ADR-014 (the Caching decorators and <code>IQueryCacheable</code> / <code>ICacheInvalidating</code> markers that consume this
           substrate), ADR-019 (output caching as the anonymous-traffic lever, and <code>LoginProtectionService</code> is
-          another <code>ICacheService</code> consumer), ADR-006 / ADR-008 (the same monolith-to-services swap seam this
+          another <code>ICacheService</code> consumer), ADR-006 / ADR-008 (the same monolith-to-services swap boundary this
           substrate follows), ADR-040 (amends this ADR&#39;s Tier 2: the adopters&#39; public-read policies cache
           authenticated, bearer-carrying requests too, not only anonymous traffic).</p>
           

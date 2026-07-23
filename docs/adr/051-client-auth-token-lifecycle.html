@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADR-051: Client-Side Authentication Token Lifecycle Across Render Modes · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-07-23).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/051-client-auth-token-lifecycle.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="ADR-051: Client-Side Authentication Token Lifecycle Across Render Modes">
+  <meta property="og:description" content="Accepted (2026-07-23).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/051-client-auth-token-lifecycle.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">051 · Client-Side Authentication Token Lifecycle Across Render Modes</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 51 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html" aria-current="page">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-051-client-side-authentication-token-lifecycle-across-render-modes">ADR-051: Client-Side Authentication Token Lifecycle Across Render Modes</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-07-23).</p>
+          <h2 id="context">Context</h2>
+          <p>ADR-022 and ADR-050 describe the two server halves of authentication: the Blazor host&#39;s
+          HttpOnly session cookie that survives SSR prerender (ADR-022), and the Identity service&#39;s single
+          rotating refresh token with reuse detection (ADR-050). Neither covers the client half: how a Blazor
+          or MAUI head actually holds an access token, attaches it to API calls, and reacquires one when it
+          nears expiry.</p>
+          <p>The awkward part is that the same UI code runs under three different render heads with three
+          different safe-storage stories:</p>
+          <ul>
+          <li><strong>Blazor Server</strong> (interactive circuit): no direct DOM access from the server, JS interop is
+          available only once the circuit is live, and during SSR prerender there is no circuit at all,
+          only an <code>HttpContext</code>.</li>
+          <li><strong>Blazor WebAssembly</strong>: runs in the browser with a DOM and an XSS surface, so persisting a refresh
+          token where JS can read it (localStorage) is unsafe.</li>
+          <li><strong>MAUI</strong> (Blazor Hybrid WebView): a native process with OS-backed secure storage and no
+          cross-origin browser cookie jar to lean on.</li>
+          </ul>
+          <p>A single access token acquisition path cannot serve all three: the browser heads must keep the
+          refresh token out of JS reach, while MAUI has no same-origin UI host to proxy a refresh through and
+          must talk to the API cross-origin. We wanted the application-facing surface (how a page reads auth
+          state, how an outgoing API request gets its bearer token) to be identical across heads, with the
+          head-specific storage and refresh mechanics hidden behind narrow abstractions.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Model the client token lifecycle as two small abstractions (<code>ITokenStorageService</code> for persistence,
+          <code>ITokenRefresher</code> for reacquisition) plus a shared bearer-attaching handler and a shared JWT-driven
+          auth-state provider. Each head registers the implementation that matches its safe-storage story; the
+          UI code above them never branches on render mode.</p>
+          <ul>
+          <li><strong><code>ITokenRefresher</code> abstracts reacquisition, one implementation per head family.</strong> The interface
+          exposes a single <code>AcquireAccessTokenAsync</code> that returns a fresh access token or <code>null</code> when no
+          valid session exists
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/ITokenRefresher.cs:13</code>,
+          <code>ITokenRefresher.cs:20</code>). Where the refresh token lives and how rotation happens are internal to
+          the implementation.</li>
+          <li><strong>Browser heads refresh through the same-origin proxy.</strong> <code>SameOriginProxyTokenRefresher</code> (used by
+          both Blazor Server and WASM) invokes <code>mmcaAuthSession.getToken</code> over JS interop
+          (<code>SameOriginProxyTokenRefresher.cs:11</code>, <code>SameOriginProxyTokenRefresher.cs:17</code>), which issues a
+          <code>POST /auth/session/token</code> with <code>credentials:&#39;same-origin&#39;</code> so the browser sends its HttpOnly auth
+          cookies and the UI host validates-or-refreshes server-side, returning only the access token
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/wwwroot/mmca-auth-cookie.js:35</code>). The refresh
+          token never reaches JS. When interop is unavailable (SSR prerender, disconnected circuit) it
+          returns <code>null</code> rather than throwing (<code>SameOriginProxyTokenRefresher.cs:20</code>).</li>
+          <li><strong>MAUI refreshes directly against the API.</strong> <code>DirectApiTokenRefresher</code> reads the stored access and
+          refresh tokens from OS SecureStorage (via <code>ITokenStorageService</code>), posts them to the API&#39;s
+          cross-origin <code>auth/refresh</code> endpoint, and persists the rotated pair back
+          (<code>DirectApiTokenRefresher.cs:11</code>, <code>DirectApiTokenRefresher.cs:19-20</code>, <code>DirectApiTokenRefresher.cs:29</code>,
+          <code>DirectApiTokenRefresher.cs:42</code>). This head has no browser DOM (and thus no XSS surface), so direct
+          token handling is acceptable.</li>
+          <li><strong><code>ITokenStorageService</code> abstracts persistence, one implementation per head.</strong> The interface holds
+          access-token and refresh-token get/set/clear
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/ITokenStorageService.cs:8</code>). The two
+          browser implementations keep the access token <strong>in memory only</strong> and never expose a refresh token:
+          <code>WasmTokenStorageService</code> (in MMCA.Common.UI) hydrates the in-memory token on demand from the cookie
+          and returns <code>null</code> for the refresh token (<code>WasmTokenStorageService.cs:11</code>, <code>WasmTokenStorageService.cs:17</code>,
+          <code>WasmTokenStorageService.cs:40</code>); <code>ServerTokenStorageService</code> (in MMCA.Common.UI.Web) reads the
+          HttpOnly cookie during SSR prerender when an <code>HttpContext</code> is present and holds an in-memory token on
+          the interactive circuit otherwise
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Services/ServerTokenStorageService.cs:17</code>,
+          <code>ServerTokenStorageService.cs:32-35</code>, <code>ServerTokenStorageService.cs:38-52</code>). The MAUI implementation
+          is app-local and backs onto <code>SecureStorage.Default</code> (platform secure enclaves)
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Services/MauiTokenStorageService.cs:9</code>,
+          <code>MauiTokenStorageService.cs:16</code>, <code>MauiTokenStorageService.cs:28</code>; Store registers its own equivalent
+          at <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:76</code>).</li>
+          <li><strong>Login seeds the browser HttpOnly cookie through a JS fetch.</strong> <code>SetTokensAsync</code> on both browser
+          storage services caches the access token in memory and calls <code>ISessionCookieSync.SyncAsync</code>, which
+          fires a browser fetch to <code>/auth/session-cookie</code> so the resulting <code>Set-Cookie</code> lands in the user&#39;s
+          cookie jar in both Server interactive mode and WASM
+          (<code>WasmTokenStorageService.cs:42-48</code>, <code>ISessionCookieSync.cs:8</code>,
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/JsFetchSessionCookieSync.cs:11</code>,
+          <code>JsFetchSessionCookieSync.cs:20</code>, <code>mmca-auth-cookie.js:5</code>). The refresh token transits JS only for
+          that single same-origin POST and is never persisted in localStorage. The sync is registered via
+          <code>AddClientAuthSessionCookieSync</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:105-109</code>).</li>
+          <li><strong>Every outgoing API request is bearer-stamped by one handler.</strong> <code>AuthDelegatingHandler</code> reads the
+          current access token from <code>ITokenStorageService</code> and attaches it as a <code>Bearer</code> authorization header
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/AuthDelegatingHandler.cs:9</code>,
+          <code>AuthDelegatingHandler.cs:17-20</code>). It is registered into the shared named <code>&quot;APIClient&quot;</code> HttpClient
+          pipeline via <code>AddHttpMessageHandler</code> (<code>DependencyInjection.cs:57</code>, <code>DependencyInjection.cs:61</code>,
+          <code>DependencyInjection.cs:73</code>), so the handler is head-agnostic: it depends only on the storage
+          abstraction, which supplies the correctly-hydrated token per head.</li>
+          <li><strong>Blazor auth state is derived from the JWT client-side.</strong> <code>JwtAuthenticationStateProvider</code> reads
+          the stored access token, parses and expiry-checks it without server validation, and builds an
+          authenticated <code>ClaimsPrincipal</code> from the token&#39;s claims, falling back to anonymous on any failure
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Auth/JwtAuthenticationStateProvider.cs:12</code>,
+          <code>JwtAuthenticationStateProvider.cs:32-47</code>, <code>JwtAuthenticationStateProvider.cs:49-52</code>). Client-side
+          parsing keeps the UI responsive (<code>AuthorizeView</code> reacts immediately after login or logout via
+          <code>NotifyUserAuthentication</code> / <code>NotifyUserLogout</code>, <code>JwtAuthenticationStateProvider.cs:59</code>,
+          <code>JwtAuthenticationStateProvider.cs:71</code>); the WebAPI still performs full token validation on every
+          request.</li>
+          <li><strong>Concurrent callers share one refresh.</strong> Both browser storage services proactively reacquire when
+          the in-memory token is within a 30-second expiry skew and collapse concurrent acquisitions
+          (delegating handler, auth-state provider, SignalR) onto a single in-flight hydration
+          (<code>WasmTokenStorageService.cs:15</code>, <code>WasmTokenStorageService.cs:28-37</code>, <code>ServerTokenStorageService.cs:23</code>,
+          <code>ServerTokenStorageService.cs:44</code>).</li>
+          <li><strong>Each head wires its own trio in Program.cs.</strong> The WASM client registers <code>WasmTokenStorageService</code><ul>
+          <li><code>SameOriginProxyTokenRefresher</code> + <code>JwtAuthenticationStateProvider</code>
+          (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/Program.cs:44-46</code>,
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:46-48</code>); the Blazor Server host
+          registers <code>ServerTokenStorageService</code> via <code>AddCommonServerTokenStorage</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:26-29</code>) plus the same
+          proxy refresher and auth-state provider
+          (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:91-92</code>,
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:64-65</code>); the MAUI host registers its
+          SecureStorage-backed storage + <code>DirectApiTokenRefresher</code> + <code>JwtAuthenticationStateProvider</code>
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:98-100</code>,
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:76-78</code>).</li>
+          </ul>
+          </li>
+          </ul>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>One application surface, three storage stories.</strong> Pages, services, and the HTTP pipeline talk to
+          <code>ITokenStorageService</code> and <code>AuthenticationStateProvider</code> only; the head-specific choice of HttpOnly
+          cookie versus SecureStorage lives entirely behind the two abstractions and the Program.cs
+          registration, so UI code never branches on render mode.</li>
+          <li><strong>Keep the refresh token off the highest-risk surface.</strong> The browser heads are the ones with an XSS
+          attack surface, so their refresh token stays in an HttpOnly cookie and rotation happens server-side
+          through the same-origin proxy; the access token there is memory-only and short-lived. MAUI, with no
+          DOM, can safely hold both tokens in the OS secure enclave.</li>
+          <li><strong>Reuse the ADR-022 cookie plumbing rather than duplicate it.</strong> The browser refresher is a thin JS
+          interop call onto the same <code>/auth/session/token</code> and <code>/auth/session-cookie</code> endpoints ADR-022
+          already stands up, so this decision adds the client lifecycle without a second server mechanism.</li>
+          <li><strong>Single-flight refresh avoids a token stampede.</strong> On a heavily-concurrent page (delegating handler,
+          auth-state, SignalR all asking at once) the shared in-flight hydration means one network round-trip,
+          not several racing refreshes.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>The browser heads depend on the same-origin UI host.</strong> <code>SameOriginProxyTokenRefresher</code> only works
+          where the UI host serves the <code>/auth/session/*</code> endpoints; a browser head deployed without that
+          plumbing (ADR-022) cannot refresh. MAUI has no such dependency but pays for it with cross-origin
+          direct token handling.</li>
+          <li><strong>Client-side JWT parsing is advisory, not authoritative.</strong> <code>JwtAuthenticationStateProvider</code> trusts
+          the token&#39;s shape and expiry for UI responsiveness and does no signature validation; the security
+          boundary is the WebAPI, which validates every request. A tampered local token can flip an
+          <code>AuthorizeView</code> but cannot pass an API call.</li>
+          <li><strong>MAUI token storage is app-local, not framework-shared.</strong> The two browser storage services are
+          hoisted into MMCA.Common.UI / MMCA.Common.UI.Web, but the SecureStorage-backed MAUI implementation
+          is duplicated per app (ADC and Store each own a copy), because it depends on the MAUI
+          <code>SecureStorage</code> API (ADR-042). Behavior can drift between the two apps.</li>
+          <li><strong>The split multiplies the paths to keep correct.</strong> Three storage implementations plus two
+          refreshers plus the cookie-sync means the same login/refresh/logout invariant is expressed in
+          several places; each head&#39;s registration trio must stay consistent or a head silently loses auth.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p>ADR-022 (the Blazor host&#39;s HttpOnly session cookie and the <code>/auth/session/*</code> endpoints the browser
+          refresher proxies through), ADR-050 (the single rotating refresh token with reuse detection that the
+          <code>auth/refresh</code> endpoint enforces and that this client lifecycle acquires against), ADR-042 (the
+          device-capability abstraction and the MAUI head whose SecureStorage backs <code>DirectApiTokenRefresher</code>
+          and the app-local MAUI token storage).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/051-client-auth-token-lifecycle.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-10, amended 2026-07-17).">
+  <meta name="description" content="Accepted (2026-07-10, amended 2026-07-17 and 2026-07-23).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="article">
   <meta property="og:title" content="ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid)">
-  <meta property="og:description" content="Accepted (2026-07-10, amended 2026-07-17).">
+  <meta property="og:description" content="Accepted (2026-07-10, amended 2026-07-17 and 2026-07-23).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 50 ADRs</summary>
+        <summary>All 51 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -115,6 +115,7 @@
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
         <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
           </ol>
         </nav>
       </details>
@@ -123,7 +124,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-042-device-capability-abstraction-maui-blazor-hybrid">ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-10, amended 2026-07-17).</p>
+          <p>Accepted (2026-07-10, amended 2026-07-17 and 2026-07-23).</p>
           <h2 id="context">Context</h2>
           <p>The consumer apps ship the same Blazor component set through three heads: MAUI Blazor Hybrid
           (Android/iOS/MacCatalyst/Windows), Blazor Server SSR, and WebAssembly. Native device capabilities
@@ -148,8 +149,14 @@
           <code>IGeolocationService</code>, <code>IExternalLinkService</code>, <code>ITextToSpeechService</code>, <code>IAccessibilityAnnouncer</code>,
           <code>ILocalNotificationService</code>, <code>IScreenshotService</code>, <code>IDevicePreferences</code>, <code>IBatteryStatusService</code>,
           <code>IBiometricAuthenticator</code>, <code>ISpeechToTextService</code>, <code>IExternalAuthBroker</code>, <code>IDeepLinkDispatcher</code>,
-          <code>IConnectivityStatusService</code>, <code>ILocalCacheStore</code>). Each capability has an independent fallback
-          story, and per-capability contracts let heads adopt incrementally.</p>
+          <code>IConnectivityStatusService</code>, <code>ILocalCacheStore</code>). Four more have joined since, for 22 today, all
+          TryAdd-registered by <code>AddDeviceCapabilityDefaults</code>
+          (<code>Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:27-60</code>) and
+          overridden natively by <code>AddMauiDeviceCapabilities</code>
+          (<code>Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:28-58</code>): <code>IGeocodingService</code>
+          (Wave 3), <code>IMediaPickerService</code> (ADR-045), and the push pair <code>IPushRegistrationService</code> and
+          <code>IPushDeviceTokenProvider</code> (ADR-044). Each capability has an independent fallback story, and
+          per-capability contracts let heads adopt incrementally.</p>
           </li>
           <li><p><strong>Safe defaults for every contract, TryAdd-registered by <code>AddUIShared</code>.</strong>
           <code>AddDeviceCapabilityDefaults</code> (<code>Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs</code>)
@@ -176,7 +183,7 @@
           deliberately absent from the ubuntu NetArchTest runtime map because its assemblies cannot load
           there, and the compile-time target is the enforcement.</p>
           </li>
-          <li><p><strong>Deep links funnel through one seam.</strong> Native navigation sources (notification taps, app
+          <li><p><strong>Deep links funnel through one boundary.</strong> Native navigation sources (notification taps, app
           actions, app links, QR scans) publish app-relative routes into the singleton
           <code>IDeepLinkDispatcher</code> (buffered, capacity one, for cold starts); the <code>DeepLinkListener</code>
           component in the shared layout drains the buffer after first render and navigates live requests.

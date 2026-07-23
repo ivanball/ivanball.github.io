@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ADR-034: Generic Entity Controllers with a Dynamic Query Contract · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-06-30).">
+  <meta name="description" content="Accepted (2026-06-30). Amended (2026-07-23): the filter strategy registry now also covers long/long? via LongFilterStrategy.">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/034-generic-entity-query-layer.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="article">
   <meta property="og:title" content="ADR-034: Generic Entity Controllers with a Dynamic Query Contract">
-  <meta property="og:description" content="Accepted (2026-06-30).">
+  <meta property="og:description" content="Accepted (2026-06-30). Amended (2026-07-23): the filter strategy registry now also covers long/long? via LongFilterStrategy.">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/034-generic-entity-query-layer.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 50 ADRs</summary>
+        <summary>All 51 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -115,6 +115,7 @@
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
         <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
           </ol>
         </nav>
       </details>
@@ -123,7 +124,8 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-034-generic-entity-controllers-with-a-dynamic-query-contract">ADR-034: Generic Entity Controllers with a Dynamic Query Contract</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-30).</p>
+          <p>Accepted (2026-06-30). Amended (2026-07-23): the filter strategy registry now also
+          covers <code>long</code>/<code>long?</code> via <code>LongFilterStrategy</code>.</p>
           <h2 id="context">Context</h2>
           <p>Every module exposes many entities, and most of them need the same read and write
           surface: list, page, look up for a dropdown, fetch by id, create, delete. Hand
@@ -145,7 +147,7 @@
           <li><p><strong>Generic read controller.</strong> <code>EntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code>
           (<code>Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:28</code>,
           <code>[ApiController]</code> / <code>[Route(&quot;[controller]&quot;)]</code> / <code>[ApiVersion(&quot;1.0&quot;)]</code> at
-          <code>EntityControllerBase.cs:25</code>) exposes four GET routes for any entity:
+          <code>EntityControllerBase.cs:25-27</code>) exposes four GET routes for any entity:
           <code>[HttpGet]</code> list (<code>EntityControllerBase.cs:73</code>), <code>[HttpGet(&quot;paged&quot;)]</code>
           (<code>EntityControllerBase.cs:112</code>), <code>[HttpGet(&quot;lookup&quot;)]</code> for id/name dropdown
           entries (<code>EntityControllerBase.cs:154</code>), and <code>[HttpGet(&quot;{id}&quot;)]</code>
@@ -173,13 +175,13 @@
           which parses <code>filters[Property].operator</code> / <code>filters[Property].value</code> query keys
           (<code>Source/Presentation/MMCA.Common.API/ModelBinders/QueryFilterModelBinder.cs:24</code>).
           <code>QueryFilterService.ApplyFilters</code>
-          (<code>Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:71</code>)
+          (<code>Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:73</code>)
           resolves a <code>IFilterStrategy</code>
           (<code>Source/Core/MMCA.Common.Application/Services/Filtering/IFilterStrategy.cs:6</code>)
-          per property CLR type from a strategy registry (string, bool, int, DateTime,
-          decimal, Guid and their nullables, <code>QueryFilterService.cs:26</code>), each strategy
+          per property CLR type from a strategy registry (string, bool, int, long, DateTime,
+          decimal, Guid and their nullables, <code>QueryFilterService.cs:26-42</code>), each strategy
           declaring its <code>SupportedOperators</code> (<code>IFilterStrategy.cs:24</code>). Extra types register
-          via <code>QueryFilterService.RegisterStrategy</code> (<code>QueryFilterService.cs:55</code>).</p>
+          via <code>QueryFilterService.RegisterStrategy</code> (<code>QueryFilterService.cs:57</code>).</p>
           </li>
           <li><p><strong>Sort.</strong> <code>sortColumn</code> / <code>sortDirection</code> (<code>EntityControllerBase.cs:119</code>)
           feed <code>QueryFieldService.ApplySorting</code> (<code>QueryFieldService.cs:120</code>), an
@@ -197,9 +199,9 @@
           </li>
           <li><p><strong>A last-resort safety ceiling.</strong> Independent of the API page-size clamp,
           <code>EntityQueryPipeline.MaxUnboundedResultLimit = 1000</code>
-          (<code>Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:22</code>)
+          (<code>Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:23</code>)
           caps any unpaginated query with <code>query.Take(MaxUnboundedResultLimit)</code>
-          (<code>EntityQueryPipeline.cs:100</code>, <code>:144</code>), so even a direct service caller that omits
+          (<code>EntityQueryPipeline.cs:104</code>, <code>:151</code>), so even a direct service caller that omits
           pagination cannot trigger an unbounded full-table load.</p>
           </li>
           <li><p><strong>Two include paths.</strong> <code>includeFKs</code> / <code>includeChildren</code>
@@ -219,9 +221,9 @@
           <li><strong>Bounded dynamic querying, not open SQL.</strong> Filtering is dynamic over the wire but
           not unbounded in the engine: each property is filtered only by a registered
           <code>IFilterStrategy</code> whose <code>SupportedOperators</code> are validated before the database is
-          touched (<code>QueryFilterService.ValidateFilters</code>, <code>QueryFilterService.cs:124</code>,
+          touched (<code>QueryFilterService.ValidateFilters</code>, <code>QueryFilterService.cs:126</code>,
           invoked at <code>Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:187</code>),
-          and <code>MaxUnboundedResultLimit</code> (<code>EntityQueryPipeline.cs:22</code>) plus the <code>MaxPageSize</code>
+          and <code>MaxUnboundedResultLimit</code> (<code>EntityQueryPipeline.cs:23</code>) plus the <code>MaxPageSize</code>
           clamp (<code>EntityControllerBase.cs:127</code>) bound the result size.</li>
           <li><strong>Composes with manual DTO mapping (ADR-001).</strong> Entities are projected to DTOs by
           an injected <code>IEntityDTOMapper</code> (<code>EntityQueryService.cs:35</code>, <code>:51</code>) via
@@ -242,10 +244,10 @@
           <li><strong>Dynamic filtering is an injection and over-fetch surface.</strong> Arbitrary
           client-supplied property/operator/value triples are an attack surface; it is
           bounded by validating properties and operators up front
-          (<code>QueryFilterService.ValidateFilters</code>, <code>QueryFilterService.cs:124</code>), routing each
+          (<code>QueryFilterService.ValidateFilters</code>, <code>QueryFilterService.cs:126</code>), routing each
           type through its registered <code>IFilterStrategy</code> rather than free-form expression
           evaluation, and capping rows with <code>MaxUnboundedResultLimit</code>
-          (<code>EntityQueryPipeline.cs:22</code>). Sparse fieldsets reject non-writable properties at
+          (<code>EntityQueryPipeline.cs:23</code>). Sparse fieldsets reject non-writable properties at
           projection (<code>QueryFieldService.cs:167</code>).</li>
           <li><strong>Generic endpoints are less self-documenting than bespoke ones.</strong> One generic
           shape per entity is consistent but conveys less domain intent than a named,

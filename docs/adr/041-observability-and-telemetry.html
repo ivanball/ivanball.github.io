@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ADR-041: Observability and Telemetry Strategy · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-10).">
+  <meta name="description" content="Accepted (2026-07-10). Amended (2026-07-23) to document the Telemetry:DisableHttpClientMetrics and Telemetry:DisableRuntimeMetrics cost knobs and to…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/041-observability-and-telemetry.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="article">
   <meta property="og:title" content="ADR-041: Observability and Telemetry Strategy">
-  <meta property="og:description" content="Accepted (2026-07-10).">
+  <meta property="og:description" content="Accepted (2026-07-10). Amended (2026-07-23) to document the Telemetry:DisableHttpClientMetrics and Telemetry:DisableRuntimeMetrics cost knobs and to…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/041-observability-and-telemetry.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 50 ADRs</summary>
+        <summary>All 51 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -115,6 +115,7 @@
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
         <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
           </ol>
         </nav>
       </details>
@@ -123,7 +124,9 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-041-observability-and-telemetry-strategy">ADR-041: Observability and Telemetry Strategy</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-10).</p>
+          <p>Accepted (2026-07-10). Amended (2026-07-23) to document the <code>Telemetry:DisableHttpClientMetrics</code> and
+          <code>Telemetry:DisableRuntimeMetrics</code> cost knobs and to correct the meter/activity-source literal
+          citations.</p>
           <h2 id="context">Context</h2>
           <p>The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
           the same telemetry has to make sense whether a request stays in one process or crosses a gateway and
@@ -144,8 +147,9 @@
           <ul>
           <li><p><strong>One shared telemetry baseline on every host.</strong> <code>ConfigureOpenTelemetry</code>
           (<code>Source/Hosting/MMCA.Common.Aspire/Extensions.cs:121</code>) wires OpenTelemetry logging with formatted
-          messages and scopes (<code>Extensions.cs:125</code>), metrics from ASP.NET Core, <code>HttpClient</code>, and the runtime
-          (<code>Extensions.cs:132</code>), and tracing from ASP.NET Core and <code>HttpClient</code> (<code>Extensions.cs:164</code>). It is
+          messages and scopes (<code>Extensions.cs:125</code>), metrics from ASP.NET Core (unconditional,
+          <code>Extensions.cs:132</code>) plus <code>HttpClient</code> and the runtime (each gated behind a cost knob, see below),
+          and tracing from ASP.NET Core and <code>HttpClient</code> (<code>Extensions.cs:164</code>). It is
           called from <code>AddServiceDefaults</code> (<code>Extensions.cs:41</code>), so a host opts in once and every project in
           the Aspire model inherits the same pipeline.</p>
           </li>
@@ -177,6 +181,18 @@
           (<code>CorrelationIdMiddleware.cs:37</code>). The CQRS logging decorators stamp that same id into every log
           scope (<code>LoggingCommandDecorator.cs:23</code>, <code>:25</code>), so logs, the correlation id, and the trace id line
           up for one request.</p>
+          </li>
+          <li><p><strong>Two high-volume metric families gated behind cost knobs, on by default.</strong> ASP.NET Core metrics are
+          always wired (<code>Extensions.cs:132</code>), but the two heaviest AppMetrics contributors on a low-traffic
+          multi-service deployment are conditional. <code>HttpClient</code> connection and request metrics are added only
+          when <code>Telemetry:DisableHttpClientMetrics</code> is unset or false (<code>Extensions.cs:141</code>, adding
+          instrumentation at <code>Extensions.cs:143</code>), and .NET runtime metrics (<code>dotnet.gc.*</code>, <code>jit.*</code>,
+          <code>thread_pool.*</code>) only when <code>Telemetry:DisableRuntimeMetrics</code> is unset or false (<code>Extensions.cs:150</code>,
+          adding at <code>Extensions.cs:152</code>). Both keys are read by <code>IsInstrumentationDisabled</code>
+          (<code>Extensions.cs:350</code>), which drops the family only when the value parses as boolean <code>true</code>; absent,
+          blank, or unparseable falls back to keeping the instrumentation, so a typo cannot silently blind a
+          whole metric family. A deployed host sets one or both to <code>true</code> to cut ingestion cost; outbound
+          dependency latency is still captured as traces when <code>HttpClient</code> metrics are dropped.</p>
           </li>
           <li><p><strong>Head-based sampling as a cost knob, off by default.</strong> <code>Telemetry:TracesSampleRatio</code>
           (<code>Extensions.cs:179</code>, parsed by <code>TryGetTraceSampleRatio</code> at <code>Extensions.cs:327</code>) is unset by
@@ -210,13 +226,14 @@
           the free auto-instrumentation, so the custom surface stays small.</li>
           <li><strong>RED at the decorator, not in every handler.</strong> The CQRS pipeline already wraps every handler in a
           logging decorator (ADR-014), so recording duration and outcome there makes metrics a byproduct of a
-          seam that exists, with no per-handler discipline (the invariant-over-discipline posture, ADR-015).</li>
+          pipeline layer that exists, with no per-handler discipline (the invariant-over-discipline posture, ADR-015).</li>
           <li><strong>A single correlation id with a W3C fallback.</strong> Whether or not a client supplies
           <code>X-Correlation-ID</code>, one id stitches the logs of a request together and matches the trace, which is
           what an operator needs first when a distributed call goes wrong.</li>
-          <li><strong>Cost knobs default to safe.</strong> Sampling and poll-span filtering are the levers a FinOps owner
-          reaches for (COST.md), and both fail toward keeping data: sampling is off unless configured, an
-          out-of-range ratio is ignored, and only idle poll spans are dropped.</li>
+          <li><strong>Cost knobs default to safe.</strong> Sampling, poll-span filtering, and the <code>HttpClient</code>/runtime metric
+          toggles are the levers a FinOps owner reaches for (COST.md), and all fail toward keeping data:
+          sampling is off unless configured, an out-of-range ratio is ignored, only idle poll spans are
+          dropped, and a metric family drops only on an explicit boolean <code>true</code> (a typo keeps it on).</li>
           <li><strong><code>ParentBased</code> keeps distributed traces coherent.</strong> An extracted-service deployment (ADR-008) needs
           a sampled-in request to stay sampled end to end; a per-hop random sampler would shred cross-service
           traces.</li>
@@ -225,7 +242,8 @@
           <ul>
           <li><strong>Custom instrumentation carries a maintenance cost.</strong> The Aspire package has no reference to
           Application or Infrastructure by design, so the meter and activity-source names are duplicated as
-          literals (<code>Extensions.cs:171</code>, and the sync notes at <code>CqrsMetrics.cs:8</code> and
+          literals (the meter subscriptions at <code>Extensions.cs:155</code>-<code>Extensions.cs:158</code> and the trace source at
+          <code>Extensions.cs:163</code>, and the sync notes at <code>CqrsMetrics.cs:8</code> and
           <code>OutboxPollFilterProcessor.cs:17</code>). A rename on one side silently stops export until the literal is
           updated. That is the price of the decoupled package graph.</li>
           <li><strong>Sampling trades trace completeness for cost.</strong> A sampled-out trace is simply gone; deep debugging

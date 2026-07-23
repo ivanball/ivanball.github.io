@@ -45,7 +45,7 @@ proves two live versions coexist.
   `/ServiceInfo` route under two versions selected by the header: `GetV1` is mapped to `1.0`
   (`[MapToApiVersion("1.0")]`, `ServiceInfoControllerBase.cs:40`) and returns the minimal
   `ServiceInfoResponse` shape (`ServiceInfoControllerBase.cs:51`); `GetV2` is mapped to `2.0`
-  (`[MapToApiVersion("2.0")]`, `ServiceInfoControllerBase.cs:45`) and returns the evolved
+  (`[MapToApiVersion("2.0")]`, `ServiceInfoControllerBase.cs:46`) and returns the evolved
   `ServiceInfoV2Response`, a superset that also advertises the supported and deprecated version lists
   (`ServiceInfoControllerBase.cs:54`). The base is anonymous and read-only.
 - **The class-level version attributes live on the per-service subclass.** Class-level

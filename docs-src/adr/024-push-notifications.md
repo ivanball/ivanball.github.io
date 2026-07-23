@@ -48,7 +48,7 @@ recipient policy both behind abstractions.
   (`SendPushNotificationHandler.cs:88-105`), an OS-level native-push channel that reaches devices the
   SignalR hub cannot (the app backgrounded or killed). It is best-effort by the same logic as the live
   push (a throw is logged, never fatal, and the SignalR leg has already decided the audit status), and it
-  defaults to `NullNativePushSender` (`MMCA.Common.Infrastructure`, `DependencyInjection.cs:200`), so it
+  defaults to `NullNativePushSender` (`MMCA.Common.Infrastructure`, `DependencyInjection.cs:203`), so it
   stays inert until a native hub is configured. The design of that channel is ADR-044's scope; this ADR
   keeps its own on the inbox and SignalR channels, so the "Two-Channel" title names the durable and
   transient channels this record governs, not a hard cap on the number of delivery legs.
@@ -91,7 +91,7 @@ recipient policy both behind abstractions.
 ADR-003 (the outbox dual-dispatch path, which is distinct: that carries service-to-service integration
 events, this carries user-facing notifications), ADR-004 (the `/hubs` `access_token` query-string auth
 the hub relies on), ADR-008 (extraction: ADC runs a dedicated `MMCA.ADC.Notification.Service` built on
-these seams), ADR-012 (that Notification service is now a mixed-endpoint host: its default endpoint
+these boundaries), ADR-012 (that Notification service is now a mixed-endpoint host: its default endpoint
 stays Profile-B `Http1AndHttp2` for the SignalR WebSocket/HTTP/1.1 path, and since 2026-07-09 it also
 serves an inbound `Http2`-only h2c gRPC edge on a dedicated named endpoint per ADR-039), ADR-022 (the
 browser-edge auth context the UI client runs in), ADR-044 (the optional OS-level native-push channel
