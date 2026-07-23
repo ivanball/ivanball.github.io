@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Phase 1b - Functional Group Taxonomy · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="This is the primary axis of the guide. Every one of the 2,587 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
+  <meta name="description" content="This is the primary axis of the guide. Every one of the 2,588 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
   <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/00-group-taxonomy.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="article">
   <meta property="og:title" content="Phase 1b - Functional Group Taxonomy">
-  <meta property="og:description" content="This is the primary axis of the guide. Every one of the 2,587 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
+  <meta property="og:description" content="This is the primary axis of the guide. Every one of the 2,588 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
   <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/00-group-taxonomy.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -110,7 +110,7 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Onboarding guide</p>
           <h1 id="phase-1b---functional-group-taxonomy">Phase 1b - Functional Group Taxonomy</h1>
-          <p>This is the <strong>primary axis</strong> of the guide. Every one of the <strong>2,587</strong> distinct first-party type
+          <p>This is the <strong>primary axis</strong> of the guide. Every one of the <strong>2,588</strong> distinct first-party type
           nodes from <a href="00-inventory.html"><code>00-inventory.md</code></a> is assigned to <strong>exactly one</strong> functional group -
           its primary <em>home</em>: the capability or cross-cutting concern it most exists to serve. A type used
           across many groups (e.g. <code>Result&lt;T&gt;</code>, the entity base) lives in the one foundational group that
@@ -184,14 +184,14 @@
           <tr>
           <td>G03</td>
           <td><strong>Querying: Specifications, Filtering &amp; the Entity Query Service</strong><br/>group-03-querying-specifications.md</td>
-          <td>26</td>
+          <td>27</td>
           <td>L0-L8</td>
           <td>Composable read-side: the Specification pattern, dynamic filtering/sorting/paging, and the generic entity query pipeline.</td>
           </tr>
           <tr>
           <td>G04</td>
           <td><strong>Domain &amp; Integration Events + Outbox Dual-Dispatch</strong><br/>group-04-events-outbox.md</td>
-          <td>31</td>
+          <td>29</td>
           <td>L0-L8</td>
           <td>Event contracts, the domain-event dispatcher, the transactional outbox/inbox, and the in-process + broker message buses.</td>
           </tr>
@@ -352,12 +352,12 @@
           <tr>
           <td>G25</td>
           <td><strong>Testing &amp; Quality Infrastructure</strong><br/>group-27-testing-infrastructure.md</td>
-          <td>1242</td>
+          <td>1244</td>
           <td>L0-L17</td>
           <td>All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).</td>
           </tr>
           </tbody></table></div>
-          <p><strong>Reconciliation:</strong> 1345 production types across 26 groups + 1242 test/testing types in G25 = <strong>2587</strong> (matches the inventory&#39;s distinct-node count). No type appears twice; none dropped.</p>
+          <p><strong>Reconciliation:</strong> 1344 production types across 26 groups + 1244 test/testing types in G25 = <strong>2588</strong> (matches the inventory&#39;s distinct-node count). No type appears twice; none dropped.</p>
           <hr>
           <h2 id="group-membership">Group membership</h2>
           <h3 id="g01---result--error-handling">G01 - Result &amp; Error Handling</h3>
@@ -624,7 +624,7 @@
           </tbody></table></div>
           <h3 id="g03---querying-specifications-filtering--the-entity-query-service">G03 - Querying: Specifications, Filtering &amp; the Entity Query Service</h3>
           <blockquote>
-          <p><code>group-03-querying-specifications.md</code> | 26 types | Composable read-side: the Specification pattern, dynamic filtering/sorting/paging, and the generic entity query pipeline.</p>
+          <p><code>group-03-querying-specifications.md</code> | 27 types | Composable read-side: the Specification pattern, dynamic filtering/sorting/paging, and the generic entity query pipeline.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -700,6 +700,12 @@
           <td><code>ISpecification&lt;TEntity, TIdentifierType&gt;</code></td>
           <td>interface</td>
           <td>MMCA.Common.Domain.Interfaces</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>LongFilterStrategy</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Application.Services.Filtering</td>
           </tr>
           <tr>
           <td>1</td>
@@ -794,7 +800,7 @@
           </tbody></table></div>
           <h3 id="g04---domain--integration-events--outbox-dual-dispatch">G04 - Domain &amp; Integration Events + Outbox Dual-Dispatch</h3>
           <blockquote>
-          <p><code>group-04-events-outbox.md</code> | 31 types | Event contracts, the domain-event dispatcher, the transactional outbox/inbox, and the in-process + broker message buses.</p>
+          <p><code>group-04-events-outbox.md</code> | 29 types | Event contracts, the domain-event dispatcher, the transactional outbox/inbox, and the in-process + broker message buses.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -903,12 +909,6 @@
           </tr>
           <tr>
           <td>2</td>
-          <td><code>IIntegrationEventPublisher</code></td>
-          <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces</td>
-          </tr>
-          <tr>
-          <td>2</td>
           <td><code>IMessageBus</code></td>
           <td>interface</td>
           <td>MMCA.Common.Application.Messaging</td>
@@ -940,12 +940,6 @@
           <tr>
           <td>3</td>
           <td><code>IntegrationEventConsumer&lt;TEvent&gt;</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
-          </tr>
-          <tr>
-          <td>3</td>
-          <td><code>IntegrationEventPublisher</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Services</td>
           </tr>
@@ -4417,12 +4411,6 @@
           </tr>
           <tr>
           <td>0</td>
-          <td><code>GetNowNextQuery</code></td>
-          <td>record</td>
-          <td>MMCA.ADC.Conference.Application.Sessions.UseCases.NowNext</td>
-          </tr>
-          <tr>
-          <td>0</td>
           <td><code>GetPublicSessionFilterQuery</code></td>
           <td>record</td>
           <td>MMCA.ADC.Conference.Application.Sessions.UseCases.GetPublicSessionFilter</td>
@@ -5098,6 +5086,12 @@
           <td><code>EventDTOMapper</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Application.Events.DTOs</td>
+          </tr>
+          <tr>
+          <td>7</td>
+          <td><code>GetNowNextQuery</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Conference.Application.Sessions.UseCases.NowNext</td>
           </tr>
           <tr>
           <td>7</td>
@@ -8796,7 +8790,7 @@
           </tbody></table></div>
           <h3 id="g25---testing--quality-infrastructure">G25 - Testing &amp; Quality Infrastructure</h3>
           <blockquote>
-          <p><code>group-27-testing-infrastructure.md</code> | 1242 types | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).</p>
+          <p><code>group-27-testing-infrastructure.md</code> | 1244 types | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).</p>
           </blockquote>
           <p>Rolled up by project (individual <code>[Fact]</code>s not sectioned - logged exception). Reusable test
           infrastructure assemblies (sectioned in full in the chapter) are marked <strong>(infra)</strong>.</p>
@@ -8823,7 +8817,7 @@
           </tr>
           <tr>
           <td><code>MMCA.ADC.Conference.Application.Tests</code></td>
-          <td>133</td>
+          <td>134</td>
           <td>L0-L12</td>
           <td></td>
           </tr>
@@ -8991,7 +8985,7 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.Application.Tests</code></td>
-          <td>160</td>
+          <td>161</td>
           <td>L0-L10</td>
           <td></td>
           </tr>

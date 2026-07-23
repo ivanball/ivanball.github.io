@@ -1,6 +1,6 @@
 # Phase 1b - Functional Group Taxonomy
 
-This is the **primary axis** of the guide. Every one of the **2,587** distinct first-party type
+This is the **primary axis** of the guide. Every one of the **2,588** distinct first-party type
 nodes from [`00-inventory.md`](00-inventory.md) is assigned to **exactly one** functional group -
 its primary *home*: the capability or cross-cutting concern it most exists to serve. A type used
 across many groups (e.g. `Result<T>`, the entity base) lives in the one foundational group that
@@ -55,8 +55,8 @@ disclosure) and is cross-linked in the chapter.
 |---|-----------------|-------|--------|---------|
 | G01 | **Result & Error Handling**<br/>group-01-result-error-handling.md | 11 | L0-L2 | The Result/Error railway that every operation returns instead of throwing; pagination result shapes. |
 | G02 | **Domain Building Blocks (Entities, Value Objects, Aggregates)**<br/>group-02-domain-building-blocks.md | 28 | L0-L4 | The DDD primitives: entity/aggregate base classes, audit fields, value objects + invariants, domain markers, attributes, identifier aliases. |
-| G03 | **Querying: Specifications, Filtering & the Entity Query Service**<br/>group-03-querying-specifications.md | 26 | L0-L8 | Composable read-side: the Specification pattern, dynamic filtering/sorting/paging, and the generic entity query pipeline. |
-| G04 | **Domain & Integration Events + Outbox Dual-Dispatch**<br/>group-04-events-outbox.md | 31 | L0-L8 | Event contracts, the domain-event dispatcher, the transactional outbox/inbox, and the in-process + broker message buses. |
+| G03 | **Querying: Specifications, Filtering & the Entity Query Service**<br/>group-03-querying-specifications.md | 27 | L0-L8 | Composable read-side: the Specification pattern, dynamic filtering/sorting/paging, and the generic entity query pipeline. |
+| G04 | **Domain & Integration Events + Outbox Dual-Dispatch**<br/>group-04-events-outbox.md | 29 | L0-L8 | Event contracts, the domain-event dispatcher, the transactional outbox/inbox, and the in-process + broker message buses. |
 | G05 | **CQRS: Commands, Queries & the Decorator Pipeline**<br/>group-05-cqrs-pipeline.md | 23 | L0-L8 | The command/query handler abstraction and the cross-cutting decorator pipeline (logging, transaction, caching, feature-gate, idempotency) wrapping it. |
 | G06 | **Validation**<br/>group-06-validation.md | 17 | L0-L5 | The FluentValidation-based validation contracts and failure mapping that gate commands before they execute. |
 | G07 | **Persistence & EF Core**<br/>group-07-persistence-ef-core.md | 85 | L0-L8 | The single SQLServerDbContext over the abstract ApplicationDbContext, interceptors, repositories, specifications evaluation, data-source routing (database-per-service), conventions, value generators, encryption, factories and design-time. |
@@ -79,9 +79,9 @@ disclosure) and is cross-linked in the chapter.
 | G23 | **ADC Identity Module (Users, Profiles, GDPR Export/Erasure)**<br/>group-24-identity-module.md | 82 | L0-L11 | The Identity bounded context end-to-end: the User aggregate, change-password/delete/export use cases, persistence, API/contracts/service, and profile/user UI. |
 | G24 | **ADC Application Host, UI Shell & Cross-Module Composition**<br/>group-25-adc-host-composition.md | 18 | L0-L11 | The ADC host: the Blazor Web/WASM/WinUI shells, host pages/services, security, and the cross-module application composition. |
 | G27 | **Device Capability Abstraction Layer (Native Contracts, MAUI, Browser & Fallback Adapters)**<br/>group-26-device-capability-layer.md | 87 | L0-L4 | Per-capability interface contracts (biometric, geocoding/geolocation, speech, push registration, media/clipboard/screenshot, haptics, share, external auth/links, local cache/notifications, connectivity/battery/accessibility, deep links) plus their MAUI-native, browser-JS-interop, and inert fallback implementations, selected per host at DI composition time (ADR-042/043/044/045). |
-| G25 | **Testing & Quality Infrastructure**<br/>group-27-testing-infrastructure.md | 1242 | L0-L17 | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception). |
+| G25 | **Testing & Quality Infrastructure**<br/>group-27-testing-infrastructure.md | 1244 | L0-L17 | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception). |
 
-**Reconciliation:** 1345 production types across 26 groups + 1242 test/testing types in G25 = **2587** (matches the inventory's distinct-node count). No type appears twice; none dropped.
+**Reconciliation:** 1344 production types across 26 groups + 1244 test/testing types in G25 = **2588** (matches the inventory's distinct-node count). No type appears twice; none dropped.
 
 ---
 
@@ -142,7 +142,7 @@ disclosure) and is cross-linked in the chapter.
 
 ### G03 - Querying: Specifications, Filtering & the Entity Query Service
 
-> `group-03-querying-specifications.md` | 26 types | Composable read-side: the Specification pattern, dynamic filtering/sorting/paging, and the generic entity query pipeline.
+> `group-03-querying-specifications.md` | 27 types | Composable read-side: the Specification pattern, dynamic filtering/sorting/paging, and the generic entity query pipeline.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
@@ -157,6 +157,7 @@ disclosure) and is cross-linked in the chapter.
 | 1 | `GuidFilterStrategy` | class | MMCA.Common.Application.Services.Filtering |
 | 1 | `IntFilterStrategy` | class | MMCA.Common.Application.Services.Filtering |
 | 1 | `ISpecification<TEntity, TIdentifierType>` | interface | MMCA.Common.Domain.Interfaces |
+| 1 | `LongFilterStrategy` | class | MMCA.Common.Application.Services.Filtering |
 | 1 | `StringFilterStrategy` | class | MMCA.Common.Application.Services.Filtering |
 | 2 | `Specification<TEntity, TIdentifierType>` | class | MMCA.Common.Domain.Specifications |
 | 3 | `AndSpecification<TEntity, TIdentifierType>` | class | MMCA.Common.Domain.Specifications |
@@ -175,7 +176,7 @@ disclosure) and is cross-linked in the chapter.
 
 ### G04 - Domain & Integration Events + Outbox Dual-Dispatch
 
-> `group-04-events-outbox.md` | 31 types | Event contracts, the domain-event dispatcher, the transactional outbox/inbox, and the in-process + broker message buses.
+> `group-04-events-outbox.md` | 29 types | Event contracts, the domain-event dispatcher, the transactional outbox/inbox, and the in-process + broker message buses.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
@@ -195,14 +196,12 @@ disclosure) and is cross-linked in the chapter.
 | 2 | `EntityChangedEvent<TIdentifierType>` | record | MMCA.Common.Domain.DomainEvents |
 | 2 | `IEventBus` | interface | MMCA.Common.Application.Interfaces |
 | 2 | `IIntegrationEventHandler<in TIntegrationEvent>` | interface | MMCA.Common.Application.Interfaces |
-| 2 | `IIntegrationEventPublisher` | interface | MMCA.Common.Application.Interfaces |
 | 2 | `IMessageBus` | interface | MMCA.Common.Application.Messaging |
 | 2 | `SafeDomainEventHandler<TDomainEvent>` | class | MMCA.Common.Application.DomainEvents |
 | 3 | `BrokerMessageBus` | class | MMCA.Common.Infrastructure.Services |
 | 3 | `DomainEventDispatcher` | class | MMCA.Common.Application.Services |
 | 3 | `InProcessMessageBus` | class | MMCA.Common.Infrastructure.Services |
 | 3 | `IntegrationEventConsumer<TEvent>` | class | MMCA.Common.Infrastructure.Services |
-| 3 | `IntegrationEventPublisher` | class | MMCA.Common.Infrastructure.Services |
 | 4 | `IntegrationEventConsumerExtensions` | class | MMCA.Common.Infrastructure.Services |
 | 6 | `OutboxFinalizer` | class | MMCA.Common.Infrastructure.Persistence.Outbox |
 | 8 | `BrokerEventBus` | class | MMCA.Common.Infrastructure.Services |
@@ -846,7 +845,6 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `ExportSessionCalendarQuery` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.ExportCalendar |
 | 0 | `GetCategoryDistributionQuery` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetCategoryDistribution |
 | 0 | `GetContentSimilarityQuery` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetContentSimilarity |
-| 0 | `GetNowNextQuery` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.NowNext |
 | 0 | `GetPublicSessionFilterQuery` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.GetPublicSessionFilter |
 | 0 | `GetSessionBookmarkCountQuery` | record | MMCA.ADC.Conference.Application.Speakers.UseCases.GetSessionBookmarkCount |
 | 0 | `GetSessionBookmarkCountsQuery` | record | MMCA.ADC.Conference.Application.Speakers.UseCases.GetSessionBookmarkCounts |
@@ -960,6 +958,7 @@ disclosure) and is cross-linked in the chapter.
 | 7 | `EventCreateRequestMapper` | class | MMCA.ADC.Conference.Application.Events.UseCases.Create |
 | 7 | `EventCreateRequestValidator` | class | MMCA.ADC.Conference.Application.Events.UseCases.Create |
 | 7 | `EventDTOMapper` | class | MMCA.ADC.Conference.Application.Events.DTOs |
+| 7 | `GetNowNextQuery` | record | MMCA.ADC.Conference.Application.Sessions.UseCases.NowNext |
 | 7 | `OwnSessionQuestionAnswerSpecification` | class | MMCA.ADC.Conference.Application.Sessions.Specifications |
 | 7 | `QuestionCreateRequestMapper` | class | MMCA.ADC.Conference.Application.Questions.UseCases.Create |
 | 7 | `QuestionCreateRequestValidator` | class | MMCA.ADC.Conference.Application.Questions.UseCases.Create |
@@ -1616,7 +1615,7 @@ disclosure) and is cross-linked in the chapter.
 
 ### G25 - Testing & Quality Infrastructure
 
-> `group-27-testing-infrastructure.md` | 1242 types | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).
+> `group-27-testing-infrastructure.md` | 1244 types | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).
 
 Rolled up by project (individual `[Fact]`s not sectioned - logged exception). Reusable test
 infrastructure assemblies (sectioned in full in the chapter) are marked **(infra)**.
@@ -1625,7 +1624,7 @@ infrastructure assemblies (sectioned in full in the chapter) are marked **(infra
 |--------------------------|-------|--------|------|
 | `MMCA.ADC.Architecture.Tests` **(infra)** | 30 | L0-L10 |  |
 | `MMCA.ADC.Conference.API.Tests`  | 16 | L1-L9 |  |
-| `MMCA.ADC.Conference.Application.Tests`  | 133 | L0-L12 |  |
+| `MMCA.ADC.Conference.Application.Tests`  | 134 | L0-L12 |  |
 | `MMCA.ADC.Conference.Domain.Tests`  | 22 | L5-L9 |  |
 | `MMCA.ADC.Conference.Infrastructure.Tests`  | 7 | L0-L10 |  |
 | `MMCA.ADC.Conference.IntegrationTests`  | 36 | L1-L16 |  |
@@ -1653,7 +1652,7 @@ infrastructure assemblies (sectioned in full in the chapter) are marked **(infra
 | `MMCA.ADC.Notification.IntegrationTests`  | 8 | L1-L16 |  |
 | `MMCA.ADC.ServiceBusEmulator.IntegrationTests`  | 3 | L0-L4 |  |
 | `MMCA.Common.API.Tests`  | 65 | L0-L12 |  |
-| `MMCA.Common.Application.Tests`  | 160 | L0-L10 |  |
+| `MMCA.Common.Application.Tests`  | 161 | L0-L10 |  |
 | `MMCA.Common.Architecture.Tests` **(infra)** | 25 | L1-L8 |  |
 | `MMCA.Common.Aspire.Tests`  | 11 | L0-L3 |  |
 | `MMCA.Common.Benchmarks`  | 4 | L2-L4 |  |

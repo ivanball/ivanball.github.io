@@ -203,7 +203,7 @@
           <code>WebApplicationFactory</code> can flip a gate without touching <code>appsettings.json</code>.
           <a href="#entitybuilderbasetbuilder-tentity"><code>EntityBuilderBase&lt;TBuilder, TEntity&gt;</code></a>
           (<code>MMCA.Common.Testing/Builders/EntityBuilderBase.cs:9</code>) is a minimal fluent-builder base whose single
-          abstract <code>Build()</code> (<code>:18</code>) returns the entity through its domain factory, so test setup specifies only
+          abstract <code>Build()</code> (<code>:17</code>) returns the entity through its domain factory, so test setup specifies only
           what a test cares about. Together these embody [Rubric §11, Security] (real token validation rather than
           bypassed auth middleware) and [Rubric §14, Testability].</p>
           <h2 id="architecture-fitness-functions-rules-that-gate-the-build">Architecture fitness functions: rules that gate the build</h2>
@@ -220,9 +220,11 @@
           varies. <code>Layer</code> deliberately includes optional layers (<code>Ui</code>, <code>Grpc</code>, <code>Contracts</code>, <code>ServiceHost</code>,
           <code>IArchitectureMap.cs:16-19</code>) that a repo simply omits, so a rule iterating them is vacuously satisfied
           with no compile dependency on an absent assembly (<code>IArchitectureMap.cs:3-8</code>).</p>
-          <p>The rule bodies are split across eighteen <code>ArchitectureRules.*</code> partial files (layers, purity, handlers,
-          handler results, entities, aggregates, events, modules, slices, naming, transport, controllers,
-          immutability, governance, localization, localized text, and specifications), and the thirty abstract
+          <p>The rule bodies are split across sixteen <code>ArchitectureRules.*</code> partial files (layers, purity, handlers,
+          handler results, entities, events, modules, slices, naming, transport, controllers,
+          immutability, governance, localization, localized text, and specifications; aggregate-convention
+          rules live inside <code>ArchitectureRules.Entities.cs</code> and are exercised through
+          <code>Bases/AggregateConventionTestsBase.cs</code>, not a dedicated partial), and the thirty abstract
           <code>*TestsBase</code> classes under <code>Bases/</code> (<code>LayerDependencyTestsBase</code>, <code>DomainPurityTestsBase</code>,
           <code>MicroserviceExtractionTestsBase</code>, <code>ModuleIsolationTestsBase</code>, <code>PiiConventionTestsBase</code>,
           <code>DependencyVersionTestsBase</code>, <code>IntegrationEventContractTestsBase</code>, <code>DataResidencyTestsBase</code>, and more)
@@ -250,7 +252,7 @@
           page keeps its <code>[Authorize(Roles = &quot;...&quot;)]</code> gate, so an admin route cannot regress to a bare
           <code>[Authorize]</code>. It detects <code>RouteAttribute</code> and <code>AuthorizeAttribute</code> by full-name reflection
           (<code>RouteAuthorizationTestsBase.cs:24-25</code>) so the package stays free of ASP.NET references, and a
-          <code>MinimumGovernedPages</code> floor (<code>:41-45</code>) guards against a moved namespace silently emptying the scan.
+          <code>MinimumGovernedPages</code> floor (<code>:47</code>) guards against a moved namespace silently emptying the scan.
           <a href="#brandcolortokentestsbase"><code>BrandColorTokenTestsBase</code></a>
           (<code>MMCA.Common.Testing.Architecture/Bases/BrandColorTokenTestsBase.cs:13</code>, [Rubric §20, Design System &amp;
           Theming]) reads landing-page stylesheets embedded as manifest resources and fails the build if a host
@@ -346,7 +348,7 @@
           <a href="#registerpage"><code>RegisterPage</code></a> (<code>MMCA.Common.Testing.E2E/PageObjects/RegisterPage.cs:6</code>), and
           <a href="#profilepage"><code>ProfilePage</code></a> (<code>MMCA.Common.Testing.E2E/PageObjects/ProfilePage.cs:6</code>) wrap the framework&#39;s
           real auth surfaces with role- and label-based locators (<code>LoginPage.cs:12-18</code>) and route their own fills
-          through the anti-race helper (<code>LoginPage.cs:29</code>); downstream apps add their own family, for example the
+          through the anti-race helper (<code>LoginPage.cs:31-32</code>, invoked at <code>:25-26</code>); downstream apps add their own family, for example the
           <code>MMCA.ADC.E2E.Tests</code> page objects for events, sessions, speakers, rooms, questions, and feedback.</p>
           <h2 id="the-gallery-harness">The Gallery harness</h2>
           <p>Component and E2E coverage of MMCA.Common&#39;s <em>own</em> UI needs a page to render, but the framework is not a
@@ -2933,9 +2935,9 @@
           <p>This guide treats <strong>tests as grouped, not sectioned per <code>[Fact]</code></strong> (the logged exception in the
           charter): the reusable test <em>bases</em>, the shared architecture-fitness library and its per-repo thin
           subclasses, and the component <strong>Gallery</strong> harness each get their own <code>###</code> treatment in the earlier parts
-          of this chapter, but the bulk of the suite, <strong>1,092 individual test types across 40 projects</strong>, is rolled
+          of this chapter, but the bulk of the suite, <strong>1,094 individual test types across 40 projects</strong>, is rolled
           up here. Each row below names a test project (assembly), the count of test types it contributes to the
-          1,092, <strong>what</strong> it covers, and its <strong>style</strong> (unit / integration / component / E2E / performance-smoke).
+          1,094, <strong>what</strong> it covers, and its <strong>style</strong> (unit / integration / component / E2E / performance-smoke).
           Counts reconcile exactly to the unit input.</p>
           <p>A few cross-cutting facts hold for every row, so they are stated once here rather than repeated:</p>
           <ul>
@@ -2995,7 +2997,7 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.Application.Tests</code></td>
-          <td>160</td>
+          <td>161</td>
           <td>The CQRS engine: the decorator pipeline in its registered nesting order (FeatureGate→Logging→Caching→Validating→Transactional→handler, <code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:88</code>), the opt-in MiniProfiler decorators added by <code>AddApplicationProfiling</code> (<code>.../DependencyInjection.cs:185</code>) and the <code>CqrsMetrics</code> counters/histograms (<code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Decorators/CqrsMetricsTests.cs:20</code>), <code>ModuleLoader</code> topological ordering, <code>DomainEventDispatcher</code> plus the swallow-and-log <code>SafeDomainEventHandler</code> base (<code>.../DomainEvents/SafeDomainEventHandlerTests.cs:9</code>), validation, the <a href="group-04-events-outbox.html#imessagebus"><code>IMessageBus</code></a> abstraction, entity-query projection/paging and the per-type filter strategies, the cross-source <a href="group-03-querying-specifications.html#crosssourcespecification"><code>CrossSourceSpecification</code></a> helper (ADR-018), the magic-byte upload sniffer behind <a href="group-07-persistence-ef-core.html#imagecontentsniffer"><code>ImageContentSniffer</code></a> (<code>.../ImageContentSnifferTests.cs:12</code>, ADR-045), and the notification read handlers driven by an injected <code>TimeProvider</code> test clock. The framework&#39;s largest suite; fast <strong>unit</strong> tests with mocked infrastructure.</td>
           </tr>
           <tr>
@@ -3065,7 +3067,7 @@
           </tr>
           <tr>
           <td><code>MMCA.ADC.Conference.Application.Tests</code></td>
-          <td>133</td>
+          <td>134</td>
           <td>The command/query handlers for the Conference controllers, validators, navigation populators, the <strong>Sessionize import</strong> orchestrator + sync strategies (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Application.Tests/Events/UseCases/RefreshFromSessionizeHandlerTests.cs</code>), and the event/session live-window validation served to the live layer over gRPC (<code>.../Events/EventLiveValidationServiceTests.cs</code>, <a href="group-18-conference-application.html#getpublicsessionfilterhandler"><code>GetPublicSessionFilterHandler</code></a> and its cross-source filter query, ADR-018). The biggest application suite in ADC; fast <strong>unit</strong> tests with mocked repositories/services.</td>
           </tr>
           <tr>
@@ -3234,11 +3236,11 @@
           <td><strong>Playwright</strong> end-to-end against the running Aspire stack, using a Page-Object model (<code>PageObjects/</code>) and <code>E2ETestBase</code> login helpers, organized by actor workflow (Organizer/Speaker/Attendee/Identity/Preferences) plus the Engagement live-poll and feedback flows, real-time notification push, a Web-Vitals budget check, and an <code>AccessibilityTests</code> axe sweep. Runs once per engine via <code>E2E_BROWSER</code> (chromium/firefox/webkit). The largest single project here and the source of most of the chapter&#39;s recorded E2E debugging history. <code>[Rubric §28, Front-End Testing]</code> + <code>[Rubric §22, Responsive/Cross-Browser]</code>: this suite is the cross-browser, real-user-flow safety net. <strong>E2E</strong> style.</td>
           </tr>
           </tbody></table></div>
-          <p><strong>Reconciliation.</strong> Common: 22+43+160+171+65+13+11+9+71+4+11+4 = <strong>584</strong> (12 projects).
-          ADC Conference: 17+22+133+7+16+27+36 = <strong>258</strong> (7). ADC Engagement: 2+6+27+4+6+19+13 = <strong>77</strong> (7).
+          <p><strong>Reconciliation.</strong> Common: 22+43+161+171+65+13+11+9+71+4+11+4 = <strong>585</strong> (12 projects).
+          ADC Conference: 17+22+134+7+16+27+36 = <strong>259</strong> (7). ADC Engagement: 2+6+27+4+6+19+13 = <strong>77</strong> (7).
           ADC Identity: 3+4+21+4+7+6+33 = <strong>78</strong> (7). ADC Notification: 1+5+8 = <strong>14</strong> (3).
           ADC host/cross-service/E2E: 6+12+3+60 = <strong>81</strong> (4).
-          <strong>Total = 584+258+77+78+14+81 = 1,092</strong>, across <strong>40 projects</strong>, matching the unit input exactly.</p>
+          <strong>Total = 585+259+77+78+14+81 = 1,094</strong>, across <strong>40 projects</strong>, matching the unit input exactly.</p>
           <hr>
           <p><a href="group-26-device-capability-layer.html">⬅ Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a>  •  <a href="index.html">Index</a>  •  <a href="99-coverage-audit.html">Coverage audit ➡</a></p>
           

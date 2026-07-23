@@ -124,10 +124,10 @@
           is still linked (only one possible target). Names that are neither visible nor unique are
           dropped as unresolvable without full semantic binding.</p>
           <ul>
-          <li>Edges resolved by namespace visibility: <strong>8868</strong> (~96%)</li>
+          <li>Edges resolved by namespace visibility: <strong>8871</strong> (~96%)</li>
           <li>Edges resolved by globally-unique name (fallback): <strong>331</strong></li>
           <li>References dropped as ambiguous (matched &gt;1 type, none visible): <strong>27</strong></li>
-          <li>Sensitivity: <strong>362 / 2587</strong> type levels would change if the globally-unique fallback
+          <li>Sensitivity: <strong>362 / 2588</strong> type levels would change if the globally-unique fallback
           were excluded; the fallback is retained because a globally-unique first-party name is
           unambiguous, so excluding it would under-count real dependencies.</li>
           </ul>
@@ -145,15 +145,15 @@
           </thead>
           <tbody><tr>
           <td>0</td>
-          <td>518</td>
+          <td>517</td>
           </tr>
           <tr>
           <td>1</td>
-          <td>312</td>
+          <td>313</td>
           </tr>
           <tr>
           <td>2</td>
-          <td>205</td>
+          <td>204</td>
           </tr>
           <tr>
           <td>3</td>
@@ -173,11 +173,11 @@
           </tr>
           <tr>
           <td>7</td>
-          <td>151</td>
+          <td>152</td>
           </tr>
           <tr>
           <td>8</td>
-          <td>248</td>
+          <td>249</td>
           </tr>
           <tr>
           <td>9</td>
@@ -481,13 +481,6 @@
           <tr>
           <td>0</td>
           <td><code>GetContentSimilarityQuery</code></td>
-          <td>MMCA.ADC.Conference.Application</td>
-          <td>0</td>
-          <td>(none)</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>GetNowNextQuery</code></td>
           <td>MMCA.ADC.Conference.Application</td>
           <td>0</td>
           <td>(none)</td>
@@ -4738,15 +4731,15 @@
           <td>1</td>
           <td><code>DateTimeFilterStrategy</code></td>
           <td>MMCA.Common.Application</td>
-          <td>1</td>
-          <td>IFilterStrategy</td>
+          <td>2</td>
+          <td>FilterValueParser, IFilterStrategy</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>DecimalFilterStrategy</code></td>
           <td>MMCA.Common.Application</td>
-          <td>1</td>
-          <td>IFilterStrategy</td>
+          <td>2</td>
+          <td>FilterValueParser, IFilterStrategy</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4782,6 +4775,13 @@
           <td>MMCA.Common.Application</td>
           <td>1</td>
           <td>LoginRequest</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>LongFilterStrategy</code></td>
+          <td>MMCA.Common.Application</td>
+          <td>2</td>
+          <td>FilterValueParser, IFilterStrategy</td>
           </tr>
           <tr>
           <td>1</td>
@@ -6766,13 +6766,6 @@
           </tr>
           <tr>
           <td>2</td>
-          <td><code>IIntegrationEventPublisher</code></td>
-          <td>MMCA.Common.Application</td>
-          <td>1</td>
-          <td>IIntegrationEvent</td>
-          </tr>
-          <tr>
-          <td>2</td>
           <td><code>IMessageBus</code></td>
           <td>MMCA.Common.Application</td>
           <td>1</td>
@@ -7088,13 +7081,6 @@
           </tr>
           <tr>
           <td>2</td>
-          <td><code>DistributedCacheServiceTests</code></td>
-          <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>1</td>
-          <td>DistributedCacheService</td>
-          </tr>
-          <tr>
-          <td>2</td>
           <td><code>EFQueryableExecutorTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>2</td>
@@ -7197,6 +7183,13 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>2</td>
           <td>DataSource, UseDataSourceAttribute</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>WarningCountingLogger</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>DistributedCacheService</td>
           </tr>
           <tr>
           <td>2</td>
@@ -7592,10 +7585,10 @@
           </tr>
           <tr>
           <td>3</td>
-          <td><code>RecordingIntegrationEventPublisher</code></td>
+          <td><code>RecordingEventBus</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>2</td>
-          <td>IIntegrationEvent, IIntegrationEventPublisher</td>
+          <td>IEventBus, IIntegrationEvent</td>
           </tr>
           <tr>
           <td>3</td>
@@ -8203,8 +8196,8 @@
           <td>3</td>
           <td><code>QueryFilterService</code></td>
           <td>MMCA.Common.Application</td>
-          <td>9</td>
-          <td>BoolFilterStrategy, DateTimeFilterStrategy, DecimalFilterStrategy, Error, GuidFilterStrategy, IFilterStrategy, IntFilterStrategy, Result, StringFilterStrategy</td>
+          <td>10</td>
+          <td>BoolFilterStrategy, DateTimeFilterStrategy, DecimalFilterStrategy, Error, GuidFilterStrategy, IFilterStrategy, IntFilterStrategy, LongFilterStrategy, Result, StringFilterStrategy</td>
           </tr>
           <tr>
           <td>3</td>
@@ -8516,13 +8509,6 @@
           </tr>
           <tr>
           <td>3</td>
-          <td><code>IntegrationEventPublisher</code></td>
-          <td>MMCA.Common.Infrastructure</td>
-          <td>3</td>
-          <td>IEventBus, IIntegrationEvent, IIntegrationEventPublisher</td>
-          </tr>
-          <tr>
-          <td>3</td>
           <td><code>SignalRLiveChannelPublisher</code></td>
           <td>MMCA.Common.Infrastructure</td>
           <td>2</td>
@@ -8541,6 +8527,13 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>1</td>
           <td>TestableDbSeeder</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>DistributedCacheServiceTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>2</td>
+          <td>DistributedCacheService, WarningCountingLogger</td>
           </tr>
           <tr>
           <td>3</td>
@@ -9030,7 +9023,7 @@
           <td><code>SpeakerDeletedHandler</code></td>
           <td>MMCA.ADC.Conference.Application</td>
           <td>5</td>
-          <td>DomainEntityState, IDomainEventHandler&lt;in TDomainEvent&gt;, IIntegrationEventPublisher, SpeakerChanged, SpeakerUnlinkedFromUser</td>
+          <td>DomainEntityState, IDomainEventHandler&lt;in TDomainEvent&gt;, IEventBus, SpeakerChanged, SpeakerUnlinkedFromUser</td>
           </tr>
           <tr>
           <td>4</td>
@@ -9951,6 +9944,13 @@
           </tr>
           <tr>
           <td>4</td>
+          <td><code>LongFilterStrategyTests</code></td>
+          <td>MMCA.Common.Application.Tests</td>
+          <td>2</td>
+          <td>Item, QueryFilterService</td>
+          </tr>
+          <tr>
+          <td>4</td>
           <td><code>Mocks</code></td>
           <td>MMCA.Common.Application.Tests</td>
           <td>8</td>
@@ -10340,13 +10340,6 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>4</td>
           <td>IInboxStore, IIntegrationEventHandler&lt;in TIntegrationEvent&gt;, IntegrationEventConsumer&lt;TEvent&gt;, TestIntegrationEvent</td>
-          </tr>
-          <tr>
-          <td>4</td>
-          <td><code>IntegrationEventPublisherTests</code></td>
-          <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>3</td>
-          <td>IEventBus, IIntegrationEvent, IntegrationEventPublisher</td>
           </tr>
           <tr>
           <td>4</td>
@@ -10990,7 +10983,7 @@
           <td><code>Mocks</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>2</td>
-          <td>IIntegrationEventPublisher, SpeakerDeletedHandler</td>
+          <td>IEventBus, SpeakerDeletedHandler</td>
           </tr>
           <tr>
           <td>5</td>
@@ -12355,7 +12348,7 @@
           <td><code>SpeakerDeletedHandlerTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>7</td>
-          <td>DomainEntityState, IIntegrationEvent, IIntegrationEventPublisher, Mocks, SpeakerChanged, SpeakerDeletedHandler, SpeakerUnlinkedFromUser</td>
+          <td>DomainEntityState, IEventBus, IIntegrationEvent, Mocks, SpeakerChanged, SpeakerDeletedHandler, SpeakerUnlinkedFromUser</td>
           </tr>
           <tr>
           <td>6</td>
@@ -13273,6 +13266,13 @@
           <td>MMCA.ADC.Conference.Application</td>
           <td>6</td>
           <td>Event, EventDTO, EventQuestionAnswerDTOMapper, EventSpeakerDTOMapper, IEntityDTOMapper&lt;TEntity, TEntityDTO, TIdentifierType&gt;, RoomDTOMapper</td>
+          </tr>
+          <tr>
+          <td>7</td>
+          <td><code>GetNowNextQuery</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>2</td>
+          <td>IQueryCacheable, Session</td>
           </tr>
           <tr>
           <td>7</td>
@@ -14665,7 +14665,7 @@
           <td><code>UserRegisteredHandler</code></td>
           <td>MMCA.ADC.Conference.Application</td>
           <td>8</td>
-          <td>Email, IIntegrationEventHandler&lt;in TIntegrationEvent&gt;, IIntegrationEventPublisher, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Speaker, SpeakerLinkedToUser, UserRegistered</td>
+          <td>Email, IEventBus, IIntegrationEventHandler&lt;in TIntegrationEvent&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Speaker, SpeakerLinkedToUser, UserRegistered</td>
           </tr>
           <tr>
           <td>8</td>
@@ -14750,6 +14750,13 @@
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>5</td>
           <td>Event, EventDTOMapper, EventQuestionAnswerDTOMapper, EventSpeakerDTOMapper, RoomDTOMapper</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>GetNowNextQueryCacheTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>3</td>
+          <td>GetNowNextQuery, IQueryCacheable, Session</td>
           </tr>
           <tr>
           <td>8</td>
@@ -16058,7 +16065,7 @@
           <td><code>Fakes</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>4</td>
-          <td>InMemoryRepository&lt;TEntity, TIdentifierType&gt;, RecordingIntegrationEventPublisher, RecordingUnitOfWork, Speaker</td>
+          <td>InMemoryRepository&lt;TEntity, TIdentifierType&gt;, RecordingEventBus, RecordingUnitOfWork, Speaker</td>
           </tr>
           <tr>
           <td>9</td>
@@ -16505,8 +16512,8 @@
           <td>9</td>
           <td><code>DependencyInjection</code></td>
           <td>MMCA.Common.Infrastructure</td>
-          <td>103</td>
-          <td>ApplicationDbContext, ApplicationDbContextEFFactory, AuditSaveChangesInterceptor, AzureBlobFileStorageService, AzureNotificationHubDeviceRegistrar, AzureNotificationHubNativePushSender, BrokerEventBus, BrokerMessageBus, ClaimBasedUserIdProvider, ClassReference, ConnectionStringSettings, CorrelationContext, CosmosDbContext, CurrentUserService, DataSourceEntrySettings, DataSourceResolver, DataSourceService, DataSourcesSettings, DbContextFactory, DefaultCosmosDbContextFactory …(+83)</td>
+          <td>101</td>
+          <td>ApplicationDbContext, ApplicationDbContextEFFactory, AuditSaveChangesInterceptor, AzureBlobFileStorageService, AzureNotificationHubDeviceRegistrar, AzureNotificationHubNativePushSender, BrokerEventBus, BrokerMessageBus, ClaimBasedUserIdProvider, ClassReference, ConnectionStringSettings, CorrelationContext, CosmosDbContext, CurrentUserService, DataSourceEntrySettings, DataSourceResolver, DataSourceService, DataSourcesSettings, DbContextFactory, DefaultCosmosDbContextFactory …(+81)</td>
           </tr>
           <tr>
           <td>9</td>
@@ -16568,8 +16575,8 @@
           <td>9</td>
           <td><code>DependencyInjectionTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>22</td>
-          <td>CorrelationContext, CurrentUserService, DistributedCacheService, EntityConfigurationOptions, ICacheService, ICorrelationContext, ICurrentUserService, IEmailSender, IEventBus, IIntegrationEventPublisher, ILiveChannelPublisher, InProcessEventBus, IntegrationEventPublisher, IPasswordHasher, IPushNotificationSender, ITokenService, MemoryCacheService, NullLiveChannelPublisher, NullPushNotificationSender, PasswordHasher …(+2)</td>
+          <td>20</td>
+          <td>CorrelationContext, CurrentUserService, DistributedCacheService, EntityConfigurationOptions, ICacheService, ICorrelationContext, ICurrentUserService, IEmailSender, IEventBus, ILiveChannelPublisher, InProcessEventBus, IPasswordHasher, IPushNotificationSender, ITokenService, MemoryCacheService, NullLiveChannelPublisher, NullPushNotificationSender, PasswordHasher, SmtpEmailSender, TokenService</td>
           </tr>
           <tr>
           <td>9</td>
@@ -17234,7 +17241,7 @@
           <td><code>UserRegisteredHandlerTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>10</td>
-          <td>Fakes, IIntegrationEventPublisher, InMemoryRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, RecordingIntegrationEventPublisher, RecordingUnitOfWork, Speaker, SpeakerLinkedToUser, UserRegistered, UserRegisteredHandler</td>
+          <td>Fakes, IEventBus, InMemoryRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, RecordingEventBus, RecordingUnitOfWork, Speaker, SpeakerLinkedToUser, UserRegistered, UserRegisteredHandler</td>
           </tr>
           <tr>
           <td>10</td>
