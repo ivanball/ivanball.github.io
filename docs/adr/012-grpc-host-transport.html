@@ -156,7 +156,7 @@
           <em>(Since 2026-07-09, ADC&#39;s Notification does serve one inbound gRPC edge, from a dedicated Http2-only
           endpoint alongside its Http1AndHttp2 default endpoint: see the mixed-endpoint update below.)</em></p>
           <h2 id="update-2026-07-09-adc-notification-adds-a-mixed-endpoint-profile-per-endpoint-protocols">Update (2026-07-09): ADC Notification adds a mixed-endpoint profile (per-endpoint protocols)</h2>
-          <p>The live-channel push seam (ADR-039) gave ADC&#39;s Notification service an <strong>inbound cleartext gRPC
+          <p>The live-channel push pipeline (ADR-039) gave ADC&#39;s Notification service an <strong>inbound cleartext gRPC
           server</strong> (<code>LiveChannelPushService.PushToChannel</code>, called best-effort by Engagement command handlers)
           while it still hosts the SignalR hub whose WebSocket transport needs the HTTP/1.1 Upgrade handshake.
           That combination breaks the original per-host rule (&quot;a WebSocket host cannot be a cleartext gRPC
@@ -286,7 +286,7 @@
           <h2 id="related">Related</h2>
           <ul>
           <li>ADR-004 (cross-service token validation via JWKS / OIDC discovery), ADR-007 (gRPC cross-service
-          calls), ADR-008 (monolith → services + gateway topology), ADR-039 (live-channel push: the seam
+          calls), ADR-008 (monolith → services + gateway topology), ADR-039 (live-channel push: the pipeline
           that gave Notification its inbound gRPC edge and motivated the mixed-endpoint profile).</li>
           </ul>
           

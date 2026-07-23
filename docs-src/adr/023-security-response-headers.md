@@ -26,7 +26,7 @@ with `AddCommonSecurityHeaders(configuration?, configure?)` and inserted early w
   (`max-age=31536000; includeSubDomains`, emitted only outside Development and only when `EnableHsts`).
   All values are overridable via the `"SecurityHeaders"` configuration section or the `configure`
   delegate (`SecurityHeadersSettings`).
-- **The CSP is resolved through an `ICspPolicyProvider` seam**, not stamped as a constant. The provider
+- **The CSP is resolved through an `ICspPolicyProvider` extension point**, not stamped as a constant. The provider
   returns a `CspPolicy(string Value, bool Enforce)`: when `Enforce` is true the middleware writes
   `Content-Security-Policy`, otherwise `Content-Security-Policy-Report-Only`. Returning `null` emits no
   CSP.
@@ -55,7 +55,7 @@ with `AddCommonSecurityHeaders(configuration?, configure?)` and inserted early w
 ## Rationale
 - **One hardened default, defined once.** Centralizing the header set removes per-host drift and makes a
   new edge host secure by default rather than by remembering to copy headers.
-- **A seam, because one CSP cannot fit all hosts.** The `ICspPolicyProvider` indirection is the minimum
+- **An extension point, because one CSP cannot fit all hosts.** The `ICspPolicyProvider` indirection is the minimum
   needed to let a Blazor host inject a runtime, origin-pinned policy while API/Gateway hosts keep the
   strict static one, without the framework guessing either app's origins.
 - **Fail-safe over fail-secure for the default.** Omitting `script-src`/`style-src` from the baseline

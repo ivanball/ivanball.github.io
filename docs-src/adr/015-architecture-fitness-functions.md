@@ -39,7 +39,7 @@ invariant is written once and inherited by every consumer.
 - **Invariant over discipline.** Turning "do not do X" into a red build is the only enforcement that
   scales. It is the same lever used by the layer rules, the resilience gate (ADR-009), the
   event-version gate (ADR-010), and the MassTransit pin (ADR-016).
-- **Write once, run everywhere.** The `IArchitectureMap` seam keeps the four repos' rules in lockstep
+- **Write once, run everywhere.** The `IArchitectureMap` extension point keeps the four repos' rules in lockstep
   with zero duplication; a rule change lands for all consumers at once.
 - **Two layers, two speeds.** The MSBuild guard fails at compile time on the common case; the
   NetArchTest suite catches the subtler assembly-level violations a project-reference check cannot see.

@@ -151,7 +151,7 @@
           Android App Links (<code>assetlinks.json</code>) and iOS Universal Links (<code>apple-app-site-association</code>),
           the OS opens those URLs in the installed app instead of the browser.</li>
           <li><strong>Notification taps and app actions</strong>, which are app-internal and covered by the
-          <code>IDeepLinkDispatcher</code> seam (ADR-042).</li>
+          <code>IDeepLinkDispatcher</code> boundary (ADR-042).</li>
           <li><strong>External OAuth on a native head.</strong> Google and GitHub reject OAuth inside embedded WebViews, so
           the MAUI head must run the provider flow in the system browser (<code>WebAuthenticator</code>) and needs
           the API to redirect its completion BACK to the app. Today <code>OAuthControllerBase.CompleteAsync</code>

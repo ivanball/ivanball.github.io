@@ -2,7 +2,7 @@
 
 ## Status
 Accepted (2026-07-11). Records the BR-116 amendment (ADC): avatar photos are IN scope, powered
-by two new framework seams. The framework legs are implemented; each consumer provisions its
+by two new framework extension points. The framework legs are implemented; each consumer provisions its
 own storage account and wires the upload endpoints.
 
 ## Context
