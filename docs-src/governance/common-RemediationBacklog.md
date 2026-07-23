@@ -1,6 +1,6 @@
 # MMCA.Common — Architecture Remediation Backlog
 
-Derived from `ArchitectureScorecard.md` (canonical two-axis scoring: **Maturity 96.9% / Implementation 84.6%**, framework v1.121.0; the 2026-07-21 twenty-first-wave two-pass re-score at HEAD `4a4fc05`, working tree clean, moved exactly one score: **§12 Performance & Scalability Maturity 3→4**, because the `Performance gate (BenchmarkDotNet Short + baseline verify)` context is now present in live `required_status_checks` on `main` (8 required contexts), refuting the twentieth wave's sole basis for holding it at 3. Seven first-pass lifts (§4, §9, §11, §19, §20, §26, §29) were refuted on adversarial re-verification and held at prior, and the remaining 26 categories were re-confirmed. **Categories still below Maturity 4: #9, #17, #30 (M3) and #31 (M2)**, so 30 of 34 now sit at Maturity 4. The prior twentieth-wave entry, retained for provenance: the 2026-07-17 re-score at HEAD `76d70cf` moved four scores: §25 Navigation Maturity 3→4 (the `NavigationContractTests` drift gate in the CI-gated `.slnx` unit tier), §33 Developer Experience Maturity 3→4 + Implementation 8→9 (the `consumer-source-build` canary promoted to a required merge gate 2026-07-16), §22 Responsive Implementation 8→9 (webkit promoted to a required merge gate 2026-07-16; all three engines now block), and §13 Observability Implementation 9→8 (band recalibration: alerting/dashboards/runbooks are deployer-owned). It refuted three first-pass lifts (§9 and §17 maturity, §31 both axes, all held at prior), declined the §12 maturity candidacy on live branch-protection evidence (the shipped perf gate's context is not in `required_status_checks`), and re-confirmed all 28 other categories.)
+Derived from `ArchitectureScorecard.md` (canonical two-axis scoring: **Maturity 96.9% / Implementation 84.6%**, framework v1.123.0; the 2026-07-23 twenty-second-wave two-pass re-score at HEAD `c911480`, working tree clean, moved **no scores**: all 34 categories re-confirmed at their twenty-first-wave values. Five first-pass proposals were refuted on adversarial re-verification and held at prior: three lifts (§9 Maturity 3→4, §10 Implementation 8→9, §30 Maturity 3→4) and two downgrades (§23 and §24, each Implementation 8→7). **Categories still below Maturity 4: #9, #17, #30 (M3) and #31 (M2)**, so 30 of 34 sit at Maturity 4. The prior twenty-first-wave entry, retained for provenance: the 2026-07-21 re-score at HEAD `4a4fc05` moved exactly one score, **§12 Performance & Scalability Maturity 3→4**, because the `Performance gate (BenchmarkDotNet Short + baseline verify)` context is present in live `required_status_checks` on `main` (8 required contexts), refuting the twentieth wave's sole basis for holding it at 3; seven first-pass lifts (§4, §9, §11, §19, §20, §26, §29) were refuted and the remaining 26 categories re-confirmed.)
 The wave-by-wave priority ranking below is the **historical single-axis review** (index 80%, 218/272, 2026-06-08/09); it is retained for provenance and is **superseded by the in-repo two-axis scorecard**, which is the live source of scores.
 Tasks are every applicable category scoring **< 4**, ranked by **priority = (4 − score) × weight**.
 Higher priority = bigger weighted gap = more index points per unit of effort.
@@ -733,6 +733,40 @@ package: `Microsoft.Extensions.TimeProvider.Testing` 10.7.0.
   cited by historical entries moved to `Website/docs-src/` in the 2026-07-20 centralization.
 - ✅ **Counts refresh.** The source-generated, CI-gated `FACTS.md` reports **15 packages / 91 fitness
   methods across 30 bases (Common runs 55) / coverage floor 68.3%**.
+
+---
+
+## Progress - twenty-second wave (evidence re-score at v1.123.0, 2026-07-23)
+
+> A full 34-category, two-pass evidence re-score (per-category scorer plus adversarial verifier) at framework
+> **v1.123.0** (HEAD `c911480`, working tree **clean**). **No score moves.** Canonical scoring holds at
+> **Maturity 96.9% (314/324) / Implementation 84.6% (685/810)** per
+> [`ArchitectureScorecard.md`](common-ArchitectureScorecard.md). The cycle's value is entirely in what it
+> refused to move: five first-pass proposals (three lifts, two downgrades) were refuted against source.
+
+- ◐ **Three adversarially-refuted lift proposals, no score move.** §9 API & Contracts (M3→4 rejected
+  again: `OpenApiContractTestsBase` is subclassed only in consumer hosts, never in Common's own tests, and
+  `OpenApiEndpointExtensions.cs:13` records the delegation as deliberate, so no in-repo CI gate enforces
+  the contract); §10 Cross-Cutting Concerns (I8→9 rejected: the three documented hold-reasons are still in
+  source: the distributed cache path is a no-op without a real `IConnectionMultiplexer`
+  (`DependencyInjection.cs:158`), the idempotency semaphore is in-memory rather than
+  cross-instance-exclusive, and resilience config is partly literal); §30 Compliance (M3→4 rejected: the
+  only automatic gate, `PiiErasureContractFitnessTests`, proves the erasure mechanism, while the
+  structural `[Pii]` scan stays vacuous in-repo and the governing process (inventory, DSAR, consent,
+  residency, retention) is consumer-resident).
+- ◐ **Two adversarially-refuted downgrade proposals, no score move.** §23 Front-End Performance and §24
+  Forms, Validation & UX Safety (each I8→7 rejected on a fresh re-read of every cited file): no
+  regression exists. §23's web-vitals budget gate is in fact stronger than when its 8 was set (all three
+  browser engines now required, `ci.yml:107`), and §24's auth-form surface (Register/Login `EditForm` +
+  DataAnnotations, `PasswordComplexityAttribute`, `UnsavedChangesGuard.IsDirtyAccessor`, the CI-gated
+  bUnit/model tests) is intact.
+- 📎 **Evidence enrichment, no band move.** The v1.122.0-v1.123.0 capability train (typed filter DSL
+  operators, the `EntityQueryPipeline` page-size clamp, cache-observability warnings, the
+  `IIntegrationEventPublisher` removal with callers moved to `IEventBus`) lands in categories already
+  scored 8-9.
+- ✅ **Open set and rankings unchanged.** #9, #17, #30 (M3, priority 2 each) and #31 (M2, computed
+  priority 4, documented accepted cap); the *Deliberate / accepted* section stands as written. `FACTS.md`
+  reports **15 packages / 91 fitness methods across 30 bases (Common runs 55)**.
 
 ---
 
