@@ -970,14 +970,15 @@
           <li><input disabled="" type="checkbox"> Add <strong>NetArchTest security invariants</strong> (no stray <code>[AllowAnonymous]</code>; no <code>AllowAnyOrigin</code> + <code>AllowCredentials</code>).</li>
           <li><input disabled="" type="checkbox"> Commit a <strong>SECURITY.md</strong> with an OWASP Top-10 review note.</li>
           </ul>
-          <h3 id="4--domain-driven-design--3--4-no-confirmed-red-flags">[ ] #4 · Domain-Driven Design — 3 → 4 <em>(no confirmed red flags)</em></h3>
+          <h3 id="x-4--domain-driven-design-3-to-4-now-maturity-4-no-confirmed-red-flags">[x] #4 · Domain-Driven Design (3 to 4; now Maturity 4, no confirmed red flags)</h3>
           <ul>
-          <li><em>Gap:</em> no DDD-specific fitness functions; minor factory inconsistencies (<code>UserNotification.Create</code> returns a bare entity; <code>Money.operator+</code> throws on currency mismatch).</li>
+          <li><em>Gap (resolved):</em> no DDD-specific fitness functions; minor factory inconsistencies (<code>UserNotification.Create</code> returned a bare entity; <code>Money.operator+</code> throws on currency mismatch).</li>
           </ul>
           <p><strong>Fix</strong></p>
           <ul>
-          <li><input disabled="" type="checkbox"> Add NetArchTest rules: aggregates expose <strong>private ctors + factory methods</strong>; <strong>no cross-aggregate navigation properties</strong>.</li>
-          <li><input disabled="" type="checkbox"> Normalize the factory convention to <strong>always return <code>Result&lt;T&gt;</code></strong>.</li>
+          <li><input checked="" disabled="" type="checkbox"> NetArchTest rules, aggregates expose <strong>private ctors + factory methods</strong>: <code>AggregateConventionTests</code> / <code>EntityConventionTests</code> assert <code>DomainExposesAggregateRoots</code>, <code>AggregateRootsHaveResultFactory</code>, and <code>DomainAggregateRootsHaveNoPublicConstructors</code> (<code>Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Entities.cs</code>).</li>
+          <li><input checked="" disabled="" type="checkbox"> Normalize the factory convention to <strong>always return <code>Result&lt;T&gt;</code></strong>: every <code>Create</code> factory across Domain + Shared already returns <code>Result&lt;T&gt;</code> (8 types: <code>Address</code>, <code>DateRange</code>, <code>DateTimeRange</code>, <code>Email</code>, <code>Money</code>, <code>PhoneNumber</code>, <code>PushNotification</code>, <code>UserNotification</code>). Locked in by the new <code>DomainFactoriesReturnResult</code> fitness function (generalizes the aggregate-only check to value objects, wired into both <code>AggregateConventionTestsBase</code> and <code>EntityConventionTestsBase</code>), so a future bare-value-object/entity factory fails the build.</li>
+          <li><del><em>no cross-aggregate navigation properties</em></del> is <strong>deliberately not enforced</strong> (see <em>Deliberate / accepted</em> below). Cross-aggregate object navigation is an accepted design feature: aggregate roots reference other roots via <code>[Navigation]</code> FK references loaded by the navigation populators (ADR-002), for example <code>Session.Event</code> / <code>Session.Room</code> in ADC. A strict rule would contradict ADR-002 and break the consumers&#39; 15 aggregates. <code>Money.operator+</code> keeps throwing by design (a C# operator cannot return <code>Result&lt;T&gt;</code>), and <code>Money.Add(...)</code> is the documented <code>Result</code>-returning path (covered by <code>Addition_DifferentCurrencies_ThrowsInvalidOperationException</code> / <code>Add_DifferentCurrencies_ReturnsFailure</code>).</li>
           </ul>
           <h3 id="18--ui-architecture--component-design--3--4-no-confirmed-red-flags">[ ] #18 · UI Architecture &amp; Component Design — 3 → 4 <em>(no confirmed red flags)</em></h3>
           <ul>

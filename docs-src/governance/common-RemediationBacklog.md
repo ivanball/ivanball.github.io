@@ -877,12 +877,13 @@ Soft-delete is the only deletion model — no lawful erasure path. *(All three f
 - [ ] Add **NetArchTest security invariants** (no stray `[AllowAnonymous]`; no `AllowAnyOrigin` + `AllowCredentials`).
 - [ ] Commit a **SECURITY.md** with an OWASP Top-10 review note.
 
-### [ ] #4 · Domain-Driven Design — 3 → 4 *(no confirmed red flags)*
-- *Gap:* no DDD-specific fitness functions; minor factory inconsistencies (`UserNotification.Create` returns a bare entity; `Money.operator+` throws on currency mismatch).
+### [x] #4 · Domain-Driven Design (3 to 4; now Maturity 4, no confirmed red flags)
+- *Gap (resolved):* no DDD-specific fitness functions; minor factory inconsistencies (`UserNotification.Create` returned a bare entity; `Money.operator+` throws on currency mismatch).
 
 **Fix**
-- [ ] Add NetArchTest rules: aggregates expose **private ctors + factory methods**; **no cross-aggregate navigation properties**.
-- [ ] Normalize the factory convention to **always return `Result<T>`**.
+- [x] NetArchTest rules, aggregates expose **private ctors + factory methods**: `AggregateConventionTests` / `EntityConventionTests` assert `DomainExposesAggregateRoots`, `AggregateRootsHaveResultFactory`, and `DomainAggregateRootsHaveNoPublicConstructors` (`Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Entities.cs`).
+- [x] Normalize the factory convention to **always return `Result<T>`**: every `Create` factory across Domain + Shared already returns `Result<T>` (8 types: `Address`, `DateRange`, `DateTimeRange`, `Email`, `Money`, `PhoneNumber`, `PushNotification`, `UserNotification`). Locked in by the new `DomainFactoriesReturnResult` fitness function (generalizes the aggregate-only check to value objects, wired into both `AggregateConventionTestsBase` and `EntityConventionTestsBase`), so a future bare-value-object/entity factory fails the build.
+- ~~*no cross-aggregate navigation properties*~~ is **deliberately not enforced** (see *Deliberate / accepted* below). Cross-aggregate object navigation is an accepted design feature: aggregate roots reference other roots via `[Navigation]` FK references loaded by the navigation populators (ADR-002), for example `Session.Event` / `Session.Room` in ADC. A strict rule would contradict ADR-002 and break the consumers' 15 aggregates. `Money.operator+` keeps throwing by design (a C# operator cannot return `Result<T>`), and `Money.Add(...)` is the documented `Result`-returning path (covered by `Addition_DifferentCurrencies_ThrowsInvalidOperationException` / `Add_DifferentCurrencies_ReturnsFailure`).
 
 ### [ ] #18 · UI Architecture & Component Design — 3 → 4 *(no confirmed red flags)*
 - *Gap:* no bUnit/render tests; component conventions review-only.
