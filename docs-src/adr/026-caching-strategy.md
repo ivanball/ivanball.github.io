@@ -1,7 +1,7 @@
 # ADR-026: Two-Tier Caching: a Swappable `ICacheService` Substrate plus an HTTP Output-Cache Edge
 
 ## Status
-Accepted (2026-06-27, amended 2026-07-10).
+Accepted (2026-06-27, amended 2026-07-10, 2026-07-23).
 
 ## Context
 The framework needs caching in two distinct places. Inside the application pipeline, query results
@@ -34,7 +34,7 @@ Cache in two tiers, each with its own substrate.
   `MemoryDistributedCache`, i.e. Aspire registered Redis), and otherwise `MemoryCacheService`. The
   monolith with no distributed cache gets in-process caching for free; a host that wires Redis gets the
   distributed store with no application-code change. This is the same "monolith now, scale or extract
-  later" seam as `InProcessMessageBus` vs `BrokerMessageBus` (ADR-003/006/008).
+  later" extension point as `InProcessMessageBus` vs `BrokerMessageBus` (ADR-003/006/008).
 - **Prefix invalidation, implemented per store.** `IMemoryCache` has no key-enumeration API, so
   `MemoryCacheService` tracks live keys in a `ConcurrentDictionary` (kept in sync by a post-eviction
   callback) to support `RemoveByPrefixAsync`. `DistributedCacheService` serializes values as UTF-8 JSON
@@ -88,12 +88,21 @@ Cache in two tiers, each with its own substrate.
 - **Memory mode is per-replica.** In the in-process store each replica caches independently; a
   scaled-out deployment that did not wire Redis would see cross-replica staleness bounded only by the
   TTL. The framework's answer is to register a distributed cache once scaled out (both apps do).
-- **Distributed prefix invalidation is conditional.** `DistributedCacheService` can only scan-and-delete
-  by prefix when an `IConnectionMultiplexer` is in the container. The services register
-  `AddRedisDistributedCache` (which provides `IDistributedCache`), not `AddRedisClient` (which would
-  provide the multiplexer), so prefix-based invalidation against Redis is currently a no-op and staleness
-  is bounded by the 30s TTL rather than evicted on write. Single-key `RemoveAsync` is unaffected.
-  Registering the Redis client (or a multiplexer) would close this; until then the TTL is the backstop.
+- **Distributed prefix invalidation needs the multiplexer, and every service now registers it.**
+  `DistributedCacheService` can only scan-and-delete by prefix when an `IConnectionMultiplexer` is in the
+  container. All seven services now register `AddRedisClient("redis")` immediately alongside
+  `AddRedisDistributedCache("redis")`, gated by the same redis-connection-string conditional, precisely so
+  the multiplexer is present for SCAN-based prefix eviction (ADC Conference
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:112,117`, Notification
+  `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:99,104`, Engagement
+  `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:88,93`, Identity
+  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:109,114`; Store Catalog
+  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:72,77`, Sales
+  `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:76,81`, Identity
+  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:77,82`). So whenever Redis is
+  configured, prefix-based invalidation against Redis is live and cached entries are evicted on write; the
+  30s TTL is now the backstop only for the no-Redis case (memory mode), where prefix removal self-heals
+  within seconds instead. Single-key `RemoveAsync` is unaffected in either mode.
 - **Distributed mode pays serialization and a network hop.** Values cross the wire as JSON; large or
   hot objects cost more than the in-process path.
 - **Output caching is opt-in per service.** A read-heavy service that forgets to register a real
@@ -103,6 +112,6 @@ Cache in two tiers, each with its own substrate.
 ## Related
 ADR-014 (the Caching decorators and `IQueryCacheable` / `ICacheInvalidating` markers that consume this
 substrate), ADR-019 (output caching as the anonymous-traffic lever, and `LoginProtectionService` is
-another `ICacheService` consumer), ADR-006 / ADR-008 (the same monolith-to-services swap seam this
+another `ICacheService` consumer), ADR-006 / ADR-008 (the same monolith-to-services swap boundary this
 substrate follows), ADR-040 (amends this ADR's Tier 2: the adopters' public-read policies cache
 authenticated, bearer-carrying requests too, not only anonymous traffic).

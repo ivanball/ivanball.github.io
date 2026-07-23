@@ -1,7 +1,8 @@
 # ADR-034: Generic Entity Controllers with a Dynamic Query Contract
 
 ## Status
-Accepted (2026-06-30).
+Accepted (2026-06-30). Amended (2026-07-23): the filter strategy registry now also
+covers `long`/`long?` via `LongFilterStrategy`.
 
 ## Context
 Every module exposes many entities, and most of them need the same read and write
@@ -27,7 +28,7 @@ contract, supplied by two controller bases over a shared query pipeline.
    TIdentifierType>`
    (`Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:28`,
    `[ApiController]` / `[Route("[controller]")]` / `[ApiVersion("1.0")]` at
-   `EntityControllerBase.cs:25`) exposes four GET routes for any entity:
+   `EntityControllerBase.cs:25-27`) exposes four GET routes for any entity:
    `[HttpGet]` list (`EntityControllerBase.cs:73`), `[HttpGet("paged")]`
    (`EntityControllerBase.cs:112`), `[HttpGet("lookup")]` for id/name dropdown
    entries (`EntityControllerBase.cs:154`), and `[HttpGet("{id}")]`
@@ -56,13 +57,13 @@ contract, supplied by two controller bases over a shared query pipeline.
    which parses `filters[Property].operator` / `filters[Property].value` query keys
    (`Source/Presentation/MMCA.Common.API/ModelBinders/QueryFilterModelBinder.cs:24`).
    `QueryFilterService.ApplyFilters`
-   (`Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:71`)
+   (`Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:73`)
    resolves a `IFilterStrategy`
    (`Source/Core/MMCA.Common.Application/Services/Filtering/IFilterStrategy.cs:6`)
-   per property CLR type from a strategy registry (string, bool, int, DateTime,
-   decimal, Guid and their nullables, `QueryFilterService.cs:26`), each strategy
+   per property CLR type from a strategy registry (string, bool, int, long, DateTime,
+   decimal, Guid and their nullables, `QueryFilterService.cs:26-42`), each strategy
    declaring its `SupportedOperators` (`IFilterStrategy.cs:24`). Extra types register
-   via `QueryFilterService.RegisterStrategy` (`QueryFilterService.cs:55`).
+   via `QueryFilterService.RegisterStrategy` (`QueryFilterService.cs:57`).
 
 5. **Sort.** `sortColumn` / `sortDirection` (`EntityControllerBase.cs:119`)
    feed `QueryFieldService.ApplySorting` (`QueryFieldService.cs:120`), an
@@ -80,9 +81,9 @@ contract, supplied by two controller bases over a shared query pipeline.
 
 7. **A last-resort safety ceiling.** Independent of the API page-size clamp,
    `EntityQueryPipeline.MaxUnboundedResultLimit = 1000`
-   (`Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:22`)
+   (`Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:23`)
    caps any unpaginated query with `query.Take(MaxUnboundedResultLimit)`
-   (`EntityQueryPipeline.cs:100`, `:144`), so even a direct service caller that omits
+   (`EntityQueryPipeline.cs:104`, `:151`), so even a direct service caller that omits
    pagination cannot trigger an unbounded full-table load.
 
 8. **Two include paths.** `includeFKs` / `includeChildren`
@@ -100,9 +101,9 @@ contract, supplied by two controller bases over a shared query pipeline.
 - **Bounded dynamic querying, not open SQL.** Filtering is dynamic over the wire but
   not unbounded in the engine: each property is filtered only by a registered
   `IFilterStrategy` whose `SupportedOperators` are validated before the database is
-  touched (`QueryFilterService.ValidateFilters`, `QueryFilterService.cs:124`,
+  touched (`QueryFilterService.ValidateFilters`, `QueryFilterService.cs:126`,
   invoked at `Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:187`),
-  and `MaxUnboundedResultLimit` (`EntityQueryPipeline.cs:22`) plus the `MaxPageSize`
+  and `MaxUnboundedResultLimit` (`EntityQueryPipeline.cs:23`) plus the `MaxPageSize`
   clamp (`EntityControllerBase.cs:127`) bound the result size.
 - **Composes with manual DTO mapping (ADR-001).** Entities are projected to DTOs by
   an injected `IEntityDTOMapper` (`EntityQueryService.cs:35`, `:51`) via
@@ -122,10 +123,10 @@ contract, supplied by two controller bases over a shared query pipeline.
 - **Dynamic filtering is an injection and over-fetch surface.** Arbitrary
   client-supplied property/operator/value triples are an attack surface; it is
   bounded by validating properties and operators up front
-  (`QueryFilterService.ValidateFilters`, `QueryFilterService.cs:124`), routing each
+  (`QueryFilterService.ValidateFilters`, `QueryFilterService.cs:126`), routing each
   type through its registered `IFilterStrategy` rather than free-form expression
   evaluation, and capping rows with `MaxUnboundedResultLimit`
-  (`EntityQueryPipeline.cs:22`). Sparse fieldsets reject non-writable properties at
+  (`EntityQueryPipeline.cs:23`). Sparse fieldsets reject non-writable properties at
   projection (`QueryFieldService.cs:167`).
 - **Generic endpoints are less self-documenting than bespoke ones.** One generic
   shape per entity is consistent but conveys less domain intent than a named,

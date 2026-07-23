@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 50 ADRs</summary>
+        <summary>All 51 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -115,6 +115,7 @@
         <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
         <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
           </ol>
         </nav>
       </details>
@@ -176,9 +177,9 @@
           (<code>MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260621192808_InitialCreate.cs:21,179</code>),
           because that per-service project postdates the frozen combined-archive lineage that added the ADC
           migration. Of the services carrying the flag, only ADC Identity and ADC Conference register a broker
-          consumer today (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:274-275</code>,
-          <code>MMCA.ADC.Conference.Service/Program.cs:272</code>), and Store Sales consumes <code>ProductVariantChanged</code>
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:188</code>); ADC Engagement and Notification
+          consumer today (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:277-280</code>,
+          <code>MMCA.ADC.Conference.Service/Program.cs:276-277</code>), and Store Sales consumes <code>ProductVariantChanged</code>
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:192-193</code>); ADC Engagement and Notification
           carry <code>EnableInbox: true</code> and the table but register no consumer today, so their inbox is provisioned
           and unused (functionally harmless).</p>
           <h2 id="rationale">Rationale</h2>

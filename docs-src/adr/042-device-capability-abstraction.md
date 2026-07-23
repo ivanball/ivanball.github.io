@@ -1,7 +1,7 @@
 # ADR-042: Device Capability Abstraction (MAUI Blazor Hybrid)
 
 ## Status
-Accepted (2026-07-10, amended 2026-07-17).
+Accepted (2026-07-10, amended 2026-07-17 and 2026-07-23).
 
 ## Context
 The consumer apps ship the same Blazor component set through three heads: MAUI Blazor Hybrid
@@ -29,8 +29,14 @@ Add a per-capability contract layer to `MMCA.Common.UI` and a fifteenth package,
   `IGeolocationService`, `IExternalLinkService`, `ITextToSpeechService`, `IAccessibilityAnnouncer`,
   `ILocalNotificationService`, `IScreenshotService`, `IDevicePreferences`, `IBatteryStatusService`,
   `IBiometricAuthenticator`, `ISpeechToTextService`, `IExternalAuthBroker`, `IDeepLinkDispatcher`,
-  `IConnectivityStatusService`, `ILocalCacheStore`). Each capability has an independent fallback
-  story, and per-capability contracts let heads adopt incrementally.
+  `IConnectivityStatusService`, `ILocalCacheStore`). Four more have joined since, for 22 today, all
+  TryAdd-registered by `AddDeviceCapabilityDefaults`
+  (`Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:27-60`) and
+  overridden natively by `AddMauiDeviceCapabilities`
+  (`Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:28-58`): `IGeocodingService`
+  (Wave 3), `IMediaPickerService` (ADR-045), and the push pair `IPushRegistrationService` and
+  `IPushDeviceTokenProvider` (ADR-044). Each capability has an independent fallback story, and
+  per-capability contracts let heads adopt incrementally.
 
 - **Safe defaults for every contract, TryAdd-registered by `AddUIShared`.**
   `AddDeviceCapabilityDefaults` (`Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs`)
@@ -57,7 +63,7 @@ Add a per-capability contract layer to `MMCA.Common.UI` and a fifteenth package,
   deliberately absent from the ubuntu NetArchTest runtime map because its assemblies cannot load
   there, and the compile-time target is the enforcement.
 
-- **Deep links funnel through one seam.** Native navigation sources (notification taps, app
+- **Deep links funnel through one boundary.** Native navigation sources (notification taps, app
   actions, app links, QR scans) publish app-relative routes into the singleton
   `IDeepLinkDispatcher` (buffered, capacity one, for cold starts); the `DeepLinkListener`
   component in the shared layout drains the buffer after first render and navigates live requests.

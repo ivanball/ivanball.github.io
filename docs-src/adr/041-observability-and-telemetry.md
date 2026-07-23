@@ -1,7 +1,9 @@
 # ADR-041: Observability and Telemetry Strategy
 
 ## Status
-Accepted (2026-07-10).
+Accepted (2026-07-10). Amended (2026-07-23) to document the `Telemetry:DisableHttpClientMetrics` and
+`Telemetry:DisableRuntimeMetrics` cost knobs and to correct the meter/activity-source literal
+citations.
 
 ## Context
 The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
@@ -25,8 +27,9 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
 
 - **One shared telemetry baseline on every host.** `ConfigureOpenTelemetry`
   (`Source/Hosting/MMCA.Common.Aspire/Extensions.cs:121`) wires OpenTelemetry logging with formatted
-  messages and scopes (`Extensions.cs:125`), metrics from ASP.NET Core, `HttpClient`, and the runtime
-  (`Extensions.cs:132`), and tracing from ASP.NET Core and `HttpClient` (`Extensions.cs:164`). It is
+  messages and scopes (`Extensions.cs:125`), metrics from ASP.NET Core (unconditional,
+  `Extensions.cs:132`) plus `HttpClient` and the runtime (each gated behind a cost knob, see below),
+  and tracing from ASP.NET Core and `HttpClient` (`Extensions.cs:164`). It is
   called from `AddServiceDefaults` (`Extensions.cs:41`), so a host opts in once and every project in
   the Aspire model inherits the same pipeline.
 
@@ -59,6 +62,18 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
   scope (`LoggingCommandDecorator.cs:23`, `:25`), so logs, the correlation id, and the trace id line
   up for one request.
 
+- **Two high-volume metric families gated behind cost knobs, on by default.** ASP.NET Core metrics are
+  always wired (`Extensions.cs:132`), but the two heaviest AppMetrics contributors on a low-traffic
+  multi-service deployment are conditional. `HttpClient` connection and request metrics are added only
+  when `Telemetry:DisableHttpClientMetrics` is unset or false (`Extensions.cs:141`, adding
+  instrumentation at `Extensions.cs:143`), and .NET runtime metrics (`dotnet.gc.*`, `jit.*`,
+  `thread_pool.*`) only when `Telemetry:DisableRuntimeMetrics` is unset or false (`Extensions.cs:150`,
+  adding at `Extensions.cs:152`). Both keys are read by `IsInstrumentationDisabled`
+  (`Extensions.cs:350`), which drops the family only when the value parses as boolean `true`; absent,
+  blank, or unparseable falls back to keeping the instrumentation, so a typo cannot silently blind a
+  whole metric family. A deployed host sets one or both to `true` to cut ingestion cost; outbound
+  dependency latency is still captured as traces when `HttpClient` metrics are dropped.
+
 - **Head-based sampling as a cost knob, off by default.** `Telemetry:TracesSampleRatio`
   (`Extensions.cs:179`, parsed by `TryGetTraceSampleRatio` at `Extensions.cs:327`) is unset by
   default, so a host samples everything and behavior does not change. A deployed host sets a ratio in
@@ -89,13 +104,14 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
   the free auto-instrumentation, so the custom surface stays small.
 - **RED at the decorator, not in every handler.** The CQRS pipeline already wraps every handler in a
   logging decorator (ADR-014), so recording duration and outcome there makes metrics a byproduct of a
-  seam that exists, with no per-handler discipline (the invariant-over-discipline posture, ADR-015).
+  pipeline layer that exists, with no per-handler discipline (the invariant-over-discipline posture, ADR-015).
 - **A single correlation id with a W3C fallback.** Whether or not a client supplies
   `X-Correlation-ID`, one id stitches the logs of a request together and matches the trace, which is
   what an operator needs first when a distributed call goes wrong.
-- **Cost knobs default to safe.** Sampling and poll-span filtering are the levers a FinOps owner
-  reaches for (COST.md), and both fail toward keeping data: sampling is off unless configured, an
-  out-of-range ratio is ignored, and only idle poll spans are dropped.
+- **Cost knobs default to safe.** Sampling, poll-span filtering, and the `HttpClient`/runtime metric
+  toggles are the levers a FinOps owner reaches for (COST.md), and all fail toward keeping data:
+  sampling is off unless configured, an out-of-range ratio is ignored, only idle poll spans are
+  dropped, and a metric family drops only on an explicit boolean `true` (a typo keeps it on).
 - **`ParentBased` keeps distributed traces coherent.** An extracted-service deployment (ADR-008) needs
   a sampled-in request to stay sampled end to end; a per-hop random sampler would shred cross-service
   traces.
@@ -103,7 +119,8 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
 ## Trade-offs
 - **Custom instrumentation carries a maintenance cost.** The Aspire package has no reference to
   Application or Infrastructure by design, so the meter and activity-source names are duplicated as
-  literals (`Extensions.cs:171`, and the sync notes at `CqrsMetrics.cs:8` and
+  literals (the meter subscriptions at `Extensions.cs:155`-`Extensions.cs:158` and the trace source at
+  `Extensions.cs:163`, and the sync notes at `CqrsMetrics.cs:8` and
   `OutboxPollFilterProcessor.cs:17`). A rename on one side silently stops export until the literal is
   updated. That is the price of the decoupled package graph.
 - **Sampling trades trace completeness for cost.** A sampled-out trace is simply gone; deep debugging
