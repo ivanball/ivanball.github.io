@@ -500,9 +500,13 @@ package: `Microsoft.Extensions.TimeProvider.Testing` 10.7.0.
   clamp, §13 query-failure RED-metric parity) tighten existing mechanisms without moving a band.
 
 **Doc-hygiene follow-ups surfaced this wave (outside the scorecard/backlog, not score-movers):**
-- [ ] **`SECURITY.md:5` still says "thirteen packages"** (should be fourteen) and **`GETTING-STARTED.md`'s
+- [x] **`SECURITY.md:5` still says "thirteen packages"** (should be fourteen) and **`GETTING-STARTED.md`'s
   `Directory.Packages.props` sample lists 13 package entries plus a stale `1.77.0` example version.** Minor
   §34-adjacent staleness against the CI-gated `FACTS.md` (14 packages); refresh in a docs pass. *(§34, effort S.)*
+  **DONE (verified 2026-07-23):** `SECURITY.md` no longer hard-codes a package count, and the
+  `common-GETTING-STARTED.md` sample (now centralized in Website `docs-src/guides/`) marks the `1.77.0`
+  version as illustrative and defers to `FACTS.md`. Note the item's own "should be fourteen" target was
+  itself overtaken: the package count is now 15 per `FACTS.md`.
 
 ---
 
@@ -860,7 +864,7 @@ Soft-delete is the only deletion model — no lawful erasure path. *(All three f
 - [x] **Correct or remove** the misleading comment + log message. *(Done — `IntegrationEventConsumer.cs:59-60` + the doc-comments at `DependencyInjection.cs:401,408`.)*
 
 ### [ ] #32 · Dependency & Supply-Chain Management — 3 → 4 (weight 3, framework)
-- **(medium)** The safety-critical **MassTransit v8 pin** (`Directory.Packages.props:28-36`) is guarded only by a prose comment; a blanket "update all" once bumped it to v9.1.2, which crashes every broker-enabled host at startup — and CI never starts a broker, so the build stays green. *(Matches the standing MassTransit-v8 constraint.)*
+- **(medium)** The safety-critical **MassTransit v8 pin** (`Directory.Packages.props:54-56`) is guarded only by a prose comment; a blanket "update all" once bumped it to v9.1.2, which crashes every broker-enabled host at startup — and CI never starts a broker, so the build stays green. *(Matches the standing MassTransit-v8 constraint.)*
 - **(low)** No lock files or SBOM for 11 published packages; no documented breaking-change/SemVer policy or CHANGELOG.
 
 **Fix** *(the pin fix also closes #16's medium)*
@@ -949,7 +953,7 @@ Soft-delete is the only deletion model — no lawful erasure path. *(All three f
 - [x] ~~Maturity 3→4 via the build-gating `performance-smoke` job.~~ **RECALIBRATED 4→3 (2026-07-15):** the job is present and blocking on every push/PR with no `continue-on-error` (`.github/workflows/ci.yml:175`), but it is a runs-clean smoke (`--job Dry`; fails only if a benchmarked path throws or no longer compiles, `ci.yml:172,193`), not a latency-regression gate, so it does not automatically enforce the performance property the rubric maturity-4 bar requires. No work was lost; the recalibration rests entirely on the smoke-vs-regression distinction, and the shipped guards (smoke gate, page-size clamp, unbounded-query ceiling) keep Implementation at 8.
 - [x] **Add a latency-regression gate** (a committed baseline plus tolerance threshold) over the BenchmarkDotNet hot paths to restore §12 to Maturity 4. Blocker: none, pure CI + baseline work; effort M. **DONE (2026-07-16):** the `performance-smoke` CI job now runs the suite with `--job Short --exporters json` and a second step (`build/perfgate`, dependency-free like `build/facts`) fails the job against the committed `Tests/Performance/perf-baseline.json`: deterministic per-benchmark allocation ceilings (0 / 8000 / 4500 B/op) plus a machine-independent ratio floor (the compiled-expression cache must stay at least 1000x ahead of the recompile anti-pattern; measured ~120,000x), so a broken cache or an allocation storm reds the job instead of running clean. Verified green on real results and red on a seeded ceiling violation. ~~Maturity 3 → 4 candidacy recorded for the next re-score.~~ **Candidacy DECLINED (twentieth-wave re-score, 2026-07-17):** the job's context is absent from the live `required_status_checks` list (branch-protection API; `CONTRIBUTING.md:57-62` agrees), so a red perf gate does not block a PR merge and the rubric's merge-gate bar is unmet; §12 holds M3/I8.
 - [x] **Promote the perf-gate job context to branch protection's required checks**, the same promotion path firefox (2026-07-12), webkit (2026-07-16), and the consumer-source-build canary (2026-07-16) completed. **DONE, verified 2026-07-21:** the live `required_status_checks` list on `main` carries 8 contexts including `Performance gate (BenchmarkDotNet Short + baseline verify)`, matching the job name at `.github/workflows/ci.yml:179` exactly, and the job carries no `continue-on-error` (`ci.yml:196-204`), so a baseline violation now blocks the merge. **§12 restored to Maturity 4 on the twenty-first-wave re-score**; Implementation holds at 8 because load and stress timing against realistic volumes stays a consumer-app concern.
-- [ ] **(residual, doc half of the promotion)** Add the perf-gate context to `CONTRIBUTING.md`'s required-checks list. It still lists five gates and omits the perf gate, webkit, and the Helpdesk consumer-source canary from both the prose list (`CONTRIBUTING.md:57-64`) and the branch-protection reproduce snippet (`CONTRIBUTING.md:104-112,124`). Tracked as the shared doc-sync item under #34 below; it does not hold §12's score. Blocker: none, administrative; effort S.
+- [x] **(residual, doc half of the promotion)** Add the perf-gate context to `CONTRIBUTING.md`'s required-checks list. **DONE (closed by PR #100; verified 2026-07-23):** `CONTRIBUTING.md:57-66` now lists all **eight** required contexts including the perf gate, webkit, and the `Consumer source build (Helpdesk)` canary, and the branch-protection reproduce snippet (`CONTRIBUTING.md:113-123`) matches. The shared doc-sync item under #34 is satisfied for this piece; it never held §12's score.
 
 ### [x] #17 · DevOps & Deployment: **DONE (eighth wave, impl 7→8)**
 - [x] In-repo reference deployment sample added: `samples/deployment/{foundation,main}.bicep` (lint clean via `az bicep build`) + `DEPLOYMENT.md` (OIDC federated-credential + UAMI bootstrap + smoke-gate/auto-rollback). (Deeper CD-to-Azure lives in consumer repos.)
