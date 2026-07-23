@@ -356,12 +356,16 @@
   Without the bypass, a read-populate-after-evict race on the output cache could leave a freshly
   assigned speaker seeing "no sessions". This is the UI-contract expression of the freshness-vs-cache
   decision; the public session list stays cached, the personalized dashboard does not.
-- **Walkthrough**: three read methods, all `SpeakerIdentifierType`-scoped.
+- **Walkthrough**: four read methods, all `SpeakerIdentifierType`-scoped.
   - `GetSpeakerSessionsAsync(speakerId, ct)` (line 17): returns
     `Task<IReadOnlyList<SessionDTO>>`, the speaker's sessions, uncached.
   - `GetSessionBookmarkCountAsync(speakerId, sessionId, ct)` (line 21): returns `Task<int>`, the
     bookmark count for one of the speaker's sessions.
-  - `GetSessionFeedbackAsync(speakerId, sessionId, ct)` (line 26): returns
+  - `GetSessionBookmarkCountsAsync(speakerId, sessionIds, ct)` (lines 31-34): returns
+    `Task<IReadOnlyDictionary<SessionIdentifierType, int>>`, every requested session's active bookmark
+    count in a single request (the doc comment at lines 26-30 records it replaces the dashboard's
+    per-session fan-out; unbookmarked sessions map to 0).
+  - `GetSessionFeedbackAsync(speakerId, sessionId, ct)` (line 36): returns
     `Task<SessionFeedbackDTO?>`, nullable when no feedback exists.
 - **Why it's built this way**: keeping these on a dedicated interface (rather than folding them into
   [`ISessionUIService`](#isessionuiservice)) isolates the cache-bypass semantics to the personalized
@@ -720,20 +724,19 @@
   - `AddAsync(dto)` override (`RoomService.cs:16-32`): `SendRequestAsync<RoomDTO>` posting an anonymous
     object `{ RoomId = dto.Id, dto.EventId, dto.Name, dto.Sort, dto.Capacity, dto.Floor, dto.Location,
     dto.AccessibilityInfo }` to `Endpoint`; the trailing `!` asserts the base returns a non-null DTO.
-  - `DeleteAsync(roomId, eventId)` (`RoomService.cs:34-40`): builds `{Endpoint}/{roomId}?eventId={eventId}`
-    (parent id as a query param, mirroring the [`IRoomUIService`](#iroomuiservice) contract) and sends it
-    on an authenticated client from `CreateAuthenticatedClientAsync()`, returning
-    `response.IsSuccessStatusCode`. This delete path calls `httpClient.DeleteAsync` **directly**, it does
-    not go through the base `SendRequestAsync`, so it gets **no** Polly retry and **no**
-    `ServiceExceptionHelper` domain-error extraction; a failure surfaces only as a `false` return.
+  - `DeleteAsync(roomId, eventId)` (`RoomService.cs:35-43`): builds `{Endpoint}/{roomId}?eventId={eventId}`
+    (parent id as a query param, mirroring the [`IRoomUIService`](#iroomuiservice) contract) and routes it
+    through the base `SendRequestAsync<object>` with `expectContent: false`, exactly like the inherited
+    CRUD deletes: Polly retry, `ServiceExceptionHelper` domain-error extraction, and a thrown exception on
+    a non-success response, returning `true` on success.
 - **Why it's built this way**: the create-payload remap keeps the UI honest about the server's
   `AddRoomRequest` shape; the parent-scoped delete is required because rooms belong to an event and the
   endpoint binds the parent id (the silent-404 footgun the interface guards against).
 - **Where it's used**: registered as [`IRoomUIService`](#iroomuiservice); injected into the Room
   management pages under an Event (add form, delete button).
-- **Caveats / not-in-source**: unlike the inherited CRUD deletes, `DeleteAsync` here is a single
-  unretried request that reports success only as a `bool`, so a transient network blip returns `false`
-  rather than retrying or raising a domain error.
+- **Caveats / not-in-source**: `DeleteAsync` returns a constant `true` (matching the base CRUD
+  `DeleteAsync` contract): the `bool` carries no failure signal of its own, because failures, transient
+  ones after the retries are exhausted, surface as thrown exceptions handled by the calling page.
 
 ### SessionCategoryItemService
 
@@ -854,16 +857,17 @@
 
 ### SpeakerDashboardService
 
-> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Services` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/SpeakerDashboardService.cs:14` · Level 4 · class (sealed)
+> MMCA.ADC.Conference.UI · `MMCA.ADC.Conference.UI.Services` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Services/SpeakerDashboardService.cs:15` · Level 4 · class (sealed)
 
-- **What it is**: a bespoke **authenticated HTTP service** backing the speaker's own dashboard, three
+- **What it is**: a bespoke **authenticated HTTP service** backing the speaker's own dashboard, four
   speaker-scoped reads: the sessions this speaker presents, how many attendees bookmarked one of those
-  sessions, and the aggregated feedback for a session. It extends
+  sessions (single and batched variants), and the aggregated feedback for a session. It extends
   [`AuthenticatedServiceBase`](group-15-common-ui-framework.md#authenticatedservicebase) directly (not the
   CRUD base) and implements [`ISpeakerDashboardUIService`](#ispeakerdashboarduiservice).
 - **Depends on**: [`AuthenticatedServiceBase`](group-15-common-ui-framework.md#authenticatedservicebase)
-  (Level 1, Common UI) for `CreateAuthenticatedClientAsync()`;
-  [`ITokenStorageService`](group-15-common-ui-framework.md#itokenstorageservice) (Level 0);
+  (Level 1, Common UI) for `CreateAuthenticatedClientAsync()` and the shared Polly `RetryPolicy`;
+  [`ServiceExceptionHelper`](group-15-common-ui-framework.md#serviceexceptionhelper) for domain-error
+  extraction; [`ITokenStorageService`](group-15-common-ui-framework.md#itokenstorageservice) (Level 0);
   [`PagedCollectionResult<T>`](group-01-result-error-handling.md#pagedcollectionresultt) for the
   paged-envelope deserialization; [`SessionDTO`](group-17-conference-domain.md#sessiondto) and
   [`SessionFeedbackDTO`](group-17-conference-domain.md#sessionfeedbackdto) (nullable feedback return);
@@ -879,24 +883,34 @@
   `_={Guid:N}` cache-bust query param so the read is a guaranteed miss against the shared
   `conference:sessions` output cache; the cached public list can briefly lag a just-made speaker
   assignment (a read-populate-after-evict race, documented in the inline comment at
-  `SpeakerDashboardService.cs:24-30`), which would otherwise leave a freshly-assigned speaker seeing "no
+  `SpeakerDashboardService.cs:23-29`), which would otherwise leave a freshly-assigned speaker seeing "no
   sessions". The bookmark count is sourced server-side from the **Engagement** service across the
   gRPC/event boundary (ADR-007), but the UI sees only this single typed contract.
-- **Walkthrough** (`SpeakerDashboardService.cs:14`):
-  - `GetSpeakerSessionsAsync(speakerId)` (`SpeakerDashboardService.cs:18-45`): creates the authenticated
-    client, builds `sessions?includeFKs=false&includeChildren=true&_={cacheBust}` where `cacheBust =
-    Guid.NewGuid().ToString("N")` (lines 31-32); on non-success returns `[]`; otherwise deserializes a
+- **Walkthrough** (`SpeakerDashboardService.cs:15`):
+  - Every read dispatches through the private `SendGetRequestAsync<T>` (`SpeakerDashboardService.cs:86-105`),
+    the service's own copy of the `EntityServiceBase.SendRequestAsync` semantics (which live on the CRUD
+    base this class does not extend): the request runs through the Polly `RetryPolicy`, a non-success
+    response first goes through [`ServiceExceptionHelper`](group-15-common-ui-framework.md#serviceexceptionhelper)
+    domain-error extraction and then `EnsureSuccessStatusCode()`, and only a success deserializes. A
+    `treatNotFoundAsDefault` flag lets a caller map 404 to `default` instead of throwing.
+  - `GetSpeakerSessionsAsync(speakerId)` (`SpeakerDashboardService.cs:19-40`): builds
+    `sessions?includeFKs=false&includeChildren=true&_={cacheBust}` where `cacheBust =
+    Guid.NewGuid().ToString("N")` (lines 30-31); deserializes a
     [`PagedCollectionResult<SessionDTO>`](group-01-result-error-handling.md#pagedcollectionresultt)
     (matching the paged envelope, not a bare array) and returns only the sessions whose `SessionSpeakers`
-    contains this `speakerId` (lines 40-44). The inline note (lines 29-30) records that the base
+    contains this `speakerId` (lines 35-39). The inline note (lines 28-29) records that the base
     `/sessions` endpoint serves at most `MaxPageSize` (500) in one page, which covers a single
     conference's catalog.
-  - `GetSessionBookmarkCountAsync(speakerId, sessionId)` (`SpeakerDashboardService.cs:47-61`): GETs
-    `speakers/{speakerId}/sessions/{sessionId}/bookmarks/count`; returns `0` on non-success, else the
-    deserialized `int`.
-  - `GetSessionFeedbackAsync(speakerId, sessionId)` (`SpeakerDashboardService.cs:63-77`): GETs
-    `speakers/{speakerId}/sessions/{sessionId}/feedback`; returns `null` on non-success, else the
-    deserialized [`SessionFeedbackDTO`](group-17-conference-domain.md#sessionfeedbackdto).
+  - `GetSessionBookmarkCountAsync(speakerId, sessionId)` (`SpeakerDashboardService.cs:42-49`): GETs
+    `speakers/{speakerId}/sessions/{sessionId}/bookmarks/count` and returns the deserialized `int`.
+  - `GetSessionBookmarkCountsAsync(speakerId, sessionIds)` (`SpeakerDashboardService.cs:51-63`): the
+    batched variant; short-circuits an empty id list, GETs
+    `speakers/{speakerId}/sessions/bookmarks/counts?sessionIds=...` (one repeated query param per id)
+    and returns the deserialized per-session dictionary.
+  - `GetSessionFeedbackAsync(speakerId, sessionId)` (`SpeakerDashboardService.cs:65-73`): GETs
+    `speakers/{speakerId}/sessions/{sessionId}/feedback` with `treatNotFoundAsDefault: true`, so a 404
+    ("no feedback captured yet", a legitimate domain state) returns `null` while other failures throw;
+    else the deserialized [`SessionFeedbackDTO`](group-17-conference-domain.md#sessionfeedbackdto).
   - The leading `speakerId` scopes every call, and each URL is built with
     `string.Create(InvariantCulture, ...)` for culture-stable id formatting.
 - **Why it's built this way**: aggregate dashboard reads do not fit the entity-CRUD or lookup shapes, so
@@ -905,9 +919,10 @@
   output cache untouched.
 - **Where it's used**: registered as [`ISpeakerDashboardUIService`](#ispeakerdashboarduiservice);
   injected into the speaker dashboard / "My Sessions" page.
-- **Caveats / not-in-source**: these reads use the raw `httpClient.GetAsync`, not the base
-  `SendRequestAsync`, so they get **no** Polly retry and **no** `ServiceExceptionHelper` domain-error
-  extraction, a failed read degrades to an empty/zero/null result rather than surfacing an error. The
+- **Caveats / not-in-source**: the retry/domain-error dispatch is a private copy of the
+  `EntityServiceBase.SendRequestAsync` semantics rather than inherited behavior, because that dispatch
+  lives on the CRUD base and `AuthenticatedServiceBase` does not carry it; a failed read now throws
+  (after the retries are exhausted) and relies on the dashboard page's catch-and-snackbar handling. The
   500-per-page ceiling assumes a single conference's session count stays under `MaxPageSize`.
 
 ### SpeakerService
@@ -1616,7 +1631,7 @@
   [`SpeakerDTO`](group-17-conference-domain.md#speakerdto),
   [`SessionDTO`](group-17-conference-domain.md#sessiondto),
   [`SessionFeedbackDTO`](group-17-conference-domain.md#sessionfeedbackdto), [`EventInfo`](#eventinfo). Uses
-  the `Speaker`/`Session` aliases. Externals: `RendererInfo`, `Task.WhenAll`.
+  the `Speaker`/`Session` aliases. Externals: `RendererInfo`.
 - **Concept introduced, claim-driven identity scoping, prerender-safe loading, and lazy expand-on-demand.**
   Three ideas converge here:
   1. **Claim-driven scoping.** Instead of an id from the route, the page derives *who you are* from the auth
@@ -1638,8 +1653,11 @@
     sessions output cache** so a just-made assignment shows immediately) → narrow to the current/next event
     resolved by `ResolveCurrentEventAsync` (lines 144-161, via
     [`CurrentEventSelector`](group-17-conference-domain.md#currenteventselector)), falling back to all
-    sessions when none resolves → fetch bookmark counts **concurrently** with `Task.WhenAll` (lines 111-128),
-    each count a cross-service hop, so awaiting them one by one would stack the full latency chain.
+    sessions when none resolves → fetch all bookmark counts in **one batched request** via
+    `DashboardService.GetSessionBookmarkCountsAsync` (lines 108-123; the in-code comment records that each
+    count used to be its own cross-service hop, replaced by the batch endpoint's single grouped query); the
+    count load is wrapped in its own best-effort catch so a failed count read never breaks the dashboard
+    render.
   - Profile editing (lines 163-226): `StartEditingProfile` seeds `_edit*` fields; `SaveProfileAsync` rebuilds
     a [`SpeakerDTO`](group-17-conference-domain.md#speakerdto) preserving `RowVersion`, `Email`,
     `ProfilePicture`, `FirstName`/`LastName`, and `LinkedUserId` (lines 195-206), so the self-edit cannot
