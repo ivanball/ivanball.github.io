@@ -443,7 +443,7 @@
           <li><em>Remediation:</em> mirror the remaining server-only rules client-side where they do not need the DB. <em>Expected:</em> §24 impl 8→9.</li>
           </ul>
           </li>
-          <li><strong>Concurrency seam residual [C→A]</strong>: the ADR-035 client half shipped (11 property-edit requests implement <code>IConcurrencyAware</code>, DTOs expose <code>RowVersion</code>, handlers call <code>SetOriginalRowVersion</code>, stale-token 409 integration-tested), but child-level entities (e.g. <code>ProductVariant</code> under <code>Product</code>) need a child-typed <code>SetOriginalRowVersion</code> overload in MMCA.Common before their edits get the same protection.<ul>
+          <li><strong>Concurrency boundary residual [C→A]</strong>: the ADR-035 client half shipped (11 property-edit requests implement <code>IConcurrencyAware</code>, DTOs expose <code>RowVersion</code>, handlers call <code>SetOriginalRowVersion</code>, stale-token 409 integration-tested), but child-level entities (e.g. <code>ProductVariant</code> under <code>Product</code>) need a child-typed <code>SetOriginalRowVersion</code> overload in MMCA.Common before their edits get the same protection.<ul>
           <li><em>Remediation:</em> add the aggregate-child overload in Common and sweep (lands in Common, both consumers in one pass). <em>Expected:</em> §8 evidence completes across child edits.</li>
           </ul>
           </li>

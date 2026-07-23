@@ -6,7 +6,7 @@ between them had to cross a network boundary. Asynchronous, fire-and-forget flow
 via the outbox (see [`IMessageBus`](group-04-events-outbox.md#imessagebus) and ADR-003); but some
 calls need a *synchronous answer*, "how many bookmarks does this session have?", "is this session
 valid to bookmark?", "give me the user ids of every attendee". This chapter is the **synchronous
-transport seam**: a tiny, transport-only package (`MMCA.Common.Grpc`) plus a per-consumer
+transport boundary**: a tiny, transport-only package (`MMCA.Common.Grpc`) plus a per-consumer
 `*.Contracts` convention that together let a module be lifted out of the monolith and called over
 **gRPC** *without rewriting a line of application or domain code*. The governing decision is
 [ADR-007 (gRPC extraction)](../ADRs/007-grpc-extraction.md), with the supporting topology in
@@ -45,7 +45,7 @@ in Engagement; the cross-process implementation is `BookmarkCountServiceGrpcAdap
 which holds a generated `BookmarkCountServiceClient` and translates an interface call into a gRPC call
 and the proto response back into the C# return type. Because both the in-process service and the
 adapter satisfy the *identical interface*, swapping monolith for microservice is a **registration
-change, not a rewrite**, which is the whole point of the seam.
+change, not a rewrite**, which is the whole point of the boundary.
 
 **How the swap actually happens at the composition root.** Each `.Contracts` project also ships an
 `extension(IServiceCollection)` DI helper, e.g. `AddConferenceSessionValidationClient()`
@@ -120,7 +120,7 @@ intended marker for "this type is part of an extracted service's wire surface", 
 interface, the integration-event records, and the boundary DTOs, with an optional `Version`. Its
 doc-comment and ADR-007 describe a consumer-side architecture test that enforces contract purity
 against it. In the *current* source, however, **no type carries `[ServiceContract]` and no test reads
-it**, the attribute is a provided-but-unadopted seam. What the framework actually relies on for
+it**, the attribute is a provided-but-unadopted extension point. What the framework actually relies on for
 contract governance today are *other* fitness functions: ADC's integration-event contract-snapshot
 tests (which freeze each event's wire shape and fail on drift) and the `MicroserviceExtractionTests`
 that forbid `MassTransit`/gRPC types from leaking into Application/Domain/Shared, the executable
@@ -173,7 +173,7 @@ part of the contract surface by virtue of their `.proto` regardless, so they nee
     97-98).
 - **Why it's built this way**: sealing + overriding all five call types makes token forwarding total:
   there is no call shape that silently drops the credential. Doing it in an interceptor (not per call
-  site) keeps consumer code transport-agnostic, which is exactly the extraction seam ADR-007 and
+  site) keeps consumer code transport-agnostic, which is exactly the extraction boundary ADR-007 and
   ADR-008 want. The duplicate-header guard means it composes safely with other interceptors.
 - **Where it's used**: registered automatically by `AddTypedGrpcClient<TClient>` in this group's
   [`DependencyInjection`](#dependencyinjection) (`DependencyInjection.cs:72,76`), so every typed gRPC
@@ -204,7 +204,7 @@ part of the contract surface by virtue of their `.proto` regardless, so they nee
   tooling/tests can then enforce. Crucially, `MMCA.Common` ships **no** `[ServiceContract]` types
   itself, it provides the *marker*; the concrete contracts live in the consumer (ADC/Store), which is
   why the enforcing test is meant to live there too.
-- **Where it's used**: **currently unused in code (a provided-but-unadopted seam).** Verified by
+- **Where it's used**: **currently unused in code (a provided-but-unadopted extension point).** Verified by
   source search: *no* type in `MMCA.Common`, `MMCA.ADC`, or `MMCA.Store` carries `[ServiceContract]`,
   and no architecture test references the attribute, the only `.cs` file mentioning it is its own
   definition. The contract governance the framework actually relies on today is enforced **without**
@@ -230,7 +230,7 @@ part of the contract surface by virtue of their `.proto` regardless, so they nee
   (BCL).
 - **Concept introduced, bridging the Result pattern across the gRPC transport.** `[Rubric §9, API &
   Contract Design]` (assesses consistent error shapes across transports) and `[Rubric §7,
-  Microservices Readiness]` (the gRPC extraction seam). gRPC has no native "return a failure value";
+  Microservices Readiness]` (the gRPC extraction boundary). gRPC has no native "return a failure value";
   failures travel as `RpcException`/status codes. So the [`Result`](group-01-result-error-handling.md#result)
   pattern (taught in [primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to) and
   G01) is adapted to the wire by smuggling the failure through a single, *internal-to-the-transport-edge*
@@ -347,7 +347,7 @@ part of the contract surface by virtue of their `.proto` regardless, so they nee
   [`JwtForwardingClientInterceptor`](#jwtforwardingclientinterceptor) (Level 0); `Grpc.Net.ClientFactory`,
   `Microsoft.Extensions.Http.Resilience` (Polly), and the `Microsoft.Extensions.DependencyInjection`
   helpers (NuGet/BCL).
-- **Concept reinforced, wiring the gRPC extraction seam (ADR-007), with resilience and h2c.** `[Rubric
+- **Concept reinforced, wiring the gRPC extraction boundary (ADR-007), with resilience and h2c.** `[Rubric
   §7, Microservices Readiness]` (ADR-007: gRPC transport for synchronous inter-service calls, wired so
   consumer code stays transport-agnostic). `[Rubric §29, Resilience & Business Continuity]` (ADR-009:
   a standard Polly resilience pipeline on **every** outbound gRPC client, retry/timeout/circuit-breaker

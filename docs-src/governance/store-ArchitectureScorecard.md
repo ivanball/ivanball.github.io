@@ -75,7 +75,7 @@ Front-end security is the standout (§26, impl 9): access token in-memory, refre
    - _Remediation:_ move the residual values behind semantic classes via wrapper elements or theme tokens where feasible. _Expected:_ §20 impl 7→8.
 4. **Client validation short of server parity**: §24 (impl 8): the four create forms' guard/dirty/validated-`MudForm` markers are CI-gated (`FormsConventionTests`, M4), but client validation stays MudForm-level rather than full FluentValidation parity with the server rules.
    - _Remediation:_ mirror the remaining server-only rules client-side where they do not need the DB. _Expected:_ §24 impl 8→9.
-5. **Concurrency seam residual [C→A]**: the ADR-035 client half shipped (11 property-edit requests implement `IConcurrencyAware`, DTOs expose `RowVersion`, handlers call `SetOriginalRowVersion`, stale-token 409 integration-tested), but child-level entities (e.g. `ProductVariant` under `Product`) need a child-typed `SetOriginalRowVersion` overload in MMCA.Common before their edits get the same protection.
+5. **Concurrency boundary residual [C→A]**: the ADR-035 client half shipped (11 property-edit requests implement `IConcurrencyAware`, DTOs expose `RowVersion`, handlers call `SetOriginalRowVersion`, stale-token 409 integration-tested), but child-level entities (e.g. `ProductVariant` under `Product`) need a child-typed `SetOriginalRowVersion` overload in MMCA.Common before their edits get the same protection.
    - _Remediation:_ add the aggregate-child overload in Common and sweep (lands in Common, both consumers in one pass). _Expected:_ §8 evidence completes across child edits.
 
 ## Cross-repo comparison

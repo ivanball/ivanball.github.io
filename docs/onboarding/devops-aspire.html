@@ -595,7 +595,7 @@
           service&#39;s <code>Program.cs</code> reads <code>MessageBus:Provider</code> and branches accordingly. This is ADR-003 (outbox +
           in-process dispatch + background processor) combined with the infrastructure flexibility of
           <code>MessageBusProvider</code> selection.</p>
-          <p>[Rubric §7, Microservices Architecture] is directly served by the fact that the extraction seams
+          <p>[Rubric §7, Microservices Architecture] is directly served by the fact that the extraction boundaries
           (gRPC contracts, broker interfaces, JWKS discovery) are identical in both environments. An engineer can
           validate a cross-service event flow locally against RabbitMQ before it reaches the Azure Service Bus in
           production.</p>

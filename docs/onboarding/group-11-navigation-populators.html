@@ -167,7 +167,7 @@
           <strong>navigation-populator delegate</strong> on that materialized page (line 106) to fill in the cross-source
           relationships, paying the manual-load cost on one page of parents, not the whole table, and never as
           an N+1.</p>
-          <p>That delegate is the seam to the second half of the chapter. Its signature,
+          <p>That delegate is the extension point to the second half of the chapter. Its signature,
           <code>(IReadOnlyCollection&lt;TEntity&gt;, NavigationMetadata, bool includeFKs, bool includeChildren, CancellationToken)</code>, is exactly the contract of
           <a href="group-11-navigation-populators.html#inavigationpopulatorin-tentity"><code>INavigationPopulator&lt;in TEntity&gt;</code></a>,
           the per-entity port a module implements to load its own cross-source navigations. The <code>in</code> variance
@@ -552,7 +552,7 @@
           <code>TChild : AuditableBaseEntity&lt;TChildId&gt;</code>, <code>TChildId : notnull</code> (lines 17-19).</li>
           <li><strong>Why it&#39;s built this way</strong>: ADR-002 motivates the pattern: cross-source includes cannot go through
           EF <code>Include</code>, but the Application layer must not know about EF or the physical split. The descriptor is
-          the seam, constructed in Application code (a module&#39;s <code>DependencyInjection.cs</code>, typed against domain
+          the extension point, constructed in Application code (a module&#39;s <code>DependencyInjection.cs</code>, typed against domain
           entity types) and delegating the actual batch query to <a href="#navigationloader"><code>NavigationLoader</code></a>, which
           uses the read repository.</li>
           <li><strong>Where it&#39;s used</strong>: constructed in per-module navigation-populator DI registrations (e.g. an Event

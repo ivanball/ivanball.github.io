@@ -115,7 +115,7 @@
           It depends on no Application/Domain/Infrastructure type so it can compile into a Blazor WebAssembly
           bundle, and it ships the reusable building blocks every consumer UI assembles into pages: a
           <strong>server-paged data-grid list-page base class</strong>, the brand <strong>MudBlazor theme</strong>, a <strong>typed HTTP
-          service base</strong> for talking to the WebAPI, the <strong>client-side authentication + token-refresh seam</strong>,
+          service base</strong> for talking to the WebAPI, the <strong>client-side authentication + token-refresh boundary</strong>,
           <strong>list-page state preservation</strong> across navigation, a <strong>pluggable UI-module</strong> contract, and a
           turnkey <strong>notification inbox / push</strong> feature. This is the framework half of the &quot;write-once UI,
           render everywhere&quot; story from primer §2, the per-app and per-module Razor pages (ADC&#39;s
@@ -124,7 +124,7 @@
           per-platform reimplementation. <code>[Rubric §18, UI Architecture &amp; Component Design]</code> (assesses
           component reuse, separation of presentation from data access, and a coherent composition model);
           nearly every type here exists so a consumer page is <em>composed</em>, not hand-rolled.</p>
-          <p><strong>The data-access seam: <code>IEntityService</code> over a named HttpClient.</strong> A UI never calls
+          <p><strong>The data-access boundary: <code>IEntityService</code> over a named HttpClient.</strong> A UI never calls
           <code>HttpClient</code> directly. It depends on
           <a href="#ientityservicetentitydto-tidentifiertype"><code>IEntityService&lt;TEntityDTO, TIdentifierType&gt;</code></a>,
           the CRUD contract (<code>GetAllAsync</code>, <code>GetPagedAsync</code>, <code>GetByIdAsync</code>, <code>AddAsync</code>, <code>UpdateAsync</code>,
@@ -183,7 +183,7 @@
           <a href="#returnurlprotector"><code>ReturnUrlProtector</code></a> and the
           <a href="#routepaths"><code>RoutePaths</code></a>/<a href="#navitem"><code>NavItem</code></a>
           route catalogue).</p>
-          <p><strong>Authentication and the token-refresh seam.</strong> Client-side auth is contracted by
+          <p><strong>Authentication and the token-refresh boundary.</strong> Client-side auth is contracted by
           <a href="#iauthuiservice"><code>IAuthUIService</code></a> (login, register, OAuth-code
           exchange, logout, refresh, change-password) and implemented by
           <a href="#authuiservice"><code>AuthUIService</code></a>, which calls the WebAPI <code>auth/*</code>
@@ -273,7 +273,7 @@
           service persists the choice to a non-HttpOnly cookie + <code>localStorage</code> through a <code>theme.js</code> interop module
           (<code>ThemeService.cs:53-59</code>), defaulting to the OS <code>prefers-color-scheme</code> (its <code>systemPrefersDark</code> interop)
           only when nothing is stored (<code>ThemeService.cs:42-45</code>). It raises an <code>OnChange</code> event (<code>ThemeService.cs:28</code>)
-          so the app-bar toggle and the layout stay in sync, and the same per-user seam carries the choice to
+          so the app-bar toggle and the layout stay in sync, and the same per-user pipeline carries the choice to
           <code>User.PreferredTheme</code> (ADR-028, which reuses ADR-027&#39;s cookie/profile/bootstrap machinery rather than
           inventing a parallel one). The <code>ThemeToggle</code> component ships in that shared <code>MainLayout</code> beside the
           <code>CultureSwitcher</code> in the <code>appbar-icon-actions</code> slot (<code>MainLayout.razor:32-35</code>), so every consumer host

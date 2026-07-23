@@ -113,7 +113,7 @@ layers. A domain factory or aggregate method validates its inputs and returns
 reads the **first** error's [`ErrorType`](#errortype) and maps it, via
 [`ErrorHttpMapping`](group-12-api-hosting-mapping.md#errorhttpmapping)'s `FrozenDictionary`, to the
 right status code, then renders an **RFC 9457 Problem Details** body. The same `Result` failure can
-also cross a service boundary: on the gRPC seam,
+also cross a service boundary: on the gRPC boundary,
 [`ResultGrpcExtensions`](group-13-grpc-contracts.md#resultgrpcextensions) turns a failure into an
 `RpcException` carrying the errors over the wire (ADR-007), and the typed client turns it back into a
 `Result` on the far side, so a remote call looks like a local one to application code. Because the

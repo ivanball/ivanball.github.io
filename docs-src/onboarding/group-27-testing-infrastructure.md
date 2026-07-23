@@ -460,7 +460,7 @@ is cataloged by project in the companion per-project test rollup for this chapte
   it through the [`IArchitectureMap`](#iarchitecturemap) abstraction. `[Rubric §3, Clean Architecture]`
   assesses whether layer boundaries are explicit and enforced; this map is the machine-readable statement
   of those boundaries. `[Rubric §7, Microservices Readiness]` applies because the map enumerates each
-  module's six layers (Domain, Application, Infrastructure, Shared, Api, Ui), the same seams the modules
+  module's six layers (Domain, Application, Infrastructure, Shared, Api, Ui), the same boundaries the modules
   extract along.
 - **Walkthrough**
   - `RepoToken` (`AdcArchitectureMap.cs:10`): `"MMCA.ADC"`, used by the base to locate the repo root
@@ -854,9 +854,9 @@ is cataloged by project in the companion per-project test rollup for this chapte
   instead.
 - **Depends on**: the shared [`SpecificationConventionTestsBase`](#specificationconventiontestsbase)
   (extended, `SpecificationConventionTests.cs:8`) and [`AdcArchitectureMap`](#adcarchitecturemap).
-- **Concept**: `[Rubric §8, Data Architecture]`, this keeps the polyglot-persistence seam (ADR-018) usable.
+- **Concept**: `[Rubric §8, Data Architecture]`, this keeps the polyglot-persistence extension point (ADR-018) usable.
   The comment records that ADC's Session-to-Cosmos / Room-to-SQLite trial was reverted but the framework
-  seams were kept, so this guard stays on as a forward safeguard even though every entity currently routes
+  extension points were kept, so this guard stays on as a forward safeguard even though every entity currently routes
   to SQL Server (`SpecificationConventionTests.cs:3-7`).
 - **Walkthrough**
   - `Map` (`:10`): the only override.

@@ -135,7 +135,7 @@
           rather than scattered <code>if (!valid) return</code> checks in every handler. <code>[Rubric §6, CQRS &amp; Event-Driven]</code>
           (cross-cutting concerns belong in the pipeline) <code>[Rubric §24, Forms, Validation &amp; UX Safety]</code>
           (centralized, consistent input validation).</p>
-          <p><strong>The failure-mapping seam.</strong> FluentValidation speaks in <code>ValidationResult</code> / <code>ValidationFailure</code>;
+          <p><strong>The failure-mapping boundary.</strong> FluentValidation speaks in <code>ValidationResult</code> / <code>ValidationFailure</code>;
           the rest of the codebase speaks in the <a href="group-01-result-error-handling.html#result">Result pattern</a>
           (primer §2). <a href="#validationfailureextensions"><code>ValidationFailureExtensions.ToErrors</code></a> is the one-line
           bridge: a C# <code>extension(ValidationResult)</code> block (primer §4) that projects each failure into an
@@ -472,7 +472,7 @@
           exceptions</em>). FluentValidation validators (<code>AbstractValidator&lt;T&gt;</code>) produce a <code>ValidationResult</code> whose
           <code>Errors</code> are framework-specific <code>ValidationFailure</code> objects; the application pipeline needs those
           surfaced as a <a href="group-01-result-error-handling.html#result"><code>Result</code></a> failure carrying domain
-          <a href="group-01-result-error-handling.html#error"><code>Error</code></a>s. This extension is the <em>only</em> seam where that
+          <a href="group-01-result-error-handling.html#error"><code>Error</code></a>s. This extension is the <em>only</em> boundary where that
           translation happens, so the rest of the pipeline depends on neither FluentValidation&#39;s failure shape
           nor a hand-rolled mapping. It also touches <code>[Rubric §9, API &amp; Contract Design]</code> (assesses uniform,
           standardized error responses): because each failure becomes an

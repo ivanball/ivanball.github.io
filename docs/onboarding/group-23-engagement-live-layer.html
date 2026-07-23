@@ -191,7 +191,7 @@
           payload-shape vocabulary for both features lives in the two channel-contract classes shared by
           publisher and subscriber, <a href="#livepollchannel"><code>LivePollChannel</code></a> and
           <a href="#sessionquestionchannel"><code>SessionQuestionChannel</code></a>.</p>
-          <h2 id="one-websocket-two-publisher-seams-and-a-cross-service-ingress">One WebSocket, two publisher seams, and a cross-service ingress</h2>
+          <h2 id="one-websocket-two-publisher-extension-points-and-a-cross-service-ingress">One WebSocket, two publisher extension points, and a cross-service ingress</h2>
           <p>The transport itself is framework-owned (ADR-039, <a href="group-10-notifications.html">Group 10</a>). The single
           <a href="group-10-notifications.html#notificationhub"><code>NotificationHub</code></a> carries both durable notifications and
           channel events on one connection, and the application-layer port
@@ -205,7 +205,7 @@
           Notification service does), so Engagement registers a <strong>gRPC adapter</strong> for <code>ILiveChannelPublisher</code>
           that forwards the pre-serialized JSON payload to the Notification service&#39;s live-channel ingress,
           which then does the real group send. This is exactly the &quot;a host that does not map the hub can
-          replace the registration with its own transport&quot; seam ADR-039 anticipates, and it rides the ADR-012
+          replace the registration with its own transport&quot; boundary ADR-039 anticipates, and it rides the ADR-012
           mixed-endpoint gRPC profile (the Notification service serves a dedicated <code>Http2</code>-only endpoint for
           this ingress alongside its WebSocket endpoint). Because the payload is an opaque string at every hop,
           no serializer dependency crosses the wire.</p>
@@ -239,7 +239,7 @@
           computes its live window into a <a href="#liveeventcontext"><code>LiveEventContext</code></a> (mirroring the backend math),
           and degrades to <code>null</code> on any API failure so the live surfaces simply stay dormant rather than error.
           The cross-module <a href="#isessionliveuiservice"><code>ISessionLiveUIService</code></a> / <a href="#sessionliveuiservice"><code>SessionLiveUIService</code></a>
-          seam is what lets a Conference session page light up its &quot;Live&quot; button when Engagement is deployed.</p>
+          boundary is what lets a Conference session page light up its &quot;Live&quot; button when Engagement is deployed.</p>
           <h2 id="authorization-feature-gating-and-the-cross-service-dependency-on-conference">Authorization, feature gating, and the cross-service dependency on Conference</h2>
           <p>Both controllers, <a href="#livepollscontroller"><code>LivePollsController</code></a> and
           <a href="#sessionquestionscontroller"><code>SessionQuestionsController</code></a>, sit behind
@@ -257,7 +257,7 @@
           id, <code>speaker_id</code> claim, roles) is always bound from the token via
           <a href="group-08-auth.html#icurrentuserservice"><code>ICurrentUserService</code></a>, never from the request body
           (<code>LivePollsController.cs:213-222</code>).</p>
-          <p>This makes the live layer <strong>bidirectionally coupled to Conference</strong>, the same modular-monolith seam
+          <p>This makes the live layer <strong>bidirectionally coupled to Conference</strong>, the same modular-monolith boundary
           Group 22 demonstrated (ADR-007/ADR-008). Engagement calls Conference&#39;s
           <a href="group-17-conference-domain.html#ieventlivevalidationservice"><code>IEventLiveValidationService</code></a> to fetch
           the live window, the session&#39;s assigned speakers, and the event&#39;s moderation default (in-process when
@@ -272,7 +272,7 @@
           <code>[Rubric §6, CQRS &amp; Event-Driven]</code> (command/query slices, durable domain events over the outbox
           <em>versus</em> the separate ephemeral channel push); <code>[Rubric §7, Microservices Readiness]</code> (the
           <code>ILiveChannelPublisher</code> port with a SignalR impl, a Null default, and a gRPC forwarding adapter, plus
-          the Conference validation seam); <code>[Rubric §12, Performance &amp; Scalability]</code> (per-vote checks against a
+          the Conference validation boundary); <code>[Rubric §12, Performance &amp; Scalability]</code> (per-vote checks against a
           snapshotted window with no cross-service hop, and patch-in-place tally updates that avoid the <em>V</em>C*
           refetch storm against the rate limiter); <code>[Rubric §11, Security]</code> (RequireAuthenticated + feature
           gates + handler-enforced speaker-scoped rights + <code>HasPermission</code>, identity from token, anonymous
@@ -375,7 +375,7 @@
           (<code>CallerSpeakerId?</code>, <code>CallerIsOrganizer</code>).</li>
           <li><strong>Why it&#39;s built this way</strong>: moderation shows Pending questions that attendees must not see, so the
           read is gated exactly like the write commands, reusing <a href="#livepollauthorization"><code>LivePollAuthorization</code></a>
-          against the Conference seam rather than inventing a query-only rule.</li>
+          against the Conference boundary rather than inventing a query-only rule.</li>
           <li><strong>Where it&#39;s used</strong>: handled by <a href="#getmoderationqueuehandler"><code>GetModerationQueueHandler</code></a>.</li>
           </ul>
           <h3 id="getopenpollsquery">GetOpenPollsQuery</h3>
@@ -477,8 +477,8 @@
           best-effort (<code>CloseLivePollHandler.cs:17</code>).</li>
           <li><strong>Depends on</strong>: <a href="group-07-persistence-ef-core.html#iunitofwork"><code>IUnitOfWork</code></a> (repository + save),
           <a href="group-17-conference-domain.html#ieventlivevalidationservice"><code>IEventLiveValidationService</code></a> (the
-          Conference gRPC seam), <a href="group-10-notifications.html#ilivechannelpublisher"><code>ILiveChannelPublisher</code></a>
-          (the transient live-push seam), <a href="#livepollauthorization"><code>LivePollAuthorization</code></a>,
+          Conference gRPC boundary), <a href="group-10-notifications.html#ilivechannelpublisher"><code>ILiveChannelPublisher</code></a>
+          (the transient live-push extension point), <a href="#livepollauthorization"><code>LivePollAuthorization</code></a>,
           <a href="#livepoll"><code>LivePoll</code></a>, <a href="#livepollchannel"><code>LivePollChannel</code></a>,
           <a href="group-05-cqrs-pipeline.html#icommandhandlerin-tcommand-tresult"><code>ICommandHandler&lt;in TCommand, TResult&gt;</code></a>,
           and BCL <code>System.Text.Json</code> + <code>ILogger</code>.</li>
@@ -491,7 +491,7 @@
           gRPC (<code>GetSessionLiveInfoAsync</code>, <code>:43</code>), then calls
           <a href="#livepollauthorization"><code>LivePollAuthorization.EnsureCanManage</code></a> (<code>:47-48</code>) with that
           session&#39;s assigned-speaker list; an event-wide poll passes <code>sessionInfo: null</code> so only
-          organizers/admins pass (<code>:54-55</code>). The cross-service call is the <code>[Rubric §7]</code> seam: Engagement
+          organizers/admins pass (<code>:54-55</code>). The cross-service call is the <code>[Rubric §7]</code> boundary: Engagement
           never reaches into Conference&#39;s tables, it asks a typed gRPC client (ADR-007).</li>
           <li><strong>Transition</strong> in the domain: <code>poll.Close()</code> (<code>:60</code>) enforces &quot;only an Open poll can close&quot; and
           raises the <code>LivePollChanged</code> domain event; a bad transition returns its
@@ -636,7 +636,7 @@
           with no validating/authorization decorator, this handler enforces BR-236 itself: it fetches the
           session&#39;s live info from Conference (<code>GetSessionLiveInfoAsync</code>, <code>:29</code>), runs
           <a href="#livepollauthorization"><code>LivePollAuthorization.EnsureCanManage</code></a> with the query&#39;s caller facts
-          (<code>:33-34</code>), and short-circuits to a <code>Result.Failure</code> on either the seam failure or a rights failure
+          (<code>:33-34</code>), and short-circuits to a <code>Result.Failure</code> on either the boundary failure or a rights failure
           (<code>:30-36</code>). The moderation queue deliberately exposes not-yet-approved questions, which is exactly why
           it is gated.</li>
           <li><strong>Walkthrough</strong>: authorize (<code>:29-36</code>); load the session&#39;s questions no-tracking (<code>:39-43</code>); project
@@ -1095,7 +1095,7 @@
           <ul>
           <li><strong>What it is</strong>: the conference-day home page. It shows now-and-next sessions, the event&#39;s open live polls with live tallies, and (for organizers only) a poll-manage tab, and it joins the event&#39;s live channel so poll events refresh the tallies without polling.</li>
           <li><strong>Depends on</strong>: injected UI services <a href="#iliveeventuiservice"><code>ILiveEventUIService</code></a>, <a href="#ilivepolluiservice"><code>ILivePollUIService</code></a>, <a href="#isessionlookupservice"><code>ISessionLookupService</code></a>, <a href="group-15-common-ui-framework.html#notificationstate"><code>NotificationState</code></a>, <a href="group-15-common-ui-framework.html#notificationhubservice"><code>NotificationHubService</code></a>, MudBlazor&#39;s <code>ISnackbar</code>, and <a href="group-26-device-capability-layer.html#ihapticfeedbackservice"><code>IHapticFeedbackService</code></a>; DTOs <a href="#liveeventcontext"><code>LiveEventContext</code></a>, <a href="#livepollresultsdto"><code>LivePollResultsDTO</code></a>, <a href="#livepolldto"><code>LivePollDTO</code></a>, <a href="#sessioninfo"><code>SessionInfo</code></a>, and <a href="#createlivepollrequest"><code>CreateLivePollRequest</code></a>; the <a href="#livepollchannel"><code>LivePollChannel</code></a> key/event vocabulary; <a href="group-08-auth.html#rolenames"><code>RoleNames</code></a> and <a href="group-15-common-ui-framework.html#errormessages"><code>ErrorMessages</code></a> from the Common UI; plus the nested <a href="#optionstate"><code>OptionState</code></a>. It implements <code>IAsyncDisposable</code>.</li>
-          <li><strong>Concept introduced, the live Blazor surface: prerender-safe load then interactive channel join.</strong> <code>[Rubric §18, UI Architecture]</code> (assesses component lifecycle and separation of load from live wiring), <code>[Rubric §19, State Management]</code>, and <code>[Rubric §23, Front-End Performance]</code>. The page splits its lifecycle in two. <code>OnInitializedAsync</code> (<code>HappeningNow.razor.cs:55</code>) does the data load, reading the organizer flag from the cascading <code>AuthenticationState</code> via <code>IsInRole(RoleNames.Organizer)</code> (<code>HappeningNow.razor.cs:76</code>), fetching the current <a href="#liveeventcontext"><code>LiveEventContext</code></a>, and loading sessions and polls (and manage-polls only for organizers). The live wiring waits for <code>OnAfterRenderAsync</code> with <code>firstRender &amp;&amp; RendererInfo.IsInteractive</code> (<code>HappeningNow.razor.cs:107-123</code>): only an interactive render, and only when the event is currently live (<code>_liveEvent.IsLiveAt(DateTime.UtcNow)</code>), joins the <a href="#livepollchannel"><code>LivePollChannel.ForEvent</code></a> key and subscribes to channel events. The comment at <code>HappeningNow.razor.cs:67-70</code> documents a deliberate exception: unlike the sibling Live/Presenter pages this page keeps its loads on the prerender pass (accepting a double fetch) because its bUnit suite renders the non-interactive path so the sealed <a href="group-15-common-ui-framework.html#notificationhubservice"><code>NotificationHubService</code></a> never dials out, adding a prerender guard needs a hub-service test seam first (deferred). <code>[Rubric §28, Front-End Testing]</code>: the code shape here is driven by what the component test can exercise.</li>
+          <li><strong>Concept introduced, the live Blazor surface: prerender-safe load then interactive channel join.</strong> <code>[Rubric §18, UI Architecture]</code> (assesses component lifecycle and separation of load from live wiring), <code>[Rubric §19, State Management]</code>, and <code>[Rubric §23, Front-End Performance]</code>. The page splits its lifecycle in two. <code>OnInitializedAsync</code> (<code>HappeningNow.razor.cs:55</code>) does the data load, reading the organizer flag from the cascading <code>AuthenticationState</code> via <code>IsInRole(RoleNames.Organizer)</code> (<code>HappeningNow.razor.cs:76</code>), fetching the current <a href="#liveeventcontext"><code>LiveEventContext</code></a>, and loading sessions and polls (and manage-polls only for organizers). The live wiring waits for <code>OnAfterRenderAsync</code> with <code>firstRender &amp;&amp; RendererInfo.IsInteractive</code> (<code>HappeningNow.razor.cs:107-123</code>): only an interactive render, and only when the event is currently live (<code>_liveEvent.IsLiveAt(DateTime.UtcNow)</code>), joins the <a href="#livepollchannel"><code>LivePollChannel.ForEvent</code></a> key and subscribes to channel events. The comment at <code>HappeningNow.razor.cs:67-70</code> documents a deliberate exception: unlike the sibling Live/Presenter pages this page keeps its loads on the prerender pass (accepting a double fetch) because its bUnit suite renders the non-interactive path so the sealed <a href="group-15-common-ui-framework.html#notificationhubservice"><code>NotificationHubService</code></a> never dials out, adding a prerender guard needs a hub-service test extension point first (deferred). <code>[Rubric §28, Front-End Testing]</code>: the code shape here is driven by what the component test can exercise.</li>
           <li><strong>Walkthrough</strong>, in teaching order:<ul>
           <li><strong>Injected state and fields</strong> (<code>HappeningNow.razor.cs:23-52</code>): the seven injected services, the cascading <code>AuthState</code>, a <code>CancellationTokenSource _cts</code> for disposal-safe async, the loaded <code>_liveEvent</code>, poll/manage/session lists, and the create-poll form buffers <code>_newQuestion</code> and <code>_newOptions</code> (seeded with two empty <a href="#optionstate"><code>OptionState</code></a> rows, <code>HappeningNow.razor.cs:50</code>).</li>
           <li><strong>Load</strong> (<code>HappeningNow.razor.cs:55-105</code>): sets breadcrumbs, subscribes to <a href="group-15-common-ui-framework.html#notificationstate"><code>NotificationState</code></a><code>.OnChange</code> to keep the header unread badge live, fetches the current event and returns early if none, then loads sessions and polls; every failure funnels into a single localized <code>_loadError</code>, and <code>OperationCanceledException</code> is swallowed as expected-during-disposal.</li>
@@ -1580,7 +1580,7 @@
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the command handler that applies a moderation transition to a <a href="#sessionquestion"><code>SessionQuestion</code></a> (BR-234), enforcing the BR-236 rights, then best-effort publishes the matching live-channel event (BR-238).</li>
-          <li><strong>Depends on</strong>: <a href="group-05-cqrs-pipeline.html#icommandhandlerin-tcommand-tresult"><code>ICommandHandler&lt;in TCommand, TResult&gt;</code></a>, <a href="group-07-persistence-ef-core.html#iunitofwork"><code>IUnitOfWork</code></a>, <a href="group-17-conference-domain.html#ieventlivevalidationservice"><code>IEventLiveValidationService</code></a> (the Conference gRPC seam for session info), <a href="group-10-notifications.html#ilivechannelpublisher"><code>ILiveChannelPublisher</code></a> (the Notification gRPC ingress), <a href="#livepollauthorization"><code>LivePollAuthorization</code></a>, the <a href="#sessionquestionchannel"><code>SessionQuestionChannel</code></a> event names, the channel payload DTOs (<a href="#sessionquestionapprovedpayload"><code>SessionQuestionApprovedPayload</code></a> and siblings), and <code>ILogger</code>.</li>
+          <li><strong>Depends on</strong>: <a href="group-05-cqrs-pipeline.html#icommandhandlerin-tcommand-tresult"><code>ICommandHandler&lt;in TCommand, TResult&gt;</code></a>, <a href="group-07-persistence-ef-core.html#iunitofwork"><code>IUnitOfWork</code></a>, <a href="group-17-conference-domain.html#ieventlivevalidationservice"><code>IEventLiveValidationService</code></a> (the Conference gRPC boundary for session info), <a href="group-10-notifications.html#ilivechannelpublisher"><code>ILiveChannelPublisher</code></a> (the Notification gRPC ingress), <a href="#livepollauthorization"><code>LivePollAuthorization</code></a>, the <a href="#sessionquestionchannel"><code>SessionQuestionChannel</code></a> event names, the channel payload DTOs (<a href="#sessionquestionapprovedpayload"><code>SessionQuestionApprovedPayload</code></a> and siblings), and <code>ILogger</code>.</li>
           <li><strong>Concept introduced, best-effort side-channel publish that never fails the command (BR-238).</strong> <code>[Rubric §29, Resilience &amp; Business Continuity]</code> and <code>[Rubric §7, Microservices Readiness]</code> (a downstream service being unreachable must not fail the local write). The mutation is committed first via <code>SaveChangesAsync</code>; only <em>then</em> does the handler attempt the live-channel publish, wrapped in a <code>try/catch (Exception)</code> that logs and swallows so a Notification outage cannot roll back a moderation (<code>ModerateQuestionHandler.cs:85-142</code>, with a justified <code>#pragma warning disable CA1031</code> at <code>:137</code>). <code>[Rubric §13, Observability &amp; Operability]</code>: both the success and the swallowed-failure paths emit source-generated <code>[LoggerMessage]</code> logs (<code>:145-149</code>).</li>
           <li><strong>Walkthrough</strong><ul>
           <li><code>HandleAsync</code> (<code>:28</code>): loads the tracked <a href="#sessionquestion"><code>SessionQuestion</code></a> by id (<code>:33</code>), returns <code>Error.NotFound</code> if missing (<code>:39-43</code>).</li>

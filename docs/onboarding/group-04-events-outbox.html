@@ -446,7 +446,7 @@
           safe to call from the same thread that just finished <code>SaveChangesAsync</code>. <code>WaitAsync(TimeSpan timeout, CancellationToken ct)</code> (line 20) is what the processor loop awaits at the top of every cycle,
           returning when either signalled or the timeout elapses.</li>
           <li><strong>Why it&#39;s built this way</strong>: keeping it an interface lets tests inject a controllable signal to
-          drive the processor deterministically without real timers (a §14 testability seam).</li>
+          drive the processor deterministically without real timers (a §14 testability injection point).</li>
           <li><strong>Where it&#39;s used</strong>: <code>Signal()</code> is called by <a href="#brokereventbus"><code>BrokerEventBus</code></a>/<a href="#inprocesseventbus"><code>InProcessEventBus</code></a>
           after writing an outbox row and by the <code>SaveChanges</code> event-capture path; <code>WaitAsync</code> is awaited by
           the <a href="#outboxprocessor"><code>OutboxProcessor</code></a> loop, with the wait duration computed from
@@ -699,7 +699,7 @@
           <a href="group-07-persistence-ef-core.html#idatasourceresolver"><code>IDataSourceResolver</code></a>,
           <a href="group-07-persistence-ef-core.html#idbcontextfactory"><code>IDbContextFactory</code></a>, and an optional
           <code>TimeProvider</code>; the <a href="#outboxmessage"><code>OutboxMessage</code></a>/<a href="#inboxmessage"><code>InboxMessage</code></a> entities.</li>
-          <li><strong>Concept reinforced, retention as a privacy + storage control (plus a clock seam).</strong> <code>[Rubric §30, Compliance, Privacy &amp; Data Governance]</code> (assesses bounded retention of data that may contain PII),
+          <li><strong>Concept reinforced, retention as a privacy + storage control (plus a clock injection point).</strong> <code>[Rubric §30, Compliance, Privacy &amp; Data Governance]</code> (assesses bounded retention of data that may contain PII),
           <code>[Rubric §8, Data Architecture]</code>, and <code>[Rubric §14, Testability]</code>. The
           <a href="#outboxprocessor"><code>OutboxProcessor</code></a> only ever <em>sets</em> <code>ProcessedOn</code>; without this sweep the outbox,
           which stores serialized event payloads that may contain personal data, grows unbounded (the doc cites
@@ -1407,7 +1407,7 @@
           per-event MassTransit consumer class to author</strong>. This one universal adapter is registered once per
           event type via <a href="#integrationeventconsumerextensions"><code>IntegrationEventConsumerExtensions</code></a>, which
           keeps the MassTransit dependency out of the handlers and out of the Application layer (ADR-003 for
-          the inbox/outbox guarantee; ADRs 007/008 for the extraction seam).</li>
+          the inbox/outbox guarantee; ADRs 007/008 for the extraction boundary).</li>
           <li><strong>Where it&#39;s used</strong>: registered in each broker-mode service host&#39;s MassTransit configuration for
           every integration event the service consumes (e.g. Conference consuming <code>UserRegistered</code>; Identity
           consuming <code>SpeakerLinkedToUser</code> / <code>SpeakerUnlinkedFromUser</code>).</li>
@@ -1456,7 +1456,7 @@
           <li><strong>Why it&#39;s built this way</strong>: each service host&#39;s <code>Program.cs</code> calls this once per integration event
           type it consumes. Hiding <code>AddConsumer</code> keeps the host from coupling to the concrete consumer type;
           <code>MicroserviceExtractionTests</code> (primer §4) enforces that Application/Domain never reference MassTransit
-          directly, so the seam stays clean (ADRs 007/008).</li>
+          directly, so the boundary stays clean (ADRs 007/008).</li>
           <li><strong>Where it&#39;s used</strong>: in each broker-mode service&#39;s <code>Program.cs</code> configure-consumers callback (e.g.
           <code>config.RegisterIntegrationEventConsumer&lt;SpeakerLinkedToUser&gt;()</code>).</li>
           </ul>
@@ -1498,7 +1498,7 @@
           <code>InProcessEventBus</code> additionally takes <a href="#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a>,
           <code>BrokerEventBus</code> additionally takes <a href="#ioutboxsignal"><code>IOutboxSignal</code></a>. Both produce
           <a href="#outboxmessage"><code>OutboxMessage</code></a> rows and depend on <a href="#iintegrationevent"><code>IIntegrationEvent</code></a>.</li>
-          <li><strong>Concept introduced, the outbox dual-dispatch seam (ADR-003) and the in-process/broker switch
+          <li><strong>Concept introduced, the outbox dual-dispatch boundary (ADR-003) and the in-process/broker switch
           (ADRs 007/008).</strong> <code>[Rubric §6, CQRS &amp; Event-Driven]</code> (transactional outbox = atomic write +
           publish), <code>[Rubric §7, Microservices Readiness]</code> (one interface, two transports), <code>[Rubric §8, Data Architecture]</code> (the outbox is the cross-source consistency mechanism in database-per-service,
           ADR-006). Both implementations resolve the outbox target the same way

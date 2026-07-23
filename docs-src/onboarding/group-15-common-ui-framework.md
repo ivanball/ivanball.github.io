@@ -5,7 +5,7 @@ layer in the framework that, like `Grpc`, is allowed to reference **`Shared` onl
 It depends on no Application/Domain/Infrastructure type so it can compile into a Blazor WebAssembly
 bundle, and it ships the reusable building blocks every consumer UI assembles into pages: a
 **server-paged data-grid list-page base class**, the brand **MudBlazor theme**, a **typed HTTP
-service base** for talking to the WebAPI, the **client-side authentication + token-refresh seam**,
+service base** for talking to the WebAPI, the **client-side authentication + token-refresh boundary**,
 **list-page state preservation** across navigation, a **pluggable UI-module** contract, and a
 turnkey **notification inbox / push** feature. This is the framework half of the "write-once UI,
 render everywhere" story from primer §2, the per-app and per-module Razor pages (ADC's
@@ -15,7 +15,7 @@ per-platform reimplementation. `[Rubric §18, UI Architecture & Component Design
 component reuse, separation of presentation from data access, and a coherent composition model);
 nearly every type here exists so a consumer page is *composed*, not hand-rolled.
 
-**The data-access seam: `IEntityService` over a named HttpClient.** A UI never calls
+**The data-access boundary: `IEntityService` over a named HttpClient.** A UI never calls
 `HttpClient` directly. It depends on
 [`IEntityService<TEntityDTO, TIdentifierType>`](#ientityservicetentitydto-tidentifiertype),
 the CRUD contract (`GetAllAsync`, `GetPagedAsync`, `GetByIdAsync`, `AddAsync`, `UpdateAsync`,
@@ -80,7 +80,7 @@ Routing & Information Architecture]` for the history/return-URL handling (see
 [`RoutePaths`](#routepaths)/[`NavItem`](#navitem)
 route catalogue).
 
-**Authentication and the token-refresh seam.** Client-side auth is contracted by
+**Authentication and the token-refresh boundary.** Client-side auth is contracted by
 [`IAuthUIService`](#iauthuiservice) (login, register, OAuth-code
 exchange, logout, refresh, change-password) and implemented by
 [`AuthUIService`](#authuiservice), which calls the WebAPI `auth/*`
@@ -176,7 +176,7 @@ registered `Scoped` in `AddUIShared` at `DependencyInjection.cs:83`) now owns th
 service persists the choice to a non-HttpOnly cookie + `localStorage` through a `theme.js` interop module
 (`ThemeService.cs:53-59`), defaulting to the OS `prefers-color-scheme` (its `systemPrefersDark` interop)
 only when nothing is stored (`ThemeService.cs:42-45`). It raises an `OnChange` event (`ThemeService.cs:28`)
-so the app-bar toggle and the layout stay in sync, and the same per-user seam carries the choice to
+so the app-bar toggle and the layout stay in sync, and the same per-user pipeline carries the choice to
 `User.PreferredTheme` (ADR-028, which reuses ADR-027's cookie/profile/bootstrap machinery rather than
 inventing a parallel one). The `ThemeToggle` component ships in that shared `MainLayout` beside the
 `CultureSwitcher` in the `appbar-icon-actions` slot (`MainLayout.razor:32-35`), so every consumer host

@@ -114,6 +114,6 @@ folder is now fully superseded and **safe to delete** (the last Phase 5 step):
 - `Tests/Integration/MMCA.ADC.IntegrationTests/Infrastructure/IntegrationTestBase.cs` (ADC seed/auth helpers)
 - `Source/Services/MMCA.ADC.Conference.Service/Program.cs` (warmup/`StartAsync` guard + `public partial class Program`)
 - `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs`
-  (`AddForwardedJwtBearer`/`AddCommonAuthentication` — the seam the WAF overrides)
+  (`AddForwardedJwtBearer`/`AddCommonAuthentication`, the extension point the WAF overrides)
 - `MMCA.Common/Source/Hosting/MMCA.Common.Testing/IntegrationTestBase.cs`, `JwtTokenGenerator.cs`
 - `MMCA.ADC.slnx`, `MMCA.ADC.CI.slnf` (re-add reworked projects; CI inclusion per above)

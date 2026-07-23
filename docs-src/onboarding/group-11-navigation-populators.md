@@ -61,7 +61,7 @@ query server-side (loading only the requested page), materializes it, and *then*
 relationships, paying the manual-load cost on one page of parents, not the whole table, and never as
 an N+1.
 
-That delegate is the seam to the second half of the chapter. Its signature,
+That delegate is the extension point to the second half of the chapter. Its signature,
 `(IReadOnlyCollection<TEntity>, NavigationMetadata, bool includeFKs, bool includeChildren,
 CancellationToken)`, is exactly the contract of
 [`INavigationPopulator<in TEntity>`](group-11-navigation-populators.md#inavigationpopulatorin-tentity),
@@ -435,7 +435,7 @@ an unsupported include, and otherwise the `NullNavigationPopulator` no-ops.
   `TChild : AuditableBaseEntity<TChildId>`, `TChildId : notnull` (lines 17-19).
 - **Why it's built this way**: ADR-002 motivates the pattern: cross-source includes cannot go through
   EF `Include`, but the Application layer must not know about EF or the physical split. The descriptor is
-  the seam, constructed in Application code (a module's `DependencyInjection.cs`, typed against domain
+  the extension point, constructed in Application code (a module's `DependencyInjection.cs`, typed against domain
   entity types) and delegating the actual batch query to [`NavigationLoader`](#navigationloader), which
   uses the read repository.
 - **Where it's used**: constructed in per-module navigation-populator DI registrations (e.g. an Event

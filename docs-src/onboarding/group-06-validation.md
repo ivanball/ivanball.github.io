@@ -27,7 +27,7 @@ rather than scattered `if (!valid) return` checks in every handler. `[Rubric §6
 (cross-cutting concerns belong in the pipeline) `[Rubric §24, Forms, Validation & UX Safety]`
 (centralized, consistent input validation).
 
-**The failure-mapping seam.** FluentValidation speaks in `ValidationResult` / `ValidationFailure`;
+**The failure-mapping boundary.** FluentValidation speaks in `ValidationResult` / `ValidationFailure`;
 the rest of the codebase speaks in the [Result pattern](group-01-result-error-handling.md#result)
 (primer §2). [`ValidationFailureExtensions.ToErrors`](#validationfailureextensions) is the one-line
 bridge: a C# `extension(ValidationResult)` block (primer §4) that projects each failure into an
@@ -284,7 +284,7 @@ ADRs and the layering rules the architecture fitness tests enforce (primer §4).
   exceptions*). FluentValidation validators (`AbstractValidator<T>`) produce a `ValidationResult` whose
   `Errors` are framework-specific `ValidationFailure` objects; the application pipeline needs those
   surfaced as a [`Result`](group-01-result-error-handling.md#result) failure carrying domain
-  [`Error`](group-01-result-error-handling.md#error)s. This extension is the *only* seam where that
+  [`Error`](group-01-result-error-handling.md#error)s. This extension is the *only* boundary where that
   translation happens, so the rest of the pipeline depends on neither FluentValidation's failure shape
   nor a hand-rolled mapping. It also touches `[Rubric §9, API & Contract Design]` (assesses uniform,
   standardized error responses): because each failure becomes an

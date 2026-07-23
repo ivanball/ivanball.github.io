@@ -562,7 +562,7 @@
           it through the <a href="#iarchitecturemap"><code>IArchitectureMap</code></a> abstraction. <code>[Rubric §3, Clean Architecture]</code>
           assesses whether layer boundaries are explicit and enforced; this map is the machine-readable statement
           of those boundaries. <code>[Rubric §7, Microservices Readiness]</code> applies because the map enumerates each
-          module&#39;s six layers (Domain, Application, Infrastructure, Shared, Api, Ui), the same seams the modules
+          module&#39;s six layers (Domain, Application, Infrastructure, Shared, Api, Ui), the same boundaries the modules
           extract along.</li>
           <li><strong>Walkthrough</strong><ul>
           <li><code>RepoToken</code> (<code>AdcArchitectureMap.cs:10</code>): <code>&quot;MMCA.ADC&quot;</code>, used by the base to locate the repo root
@@ -1048,9 +1048,9 @@
           instead.</li>
           <li><strong>Depends on</strong>: the shared <a href="#specificationconventiontestsbase"><code>SpecificationConventionTestsBase</code></a>
           (extended, <code>SpecificationConventionTests.cs:8</code>) and <a href="#adcarchitecturemap"><code>AdcArchitectureMap</code></a>.</li>
-          <li><strong>Concept</strong>: <code>[Rubric §8, Data Architecture]</code>, this keeps the polyglot-persistence seam (ADR-018) usable.
+          <li><strong>Concept</strong>: <code>[Rubric §8, Data Architecture]</code>, this keeps the polyglot-persistence extension point (ADR-018) usable.
           The comment records that ADC&#39;s Session-to-Cosmos / Room-to-SQLite trial was reverted but the framework
-          seams were kept, so this guard stays on as a forward safeguard even though every entity currently routes
+          extension points were kept, so this guard stays on as a forward safeguard even though every entity currently routes
           to SQL Server (<code>SpecificationConventionTests.cs:3-7</code>).</li>
           <li><strong>Walkthrough</strong><ul>
           <li><code>Map</code> (<code>:10</code>): the only override.</li>

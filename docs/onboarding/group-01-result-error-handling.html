@@ -218,7 +218,7 @@
           reads the <strong>first</strong> error&#39;s <a href="#errortype"><code>ErrorType</code></a> and maps it, via
           <a href="group-12-api-hosting-mapping.html#errorhttpmapping"><code>ErrorHttpMapping</code></a>&#39;s <code>FrozenDictionary</code>, to the
           right status code, then renders an <strong>RFC 9457 Problem Details</strong> body. The same <code>Result</code> failure can
-          also cross a service boundary: on the gRPC seam,
+          also cross a service boundary: on the gRPC boundary,
           <a href="group-13-grpc-contracts.html#resultgrpcextensions"><code>ResultGrpcExtensions</code></a> turns a failure into an
           <code>RpcException</code> carrying the errors over the wire (ADR-007), and the typed client turns it back into a
           <code>Result</code> on the far side, so a remote call looks like a local one to application code. Because the

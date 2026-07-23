@@ -16,7 +16,7 @@ Two codebases are in scope:
   (four core: `.Shared`, `.Domain`, `.Application`, `.Infrastructure`; five presentation: `.API`,
   `.Grpc`, `.UI`, `.UI.Maui`, `.UI.Web`; two Aspire: `.Aspire`, `.Aspire.Hosting`; four testing: `.Testing`, `.Testing.E2E`,
   `.Testing.UI`, `.Testing.Architecture`). It is *not* a runnable app; it ships the base classes and
-  infrastructure for building modular monoliths with DDD + Clean Architecture + CQRS, plus the seams
+  infrastructure for building modular monoliths with DDD + Clean Architecture + CQRS, plus the extension points
   to extract a module into its own microservice later. The fifteen packages release **in lockstep**
   (one version tags all fifteen).
 - **`MMCA.ADC`**: the **Atlanta Developers Conference** application, a consumer of those packages.
@@ -131,8 +131,8 @@ chapter; here is the orientation so the vocabulary is familiar.
   Server only, 4 SQL databases), but the ADR-018 work shipped the full polyglot machinery (unified base,
   cross-source spec + fitness rule, Cosmos-index skip, SQLite `EnsureCreated`, Cosmos/SQLite Aspire
   helpers, portability tests) and ADC Conference's `Session`→Cosmos / `Room`→SQLite move is the
-  staged-but-not-yet-deployed first use. Treat Cosmos/SQLite as supported, exercised seams, see the
-  coverage audit's seam inventory.
+  staged-but-not-yet-deployed first use. Treat Cosmos/SQLite as supported, exercised extension points, see the
+  coverage audit's extension-point inventory.
 
 - **The Result pattern.** Expected error paths use a `Result`/`Result<T>` return value carrying
   `Error`s, **not** exceptions. This is the single most pervasive idiom in the codebase, taught in

@@ -360,7 +360,7 @@
           <li><strong>Concept introduced, the per-entity marker UI-service interface.</strong> <code>[Rubric §18, UI Architecture]</code>
           (assesses whether the front end talks to a typed service abstraction rather than raw
           <code>HttpClient</code>; here every Blazor page injects an <em>interface</em>, never the concrete HTTP class).
-          <code>[Rubric §1, SOLID]</code> (the marker gives each aggregate its own DI seam so a page depends only on the
+          <code>[Rubric §1, SOLID]</code> (the marker gives each aggregate its own injection point so a page depends only on the
           contract it needs, even though the shape is inherited). The generic CRUD surface (<code>GetPagedAsync</code>,
           <code>GetByIdAsync</code>, <code>CreateAsync</code>, <code>UpdateAsync</code>, <code>DeleteAsync</code>) all comes from
           <a href="group-15-common-ui-framework.html#ientityservicetentitydto-tidentifiertype"><code>IEntityService&lt;TEntityDTO, TIdentifierType&gt;</code></a>;

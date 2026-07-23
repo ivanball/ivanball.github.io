@@ -354,7 +354,7 @@ For the mechanics of *why* each design choice was made, ADR-003 (outbox and at-l
   CancellationToken ct)` (line 20) is what the processor loop awaits at the top of every cycle,
   returning when either signalled or the timeout elapses.
 - **Why it's built this way**: keeping it an interface lets tests inject a controllable signal to
-  drive the processor deterministically without real timers (a §14 testability seam).
+  drive the processor deterministically without real timers (a §14 testability injection point).
 - **Where it's used**: `Signal()` is called by [`BrokerEventBus`](#brokereventbus)/[`InProcessEventBus`](#inprocesseventbus)
   after writing an outbox row and by the `SaveChanges` event-capture path; `WaitAsync` is awaited by
   the [`OutboxProcessor`](#outboxprocessor) loop, with the wait duration computed from
@@ -591,7 +591,7 @@ For the mechanics of *why* each design choice was made, ADR-003 (outbox and at-l
   [`IDataSourceResolver`](group-07-persistence-ef-core.md#idatasourceresolver),
   [`IDbContextFactory`](group-07-persistence-ef-core.md#idbcontextfactory), and an optional
   `TimeProvider`; the [`OutboxMessage`](#outboxmessage)/[`InboxMessage`](#inboxmessage) entities.
-- **Concept reinforced, retention as a privacy + storage control (plus a clock seam).** `[Rubric §30,
+- **Concept reinforced, retention as a privacy + storage control (plus a clock injection point).** `[Rubric §30,
   Compliance, Privacy & Data Governance]` (assesses bounded retention of data that may contain PII),
   `[Rubric §8, Data Architecture]`, and `[Rubric §14, Testability]`. The
   [`OutboxProcessor`](#outboxprocessor) only ever *sets* `ProcessedOn`; without this sweep the outbox,
@@ -1263,7 +1263,7 @@ For the mechanics of *why* each design choice was made, ADR-003 (outbox and at-l
   per-event MassTransit consumer class to author**. This one universal adapter is registered once per
   event type via [`IntegrationEventConsumerExtensions`](#integrationeventconsumerextensions), which
   keeps the MassTransit dependency out of the handlers and out of the Application layer (ADR-003 for
-  the inbox/outbox guarantee; ADRs 007/008 for the extraction seam).
+  the inbox/outbox guarantee; ADRs 007/008 for the extraction boundary).
 - **Where it's used**: registered in each broker-mode service host's MassTransit configuration for
   every integration event the service consumes (e.g. Conference consuming `UserRegistered`; Identity
   consuming `SpeakerLinkedToUser` / `SpeakerUnlinkedFromUser`).
@@ -1310,7 +1310,7 @@ For the mechanics of *why* each design choice was made, ADR-003 (outbox and at-l
 - **Why it's built this way**: each service host's `Program.cs` calls this once per integration event
   type it consumes. Hiding `AddConsumer` keeps the host from coupling to the concrete consumer type;
   `MicroserviceExtractionTests` (primer §4) enforces that Application/Domain never reference MassTransit
-  directly, so the seam stays clean (ADRs 007/008).
+  directly, so the boundary stays clean (ADRs 007/008).
 - **Where it's used**: in each broker-mode service's `Program.cs` configure-consumers callback (e.g.
   `config.RegisterIntegrationEventConsumer<SpeakerLinkedToUser>()`).
 
@@ -1338,7 +1338,7 @@ differ **only** in what they do *after* persisting.
   `InProcessEventBus` additionally takes [`IDomainEventDispatcher`](#idomaineventdispatcher),
   `BrokerEventBus` additionally takes [`IOutboxSignal`](#ioutboxsignal). Both produce
   [`OutboxMessage`](#outboxmessage) rows and depend on [`IIntegrationEvent`](#iintegrationevent).
-- **Concept introduced, the outbox dual-dispatch seam (ADR-003) and the in-process/broker switch
+- **Concept introduced, the outbox dual-dispatch boundary (ADR-003) and the in-process/broker switch
   (ADRs 007/008).** `[Rubric §6, CQRS & Event-Driven]` (transactional outbox = atomic write +
   publish), `[Rubric §7, Microservices Readiness]` (one interface, two transports), `[Rubric §8,
   Data Architecture]` (the outbox is the cross-source consistency mechanism in database-per-service,
