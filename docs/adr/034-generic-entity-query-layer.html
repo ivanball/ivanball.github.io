@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 51 ADRs</summary>
+        <summary>All 52 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -116,6 +116,7 @@
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
         <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
         <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
           </ol>
         </nav>
       </details>
@@ -266,6 +267,36 @@
           the generic create is <code>[Idempotent]</code>, <code>AggregateRootEntityControllerBase.cs:59</code>),
           ADR-019 (rate limiting: these GET routes are the authenticated read surface the
           always-on global limiter caps per principal).</p>
+          <h2 id="revision-2026-07-24">Revision (2026-07-24)</h2>
+          <p>Filter and pagination corrections from a code review. The contract shape is unchanged; these close
+          cases where the engine widened a result set instead of narrowing it, or reported a total it did not
+          have.</p>
+          <ol>
+          <li><strong>An unparseable filter value is a 400, not an unfiltered read.</strong> Every strategy silently returned
+          the query unchanged when it could not parse a value, and validation never looked at values at all,
+          so <code>?filter=id:equals:abc</code> returned the whole (capped) result set rather than no matches. That is
+          the wrong direction for a fail-safe default on an endpoint whose filter may be the only scoping.
+          <code>IFilterStrategy.CanParseValue</code> (a default interface member returning <code>true</code>, so custom strategies
+          are unaffected until they opt in) is implemented by the six value-type strategies and checked in
+          <code>ValidateFilters</code>, which now emits <code>Filter.Value.Invalid</code>. Presence operators still ignore the
+          value, <code>IN</code> needs at least one parseable item, and <code>BETWEEN</code> needs exactly two bounds.</li>
+          <li><strong>A mapped filter is applied, not silently dropped.</strong> <code>ApplyFilters</code> and <code>ValidateFilters</code>
+          disagreed on how to resolve a <code>DTOToEntityPropertyMap</code> entry: validation fell back to the mapped
+          entity name while application retried the DTO name. A plain rename entry therefore passed
+          validation and was then skipped, returning an unfiltered result set with a 200. Both now share one
+          resolver, so anything validation accepts is what gets applied.</li>
+          <li><strong>Pagination edges.</strong> The Skip offset was computed with checked 32-bit arithmetic, so a page
+          number near <code>int.MaxValue</code> overflowed into a 500 instead of the empty page it describes; it is now
+          64-bit and range-checked. An unpaginated read reported the <code>MaxUnboundedResultLimit</code> safety cap as
+          <code>TotalItemCount</code>, telling callers the set was exactly that size; it now issues a count query only
+          when the materialized rows actually reach the cap. <code>PaginationMetadata.PageSize</code> reports the size
+          the pipeline applied rather than the one requested.</li>
+          <li><strong>The keyed by-id fast path is reachable again.</strong> <code>IsPrimaryKeyOnlyLookup</code> treated <code>includeFKs</code> as
+          disqualifying while <code>GetByIdAsync</code> defaults it to <code>true</code>, so every REST by-id read fell through to
+          the dynamic-filter pipeline (a parsed string predicate, <code>TOP 1000</code>, and a client-side
+          <code>FirstOrDefault</code>) where a keyed <code>TOP 1 WHERE Id = @id</code> would do. The flags now disqualify only when
+          the entity actually has navigations to include.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>

@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 51 ADRs</summary>
+        <summary>All 52 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -116,6 +116,7 @@
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
         <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
         <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
           </ol>
         </nav>
       </details>
@@ -152,8 +153,20 @@
           (default 10) registrations from one IP land inside <code>RegistrationRateLimitWindowMinutes</code> (default 60);
           <code>IncrementRegistrationCountAsync(ip)</code> bumps the per-IP counter. A missing/empty IP is a deliberate
           <strong>no-op (fail-open)</strong>.</li>
-          <li><strong>Keyed by submitted email / client IP, not by principal</strong>, so it works before authentication — the
+          <li><strong>Keyed by submitted email / client IP, not by principal</strong>, so it works before authentication: the
           gap a per-principal limiter cannot fill.</li>
+          <li><strong>The email key is the normalized address, not the raw request string.</strong> Keys route through the same
+          <code>Email</code> value-object normalization (trim, lowercase) the user lookup uses, so every spelling that
+          resolves to one account shares one counter and one lockout. Building keys from raw input made the
+          backoff bypassable by varying capitalization or padding: <code>User@x.com</code>, <code>user@x.com</code> and a padded
+          variant targeted the same account but got three independent counters. A malformed address, which
+          never matches a user but still increments a counter, falls back to the same trim-and-lowercase shape
+          so its variants collapse too.</li>
+          <li><strong>Counters increment atomically.</strong> <code>ICacheService.IncrementAsync</code> is a default interface member whose
+          Redis implementation uses <code>INCR</code>; the read-modify-write it replaced let concurrent attempts overwrite
+          each other&#39;s increments, so a burst of parallel guesses could stay under <code>MaxFailedAttempts</code>
+          indefinitely. On a store with a native counter the window is also anchored to the first attempt
+          rather than sliding on every write.</li>
           <li><strong>Counters are cache-scoped and TTL-bounded.</strong> They live in the same swappable <code>ICacheService</code>
           substrate as ADR-026 (in-process memory in the monolith, distributed/Redis when wired) and self-expire
           via cache TTL — a lockout is inherently ephemeral, so expiry <em>is</em> the reset.</li>
@@ -186,6 +199,10 @@
           per-replica and evaporate on restart, so a multi-replica deployment that did not wire a distributed
           cache does not aggregate an attacker hitting different replicas. The answer is the same as ADR-026:
           register a distributed cache once scaled out (both apps do).</li>
+          <li><strong>Normalization widens the DoS lever slightly.</strong> Collapsing every spelling onto one counter is what
+          makes the lockout enforceable, and it also means an attacker no longer needs to guess the exact
+          spelling the victim uses to lock them out. That is the same targeted-DoS trade below, not a new one:
+          the alternative was a lockout that did not hold at all.</li>
           <li><strong>Email-keyed lockout is a targeted-DoS lever.</strong> An attacker can lock a <em>known</em> account out by
           deliberately failing its logins. The short backoff cap (default 300s) and the generic 401 bound the
           harm, but it is an accepted availability-for-security trade.</li>

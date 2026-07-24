@@ -44,11 +44,10 @@ bypass role (`Admin` by default).
   (`OwnerOrAdminFilter.cs:38`) and returns `ForbidResult` (HTTP 403) if the claim is missing
   (`OwnerOrAdminFilter.cs:40`, `OwnerOrAdminFilter.cs:42`) or if the requested owner parameter resolves
   to an int that does not equal the claim (`OwnerOrAdminFilter.cs:46`, `OwnerOrAdminFilter.cs:49`).
-  `TryGetOwnerParameter` (`OwnerOrAdminFilter.cs:58`) reads that parameter from a **route value**
+  `TryGetOwnerParameter` reads that parameter from a **route value**
   (`/customers/{id}`) or, when the route lacks it, from a **model-bound query/body argument**
-  (`?userId=42`), so the guard now also covers list/query routes that carry the owner as a bound
-  argument, not only route ids. An absent or non-int parameter falls through to the action
-  (`OwnerOrAdminFilter.cs:53`). It is registered scoped by `AddAPI`
+  (`?userId=42`), so the guard also covers list/query routes that carry the owner as a bound
+  argument, not only route ids. It is registered scoped by `AddAPI`
   (`Source/Presentation/MMCA.Common.API/DependencyInjection.cs:68`) and applied per controller as
   `[ServiceFilter(typeof(OwnerOrAdminFilter))]`.
 - **Collection ownership specification.** `OwnershipHelper`
@@ -67,9 +66,25 @@ bypass role (`Admin` by default).
   to its `bypassRole` argument (`"Admin"` by default) case-insensitively (`OwnershipHelper.cs:20`). Both
   enforcement points consult it, so a caller in the bypass role sees and touches any resource through
   either path.
+- **The filter denies by default.** When the owner parameter cannot be resolved (absent, non-int, or
+  carried inside a bound model whose `ToString()` does not parse), the request is rejected. The
+  filter originally fell through to the action in that case, which meant it silently stopped
+  guarding any action whose parameter was optional or not an int: "nothing to compare" was being
+  read as "nothing to enforce". An action that legitimately has no owner parameter opts out with
+  `[AllowMissingOwner]`
+  (`Source/Presentation/MMCA.Common.API/Authorization/AllowMissingOwnerAttribute.cs`), honored on the
+  action or its controller through the endpoint metadata. The attribute is an assertion that the
+  action is guarded some other way, so each application site must name that guard: an ownership
+  specification that already narrows the rows, or its own authorization policy. The opt-out excuses
+  only a *missing* parameter; an action carrying a foreign owner id is still denied, and a missing
+  owner claim is still denied regardless.
 - **Two failure shapes, by design.** The single-resource filter denies with 403 (`ForbidResult`); the
   collection path never 403s, it returns a filtered (possibly empty) result set. Both flow through the
   caller's normal `Result`/HTTP edge (ADR-013), not exceptions.
+
+**Applying the filter at controller level covers every action on that controller**, including ones
+inherited from `EntityControllerBase` / `AggregateRootEntityControllerBase`. Adding it is therefore an
+audit of the whole controller, not just of the routes that motivated it.
 
 **Adoption.** MMCA.Store wires both in production. The filter guards
 `MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:38` and
@@ -100,6 +115,22 @@ query argument its Bookmarks list endpoints bind (`DependencyInjection.cs:48`). 
 unchanged; only the options differ, which is exactly what the options object exists for. The Bookmarks
 **delete** keeps a separate DB-backed inline ownership check that returns 404-not-403 (the same
 per-mutation, existence-hiding pattern Store's `OrdersController` uses).
+
+**The deny-by-default audit.** Both Store controllers apply the filter at class level, so every action
+on them was reviewed and the ones with no owner parameter now carry `[AllowMissingOwner]` with the
+guard that replaces the check named at each site:
+
+| Action | Guard that replaces the parameter check |
+| --- | --- |
+| `ShoppingCartsController.GetAllAsync` (both overloads) | `ShoppingCartByCustomerSpecification` already narrows the rows to the caller |
+| `ShoppingCartsController.GetAllForLookupAsync` | `RequireAdmin` policy |
+| `CustomersController.GetAllAsync` (both overloads), `GetAllForLookupAsync` | `RequireAdmin` policy |
+
+`CustomersController.CreateAsync` was inherited without its own policy and had been relying on the
+filter failing open. Deny-by-default closes that, but only incidentally, because the action happens to
+carry no owner parameter; it is now explicitly `RequireAdmin`, matching the Admin-gated create page
+that is its only caller. ADC's `BookmarksController` needs no annotation: both filtered actions bind a
+`[Required]` non-nullable `userId`, so model validation rejects a missing value before the filter runs.
 
 ## Rationale
 - **Reject-one and filter-many are genuinely two mechanisms.** A single-resource route has an id to

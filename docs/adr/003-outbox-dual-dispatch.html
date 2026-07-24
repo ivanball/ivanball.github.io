@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 51 ADRs</summary>
+        <summary>All 52 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -116,6 +116,7 @@
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
         <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
         <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
           </ol>
         </nav>
       </details>
@@ -188,6 +189,28 @@
           ADR-014 Transactional path), the post-save dispatch/mark-processed work is deferred and flushed
           only after a successful commit; rollback (exception or the new business-failure rollback,
           ADR-014 Revision) drops it together with the outbox rows.</li>
+          </ol>
+          <h2 id="revision-2026-07-24">Revision (2026-07-24)</h2>
+          <p>Three capture-side corrections found in a code review. None change the dual-dispatch decision; they
+          close gaps between what it promised and what the interceptor did.</p>
+          <ol>
+          <li><strong>Capture removes exactly what it captured.</strong> The post-dispatch cleanup used to clear an
+          aggregate&#39;s event list wholesale, which also discarded anything a handler raised on that same
+          aggregate <em>during</em> in-process dispatch: those events arrive after the capture and were wiped
+          before any later capture could see them, so they never dispatched and never reached the outbox.
+          Capture now snapshots each aggregate&#39;s events and removes only those (<code>IAggregateRoot</code>
+          <code>.RemoveDomainEvents</code>), leaving a handler-raised event pending for the next save.</li>
+          <li><strong>A retried operation writes one row per event.</strong> <code>ExecuteInTransactionAsync</code> runs under an EF
+          execution strategy that re-runs the whole delegate on a transient fault, against the same cached
+          <code>DbContext</code> instances. Because capture runs on every <code>SavingChanges</code> pass while the aggregate&#39;s
+          events are only cleared after a <em>successful</em> save, each attempt appended another outbox row per
+          event: one transient SQL failure published every integration event twice. Capture now discards an
+          abandoned capture&#39;s staged rows, and the retry path clears the change tracker first so entities
+          added by the failed attempt are not inserted again either.</li>
+          <li><strong>Shutdown does not consume retries.</strong> The dispatch loop&#39;s general <code>catch</code> also caught the
+          cancellation raised at host shutdown, incrementing <code>RetryCount</code> and stamping <code>LastError</code> on the
+          whole remainder of the batch. A graceful restart could therefore dead-letter messages that were
+          never actually attempted. Cancellation now rethrows and the batch is left untouched.</li>
           </ol>
           
         <div class="doc-foot btn-row">

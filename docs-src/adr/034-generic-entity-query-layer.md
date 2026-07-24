@@ -145,3 +145,33 @@ ADR-013 (Result pattern at the edge: every action returns through
 the generic create is `[Idempotent]`, `AggregateRootEntityControllerBase.cs:59`),
 ADR-019 (rate limiting: these GET routes are the authenticated read surface the
 always-on global limiter caps per principal).
+
+## Revision (2026-07-24)
+Filter and pagination corrections from a code review. The contract shape is unchanged; these close
+cases where the engine widened a result set instead of narrowing it, or reported a total it did not
+have.
+
+1. **An unparseable filter value is a 400, not an unfiltered read.** Every strategy silently returned
+   the query unchanged when it could not parse a value, and validation never looked at values at all,
+   so `?filter=id:equals:abc` returned the whole (capped) result set rather than no matches. That is
+   the wrong direction for a fail-safe default on an endpoint whose filter may be the only scoping.
+   `IFilterStrategy.CanParseValue` (a default interface member returning `true`, so custom strategies
+   are unaffected until they opt in) is implemented by the six value-type strategies and checked in
+   `ValidateFilters`, which now emits `Filter.Value.Invalid`. Presence operators still ignore the
+   value, `IN` needs at least one parseable item, and `BETWEEN` needs exactly two bounds.
+2. **A mapped filter is applied, not silently dropped.** `ApplyFilters` and `ValidateFilters`
+   disagreed on how to resolve a `DTOToEntityPropertyMap` entry: validation fell back to the mapped
+   entity name while application retried the DTO name. A plain rename entry therefore passed
+   validation and was then skipped, returning an unfiltered result set with a 200. Both now share one
+   resolver, so anything validation accepts is what gets applied.
+3. **Pagination edges.** The Skip offset was computed with checked 32-bit arithmetic, so a page
+   number near `int.MaxValue` overflowed into a 500 instead of the empty page it describes; it is now
+   64-bit and range-checked. An unpaginated read reported the `MaxUnboundedResultLimit` safety cap as
+   `TotalItemCount`, telling callers the set was exactly that size; it now issues a count query only
+   when the materialized rows actually reach the cap. `PaginationMetadata.PageSize` reports the size
+   the pipeline applied rather than the one requested.
+4. **The keyed by-id fast path is reachable again.** `IsPrimaryKeyOnlyLookup` treated `includeFKs` as
+   disqualifying while `GetByIdAsync` defaults it to `true`, so every REST by-id read fell through to
+   the dynamic-filter pipeline (a parsed string predicate, `TOP 1000`, and a client-side
+   `FirstOrDefault`) where a keyed `TOP 1 WHERE Id = @id` would do. The flags now disqualify only when
+   the entity actually has navigations to include.
