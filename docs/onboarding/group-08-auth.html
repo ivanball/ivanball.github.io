@@ -131,8 +131,8 @@
           machinery (<a href="#sessioncookieendpoints"><code>SessionCookieEndpoints</code></a>,
           <a href="#sessioncookieauthenticationhandler"><code>SessionCookieAuthenticationHandler</code></a>,
           <a href="#cookiesessionrefresher"><code>CookieSessionRefresher</code></a>), exists so that server-side-rendered Blazor pages
-          stay authenticated across a cold navigation. The governing decisions are ADR-004 (cross-service token
-          validation via JWKS), ADR-029 (brute-force protection), ADR-032 (password hashing), and ADR-033
+          stay authenticated across a cold navigation. The governing decisions are <a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a> (cross-service token
+          validation via JWKS), <a href="https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html" target="_blank" rel="noopener">ADR-029</a> (brute-force protection), <a href="https://ivanball.github.io/docs/adr/032-password-hashing.html" target="_blank" rel="noopener">ADR-032</a> (password hashing), and <a href="https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html" target="_blank" rel="noopener">ADR-033</a>
           (resource-ownership authorization); the rubric lenses are almost entirely [Rubric §11, Security] with
           supporting [Rubric §7, Microservices Readiness] and [Rubric §10, Cross-Cutting]. Auth surfaces all of
           its expected failures (bad password, lockout, expired session) as
@@ -154,7 +154,7 @@
           the matching public key, which it fetches over JWKS. The keys are materialized once at construction and
           the owned <code>RSA</code> handles are disposed with the service (<code>TokenService.cs:33</code>, <code>TokenService.cs:154</code>), so
           token operations never re-parse key material. That asymmetric split is exactly what lets a module be
-          extracted without every service holding a signing key (ADR-004): a compromised non-Identity service can
+          extracted without every service holding a signing key (<a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a>): a compromised non-Identity service can
           verify tokens but cannot forge them.</p>
           <p>The public half is served by <a href="#rsajwksprovider"><code>RsaJwksProvider</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:15</code>), which lazily builds a
@@ -185,7 +185,7 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:10</code>): password hash and salt, the current
           refresh token and its expiry, and two mutators (<code>UpdateRefreshToken</code>, <code>RevokeRefreshToken</code>).</p>
           <p><code>LoginAsync</code> (<code>AuthenticationServiceBase.cs:63</code>) shows the shape. It validates the request first, then
-          runs the ADR-029 lockout check, then does the <strong>dual-fetch</strong>: an untracked, no-change-tracking query to
+          runs the <a href="https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html" target="_blank" rel="noopener">ADR-029</a> lockout check, then does the <strong>dual-fetch</strong>: an untracked, no-change-tracking query to
           verify the password cheaply (<code>AuthenticationServiceBase.cs:86</code>), and only on success a second <em>tracked</em>
           re-fetch so the rotated refresh token can be persisted through <code>SaveChangesAsync</code>
           (<code>AuthenticationServiceBase.cs:110</code>). Soft-deleted accounts fall out through EF query filters and return
@@ -211,11 +211,11 @@
           constant time via <code>CryptographicOperations.FixedTimeEquals</code> (<code>PasswordHasher.cs:58</code>) to close the timing
           side channel. It stays backward-compatible with an older HMAC-SHA512 scheme by branching on salt length
           (32 bytes = PBKDF2, 128 bytes = legacy, <code>PasswordHasher.cs:52</code>), so existing hashes still verify without
-          a forced reset (ADR-032). This is a clean [Rubric §11, Security] story: modern KDF, constant-time
+          a forced reset (<a href="https://ivanball.github.io/docs/adr/032-password-hashing.html" target="_blank" rel="noopener">ADR-032</a>). This is a clean [Rubric §11, Security] story: modern KDF, constant-time
           compare, and a migration path all in one small type.</p>
           <p><a href="#loginprotectionservice"><code>LoginProtectionService</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:18</code>) adds the
-          ADR-029 gates on top, backed by <a href="group-09-caching.html#icacheservice"><code>ICacheService</code></a> rather than a
+          <a href="https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html" target="_blank" rel="noopener">ADR-029</a> gates on top, backed by <a href="group-09-caching.html#icacheservice"><code>ICacheService</code></a> rather than a
           database so the counters are cheap and self-expiring. After
           <a href="#loginprotectionsettings"><code>LoginProtectionSettings</code></a><code>.MaxFailedAttempts</code> consecutive failures it applies
           an exponential-backoff lockout (<code>LoginProtectionService.cs:58</code>), with a deliberately clamped shift
@@ -269,7 +269,7 @@
           returning 403 otherwise (<code>OwnerOrAdminFilter.cs:46</code>). Its vocabulary (claim type, bypass role, route
           parameter) is configurable through <a href="#owneroradminfilteroptions"><code>OwnerOrAdminFilterOptions</code></a> with
           <a href="#ownershiphelper"><code>OwnershipHelper</code></a> supplying the admin check, and the defaults preserve the original
-          <code>customer_id</code> / <code>Admin</code> / <code>id</code> behavior (ADR-033).</p>
+          <code>customer_id</code> / <code>Admin</code> / <code>id</code> behavior (<a href="https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html" target="_blank" rel="noopener">ADR-033</a>).</p>
           <h2 id="session-cookies-keeping-ssr-authenticated">Session cookies: keeping SSR authenticated</h2>
           <p>The final cluster solves a Blazor-specific problem: an interactive Blazor app keeps its access token in
           browser memory, but a <em>cold</em> server-side render (a new tab, an F5, an external deep link) has no memory
@@ -361,7 +361,7 @@
           <li><strong>Concept introduced, externalizing a filter&#39;s vocabulary through the options pattern.</strong>
           <code>[Rubric §11, Security]</code> (the ownership rule is real but its identifiers are configuration, not
           hard-code) and <code>[Rubric §16, Maintainability]</code> (one host reuses the framework filter with a
-          different claim/role without a fork). Before ADR-033 (cited in the doc comment,
+          different claim/role without a fork). Before <a href="https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html" target="_blank" rel="noopener">ADR-033</a> (cited in the doc comment,
           <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilterOptions.cs:4</code>) the
           filter hard-coded MMCA.Store&#39;s <code>customer_id</code> / <code>Admin</code> / <code>id</code> triple; extracting them into an
           <code>IOptions&lt;T&gt;</code>-bound class lets an app with a different ownership vocabulary (say a <code>UserId</code> claim
@@ -616,7 +616,7 @@
           (a resource-level access gate that runs before the action body) and <code>[Rubric §10, Cross-Cutting Concerns]</code> (the ownership rule is expressed once as a filter and attached to any controller that
           mixes admin and owner access, rather than re-coded in each action). This is the <em>gate</em> counterpart to
           <a href="#ownershiphelper"><code>OwnershipHelper</code></a>&#39;s <em>query scoping</em>: the helper narrows a list; this filter blocks
-          an attempt to read or mutate a specific id the caller does not own (ADR-033, cited at
+          an attempt to read or mutate a specific id the caller does not own (<a href="https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html" target="_blank" rel="noopener">ADR-033</a>, cited at
           <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:14</code>).</li>
           <li><strong>Walkthrough</strong>: <code>OnActionExecutionAsync</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:25</code>) reads the
@@ -642,7 +642,7 @@
           <li><strong>Why it&#39;s built this way</strong>: forbidding when the parameter <em>is present but mismatched</em>, while
           allowing when the parameter is <em>absent</em>, means the filter guards id-scoped endpoints without breaking
           actions that carry no owner parameter. Reading the vocabulary from injected options keeps a single
-          filter reusable across hosts (ADR-033). The registration guidance in the remarks
+          filter reusable across hosts (<a href="https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html" target="_blank" rel="noopener">ADR-033</a>). The registration guidance in the remarks
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:16-19</code>) is
           <code>[ServiceFilter(typeof(OwnerOrAdminFilter))]</code> as a scoped service.</li>
           <li><strong>Where it&#39;s used</strong>: applied via <code>[ServiceFilter(typeof(OwnerOrAdminFilter))]</code> on controllers that
@@ -735,7 +735,7 @@
           <ul>
           <li><strong>What it is</strong>: the password-security port: hash a plaintext password into a separated <code>(byte[] Hash, byte[] Salt)</code> pair, and verify a plaintext against a stored hash and salt.</li>
           <li><strong>Depends on</strong>: BCL only. Its Infrastructure adapter is <a href="#passwordhasher"><code>PasswordHasher</code></a>.</li>
-          <li><strong>Concept introduced: hash and salt kept apart. [Rubric §11, Security]</strong> assesses credential handling. Returning the hash and salt as two separate <code>byte[]</code> fields (line 11) rather than one concatenated blob keeps the storage contract explicit: the caller persists both columns, and <code>VerifyPassword</code> (line 18) is unambiguous about what it re-derives and compares. Because the algorithm lives entirely behind this interface, it can be strengthened without touching a single Application handler (ADR-032 sets the current PBKDF2-HMAC-SHA512 / 600k-iteration policy, applied inside <a href="#passwordhasher"><code>PasswordHasher</code></a>).</li>
+          <li><strong>Concept introduced: hash and salt kept apart. [Rubric §11, Security]</strong> assesses credential handling. Returning the hash and salt as two separate <code>byte[]</code> fields (line 11) rather than one concatenated blob keeps the storage contract explicit: the caller persists both columns, and <code>VerifyPassword</code> (line 18) is unambiguous about what it re-derives and compares. Because the algorithm lives entirely behind this interface, it can be strengthened without touching a single Application handler (<a href="https://ivanball.github.io/docs/adr/032-password-hashing.html" target="_blank" rel="noopener">ADR-032</a> sets the current PBKDF2-HMAC-SHA512 / 600k-iteration policy, applied inside <a href="#passwordhasher"><code>PasswordHasher</code></a>).</li>
           <li><strong>Walkthrough</strong>: line 11 <code>(byte[] Hash, byte[] Salt) HashPassword(string password)</code> returns a value tuple the caller stores as two fields. Line 18 <code>bool VerifyPassword(string password, byte[] hash, byte[] salt)</code> re-derives from the supplied salt and compares (constant-time, in the concrete).</li>
           <li><strong>Why it&#39;s built this way</strong>: abstracting the hasher behind a two-method port is the [Rubric §1, SOLID] Dependency-Inversion story: swapping to Argon2 or bumping the iteration count is an Infrastructure registration change, invisible to the Register/Login use cases.</li>
           <li><strong>Where it&#39;s used</strong>: the Identity module&#39;s register handler (calls <code>HashPassword</code>) and login handler (calls <code>VerifyPassword</code>).</li>
@@ -747,7 +747,7 @@
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: a single-method port (<code>IsUserSoftDeletedAsync</code>, line 15) that answers &quot;has this account been soft-deleted?&quot;, called after JWT authentication to reject a soft-deleted user who still holds a valid, unexpired token (BR-133).</li>
-          <li><strong>Depends on</strong>: BCL and the <code>UserIdentifierType</code> alias. Cross-reference ADR-005 (soft-delete versus erasure) and <span class="doc-deadlink" title="Reference outside the published set">primer §2</span> for the soft-delete convention.</li>
+          <li><strong>Depends on</strong>: BCL and the <code>UserIdentifierType</code> alias. Cross-reference <a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a> (soft-delete versus erasure) and <span class="doc-deadlink" title="Reference outside the published set">primer §2</span> for the soft-delete convention.</li>
           <li><strong>Concept introduced: closing the stateless-token window. [Rubric §11, Security]</strong> assesses whether revocation is timely; a JWT is stateless and can outlive the account it names. This interface lets middleware re-check deletion on every authenticated request and return 401 when the account is gone, with no per-handler code. It is deliberately defined in Application and implemented by the Identity module so the middleware never takes a cross-module domain reference (the same dependency-inversion move as the other ports here).</li>
           <li><strong>Walkthrough</strong>: line 15 <code>Task&lt;bool&gt; IsUserSoftDeletedAsync(UserIdentifierType userId, CancellationToken cancellationToken = default)</code>. One question, one answer.</li>
           <li><strong>Where it&#39;s used</strong>: <a href="group-12-api-hosting-mapping.html#softdeletedusermiddleware"><code>SoftDeletedUserMiddleware</code></a>, registered after authentication in the API pipeline; the Identity module supplies the concrete backed by its own query.</li>
@@ -773,7 +773,7 @@
           <ul>
           <li><strong>What it is</strong>: the inbound body for <code>POST /auth/session-cookie</code>: the access and refresh token strings the browser hands back to the server so they can be re-issued as HttpOnly cookies.</li>
           <li><strong>Depends on</strong>: nothing first-party; a two-string <code>sealed record</code>. Consumed by <a href="#sessioncookieendpoints"><code>SessionCookieEndpoints</code></a>.</li>
-          <li><strong>Concept introduced: the browser cannot set an HttpOnly cookie from JS. [Rubric §11, Security]</strong> and [Rubric §26, Front-End Security] both assess XSS-resistant token storage. After the SPA logs in against the API it holds the token pair in memory; to persist them as HttpOnly cookies (unreadable by JS, so an injected script cannot exfiltrate them) it POSTs them once to this same-origin endpoint, which writes the cookies server-side. This is the seeding half of ADR-022&#39;s browser session-cookie scheme.</li>
+          <li><strong>Concept introduced: the browser cannot set an HttpOnly cookie from JS. [Rubric §11, Security]</strong> and [Rubric §26, Front-End Security] both assess XSS-resistant token storage. After the SPA logs in against the API it holds the token pair in memory; to persist them as HttpOnly cookies (unreadable by JS, so an injected script cannot exfiltrate them) it POSTs them once to this same-origin endpoint, which writes the cookies server-side. This is the seeding half of <a href="https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html" target="_blank" rel="noopener">ADR-022</a>&#39;s browser session-cookie scheme.</li>
           <li><strong>Walkthrough</strong>: the whole type is the record on line 69: <code>sealed record SessionCookieRequest(string AccessToken, string RefreshToken)</code>. It is a nested type of <a href="#sessioncookieendpoints"><code>SessionCookieEndpoints</code></a>, bound from the request JSON.</li>
           <li><strong>Where it&#39;s used</strong>: the <code>POST /auth/session-cookie</code> handler in <a href="#sessioncookieendpoints"><code>SessionCookieEndpoints</code></a> (line 27), which passes both tokens straight to <a href="#sessioncookiejar"><code>SessionCookieJar</code></a>.</li>
           </ul>
@@ -811,7 +811,7 @@
           <li><strong>Depends on</strong>: <code>HttpContext</code> (ASP.NET) and <a href="#sessiontokenresult"><code>SessionTokenResult</code></a>. Its implementation is <a href="#cookiesessionrefresher"><code>CookieSessionRefresher</code></a>.</li>
           <li><strong>Concept introduced: server-side, JS-invisible refresh. [Rubric §11, Security]</strong> assesses where the long-lived credential lives. The type-level comment (lines 19-25) describes the contract precisely: if the access cookie&#39;s JWT is still valid it is returned as-is; otherwise the refresh cookie is exchanged at the API&#39;s <code>auth/refresh</code> endpoint server-to-server so the refresh token never reaches browser JS, the rotated pair is written back as HttpOnly cookies, and the fresh access token is stashed on <code>HttpContext.Items</code> so the current request&#39;s SSR authentication can read it before the <code>Set-Cookie</code> takes effect on the next request.</li>
           <li><strong>Walkthrough</strong>: line 33 <code>Task&lt;SessionTokenResult?&gt; GetOrRefreshAsync(HttpContext context, CancellationToken cancellationToken = default)</code>. The nullable return is the whole vocabulary: a value means &quot;here is a good access token&quot;; <code>null</code> means &quot;no session, treat as anonymous&quot;.</li>
-          <li><strong>Why it&#39;s built this way</strong>: a single interface lets both the SSR middleware and the <code>/auth/session/token</code> endpoint share one refresh path, so there is exactly one place that rotates and one place that decides validity (ADR-022).</li>
+          <li><strong>Why it&#39;s built this way</strong>: a single interface lets both the SSR middleware and the <code>/auth/session/token</code> endpoint share one refresh path, so there is exactly one place that rotates and one place that decides validity (<a href="https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html" target="_blank" rel="noopener">ADR-022</a>).</li>
           <li><strong>Where it&#39;s used</strong>: <a href="#cookiesessionrefreshmiddleware"><code>CookieSessionRefreshMiddleware</code></a> (before authentication, on navigations) and the <code>/auth/session/token</code> handler in <a href="#sessioncookieendpoints"><code>SessionCookieEndpoints</code></a> (on the browser&#39;s poll).</li>
           </ul>
           <hr>
@@ -824,7 +824,7 @@
           <li><strong>Depends on</strong>: <code>RequestDelegate</code> and <a href="#icookiesessionrefresher"><code>ICookieSessionRefresher</code></a> (constructor injected, line 14). Registered by <a href="#cookiesessionrefreshmiddlewareextensions"><code>CookieSessionRefreshMiddlewareExtensions</code></a>.</li>
           <li><strong>Concept introduced: refresh-before-authenticate for prerender. [Rubric §11, Security]</strong> and [Rubric §18, UI Architecture] meet here: a Blazor Web App prerenders <code>[Authorize]</code> pages on a cold GET (new tab, F5, deep link), and authentication reads the cookie before any interactive code runs. If the access cookie has just expired, plain authentication would fail and redirect. This middleware inserts a refresh attempt first, so the stashed fresh token (set on <code>HttpContext.Items</code> by the refresher) is what authentication then reads.</li>
           <li><strong>Walkthrough</strong>: <code>InvokeAsync</code> (lines 17-27) null-checks the context, calls <code>ShouldAttempt</code>, and on a match awaits <code>refresher.GetOrRefreshAsync(context, context.RequestAborted)</code> before invoking <code>next</code>. <code>ShouldAttempt</code> (lines 29-32) gates strictly to <code>GET</code> with an <code>Accept</code> header containing <code>text/html</code>, so it never fires on static assets, API, or XHR calls. The refresh is a side effect only: the middleware ignores the return value and always continues the pipeline, leaving the actual authentication decision to the downstream scheme.</li>
-          <li><strong>Why it&#39;s built this way</strong>: narrow gating keeps a per-request cookie read off every static-asset request, and delegating single-flight to the refresher means the middleware itself cannot double-rotate a token (ADR-022).</li>
+          <li><strong>Why it&#39;s built this way</strong>: narrow gating keeps a per-request cookie read off every static-asset request, and delegating single-flight to the refresher means the middleware itself cannot double-rotate a token (<a href="https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html" target="_blank" rel="noopener">ADR-022</a>).</li>
           <li><strong>Where it&#39;s used</strong>: registered on the Blazor Server (UI.Web) host immediately before <code>UseAuthentication()</code> via <code>UseCookieSessionRefresh()</code>.</li>
           <li><strong>Caveats / not-in-source</strong>: the registration order (before <code>UseAuthentication</code>) is enforced by the host that calls the extension, not by this class; getting it wrong silently disables the SSR refresh.</li>
           </ul>
@@ -838,7 +838,7 @@
           <li><strong>Depends on</strong>: <a href="#sessioncookiejar"><code>SessionCookieJar</code></a>, <a href="#icookiesessionrefresher"><code>ICookieSessionRefresher</code></a>, <a href="#sessioncookierequest"><code>SessionCookieRequest</code></a>, <a href="#sessiontokenresponse"><code>SessionTokenResponse</code></a>, and ASP.NET routing/<code>Results</code>. Cookies written here are read by <a href="#cookietokenreader"><code>CookieTokenReader</code></a>.</li>
           <li><strong>Concept introduced: the cookie names are the shared contract.</strong> Lines 17-18 declare <code>AccessTokenCookieName = &quot;mmca_auth_access&quot;</code> and <code>RefreshTokenCookieName = &quot;mmca_auth_refresh&quot;</code>; every other type in this feature (the jar, the reader, the refresher) references these constants rather than string literals, so there is one source of truth for the cookie names. [Rubric §9, API &amp; Contract Design] is the relevant lens: three tightly-scoped endpoints, each excluded from OpenAPI (<code>ExcludeFromDescription</code>, lines 25/56) because they are browser plumbing, not a public API.</li>
           <li><strong>Walkthrough</strong>: <code>MapSessionCookieEndpoints</code> (lines 20-61): the <code>/auth/session-cookie</code> group is created with <code>ExcludeFromDescription</code> (lines 24-25). The <code>POST</code> (lines 27-31) takes a <a href="#sessioncookierequest"><code>SessionCookieRequest</code></a> and calls <code>SessionCookieJar.Append</code>; the <code>DELETE</code> (lines 33-37) calls <code>SessionCookieJar.Delete</code>; both <code>DisableAntiforgery</code> because there is no token cookie to validate. The <code>/auth/session/token</code> <code>POST</code> (lines 43-58) first rejects an obvious cross-site request with 403 (lines 47-49), then calls the refresher: a <code>null</code> result becomes a <code>401</code> JSON <code>{ error = &quot;no_session&quot; }</code> (line 53), otherwise a <a href="#sessiontokenresponse"><code>SessionTokenResponse</code></a> is returned (line 54). It is <code>AllowAnonymous</code> (it authenticates via the cookies themselves) and antiforgery-disabled. The private <code>IsCrossSite</code> (lines 65-67) inspects the <code>Sec-Fetch-Site</code> header and treats an absent header as allowed (older browsers).</li>
-          <li><strong>Why it&#39;s built this way</strong>: CSRF is defended in depth: <code>POST</code>-only, <code>SameSite=Lax</code> on the cookies, and the <code>Sec-Fetch-Site</code> check together stop a cross-site page from driving these endpoints, which is why they can safely disable the standard antiforgery token (ADR-022). [Rubric §11, Security].</li>
+          <li><strong>Why it&#39;s built this way</strong>: CSRF is defended in depth: <code>POST</code>-only, <code>SameSite=Lax</code> on the cookies, and the <code>Sec-Fetch-Site</code> check together stop a cross-site page from driving these endpoints, which is why they can safely disable the standard antiforgery token (<a href="https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html" target="_blank" rel="noopener">ADR-022</a>). [Rubric §11, Security].</li>
           <li><strong>Where it&#39;s used</strong>: mapped on the UI.Web host&#39;s endpoint routing; the SPA&#39;s auth client calls all three.</li>
           </ul>
           <hr>
@@ -851,7 +851,7 @@
           <li><strong>Depends on</strong>: <code>CookieOptions</code>/<code>IWebHostEnvironment</code> (ASP.NET) and the cookie-name constants on <a href="#sessioncookieendpoints"><code>SessionCookieEndpoints</code></a>.</li>
           <li><strong>Concept introduced: one place to build cookie options. [Rubric §11, Security]</strong> assesses cookie hardening. Centralizing <code>BuildOptions</code> (lines 30-37) means every write is <code>HttpOnly = true</code>, <code>Secure</code> outside Development (line 33: <code>!environment.IsDevelopment()</code>, so localhost HTTP still works while production forces HTTPS), <code>SameSite = SameSiteMode.Lax</code>, and <code>Path = &quot;/&quot;</code>. Any drift between the seed, refresh, and clear paths is impossible because they all call this one method.</li>
           <li><strong>Walkthrough</strong>: line 14 <code>Lifetime = TimeSpan.FromDays(7)</code>, aligned to the refresh-token lifetime so a cookie never outlives the credential it carries. <code>Append</code> (lines 16-21) writes both cookies with the 7-day <code>MaxAge</code>. <code>Delete</code> (lines 23-28) rebuilds the options with <code>TimeSpan.Zero</code>, which line 36 turns into a <code>null</code> <code>MaxAge</code>, and calls <code>Cookies.Delete</code> for both names.</li>
-          <li><strong>Why it&#39;s built this way</strong>: a delete must send back the same <code>Path</code>/<code>SameSite</code>/<code>Secure</code> attributes as the original write or the browser will not match and clear the cookie; sharing <code>BuildOptions</code> guarantees that (ADR-022).</li>
+          <li><strong>Why it&#39;s built this way</strong>: a delete must send back the same <code>Path</code>/<code>SameSite</code>/<code>Secure</code> attributes as the original write or the browser will not match and clear the cookie; sharing <code>BuildOptions</code> guarantees that (<a href="https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html" target="_blank" rel="noopener">ADR-022</a>).</li>
           <li><strong>Where it&#39;s used</strong>: <a href="#sessioncookieendpoints"><code>SessionCookieEndpoints</code></a> (seed and clear) and <a href="#cookiesessionrefresher"><code>CookieSessionRefresher</code></a> (rewrite on rotation).</li>
           </ul>
           <hr>
@@ -876,7 +876,7 @@
           <li><strong>Depends on</strong>: <code>IHttpContextAccessor</code> (constructor, line 10) and the cookie-name constants on <a href="#sessioncookieendpoints"><code>SessionCookieEndpoints</code></a>. Consumed by <a href="#sessioncookieauthenticationhandler"><code>SessionCookieAuthenticationHandler</code></a>.</li>
           <li><strong>Concept introduced: the fresh-token handoff. [Rubric §10, Cross-Cutting Concerns]</strong> covers request-scoped state. The internal <code>FreshAccessTokenItemKey</code> constant (line 17) is the agreed <code>HttpContext.Items</code> key under which <a href="#cookiesessionrefresher"><code>CookieSessionRefresher</code></a> parks a just-rotated access token. <code>ReadAccessToken</code> checks that key first so, on the very request that triggered a refresh, SSR authentication uses the new token rather than the still-expired one sitting in the request cookie (the <code>Set-Cookie</code> only affects the next request).</li>
           <li><strong>Walkthrough</strong>: <code>ReadAccessToken</code> (lines 19-34): return <code>null</code> if there is no <code>HttpContext</code>; otherwise prefer a non-empty <code>string</code> under <code>FreshAccessTokenItemKey</code> (lines 27-31); fall back to the access cookie (line 33). <code>ReadRefreshToken</code> (lines 36-37) reads the refresh cookie directly, with no fresh-item fallback (only the access token is ever rotated mid-request).</li>
-          <li><strong>Why it&#39;s built this way</strong>: the Items-first precedence is what makes the middleware&#39;s server-side refresh actually take effect on the triggering request instead of only the next one (ADR-022).</li>
+          <li><strong>Why it&#39;s built this way</strong>: the Items-first precedence is what makes the middleware&#39;s server-side refresh actually take effect on the triggering request instead of only the next one (<a href="https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html" target="_blank" rel="noopener">ADR-022</a>).</li>
           <li><strong>Where it&#39;s used</strong>: <a href="#sessioncookieauthenticationhandler"><code>SessionCookieAuthenticationHandler</code></a> and the UI host&#39;s server-side token store during prerender.</li>
           </ul>
           <hr>
@@ -889,7 +889,7 @@
           <li><strong>Depends on</strong>: <code>IHttpClientFactory</code>, <code>IMemoryCache</code>, <code>IWebHostEnvironment</code> (constructor, lines 43-46), <a href="#sessioncookiejar"><code>SessionCookieJar</code></a>, <a href="#cookietokenreader"><code>CookieTokenReader</code></a> (the Items key), <a href="#sessioncookieendpoints"><code>SessionCookieEndpoints</code></a> (cookie names), and the <a href="#authenticationresponse"><code>AuthenticationResponse</code></a>/<a href="#refreshtokenrequest"><code>RefreshTokenRequest</code></a> contracts from <code>MMCA.Common.Shared.Auth</code>. Uses <code>System.IdentityModel.Tokens.Jwt</code> to read expiry.</li>
           <li><strong>Concept introduced: single-flight refresh under a thundering herd. [Rubric §12, Performance &amp; Scalability]</strong> assesses behavior under concurrent load. When an access token expires, many queued requests can arrive at once; rotating for each would invalidate the refresh token repeatedly and log the user out. The type comment (lines 36-42) states the design: a process-wide <code>SemaphoreSlim</code> (line 53) plus a short 10-second rotation-grace cache (line 51 <code>RotationGrace</code>) collapse concurrent refreshes. The first request rotates and caches the result keyed by the OLD refresh token (line 133); siblings carrying the same expired pair read the cached rotated pair instead of rotating again.</li>
           <li><strong>Walkthrough</strong>: <code>GetOrRefreshAsync</code> (lines 55-84): read the access cookie and, if <code>TryReadValidExpiry</code> passes, return it as-is (lines 59-63). Otherwise read the refresh cookie; a missing one returns <code>null</code> (lines 65-69). Call <code>RefreshAsync</code>, and on success write the rotated pair with <code>SessionCookieJar.Append</code> (line 78) and stash the fresh access token on <code>context.Items[CookieTokenReader.FreshAccessTokenItemKey]</code> (line 82). <code>RefreshAsync</code> (lines 86-108) is the double-checked lock: a cache hit returns immediately (lines 88-91), otherwise it waits the semaphore, re-checks the cache (a request it queued behind may have just rotated, lines 97-100), then calls <code>CallRefreshAsync</code>. <code>CallRefreshAsync</code> (lines 110-135) POSTs a <code>RefreshTokenRequest</code> to the relative <code>auth/refresh</code> URI on the named <code>SessionCookieRefreshClient</code> (line 48), deliberately with <code>CancellationToken.None</code> (lines 114-119) so that once the lock is held the rotation completes and writes its cookies even if the triggering request was aborted, then caches the <code>AuthenticationResponse</code> under the old refresh token for <code>RotationGrace</code>. <code>TryReadValidExpiry</code> (lines 137-166) reads the JWT and rejects it if <code>ValidTo &lt;= UtcNow + ClockSkew</code> (30-second skew, line 50), catching malformed-token exceptions. <code>Dispose</code> (line 170) releases the semaphore.</li>
-          <li><strong>Why it&#39;s built this way</strong>: keying the grace cache by the OLD token is what lets a slightly-late sibling still find the rotated pair; refreshes are rare (only on cold-navigation expiry) and each holds the lock for one short HTTP call, so the process-wide lock is cheap (ADR-022). The server-to-server call is what keeps the refresh token off browser JS. [Rubric §11, Security].</li>
+          <li><strong>Why it&#39;s built this way</strong>: keying the grace cache by the OLD token is what lets a slightly-late sibling still find the rotated pair; refreshes are rare (only on cold-navigation expiry) and each holds the lock for one short HTTP call, so the process-wide lock is cheap (<a href="https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html" target="_blank" rel="noopener">ADR-022</a>). The server-to-server call is what keeps the refresh token off browser JS. [Rubric §11, Security].</li>
           <li><strong>Where it&#39;s used</strong>: resolved as <a href="#icookiesessionrefresher"><code>ICookieSessionRefresher</code></a> by <a href="#cookiesessionrefreshmiddleware"><code>CookieSessionRefreshMiddleware</code></a> and the <code>/auth/session/token</code> endpoint.</li>
           <li><strong>Caveats / not-in-source</strong>: the <code>SessionCookieRefreshClient</code> named <code>HttpClient</code> must be configured (base address = the API) by the host; that registration lives in the host&#39;s DI, not this file.</li>
           </ul>
@@ -903,7 +903,7 @@
           <li><strong>Depends on</strong>: <code>AuthenticationHandler&lt;AuthenticationSchemeOptions&gt;</code> (ASP.NET), <a href="#cookietokenreader"><code>CookieTokenReader</code></a> (constructor, line 28), and <code>System.IdentityModel.Tokens.Jwt</code>. Registered by <a href="#sessioncookieauthenticationextensions"><code>SessionCookieAuthenticationExtensions</code></a>.</li>
           <li><strong>Concept introduced: a deliberately non-validating scheme. [Rubric §11, Security]</strong> assesses where the trust decision is actually made. The <code>&lt;remarks&gt;</code> (lines 18-23) are load-bearing: this handler does not validate the JWT signature. The cookie was minted by the UI host after a successful API login, and every real API call still performs full JWT validation, so this handler exists only to extract claims for ASP.NET&#39;s auth system during prerender. It is the reason a deep-linked <code>[Authorize]</code> page renders instead of flashing a redirect.</li>
           <li><strong>Walkthrough</strong>: <code>SchemeName = &quot;SessionCookie&quot;</code> (line 32) is the canonical scheme name. <code>HandleAuthenticateAsync</code> (lines 35-69): read the token via <a href="#cookietokenreader"><code>CookieTokenReader</code></a>; no token gives <code>AuthenticateResult.NoResult()</code> (lines 37-41). It then checks the token is a readable JWT (<code>Fail</code> if not, lines 46-49) and, using the base handler&#39;s injectable <code>TimeProvider</code> (line 55), fails if <code>ValidTo</code> is in the past (lines 55-58). On success it builds a <code>ClaimsIdentity</code> from the JWT claims with <code>NameIdentifier</code>/<code>Role</code> claim types (line 60), wraps it in a <code>ClaimsPrincipal</code> and <code>AuthenticationTicket</code>, and returns <code>Success</code> (lines 60-63), catching malformed-token exceptions as <code>Fail</code> (lines 65-68). <code>HandleChallengeAsync</code> (lines 72-77) redirects an unauthenticated caller to <code>/login?returnUrl=...</code>. <code>HandleForbiddenAsync</code> (lines 80-84) sets a bare <code>403</code>.</li>
-          <li><strong>Why it&#39;s built this way</strong>: validating the signature here would duplicate the API&#39;s JWKS validation and couple the UI host to the signing key; extracting claims only, while the API remains the single validation authority, keeps the trust boundary in one place (ADR-004 / ADR-022). Using the injectable <code>TimeProvider</code> keeps the expiry check on the same clock the rest of the auth stack (and its tests) uses. [Rubric §14, Testability].</li>
+          <li><strong>Why it&#39;s built this way</strong>: validating the signature here would duplicate the API&#39;s JWKS validation and couple the UI host to the signing key; extracting claims only, while the API remains the single validation authority, keeps the trust boundary in one place (<a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a> / <a href="https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html" target="_blank" rel="noopener">ADR-022</a>). Using the injectable <code>TimeProvider</code> keeps the expiry check on the same clock the rest of the auth stack (and its tests) uses. [Rubric §14, Testability].</li>
           <li><strong>Where it&#39;s used</strong>: registered as the <code>SessionCookie</code> scheme on the UI.Web host via <code>AddSessionCookieAuthentication()</code>.</li>
           </ul>
           <hr>
@@ -995,7 +995,7 @@
           <code>RevokeRefreshToken()</code> (<code>IAuthUser.cs:30</code>).</li>
           <li><strong>Why it&#39;s built this way</strong>: keeping the contract in Domain and minimal keeps the shared auth
           workflow reusable across Store and ADC (both <code>User</code> aggregates implement it) while the aggregates stay
-          free to model everything else however each app needs (ADR-004 for the dual-fetch/JWKS auth model that
+          free to model everything else however each app needs (<a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a> for the dual-fetch/JWKS auth model that
           this contract feeds).</li>
           <li><strong>Where it&#39;s used</strong>: the shared <code>AuthenticationServiceBase&lt;TUser&gt;</code> login and refresh flow; each
           Identity module&#39;s <code>User</code> aggregate is the implementer.</li>
@@ -1013,7 +1013,7 @@
           <a href="#rsajwksprovider">RsaJwksProvider</a>; driven by
           <a href="group-14-module-system-composition.html#jwkssettings">JwksSettings</a> and served by
           <a href="group-12-api-hosting-mapping.html#jwksendpointextensions">JwksEndpointExtensions</a>.</li>
-          <li><strong>Concept</strong>: <code>[Rubric §11, Security]</code> and <code>[Rubric §7, Microservices Readiness]</code> (ADR-004). In the
+          <li><strong>Concept</strong>: <code>[Rubric §11, Security]</code> and <code>[Rubric §7, Microservices Readiness]</code> (<a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a>). In the
           extracted-service topology, services cannot share a symmetric HMAC secret without every service
           holding it and widening the blast radius on compromise. Instead the Identity service holds the RSA
           private key and publishes only the public key at a well-known URL; other services fetch it at startup
@@ -1099,7 +1099,7 @@
           <li><strong>Why it&#39;s built this way</strong>: verification stays backward-compatible with pre-existing HMAC hashes so
           a deployment can migrate lazily; new writes are PBKDF2 only, so the population converges without a
           data migration. <code>FixedTimeEquals</code> and the 600k iteration count are the concrete OWASP-aligned defenses
-          (ADR-032 for the password-material model this feeds).</li>
+          (<a href="https://ivanball.github.io/docs/adr/032-password-hashing.html" target="_blank" rel="noopener">ADR-032</a> for the password-material model this feeds).</li>
           <li><strong>Where it&#39;s used</strong>: the Identity module&#39;s registration and login command handlers, against the
           <code>PasswordHash</code>/<code>PasswordSalt</code> exposed by <a href="#iauthuser">IAuthUser</a>.</li>
           </ul>
@@ -1117,7 +1117,7 @@
           <code>System.Security.Cryptography.RSA</code>, <code>Microsoft.IdentityModel.Tokens</code>
           (<code>JsonWebKeySet</code>, <code>RsaSecurityKey</code>, <code>JsonWebKeyConverter</code>) (NuGet/BCL).</li>
           <li><strong>Concept</strong>: reinforces the JWKS story introduced on <a href="#ijwksprovider">IJwksProvider</a>
-          (<code>[Rubric §11, Security]</code>, <code>[Rubric §7, Microservices Readiness]</code>, ADR-004). The build cost is paid
+          (<code>[Rubric §11, Security]</code>, <code>[Rubric §7, Microservices Readiness]</code>, <a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a>). The build cost is paid
           once and memoized: the constructor stores a <code>Lazy&lt;JsonWebKeySet&gt;</code> (<code>RsaJwksProvider.cs:17</code>) so the PEM
           is parsed a single time on first request and cached for the process lifetime.</li>
           <li><strong>Walkthrough</strong><ul>
@@ -1167,7 +1167,7 @@
           an already-expired token (<code>TokenService.cs:124</code>); and validation pins the algorithm via
           <code>ValidAlgorithms = [_validationAlgorithm]</code> (<code>TokenService.cs:130</code>) and re-checks the token header&#39;s
           <code>Alg</code> after validation (<code>TokenService.cs:139-140</code>), which blocks the algorithm-substitution attack
-          where a public RS256 key is abused as an HS256 secret. RS256 is the extracted-service mode (ADR-004):
+          where a public RS256 key is abused as an HS256 secret. RS256 is the extracted-service mode (<a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a>):
           the issuer signs with its private key and publishes the public key via JWKS so other services validate
           without a shared secret.</li>
           <li><strong>Walkthrough</strong><ul>
@@ -1187,7 +1187,7 @@
           <li><code>Dispose</code> (<code>TokenService.cs:154</code>): releases the owned <code>RSA</code> handles.</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: see ADR-004 (dual-fetch/JWKS auth) for the RS256 rationale. Owning and
+          <li><strong>Why it&#39;s built this way</strong>: see <a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a> (dual-fetch/JWKS auth) for the RS256 rationale. Owning and
           disposing the <code>RSA</code> objects is required to release native key handles; the <code>RsaSecurityKey</code> wrappers
           hold only weak references to them (<code>TokenService.cs:31-34</code>).</li>
           <li><strong>Where it&#39;s used</strong>: the Identity module&#39;s authentication and refresh command handlers; the emitted
@@ -1685,7 +1685,7 @@
           </li>
           <li><p><strong>Why it&#39;s built this way</strong>: keeping the protection policy behind an interface lets the shared
           authentication workflow compose it in while the concrete cache mechanics stay in the implementation;
-          the null-IP &quot;skip&quot; keeps the limiter from becoming an availability hazard (ADR-029).</p>
+          the null-IP &quot;skip&quot; keeps the limiter from becoming an availability hazard (<a href="https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html" target="_blank" rel="noopener">ADR-029</a>).</p>
           </li>
           <li><p><strong>Where it&#39;s used</strong>: injected into <a href="#authenticationservicebasetuser"><code>AuthenticationServiceBase&lt;TUser&gt;</code></a>,
           which calls all five methods across its login and registration flows; the concrete, cache-backed
@@ -1800,7 +1800,7 @@
           this workflow at roughly 70-95% line-identity; folding it here means a fix to the lockout order or
           the refresh-rotation logic is written once. <code>[Rubric §11, Security]</code>: the base encodes the security
           posture directly, validate-first, an <a href="#iloginprotectionservice"><code>ILoginProtectionService</code></a>
-          lockout/rate-limit gate (ADR-029), an untracked-then-tracked dual fetch, and refresh-token rotation
+          lockout/rate-limit gate (<a href="https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html" target="_blank" rel="noopener">ADR-029</a>), an untracked-then-tracked dual fetch, and refresh-token rotation
           with <strong>reuse detection</strong> (BR-205/206). <code>[Rubric §7, Microservices Readiness]</code>: the workflow depends
           only on ports (<code>IUnitOfWork</code>, <code>ITokenService</code>, ...) so it runs unchanged whether the Identity module
           is in-monolith or its own service.</li>
@@ -1812,7 +1812,7 @@
           (external login) reuse them without re-injecting.</li>
           <li><strong>Token lifetimes</strong> (lines 57-60): <code>virtual</code> <code>AccessTokenLifetime</code> (15 minutes) and
           <code>RefreshTokenLifetime</code> (7 days), the BR-205 defaults, are overridable per app.</li>
-          <li><strong><code>LoginAsync</code></strong> (lines 63-121): validate the request (line 67), check lockout (line 74, ADR-029 /
+          <li><strong><code>LoginAsync</code></strong> (lines 63-121): validate the request (line 67), check lockout (line 74, <a href="https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html" target="_blank" rel="noopener">ADR-029</a> /
           BR-212), normalise the raw email into an <a href="group-02-domain-building-blocks.html#email"><code>Email</code></a> value
           object (line 82) so the EF predicate compares same-typed converted values. <strong>Step 1</strong> is an
           <em>untracked</em> fetch via the <code>FindUntrackedByEmailAsync</code> hook (line 86) to verify credentials without
@@ -1821,7 +1821,7 @@
           pre-hoist behaviour is preserved), then <code>passwordHasher.VerifyPassword</code> (line 102). <strong>Step 2</strong> is a
           <em>tracked</em> re-fetch by id (line 110) so the new refresh token can be persisted, followed by
           <code>ResetFailedAttemptsAsync</code> (line 118) and <code>IssueTokensAsync</code> (line 120).</li>
-          <li><strong><code>RegisterAsync</code></strong> (lines 124-177): validate (line 129), IP rate-limit (line 136, ADR-029 /
+          <li><strong><code>RegisterAsync</code></strong> (lines 124-177): validate (line 129), IP rate-limit (line 136, <a href="https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html" target="_blank" rel="noopener">ADR-029</a> /
           BR-213), reject a duplicate email through the <code>EmailExistsAsync</code> hook (line 143), hash the password
           (line 150), build the user through the <code>CreateUser</code> hook (line 151), mint and store a refresh token
           (lines 158-159), <code>AddAsync</code> + <code>SaveChangesAsync</code> (lines 161-162), then run the <code>OnUserRegisteredAsync</code>
@@ -1856,7 +1856,7 @@
           EF query filters returning the generic 401) while still giving a tracked instance to persist the new
           token. Refresh-token reuse detection (revoke-on-mismatch) is the BR-206 defence against a stolen
           token being replayed. Password material flows through <a href="#iauthuser"><code>IAuthUser</code></a>&#39;s <code>PasswordHash</code>/
-          <code>PasswordSalt</code> (ADR-032), and the whole workflow depends only on abstractions, so it is identical
+          <code>PasswordSalt</code> (<a href="https://ivanball.github.io/docs/adr/032-password-hashing.html" target="_blank" rel="noopener">ADR-032</a>), and the whole workflow depends only on abstractions, so it is identical
           whether the module runs in-process or as an extracted service.</li>
           <li><strong>Where it&#39;s used</strong>: subclassed by each app&#39;s sealed
           <a href="group-24-identity-module.html#authenticationservice"><code>AuthenticationService</code></a> (for example

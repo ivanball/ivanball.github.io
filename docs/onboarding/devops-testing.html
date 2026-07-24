@@ -581,7 +581,7 @@
           <code>ResetDatabaseAsync()</code> resets the database between tests. The doc comment (<code>IIntegrationTestFixture.cs:16-20</code>)
           explicitly notes that fixtures for database-per-service hosts must reset <strong>every</strong> relational source
           by enumerating <code>IEntityDataSourceRegistry</code> and <code>IDataSourceResolver</code>, this is the
-          database-per-microservice (ADR-006) implication for test cleanup. Each concrete fixture implements
+          database-per-microservice (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>) implication for test cleanup. Each concrete fixture implements
           this by opening a per-source <code>SqlConnection</code> and calling <code>Respawner.ResetAsync</code>.</p>
           <h4 id="integrationtestbasetfixture"><code>IntegrationTestBase&lt;TFixture&gt;</code></h4>
           <p><code>MMCA.Common/Source/Hosting/MMCA.Common.Testing/IntegrationTestBase.cs:13</code></p>
@@ -841,7 +841,7 @@
           framework-independent, not just convention.</p>
           <h4 id="microserviceextractiontests"><code>MicroserviceExtractionTests</code></h4>
           <p><code>MMCA.Common.Architecture.Tests/MicroserviceExtractionTests.cs</code></p>
-          <p>Enforces the transport-isolation invariant for microservice extraction (ADR-007/ADR-008):
+          <p>Enforces the transport-isolation invariant for microservice extraction (<a href="https://ivanball.github.io/docs/adr/007-grpc-extraction.html" target="_blank" rel="noopener">ADR-007</a>/<a href="https://ivanball.github.io/docs/adr/008-service-extraction-topology.html" target="_blank" rel="noopener">ADR-008</a>):
           <code>Application</code>, <code>Domain</code>, and <code>Shared</code> must not reference <code>MassTransit</code>; transport (gRPC / MassTransit)
           belongs only in Infrastructure and the transport-edge packages. The rule body is the shared
           <code>MicroserviceExtractionTestsBase</code> over <code>CommonArchitectureMap</code>.</p>
@@ -854,7 +854,7 @@
           <h4 id="piiconventiontests"><code>PiiConventionTests</code></h4>
           <p><code>MMCA.Common.Architecture.Tests/PiiConventionTests.cs</code></p>
           <p>1 fact: any type in <code>MMCA.Common.Domain</code> bearing a <code>[Pii]</code>-decorated property must implement
-          <code>IAnonymizable</code> (ADR-005). The test passes vacuously today (the framework ships no PII-bearing data
+          <code>IAnonymizable</code> (<a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a>). The test passes vacuously today (the framework ships no PII-bearing data
           subject entity), and fails the build the moment one is added without an erasure path.
           [Rubric §30, Compliance, Privacy &amp; Data Governance]: §30 assesses whether GDPR/CCPA erasure
           obligations are structurally enforced; this test is the structural gate.</p>

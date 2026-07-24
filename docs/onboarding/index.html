@@ -235,13 +235,13 @@
           <td>7</td>
           <td><a href="group-07-persistence-ef-core.html">Persistence &amp; EF Core</a></td>
           <td>85</td>
-          <td><code>SQLServerDbContext</code> over abstract <code>ApplicationDbContext</code>, interceptors (incl. the deferred-dispatch record), repositories, engine-aware entity config, data-source routing, conventions (incl. the soft-delete unique-index convention), factories, managed file storage + image processing (ADR-045), native-push device registrar (ADR-044)</td>
+          <td><code>SQLServerDbContext</code> over abstract <code>ApplicationDbContext</code>, interceptors (incl. the deferred-dispatch record), repositories, engine-aware entity config, data-source routing, conventions (incl. the soft-delete unique-index convention), factories, managed file storage + image processing (<a href="https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html" target="_blank" rel="noopener">ADR-045</a>), native-push device registrar (<a href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html" target="_blank" rel="noopener">ADR-044</a>)</td>
           </tr>
           <tr>
           <td>8</td>
           <td><a href="group-08-auth.html">Authentication &amp; Authorization</a></td>
           <td>56</td>
-          <td>JWT/JWKS dual-fetch, the shared <code>AuthenticationServiceBase&lt;TUser&gt;</code> login/refresh workflow (<code>IAuthUser</code>), current-user/claims, password hashing, cookie sessions, role policies + the permission-based authorization mechanism (registry, <code>[HasPermission]</code>), the <code>RoleValue</code> base, the external-auth-broker contract (ADR-042/043)</td>
+          <td>JWT/JWKS dual-fetch, the shared <code>AuthenticationServiceBase&lt;TUser&gt;</code> login/refresh workflow (<code>IAuthUser</code>), current-user/claims, password hashing, cookie sessions, role policies + the permission-based authorization mechanism (registry, <code>[HasPermission]</code>), the <code>RoleValue</code> base, the external-auth-broker contract (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>/043)</td>
           </tr>
           <tr>
           <td>9</td>
@@ -253,25 +253,25 @@
           <td>10</td>
           <td><a href="group-10-notifications.html">Notifications (Push + In-App Inbox + Email)</a></td>
           <td>54</td>
-          <td>Push (SignalR), in-app inbox, email, recipient providers, the ADR-039 hub-channel live publisher, ADR-044 native OS-level push (Azure Notification Hubs, shipped inert), ADC Notification module + its cross-service gRPC live-channel plumbing + extractable-host Kestrel config</td>
+          <td>Push (SignalR), in-app inbox, email, recipient providers, the <a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a> hub-channel live publisher, <a href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html" target="_blank" rel="noopener">ADR-044</a> native OS-level push (Azure Notification Hubs, shipped inert), ADC Notification module + its cross-service gRPC live-channel plumbing + extractable-host Kestrel config</td>
           </tr>
           <tr>
           <td>11</td>
           <td><a href="group-11-navigation-populators.html">Navigation Metadata &amp; Populators</a></td>
           <td>12</td>
-          <td>EF-decoupled cross-container/cross-source eager loading (ADR-002)</td>
+          <td>EF-decoupled cross-container/cross-source eager loading (<a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>)</td>
           </tr>
           <tr>
           <td>12</td>
           <td><a href="group-12-api-hosting-mapping.html">API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</a></td>
           <td>56</td>
-          <td>Controller bases (incl. OAuth + service-info + API versioning, ADR-046), middleware (incl. soft-deleted-user revocation, ADR-047), startup, model binders, JSON converters, feature mgmt, idempotency, mapping, edge error localization (i18n), authenticated output caching (ADR-040), app-association/deep-link endpoints (ADR-043)</td>
+          <td>Controller bases (incl. OAuth + service-info + API versioning, <a href="https://ivanball.github.io/docs/adr/046-http-api-versioning.html" target="_blank" rel="noopener">ADR-046</a>), middleware (incl. soft-deleted-user revocation, <a href="https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html" target="_blank" rel="noopener">ADR-047</a>), startup, model binders, JSON converters, feature mgmt, idempotency, mapping, edge error localization (i18n), authenticated output caching (<a href="https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html" target="_blank" rel="noopener">ADR-040</a>), app-association/deep-link endpoints (<a href="https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html" target="_blank" rel="noopener">ADR-043</a>)</td>
           </tr>
           <tr>
           <td>13</td>
           <td><a href="group-13-grpc-contracts.html">gRPC &amp; Inter-Service Contracts</a></td>
           <td>6</td>
-          <td>Typed gRPC clients/servers, interceptors, Result-over-the-wire (ADR-007)</td>
+          <td>Typed gRPC clients/servers, interceptors, Result-over-the-wire (<a href="https://ivanball.github.io/docs/adr/007-grpc-extraction.html" target="_blank" rel="noopener">ADR-007</a>)</td>
           </tr>
           <tr>
           <td>14</td>
@@ -283,7 +283,7 @@
           <td>15</td>
           <td><a href="group-15-common-ui-framework.html">Common UI Framework</a></td>
           <td>82</td>
-          <td>Reusable MudBlazor building blocks: data-grid list page base, theme, common pages/services, i18n culture bootstrap + day/dark <code>ThemeService</code>, user-preference readers/writers, pseudo-localization gate, OAuth UI settings + token storage (Web/WASM), hub-channel subscriptions (ADR-039)</td>
+          <td>Reusable MudBlazor building blocks: data-grid list page base, theme, common pages/services, i18n culture bootstrap + day/dark <code>ThemeService</code>, user-preference readers/writers, pseudo-localization gate, OAuth UI settings + token storage (Web/WASM), hub-channel subscriptions (<a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>)</td>
           </tr>
           <tr>
           <td>16</td>
@@ -301,7 +301,7 @@
           <td>18</td>
           <td><a href="group-18-conference-application.html">ADC Conference, Application &amp; Use Cases</a></td>
           <td>211</td>
-          <td>Conference CQRS handlers, validators (incl. the per-field session validation-rule family), DTOs, specs, Sessionize import, decision-support analytics, batch bookmark-count query, event-filtering-by-role handlers, calendar (.ics) export slice (ADR-042)</td>
+          <td>Conference CQRS handlers, validators (incl. the per-field session validation-rule family), DTOs, specs, Sessionize import, decision-support analytics, batch bookmark-count query, event-filtering-by-role handlers, calendar (.ics) export slice (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>)</td>
           </tr>
           <tr>
           <td>19</td>
@@ -325,19 +325,19 @@
           <td>22</td>
           <td><a href="group-22-engagement-module.html">ADC Engagement Module (Session Bookmarks)</a></td>
           <td>72</td>
-          <td>The async session-bookmarking slice of the Engagement bounded context: bookmark aggregate, use cases, persistence, API/contracts/service, feedback UI, the durable live-channel publish queue (ADR-039), the cross-service user-engagement export slice (gRPC)</td>
+          <td>The async session-bookmarking slice of the Engagement bounded context: bookmark aggregate, use cases, persistence, API/contracts/service, feedback UI, the durable live-channel publish queue (<a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>), the cross-service user-engagement export slice (gRPC)</td>
           </tr>
           <tr>
           <td>23</td>
           <td><a href="group-23-engagement-live-layer.html">ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></td>
           <td>92</td>
-          <td>Event-wide live polls with voting + moderated per-session Q&amp;A with upvoting, over the ADR-039 hub-channel transport and the cross-service gRPC live-channel adapter (HappeningNow / SessionLive / PresenterView)</td>
+          <td>Event-wide live polls with voting + moderated per-session Q&amp;A with upvoting, over the <a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a> hub-channel transport and the cross-service gRPC live-channel adapter (HappeningNow / SessionLive / PresenterView)</td>
           </tr>
           <tr>
           <td>24</td>
           <td><a href="group-24-identity-module.html">ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></td>
           <td>82</td>
-          <td>The Identity bounded context end-to-end (incl. <code>IdentityPermissions</code>, user culture/theme preferences, the ADR-045 user-avatar photo slice end to end, the external-login email verifier + extractable-host Kestrel config; <code>AuthenticationService</code> now extends Common&#39;s shared base)</td>
+          <td>The Identity bounded context end-to-end (incl. <code>IdentityPermissions</code>, user culture/theme preferences, the <a href="https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html" target="_blank" rel="noopener">ADR-045</a> user-avatar photo slice end to end, the external-login email verifier + extractable-host Kestrel config; <code>AuthenticationService</code> now extends Common&#39;s shared base)</td>
           </tr>
           <tr>
           <td>25</td>
@@ -349,7 +349,7 @@
           <td>26</td>
           <td><a href="group-26-device-capability-layer.html">Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></td>
           <td>87</td>
-          <td>Per-capability interface contracts (biometric, geolocation, speech, push registration, clipboard/share/haptics, external auth/links, connectivity/battery, deep links) + their MAUI-native, browser-JS-interop, and inert-fallback implementations, selected per host at DI composition time (ADR-042/043/044/045)</td>
+          <td>Per-capability interface contracts (biometric, geolocation, speech, push registration, clipboard/share/haptics, external auth/links, connectivity/battery, deep links) + their MAUI-native, browser-JS-interop, and inert-fallback implementations, selected per host at DI composition time (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>/043/044/045)</td>
           </tr>
           <tr>
           <td>27</td>

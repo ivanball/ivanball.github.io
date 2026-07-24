@@ -26,7 +26,7 @@ Cross-Cutting Concerns]` and `[Rubric §3, Clean Architecture]` also run through
 where the inward-pointing dependency rule gets physically realized (Infrastructure references
 Application references Domain references Shared), and where cross-cutting concerns are registered once
 for every module rather than per-feature. The two ADRs that explain *why* this shape exists are
-ADR-008 (service-extraction topology) and ADR-006 (database-per-service).
+[ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html) (service-extraction topology) and [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) (database-per-service).
 
 ## The module contract and the boundary it creates
 
@@ -52,7 +52,7 @@ in its own service the Engagement module is *disabled* in that host's config, ye
 `GetSessionBookmarkCountHandler` still needs Engagement's `IBookmarkCountService`, so the disabled
 Engagement module contributes a stub, and the host then *replaces* that stub with a typed gRPC client
 pointed at the real Engagement process. Application code never learns which path it got; the transport
-choice lives entirely at the composition edge (ADR-008). `[Rubric §2, Design Patterns]` applies here,
+choice lives entirely at the composition edge ([ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)). `[Rubric §2, Design Patterns]` applies here,
 this is a clean strategy/null-object pairing (real service vs. disabled stub vs. remote client) rather
 than scattered `if (moduleEnabled)` checks.
 
@@ -189,7 +189,7 @@ not bind through `AddOptions`, and its constructor rejects a reserved `"Default"
 [`OutboxProcessor`](group-04-events-outbox.md#outboxprocessor); the JWT/JWKS group
 ([`JwtSettings`](#jwtsettings) / [`IJwtSettings`](#ijwtsettings) with its algorithm-aware
 `IValidatableObject.Validate`, `JwtSettings.cs:16`, the [`JwtSigningAlgorithm`](#jwtsigningalgorithm)
-enum, and [`JwksSettings`](#jwkssettings)) backing token signing and cross-service validation (ADR-004);
+enum, and [`JwksSettings`](#jwkssettings)) backing token signing and cross-service validation ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html));
 and [`SmtpSettings`](#smtpsettings) / [`PushNotificationSettings`](#pushnotificationsettings) for the
 email and SignalR-push pipelines.
 
@@ -197,7 +197,7 @@ email and SignalR-push pipelines.
 
 Two attributes, both in `MMCA.Common.Infrastructure`, both `Inherited = true` so they ride down a
 configuration class hierarchy, encode *where an entity is stored* declaratively, the per-entity half of
-the database-per-service strategy (ADR-006).
+the database-per-service strategy ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)).
 [`UseDataSourceAttribute`](#usedatasourceattribute) (`UseDataSourceAttribute.cs:12-17`) names the
 **engine** ([`DataSource`](group-07-persistence-ef-core.md#datasource): SQL Server / Cosmos / SQLite)
 and is carried by the provider-specific configuration base classes, so choosing a base class chooses
@@ -233,7 +233,7 @@ so the decorators wrap the now-registered Conference handlers. Finally
 `app.Services.InitializeDatabaseAsync(applicationSettings, moduleLoader)` (`Program.cs:295`) applies
 migrations and runs the module seeders the loader collected. The exact same module assemblies, dropped
 into a monolith host with all four modules `Enabled`, would Kahn-sort into one in-process graph with no
-gRPC clients, which is precisely the reversibility ADR-008 is after.
+gRPC clients, which is precisely the reversibility [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html) is after.
 
 ### AssemblyReference
 > MMCA.Common.Application · `MMCA.Common.Application` · `MMCA.Common/Source/Core/MMCA.Common.Application/AssemblyReference.cs:5` · Level 0 · class (static)
@@ -322,7 +322,7 @@ gRPC clients, which is precisely the reversibility ADR-008 is after.
 
 - **Depends on**: BCL only (`List<string>`, options binding). `[Rubric §7, Microservices Readiness]`.
 
-- **Concept introduced, the module-extraction boundary expressed as configuration.** `[Rubric §7, Microservices Readiness]` assesses whether a module can be lifted into its own service without rewriting application code. ADR-008 ("service-extraction topology") is the *why*: when, say, Catalog is extracted, the host sets `"Catalog": { "Enabled": false }` and any module that still depends on it adds `"RemoteDependencies": [ "Catalog" ]`. [`ModuleLoader`](#moduleloader) then skips the strict `RequiresDependencies` check for that name and lets the disabled module's `RegisterDisabledStubs` put the contract type in DI; the host afterwards `Replace`s the stub with a real gRPC client adapter (the XML doc, lines 11–36, walks through exactly this with a Catalog/Sales example). So extraction becomes a config + wiring change, not a code change.
+- **Concept introduced, the module-extraction boundary expressed as configuration.** `[Rubric §7, Microservices Readiness]` assesses whether a module can be lifted into its own service without rewriting application code. [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html) ("service-extraction topology") is the *why*: when, say, Catalog is extracted, the host sets `"Catalog": { "Enabled": false }` and any module that still depends on it adds `"RemoteDependencies": [ "Catalog" ]`. [`ModuleLoader`](#moduleloader) then skips the strict `RequiresDependencies` check for that name and lets the disabled module's `RegisterDisabledStubs` put the contract type in DI; the host afterwards `Replace`s the stub with a real gRPC client adapter (the XML doc, lines 11–36, walks through exactly this with a Catalog/Sales example). So extraction becomes a config + wiring change, not a code change.
 
 - **Walkthrough**: `bool Enabled { get; init; } = true` (line 9), `init`-only, so it can't be mutated after binding. `List<string> RemoteDependencies { get; set; } = []` (line 38), note this one is `set`, not `init`, because ASP.NET Core's `IConfiguration` binder needs a settable collection to populate; the resulting `CA2227` ("collection properties should be read-only") analyzer warning is suppressed with an inline `#pragma` (lines 37–39) and an explanatory comment, an acknowledged, documented trade-off rather than an oversight.
 
@@ -375,7 +375,7 @@ gRPC clients, which is precisely the reversibility ADR-008 is after.
 
 - **Walkthrough**: five members, three of them with **default interface implementations** so a minimal module need only supply `Name` and `Register`: `Name` (line 12, required); `Dependencies => []` (line 17, default empty); `RequiresDependencies => false` (line 23, default tolerant); `Register(IServiceCollection, IConfigurationBuilder, ApplicationSettings)` (line 28, required); `RegisterDisabledStubs(IServiceCollection) { }` (line 34, default no-op). Note `Register` takes an `IConfigurationBuilder` (not a built `IConfiguration`) so a module can *add its own configuration sources* before its services bind them, which is exactly what the loader exploits to inject per-module JSON files.
 
-- **Why it's built this way**: see MMCA.Common `CLAUDE.md` ("Module System") and ADR-008: making `IModule` the single boundary means extraction is a deployment/topology concern, not a rewrite. Default interface members keep the common case ceremony-free while leaving the extraction hooks available.
+- **Why it's built this way**: see MMCA.Common `CLAUDE.md` ("Module System") and [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html): making `IModule` the single boundary means extraction is a deployment/topology concern, not a rewrite. Default interface members keep the common case ceremony-free while leaving the extraction hooks available.
 
 - **Where it's used**: implemented by every ADC module (`ConferenceModule`, `EngagementModule`, `IdentityModule`, `NotificationModule`, all Level 3). Discovered, sorted, and invoked by [`ModuleLoader`](#moduleloader) (Level 3).
 
@@ -478,14 +478,14 @@ gRPC clients, which is precisely the reversibility ADR-008 is after.
 
 - **Depends on**: `System.Attribute` (BCL) only. Its resolved logical name is consumed downstream by the data-source machinery ([`DataSourceResolver`](group-07-persistence-ef-core.md#datasourceresolver), [`EntityDataSourceRegistry`](group-07-persistence-ef-core.md#entitydatasourceregistry)) and mapped to a connection string through the `DataSources` configuration entries modelled by [`DataSourceEntrySettings`](#datasourceentrysettings) / [`DataSourcesSettings`](#datasourcessettings).
 
-- **Concept introduced, declarative database-per-service routing.** `[Rubric §8, Data Architecture]` assesses how the model maps to physical stores; `[Rubric §7, Microservices Readiness]` assesses whether a module can be lifted out with its own database (ADR-006). The attribute's XML doc (`UseDatabaseAttribute.cs:9-14`) spells out the three-step resolution order for an entity's logical name: (1) this attribute on the concrete configuration class (inherited); (2) the module name derived from the entity namespace, the segment before `Domain`; (3) the literal `"Default"`, the top-level `ConnectionStrings` section. A logical name with no `DataSources` entry (or whose connection string equals the top-level one) collapses onto the `Default` physical source (`UseDatabaseAttribute.cs:15-17`), so a host that configures nothing behaves exactly like a single-database monolith. This "convention with an explicit override" shape is the load-bearing idea: most modules never apply the attribute and ride the namespace convention.
+- **Concept introduced, declarative database-per-service routing.** `[Rubric §8, Data Architecture]` assesses how the model maps to physical stores; `[Rubric §7, Microservices Readiness]` assesses whether a module can be lifted out with its own database ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)). The attribute's XML doc (`UseDatabaseAttribute.cs:9-14`) spells out the three-step resolution order for an entity's logical name: (1) this attribute on the concrete configuration class (inherited); (2) the module name derived from the entity namespace, the segment before `Domain`; (3) the literal `"Default"`, the top-level `ConnectionStrings` section. A logical name with no `DataSources` entry (or whose connection string equals the top-level one) collapses onto the `Default` physical source (`UseDatabaseAttribute.cs:15-17`), so a host that configures nothing behaves exactly like a single-database monolith. This "convention with an explicit override" shape is the load-bearing idea: most modules never apply the attribute and ride the namespace convention.
 
 - **Walkthrough**:
   - `[AttributeUsage(AttributeTargets.Class, Inherited = true, AllowMultiple = false)]` (`UseDatabaseAttribute.cs:21`). `Inherited = true` is deliberate: annotating a per-module configuration base class propagates the database assignment to every derived configuration, so a module can pin all its entities to one database in a single place. `AllowMultiple = false` forbids an ambiguous second assignment.
   - Primary-constructor parameter `name` (`UseDatabaseAttribute.cs:22`), the logical name (for example `"Conference"`).
   - `Name` get-only property (`UseDatabaseAttribute.cs:25`) initialized from that parameter, the value the resolver reads.
 
-- **Why it's built this way**: an attribute keeps the database choice declarative and co-located with the entity configuration rather than buried in a registration method, and `Inherited = true` turns per-module assignment into one annotation instead of one per entity (ADR-006, database per microservice).
+- **Why it's built this way**: an attribute keeps the database choice declarative and co-located with the entity configuration rather than buried in a registration method, and `Inherited = true` turns per-module assignment into one annotation instead of one per entity ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html), database per microservice).
 
 - **Where it's used**: applied on concrete EF entity type configuration classes in the modules; read up front by the eager [`EntityDataSourceRegistry`](group-07-persistence-ef-core.md#entitydatasourceregistry) so routing does not depend on a model having been built.
 
@@ -505,7 +505,7 @@ gRPC clients, which is precisely the reversibility ADR-008 is after.
   - Primary-constructor parameter `dataSource` (`UseDataSourceAttribute.cs:13`) of type [`DataSource`](group-07-persistence-ef-core.md#datasource).
   - `DataSource` get-only property (`UseDataSourceAttribute.cs:16`) exposing the chosen engine. The XML doc (`UseDataSourceAttribute.cs:5-9`) records that it is read by [`DataSourceService`](group-07-persistence-ef-core.md#datasourceservice) at model-building time to populate the entity-to-source cache that [`UnitOfWork`](group-07-persistence-ef-core.md#unitofwork) uses to route each entity to the correct [`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext).
 
-- **Why it's built this way**: keeping the engine on an attribute (inherited from a provider base class) means an entity's engine and database are both declarative metadata the registry can scan up front, which is what lets routing happen without first building an EF model (ADR-006).
+- **Why it's built this way**: keeping the engine on an attribute (inherited from a provider base class) means an entity's engine and database are both declarative metadata the registry can scan up front, which is what lets routing happen without first building an EF model ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)).
 
 - **Where it's used**: on the per-engine `EntityTypeConfiguration*` base classes and, through inheritance, every concrete configuration under them; read by [`DataSourceService`](group-07-persistence-ef-core.md#datasourceservice) / [`EntityDataSourceRegistry`](group-07-persistence-ef-core.md#entitydatasourceregistry).
 
@@ -526,12 +526,12 @@ gRPC clients, which is precisely the reversibility ADR-008 is after.
   - **The physical-factory warning (`DependencyInjection.cs:79-85`)**: [`DbContextFactory`](group-07-persistence-ef-core.md#dbcontextfactory) is scoped (one per request) and [`PhysicalDbContextFactory`](group-07-persistence-ef-core.md#physicaldbcontextfactory) is a singleton that must **never** be converted to EF context pooling, because each raw context carries per-source constructor state that pooling would silently reuse across databases.
   - **The Scrutor scan (`DependencyInjection.cs:105-109`)** discovers every `IEntityTypeConfigurationBase<,>` in the Infrastructure assembly via `FromAssemblyOf<ClassReference>()` (`DependencyInjection.cs:106`) and registers each as its implemented interfaces, scoped to match the DbContext lifetime, closing the loop back to [`ClassReference`](#classreference).
   - **`AddCaching` (`DependencyInjection.cs:149-168`)** is a Redis-or-memory probe resolved once as a singleton: if an `IDistributedCache` is registered and is not the no-op `MemoryDistributedCache` (`DependencyInjection.cs:156`), it wraps the real distributed cache (and any `IConnectionMultiplexer`) in `DistributedCacheService`; otherwise it falls back to `MemoryCacheService` (`DependencyInjection.cs:164`).
-  - **`AddServices` (`DependencyInjection.cs:174-212`)** registers the small services and encodes a subtle lifetime lesson: [`TokenService`](group-08-auth.md#tokenservice) is a **singleton** (`DependencyInjection.cs:186`) with a six-line comment explaining why (`DependencyInjection.cs:180-185`): a scoped lifetime disposed the RSA handle at end-of-request while IdentityModel's static `CryptoProviderCache` still held the cached signature provider wrapping it, throwing `ObjectDisposedException` on the next RS256 sign. `[Rubric §11, Security]` (correct signing-key lifecycle). It also sets the default [`IMessageBus`](group-04-events-outbox.md#imessagebus) to [`InProcessMessageBus`](group-04-events-outbox.md#inprocessmessagebus) (`DependencyInjection.cs:194`) and wires the inert no-op defaults for push (`DependencyInjection.cs:198-199`), native push (ADR-044, `203-204`), and file storage (ADR-045, `208`) so hosts can register the opt-in methods unconditionally.
+  - **`AddServices` (`DependencyInjection.cs:174-212`)** registers the small services and encodes a subtle lifetime lesson: [`TokenService`](group-08-auth.md#tokenservice) is a **singleton** (`DependencyInjection.cs:186`) with a six-line comment explaining why (`DependencyInjection.cs:180-185`): a scoped lifetime disposed the RSA handle at end-of-request while IdentityModel's static `CryptoProviderCache` still held the cached signature provider wrapping it, throwing `ObjectDisposedException` on the next RS256 sign. `[Rubric §11, Security]` (correct signing-key lifecycle). It also sets the default [`IMessageBus`](group-04-events-outbox.md#imessagebus) to [`InProcessMessageBus`](group-04-events-outbox.md#inprocessmessagebus) (`DependencyInjection.cs:194`) and wires the inert no-op defaults for push (`DependencyInjection.cs:198-199`), native push ([ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html), `203-204`), and file storage ([ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html), `208`) so hosts can register the opt-in methods unconditionally.
   - **`AddBrokerMessaging` (`DependencyInjection.cs:372-421`)** is the extraction pivot. It reads [`MessageBusSettings.Provider`](#messagebussettings): on `InProcess` it returns immediately (`DependencyInjection.cs:381-384`), leaving the in-process bus in place; otherwise it calls `AddMassTransit` and then **`Replace`s** the scoped [`IMessageBus`](group-04-events-outbox.md#imessagebus) with [`BrokerMessageBus`](group-04-events-outbox.md#brokermessagebus) (`DependencyInjection.cs:401`) and [`IEventBus`](group-04-events-outbox.md#ieventbus) with `BrokerEventBus` (`DependencyInjection.cs:407`), the deliberate exception to the `TryAdd` rule, because the in-process bus must not run alongside the broker. It also chooses the consumer-side [`IInboxStore`](group-04-events-outbox.md#efinboxstore) implementation from `settings.EnableInbox` (`DependencyInjection.cs:411-418`).
   - **Transport wiring (`DependencyInjection.cs:475-550`)** is factored into two private static helpers (`ResolveBrokerConnectionString` at `475-484`, `ConfigureBrokerTransport` at `504-550`) outside the extension block to keep `AddBrokerMessaging`'s cyclomatic complexity below the analyzer threshold; both carry a justified `IDE0051` suppression (`DependencyInjection.cs:471-474`, `500-503`) documenting a Roslyn false positive where SDK 10.0.201+ cannot see references crossing the extension-block boundary. `[Rubric §29, Resilience & Business Continuity]`: every receive endpoint gets an exponential-backoff `UseMessageRetry` policy (`DependencyInjection.cs:519-523`, `536-540`); `UseDelayedRedelivery` is intentionally not wired, with a comment explaining the Aspire RabbitMQ container lacks the delayed-message-exchange plugin (`DependencyInjection.cs:494-499`).
   - **`AddTypedServiceClient` (`DependencyInjection.cs:441-458`)** wires a typed `HttpClient` to Aspire service discovery (`http://{serviceName}`, `DependencyInjection.cs:451-452`), attaches [`JwtForwardingDelegatingHandler`](group-12-api-hosting-mapping.md#jwtforwardingdelegatinghandler) (`DependencyInjection.cs:453`) so the inbound bearer token flows downstream, and adds the standard Polly resilience handler (`DependencyInjection.cs:456`); the doc notes gRPC is preferred for service-to-service contracts.
 
-- **Why it's built this way**: the `extension(IServiceCollection)` syntax keeps every Infrastructure registration in one file without a proliferation of static helper classes, and pushing all concrete choices into one composition root at the layer edge is what keeps Application and Domain free of framework references (ADR-006 for the database-per-service wiring, ADR-007/ADR-008 for the broker/extraction path). See the DI-sequence note in `MMCA.Common/CLAUDE.md`: hosts call `AddApplicationDecorators()` last so Scrutor can decorate handlers already registered, but the relative position of `AddInfrastructure` is not otherwise ordering-sensitive.
+- **Why it's built this way**: the `extension(IServiceCollection)` syntax keeps every Infrastructure registration in one file without a proliferation of static helper classes, and pushing all concrete choices into one composition root at the layer edge is what keeps Application and Domain free of framework references ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) for the database-per-service wiring, [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)/[ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html) for the broker/extraction path). See the DI-sequence note in `MMCA.Common/CLAUDE.md`: hosts call `AddApplicationDecorators()` last so Scrutor can decorate handlers already registered, but the relative position of `AddInfrastructure` is not otherwise ordering-sensitive.
 
 - **Where it's used**: called from each service host's `Program.cs` (the reference apps and the extracted `MMCA.ADC.*` service hosts) after `AddApplication()`; the optional methods (`AddBrokerMessaging`, `AddPushNotifications`, `AddNativePushNotifications`, `AddAzureBlobFileStorage`) are added by the specific hosts that need those channels.
 
@@ -551,7 +551,7 @@ gRPC clients, which is precisely the reversibility ADR-008 is after.
 - **Concept introduced, per-source connection overrides for database-per-service.**
   `[Rubric §8, Data Architecture]` (assesses deliberate persistence: which database an entity lives
   in, migrations, connection management). `[Rubric §7, Microservices Readiness]` (assesses whether a
-  module can be lifted into its own service). This type is the configuration half of ADR-006: a module
+  module can be lifted into its own service). This type is the configuration half of [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html): a module
   earns its own physical SQL database simply by adding a `DataSources:Sales` entry with its own
   `SQLServerConnectionString` (and optionally its own `SQLServerMigrationsAssembly`). Crucially, the
   **fallback is the monolith**: a module that omits an entry, or whose connection string equals the
@@ -564,7 +564,7 @@ gRPC clients, which is precisely the reversibility ADR-008 is after.
   `SqliteConnectionString`, `SQLServerConnectionString`, and `SQLServerMigrationsAssembly`. The
   doc-comment example (lines 9-18) shows a real `DataSources:Conference` entry. The
   `SQLServerMigrationsAssembly` override is what lets each database have its own migrations project
-  (one migrations assembly per database, see ADR-006's design-time note).
+  (one migrations assembly per database, see [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)'s design-time note).
 - **Why it's built this way**: sealed and `init`-only for the same reason as every settings type
   here: immutable after binding, no inheritance surprises. The empty-string default (rather than
   `null`) makes "did the operator set this?" a simple `IsNullOrEmpty` check at fallback time.
@@ -576,7 +576,7 @@ gRPC clients, which is precisely the reversibility ADR-008 is after.
 
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/FileStorageSettings.cs:10` · Level 0 · class (sealed)
 
-- **What it is**: blob file-storage configuration bound from the `FileStorage` section (ADR-045). It
+- **What it is**: blob file-storage configuration bound from the `FileStorage` section ([ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html)). It
   carries two mutually-preferred auth paths (a managed-identity `ServiceUri` for production, a
   `ConnectionString` for local development) plus the target container name.
 - **Depends on**: `System.Uri` (BCL) only, no first-party dependency. Consumed by the
@@ -621,7 +621,7 @@ gRPC clients, which is precisely the reversibility ADR-008 is after.
   every logical database falls back to. Any logical database with no `DataSources:*` override (or
   whose override is empty) uses these values, which is what collapses the whole application onto a
   single physical database, preserving monolith behaviour with zero configuration change (see
-  [`DataSourceEntrySettings`](#datasourceentrysettings) for the per-source side, and ADR-006 for the
+  [`DataSourceEntrySettings`](#datasourceentrysettings) for the per-source side, and [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) for the
   whole strategy).
 - **Walkthrough**: five `get; init;` properties (`IConnectionStringSettings.cs:9-24`):
   `CosmosConnectionString`, `CosmosDatabaseName`, `SqliteConnectionString`,
@@ -692,13 +692,13 @@ gRPC clients, which is precisely the reversibility ADR-008 is after.
   [`IJwksProvider`](group-08-auth.md#ijwksprovider) is registered
   ([`RsaJwksProvider`](group-08-auth.md#rsajwksprovider) vs. the empty no-op); pairs with
   [`JwtSigningAlgorithm`](#jwtsigningalgorithm).
-- **Concept introduced, cross-service token validation via JWKS (ADR-004).**
+- **Concept introduced, cross-service token validation via JWKS ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)).**
   `[Rubric §11, Security]` (assesses key management and authN correctness). `[Rubric §7,
   Microservices Readiness]`. When modules are extracted into separate services they cannot share a
   symmetric HMAC secret without spreading the blast radius of a compromise across every service.
   Instead the Identity service holds only the RSA *private* key and publishes the matching *public*
   key as a JWK document; extracted services fetch it and validate tokens against it (the dual-fetch /
-  discovery story of ADR-004). `JwksSettings` is what populates that document.
+  discovery story of [ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)). `JwksSettings` is what populates that document.
 - **Walkthrough**: `SectionName = "Jwks"` (line 20). `Enabled` defaults to `false` (line 26) so an
   existing HMAC deployment does not start advertising an RSA key set by accident. `KeyId` (line 34,
   `[StringLength(64)]`) defaults to `"default"` and is published as the JWK `kid` claim, it **must
@@ -773,7 +773,7 @@ gRPC clients, which is precisely the reversibility ADR-008 is after.
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Settings` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/NativePushSettings.cs:9` · Level 0 · class (sealed)
 
 - **What it is**: native (mobile) push delivery configuration bound from the `NativePush` section
-  (ADR-044). It carries an on/off toggle plus the Azure Notification Hubs connection string and hub
+  ([ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html)). It carries an on/off toggle plus the Azure Notification Hubs connection string and hub
   name.
 - **Depends on**: nothing first-party (BCL strings only). Consumed by the native-push wiring, which
   selects between
@@ -840,7 +840,7 @@ gRPC clients, which is precisely the reversibility ADR-008 is after.
   [`DataSourceResolver`](group-07-persistence-ef-core.md#datasourceresolver).
 - **Concept introduced, fail-fast validation of dictionary-shaped configuration.**
   `[Rubric §8, Data Architecture]`, `[Rubric §7, Microservices Readiness]` (the per-module database
-  registry of ADR-006). Unlike the other settings here, this type is **built directly from
+  registry of [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)). Unlike the other settings here, this type is **built directly from
   configuration in `AddInfrastructure`** rather than through the options pipeline, the doc comment
   (lines 8-11) notes root-level dictionary sections do not bind cleanly through `IOptions<T>`. Its
   constructor (lines 23-41) enforces two invariants at construction time: no empty/whitespace logical
@@ -872,7 +872,7 @@ gRPC clients, which is precisely the reversibility ADR-008 is after.
   exposes *both* key families so a single deployment can choose its mode: `SecretForKey` (HMAC) for
   HS256, and `RsaPrivateKeyPem` / `RsaPublicKeyPem` for RS256. The doc comment (lines 4-8) ties this
   to the extraction migration: switching deployments from HMAC to RSA is what lets the Identity service
-  sign tokens that other services validate via JWKS without sharing a symmetric secret (ADR-004).
+  sign tokens that other services validate via JWKS without sharing a symmetric secret ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)).
 - **Walkthrough**: eight `get; init;` members (`IJwSettings.cs:16-49`): `SigningAlgorithm`,
   `SecretForKey`, the nullable `RsaPrivateKeyPem` / `RsaPublicKeyPem` (kept in user-secrets / Key
   Vault, never `appsettings.json`, per the doc comment on line 27), `Issuer`, `Audience`,
@@ -1021,7 +1021,7 @@ gRPC clients, which is precisely the reversibility ADR-008 is after.
   immutable for the process lifetime.
 
   `[Rubric §6: CQRS & Event-Driven]` assesses how reliably domain state changes turn into dispatched
-  events. This type is the knob set for the at-least-once outbox pattern (ADR-003): `MaxRetries`
+  events. This type is the knob set for the at-least-once outbox pattern ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)): `MaxRetries`
   (`OutboxSettings.cs:21`, default 5) caps failed-message retries, and `ProcessingDelaySeconds`
   (`OutboxSettings.cs:40`, default 5) is the safety parameter that bounds the duplicate-dispatch
   window. The in-process path (save the aggregate and its outbox row, then dispatch and mark the row
@@ -1061,8 +1061,8 @@ gRPC clients, which is precisely the reversibility ADR-008 is after.
   - `CleanupIntervalHours` (`OutboxSettings.cs:72-73`): `[Range(1, 168)]`, default 6; how often the
     purge sweep runs, ignored when `RetentionDays` is `0`.
 
-- **Why it's built this way**: the defaults encode the framework's out-of-the-box posture (ADR-003
-  outbox, ADR-006 database-per-service): a monolith with no `Outbox` section gets a working
+- **Why it's built this way**: the defaults encode the framework's out-of-the-box posture ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)
+  outbox, [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) database-per-service): a monolith with no `Outbox` section gets a working
   at-least-once processor writing to its single default database, while a multi-service deployment
   overrides `PollingIntervalSeconds`, `DataSource`, and `DatabaseName` to tune cost and routing. The
   `[Range]` guards give fail-fast validation at bind time rather than a bad value surfacing mid-cycle.

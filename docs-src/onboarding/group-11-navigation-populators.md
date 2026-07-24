@@ -1,14 +1,14 @@
 # 11. Navigation Metadata & Populators (EF-decoupled eager loading)
 
 EF Core gives you `.Include()` for eager loading, and for a single SQL Server database that is the
-right tool. But this codebase is a **database-per-service** modular monolith (ADR-006): two related
+right tool. But this codebase is a **database-per-service** modular monolith ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)): two related
 entities can live in **different physical data sources**, different SQL databases, or a Cosmos
 container that has no JOINs at all, and across that boundary EF's `Include` simply cannot produce a
 JOIN. The relationship is real in the domain model, but the physical storage cannot satisfy it in one
 query. This chapter is the framework's answer to that gap: a small, self-contained subsystem that
 decides *which* navigations EF can load and *which* must be hand-loaded, then batch-loads the latter
 without ever leaking EF or the physical split into the Application or Domain layers. It is the
-machinery behind **ADR-002 (navigation populators)**, and it sits directly underneath the query
+machinery behind **[ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html) (navigation populators)**, and it sits directly underneath the query
 pipeline taught in [Group 03](group-03-querying-specifications.md).
 
 The whole feature turns on one piece of metadata you author in the **Domain** layer and one piece the
@@ -132,7 +132,7 @@ application code that issued the query never changes. Second, the design is a cl
 keeping policy out of the domain: the *what* (a `[Navigation]` marker) lives in Domain, the *whether*
 (supported vs unsupported) is computed in Application from an Infrastructure capability check, and the
 *how* (batch SQL) is a static helper, three responsibilities, three layers, no EF leakage upward
-(`[Rubric §3, Clean Architecture]`, ADR-002). The trade-off ADR-002 itself names is honest: for a
+(`[Rubric §3, Clean Architecture]`, [ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html)). The trade-off [ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html) itself names is honest: for a
 pure single-SQL-database host where `Include` always works, this is an extra abstraction layer, but it
 costs nothing at runtime there, because the populator is only invoked when the metadata actually reports
 an unsupported include, and otherwise the `NullNavigationPopulator` no-ops.
@@ -146,7 +146,7 @@ an unsupported include, and otherwise the `NullNavigationPopulator` no-ops.
 - **Concept introduced, navigation metadata decoupled from EF.** `[Rubric §2, Design Patterns]`
   (assesses whether patterns are idiomatic and solve a real problem) and `[Rubric §3, Clean
   Architecture]` (assesses that dependencies point inward and the domain/application core stays
-  framework-free). ADR-002 ("navigation populators") is the relevant decision: the application layer
+  framework-free). [ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html) ("navigation populators") is the relevant decision: the application layer
   needs to know an entity's navigations (to build EF `Include` paths and field projections) **without**
   referencing Infrastructure/EF. Declaring navigations with this *domain-level* attribute lets
   [`NavigationMetadataProvider`](group-03-querying-specifications.md#navigationmetadataprovider)
@@ -158,7 +158,7 @@ an unsupported include, and otherwise the `NullNavigationPopulator` no-ops.
   means a derived entity must redeclare its own navigations rather than silently inheriting a base
   type's, discovery is explicit, not accidental.
 - **Why it's built this way**: using a domain attribute rather than reading EF's own metadata means the
-  application layer can resolve includes without an EF reference, the whole point of ADR-002 and a
+  application layer can resolve includes without an EF reference, the whole point of [ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html) and a
   concrete §3 win. The single `IsCollection` boolean is the same FK-vs-collection axis that
   [`NavigationType`](#navigationtype) classifies one level up.
 - **Where it's used**: read by
@@ -195,7 +195,7 @@ an unsupported include, and otherwise the `NullNavigationPopulator` no-ops.
   child collection), declaring entity type, and target entity type.
 - **Depends on**: [`NavigationType`](#navigationtype) (Level 0, same file `INavigationMetadata.cs:6`);
   `System.Type` (BCL).
-- **Concept**: `[Rubric §2, Design Patterns]` (ADR-002, navigation populators). The query pipeline
+- **Concept**: `[Rubric §2, Design Patterns]` ([ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html), navigation populators). The query pipeline
   needs to decide *per-navigation* whether to use EF `Include` (same data source) or a batch populator
   (cross-source). `NavigationPropertyInfo` carries the information needed to make that decision; it is
   the unit of metadata that [`INavigationMetadata`](#inavigationmetadata) (same file, line 34) sorts
@@ -220,14 +220,14 @@ an unsupported include, and otherwise the `NullNavigationPopulator` no-ops.
   (`UnsupportedIncludes`). Both expose `IReadOnlyList<NavigationPropertyInfo>`.
 - **Depends on**: [`NavigationPropertyInfo`](#navigationpropertyinfo) /
   [`NavigationType`](#navigationtype) (same file, Levels 1/0).
-- **Concept reinforced, the per-entity view of ADR-002 (navigation populators).** `[Rubric §2,
+- **Concept reinforced, the per-entity view of [ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html) (navigation populators).** `[Rubric §2,
   Design Patterns]` and `[Rubric §8, Data Architecture]` (cross-source navigations cannot be EF-
   included and must be loaded separately). This is the read-only interface that
   [`NavigationMetadata`](#navigationmetadata) (Level 3) implements; the split between
   `SupportedIncludes` and `UnsupportedIncludes` is the decision that routes a query down the EF-`Include`
   path or the manual-populator path. `[Rubric §7, Microservices Readiness]` is in play too: a
   navigation lands in `UnsupportedIncludes` precisely when its two ends live in different physical data
-  sources (ADR-006), so this bucketing is what lets an extracted module keep its object graph hydrated
+  sources ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)), so this bucketing is what lets an extracted module keep its object graph hydrated
   without cross-database foreign keys.
 - **Walkthrough**: two members (lines 37, 40): `SupportedIncludes` (EF `.Include()`, same source) and
   `UnsupportedIncludes` (manual batch loading, cross source). Both are `IReadOnlyList<…>`, the
@@ -245,7 +245,7 @@ an unsupported include, and otherwise the `NullNavigationPopulator` no-ops.
   (cross-data-source, handled by [`INavigationPopulator<in TEntity>`](#inavigationpopulatorin-tentity)).
 - **Depends on**: [`INavigationMetadata`](#inavigationmetadata) (Level 2, the interface it implements),
   [`NavigationPropertyInfo`](#navigationpropertyinfo) (Level 1).
-- **Concept reinforced, separating EF-includable from manually-loaded navigations (ADR-002).**
+- **Concept reinforced, separating EF-includable from manually-loaded navigations ([ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html)).**
   `[Rubric §8, Data Architecture]` (navigations that cross data-source boundaries cannot be EF-included
   and must be loaded separately). The classic *builder with a read-only public view* shape: the two
   backing lists are private, the two `IReadOnlyList<…>` properties expose them, and all four mutators are
@@ -274,9 +274,9 @@ an unsupported include, and otherwise the `NullNavigationPopulator` no-ops.
   cross-database / cross-container relationships). Modules implement this to load navigations *after*
   the primary entities have been materialized.
 - **Depends on**: [`NavigationMetadata`](#navigationmetadata) (Level 3, passed into `PopulateAsync`).
-- **Concept reinforced, the consumer side of ADR-002.** A module's `INavigationPopulator<TEntity>`
+- **Concept reinforced, the consumer side of [ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html).** A module's `INavigationPopulator<TEntity>`
   implementation knows how to batch-load related data from a different data source and attach it to the
-  already-materialized entities. `[Rubric §2, Design Patterns]` (the ADR-002 navigation-populator
+  already-materialized entities. `[Rubric §2, Design Patterns]` (the [ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html) navigation-populator
   pattern, a Strategy injected per entity type). `[Rubric §7, Microservices Readiness]` (cross-service
   loading without cross-DB foreign keys: when a module is extracted and its related entity lives in
   another service's database, this is how the navigation still gets filled). The `in TEntity`
@@ -287,7 +287,7 @@ an unsupported include, and otherwise the `NullNavigationPopulator` no-ops.
   the populator only loads what was actually asked for; the `IReadOnlyCollection<TEntity>` argument is
   the whole materialized page at once, which is what enables *batch* loading (one query for all parents)
   rather than N+1.
-- **Why it's built this way**: see ADR-002. Defining the port in `Application` (not `Infrastructure`)
+- **Why it's built this way**: see [ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html). Defining the port in `Application` (not `Infrastructure`)
   keeps the query pipeline that calls it free of EF; the actual SQL is reached through repository
   abstractions inside the implementations ([`NavigationLoader`](#navigationloader) and the descriptor
   classes below).
@@ -359,7 +359,7 @@ an unsupported include, and otherwise the `NullNavigationPopulator` no-ops.
     same key (the doc comment on line 184 calls this out).
 - **Why it's built this way**: building the predicate as an expression tree (rather than a compiled
   delegate) lets EF translate it to SQL `IN (...)` server-side; the delegate cache avoids re-compiling
-  the *grouping* selector on every call. This is ADR-002's batch-loading engine.
+  the *grouping* selector on every call. This is [ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html)'s batch-loading engine.
 - **Where it's used**: called by the descriptor classes in this group
   ([`ChildNavigationDescriptor`](#childnavigationdescriptortentity-tparentid-tchild-tchildid) and
   [`FKNavigationDescriptor`](#fknavigationdescriptortentity-tchild-tchildid)), which is how
@@ -374,7 +374,7 @@ an unsupported include, and otherwise the `NullNavigationPopulator` no-ops.
   remove per-entity boilerplate.
 - **Depends on**: [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork) (passed into
   `LoadAsync` so the descriptor can resolve a read repository).
-- **Concept reinforced, declarative cross-source navigation (ADR-002).** Three members (lines 13-27):
+- **Concept reinforced, declarative cross-source navigation ([ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html)).** Three members (lines 13-27):
   `PropertyName` (must match the EF property name so it can be matched against
   `NavigationMetadata.UnsupportedIncludes`), `RequiresChildren` (whether `includeChildren`, `true`, or
   `includeFKs`, `false`, triggers it), and `LoadAsync(entities, unitOfWork, ct)` which **batch-loads**
@@ -382,7 +382,7 @@ an unsupported include, and otherwise the `NullNavigationPopulator` no-ops.
   descriptor per navigation) and `[Rubric §12, Performance]` (batch load avoids the N+1 problem). This
   is the application-layer piece that the query service invokes (via
   [`INavigationPopulator.PopulateAsync`](#inavigationpopulatorin-tentity)) for navigations EF can't
-  `Include` because the two ends live in different physical databases (ADR-006). The `in TEntity`
+  `Include` because the two ends live in different physical databases ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)). The `in TEntity`
   contravariance matches the populator's.
 - **Why it's built this way**: declaring each cross-source navigation as a small descriptor lets one
   generic populator serve every entity, and keeps the descriptor out of Infrastructure: it depends only
@@ -406,7 +406,7 @@ an unsupported include, and otherwise the `NullNavigationPopulator` no-ops.
 - **What it is**: the one-to-many [`INavigationDescriptor<in TEntity>`](#inavigationdescriptorin-tentity):
   loads a child *collection* (e.g. `Event.Rooms`) by matching children whose FK equals the parent's
   primary key. Used with [`DeclarativeNavigationPopulator<TEntity>`](#declarativenavigationpopulatortentity)
-  to load navigations EF cannot resolve via `Include` (cross-source, per ADR-002). It captures selectors
+  to load navigations EF cannot resolve via `Include` (cross-source, per [ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html)). It captures selectors
   plus an assign callback; `LoadAsync` delegates to [`NavigationLoader`](#navigationloader).
 - **Depends on**: [`INavigationDescriptor<in TEntity>`](#inavigationdescriptorin-tentity) (Level 8, the
   interface it implements); [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype)
@@ -433,7 +433,7 @@ an unsupported include, and otherwise the `NullNavigationPopulator` no-ops.
   `NavigationLoader.LoadChildrenPropertyAsync`, pulling the read repository from
   `unitOfWork.GetReadRepository<TChild, TChildId>()`. Constraints: `TParentId : notnull`,
   `TChild : AuditableBaseEntity<TChildId>`, `TChildId : notnull` (lines 17-19).
-- **Why it's built this way**: ADR-002 motivates the pattern: cross-source includes cannot go through
+- **Why it's built this way**: [ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html) motivates the pattern: cross-source includes cannot go through
   EF `Include`, but the Application layer must not know about EF or the physical split. The descriptor is
   the extension point, constructed in Application code (a module's `DependencyInjection.cs`, typed against domain
   entity types) and delegating the actual batch query to [`NavigationLoader`](#navigationloader), which

@@ -163,7 +163,7 @@
           <p>Source dependencies point <strong>inward</strong> toward the Domain; each layer references only layers below it.
           Two deliberate exceptions: <code>UI</code> and <code>Grpc</code> depend on <code>Shared</code> <strong>only</strong> (UI for Blazor WASM
           compatibility, Grpc because it is pure transport). Enforced twice: a compile-time MSBuild layer guard
-          <strong>and</strong> NetArchTest fitness tests (ADR-015).</p>
+          <strong>and</strong> NetArchTest fitness tests (<a href="https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html" target="_blank" rel="noopener">ADR-015</a>).</p>
           <pre class="mermaid">flowchart TD
               APIL[&quot;API / Grpc&lt;br/&gt;&lt;i&gt;presentation / transport&lt;/i&gt;&quot;]
               INFL[&quot;Infrastructure&lt;br/&gt;&lt;i&gt;EF Core, caching, JWT/JWKS, outbox, message bus, SignalR&lt;/i&gt;&quot;]
@@ -333,7 +333,7 @@
               classDef core fill:#e8f0fe,stroke:#4285f4,color:#111
               class RESULT,SPEC,VALID,PERSIST,CACHE core</pre>
           <hr>
-          <h2 id="5-request-lifecycle-the-cqrs-decorator-pipeline-adr-014">5. Request lifecycle, the CQRS decorator pipeline (ADR-014)</h2>
+          <h2 id="5-request-lifecycle-the-cqrs-decorator-pipeline-adr-014">5. Request lifecycle, the CQRS decorator pipeline (<a href="https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html" target="_blank" rel="noopener">ADR-014</a>)</h2>
           <p>Handlers are thin (one method); every cross-cutting concern is a decorator wrapping the next. Scrutor
           <code>TryDecorate</code> composes them; the <strong>execution order is load-bearing</strong>:
           FeatureGate → Logging → Caching → Validating → Transactional → Handler. Opt-in marker interfaces let
@@ -362,7 +362,7 @@
               classDef dec fill:#fef7e0,stroke:#f9ab00,color:#111
               class FG,LOG,CA,VA,TX,H dec</pre>
           <hr>
-          <h2 id="6-event-driven-integration-outbox-dual-dispatch-adr-003--010--021">6. Event-driven integration, outbox dual-dispatch (ADR-003 / 010 / 021)</h2>
+          <h2 id="6-event-driven-integration-outbox-dual-dispatch-adr-003--010--021">6. Event-driven integration, outbox dual-dispatch (<a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a> / 010 / 021)</h2>
           <p>Domain events are captured into an <code>OutboxMessage</code> row <strong>in the same transaction</strong> as the data
           (no dual-write bug). A background processor drains the outbox and dispatches both in-process and over
           the broker; every integration event carries a <code>SchemaVersion</code>; consumers dedup by <code>MessageId</code> via an
@@ -393,7 +393,7 @@
               classDef evt fill:#e6f4ea,stroke:#34a853,color:#111
               class AGG,SAVE,PROC,DISP,BROKER,CONSUMER,HANDLER evt</pre>
           <hr>
-          <h2 id="7-modular-monolith--extractable-services-adr-006--007--008--012">7. Modular monolith → extractable services (ADR-006 / 007 / 008 / 012)</h2>
+          <h2 id="7-modular-monolith--extractable-services-adr-006--007--008--012">7. Modular monolith → extractable services (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a> / 007 / 008 / 012)</h2>
           <p>Modules implement <code>IModule</code> and are discovered + Kahn-ordered by <code>ModuleLoader</code>. The <strong>same module
           code</strong> runs as a single monolith host or as N service processes behind a YARP gateway, because
           application code talks to abstractions (<code>IMessageBus</code>, typed gRPC clients) and transport lives at the
@@ -436,12 +436,12 @@
               class MC,ME,MI,MN mod
               class MONO,GW,SVC1,SVC2,SVC3 dep</pre>
           <hr>
-          <h2 id="8-persistence-database-per-service--polyglot-engines-adr-006--018--030">8. Persistence, database-per-service + polyglot engines (ADR-006 / 018 / 030)</h2>
+          <h2 id="8-persistence-database-per-service--polyglot-engines-adr-006--018--030">8. Persistence, database-per-service + polyglot engines (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a> / 018 / 030)</h2>
           <p>One concrete <code>SQLServerDbContext</code> over the abstract <code>ApplicationDbContext</code>, <strong>one instance per
           database</strong>. Each entity is engine-agnostic; a single <code>[UseDataSource(engine)]</code> attribute on its
           config class picks SQL Server, Cosmos, or SQLite. Cross-source relationships auto-degrade; the outbox
           is the cross-source consistency mechanism. Each service self-applies its EF migrations at boot
-          (ADR-030).</p>
+          (<a href="https://ivanball.github.io/docs/adr/030-startup-sole-migrator.html" target="_blank" rel="noopener">ADR-030</a>).</p>
           <pre class="mermaid">flowchart TD
               ENTITY[&quot;Domain entity (plain class, no persistence choice)&quot;]
               CFG[&quot;Per-entity Configuration : EntityTypeConfiguration&amp;lt;TEntity,TId&amp;gt;&quot;]
@@ -505,7 +505,7 @@
               classDef a fill:#fce8e6,stroke:#ea4335,color:#111
               class JWT,JWKS,COOKIE,HASH,LOGIN,RBAC,PERM,OWN,RL a</pre>
           <hr>
-          <h2 id="10-notifications-two-channels-behind-one-sender-adr-024">10. Notifications, two channels behind one sender (ADR-024)</h2>
+          <h2 id="10-notifications-two-channels-behind-one-sender-adr-024">10. Notifications, two channels behind one sender (<a href="https://ivanball.github.io/docs/adr/024-push-notifications.html" target="_blank" rel="noopener">ADR-024</a>)</h2>
           <p>A durable in-app inbox <strong>and</strong> a transient SignalR push, both behind <code>IPushNotificationSender</code>, plus
           email. Recipient providers resolve who gets notified; the thin <code>MMCA.ADC.Notification</code> module hosts
           it.</p>
@@ -531,8 +531,8 @@
           <h2 id="11-ui-write-once-render-everywhere--i18n--theming">11. UI, write-once render everywhere + i18n + theming</h2>
           <p>A page is authored <strong>once</strong> as a Razor component in a per-module UI library; both the Blazor web host
           (Server + WASM) and the .NET MAUI host reference the same libraries, so it renders across Web,
-          Android, iOS, macOS, Windows. Culture cookie + <code>IStringLocalizer</code> drive i18n (ADR-027); <code>ThemeService</code>
-          drives day/dark (ADR-028).</p>
+          Android, iOS, macOS, Windows. Culture cookie + <code>IStringLocalizer</code> drive i18n (<a href="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html" target="_blank" rel="noopener">ADR-027</a>); <code>ThemeService</code>
+          drives day/dark (<a href="https://ivanball.github.io/docs/adr/028-dark-theme-mode.html" target="_blank" rel="noopener">ADR-028</a>).</p>
           <pre class="mermaid">flowchart TD
               PAGE[&quot;Razor component authored once&lt;br/&gt;(per-module .UI library, e.g. EventList.razor)&quot;]
               COMMONUI[&quot;MMCA.Common.UI: MudBlazor building blocks,&lt;br/&gt;DataGrid list-page base, common pages/services (G15)&quot;]

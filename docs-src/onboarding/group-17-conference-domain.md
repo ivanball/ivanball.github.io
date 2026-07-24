@@ -180,7 +180,7 @@ and carry the [`DomainEntityState`](group-02-domain-building-blocks.md#domainent
 [`SessionCategoryItemChanged`](#sessioncategoryitemchanged), the `*QuestionAnswerChanged` set, and the
 rest, carry both the parent and child IDs (for example `RoomChanged(state, Id, room.Id, room.Name)` at
 `Event.cs:347`) so a consumer can target the precise change and the module can invalidate the right
-output-cache tag. These are **intra-module domain events**: they ride the outbox (ADR-003) but are
+output-cache tag. These are **intra-module domain events**: they ride the outbox ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)) but are
 consumed inside Conference. They do not cross the wire to other services; that is the job of
 integration events.
 
@@ -215,7 +215,7 @@ two aggregates.
 ## Read models and the AI decision-support feature
 
 The largest cluster in `Conference.Shared` is the **DTO** layer, the wire contracts that decouple the
-API from the domain entities (`[Rubric §9, API & Contract Design]`; ADR-001 chose manual/Mapperly
+API from the domain entities (`[Rubric §9, API & Contract Design]`; [ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html) chose manual/Mapperly
 mapping over reflection-based AutoMapper). Most are straightforward projections:
 [`EventDTO`](#eventdto), [`SessionDTO`](#sessiondto), [`SpeakerDTO`](#speakerdto),
 [`ConferenceCategoryDTO`](#conferencecategorydto), [`QuestionDTO`](#questiondto), [`RoomDTO`](#roomdto),
@@ -242,7 +242,7 @@ not by a feature flag. The one flag the module does carry,
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/ConferenceFeatures.cs:15`), gates only
 the Sessionize external sync that seeds the raw session data this dashboard then analyzes, wired
 through the `[FeatureGate]`/`IFeatureGated` mechanism from
-[G05](group-05-cqrs-pipeline.md#ifeaturegated) (`[Rubric §10, Cross-Cutting Concerns]`, ADR-031) on the
+[G05](group-05-cqrs-pipeline.md#ifeaturegated) (`[Rubric §10, Cross-Cutting Concerns]`, [ADR-031](https://ivanball.github.io/docs/adr/031-feature-flag-management.html)) on the
 `RefreshFromSessionizeCommand`, not on the scoring or dashboard handlers.
 
 ## Authorization vocabulary and current-event selection
@@ -256,7 +256,7 @@ identifiers endpoints require via `[HasPermission(...)]` rather than by role nam
 `ContentManagement` subsets (`ConferencePermissions.cs:33,49`) let a role grant an entire capability
 set or the narrower session-catalog-curation slice (sessions, speakers, and the category taxonomy) at
 once, a distinction capability checks express centrally and role checks cannot. This is the
-permission-based authorization story (`[Rubric §11, Security]`, ADR-020), decided by the
+permission-based authorization story (`[Rubric §11, Security]`, [ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html)), decided by the
 role-to-permission grants declared in the module's registration, not scattered across controllers.
 
 [`CurrentEventSelector`](#currenteventselector)
@@ -282,7 +282,7 @@ Readiness]`, `[Rubric §3, Clean Architecture]`):
   [`ISessionBookmarkValidationService`](#isessionbookmarkvalidationservice) *interface*
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/ISessionBookmarkValidationService.cs:10`),
   implemented in `Conference.Application` in-process, or by a gRPC adapter when the modules run as
-  separate services (ADR-007). When Conference is *disabled* in a host,
+  separate services ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)). When Conference is *disabled* in a host,
   [`DisabledSessionBookmarkValidationService`](#disabledsessionbookmarkvalidationservice) is registered
   as a null-object stub that approves every validation and returns an empty ID set: graceful
   degradation rather than a missing-dependency crash.
@@ -312,7 +312,7 @@ Readiness]`, `[Rubric §3, Clean Architecture]`):
   sets or clears `User.LinkedSpeakerId`, so the next JWT refresh carries the `speaker_id` claim
   (BR-209). This is the eventually-consistent replacement for what used to be a direct cross-module
   service call: the User-to-Speaker bidirectional link now survives the service split because it
-  travels as an event over the broker (ADR-006/ADR-008).
+  travels as an event over the broker ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)/[ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)).
 
 ## End-to-end: one organizer action
 
@@ -328,9 +328,9 @@ No exception was thrown on the expected not-found path, no child was mutated fro
 aggregate, no event was hand-dispatched, and the same code path would behave identically whether
 Conference runs in the monolith or as its own service, which is exactly the property the framework
 groups (G01 through G14) exist to provide, here made concrete in a domain you can reason about. For the
-*why* behind each design choice, ADR-001 (manual mapping), ADR-002 (navigation populators), ADR-003
-(outbox), ADR-006/007/008 (database-per-service, gRPC, service topology), ADR-020 (permission-based
-authorization), and ADR-031 (feature flags) are the primary references; the business rules themselves
+*why* behind each design choice, [ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html) (manual mapping), [ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html) (navigation populators), [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)
+(outbox), [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)/007/008 (database-per-service, gRPC, service topology), [ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html) (permission-based
+authorization), and [ADR-031](https://ivanball.github.io/docs/adr/031-feature-flag-management.html) (feature flags) are the primary references; the business rules themselves
 are catalogued in `MMCA.ADC/specifications.md`.
 
 ### AssemblyReference, ClassReference
@@ -430,7 +430,7 @@ are catalogued in `MMCA.ADC/specifications.md`.
 - **Depends on**: [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype) (bound to `SessionIdentifierType`), [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate), [`NavigationAttribute`](group-11-navigation-populators.md#navigationattribute), [`EntityTypeExtensions`](group-02-domain-building-blocks.md#entitytypeextensions) (the `IsIdValueGenerated` extension), [`Result`](group-01-result-error-handling.md#result)/[`Error`](group-01-result-error-handling.md#error) (group-01); the domain entities [`Event`](#event) and [`Room`](#room) (reference navigations); [`SessionInvariants`](#sessioninvariants); the child entities and their domain events [`SessionChanged`](#sessionchanged), [`SessionSpeakerChanged`](#sessionspeakerchanged), [`SessionCategoryItemChanged`](#sessioncategoryitemchanged), [`SessionQuestionAnswerChanged`](#sessionquestionanswerchanged).
 - **Concept introduced, the aggregate root as consistency boundary.** `[Rubric §4, Domain-Driven Design]` (assesses aggregates with a single transactional boundary and correct child-entity lifecycle management). An **aggregate root** is the only entry point for mutations inside its boundary: nothing outside `Session` can add or remove a `SessionSpeaker` directly, all such operations go through `Session.AddSessionSpeaker` / `RemoveSessionSpeaker`, etc. This guarantees three things at once:
   - **Invariant checking**: `AddSessionSpeaker` rejects a duplicate speaker (`Session.cs:308-315`).
-  - **Event emission**: every structural change raises a domain event, making the change observable to other modules through the outbox (ADR-003) without the aggregate knowing who listens. `[Rubric §6, CQRS & Event-Driven]`.
+  - **Event emission**: every structural change raises a domain event, making the change observable to other modules through the outbox ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)) without the aggregate knowing who listens. `[Rubric §6, CQRS & Event-Driven]`.
   - **Cascade soft-delete**: `Delete()` (`Session.cs:263`) soft-deletes each non-deleted child before emitting `SessionChanged(Deleted)`, implementing BR-55 at the domain level rather than via a DB cascade or handler glue.
 
   The `private` constructors (`Session.cs:99` and `:101`) plus `static Result<Session> Create` (`Session.cs:150`) enforce that a `Session` is only ever built through a validated, event-emitting path.
@@ -521,7 +521,7 @@ are catalogued in `MMCA.ADC/specifications.md`.
 
 - **What it is**: the read/write DTO for one event-level question answer, linking an event to a metadata question with the answer text an organizer supplied. It is one of the three child-collection DTOs that [`EventDTO`](#eventdto) composes.
 - **Depends on**: [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype) (over `EventQuestionAnswerIdentifierType`); the FK fields use the `EventIdentifierType` and `QuestionIdentifierType` aliases.
-- **Concept introduced, the child-collection DTO and `required`/`init` immutability.** The DTO shape and the [`IBaseDTO`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype) marker were taught in group-12; here is the family of child DTOs an aggregate DTO composes. `[Rubric §9, API & Contract Design]` (DTOs decoupled from domain entities, stable contracts): this record is the wire shape clients see, the [`EventQuestionAnswer`](#eventquestionanswer) join entity never crosses the boundary. Cross-aggregate references appear as **scalar FKs** (`QuestionId`), never nested objects, consistent with database-per-service (ADR-006) where the related aggregate may live in a different source.
+- **Concept introduced, the child-collection DTO and `required`/`init` immutability.** The DTO shape and the [`IBaseDTO`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype) marker were taught in group-12; here is the family of child DTOs an aggregate DTO composes. `[Rubric §9, API & Contract Design]` (DTOs decoupled from domain entities, stable contracts): this record is the wire shape clients see, the [`EventQuestionAnswer`](#eventquestionanswer) join entity never crosses the boundary. Cross-aggregate references appear as **scalar FKs** (`QuestionId`), never nested objects, consistent with database-per-service ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)) where the related aggregate may live in a different source.
 - **Walkthrough**: four `required init` properties (lines 12-21), `Id` (the strong id alias), `EventId` (FK to the parent event), `QuestionId` (FK to the question), and `AnswerValue` (the answer text). Being a `record class` with all-`required` members, it cannot be partially constructed and is immutable after creation.
 - **Why it's built this way**: modelling the join as a flat DTO with scalar FKs keeps the contract stable and portable across the service boundary, the same shape the sibling child DTOs use.
 - **Where it's used**: nested in [`EventDTO.EventQuestionAnswers`](#eventdto); mapped from the [`EventQuestionAnswer`](#eventquestionanswer) entity by its Mapperly mapper (group-18).
@@ -567,7 +567,7 @@ are catalogued in `MMCA.ADC/specifications.md`.
 
 - **What it is**: the aggregate DTO for a conference event, the full wire shape a client reads or writes for the [`Event`](#event) aggregate, composing its three child collections (rooms, speaker associations, question answers) plus the event's own scalar fields and concurrency token.
 - **Depends on**: [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype) and [`IConcurrencyAware`](group-12-api-hosting-mapping.md#iconcurrencyaware) (both implemented, line 9); composes [`RoomDTO`](#roomdto), [`EventSpeakerDTO`](#eventspeakerdto), [`EventQuestionAnswerDTO`](#eventquestionanswerdto); carries [`QuestionModerationDefault`](#questionmoderationdefault).
-- **Concept introduced, the aggregate DTO and optimistic-concurrency round-trip on the wire.** `[Rubric §9, API & Contract Design]` (aggregate DTOs compose child DTOs so a UI gets everything it needs in one call, ADR-001 manual/Mapperly mapping): `EventDTO` is the Level-2 "composite" that bundles the Level-1 children. `[Rubric §8, Data Architecture]` (optimistic concurrency): implementing [`IConcurrencyAware`](group-12-api-hosting-mapping.md#iconcurrencyaware) means the DTO round-trips the EF `RowVersion` token (line 16) so an update form can detect a concurrent edit. The inline `SuppressMessage` on `RowVersion` (line 15) documents that returning a `byte[]` is intentional, it is the raw rowversion token, and a second suppression on `VenueMapUrl` (line 40) records that a URL is stored as a plain string because it comes from external Sessionize input.
+- **Concept introduced, the aggregate DTO and optimistic-concurrency round-trip on the wire.** `[Rubric §9, API & Contract Design]` (aggregate DTOs compose child DTOs so a UI gets everything it needs in one call, [ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html) manual/Mapperly mapping): `EventDTO` is the Level-2 "composite" that bundles the Level-1 children. `[Rubric §8, Data Architecture]` (optimistic concurrency): implementing [`IConcurrencyAware`](group-12-api-hosting-mapping.md#iconcurrencyaware) means the DTO round-trips the EF `RowVersion` token (line 16) so an update form can detect a concurrent edit. The inline `SuppressMessage` on `RowVersion` (line 15) documents that returning a `byte[]` is intentional, it is the raw rowversion token, and a second suppression on `VenueMapUrl` (line 40) records that a URL is stored as a plain string because it comes from external Sessionize input.
 - **Walkthrough**
   - Identity and concurrency: `Id` (`required`, line 12) and the nullable `RowVersion` (line 16).
   - Required core: `Name`, `StartDate`, `EndDate` (`DateOnly`), and `TimeZone` (the IANA id used to compute the live window) are `required` (lines 19-31).
@@ -655,7 +655,7 @@ are catalogued in `MMCA.ADC/specifications.md`.
   already-valid aggregate, not a domain value object that must guard its own invariants.
 - **Why it's built this way**: a positional record gives free structural equality and immutability with
   no boilerplate, which is all a read model needs. It is the row element of
-  [`NowNextDTO`](#nownextdto) rather than a standalone contract, so it lives in the same file (ADR-042
+  [`NowNextDTO`](#nownextdto) rather than a standalone contract, so it lives in the same file ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)
   Wave 8, cited in the doc comment `NowNextDTO.cs:4`).
 - **Where it's used**: nested as the `Now` and `Next` lists on [`NowNextDTO`](#nownextdto); populated by
   the Conference now-next query handler and served on the public now-next endpoint behind the Android
@@ -705,10 +705,10 @@ are catalogued in `MMCA.ADC/specifications.md`.
   (FK to the parent session), and `CategoryItemId` (FK to the category item). `required` forces every
   member to be set at construction; `init` freezes them after. It shares its exact shape with
   [`SessionSpeakerDTO`](#sessionspeakerdto) (see there for the family walkthrough).
-- **Why it's built this way**: a manually-declared record (mapped by hand or by a Mapperly mapper, ADR-001)
+- **Why it's built this way**: a manually-declared record (mapped by hand or by a Mapperly mapper, [ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html))
   keeps the wire contract explicit and decoupled from the EF entity.
 - **Where it's used**: nested as `SessionCategoryItems` on [`SessionDTO`](#sessiondto)
-  (`SessionDTO.cs:75`); produced by the Conference session DTO mapper and navigation populators (ADR-002).
+  (`SessionDTO.cs:75`); produced by the Conference session DTO mapper and navigation populators ([ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html)).
 
 ### SessionQuestionAnswerDTO
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/SessionQuestionAnswerDTO.cs:9` · Level 1 · record
@@ -732,7 +732,7 @@ are catalogued in `MMCA.ADC/specifications.md`.
   answer value) lets the session own a replaceable collection of answers and lets the wire contract stay
   independent of the EF link entity.
 - **Where it's used**: nested as `SessionQuestionAnswers` on [`SessionDTO`](#sessiondto)
-  (`SessionDTO.cs:72`); produced by the session DTO mapper and navigation populators (ADR-002).
+  (`SessionDTO.cs:72`); produced by the session DTO mapper and navigation populators ([ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html)).
 
 ### SessionSpeakerDTO
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/SessionSpeakerDTO.cs:8` · Level 1 · record
@@ -751,9 +751,9 @@ are catalogued in `MMCA.ADC/specifications.md`.
   member-for-member, while [`SessionQuestionAnswerDTO`](#sessionquestionanswerdto) adds one payload field.
 - **Why it's built this way**: giving each join its own surface DTO (rather than exposing a raw
   composite key) keeps the child collections on [`SessionDTO`](#sessiondto) diffable and lets the
-  contract stay independent of the EF link entities (ADR-001).
+  contract stay independent of the EF link entities ([ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html)).
 - **Where it's used**: nested as `SessionSpeakers` on [`SessionDTO`](#sessiondto) (`SessionDTO.cs:69`);
-  produced by the session DTO mapper and navigation populators (ADR-002). This is the collection whose
+  produced by the session DTO mapper and navigation populators ([ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html)). This is the collection whose
   populator gap once dropped speakers from the list (vs. get-by-id) query, so it is the one to check when
   a session list shows no speakers.
 
@@ -795,8 +795,8 @@ are catalogued in `MMCA.ADC/specifications.md`.
 - **Why it's built this way**: defaulting each child collection to `[]` means a list query that skips a
   populator returns an empty collection rather than a null reference; the trade-off is that a genuinely
   unpopulated collection is indistinguishable from an empty one, which is why the speakers-in-list
-  populator gap was a silent bug and not a crash. Manual DTO shaping (ADR-001) keeps the contract
-  explicit; navigation populators (ADR-002) fill the child collections on demand.
+  populator gap was a silent bug and not a crash. Manual DTO shaping ([ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html)) keeps the contract
+  explicit; navigation populators ([ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html)) fill the child collections on demand.
 - **Where it's used**: returned by the Conference session read endpoints (get-by-id and paged list) and
   mapped from the `Session` aggregate by the session DTO mapper; consumed by the Conference UI session
   pages and the session-detail views.
@@ -833,7 +833,7 @@ are catalogued in `MMCA.ADC/specifications.md`.
 - **Why it's built this way**: returning [`Result`](group-01-result-error-handling.md#result) rather than
   throwing lets Engagement fold a validation failure into its own command result; keeping the interface
   in `Shared` (not `Application`) is what lets a disabled-stub or gRPC implementation be swapped in
-  without Engagement seeing Conference's internals (ADR-007 gRPC extraction, ADR-008 service topology).
+  without Engagement seeing Conference's internals ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html) gRPC extraction, [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html) service topology).
 - **Where it's used**: injected into Engagement's bookmark command handlers; implemented by
   Conference.Application in-process, by a Conference gRPC adapter across services, and by
   [`DisabledSessionBookmarkValidationService`](#disabledsessionbookmarkvalidationservice) when Conference
@@ -867,7 +867,7 @@ are catalogued in `MMCA.ADC/specifications.md`.
     event-filtered bookmark query degrades to "no bookmarks for this event" instead of throwing.
 - **Why it's built this way**: returning cached completed tasks (no allocation of async state machines)
   keeps the stub cheap on a path that runs per request; the collection literal `[]` gives a benign empty
-  answer. Making degradation explicit and named (not a null service) is the governance point (ADR-008
+  answer. Making degradation explicit and named (not a null service) is the governance point ([ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)
   service topology).
 - **Where it's used**: registered in the Engagement service's `Program.cs` (via the module's
   `RegisterDisabledStubs()`) to satisfy
@@ -1083,7 +1083,7 @@ are catalogued in `MMCA.ADC/specifications.md`.
      [`IEntityDTOMapper<CategoryItem, CategoryItemDTO, CategoryItemIdentifierType>`](group-12-api-hosting-mapping.md#ientitydtomappertentity-tentitydto-tidentifiertype)
      (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Categories/DTOs/CategoryItemDTOMapper.cs:12`)
      is a `[Mapper] partial class`, the source generator writes the field-by-field copy at compile time
-     (ADR-001), so there is no reflection cost and a shape mismatch is a build error.
+     ([ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html)), so there is no reflection cost and a shape mismatch is a build error.
 - **Walkthrough**: four members (`CategoryItemDTO.cs:11-20`), `Id` (the `IBaseDTO` contract), the
   `required` `Name`, an optional `Sort` (`int`, display order), and the `required` `CategoryId` FK back to
   the parent category. `Sort` is a plain `int` (defaults to 0) rather than `required`, so an item without
@@ -1331,7 +1331,7 @@ are catalogued in `MMCA.ADC/specifications.md`.
   Architecture]`. Like [`ConferenceCategoryDTO`](#conferencecategorydto) it is a concurrency-aware
   aggregate DTO with nested child collections, but it also surfaces `LinkedUserId`
   (`SpeakerDTO.cs:58`), a *nullable, cross-database* FK to an Identity `User`. That id is a scalar, not an
-  EF navigation, because the User and Speaker live in separate databases (ADR-006); the link is reconciled
+  EF navigation, because the User and Speaker live in separate databases ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)); the link is reconciled
   by events (see [`SpeakerChanged`](#speakerchanged) and [`SpeakerLinkedToUser`](#speakerlinkedtouser)),
   never a cross-database join. Three URL-ish fields (`LinkedInUrl`/`GitHubUrl`/`WebsiteUrl`) carry a
   scoped `[SuppressMessage(... CA1056 ...)]` (`SpeakerDTO.cs:46,50,54`) because they are stored as strings
@@ -1377,7 +1377,7 @@ are catalogued in `MMCA.ADC/specifications.md`.
 - **Walkthrough**: three positional members (lines 13-15), `State`, `CategoryId`, and `Title`; `State`
   and `CategoryId` are forwarded to the base constructor (line 16), `Title` is the record's own added
   property.
-- **Why it's built this way**: one lifecycle event per aggregate keeps the event surface small (ADR-010
+- **Why it's built this way**: one lifecycle event per aggregate keeps the event surface small ([ADR-010](https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html)
   contract-versioning applies to the shared base), and `State` lets a handler branch on the transition
   rather than subscribing to three separate types.
 - **Where it's used**: raised from [`Category`](#category)'s `Create`/`Update`/`Delete`; dispatched
@@ -1408,7 +1408,7 @@ are catalogued in `MMCA.ADC/specifications.md`.
 - **Depends on**: [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent) (base record) and the [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate) enum; the module id aliases `SessionIdentifierType`, `SessionCategoryItemIdentifierType`, `CategoryItemIdentifierType` (BCL scalars behind the alias). No NuGet dependency.
 - **Concept introduced, the child-collection domain event.** `[Rubric §6, CQRS & Event-Driven]` (assesses whether state changes are announced as first-class events rather than leaked as side effects) and `[Rubric §4, Domain-Driven Design]` (assesses whether the aggregate root is the sole author of change inside its consistency boundary). The aggregate-root-level events later in this part ([`SessionChanged`](#sessionchanged), [`SpeakerChanged`](#speakerchanged)) derive from [`EntityChangedEvent<TIdentifierType>`](group-04-events-outbox.md#entitychangedeventtidentifiertype); this event and its four siblings instead derive **directly** from [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent) because a join/child row has no independent lifecycle event of its own to reuse. It carries three ids so a handler can react without reloading: the parent [`Session`](#session), the join entity, and the [`CategoryItem`](#categoryitem) that was linked. How a raised event reaches the outbox and in-process handlers is taught once in [Group 04](group-04-events-outbox.md); this part only produces them.
 - **Walkthrough**: a positional `sealed record class` with four members (`SessionCategoryItemChanged.cs:13-17`): `State` (the [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate), `Added` or `Deleted` for a join row), `SessionId`, `SessionCategoryItemId`, and `CategoryItemId`. Being a record, structural equality and immutability come for free; the primary-constructor parameters are the only state.
-- **Why it's built this way**: publishing the ids rather than the entity keeps the event a flat, serializable fact (it must survive an outbox round-trip, ADR-003) and keeps a handler from touching the aggregate's internals. Raising a distinct event per join type (rather than one generic "session updated") lets read-side cache invalidation and projections target exactly what moved.
+- **Why it's built this way**: publishing the ids rather than the entity keeps the event a flat, serializable fact (it must survive an outbox round-trip, [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)) and keeps a handler from touching the aggregate's internals. Raising a distinct event per join type (rather than one generic "session updated") lets read-side cache invalidation and projections target exactly what moved.
 - **Where it's used**: raised inside [`Session`](#session)'s category-item add/remove methods; consumed by in-process `IDomainEventHandler` implementations and captured by the outbox in `SaveChangesAsync`.
 
 ---
@@ -1499,7 +1499,7 @@ are catalogued in `MMCA.ADC/specifications.md`.
 - **Depends on**: [`BaseIntegrationEvent`](group-04-events-outbox.md#baseintegrationevent) (base); aliases `UserIdentifierType`, `SpeakerIdentifierType`.
 - **Concept introduced, the integration event (vs the domain event).** `[Rubric §7, Microservices Readiness]` (assesses whether cross-module coupling runs through published contracts a peer can consume without a code reference back) and `[Rubric §9, API & Contract Design]` (the async message *is* a public contract). Two things distinguish it from every event above. First, it derives from [`BaseIntegrationEvent`](group-04-events-outbox.md#baseintegrationevent), not `BaseDomainEvent`: a domain event stays inside the producing module, an integration event is meant to cross a module/service boundary over the broker (RabbitMQ locally, Azure Service Bus in production) via the outbox. Second, it lives in the `.Shared` project, not `.Domain`, precisely so the subscribing Identity module can reference the contract without pulling in Conference's domain model. Per the XML doc (`SpeakerLinkedToUser.cs:11-16`), it replaced a former direct in-process service call (`IUserSpeakerLinkService.LinkSpeakerAsync`), making the bidirectional User-Speaker link eventually consistent across boundaries.
 - **Walkthrough**: `sealed record class SpeakerLinkedToUser(UserIdentifierType UserId, SpeakerIdentifierType SpeakerId) : BaseIntegrationEvent` (`SpeakerLinkedToUser.cs:20-23`). Just the two ids of the link; the receiver needs nothing more to set `LinkedSpeakerId`.
-- **Why it's built this way**: modeling the link as a published fact rather than a synchronous call is the outbox/eventual-consistency story (ADR-003); it lets Identity and Conference run as separate services with no shared database and no cross-database FK.
+- **Why it's built this way**: modeling the link as a published fact rather than a synchronous call is the outbox/eventual-consistency story ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)); it lets Identity and Conference run as separate services with no shared database and no cross-database FK.
 - **Where it's used**: published by the Conference link-command handler; consumed by Identity's `SpeakerLinkedToUserHandler`.
 
 ---
@@ -1545,7 +1545,7 @@ are catalogued in `MMCA.ADC/specifications.md`.
 - **Walkthrough**, in teaching order:
   - **`[IdValueGenerated]`** on the class (`Event.cs:16`): marks the id as database-generated; the factory reads this at runtime via `typeof(Event).IsIdValueGenerated`.
   - **Scalar state** (`Event.cs:20-60`): `Name`, `Description?`, `StartDate`/`EndDate` (`DateOnly`), `TimeZone`, `SessionizeCode?`, `VenueAddress?`, `VenueMapUrl?`, `WiFiInfo?`, `IsPublished`, `QuestionModerationDefault` (the BR-233 default status a newly submitted live-layer question gets), and the nullable `LastSessionizeRefreshOn`/`LastSessionizeRefreshBy` refresh-audit pair. All have private setters.
-  - **Child collections** (`Event.cs:62-78`): private `List<Room>`/`List<EventSpeaker>`/`List<EventQuestionAnswer>` exposed as `IReadOnlyCollection<...>` marked `[Navigation(IsCollection = true)]` for the populator (ADR-002).
+  - **Child collections** (`Event.cs:62-78`): private `List<Room>`/`List<EventSpeaker>`/`List<EventQuestionAnswer>` exposed as `IReadOnlyCollection<...>` marked `[Navigation(IsCollection = true)]` for the populator ([ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html)).
   - **Constructors** (`Event.cs:81-107`): a parameterless EF constructor that seeds non-null strings, plus a private ctor used by the factory.
   - **`Create`** (`Event.cs:125`): combines `EnsureNameIsValid` + `EnsureTimeZoneIsValid` + `EnsureDateRangeIsValid`; on success builds the instance, assigns `Id` as `default` when id-value-generated (else the passed id), sets `QuestionModerationDefault`, and raises `EventChanged(Added)`. Returns [`Result<Event>`](group-01-result-error-handling.md#result).
   - **`Update`** (`Event.cs:182`): re-validates the same three invariants, writes the scalars, raises `EventChanged(Updated)`.
@@ -1685,7 +1685,7 @@ are catalogued in `MMCA.ADC/specifications.md`.
   - **Marker** `[IdValueGenerated]` (line 15): Category PKs are DB-generated; Sessionize imports still
     supply explicit ids via `IDENTITY_INSERT`.
   - **Fields** (lines 19-31): `Title`, `Sort`, `Type?`, the private list, and `CategoryItems` tagged
-    `[Navigation(IsCollection = true)]` (ADR-002, signals the populator this is a child collection).
+    `[Navigation(IsCollection = true)]` ([ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html), signals the populator this is a child collection).
   - **EF ctor** (line 34): parameterless, private, sets `Title = string.Empty` to satisfy the
     non-nullable field before EF assigns columns.
   - `Create` (lines 54-75): validate via `CategoryInvariants.EnsureTitleIsValid` then resolve whether
@@ -1700,7 +1700,7 @@ are catalogued in `MMCA.ADC/specifications.md`.
     cross-source load; `SetItems(_categoryItems, …)` replaces the in-memory list *without* raising
     domain events (it is hydration, not a domain mutation).
 - **Why it's built this way**: a single class owning uniqueness, cascade-delete and event emission
-  keeps consistency rules in one place. ADR-002 explains why `SetCategoryItems` exists: when category
+  keeps consistency rules in one place. [ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html) explains why `SetCategoryItems` exists: when category
   and items share a database EF `Include()` loads them together; when they could cross databases the
   populator queries separately and calls `SetCategoryItems`, the aggregate is agnostic to the path.
 - **Where it's used**: loaded by `IReadRepository<Category, …>`, mutated by the Conference category
@@ -1821,7 +1821,7 @@ are catalogued in `MMCA.ADC/specifications.md`.
   field** and **value-object composition**. `[Rubric §7, Microservices Readiness]` and `[Rubric §8,
   Data Architecture]`: `LinkedUserId` (line 55) is a nullable *scalar* FK to `User` in the Identity
   database, it cannot be an EF navigation because the two entities live in different databases
-  (ADR-006). `Email` is a value object, so an invalid email can never be stored.
+  ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)). `Email` is a value object, so an invalid email can never be stored.
 - **Walkthrough**
   - `FullName` (line 58): a computed `=>` property (`$"{FirstName} {LastName}"`), not stored.
   - `Create` (lines 110-157): parses `email` into an [`Email`](group-02-domain-building-blocks.md#email)
@@ -1837,7 +1837,7 @@ are catalogued in `MMCA.ADC/specifications.md`.
     *before* `base.Delete()` (line 232), clears `LinkedUserId` within the Conference context (line 239),
     then emits `SpeakerChanged(Deleted, …, previousLinkedUserId)` (line 241) so the cross-context
     integration-event handler can clear `User.LinkedSpeakerId` in Identity. The event carries enough
-    data for the handler to act without a synchronous call back (ADR-003).
+    data for the handler to act without a synchronous call back ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)).
   - `LinkUser`/`UnlinkUser` (lines 250-282): guard against already-linked / not-linked (BR-209), set or
     clear `LinkedUserId`, and emit `SpeakerChanged(Updated)`.
   - `AddSpeakerCategoryItem`/`RemoveSpeakerCategoryItem` (lines 292-337) and the
@@ -1849,8 +1849,8 @@ are catalogued in `MMCA.ADC/specifications.md`.
     duplicate guard, a speaker answering the same question twice is not blocked in the domain.
   - `SetSpeakerCategoryItems`/`SetSpeakerQuestionAnswers` (lines 341, 418): `internal` populator hooks.
 - **Why it's built this way**: `LinkedUserId` as a nullable scalar (not a navigation) is the direct
-  consequence of database-per-service (ADR-006): the bidirectional User↔Speaker link is maintained
-  through integration events (ADR-003) and gRPC, never a cross-database FK. (Per the project memory,
+  consequence of database-per-service ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)): the bidirectional User↔Speaker link is maintained
+  through integration events ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)) and gRPC, never a cross-database FK. (Per the project memory,
   speaker locality is modeled as a `CategoryItem`, not a `Speaker.Location` field, hence the
   `SpeakerCategoryItem` collection rather than a scalar location property.)
 - **Where it's used**: read by `IEntityQueryService`, mutated by the speaker handlers, and referenced

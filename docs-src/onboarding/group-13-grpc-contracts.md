@@ -3,15 +3,15 @@
 **What this chapter is about.** Once the ADC modules stopped sharing a process and became four
 separate service hosts (Identity, Conference, Engagement, Notification), the in-process method calls
 between them had to cross a network boundary. Asynchronous, fire-and-forget flows go over the broker
-via the outbox (see [`IMessageBus`](group-04-events-outbox.md#imessagebus) and ADR-003); but some
+via the outbox (see [`IMessageBus`](group-04-events-outbox.md#imessagebus) and [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)); but some
 calls need a *synchronous answer*, "how many bookmarks does this session have?", "is this session
 valid to bookmark?", "give me the user ids of every attendee". This chapter is the **synchronous
 transport boundary**: a tiny, transport-only package (`MMCA.Common.Grpc`) plus a per-consumer
 `*.Contracts` convention that together let a module be lifted out of the monolith and called over
 **gRPC** *without rewriting a line of application or domain code*. The governing decision is
-[ADR-007 (gRPC extraction)](../ADRs/007-grpc-extraction.md), with the supporting topology in
-ADR-008 (YARP service mesh), auth in ADR-004 (JWKS dual-fetch), and the concrete Kestrel/HTTP-2
-transport choices (h2c `Http2`-only for ADC vs `Http1AndHttp2` + ALPN for Store) in ADR-012. `[Rubric §7, Microservices
+[ADR-007 (gRPC extraction)](https://ivanball.github.io/docs/adr/007-grpc-extraction.html), with the supporting topology in
+[ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html) (YARP service mesh), auth in [ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html) (JWKS dual-fetch), and the concrete Kestrel/HTTP-2
+transport choices (h2c `Http2`-only for ADC vs `Http1AndHttp2` + ALPN for Store) in [ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html). `[Rubric §7, Microservices
 Readiness]` is the headline lens here, it assesses whether modules can genuinely be extracted, with
 explicit, versioned contracts and transport kept at the edge, and `[Rubric §9, API & Contract
 Design]` because the goal is that an error looks the same to a caller whether the answer came from an
@@ -36,7 +36,7 @@ exists to wire up.
 **The contract-package convention.** Anything whose project name ends in `.Contracts` is special:
 `Directory.Build.props` (in both Common and ADC) auto-pulls `Grpc.Tools` + `Google.Protobuf` and
 compiles every `Protos/**/*.proto` with `GrpcServices="Both"`, so a single shared package produces
-*both* the server base class and the client stub. The deliberate design choice (ADR-007) is that each
+*both* the server base class and the client stub. The deliberate design choice ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)) is that each
 `.Contracts` project also ships a **hand-written gRPC adapter** that implements the *same C# interface
 the modules already used in-process*. Concretely: Conference's code depends on the interface
 `IBookmarkCountService` (defined in `MMCA.ADC.Engagement.Shared`); the in-process implementation lives
@@ -89,7 +89,7 @@ translation is a pipeline concern, written once in the interceptor, not repeated
 caller's JWT rides along to the downstream service and distributed authorization works without each
 handler threading a token by hand (it is a no-op outside an HTTP request, e.g. in background
 processors). The downstream service validates that forwarded token against the issuer's **JWKS**, not
-a shared secret (ADR-004; see [`RsaJwksProvider`](group-08-auth.md#rsajwksprovider) /
+a shared secret ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html); see [`RsaJwksProvider`](group-08-auth.md#rsajwksprovider) /
 [`IJwksProvider`](group-08-auth.md#ijwksprovider)), discovered through the gateway. The transport is
 **HTTP/2 cleartext (h2c) with prior knowledge**: the client addresses `http://{serviceName}`,
 resolved by **Aspire service discovery**, because Aspire's project-resource discovery doesn't reliably
@@ -112,13 +112,13 @@ AppHost (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:221-225`) delibera
 a `WithReference(conference).WaitFor(conference)` but the reverse Conference → Engagement edge only a
 `WithReference` with **no `WaitFor`**, because a reciprocal wait would deadlock startup (each waiting
 for the other to be healthy). The transient "peer not ready" errors that result self-heal through the
-resilience pipeline. This is the practical cost ADR-007 calls out: mutual synchronous dependencies
+resilience pipeline. This is the practical cost [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html) calls out: mutual synchronous dependencies
 need care, and the resilience handler is what makes them tolerable.
 
 **Governance, and one honest gap.** [`ServiceContractAttribute`](#servicecontractattribute) is the
 intended marker for "this type is part of an extracted service's wire surface", apply it to the C#
 interface, the integration-event records, and the boundary DTOs, with an optional `Version`. Its
-doc-comment and ADR-007 describe a consumer-side architecture test that enforces contract purity
+doc-comment and [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html) describe a consumer-side architecture test that enforces contract purity
 against it. In the *current* source, however, **no type carries `[ServiceContract]` and no test reads
 it**, the attribute is a provided-but-unadopted extension point. What the framework actually relies on for
 contract governance today are *other* fitness functions: ADC's integration-event contract-snapshot
@@ -151,7 +151,7 @@ part of the contract surface by virtue of their `.proto` regardless, so they nee
   middleware: it wraps every call in a pipeline. There are **five** call shapes, unary (async and
   blocking), server-streaming, client-streaming, and duplex-streaming, and this interceptor overrides
   all five so no call variant can bypass token forwarding. It is the **client** side of the
-  cross-service auth story whose **server** side is JWKS validation (ADR-004 "authentication
+  cross-service auth story whose **server** side is JWKS validation ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html) "authentication
   dual-fetch").
 - **Walkthrough**: members in execution order:
   - `private const string AuthorizationHeader = "Authorization"` (line 21), the single header name.
@@ -173,8 +173,8 @@ part of the contract surface by virtue of their `.proto` regardless, so they nee
     97-98).
 - **Why it's built this way**: sealing + overriding all five call types makes token forwarding total:
   there is no call shape that silently drops the credential. Doing it in an interceptor (not per call
-  site) keeps consumer code transport-agnostic, which is exactly the extraction boundary ADR-007 and
-  ADR-008 want. The duplicate-header guard means it composes safely with other interceptors.
+  site) keeps consumer code transport-agnostic, which is exactly the extraction boundary [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html) and
+  [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html) want. The duplicate-header guard means it composes safely with other interceptors.
 - **Where it's used**: registered automatically by `AddTypedGrpcClient<TClient>` in this group's
   [`DependencyInjection`](#dependencyinjection) (`DependencyInjection.cs:72,76`), so every typed gRPC
   client an extracted ADC/Store service builds gets it without explicit wiring.
@@ -188,7 +188,7 @@ part of the contract surface by virtue of their `.proto` regardless, so they nee
 - **Concept introduced, explicit service contracts + attribute-driven governance.** `[Rubric §7,
   Microservices Readiness]` (assesses explicit, versioned contracts and extractability) and
   `[Rubric §9, API & Contract Design]` (versioned contracts). When a module is lifted into its own
-  service (ADR-007), the types consumers depend on, the service interface, the integration-event
+  service ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)), the types consumers depend on, the service interface, the integration-event
   records, the boundary DTOs, are tagged `[ServiceContract]` so the wire surface is *identifiable*.
   This also touches `[Rubric §34, Architecture Governance]` (assesses fitness functions / executable
   governance): the doc comment (`ServiceContractAttribute.cs:5-9`) states the *intended* invariant,
@@ -213,7 +213,7 @@ part of the contract surface by virtue of their `.proto` regardless, so they nee
   transport at the edge (`Infrastructure`/`*.Service`/`*.Contracts`). Generated gRPC client classes are
   part of the contract surface by virtue of their `.proto` regardless.
 - **Caveats / not-in-source**: **discrepancy logged (code is ground truth):** the attribute's own
-  XML-doc and ADR-007 describe it as the marker that identifies the wire surface and is enforced by a
+  XML-doc and [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html) describe it as the marker that identifies the wire surface and is enforced by a
   consumer architecture test, but neither an applied use of the marker nor a test referencing it exists
   in the current source. Treat `[ServiceContract]` as an *available* but not-yet-adopted convention; if
   you extract a module, you can start applying it, but don't assume existing contracts are tagged.
@@ -347,9 +347,9 @@ part of the contract surface by virtue of their `.proto` regardless, so they nee
   [`JwtForwardingClientInterceptor`](#jwtforwardingclientinterceptor) (Level 0); `Grpc.Net.ClientFactory`,
   `Microsoft.Extensions.Http.Resilience` (Polly), and the `Microsoft.Extensions.DependencyInjection`
   helpers (NuGet/BCL).
-- **Concept reinforced, wiring the gRPC extraction boundary (ADR-007), with resilience and h2c.** `[Rubric
-  §7, Microservices Readiness]` (ADR-007: gRPC transport for synchronous inter-service calls, wired so
-  consumer code stays transport-agnostic). `[Rubric §29, Resilience & Business Continuity]` (ADR-009:
+- **Concept reinforced, wiring the gRPC extraction boundary ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)), with resilience and h2c.** `[Rubric
+  §7, Microservices Readiness]` ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html): gRPC transport for synchronous inter-service calls, wired so
+  consumer code stays transport-agnostic). `[Rubric §29, Resilience & Business Continuity]` ([ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html):
   a standard Polly resilience pipeline on **every** outbound gRPC client, retry/timeout/circuit-breaker
  , matching the HTTP defaults from `MMCA.Common.Aspire`). The DI uses the `extension(IServiceCollection)`
   syntax, the codebase's idiom for adding registration methods directly onto `IServiceCollection`.
@@ -382,7 +382,7 @@ part of the contract surface by virtue of their `.proto` regardless, so they nee
 
   Application code should typically register a hand-written adapter implementing the C# service
   interface (e.g. `IProductVariantService`) that delegates to the generated typed client, so the rest
-  of the app never sees gRPC types (ADR-007/008).
+  of the app never sees gRPC types ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)/008).
 - **Where it's used**: each extracted service host calls `AddGrpcServiceDefaults()` server-side; each
   consumer host calls `AddTypedGrpcClient<TClient>("<servicename>")` (e.g.
   `AddTypedGrpcClient<ConferenceServiceClient>("conference")`) for each downstream peer it talks to.

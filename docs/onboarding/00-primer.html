@@ -200,14 +200,14 @@
           <li><p><strong>Event-driven integration + the Outbox pattern.</strong> When an aggregate changes, its domain events are
           serialized into an <code>OutboxMessage</code> row <strong>in the same transaction</strong> as the data, then a background
           processor delivers them at-least-once. This avoids the &quot;save then publish and hope&quot; dual-write bug.
-          (ADR-003 &quot;outbox dual-dispatch&quot;.)</p>
+          (<a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a> &quot;outbox dual-dispatch&quot;.)</p>
           </li>
           <li><p><strong>Database-per-service.</strong> Each module/service owns its own SQL database and its own outbox table;
           there is one concrete <code>SQLServerDbContext</code> class but <strong>one instance per database</strong>. Cross-source
           relationships auto-degrade (the FK is dropped, navigation flows through batch loaders), and the
-          outbox is the cross-source consistency mechanism. (ADR-006.)</p>
+          outbox is the cross-source consistency mechanism. (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>.)</p>
           </li>
-          <li><p><strong>Engine-agnostic entities, the storage provider is a one-token choice (ADR-018).</strong> A
+          <li><p><strong>Engine-agnostic entities, the storage provider is a one-token choice (<a href="https://ivanball.github.io/docs/adr/018-polyglot-persistence.html" target="_blank" rel="noopener">ADR-018</a>).</strong> A
           domain entity carries <em>no</em> persistence-engine choice; it is a plain class. What decides whether it
           is stored in <strong>SQL Server, Cosmos DB, or SQLite</strong> is a single <code>[UseDataSource(&lt;engine&gt;)]</code> attribute on
           its <code>Infrastructure/Persistence/EntityConfiguration/{Entity}Configuration</code> class, carried for you by
@@ -222,10 +222,10 @@
           filter goes through <code>CrossSourceSpecification</code> (so even a &quot;published-event&quot; predicate stays
           translatable). First concrete code: the configuration hierarchy in
           <a href="group-07-persistence-ef-core.html"><code>group-07</code></a>; this is the per-entity half of database-per-service
-          (ADR-006) plus the polyglot story (ADR-018).
+          (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>) plus the polyglot story (<a href="https://ivanball.github.io/docs/adr/018-polyglot-persistence.html" target="_blank" rel="noopener">ADR-018</a>).
           <em>Adoption note (verified by source):</em> this is a real, <strong>tested</strong> capability with a <strong>staged first
           adoption</strong>. Today <strong>all current production entity configs use the <code>…SQLServer</code> base</strong> (ADC runs SQL
-          Server only, 4 SQL databases), but the ADR-018 work shipped the full polyglot machinery (unified base,
+          Server only, 4 SQL databases), but the <a href="https://ivanball.github.io/docs/adr/018-polyglot-persistence.html" target="_blank" rel="noopener">ADR-018</a> work shipped the full polyglot machinery (unified base,
           cross-source spec + fitness rule, Cosmos-index skip, SQLite <code>EnsureCreated</code>, Cosmos/SQLite Aspire
           helpers, portability tests) and ADC Conference&#39;s <code>Session</code>→Cosmos / <code>Room</code>→SQLite move is the
           staged-but-not-yet-deployed first use. Treat Cosmos/SQLite as supported, exercised extension points, see the
@@ -237,7 +237,7 @@
           </li>
           <li><p><strong>Soft-delete + audit fields.</strong> Entities are never hard-deleted; an <code>IsDeleted</code> flag plus EF global
           query filters exclude them. <code>CreatedOn/By</code> and <code>LastModifiedOn/By</code> are stamped centrally in
-          <code>SaveChangesAsync</code>. For genuine erasure (GDPR/CCPA) there is a separate anonymize path. (ADR-005.)</p>
+          <code>SaveChangesAsync</code>. For genuine erasure (GDPR/CCPA) there is a separate anonymize path. (<a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a>.)</p>
           </li>
           <li><p><strong>Strongly-typed identifier aliases.</strong> Each entity&#39;s ID type is a solution-wide
           <code>global using XIdentifierType = int;</code> (or <code>= System.Guid;</code>) alias, linked into every project via
@@ -250,7 +250,7 @@
           <p>The <em>why</em> behind these patterns lives in <strong>fifty accepted ADRs</strong> (001-050; the Website repo&#39;s
           <code>docs-src/adr/README.md</code> owns the count and range), version-controlled in
           <code>Website/docs-src/adr/</code> and published at <a href="https://ivanball.github.io/docs/adr/" target="_blank" rel="noopener">https://ivanball.github.io/docs/adr/</a> (its <code>README.md</code> is the
-          canonical index with one-line summaries). Group chapters tag the relevant one inline (e.g. &quot;ADR-003&quot;);
+          canonical index with one-line summaries). Group chapters tag the relevant one inline (e.g. &quot;<a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>&quot;);
           the full set, for orientation:</p>
           <div class="table-wrap"><table>
           <thead>
@@ -312,7 +312,7 @@
           </tr>
           <tr>
           <td>011</td>
-          <td><del>en-US-only i18n is a deliberate non-goal</del> <strong>superseded by ADR-027</strong> (multi-locale en-US + es)</td>
+          <td><del>en-US-only i18n is a deliberate non-goal</del> <strong>superseded by <a href="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html" target="_blank" rel="noopener">ADR-027</a></strong> (multi-locale en-US + es)</td>
           <td><a href="group-15-common-ui-framework.html">g15</a></td>
           </tr>
           <tr>
@@ -513,11 +513,11 @@
           </tbody></table></div>
           <p>ADRs 011–050 were authored after this guide&#39;s first build; their patterns were already documented here,
           and the chapters now cross-reference the ADR numbers. Recent framework additions include the
-          <strong>device capability abstraction layer</strong> (ADR-042/043/044/045: per-capability contracts with MAUI-native,
+          <strong>device capability abstraction layer</strong> (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>/043/044/045: per-capability contracts with MAUI-native,
           browser, and inert-fallback adapters, mobile deep links, native OS push, managed file storage + user
           avatars), taught in the new <a href="group-26-device-capability-layer.html">g26</a> chapter and cross-referenced in
-          g07/g10/g12/g24; the newest records are the library-scoped <code>ConfigureAwait(false)</code> build policy (ADR-049)
-          and the rotating-refresh-token auth workflow (ADR-050). The canonical index for the full set is the
+          g07/g10/g12/g24; the newest records are the library-scoped <code>ConfigureAwait(false)</code> build policy (<a href="https://ivanball.github.io/docs/adr/049-library-configureawait-policy.html" target="_blank" rel="noopener">ADR-049</a>)
+          and the rotating-refresh-token auth workflow (<a href="https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html" target="_blank" rel="noopener">ADR-050</a>). The canonical index for the full set is the
           Website repo&#39;s <code>docs-src/adr/README.md</code> (published at <a href="https://ivanball.github.io/docs/adr/" target="_blank" rel="noopener">https://ivanball.github.io/docs/adr/</a>), which owns
           the count and range.</p>
           <hr>
@@ -538,7 +538,7 @@
           <ul>
           <li><strong>FluentValidation 12</strong>: request/command validators, run by a pipeline decorator.</li>
           <li><strong>Riok.Mapperly 4.3.1</strong>: a <em>source-generated</em>, compile-time object mapper (no runtime reflection).
-          Note ADR-001 chose manual DTO mapping over reflection-based AutoMapper; Mapperly is the
+          Note <a href="https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html" target="_blank" rel="noopener">ADR-001</a> chose manual DTO mapping over reflection-based AutoMapper; Mapperly is the
           compile-time, allocation-free way to keep mapping explicit and fast.</li>
           <li><strong>Scrutor 7</strong>: assembly scanning and <strong>decorator registration</strong> (<code>TryDecorate</code>) for DI; this is how
           the CQRS decorator pipeline is wired.</li>
@@ -564,7 +564,7 @@
           <p><strong>Transport (service extraction)</strong></p>
           <ul>
           <li><strong>Grpc.AspNetCore / Grpc.Net.ClientFactory / Grpc.Tools / Google.Protobuf</strong>: gRPC server + client<ul>
-          <li><code>.proto</code> compilation, for synchronous inter-service calls between extracted modules (ADR-007).</li>
+          <li><code>.proto</code> compilation, for synchronous inter-service calls between extracted modules (<a href="https://ivanball.github.io/docs/adr/007-grpc-extraction.html" target="_blank" rel="noopener">ADR-007</a>).</li>
           </ul>
           </li>
           </ul>
@@ -588,7 +588,7 @@
           <p><strong>Auth / crypto</strong></p>
           <ul>
           <li><strong>System.IdentityModel.Tokens.Jwt 8</strong>: JWT creation/validation; JWKS key publishing for
-          cross-service token validation (ADR-004 &quot;authentication dual-fetch&quot;).</li>
+          cross-service token validation (<a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a> &quot;authentication dual-fetch&quot;).</li>
           </ul>
           <p><strong>Versioning / build</strong></p>
           <ul>
@@ -715,7 +715,7 @@
           explained there. The coverage audit will include a matrix proving every one of the 34 is explained at
           least once against real code or a real artifact.</p>
           <p><strong>A note on §27, Internationalization &amp; Localization.</strong> <code>[Rubric §27, Internationalization &amp; Localization]</code> assesses externalized strings and culture-aware formatting. The original single-locale
-          stance (ADR-011) has been <strong>superseded by ADR-027</strong>: the framework now ships <strong>two locales, en-US
+          stance (<a href="https://ivanball.github.io/docs/adr/011-single-locale-i18n.html" target="_blank" rel="noopener">ADR-011</a>) has been <strong>superseded by <a href="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html" target="_blank" rel="noopener">ADR-027</a></strong>: the framework now ships <strong>two locales, en-US
           (default) and Spanish (es)</strong>. UI strings resolve through <code>IStringLocalizer&lt;T&gt;</code> over co-located <code>.resx</code>
           files (the marker <a href="group-15-common-ui-framework.html#sharedresource"><code>SharedResource</code></a> anchors the shared
           set), and <strong>backend <code>Result</code> errors are localized server-side at the edge</strong> keyed by the existing
@@ -730,11 +730,11 @@
           <code>CultureInfo.InvariantCulture</code> (<a href="group-02-domain-building-blocks.html#domainhelper"><code>DomainHelper</code></a>,
           <code>MMCA.Common/Source/Core/MMCA.Common.Shared/Extensions/DomainHelper.cs:43-47</code>). Culture-aware date/number
           formatting is currently guarded only by an advisory analyzer suggestion (<code>MA0076</code>); a fitness-rule gate is
-          noted as follow-up in ADR-027.</p>
-          <p><strong>A note on §20, theming (day/dark).</strong> Beyond the design tokens, <strong>ADR-028</strong> adds a day/dark mode:
+          noted as follow-up in <a href="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html" target="_blank" rel="noopener">ADR-027</a>.</p>
+          <p><strong>A note on §20, theming (day/dark).</strong> Beyond the design tokens, <strong><a href="https://ivanball.github.io/docs/adr/028-dark-theme-mode.html" target="_blank" rel="noopener">ADR-028</a></strong> adds a day/dark mode:
           <a href="group-15-common-ui-framework.html#themeservice"><code>ThemeService</code></a> binds <code>MudThemeProvider</code>&#39;s
           <code>@bind-IsDarkMode</code> to the already-defined <code>MMCATheme.PaletteDark</code>, persists the choice to cookie +
-          localStorage + <code>User.PreferredTheme</code>, and defaults to the OS <code>prefers-color-scheme</code>, reusing ADR-027&#39;s
+          localStorage + <code>User.PreferredTheme</code>, and defaults to the OS <code>prefers-color-scheme</code>, reusing <a href="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html" target="_blank" rel="noopener">ADR-027</a>&#39;s
           cookie/profile persistence. Honest gap: the no-flash SSR bootstrap is <strong>not yet wired for theme</strong>, so a
           first-paint flash is possible (stated, not yet remediated).</p>
           <hr>
