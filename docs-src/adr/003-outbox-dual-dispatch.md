@@ -62,3 +62,25 @@ Four changes from the 2026-07-19 full review:
    ADR-014 Transactional path), the post-save dispatch/mark-processed work is deferred and flushed
    only after a successful commit; rollback (exception or the new business-failure rollback,
    ADR-014 Revision) drops it together with the outbox rows.
+
+## Revision (2026-07-24)
+Three capture-side corrections found in a code review. None change the dual-dispatch decision; they
+close gaps between what it promised and what the interceptor did.
+
+1. **Capture removes exactly what it captured.** The post-dispatch cleanup used to clear an
+   aggregate's event list wholesale, which also discarded anything a handler raised on that same
+   aggregate *during* in-process dispatch: those events arrive after the capture and were wiped
+   before any later capture could see them, so they never dispatched and never reached the outbox.
+   Capture now snapshots each aggregate's events and removes only those (`IAggregateRoot`
+   `.RemoveDomainEvents`), leaving a handler-raised event pending for the next save.
+2. **A retried operation writes one row per event.** `ExecuteInTransactionAsync` runs under an EF
+   execution strategy that re-runs the whole delegate on a transient fault, against the same cached
+   `DbContext` instances. Because capture runs on every `SavingChanges` pass while the aggregate's
+   events are only cleared after a *successful* save, each attempt appended another outbox row per
+   event: one transient SQL failure published every integration event twice. Capture now discards an
+   abandoned capture's staged rows, and the retry path clears the change tracker first so entities
+   added by the failed attempt are not inserted again either.
+3. **Shutdown does not consume retries.** The dispatch loop's general `catch` also caught the
+   cancellation raised at host shutdown, incrementing `RetryCount` and stamping `LastError` on the
+   whole remainder of the batch. A graceful restart could therefore dead-letter messages that were
+   never actually attempted. Cancellation now rethrows and the batch is left untouched.

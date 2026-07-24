@@ -143,3 +143,15 @@ mechanism for erasure fields that must stay retrievable, `ADRs/005-soft-delete-v
 this converter "the at-rest counterpart to hashing credentials"), ADR-018 (polyglot persistence: the
 shipped, tested, but unadopted precedent this record mirrors). This ADR backs the one-line "Field encryption"
 entry in the security model (`SECURITY.md:26`), which stays as the reader-facing pointer.
+
+## Revision (2026-07-24)
+Documented a constraint the converter always had but did not state: **the ciphertext is
+non-deterministic**. Every write uses a fresh random nonce, which is the correct property for
+confidentiality and means the column cannot support equality or range predicates (a `Where` against
+it compares to a ciphertext that will never match, returning no rows silently), unique indexes, or
+server-side sorting and grouping.
+
+The usage example was changed off `Email` for exactly that reason: applying the converter to an
+address the authentication flow looks up by value would have broken login silently rather than
+loudly. A lookup key that must stay searchable needs a separate deterministic surface, such as a
+keyed hash stored alongside the encrypted column.

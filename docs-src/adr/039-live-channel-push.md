@@ -71,3 +71,26 @@ delivery guarantee).
 - If a hub-hosting service ever runs more than one replica, the already-detected Redis backplane
   (ADR-024) is required for group sends to reach connections on other replicas; single-replica
   deployments need nothing.
+
+## Revision (2026-07-24)
+Two corrections from a code review; the best-effort, per-session-ordered decision is unchanged.
+
+1. **Broadcasts are enqueued after commit, not during the command.** `CastVoteHandler` and
+   `ToggleUpvoteHandler` both emitted their broadcast inside the handler, while the ADR-014
+   transactional decorator still had the transaction open, so a rollback left clients already told
+   about a vote or upvote that never persisted. Both moved to domain-event handlers on
+   `LivePollVoteChanged` / `SessionQuestionUpvoteChanged`, events the aggregates already raised but
+   nothing consumed. In-process dispatch inside a transactional command is deferred until after
+   commit and dropped on rollback (ADR-003 Revision 2026-07-19), so post-commit delivery follows from
+   where the work is attached rather than from extra sequencing code.
+
+   `ToggleUpvoteHandler` additionally **awaited the gRPC publish on the request thread**, so a slow
+   Notification peer added its latency to every upvote: precisely what the queue exists to prevent.
+   The upvote path now uses the same off-request-path queue as the poll path.
+
+2. **Drops under backpressure are observable.** The queue uses
+   `BoundedChannelFullMode.DropOldest`, under which `TryWrite` **always** returns true because it
+   evicts to make room. The caller's "if the enqueue failed, log it" branch was therefore unreachable
+   and every drop was silent. Drops now go through the channel's `itemDropped` callback: counted on
+   `DroppedCount` and logged with a running total, so a drain falling behind is visible rather than
+   inferred from missing client updates.

@@ -32,8 +32,20 @@ table.
   (default 10) registrations from one IP land inside `RegistrationRateLimitWindowMinutes` (default 60);
   `IncrementRegistrationCountAsync(ip)` bumps the per-IP counter. A missing/empty IP is a deliberate
   **no-op (fail-open)**.
-- **Keyed by submitted email / client IP, not by principal**, so it works before authentication — the
+- **Keyed by submitted email / client IP, not by principal**, so it works before authentication: the
   gap a per-principal limiter cannot fill.
+- **The email key is the normalized address, not the raw request string.** Keys route through the same
+  `Email` value-object normalization (trim, lowercase) the user lookup uses, so every spelling that
+  resolves to one account shares one counter and one lockout. Building keys from raw input made the
+  backoff bypassable by varying capitalization or padding: `User@x.com`, `user@x.com` and a padded
+  variant targeted the same account but got three independent counters. A malformed address, which
+  never matches a user but still increments a counter, falls back to the same trim-and-lowercase shape
+  so its variants collapse too.
+- **Counters increment atomically.** `ICacheService.IncrementAsync` is a default interface member whose
+  Redis implementation uses `INCR`; the read-modify-write it replaced let concurrent attempts overwrite
+  each other's increments, so a burst of parallel guesses could stay under `MaxFailedAttempts`
+  indefinitely. On a store with a native counter the window is also anchored to the first attempt
+  rather than sliding on every write.
 - **Counters are cache-scoped and TTL-bounded.** They live in the same swappable `ICacheService`
   substrate as ADR-026 (in-process memory in the monolith, distributed/Redis when wired) and self-expire
   via cache TTL — a lockout is inherently ephemeral, so expiry *is* the reset.
@@ -64,6 +76,10 @@ table.
   per-replica and evaporate on restart, so a multi-replica deployment that did not wire a distributed
   cache does not aggregate an attacker hitting different replicas. The answer is the same as ADR-026:
   register a distributed cache once scaled out (both apps do).
+- **Normalization widens the DoS lever slightly.** Collapsing every spelling onto one counter is what
+  makes the lockout enforceable, and it also means an attacker no longer needs to guess the exact
+  spelling the victim uses to lock them out. That is the same targeted-DoS trade below, not a new one:
+  the alternative was a lockout that did not hold at all.
 - **Email-keyed lockout is a targeted-DoS lever.** An attacker can lock a *known* account out by
   deliberately failing its logins. The short backoff cap (default 300s) and the generic 401 bound the
   harm, but it is an accepted availability-for-security trade.

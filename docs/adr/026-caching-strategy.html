@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 51 ADRs</summary>
+        <summary>All 52 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -116,6 +116,7 @@
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
         <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
         <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
           </ol>
         </nav>
       </details>
@@ -237,6 +238,31 @@
           another <code>ICacheService</code> consumer), ADR-006 / ADR-008 (the same monolith-to-services swap boundary this
           substrate follows), ADR-040 (amends this ADR&#39;s Tier 2: the adopters&#39; public-read policies cache
           authenticated, bearer-carrying requests too, not only anonymous traffic).</p>
+          <h2 id="revision-2026-07-24">Revision (2026-07-24)</h2>
+          <p>Three substrate corrections from a code review.</p>
+          <ol>
+          <li><strong>An optional key namespace (<code>Cache:KeyPrefix</code>).</strong> Services sharing one cache instance also share
+          one keyspace, and nothing stopped two of them choosing the same key for different data. The prefix
+          is applied inside <code>DistributedCacheService</code> rather than through <code>RedisCacheOptions.InstanceName</code>
+          deliberately: <code>InstanceName</code> is prepended below this abstraction, where prefix invalidation cannot
+          see it, so the SCAN in <code>RemoveByPrefixAsync</code> would look for <code>product:*</code> while the stored keys were
+          <code>svc:product:*</code> and evict nothing, silently. Applying it here keeps get, set, remove, the SCAN
+          pattern and the Redis counter working from one key shape. <code>MemoryCacheService</code> ignores it: its
+          keyspace is private to the process by construction.</li>
+          <li><strong>Prefix invalidation survives an overwrite.</strong> <code>MemoryCacheService</code> tracks live keys in a side
+          dictionary because <code>IMemoryCache</code> cannot enumerate, and its post-eviction callback removed the key
+          for <em>every</em> eviction reason. <code>IMemoryCache</code> queues those callbacks to the thread pool, so
+          overwriting a live key fired the old entry&#39;s callback asynchronously and it could land after the
+          replacement was tracked, deleting the tracking record for an entry that was still cached. That
+          entry was then live but invisible to <code>RemoveByPrefixAsync</code> and clearable only by its TTL. The
+          callback now skips <code>EvictionReason.Replaced</code>; genuine evictions still clean up.</li>
+          <li><strong><code>ICacheService.IncrementAsync</code>.</strong> A default interface member (so no implementer breaks) with a
+          Redis <code>INCR</code> override, added for the ADR-029 counters whose read-modify-write could lose
+          concurrent increments.</li>
+          </ol>
+          <p>The query-cache stampede lock also moved to a fixed-width <code>KeyedSemaphoreStripe</code>. The previous
+          per-key dictionary was documented as bounded by the set of distinct cache keys, which holds only for
+          parameterless keys; any <code>CacheKey</code> embedding a user id or filter value grew it without bound.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>

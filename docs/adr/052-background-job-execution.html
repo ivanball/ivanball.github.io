@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ADR-017: HTTP Request Idempotency via Client-Supplied Keys · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted">
-  <link rel="canonical" href="https://ivanball.github.io/docs/adr/017-request-idempotency.html">
+  <title>ADR-052: Background Job Execution (Bounded Queue plus Hosted Drain) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-07-24).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/052-background-job-execution.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="article">
-  <meta property="og:title" content="ADR-017: HTTP Request Idempotency via Client-Supplied Keys">
-  <meta property="og:description" content="Accepted">
-  <meta property="og:url" content="https://ivanball.github.io/docs/adr/017-request-idempotency.html">
+  <meta property="og:title" content="ADR-052: Background Job Execution (Bounded Queue plus Hosted Drain)">
+  <meta property="og:description" content="Accepted (2026-07-24).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/052-background-job-execution.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
@@ -56,7 +56,7 @@
         <span aria-hidden="true">/</span>
         <a href="../../docs/adr/index.html">Architecture Decision Records</a>
         <span aria-hidden="true">/</span>
-        <span class="current">017 · HTTP Request Idempotency via Client-Supplied Keys</span>
+        <span class="current">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</span>
       </nav>
       <div class="doc-layout">
       <aside class="doc-sidebar">
@@ -81,7 +81,7 @@
         <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
         <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
         <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
-        <li><a href="017-request-idempotency.html" aria-current="page">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
         <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
         <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
         <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
@@ -116,101 +116,117 @@
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
         <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
         <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
-        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="052-background-job-execution.html" aria-current="page">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
           </ol>
         </nav>
       </details>
     </aside>
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
-          <h1 id="adr-017-http-request-idempotency-via-client-supplied-keys">ADR-017: HTTP Request Idempotency via Client-Supplied Keys</h1>
+          <h1 id="adr-052-background-job-execution-bounded-queue-plus-hosted-drain">ADR-052: Background Job Execution (Bounded Queue plus Hosted Drain)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted</p>
+          <p>Accepted (2026-07-24).</p>
           <h2 id="context">Context</h2>
-          <p>Write endpoints (POST / PUT / PATCH) are exposed to <strong>client retries and double-submits</strong>: a flaky
-          network, an impatient user double-clicking, or a resilience pipeline re-issuing a request can cause the
-          same logical operation to execute twice (e.g. two orders, two payments). The <code>Result</code> pattern (ADR-013)
-          and domain invariants stop <em>invalid</em> states, but they do not stop a <em>valid</em> operation from being applied
-          twice when the second call is a genuine duplicate of the first.</p>
-          <p>This is a different concern from the <strong>handler idempotency</strong> of ADR-003: that is about domain-event
-          <em>consumers</em> tolerating at-least-once delivery from the outbox. ADR-017 is about the <strong>inbound HTTP edge</strong>
-          deduplicating <em>client</em> requests before the use case runs at all.</p>
-          <h2 id="decision">Decision</h2>
-          <p>Provide opt-in, client-driven request idempotency as an MVC action filter in <code>MMCA.Common.API</code>.</p>
+          <p>Some requests trigger work that cannot run inside the request: an AI scoring pass over an event&#39;s
+          sessions takes minutes and issues one paid API call per session, and a live-channel broadcast must
+          not put a gRPC round trip on the hot path of a vote. The endpoint should accept the request and
+          return, leaving the work to run elsewhere.</p>
+          <p>The obvious shortcut is to start an untracked task and return, which is what the session-scoring
+          endpoint did (<code>_ = RunScoringInBackgroundAsync(eventId)</code>). A code review found three defects that
+          follow from the shape rather than from that particular implementation:</p>
           <ul>
-          <li><strong>Opt-in per action.</strong> <code>[Idempotent]</code> (<code>IdempotentAttribute</code>, a <code>ServiceFilterAttribute</code> resolving
-          <code>IdempotencyFilter</code> from DI) marks an action. Nothing is deduplicated unless the action declares it.</li>
-          <li><strong>Client supplies the key.</strong> The caller sends an <code>Idempotency-Key</code> header. If the header is absent or
-          blank, the action runs normally with <strong>no</strong> deduplication — the key is the client&#39;s assertion that &quot;two
-          requests with this key are the same operation.&quot;</li>
-          <li><strong>The key is scoped to the caller and the endpoint, not taken bare.</strong> The cache key is
-          <code>idempotency:{SHA-256(subject | method | route template | client key)}</code>, where the subject is the
-          caller&#39;s <code>user_id</code> claim or, unauthenticated, <code>anon:{remote address}</code>. Keying on the bare
-          client-supplied value made the key space global: two callers who happened to choose the same value
-          shared an entry, so one user&#39;s serialized response body was replayed to another, and because
-          services can share a single cache instance the collision also reached across endpoints and across
-          services. Hashing keeps the stored key bounded regardless of what the client sends.</li>
-          <li><strong>Cache-backed replay.</strong> The first response (status code + serialized body) is stored via
-          <code>ICacheService</code> for a bounded window (default 24h, configurable via
-          <code>IdempotencySettings.CacheExpirationHours</code>). <code>ICacheService</code> resolves to the distributed (Redis) store
-          when the host wires one and otherwise to an in-process memory cache (ADR-026), so cross-instance /
-          cross-restart replay holds only when a distributed backing is configured. A later request with the same
-          key replays the cached response and adds an <code>X-Idempotent-Replay: true</code> header so clients can tell a
-          replay from a fresh execution.</li>
-          <li><strong>Concurrency-safe within an instance.</strong> The filter uses a fast-path cache read (no lock), then a
-          striped <code>SemaphoreSlim</code> (<code>KeyedSemaphoreStripe</code>, double-check locking) so concurrent duplicates that
-          arrive before the first completes are serialized rather than both executing. Striping is deliberate:
-          a dictionary of one semaphore per key forces a choice between two defects, since removing the entry
-          when the last holder releases lets a caller wait on a semaphore no longer in the table while a
-          second creates a fresh one (both then execute, defeating the lock), and never removing it lets a
-          caller-supplied key grow the table without bound. A fixed stripe width has neither problem.</li>
-          <li><strong>Only cache deterministic success shapes.</strong> Only <strong>2xx</strong> <code>ObjectResult</code> responses are cached;
-          redirects, file results, and failures are not replayed. Caching a failure would replay it for the
-          whole retention window, so a client retrying the same key after a transient 500 would keep receiving
-          that 500 for 24 hours instead of the retry actually executing.</li>
+          <li><strong>The host does not know the work exists.</strong> <code>IHostApplicationLifetime</code> cannot wait for it and
+          shutdown cannot cancel it, so an Azure Container Apps scale-in or a deploy tears it down mid-run
+          with nothing recorded. For a multi-minute paid pass, that is spend with no result and no trace.</li>
+          <li><strong>Nothing deduplicates it.</strong> Two clicks started two concurrent passes over the same event: double
+          the API calls, racing each other&#39;s writes, and no way for the caller to learn a run was already in
+          flight.</li>
+          <li><strong>Failure handling drifts.</strong> Each fire-and-forget site invents its own try/catch, so the failure
+          posture (swallow, log, retry) is decided per call site instead of once.</li>
           </ul>
+          <p>There is a second, unrelated need with the same shape: work that must happen <em>after</em> the request&#39;s
+          transaction commits and must not add latency to it. The live-channel broadcast is that case, and it
+          already used a bounded queue plus a hosted drain (ADR-039). The two wanted the same mechanism.</p>
+          <p>This is deliberately not a distributed job system. Every case here is best-effort or re-triggerable
+          work owned by one service; durable, cross-process scheduling is what the outbox (ADR-003) and the
+          broker (ADR-008) are for, and this ADR does not compete with them.</p>
+          <h2 id="decision">Decision</h2>
+          <p>In-process background work runs as a <strong>bounded queue plus a single-reader hosted drain</strong>. Nothing
+          starts an untracked <code>Task</code> from a request.</p>
+          <ul>
+          <li><strong>A bounded <code>Channel&lt;T&gt;</code> per job kind</strong>, registered as a singleton, with the concrete type and its
+          interface both resolving to the <strong>one</strong> instance (<code>TryAddSingleton&lt;TQueue&gt;()</code> plus
+          <code>TryAddSingleton&lt;IQueue&gt;(sp =&gt; sp.GetRequiredService&lt;TQueue&gt;())</code>). Registering them separately
+          would give producers a queue nobody drains.</li>
+          <li><strong>A <code>BackgroundService</code> drain per queue</strong>, <code>SingleReader</code>, consuming with
+          <code>ReadAllAsync(stoppingToken)</code>. Because it is a hosted service the host owns the work: shutdown
+          cancels it and waits for it to unwind. The drain resolves scoped services through
+          <code>IServiceScopeFactory</code> per item, since it is itself a singleton.</li>
+          <li><strong>The full mode encodes what the work is worth.</strong><ul>
+          <li><em>Ephemeral</em> work uses <code>BoundedChannelFullMode.DropOldest</code>: under backpressure the freshest
+          broadcast is worth more than the oldest and the request path must never block. Note that
+          <code>TryWrite</code> then <strong>always</strong> returns true (it evicts to make room), so a caller cannot learn from
+          its return value that anything was dropped; the channel&#39;s <code>itemDropped</code> callback is the only
+          real signal and must be wired to a counter and a log.</li>
+          <li><em>Expensive</em> work uses <code>Wait</code> with a non-blocking <code>TryWrite</code>, so a full queue <strong>refuses</strong> the
+          request rather than silently discarding an earlier one, and the caller is told.</li>
+          </ul>
+          </li>
+          <li><strong>Expensive work deduplicates by its natural key</strong>, with the claim taken before the write and
+          released by the drain only when the run finishes. The dedup window therefore covers execution, not
+          just the wait in the queue. A duplicate request gets an explicit refusal (409), not a silent
+          coalesce.</li>
+          <li><strong>One failure posture per drain, stated once.</strong> The drain catches per item so one failed run cannot
+          kill the loop, and handles shutdown cancellation separately from failure so a graceful restart is
+          not recorded as an error.</li>
+          <li><strong>Post-commit work attaches to a domain event, not to the command handler.</strong> A handler that
+          enqueues inline runs while the ADR-014 transaction is still open, so a rollback leaves the queued
+          work describing state that never persisted. Raising a domain event and enqueuing from its handler
+          gets post-commit delivery from the existing deferral (ADR-003), with no extra sequencing code.</li>
+          </ul>
+          <p>Two implementations exist: <code>LiveChannelPublishQueue</code> / <code>LiveChannelPublishProcessor</code> (ephemeral,
+          DropOldest, ADR-039) and <code>SessionScoringQueue</code> / <code>SessionScoringProcessor</code> (expensive, Wait, dedup
+          by event id).</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
-          <li><strong>Safety at the edge, not in every handler.</strong> Deduplication lives in one filter, so a handler stays a
-          thin use case (ADR-014) and does not grow ad-hoc &quot;did I already do this?&quot; checks.</li>
-          <li><strong>Client owns the identity of an operation.</strong> Only the caller knows that a retry is the <em>same</em>
-          operation; a server-generated key cannot distinguish a retry from a legitimately-similar new request.</li>
-          <li><strong>Distributed-cache backing (when configured)</strong> makes replays work across instances and across a
-          service restart within the window, matching the database-per-service / multi-host deployment (ADR-006,
-          ADR-008); with the in-memory fallback (ADR-026) the replay is per-instance and lost on restart.</li>
-          <li><strong>Invariant-friendly default.</strong> Absent header ⇒ no behavior change, so adding <code>[Idempotent]</code> is a safe,
-          additive annotation.</li>
+          <li><strong>The host lifetime is the point.</strong> A <code>BackgroundService</code> is the only in-process shape the host can
+          cancel and await. Everything else in the decision follows from wanting that.</li>
+          <li><strong>The queue is where the policy lives.</strong> Capacity, full mode and dedup are properties of the work,
+          and putting them in the queue type means a caller cannot get them wrong: it calls <code>TryEnqueue</code> and
+          reads the outcome.</li>
+          <li><strong>Refusal beats silent coalescing for paid work.</strong> An organizer who clicks twice should learn the
+          run is already going, not have the second click vanish into a queue.</li>
+          <li><strong>Single reader gives ordering for free</strong>, which the live-channel case needs per session, and
+          serializes expensive runs so two of them cannot contend for the same external rate limit.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>The in-process semaphore only serializes duplicates landing on the same instance.</strong> Two simultaneous
-          identical requests routed to <em>different</em> instances can both miss the cache and execute; a configured
-          distributed cache makes the <em>replay</em> consistent afterward but does not provide cross-instance mutual
-          exclusion. For
-          exactly-once across instances, the operation itself must also be naturally idempotent or guarded by a
-          unique constraint.</li>
-          <li><strong>Bounded window.</strong> Replays only work within the retention window (default 24h); a duplicate after
-          expiry re-executes.</li>
-          <li><strong>Response-shape coupling.</strong> Only a 2xx <code>ObjectResult</code> is cached, and the cached body is the serialized
-          value, so an endpoint whose response depends on per-request state (other than the body) will replay the
-          original, not a freshly-computed response. Response headers are not part of the record either, so a
-          replayed 201 does not carry the original <code>Location</code>.</li>
-          <li><strong>A key is only ever replayed to the caller that produced it.</strong> Scoping to the subject means a
-          client that retries under a different identity (a rotated anonymous address, or a token exchange
-          between the first attempt and the retry) misses the cache and re-executes. That is the correct
-          trade against replaying one caller&#39;s response to another.</li>
-          <li><strong>Opt-in.</strong> An action that should be idempotent but is missing <code>[Idempotent]</code> gets no protection — the
-          same audit-the-inventory caveat as ADR-005&#39;s <code>IAnonymizable</code>.</li>
+          <li><strong>In-process only.</strong> The queue does not survive a restart and does not span replicas. Accepted
+          because every current job is either ephemeral (a lost broadcast is a missed UI refresh) or
+          re-triggerable (an organizer can click score again). Work that must survive a crash belongs in the
+          outbox (ADR-003), not here.</li>
+          <li><strong>Dedup is per replica.</strong> Two replicas can each accept a run for the same event. Today the scoring
+          endpoint is organizer-only and low-traffic, so the exposure is small; making it cluster-wide would
+          need a distributed lock or a claim row, which is the point at which this should become a real job
+          system instead.</li>
+          <li><strong>Backpressure is felt differently by the two modes</strong>, and choosing the wrong one is a silent bug
+          in either direction: <code>DropOldest</code> on expensive work discards paid runs, and <code>Wait</code> on ephemeral
+          work turns a slow peer into refused broadcasts. The mode is a per-job decision, not a default.</li>
+          <li><strong>A drain is a serialization point.</strong> One reader means a slow item delays the queue behind it. That
+          is wanted for scoring and harmless for broadcasts at the observed conference-day load; a job kind
+          that needs parallelism needs its own queue rather than a wider reader, or ordering is lost.</li>
           </ul>
           <h2 id="related">Related</h2>
-          <p>ADR-003 (handler idempotency for outbox/event consumers, a distinct concern), ADR-013 (Result is the
-          response the filter caches/replays), ADR-014 (the filter keeps the handler thin), ADR-009 (the resilience
-          pipeline that re-issues requests is the main source of the duplicates this filter absorbs), ADR-026 (the
-          <code>ICacheService</code> substrate whose distributed-vs-memory backing determines cross-instance replay).</p>
+          <p>ADR-003 (the outbox, for work that must be durable and cross-process, and the post-commit deferral
+          this relies on),
+          ADR-008 (the broker, for cross-service work),
+          ADR-014 (the transactional decorator whose commit boundary post-commit work attaches to),
+          ADR-039 (live channel push, the ephemeral instance of this pattern),
+          ADR-025 (startup warm-up, the other hosted-service use in the framework).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/017-request-idempotency.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/052-background-job-execution.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
       </div>

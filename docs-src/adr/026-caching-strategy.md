@@ -115,3 +115,29 @@ substrate), ADR-019 (output caching as the anonymous-traffic lever, and `LoginPr
 another `ICacheService` consumer), ADR-006 / ADR-008 (the same monolith-to-services swap boundary this
 substrate follows), ADR-040 (amends this ADR's Tier 2: the adopters' public-read policies cache
 authenticated, bearer-carrying requests too, not only anonymous traffic).
+
+## Revision (2026-07-24)
+Three substrate corrections from a code review.
+
+1. **An optional key namespace (`Cache:KeyPrefix`).** Services sharing one cache instance also share
+   one keyspace, and nothing stopped two of them choosing the same key for different data. The prefix
+   is applied inside `DistributedCacheService` rather than through `RedisCacheOptions.InstanceName`
+   deliberately: `InstanceName` is prepended below this abstraction, where prefix invalidation cannot
+   see it, so the SCAN in `RemoveByPrefixAsync` would look for `product:*` while the stored keys were
+   `svc:product:*` and evict nothing, silently. Applying it here keeps get, set, remove, the SCAN
+   pattern and the Redis counter working from one key shape. `MemoryCacheService` ignores it: its
+   keyspace is private to the process by construction.
+2. **Prefix invalidation survives an overwrite.** `MemoryCacheService` tracks live keys in a side
+   dictionary because `IMemoryCache` cannot enumerate, and its post-eviction callback removed the key
+   for *every* eviction reason. `IMemoryCache` queues those callbacks to the thread pool, so
+   overwriting a live key fired the old entry's callback asynchronously and it could land after the
+   replacement was tracked, deleting the tracking record for an entry that was still cached. That
+   entry was then live but invisible to `RemoveByPrefixAsync` and clearable only by its TTL. The
+   callback now skips `EvictionReason.Replaced`; genuine evictions still clean up.
+3. **`ICacheService.IncrementAsync`.** A default interface member (so no implementer breaks) with a
+   Redis `INCR` override, added for the ADR-029 counters whose read-modify-write could lose
+   concurrent increments.
+
+The query-cache stampede lock also moved to a fixed-width `KeyedSemaphoreStripe`. The previous
+per-key dictionary was documented as bounded by the set of distinct cache keys, which holds only for
+parameterless keys; any `CacheKey` embedding a user id or filter value grew it without bound.

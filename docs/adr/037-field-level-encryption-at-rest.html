@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 51 ADRs</summary>
+        <summary>All 52 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -116,6 +116,7 @@
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
         <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
         <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
           </ol>
         </nav>
       </details>
@@ -265,6 +266,16 @@
           this converter &quot;the at-rest counterpart to hashing credentials&quot;), ADR-018 (polyglot persistence: the
           shipped, tested, but unadopted precedent this record mirrors). This ADR backs the one-line &quot;Field encryption&quot;
           entry in the security model (<code>SECURITY.md:26</code>), which stays as the reader-facing pointer.</p>
+          <h2 id="revision-2026-07-24">Revision (2026-07-24)</h2>
+          <p>Documented a constraint the converter always had but did not state: <strong>the ciphertext is
+          non-deterministic</strong>. Every write uses a fresh random nonce, which is the correct property for
+          confidentiality and means the column cannot support equality or range predicates (a <code>Where</code> against
+          it compares to a ciphertext that will never match, returning no rows silently), unique indexes, or
+          server-side sorting and grouping.</p>
+          <p>The usage example was changed off <code>Email</code> for exactly that reason: applying the converter to an
+          address the authentication flow looks up by value would have broken login silently rather than
+          loudly. A lookup key that must stay searchable needs a separate deterministic surface, such as a
+          keyed hash stored alongside the encrypted column.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>

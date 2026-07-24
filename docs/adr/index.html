@@ -61,7 +61,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 51 ADRs</summary>
+        <summary>All 52 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html" aria-current="page">Overview</a></li>
@@ -116,6 +116,7 @@
         <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
         <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
         <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
           </ol>
         </nav>
       </details>
@@ -387,6 +388,11 @@
           <td><a href="051-client-auth-token-lifecycle.html">051</a></td>
           <td>Client-side auth token lifecycle across render modes</td>
           <td>One <code>ITokenRefresher</code> abstraction with two head-specific strategies: browser heads (Server/WASM) refresh through the same-origin proxy (<code>SameOriginProxyTokenRefresher</code>, HttpOnly cookie via <code>/auth/session/token</code>, ADR-022) while MAUI refreshes directly against the API (<code>DirectApiTokenRefresher</code>) persisting the rotated pair in OS SecureStorage; <code>AuthDelegatingHandler</code> stamps the bearer on the APIClient pipeline, render-mode-aware <code>ITokenStorageService</code> implementations (WASM in-memory / Server SSR-vs-interactive, single-flight with 30s skew) hold the tokens, and <code>JwtAuthenticationStateProvider</code> drives Blazor auth state. Client half of ADR-022/ADR-050.</td>
+          </tr>
+          <tr>
+          <td><a href="052-background-job-execution.html">052</a></td>
+          <td>Background job execution (bounded queue + hosted drain)</td>
+          <td>In-process work that outlives a request runs as a bounded <code>Channel&lt;T&gt;</code> singleton plus a <code>SingleReader</code> <code>BackgroundService</code> drain, never an untracked <code>Task</code> started from a controller: the host can then cancel and await it on shutdown instead of a deploy killing it mid-run. Full mode encodes what the work is worth (<code>DropOldest</code> for ephemeral broadcasts, whose drops are only visible through the <code>itemDropped</code> callback since <code>TryWrite</code> always succeeds; <code>Wait</code> plus non-blocking <code>TryWrite</code> for expensive runs, which refuse rather than discard). Expensive work dedups by natural key across queue AND execution, refusing duplicates with 409. Post-commit work attaches to a domain event so ADR-003 deferral supplies the commit boundary. Instances: <code>LiveChannelPublishQueue</code> (ADR-039), <code>SessionScoringQueue</code>.</td>
           </tr>
           </tbody></table></div>
           <h2 id="writing-a-new-adr">Writing a new ADR</h2>
