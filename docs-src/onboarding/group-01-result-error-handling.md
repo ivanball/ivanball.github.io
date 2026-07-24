@@ -10,7 +10,7 @@ envelopes that paged reads come back in, the JSON converter that lets a result s
 through the distributed cache, and the two narrow exception types reserved for the cases where
 returning a value is genuinely impossible. (The primer introduces the idea in
 [§2](00-primer.md#2-architectural-styles-this-codebase-commits-to); this chapter is where it becomes
-concrete.) This is **ADR-013** (the Result pattern): expected failures are transport-agnostic
+concrete.) This is **[ADR-013](https://ivanball.github.io/docs/adr/013-result-pattern.html)** (the Result pattern): expected failures are transport-agnostic
 `Result`/`ErrorType` values, only the edge maps them to HTTP/gRPC, and exceptions are reserved for the
 genuinely exceptional.
 
@@ -115,7 +115,7 @@ reads the **first** error's [`ErrorType`](#errortype) and maps it, via
 right status code, then renders an **RFC 9457 Problem Details** body. The same `Result` failure can
 also cross a service boundary: on the gRPC boundary,
 [`ResultGrpcExtensions`](group-13-grpc-contracts.md#resultgrpcextensions) turns a failure into an
-`RpcException` carrying the errors over the wire (ADR-007), and the typed client turns it back into a
+`RpcException` carrying the errors over the wire ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)), and the typed client turns it back into a
 `Result` on the far side, so a remote call looks like a local one to application code. Because the
 whole journey is driven by the same eight-member enum, the HTTP and gRPC error shapes are uniform
 across every endpoint and every extracted service, there is one source of truth for "what does a

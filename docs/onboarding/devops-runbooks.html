@@ -118,8 +118,8 @@
           exists. Architecture rubric categories are tagged inline; cross-links reach the IaC and CI/CD
           chapters and the ADRs that recorded the underlying decisions.</p>
           <blockquote>
-          <p><strong>Architectural context.</strong> The database-per-service split (ADR-006) and the resilience/recovery
-          posture (ADR-009) are the two decisions that make this chapter necessary. Read both ADRs before
+          <p><strong>Architectural context.</strong> The database-per-service split (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>) and the resilience/recovery
+          posture (<a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a>) are the two decisions that make this chapter necessary. Read both ADRs before
           running any of these scripts against production.</p>
           </blockquote>
           <hr>
@@ -184,17 +184,17 @@
           <hr>
           <h2 id="the-database-per-service-cutover-story">The database-per-service cutover story</h2>
           <p>Before the cutover scripts make sense, the story behind them does.</p>
-          <p><strong>Before ADR-006.</strong> All four modules (<code>Identity</code>, <code>Conference</code>, <code>Engagement</code>, <code>Notification</code>)
+          <p><strong>Before <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>.</strong> All four modules (<code>Identity</code>, <code>Conference</code>, <code>Engagement</code>, <code>Notification</code>)
           pointed at a single shared SQL database called <code>AtlDevCon</code>. This caused an outbox race: every
           service&#39;s <code>OutboxProcessor</code> polled the same <code>dbo.OutboxMessages</code> table and could claim another
-          service&#39;s rows, producing duplicate dispatch (the precise defect documented in ADR-006 and the
+          service&#39;s rows, producing duplicate dispatch (the precise defect documented in <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a> and the
           <code>project_outbox_race_shared_db.md</code> memory note, fixed 2026-06-07).</p>
-          <p><strong>The ADR-006 decision.</strong> Adopt database-per-service. Each service owns <code>ADC_Identity</code>,
+          <p><strong>The <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a> decision.</strong> Adopt database-per-service. Each service owns <code>ADC_Identity</code>,
           <code>ADC_Conference</code>, <code>ADC_Engagement</code>, or <code>ADC_Notification</code>, locally on the Aspire SQL container,
           in Azure as four Basic-tier databases on the same SQL server. The legacy <code>AtlDevCon</code> database is
           retained <strong>read-only</strong> as an archive and rollback path and is never deleted. Cross-service
           references become scalar IDs (no cross-database foreign keys); <code>CrossDataSourceDegradeConvention</code>
-          removes FK constraints at the EF level; consistency flows through the outbox and broker (ADR-003).</p>
+          removes FK constraints at the EF level; consistency flows through the outbox and broker (<a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>).</p>
           <p>[Rubric §8, Data Architecture] assesses data modeling quality, isolation, and whether services
           own their own schema. The per-service database design directly addresses this: each service has its
           own schema, its own migrations project, and its own <code>dbo.OutboxMessages</code>, no service ever sees
@@ -356,7 +356,7 @@
           <h2 id="infradisaster-recoverymd-dr-runbook">infra/DISASTER-RECOVERY.md, DR runbook</h2>
           <p><strong>File:</strong> <code>MMCA.ADC/infra/DISASTER-RECOVERY.md</code></p>
           <p><strong>What it is.</strong> The authoritative disaster-recovery runbook for the ADC production environment.
-          Mandated by ADR-009: every consuming app must declare RTO/RPO per failure scenario, document the
+          Mandated by <a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a>: every consuming app must declare RTO/RPO per failure scenario, document the
           backup/restore mechanism, accept single-region risk in writing, and record restore drills in a
           drill-result table.</p>
           <p><strong>When to consult.</strong> On any data-loss event, corruption, failed deployment, or region outage.
@@ -437,7 +437,7 @@
           <h3 id="restore-drill-requirement">Restore drill requirement</h3>
           <p><code>DISASTER-RECOVERY.md:118–131</code> provides a <code>sqlcmd</code>-based drill script that restores a throwaway
           copy of <code>AtlDevCon</code>, verifies table and row counts, then deletes it. The drill-result table (line
-          129) currently reads &quot;not yet drilled (TD-10)&quot;, per ADR-009, a recorded drill is required before
+          129) currently reads &quot;not yet drilled (TD-10)&quot;, per <a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a>, a recorded drill is required before
           the next release.</p>
           <hr>
           <h2 id="infrapost-cutover-atldevcon-downgrademd-archive-downgrade-runbook">infra/POST-CUTOVER-atldevcon-downgrade.md, archive downgrade runbook</h2>
@@ -582,12 +582,12 @@
           <li>CI/CD chapter, <code>deploy.yml</code> applies per-module idempotent migration scripts and runs the
           post-deploy smoke gate; <code>cutover-per-service-dbs.yml</code> is a sibling workflow in the same
           <code>prod-azure</code> concurrency group.</li>
-          <li><a href="../adr/006-database-per-service.html">ADR-006</a>, the decision to adopt database-per-service,
+          <li><a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>, the decision to adopt database-per-service,
           the trade-offs, and the <code>CrossDataSourceDegradeConvention</code> that removes cross-database FKs.</li>
-          <li><a href="../adr/009-resilience-and-recovery-objectives.html">ADR-009</a>, the resilience and recovery
+          <li><a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a>, the resilience and recovery
           objectives framework, including the requirement that <code>DISASTER-RECOVERY.md</code> exists and that the
           drill-result table is filled.</li>
-          <li><a href="../adr/003-outbox-dual-dispatch.html">ADR-003</a>, the outbox pattern that the cutover workflow
+          <li><a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>, the outbox pattern that the cutover workflow
           gates on (drain first) and that the per-service databases each own independently.</li>
           </ul>
           <hr>
@@ -601,7 +601,7 @@
           </thead>
           <tbody><tr>
           <td>§8 Data Architecture</td>
-          <td>ADR-006, the SQL/PS copy scripts, POST-CUTOVER downgrade runbook</td>
+          <td><a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>, the SQL/PS copy scripts, POST-CUTOVER downgrade runbook</td>
           </tr>
           <tr>
           <td>§11 Security</td>

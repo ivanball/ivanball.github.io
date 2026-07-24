@@ -172,10 +172,10 @@
           <a href="#iauditableentity"><code>IAuditableEntity</code></a> and <a href="#irowversioned"><code>IRowVersioned</code></a>
           (<code>AuditableBaseEntity.cs:13</code>); the latter exists so a repository can accept <em>any</em> tracked child entity
           for a concurrency check without a second generic parameter for the child&#39;s identifier type
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IRowVersioned.cs:11</code>, rationale in ADR-035).
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Interfaces/IRowVersioned.cs:11</code>, rationale in <a href="https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html" target="_blank" rel="noopener">ADR-035</a>).
           This rung is where [Rubric §8, Data Architecture] (soft-delete, audit, concurrency) meets [Rubric §10,
           Cross-Cutting]: three concerns that would otherwise be copy-pasted into every entity are inherited once
-          and enforced centrally (ADR-005 for soft-delete versus erasure).</p>
+          and enforced centrally (<a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a> for soft-delete versus erasure).</p>
           <p><a href="#auditableaggregaterootentitytidentifiertype"><code>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableAggregateRootEntity.cs:13</code>) is the top
           rung and the one that earns the DDD name &quot;aggregate root&quot;. It implements
@@ -208,7 +208,7 @@
           explicit numeric values at
           <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Enums/DomainEntityState.cs:9-12</code>) is the small vocabulary an
           event uses to say <em>what kind</em> of change happened. The aggregate base is the producer end of the
-          at-least-once outbox pipeline (ADR-003); the consumer end lives in
+          at-least-once outbox pipeline (<a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>); the consumer end lives in
           <a href="group-04-events-outbox.html">Group 04</a>.</p>
           <h2 id="value-objects-invalid-instances-cannot-exist">Value objects, invalid instances cannot exist</h2>
           <p>The second family models concepts with <strong>no identity</strong>: two <code>Money(10, USD)</code> are equal because their
@@ -307,7 +307,7 @@
           handler invokes to overwrite personal fields in place while keeping the row for referential integrity
           and audit history. Together these are the [Rubric §11, Security] and [Rubric §30,
           Compliance/Privacy/Data Governance] story, and they are why soft-delete and erasure are <em>different</em>
-          mechanisms (ADR-005, cited at <code>IAnonymizable.cs:19</code>): soft-delete hides a row but keeps its data,
+          mechanisms (<a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a>, cited at <code>IAnonymizable.cs:19</code>): soft-delete hides a row but keeps its data,
           anonymize destroys the data but keeps the row.</p>
           <p><a href="#idvaluegeneratedattribute"><code>IdValueGeneratedAttribute</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Attributes/IdValueGeneratedAttribute.cs:9</code>) marks a class
@@ -417,7 +417,7 @@
           <code>ChangeTracker</code>. So the domain <em>declares</em> the audit contract; the <em>stamping</em> happens centrally in
           one interceptor (<a href="group-07-persistence-ef-core.html#auditsavechangesinterceptor"><code>AuditSaveChangesInterceptor</code></a>).
           This is also <code>[Rubric §30, Compliance, Privacy &amp; Data Governance]</code> (an audit trail supports
-          accountability) and ties to ADR-005 (soft-delete vs. erasure).</li>
+          accountability) and ties to <a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a> (soft-delete vs. erasure).</li>
           <li><strong>Walkthrough</strong>: five getter-only properties. <code>CreatedBy</code> is <code>UserIdentifierType</code>;
           <code>LastModifiedBy</code> is <code>UserIdentifierType?</code> (nullable, null until first modified, matching
           <code>LastModifiedOn?</code>). No setters at all: the domain can <em>read</em> audit state but only infrastructure
@@ -429,7 +429,7 @@
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:13</code>, with private
           setters populated by EF, lines 20-31); recognized by the audit <code>SaveChanges</code> interceptor and the
           soft-delete query filter (G07). Its <code>IsDeleted</code> flag is the counterpart that
-          <a href="#ianonymizable"><code>IAnonymizable</code></a> deliberately does <em>not</em> satisfy on its own (see ADR-005, and the
+          <a href="#ianonymizable"><code>IAnonymizable</code></a> deliberately does <em>not</em> satisfy on its own (see <a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a>, and the
           explicit statement of that gap in <code>IAnonymizable.cs:11-13</code>).</li>
           </ul>
           <h3 id="ibaseentitytidentifiertype">IBaseEntity&lt;TIdentifierType&gt;</h3>
@@ -504,7 +504,7 @@
           <code>ProductVariant</code> under a <code>Product</code>) would otherwise need a second generic parameter for the child&#39;s
           own identifier type. <code>IRowVersioned</code> erases that identifier type: the child overload
           (<code>IRepository.cs:185</code>) accepts any <code>IRowVersioned</code>, so child-level edits get the same stale-token
-          protection as the root. The doc comment states this rationale and cites ADR-035
+          protection as the root. The doc comment states this rationale and cites <a href="https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html" target="_blank" rel="noopener">ADR-035</a>
           (<code>IRowVersioned.cs:3-10</code>).</li>
           <li><strong>Walkthrough</strong>: one getter, <code>byte[] RowVersion</code> (<code>IRowVersioned.cs:15</code>), wrapped in a scoped
           <code>#pragma warning disable CA1819</code> (lines 14-16) with the justification that <code>byte[]</code> is EF Core&#39;s
@@ -513,7 +513,7 @@
           <li><strong>Why it&#39;s built this way</strong>: an identifier-type-free contract is the smallest change that lets one
           repository method serve both roots and children; the alternative (a second generic parameter, or a
           non-generic <code>object</code> overload) would either leak type parameters through the whole repository surface
-          or lose type safety. ADR-035 records the decision.</li>
+          or lose type safety. <a href="https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html" target="_blank" rel="noopener">ADR-035</a> records the decision.</li>
           <li><strong>Where it&#39;s used</strong>: implemented by
           <a href="#auditablebaseentitytidentifiertype"><code>AuditableBaseEntity&lt;TIdentifierType&gt;</code></a>
           (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:13</code>), whose
@@ -544,7 +544,7 @@
           comment (<code>PiiAttribute.cs:5-13</code>): (1) an <strong>architecture fitness test</strong> asserts that any entity
           declaring a <code>[Pii]</code> property also implements <a href="#ianonymizable"><code>IAnonymizable</code></a>, so every data
           subject&#39;s data has a real right-to-erasure path (soft-delete preserves rows, so erasure needs a
-          separate anonymize path, the exact §30 red flag this avoids; ADR-005); and (2) <a href="#piiredactor"><code>PiiRedactor</code></a>,
+          separate anonymize path, the exact §30 red flag this avoids; <a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a>); and (2) <a href="#piiredactor"><code>PiiRedactor</code></a>,
           the <strong>redaction half</strong> of the contract (<code>PiiAttribute.cs:10-12</code>), masks <code>[Pii]</code>-marked members with
           the literal <code>[REDACTED]</code> so an entity carrying personal data can be written to a structured log or
           telemetry attribute without the data subject&#39;s PII leaking in clear text. Both halves exist in
@@ -628,7 +628,7 @@
           contract explicitly: aggregates are the only entities that can raise domain events and they define
           the transactional consistency boundary; the infrastructure layer (<code>ApplicationDbContext</code>) uses this
           interface to discover pending events across all tracked aggregates during <code>SaveChangesAsync</code>, the
-          hook that feeds the <a href="group-04-events-outbox.html#outboxmessage">outbox pattern</a> (ADR-003).</li>
+          hook that feeds the <a href="group-04-events-outbox.html#outboxmessage">outbox pattern</a> (<a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>).</li>
           <li><strong>Walkthrough</strong>: three members (<code>IAggregateRoot.cs:12-19</code>):
           <code>IReadOnlyCollection&lt;IDomainEvent&gt; DomainEvents { get; }</code>, the pending event queue (read-only
           from outside); <code>void AddDomainEvent(IDomainEvent)</code>, called by the aggregate&#39;s own methods to
@@ -640,7 +640,7 @@
           <li><strong>Why it&#39;s built this way</strong>: keeping the event queue behind a read-only collection plus
           explicit add/clear methods means only the aggregate&#39;s own behavior can raise events and only
           infrastructure can clear them after a successful save, preserving the at-least-once outbox
-          contract (ADR-003).</li>
+          contract (<a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>).</li>
           <li><strong>Where it&#39;s used</strong>: implemented by
           <a href="#auditableaggregaterootentitytidentifiertype"><code>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</code></a>,
           which adds the backing list and the <code>AddDomainEvent</code>/<code>ClearDomainEvents</code> implementations;
@@ -668,7 +668,7 @@
           deliberately <strong>value-erasing</strong> rather than truncating or hashing (<code>PiiRedactor.cs:18-23</code>): even a
           value&#39;s length or hash can leak information about a data subject, so a <code>[Pii]</code> value is replaced
           wholesale with <code>RedactedToken</code>. This is the log-side counterpart to <a href="#ianonymizable"><code>IAnonymizable</code></a>&#39;s
-          storage-side erasure: together they are the two halves of the §30/ADR-005 story (<code>[Pii]</code> says <em>what</em>
+          storage-side erasure: together they are the two halves of the §30/<a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a> story (<code>[Pii]</code> says <em>what</em>
           is personal; <code>PiiRedactor</code> keeps it out of <em>logs</em>; <code>IAnonymizable</code> erases it from <em>storage</em>).</li>
           <li><strong>Walkthrough</strong><ul>
           <li><code>RedactedToken</code> (<code>PiiRedactor.cs:27</code>): the public <code>const string = &quot;[REDACTED]&quot;</code> substituted for
@@ -699,7 +699,7 @@
           <li><strong>Why it&#39;s built this way</strong>: a <code>static</code> pure helper has no DI dependency, so it can be called from
           any layer, including a transport boundary, without wiring. Per-type caching keeps the logging path
           cheap; value-erasure (over truncation/hashing) is the conservative §30 choice; and routing personal
-          data through one named gate makes the redaction policy auditable in one place (ADR-005).</li>
+          data through one named gate makes the redaction policy auditable in one place (<a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a>).</li>
           <li><strong>Where it&#39;s used</strong>: unit-verified by <code>PiiRedactorTests</code>
           (<code>MMCA.Common/Tests/Core/MMCA.Common.Domain.Tests/Privacy/PiiRedactorTests.cs</code>, G25) and exercised
           end to end (composed with <a href="#ianonymizable"><code>IAnonymizable</code></a>) by <code>PiiErasureContractFitnessTests</code>
@@ -729,7 +729,7 @@
           erasure handler loads the aggregate, calls <code>Anonymize()</code>, and saves, overwriting PII fields with
           non-identifying placeholders <strong>in place</strong> rather than hard-deleting (lines 13-15). The row stays (FKs
           and audit trail intact); the person&#39;s data is gone. This is the second half of the
-          <a href="#piiattribute"><code>PiiAttribute</code></a> story (ADR-005): <code>[Pii]</code> marks <em>what</em> is PII; <code>IAnonymizable</code> defines
+          <a href="#piiattribute"><code>PiiAttribute</code></a> story (<a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a>): <code>[Pii]</code> marks <em>what</em> is PII; <code>IAnonymizable</code> defines
           <em>how</em> it is erased. <code>[Rubric §34, Architecture Governance &amp; Documentation]</code>: an architecture rule
           asserts that any Domain type with a <code>[Pii]</code> property implements <code>IAnonymizable</code>
           (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Governance.cs:11-21</code>),
@@ -745,7 +745,7 @@
           <li><strong>Why it&#39;s built this way</strong>: making erasure a one-method contract keeps the <em>policy</em> (which fields,
           what placeholders) inside the aggregate that owns the data, while the <em>trigger</em> lives in an
           application handler, and the <code>[Pii] ⇒ IAnonymizable</code> fitness rule guarantees no PII-holding entity
-          silently lacks an erasure path (ADR-005).</li>
+          silently lacks an erasure path (<a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a>).</li>
           <li><strong>Where it&#39;s used</strong>: implemented by <code>User</code> in the ADC Identity module (which holds the <code>[Pii]</code> fields
           <code>Email</code>/<code>FirstName</code>/<code>LastName</code>/<code>AvatarUrl</code>,
           <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:18,21,25,29,94</code>); called by
@@ -1135,7 +1135,7 @@
           <code>AuditableAggregateRootEntity.cs:24,34</code>), the aggregate records side-effects as <code>IDomainEvent</code>
           objects; they are dispatched by the infrastructure after a successful <code>SaveChangesAsync</code>, not
           during the domain operation itself. This is the &quot;domain events transact with the aggregate&quot;
-          design from ADR-003.</li>
+          design from <a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>.</li>
           <li><strong>Child collection mutation</strong> (<code>SetItems&lt;TChildEntity&gt;</code>, <code>AuditableAggregateRootEntity.cs:44</code>),
           replaces an entire child list atomically, calling the <code>ValidateSetItems</code> hook (line 69, virtual,
           no-op by default) so subclasses can enforce business rules <em>before</em> the mutation occurs (e.g.,
@@ -1167,7 +1167,7 @@
           <code>Error.NotFound</code> (with source and target set) when missing.</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: ADR-003 (outbox + in-process dispatch) requires domain events to
+          <li><strong>Why it&#39;s built this way</strong>: <a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a> (outbox + in-process dispatch) requires domain events to
           &quot;ride along&quot; with the entity in memory and be captured during <code>SaveChangesAsync</code>; the collection
           lives on the root because it is the consistency boundary. <code>SetItems</code> + <code>ValidateSetItems</code> gives a
           single protected-hook mutation path, avoiding scattered collection-manipulation logic in handlers.</li>

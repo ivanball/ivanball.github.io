@@ -103,14 +103,14 @@ chapter; here is the orientation so the vocabulary is familiar.
 - **Event-driven integration + the Outbox pattern.** When an aggregate changes, its domain events are
   serialized into an `OutboxMessage` row **in the same transaction** as the data, then a background
   processor delivers them at-least-once. This avoids the "save then publish and hope" dual-write bug.
-  (ADR-003 "outbox dual-dispatch".)
+  ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html) "outbox dual-dispatch".)
 
 - **Database-per-service.** Each module/service owns its own SQL database and its own outbox table;
   there is one concrete `SQLServerDbContext` class but **one instance per database**. Cross-source
   relationships auto-degrade (the FK is dropped, navigation flows through batch loaders), and the
-  outbox is the cross-source consistency mechanism. (ADR-006.)
+  outbox is the cross-source consistency mechanism. ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html).)
 
-- **Engine-agnostic entities, the storage provider is a one-token choice (ADR-018).** A
+- **Engine-agnostic entities, the storage provider is a one-token choice ([ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)).** A
   domain entity carries *no* persistence-engine choice; it is a plain class. What decides whether it
   is stored in **SQL Server, Cosmos DB, or SQLite** is a single `[UseDataSource(<engine>)]` attribute on
   its `Infrastructure/Persistence/EntityConfiguration/{Entity}Configuration` class, carried for you by
@@ -125,10 +125,10 @@ chapter; here is the orientation so the vocabulary is familiar.
   filter goes through `CrossSourceSpecification` (so even a "published-event" predicate stays
   translatable). First concrete code: the configuration hierarchy in
   [`group-07`](group-07-persistence-ef-core.md); this is the per-entity half of database-per-service
-  (ADR-006) plus the polyglot story (ADR-018).
+  ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)) plus the polyglot story ([ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)).
   *Adoption note (verified by source):* this is a real, **tested** capability with a **staged first
   adoption**. Today **all current production entity configs use the `…SQLServer` base** (ADC runs SQL
-  Server only, 4 SQL databases), but the ADR-018 work shipped the full polyglot machinery (unified base,
+  Server only, 4 SQL databases), but the [ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html) work shipped the full polyglot machinery (unified base,
   cross-source spec + fitness rule, Cosmos-index skip, SQLite `EnsureCreated`, Cosmos/SQLite Aspire
   helpers, portability tests) and ADC Conference's `Session`→Cosmos / `Room`→SQLite move is the
   staged-but-not-yet-deployed first use. Treat Cosmos/SQLite as supported, exercised extension points, see the
@@ -140,7 +140,7 @@ chapter; here is the orientation so the vocabulary is familiar.
 
 - **Soft-delete + audit fields.** Entities are never hard-deleted; an `IsDeleted` flag plus EF global
   query filters exclude them. `CreatedOn/By` and `LastModifiedOn/By` are stamped centrally in
-  `SaveChangesAsync`. For genuine erasure (GDPR/CCPA) there is a separate anonymize path. (ADR-005.)
+  `SaveChangesAsync`. For genuine erasure (GDPR/CCPA) there is a separate anonymize path. ([ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html).)
 
 - **Strongly-typed identifier aliases.** Each entity's ID type is a solution-wide
   `global using XIdentifierType = int;` (or `= System.Guid;`) alias, linked into every project via
@@ -153,7 +153,7 @@ chapter; here is the orientation so the vocabulary is familiar.
 The *why* behind these patterns lives in **fifty accepted ADRs** (001-050; the Website repo's
 `docs-src/adr/README.md` owns the count and range), version-controlled in
 `Website/docs-src/adr/` and published at <https://ivanball.github.io/docs/adr/> (its `README.md` is the
-canonical index with one-line summaries). Group chapters tag the relevant one inline (e.g. "ADR-003");
+canonical index with one-line summaries). Group chapters tag the relevant one inline (e.g. "[ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)");
 the full set, for orientation:
 
 | ADR | Decision (one line) | First/most relevant chapter |
@@ -168,7 +168,7 @@ the full set, for orientation:
 | 008 | One service host per module behind a YARP gateway; transport at the edge keeps extraction reversible | [g16](group-16-aspire-orchestration.md)/[g25](group-25-adc-host-composition.md) |
 | 009 | Standard resilience handler on every outbound client; declared RTO/RPO + drilled restore | [g13](group-13-grpc-contracts.md)/[devops-runbooks](devops-runbooks.md) |
 | 010 | Every integration event carries a `SchemaVersion`; breaking changes use a new type + upcaster | [g04](group-04-events-outbox.md) |
-| 011 | ~~en-US-only i18n is a deliberate non-goal~~ **superseded by ADR-027** (multi-locale en-US + es) | [g15](group-15-common-ui-framework.md) |
+| 011 | ~~en-US-only i18n is a deliberate non-goal~~ **superseded by [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)** (multi-locale en-US + es) | [g15](group-15-common-ui-framework.md) |
 | 012 | gRPC host transport: `Http2`-only h2c + gateway-routed JWKS (ADC) vs `Http1AndHttp2` + ALPN (Store) | [g16](group-16-aspire-orchestration.md)/[g20](group-20-conference-api-grpc.md) |
 | 013 | Expected failures are `Result`/`ErrorType` values; only the edge maps to HTTP/gRPC | [g01](group-01-result-error-handling.md) |
 | 014 | CQRS decorator chain: FeatureGate → Logging → Caching → Validating → Transactional → Handler | [g05](group-05-cqrs-pipeline.md) |
@@ -211,11 +211,11 @@ the full set, for orientation:
 
 ADRs 011–050 were authored after this guide's first build; their patterns were already documented here,
 and the chapters now cross-reference the ADR numbers. Recent framework additions include the
-**device capability abstraction layer** (ADR-042/043/044/045: per-capability contracts with MAUI-native,
+**device capability abstraction layer** ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)/043/044/045: per-capability contracts with MAUI-native,
 browser, and inert-fallback adapters, mobile deep links, native OS push, managed file storage + user
 avatars), taught in the new [g26](group-26-device-capability-layer.md) chapter and cross-referenced in
-g07/g10/g12/g24; the newest records are the library-scoped `ConfigureAwait(false)` build policy (ADR-049)
-and the rotating-refresh-token auth workflow (ADR-050). The canonical index for the full set is the
+g07/g10/g12/g24; the newest records are the library-scoped `ConfigureAwait(false)` build policy ([ADR-049](https://ivanball.github.io/docs/adr/049-library-configureawait-policy.html))
+and the rotating-refresh-token auth workflow ([ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html)). The canonical index for the full set is the
 Website repo's `docs-src/adr/README.md` (published at <https://ivanball.github.io/docs/adr/>), which owns
 the count and range.
 
@@ -238,7 +238,7 @@ Management, see §4). What each is and why it's here:
 **Application / mapping / validation**
 - **FluentValidation 12**: request/command validators, run by a pipeline decorator.
 - **Riok.Mapperly 4.3.1**: a *source-generated*, compile-time object mapper (no runtime reflection).
-  Note ADR-001 chose manual DTO mapping over reflection-based AutoMapper; Mapperly is the
+  Note [ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html) chose manual DTO mapping over reflection-based AutoMapper; Mapperly is the
   compile-time, allocation-free way to keep mapping explicit and fast.
 - **Scrutor 7**: assembly scanning and **decorator registration** (`TryDecorate`) for DI; this is how
   the CQRS decorator pipeline is wired.
@@ -261,7 +261,7 @@ Management, see §4). What each is and why it's here:
 
 **Transport (service extraction)**
 - **Grpc.AspNetCore / Grpc.Net.ClientFactory / Grpc.Tools / Google.Protobuf**: gRPC server + client
-  + `.proto` compilation, for synchronous inter-service calls between extracted modules (ADR-007).
+  + `.proto` compilation, for synchronous inter-service calls between extracted modules ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)).
 
 **UI**
 - **MudBlazor 9.5.0**: the Blazor **component library** and design system (grids, dialogs, forms,
@@ -280,7 +280,7 @@ Management, see §4). What each is and why it's here:
 
 **Auth / crypto**
 - **System.IdentityModel.Tokens.Jwt 8**: JWT creation/validation; JWKS key publishing for
-  cross-service token validation (ADR-004 "authentication dual-fetch").
+  cross-service token validation ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html) "authentication dual-fetch").
 
 **Versioning / build**
 - **MinVer 7**: derives the package version from the git tag (`vX.Y.Z`), so releases are tag-driven.
@@ -426,7 +426,7 @@ least once against real code or a real artifact.
 
 **A note on §27, Internationalization & Localization.** `[Rubric §27, Internationalization &
 Localization]` assesses externalized strings and culture-aware formatting. The original single-locale
-stance (ADR-011) has been **superseded by ADR-027**: the framework now ships **two locales, en-US
+stance ([ADR-011](https://ivanball.github.io/docs/adr/011-single-locale-i18n.html)) has been **superseded by [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)**: the framework now ships **two locales, en-US
 (default) and Spanish (es)**. UI strings resolve through `IStringLocalizer<T>` over co-located `.resx`
 files (the marker [`SharedResource`](group-15-common-ui-framework.md#sharedresource) anchors the shared
 set), and **backend `Result` errors are localized server-side at the edge** keyed by the existing
@@ -441,12 +441,12 @@ bugs the code is still deliberately **culture-invariant**: identifier parsing us
 `CultureInfo.InvariantCulture` ([`DomainHelper`](group-02-domain-building-blocks.md#domainhelper),
 `MMCA.Common/Source/Core/MMCA.Common.Shared/Extensions/DomainHelper.cs:43-47`). Culture-aware date/number
 formatting is currently guarded only by an advisory analyzer suggestion (`MA0076`); a fitness-rule gate is
-noted as follow-up in ADR-027.
+noted as follow-up in [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html).
 
-**A note on §20, theming (day/dark).** Beyond the design tokens, **ADR-028** adds a day/dark mode:
+**A note on §20, theming (day/dark).** Beyond the design tokens, **[ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html)** adds a day/dark mode:
 [`ThemeService`](group-15-common-ui-framework.md#themeservice) binds `MudThemeProvider`'s
 `@bind-IsDarkMode` to the already-defined `MMCATheme.PaletteDark`, persists the choice to cookie +
-localStorage + `User.PreferredTheme`, and defaults to the OS `prefers-color-scheme`, reusing ADR-027's
+localStorage + `User.PreferredTheme`, and defaults to the OS `prefers-color-scheme`, reusing [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)'s
 cookie/profile persistence. Honest gap: the no-flash SSR bootstrap is **not yet wired for theme**, so a
 first-paint flash is possible (stated, not yet remediated).
 

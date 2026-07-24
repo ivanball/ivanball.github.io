@@ -7,8 +7,8 @@ microservice across a broker. Two questions drive the whole design. *How do we p
 reliably when persistence and dispatch are separate steps that can each fail independently?* And *how
 do we keep application code identical whether a module ships inside the monolith or as its own
 service?* The answer to the first is the **transactional outbox** with an at-least-once background
-drainer (ADR-003); the answer to the second is a **transport-agnostic message bus** plus a
-consumer-side **inbox** (ADR-006, ADR-008, ADR-021). The types here implement both, top to bottom:
+drainer ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)); the answer to the second is a **transport-agnostic message bus** plus a
+consumer-side **inbox** ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html), [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html), [ADR-021](https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html)). The types here implement both, top to bottom:
 the event contracts, the in-process dispatcher, the outbox tables and their background services, and
 the swappable in-process/broker buses.
 
@@ -38,7 +38,7 @@ the values it was created with. [`BaseIntegrationEvent`](#baseintegrationevent) 
 `virtual SchemaVersion` defaulting to `1` (`MMCA.Common.Domain/DomainEvents/BaseIntegrationEvent.cs:22`):
 additive field changes keep the version, but a breaking change (a renamed, removed, or retyped field)
 requires a NEW event type plus a consumer-side upcaster, never a silent reshape of an existing
-contract (ADR-010). [`EntityChangedEvent<TIdentifierType>`](#entitychangedeventtidentifiertype) is a
+contract ([ADR-010](https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html)). [`EntityChangedEvent<TIdentifierType>`](#entitychangedeventtidentifiertype) is a
 reusable CRUD-lifecycle event carrying a
 [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate) (Added/Updated/Deleted)
 and the affected `EntityId` (`MMCA.Common.Domain/DomainEvents/EntityChangedEvent.cs:24-27`), so
@@ -68,7 +68,7 @@ This is the single most important guarantee in the chapter: if the business data
 is durably recorded; if the transaction rolled back, neither exists. There is no window where they
 disagree. `[Rubric §8, Data Architecture]` (transactional integrity) and `[Rubric §6]` both hinge on
 this atomicity. Crucially, the rows go to the same physical database as the aggregate: every
-relational source owns its own `OutboxMessages` table, never a shared one (ADR-006; see the
+relational source owns its own `OutboxMessages` table, never a shared one ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html); see the
 [primer on database-per-service](../00-primer.md#2-architectural-styles-this-codebase-commits-to)).
 
 ## The routing split: local events dispatch in-process, integration events wait for the bus
@@ -118,7 +118,7 @@ group; most of its complexity is about **not** wasting work. It exists because t
 *commit* and *mark-processed* can be interrupted: the process can crash, or in-process dispatch can
 throw. When that happens the row stays unprocessed (and the interceptor signals the processor on its
 failure path, `DomainEventSaveChangesInterceptor.cs:238-246`) and the processor catches it on its next
-cycle. This is the **at-least-once** guarantee of ADR-003. Its unavoidable cost is that the *same*
+cycle. This is the **at-least-once** guarantee of [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html). Its unavoidable cost is that the *same*
 event may be delivered more than once, so **handlers must be idempotent**. That is not a wart; it is
 the documented contract and a healthy discipline regardless.
 
@@ -164,7 +164,7 @@ polling around the clock does not flood Application Insights. A sibling
 (default 7, `MMCA.Common.Infrastructure/Persistence/Outbox/OutboxCleanupService.cs:92-100`,
 `OutboxSettings.cs:65`) and separately purges dead-lettered rows on their own
 `DeadLetterRetentionDays` window (`OutboxCleanupService.cs:111-127`), keeping the table bounded and,
-because payloads may contain personal data, supporting the privacy posture of ADR-005.
+because payloads may contain personal data, supporting the privacy posture of [ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html).
 
 ## The pluggable transport: in-process versus broker
 
@@ -191,7 +191,7 @@ Infrastructure supplies two interchangeable implementations of each, selected by
 The selection between these is a pure DI swap: no application or domain code changes. That is the
 whole point of `[Rubric §7, Microservices Readiness]`: transport choices live at the edges, and the
 NetArchTest extraction rules forbid `Application`/`Domain`/`Shared` from referencing MassTransit at all
-(ADR-007/008). Note the deliberate division of labor: the **`*EventBus`** types own *outbox
+([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)/008). Note the deliberate division of labor: the **`*EventBus`** types own *outbox
 persistence* (write and signal); the **`*MessageBus`** types own *delivery only* and are invoked by
 the processor when draining already-persisted rows.
 
@@ -205,7 +205,7 @@ handlers (`MMCA.Common.Infrastructure/Services/IntegrationEventConsumer.cs:33-79
 event type via [`IntegrationEventConsumerExtensions`](#integrationeventconsumerextensions)'s
 `RegisterIntegrationEventConsumer<TEvent>()`
 (`MMCA.Common.Infrastructure/Services/IntegrationEventConsumerExtensions.cs:22-27`). Because broker
-delivery is *also* at-least-once, the consumer guards against duplicates with the **inbox** (ADR-021):
+delivery is *also* at-least-once, the consumer guards against duplicates with the **inbox** ([ADR-021](https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html)):
 [`IInboxStore`](#iinboxstore)'s `AlreadyProcessedAsync` is checked before invoking handlers, and
 `MarkProcessedAsync` is written *after* they succeed, recording the event's `MessageId` in an
 [`InboxMessage`](#inboxmessage) row (`IntegrationEventConsumer.cs:42-78`). When the inbox is disabled
@@ -240,9 +240,9 @@ In monolith mode steps 2 and 3 collapse: the registered [`IMessageBus`](#imessag
 [`DomainEventDispatcher`](#domaineventdispatcher) that local events already flow through, and
 application code that publishes directly can use [`InProcessEventBus`](#inprocesseventbus) to write,
 dispatch, and finalize in one call. The *contracts the application code touches never change*, which
-is exactly the property that lets a module graduate to its own service without a rewrite (ADR-008).
-For the mechanics of *why* each design choice was made, ADR-003 (outbox and at-least-once), ADR-006
-(per-service outbox), ADR-010 (event versioning), ADR-021 (consumer inbox), and ADR-007/008
+is exactly the property that lets a module graduate to its own service without a rewrite ([ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)).
+For the mechanics of *why* each design choice was made, [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html) (outbox and at-least-once), [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)
+(per-service outbox), [ADR-010](https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html) (event versioning), [ADR-021](https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html) (consumer inbox), and [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)/008
 (transport at the edge) are the primary references.
 
 ### IDomainEvent
@@ -255,13 +255,13 @@ For the mechanics of *why* each design choice was made, ADR-003 (outbox and at-l
   (assesses reliable events; idempotent consumers; events carrying enough context) and `[Rubric §4,
   DDD]` (aggregates raise events on state change). An aggregate doesn't call other modules directly;
   it *records* that something happened (e.g. "SessionScored") as an `IDomainEvent`, and the framework
-  dispatches it after the data is safely saved, the basis of the **Outbox pattern** (ADR-003).
+  dispatches it after the data is safely saved, the basis of the **Outbox pattern** ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)).
 - **Walkthrough**: two properties: `DateOccurred` (`IDomainEvent.cs:10`) is *when the action happened*
   (not when dispatched), and `MessageId` (a `Guid`, line 13) is a unique per-instance id used for
   **consumer-side idempotency** (inbox dedup), so a redelivered event is processed once. That
   `MessageId` is what makes consumers safe under at-least-once delivery; it is minted at event creation
   by [`BaseDomainEvent`](#basedomainevent), survives outbox serialization, travels through the broker,
-  and lands in an [`InboxMessage`](#inboxmessage) as the dedup key (ADR-021).
+  and lands in an [`InboxMessage`](#inboxmessage) as the dedup key ([ADR-021](https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html)).
 - **Why it's built this way**: a minimal marker keeps the domain free of dispatch mechanics; the two
   fields are exactly what the outbox/inbox machinery needs (ordering by occurrence, dedup by id).
 - **Where it's used**: implemented by concrete domain events in each module; raised by
@@ -279,7 +279,7 @@ For the mechanics of *why* each design choice was made, ADR-003 (outbox and at-l
 - **Depends on**: nothing first-party (BCL `Guid`/`Task`). Conceptually keyed by
   [`IDomainEvent`](#idomainevent)'s `MessageId`; backed by [`InboxMessage`](#inboxmessage) rows in the
   EF implementation.
-- **Concept introduced, the consumer-side Inbox (ADR-021).** `[Rubric §6, CQRS & Event-Driven]`
+- **Concept introduced, the consumer-side Inbox ([ADR-021](https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html)).** `[Rubric §6, CQRS & Event-Driven]`
   (idempotent consumers) and `[Rubric §29, Resilience & Business Continuity]` (assesses tolerance of
   duplicate/redelivered messages). The *inbox* is the consumer-side complement to the *outbox*. Every
   reliable broker guarantees **at-least-once** delivery, so the same message can arrive more than once
@@ -293,8 +293,8 @@ For the mechanics of *why* each design choice was made, ADR-003 (outbox and at-l
   ...)` (line 15), which records the processed id (and the type name, for diagnostics).
 - **Why it's built this way**: the port lets the no-op and EF-backed implementations be swapped by
   configuration (`MessageBus:EnableInbox`) without touching consumer code, a §6/§10
-  dependency-inversion win; **ADR-021** records this opt-in inbox as the broker-consume sibling of
-  ADR-003's outbox (producer side) and ADR-017's HTTP-edge idempotency, deduping broker redeliveries
+  dependency-inversion win; **[ADR-021](https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html)** records this opt-in inbox as the broker-consume sibling of
+  [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)'s outbox (producer side) and [ADR-017](https://ivanball.github.io/docs/adr/017-request-idempotency.html)'s HTTP-edge idempotency, deduping broker redeliveries
   by `MessageId` in the consumer's own database with a unique index as the race guard. See
   [`NoOpInboxStore`](#noopinboxstore) for the Null-Object default.
 - **Where it's used**: consumed by [`IntegrationEventConsumer<TEvent>`](#integrationeventconsumertevent)
@@ -315,7 +315,7 @@ For the mechanics of *why* each design choice was made, ADR-003 (outbox and at-l
   Before processing an integration event, [`IntegrationEventConsumer<TEvent>`](#integrationeventconsumertevent)
   asks [`IInboxStore.AlreadyProcessedAsync`](#iinboxstore); after a successful handle it calls
   `MarkProcessedAsync`, which inserts one of these rows. Because the table lives in the consumer's own
-  DB, the dedup respects the database-per-service boundary (ADR-006).
+  DB, the dedup respects the database-per-service boundary ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)).
 - **Walkthrough**: four `init`-only properties (`InboxMessage.cs:11-20`): `Id` (surrogate `Guid` PK,
   defaulted to `Guid.NewGuid()`, line 11) is the EF key; `MessageId` (`required`, line 14) is the
   event's own id, the **deduplication key**, carrying a unique index in the EF config; `EventType`
@@ -324,9 +324,9 @@ For the mechanics of *why* each design choice was made, ADR-003 (outbox and at-l
 - **Why it's built this way**: separating `Id` (PK for EF internals) from `MessageId` (the business
   dedup key with the unique index) follows the same surrogate-key convention the codebase uses
   elsewhere; storing it as a plain entity lets the same EF stack purge it (see
-  [`OutboxCleanupService`](#outboxcleanupservice)). **ADR-021** governs this mechanism: the unique
+  [`OutboxCleanupService`](#outboxcleanupservice)). **[ADR-021](https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html)** governs this mechanism: the unique
   index on `MessageId` is the concurrency guard a racing duplicate delivery trips, and the row lives in
-  the consumer's own database (ADR-006).
+  the consumer's own database ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)).
 - **Where it's used**: written/read by [`EfInboxStore`](#efinboxstore); purged by
   [`OutboxCleanupService`](#outboxcleanupservice) when the inbox is enabled; an EF configuration class
   applies its unique index.
@@ -344,7 +344,7 @@ For the mechanics of *why* each design choice was made, ADR-003 (outbox and at-l
 - **Concept introduced, event-driven wake vs. fixed polling.** `[Rubric §12, Performance &
   Scalability]` (assesses latency under load), `[Rubric §29, Resilience]`, and `[Rubric §31, Cost
   Efficiency / FinOps]` (assesses idle resource burn). Without a signal, the processor would poll the
-  DB on a fixed schedule, up to 300s in production (ADR-003). Instead, the producer calls `Signal()`
+  DB on a fixed schedule, up to 300s in production ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)). Instead, the producer calls `Signal()`
   immediately after committing outbox entries; the processor is parked on `WaitAsync(timeout, ct)` and
   returns at once. This collapses dispatch latency from "up to the polling interval" to near-zero in
   the common case, while the timeout remains a safety net **and** keeps idle DB chatter (and its
@@ -427,7 +427,7 @@ For the mechanics of *why* each design choice was made, ADR-003 (outbox and at-l
   consumer.
 - **Why it's built this way**: opt-in dedup keeps the monolith simple, in-process dispatch never
   redelivers, so a single-process or broker-less deployment needs no inbox and pays nothing for the
-  default (**ADR-021**). It is the registration unless `MessageBus:EnableInbox=true` swaps in
+  default (**[ADR-021](https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html)**). It is the registration unless `MessageBus:EnableInbox=true` swaps in
   [`EfInboxStore`](#efinboxstore).
 - **Where it's used**: registered in DI as the default `IInboxStore`; consumed by
   [`IntegrationEventConsumer<TEvent>`](#integrationeventconsumertevent).
@@ -442,11 +442,11 @@ For the mechanics of *why* each design choice was made, ADR-003 (outbox and at-l
 - **Concept introduced, the Transactional Outbox pattern.** `[Rubric §6, CQRS & Event-Driven]`
   (reliable at-least-once delivery), `[Rubric §8, Data Architecture]` (event written in the same
   transaction as the aggregate), and `[Rubric §29, Resilience & Business Continuity]` (the delivery
-  guarantee survives a crash). ADR-003 is the governing decision. The problem it solves: if you save an
+  guarantee survives a crash). [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html) is the governing decision. The problem it solves: if you save an
   aggregate and *then* publish an event, a crash between the two loses the event. The fix: write the
   event to an `OutboxMessages` row in the **same database transaction** as the aggregate change; the
   [`OutboxProcessor`](#outboxprocessor) then reads unprocessed rows and dispatches them, re-dispatching
-  after a crash (at-least-once). Each service owns its own outbox table (ADR-006), so there is no
+  after a crash (at-least-once). Each service owns its own outbox table ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)), so there is no
   cross-service race.
 - **Walkthrough**
   - Static `SerializerOptions` (`OutboxMessage.cs:16-19`), a `JsonSerializerOptions` with
@@ -538,7 +538,7 @@ For the mechanics of *why* each design choice was made, ADR-003 (outbox and at-l
   original, so the original must already hold the new value first.
 - **Why it's built this way**: `ExecuteUpdate` is a single round-trip that never materializes entities;
   re-syncing the tracker afterwards keeps a later `SaveChanges` from queueing a redundant `UPDATE` for
-  rows that are already processed. This is the concrete implementation of ADR-003's *dispatch #1* (the
+  rows that are already processed. This is the concrete implementation of [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)'s *dispatch #1* (the
   in-process happy path) staying cheap, the durability net is the background
   [`OutboxProcessor`](#outboxprocessor), which does *not* use this helper.
 - **Where it's used**: called by the
@@ -570,10 +570,10 @@ For the mechanics of *why* each design choice was made, ADR-003 (outbox and at-l
   complement to the producer-side [`OutboxProcessor`](#outboxprocessor).
 - **Why it's built this way**: dedup-by-`MessageId` (the [`IDomainEvent.MessageId`](#idomainevent)
   introduced at Level 0) makes redelivery safe without distributed locks; storing the row in the
-  consumer's *own* DB keeps it within the database-per-service boundary (ADR-006). Relying on the unique
+  consumer's *own* DB keeps it within the database-per-service boundary ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)). Relying on the unique
   index (and swallowing its violation) avoids a read-then-write race between concurrent deliveries.
-  **ADR-021** is the governing decision: this opt-in inbox is the broker-consume sibling of ADR-003's
-  outbox and ADR-017's HTTP-edge idempotency, activated by `MessageBus:EnableInbox` and marking
+  **[ADR-021](https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html)** is the governing decision: this opt-in inbox is the broker-consume sibling of [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)'s
+  outbox and [ADR-017](https://ivanball.github.io/docs/adr/017-request-idempotency.html)'s HTTP-edge idempotency, activated by `MessageBus:EnableInbox` and marking
   processed only after all handlers succeed (a throwing handler leaves the message redeliverable).
 - **Where it's used**: registered in place of [`NoOpInboxStore`](#noopinboxstore) when
   `MessageBus:EnableInbox=true`; called by the [`IntegrationEventConsumer<TEvent>`](#integrationeventconsumertevent)
@@ -596,7 +596,7 @@ For the mechanics of *why* each design choice was made, ADR-003 (outbox and at-l
   `[Rubric §8, Data Architecture]`, and `[Rubric §14, Testability]`. The
   [`OutboxProcessor`](#outboxprocessor) only ever *sets* `ProcessedOn`; without this sweep the outbox,
   which stores serialized event payloads that may contain personal data, grows unbounded (the doc cites
-  ADR-003 / ADR-005). The constructor takes an optional `TimeProvider? timeProvider = null`
+  [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html) / [ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html)). The constructor takes an optional `TimeProvider? timeProvider = null`
   (`OutboxCleanupService.cs:39`) stored as `_timeProvider`, defaulting to `TimeProvider.System` (line
   43); the doc comment (lines 30-31) states its purpose, it is a clock abstraction so tests can drive
   the hour-scale sweep loop deterministically instead of waiting real hours.
@@ -612,7 +612,7 @@ For the mechanics of *why* each design choice was made, ADR-003 (outbox and at-l
   108-112). `GetRelationalSources` (lines 138-149) computes the same source set the processor drains.
 - **Why it's built this way**: bounded retention keeps both storage cost (§31) and PII exposure (§30)
   in check; doing it as a `DELETE` (not load-then-remove) is the efficient path, and per-source
-  error isolation keeps one bad DB from blocking the sweep. ADR-021 has the inbox reuse this same
+  error isolation keeps one bad DB from blocking the sweep. [ADR-021](https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html) has the inbox reuse this same
   retention sweep (gated on `EnableInbox`) rather than adding a second housekeeping service.
 - **Where it's used**: registered as a hosted service alongside the [`OutboxProcessor`](#outboxprocessor)
   in `AddInfrastructure`.
@@ -621,7 +621,7 @@ For the mechanics of *why* each design choice was made, ADR-003 (outbox and at-l
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Outbox` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:37` · Level 8 · class (sealed partial, `BackgroundService`)
 
 - **What it is**: the background service that drains every outbox table the host owns and dispatches
-  the [`OutboxMessage`](#outboxmessage)s, the engine of at-least-once delivery (ADR-003).
+  the [`OutboxMessage`](#outboxmessage)s, the engine of at-least-once delivery ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)).
 - **Depends on**: `IServiceScopeFactory`,
   [`OutboxSettings`](group-14-module-system-composition.md#outboxsettings) (via `IOptions<>`),
   [`IOutboxSignal`](#ioutboxsignal),
@@ -644,7 +644,7 @@ For the mechanics of *why* each design choice was made, ADR-003 (outbox and at-l
   DB chatter and telemetry cost. `GetOutboxSources` (`OutboxProcessor.cs:144-155`) enumerates every
   relational source backing a registered entity plus the configured publish target (Cosmos has no
   outbox), so a host only ever touches *its own* databases, never racing another service for its rows
-  (ADR-006, the fix recorded in the outbox-race memory). `ProcessSourceAsync`
+  ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html), the fix recorded in the outbox-race memory). `ProcessSourceAsync`
   (`OutboxProcessor.cs:195-256`) fetches a batch ordered by `OccurredOn` (eligible rows sort before
   pending ones, so a full batch can't starve eligible work), splits the eligible prefix (older than the
   `ProcessingDelaySeconds` cutoff) from the pending remainder, dispatches the eligible ones, then saves
@@ -662,8 +662,8 @@ For the mechanics of *why* each design choice was made, ADR-003 (outbox and at-l
   `MaxRetries` in the fetch filter, line 221) and record `LastError`. Each dispatch restarts the
   original request's trace via `StartOutboxActivity` (`OutboxProcessor.cs:320-342`) so traces span the
   async hop.
-- **Why it's built this way**: ADR-003: the outbox is the durability guarantee behind every
-  integration event; the smart-wait + per-source design (ADR-006) plus the telemetry suppression are
+- **Why it's built this way**: [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html): the outbox is the durability guarantee behind every
+  integration event; the smart-wait + per-source design ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)) plus the telemetry suppression are
   the cost/latency optimizations recorded in the outbox-cost-optimization memory. Dead-lettering
   unresolvable types stops one poison message from blocking the queue; the *progress* requirement on
   re-poll (see [`OutboxCycleResult`](#outboxcycleresult)) prevents a fully-failing batch from
@@ -765,7 +765,7 @@ For the mechanics of *why* each design choice was made, ADR-003 (outbox and at-l
   handlers.
 - **Depends on**: [`BaseDomainEvent`](#basedomainevent) (Level 1),
   [`IIntegrationEvent`](#iintegrationevent) (Level 1).
-- **Concept introduced, explicit integration-event schema versioning (ADR-010).** This base carries a
+- **Concept introduced, explicit integration-event schema versioning ([ADR-010](https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html)).** This base carries a
   single member beyond what it inherits: `public virtual int SchemaVersion => 1;` (line 22).
   `[Rubric §9, API & Contract Design]` assesses whether contracts evolve without silently breaking
   consumers; an integration event *is* a wire contract once it crosses a service boundary. The version
@@ -1181,7 +1181,7 @@ For the mechanics of *why* each design choice was made, ADR-003 (outbox and at-l
 - **Why it's built this way**: this bus does **not** itself write to the outbox. Transactional-outbox
   semantics are preserved by the [`OutboxProcessor`](#outboxprocessor): events are persisted to
   [`OutboxMessage`](#outboxmessage) in the *same DB transaction* as the aggregate change, then the
-  processor drains them by calling this bus (ADR-003). Keeping `BrokerMessageBus` a thin publish
+  processor drains them by calling this bus ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)). Keeping `BrokerMessageBus` a thin publish
   adapter, with no outbox knowledge, is what lets the same outbox machinery serve both monolith and
   broker modes (ADRs 007/008).
 - **Where it's used**: registered when `MessageBus:Provider` selects RabbitMQ or Azure Service Bus
@@ -1262,7 +1262,7 @@ For the mechanics of *why* each design choice was made, ADR-003 (outbox and at-l
   implementations (auto-discovered as singletons by `ScanModuleApplicationServices`); there is **no
   per-event MassTransit consumer class to author**. This one universal adapter is registered once per
   event type via [`IntegrationEventConsumerExtensions`](#integrationeventconsumerextensions), which
-  keeps the MassTransit dependency out of the handlers and out of the Application layer (ADR-003 for
+  keeps the MassTransit dependency out of the handlers and out of the Application layer ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html) for
   the inbox/outbox guarantee; ADRs 007/008 for the extraction boundary).
 - **Where it's used**: registered in each broker-mode service host's MassTransit configuration for
   every integration event the service consumes (e.g. Conference consuming `UserRegistered`; Identity
@@ -1338,11 +1338,11 @@ differ **only** in what they do *after* persisting.
   `InProcessEventBus` additionally takes [`IDomainEventDispatcher`](#idomaineventdispatcher),
   `BrokerEventBus` additionally takes [`IOutboxSignal`](#ioutboxsignal). Both produce
   [`OutboxMessage`](#outboxmessage) rows and depend on [`IIntegrationEvent`](#iintegrationevent).
-- **Concept introduced, the outbox dual-dispatch boundary (ADR-003) and the in-process/broker switch
+- **Concept introduced, the outbox dual-dispatch boundary ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)) and the in-process/broker switch
   (ADRs 007/008).** `[Rubric §6, CQRS & Event-Driven]` (transactional outbox = atomic write +
   publish), `[Rubric §7, Microservices Readiness]` (one interface, two transports), `[Rubric §8,
   Data Architecture]` (the outbox is the cross-source consistency mechanism in database-per-service,
-  ADR-006). Both implementations resolve the outbox target the same way
+  [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)). Both implementations resolve the outbox target the same way
   (`dataSourceResolver.ResolveLogical(OutboxSettings.DataSource, .DatabaseName)`, `InProcess` line 34 /
   `Broker` line 41), fetch the context for that source, and act on `context.SupportsOutbox`:
   - `InProcessEventBus.PublishAsync` (lines 30–51): when the source supports the outbox it adds an
@@ -1362,7 +1362,7 @@ differ **only** in what they do *after* persisting.
     `Outbox:DatabaseName` rather than silently dropping events, broker mode is incompatible with a
     non-outbox source.
   - Both batch overloads (`InProcess` line 54 / `Broker` line 63) iterate and await each single publish.
-- **Why it's built this way**: ADR-003: persisting the [`OutboxMessage`](#outboxmessage) in the same
+- **Why it's built this way**: [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html): persisting the [`OutboxMessage`](#outboxmessage) in the same
   transaction as the aggregate change makes delivery atomic with the business write (no "save then
   publish and hope" dual-write bug). Offering both a synchronous in-process path and a broker path
   behind one [`IEventBus`](#ieventbus) is exactly what lets a module move from monolith to extracted

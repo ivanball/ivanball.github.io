@@ -493,7 +493,7 @@
             }
           ]</code></pre>
           <p>[Rubric §8, Data Architecture] assesses deliberate persistence strategy including transactions,
-          isolation, migrations, and bounded ownership. The four separate databases implement ADR-006: each
+          isolation, migrations, and bounded ownership. The four separate databases implement <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>: each
           service owns exactly its data; no cross-database foreign keys exist; each service&#39;s outbox
           (<code>OutboxMessages</code> table) lives in its own database so the outbox processor never races for another
           service&#39;s rows. See <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a> and
@@ -523,7 +523,7 @@
           the live per-service databases means every production restore scenario, bad migration, silent
           corruption, regulatory request for historical data, has a recovery path beyond the 7-day PITR
           window. The disaster-recovery runbook at <code>MMCA.ADC/infra/DISASTER-RECOVERY.md</code> documents the
-          drilled restore procedure (ADR-009).</p>
+          drilled restore procedure (<a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a>).</p>
           <h3 id="azure-service-bus-mainbicep425454">Azure Service Bus (<code>main.bicep:425–454</code>)</h3>
           <pre class="doc-pre"><code>sku: Standard   // Basic rejected: MassTransit requires topics, Basic supports queues only
           minimumTlsVersion: &#39;1.2&#39;</code></pre>
@@ -716,7 +716,7 @@
           <p>When <code>useRs256 = true</code>, the RSA private key (from Key Vault) signs tokens and the public key is
           published at <code>/.well-known/jwks.json</code>. Other services fetch this document through the Gateway
           (<code>Authentication__JwtBearer__Authority = &#39;http://${identityApp.name}&#39;</code>) to validate tokens without
-          a shared secret (ADR-004 &quot;authentication dual-fetch&quot;). The 15-minute access token lifetime limits
+          a shared secret (<a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a> &quot;authentication dual-fetch&quot;). The 15-minute access token lifetime limits
           the blast radius of a leaked token.</p>
           <p>Identity is sized at 0.25 CPU / 0.5 Gi, the smallest Container Apps allocation. JWT operations
           are CPU-cheap once the key is loaded; the bottleneck is typically network I/O to SQL.</p>
@@ -802,7 +802,7 @@
           </thead>
           <tbody><tr>
           <td>§7 Microservices Readiness</td>
-          <td>Per-service databases (ADR-006); service-discovery env vars; gRPC transport selection</td>
+          <td>Per-service databases (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>); service-discovery env vars; gRPC transport selection</td>
           </tr>
           <tr>
           <td>§8 Data Architecture</td>

@@ -67,7 +67,7 @@ adc-engagement  →  ADC_Engagement   (Engagement service)
 adc-notification →  ADC_Notification (Notification service)
 ```
 
-One database per service is the direct implementation of ADR-006 (database-per-service). No service
+One database per service is the direct implementation of [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) (database-per-service). No service
 touches another service's database; no service races for another service's outbox rows.
 
 **Redis** is also persistent (Program.cs:39-40), used by service hosts for distributed output-caching
@@ -112,9 +112,9 @@ so there is no "works on my machine" topology gap between developer and pipeline
 `WithSQLServerDataSource` is a framework extension method, not an AppHost-local helper. It lives in
 `MMCA.Common.Aspire.Hosting`'s `Extensions` class (Common.Aspire.Hosting/Extensions.cs:132-145); the
 AppHost-local `DataSourceExtensions.cs` that once held it has been deleted. (It was named `WithDataSource`
-until ADR-018; the rename to `WithSQLServerDataSource` gives it a consistent `With*DataSource` shape with
+until [ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html); the rename to `WithSQLServerDataSource` gives it a consistent `With*DataSource` shape with
 the two polyglot siblings below, a breaking API change swept across consumers in one lockstep release,
-ADR-016.)
+[ADR-016](https://ivanball.github.io/docs/adr/016-lockstep-versioning-masstransit-pin.html).)
 
 ```csharp
 public static IResourceBuilder<ProjectResource> WithSQLServerDataSource(
@@ -144,7 +144,7 @@ EF change tracker, one migrations set per service. The `WaitFor(database)`
 (Common.Aspire.Hosting/Extensions.cs:142) ensures the service process does not start until SQL Server
 is healthy.
 
-**Polyglot siblings (ADR-018).** Two more helpers wire the non-SQL engines for the staged Conference
+**Polyglot siblings ([ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)).** Two more helpers wire the non-SQL engines for the staged Conference
 `Session`→Cosmos / `Room`→SQLite move:
 - `WithCosmosDataSource(service, database, logicalName)` (Extensions.cs:166-180) takes an
   `AzureCosmosDBDatabaseResource` and injects three env vars,
@@ -581,7 +581,7 @@ table below cross-references the local resource with its Azure equivalent:
 
 The transport switch (`RabbitMq` → `AzureServiceBus`) is entirely environment-driven. No code path
 changes between local and production, the same `AddBrokerMessaging(configuration)` call in each
-service's `Program.cs` reads `MessageBus:Provider` and branches accordingly. This is ADR-003 (outbox +
+service's `Program.cs` reads `MessageBus:Provider` and branches accordingly. This is [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html) (outbox +
 in-process dispatch + background processor) combined with the infrastructure flexibility of
 `MessageBusProvider` selection.
 
@@ -622,7 +622,7 @@ The gateway serves three architectural purposes:
    HTTPS, the gateway negotiates h2c to Identity, and the JWKS document is returned transparently.
 
 3. **Extraction reversibility.** If a service needs to be re-merged into the monolith or split
-   further, only the YARP route table changes. Clients and other services are unaffected. This is ADR-008
+   further, only the YARP route table changes. Clients and other services are unaffected. This is [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)
    (service extraction topology): "transport at the edge keeps extraction reversible."
 
 [Rubric §7, Microservices Architecture] is directly served: clients talk to one address; services

@@ -276,7 +276,7 @@ Two members: `CreateClient()` returns an `HttpClient` configured for the test se
 `ResetDatabaseAsync()` resets the database between tests. The doc comment (`IIntegrationTestFixture.cs:16-20`)
 explicitly notes that fixtures for database-per-service hosts must reset **every** relational source
 by enumerating `IEntityDataSourceRegistry` and `IDataSourceResolver`, this is the
-database-per-microservice (ADR-006) implication for test cleanup. Each concrete fixture implements
+database-per-microservice ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)) implication for test cleanup. Each concrete fixture implements
 this by opening a per-source `SqlConnection` and calling `Respawner.ResetAsync`.
 
 #### `IntegrationTestBase<TFixture>`
@@ -546,7 +546,7 @@ framework-independent, not just convention.
 #### `MicroserviceExtractionTests`
 `MMCA.Common.Architecture.Tests/MicroserviceExtractionTests.cs`
 
-Enforces the transport-isolation invariant for microservice extraction (ADR-007/ADR-008):
+Enforces the transport-isolation invariant for microservice extraction ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)/[ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)):
 `Application`, `Domain`, and `Shared` must not reference `MassTransit`; transport (gRPC / MassTransit)
 belongs only in Infrastructure and the transport-edge packages. The rule body is the shared
 `MicroserviceExtractionTestsBase` over `CommonArchitectureMap`.
@@ -562,7 +562,7 @@ quietly move them.
 `MMCA.Common.Architecture.Tests/PiiConventionTests.cs`
 
 1 fact: any type in `MMCA.Common.Domain` bearing a `[Pii]`-decorated property must implement
-`IAnonymizable` (ADR-005). The test passes vacuously today (the framework ships no PII-bearing data
+`IAnonymizable` ([ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html)). The test passes vacuously today (the framework ships no PII-bearing data
 subject entity), and fails the build the moment one is added without an erasure path.
 [Rubric §30, Compliance, Privacy & Data Governance]: §30 assesses whether GDPR/CCPA erasure
 obligations are structurally enforced; this test is the structural gate.

@@ -22,18 +22,18 @@ they have different durability guarantees:
    per recipient, so a user who was offline at send time still sees the message when they next open
    their inbox
    (`MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationHandler.cs:58-66`).
-   This is the persistent half of the two-channel model (ADR-024).
+   This is the persistent half of the two-channel model ([ADR-024](https://ivanball.github.io/docs/adr/024-push-notifications.html)).
 2. **The transient SignalR push.** [`IPushNotificationSender`](#ipushnotificationsender) fans the
    same message out to any connections the recipient has open right now via the
    [`NotificationHub`](#notificationhub); clients not connected at send time simply never see this
-   copy (the inbox is their catch-up). This is the real-time half of ADR-024.
-3. **The OS-level native push (ADR-044).** A separate best-effort channel reaches devices the
+   copy (the inbox is their catch-up). This is the real-time half of [ADR-024](https://ivanball.github.io/docs/adr/024-push-notifications.html).
+3. **The OS-level native push ([ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html)).** A separate best-effort channel reaches devices the
    SignalR hub cannot (app backgrounded or killed), through `INativePushSender` and the device
    registrations managed by [`DevicesController`](#devicescontroller). The sender itself and its
    Azure Notification Hubs implementation live in
    [Group 07](group-07-persistence-ef-core.md#inativepushsender); this chapter covers only the
    request record and the registration endpoint.
-4. **Ephemeral live-channel events (ADR-039).** A distinct, never-persisted fan-out to a *group*
+4. **Ephemeral live-channel events ([ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html)).** A distinct, never-persisted fan-out to a *group*
    of subscribed connections (for example `event:1` or `session:123`), used by the ADC Engagement
    live layer for poll and question updates. This rides the same hub but through
    [`ILiveChannelPublisher`](#ilivechannelpublisher) and the hub's `JoinChannel`/`LeaveChannel`
@@ -110,7 +110,7 @@ resolve the recipient user ids through
 retrieve a missed notification even if every real-time channel fails (lines 59-66); then attempt
 SignalR delivery via [`IPushNotificationSender`](#ipushnotificationsender), catching any exception
 and recording `MarkAsSent()` or `MarkAsFailed()` accordingly (delivery failure is non-fatal, lines
-69-86); then a best-effort native-push leg through `INativePushSender` (ADR-044) whose failures are
+69-86); then a best-effort native-push leg through `INativePushSender` ([ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html)) whose failures are
 logged at Warning but never change the audit status (lines 92-105); and finally a third save plus a
 map of the aggregate to a [`PushNotificationDTO`](#pushnotificationdto) via
 [`PushNotificationDTOMapper`](#pushnotificationdtomapper) (lines 107-109). The durable inbox write
@@ -189,12 +189,12 @@ adapter forwards each event over gRPC with a tight 2-second deadline to the Noti
 [`SignalRLiveChannelPublisher`](#signalrlivechannelpublisher), the only host whose `IHubContext` can
 reach connected clients
 (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Grpc/LiveChannelGrpcService.cs:19-35`).
-Both the adapter and the whole live path are **best-effort by contract** (ADR-039): every transport,
+Both the adapter and the whole live path are **best-effort by contract** ([ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html)): every transport,
 resolution, or broken-circuit failure is logged and swallowed, never thrown, so a publishing command
 can never fail because Notification is slow or down
 (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/LiveChannelPublisherGrpcAdapter.cs:26,43-48`)
 ([Rubric §29, Resilience & Business Continuity]). Serving both a WebSocket and an h2c gRPC ingress
-from one host is the mixed-endpoint profile of ADR-012, and it is why the Notification host keeps its
+from one host is the mixed-endpoint profile of [ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html), and it is why the Notification host keeps its
 default endpoint on `Http1AndHttp2` (the WebSocket Upgrade needs HTTP/1.1) while the gRPC ingress
 sits on a dedicated `Http2`-only named endpoint that peers resolve as `_grpc.notification`
 (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/KestrelConfiguration.cs:23-35`). That gRPC
@@ -220,7 +220,7 @@ the Common controllers as an MVC application part, because they ship in a NuGet 
 ASP.NET does not scan by default.
 
 Native-device management is the third channel's control plane.
-[`DevicesController`](#devicescontroller) (ADR-044) lets an authenticated user upsert
+[`DevicesController`](#devicescontroller) ([ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html)) lets an authenticated user upsert
 (`PUT`, after login and on token rotation) or delete (`DELETE`, before logout) a device
 installation, described by [`DeviceInstallationRequest`](#deviceinstallationrequest). The two verbs
 scope ownership differently, and only one actually stamps it: `UpsertAsync` reads
@@ -322,7 +322,7 @@ four ever taking the others down.
 
 - **What it is**: the port for publishing *ephemeral* live events to a channel of currently-connected clients (for example `event:1` or `session:123`). Its defining property, stated in the XML doc (lines 4-6): channel events are **not persisted**, so a client that is not connected and subscribed at publish time never sees them.
 - **Depends on**: BCL only. Contrast with [`IPushNotificationSender`](#ipushnotificationsender) (which persists a [`PushNotification`](#pushnotification) plus per-user [`UserNotification`](#usernotification) inbox rows), a contrast the XML doc draws explicitly via `<see cref="IPushNotificationSender"/>` (line 5). Implemented by [`SignalRLiveChannelPublisher`](#signalrlivechannelpublisher) and the [`NullLiveChannelPublisher`](#nulllivechannelpublisher) no-op.
-- **Concept introduced**: **ephemeral fan-out versus durable notification.** This is the distinction that splits the whole group in two: live channel events (poll-results-changed, a new session question) are fire-and-forget to whoever is watching *right now*, while push notifications are durable and land in an inbox. The interface deliberately speaks in strings (a `channelKey`, an application-defined `eventName`, a `payloadJson` string) so it stays transport-agnostic; the XML doc names SignalR groups or a message fan-out service as candidate backings (line 7). `[Rubric §7, Microservices Readiness]` assesses whether cross-boundary calls go through abstractions that can be re-homed onto a network transport: in MMCA.ADC this exact interface is served over gRPC by the Notification host's [`LiveChannelGrpcService`](#livechannelgrpcservice) (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Grpc/LiveChannelGrpcService.cs:19`), so the boundary already survives extraction (ADR-007, ADR-008).
+- **Concept introduced**: **ephemeral fan-out versus durable notification.** This is the distinction that splits the whole group in two: live channel events (poll-results-changed, a new session question) are fire-and-forget to whoever is watching *right now*, while push notifications are durable and land in an inbox. The interface deliberately speaks in strings (a `channelKey`, an application-defined `eventName`, a `payloadJson` string) so it stays transport-agnostic; the XML doc names SignalR groups or a message fan-out service as candidate backings (line 7). `[Rubric §7, Microservices Readiness]` assesses whether cross-boundary calls go through abstractions that can be re-homed onto a network transport: in MMCA.ADC this exact interface is served over gRPC by the Notification host's [`LiveChannelGrpcService`](#livechannelgrpcservice) (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Grpc/LiveChannelGrpcService.cs:19`), so the boundary already survives extraction ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html), [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)).
 - **Walkthrough**: one method, `PublishAsync(string channelKey, string eventName, string payloadJson, CancellationToken cancellationToken = default)` (line 17): publish an event to every client currently subscribed to `channelKey`. No return value beyond the `Task`, because there is no delivery guarantee to report.
 - **Why it's built this way**: a JSON-string payload plus a free-form event name keeps the framework out of the business of knowing each live event's schema; the presentation and UI layers agree on the contract. Non-delivery to absent clients is the intended semantics, not a gap. The default registration is the inert [`NullLiveChannelPublisher`](#nulllivechannelpublisher) (`MMCA.Common.Infrastructure/DependencyInjection.cs:196`), replaced by [`SignalRLiveChannelPublisher`](#signalrlivechannelpublisher) when a host opts into the SignalR wiring (line 269).
 - **Where it's used**: ADC's conference-day live layer injects it into the Engagement command handlers that change live state, [`OpenLivePollHandler`](group-23-engagement-live-layer.md#openlivepollhandler) (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/UseCases/Open/OpenLivePollHandler.cs:22`), [`SubmitQuestionHandler`](group-23-engagement-live-layer.md#submitquestionhandler) (`SubmitQuestionHandler.cs:27`), plus the moderate and upvote handlers, and forwards them in FIFO order through [`LiveChannelPublishProcessor`](group-22-engagement-module.md#livechannelpublishprocessor).
@@ -359,9 +359,9 @@ four ever taking the others down.
 
 - **What it is**: the Notification host's Kestrel endpoint wiring, lifted out of `Program.cs` into an `internal static` helper. It applies the mixed-protocol endpoint defaults the SignalR-plus-gRPC host needs and, when configured, adds a dedicated HTTP/1.1 health-probe listener.
 - **Depends on**: ASP.NET Core hosting types only (`WebApplicationBuilder`, `HttpProtocols` from `Microsoft.AspNetCore.Server.Kestrel.Core`, line 1) and the host's `IConfiguration`. No first-party types. Three sibling classes of the same name exist in the Conference, Engagement, and Identity service hosts; this is the Notification one.
-- **Concept introduced**: **per-endpoint protocol selection, not per-host.** This is the ADR-012 story in one method. The Notification service hosts the SignalR hub ([`NotificationHub`](#notificationhub)), whose WebSocket transport needs the HTTP/1.1 `Upgrade` handshake, *and* an inbound cleartext gRPC server ([`LiveChannelGrpcService`](#livechannelgrpcservice)) that needs h2c prior-knowledge HTTP/2. No single whole-host protocol profile satisfies both, so the protocols are split across two endpoints in one process: `appsettings.json` declares `http` on port 8080 as `Http1AndHttp2` and `grpc` on port 8081 as `Http2` (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/appsettings.json:9-20`), and this class supplies the defaults plus the probe listener around them. `[Rubric §7, Microservices Readiness]` assesses whether a service's transport story survives being split out: here it does, at the cost of an explicit per-endpoint protocol map. `[Rubric §13, Observability & Operability]`: the separate probe listener exists so platform health probes never depend on the protocol choices the application traffic needs. `[Rubric §17, DevOps]`: the probe port is injected by infrastructure (`HealthProbe__Port`) rather than hardcoded, so local runs and Azure Container Apps share one code path.
+- **Concept introduced**: **per-endpoint protocol selection, not per-host.** This is the [ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html) story in one method. The Notification service hosts the SignalR hub ([`NotificationHub`](#notificationhub)), whose WebSocket transport needs the HTTP/1.1 `Upgrade` handshake, *and* an inbound cleartext gRPC server ([`LiveChannelGrpcService`](#livechannelgrpcservice)) that needs h2c prior-knowledge HTTP/2. No single whole-host protocol profile satisfies both, so the protocols are split across two endpoints in one process: `appsettings.json` declares `http` on port 8080 as `Http1AndHttp2` and `grpc` on port 8081 as `Http2` (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/appsettings.json:9-20`), and this class supplies the defaults plus the probe listener around them. `[Rubric §7, Microservices Readiness]` assesses whether a service's transport story survives being split out: here it does, at the cost of an explicit per-endpoint protocol map. `[Rubric §13, Observability & Operability]`: the separate probe listener exists so platform health probes never depend on the protocol choices the application traffic needs. `[Rubric §17, DevOps]`: the probe port is injected by infrastructure (`HealthProbe__Port`) rather than hardcoded, so local runs and Azure Container Apps share one code path.
 - **Walkthrough**: one public method, `ConfigureMixedEndpointsWithHealthProbe(WebApplicationBuilder builder)` (line 23). It null-guards the builder (line 25), then calls `builder.WebHost.ConfigureKestrel` (line 27). Inside: `ConfigureEndpointDefaults` sets `HttpProtocols.Http1AndHttp2` (line 29), which is the default applied to endpoints that do not state their own protocol (the config-declared `http` and `grpc` endpoints keep their explicit values). Then `builder.Configuration.GetValue<int?>("HealthProbe:Port")` is pattern-matched with `is int probePort` (line 31), and only when the value is present does it `ListenAnyIP(probePort, o => o.Protocols = HttpProtocols.Http1)` (line 33). The XML doc records that the value arrives as `HealthProbe__Port`=8082 from `infra/main.bicep` and is absent locally (lines 15-16), so locally the third listener simply does not exist.
-- **Why it's built this way**: two reasons are stated in source. First, config-declared Kestrel endpoints and explicit `Listen` calls coexist, so adding the probe listener is strictly additive rather than a replacement (XML doc, lines 17-18). Second, the class exists at all so `Program.cs` stays inside the S1541 cyclomatic-complexity budget the analyzers enforce (lines 7-8): a small structural concession to analyzers-as-errors. See ADR-012 for the transport convention this implements.
+- **Why it's built this way**: two reasons are stated in source. First, config-declared Kestrel endpoints and explicit `Listen` calls coexist, so adding the probe listener is strictly additive rather than a replacement (XML doc, lines 17-18). Second, the class exists at all so `Program.cs` stays inside the S1541 cyclomatic-complexity budget the analyzers enforce (lines 7-8): a small structural concession to analyzers-as-errors. See [ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html) for the transport convention this implements.
 - **Where it's used**: called once from the Notification host's startup (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:70`).
 
 ---
@@ -383,7 +383,7 @@ four ever taking the others down.
 
 - **What it is**: the cross-module service contract for exporting the personal data the Notification module holds for one user: their inbox rows (ids, titles, sent and read dates). It is how the Identity module reaches into Notification-owned data to build a complete cross-service export.
 - **Depends on**: [`UserNotificationExportItemDTO`](#usernotificationexportitemdto) (its return element) and the ADC `UserIdentifierType` alias. Implemented in-process by [`UserNotificationExportService`](#usernotificationexportservice) inside the Notification module and, per the XML doc (lines 8-9), by a gRPC adapter in `MMCA.ADC.Notification.Contracts` everywhere else; the disabled-module stub is [`DisabledUserNotificationExportService`](#disabledusernotificationexportservice).
-- **Concept introduced**: **the "one interface, in-process or gRPC" extraction pattern.** The XML doc calls out that this mirrors Engagement's `IUserEngagementExportService`: a single interface the caller depends on, satisfied by an in-process implementation when the module is co-hosted (`MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.Application/DependencyInjection.cs:28`) and by a gRPC adapter that `Replace`s that registration when it is not (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/DependencyInjection.cs:84`). `[Rubric §7, Microservices Readiness]` assesses exactly this: whether a module boundary is expressed as an interface that can be re-homed onto a network transport without changing the caller (ADR-007 for gRPC extraction, ADR-008 for topology). `[Rubric §30, Compliance/Privacy]`: it is one leg of the data-subject-access aggregation. `[Rubric §9, API & Contract Design]`: the contract is a plain async method over DTOs, so the same shape serves both the in-process and the wire binding.
+- **Concept introduced**: **the "one interface, in-process or gRPC" extraction pattern.** The XML doc calls out that this mirrors Engagement's `IUserEngagementExportService`: a single interface the caller depends on, satisfied by an in-process implementation when the module is co-hosted (`MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.Application/DependencyInjection.cs:28`) and by a gRPC adapter that `Replace`s that registration when it is not (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Contracts/DependencyInjection.cs:84`). `[Rubric §7, Microservices Readiness]` assesses exactly this: whether a module boundary is expressed as an interface that can be re-homed onto a network transport without changing the caller ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html) for gRPC extraction, [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html) for topology). `[Rubric §30, Compliance/Privacy]`: it is one leg of the data-subject-access aggregation. `[Rubric §9, API & Contract Design]`: the contract is a plain async method over DTOs, so the same shape serves both the in-process and the wire binding.
 - **Walkthrough**: one method, `GetUserNotificationExportAsync(UserIdentifierType userId, CancellationToken cancellationToken)` (line 20), returning `IReadOnlyList<UserNotificationExportItemDTO>` newest-first. Note the token has **no default value** here, so every caller must pass one explicitly. The XML doc (lines 14-15) states the implementation joins the framework [`UserNotification`](#usernotification) rows with their [`PushNotification`](#pushnotification) content, which is the same join the inbox read performs.
 - **Where it's used**: the Identity module's [`ExportUserDataHandler`](group-24-identity-module.md#exportuserdatahandler) takes it as a constructor dependency (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ExportUserData/ExportUserDataHandler.cs:29`) and merges the result into the full export, unaware of which of the three implementations it received.
 
@@ -432,7 +432,7 @@ four ever taking the others down.
 - **Depends on**: [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork), [`IQueryableExecutor`](group-07-persistence-ef-core.md#iqueryableexecutor), and [`PushNotificationDTOMapper`](#pushnotificationdtomapper) (primary constructor, lines 14-17). Implements [`IQueryHandler`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult)`<GetNotificationHistoryQuery, Result<PagedCollectionResult<PushNotificationDTO>>>`.
 - **Concept introduced**: none new; note the contrast with the inbox handler. History reads a *single* table (the sent artifacts) with no `UserId` filter, and maps entities to DTOs with an explicit [`PushNotificationDTOMapper`](#pushnotificationdtomapper) rather than an inline LINQ projection, which means it materializes whole entities before mapping. `[Rubric §6, CQRS & Event-Driven]`: a separate read model and handler for the admin history view, sharing nothing with the inbox read but the underlying table.
 - **Walkthrough**: clamp page size to 500 (line 24); get the [`PushNotification`](#pushnotification) repository (line 25); ask the repository itself for the total via `repository.CountAsync` (line 27, note this one goes through the repository, not the queryable executor, because there is no composed predicate to count); page `TableNoTracking` ordered by `CreatedOn` descending with `Skip`/`Take` and materialize the entities through the executor (lines 29-34); run them through `dtoMapper.MapToDTOs` (line 36); build [`PaginationMetadata`](group-01-result-error-handling.md#paginationmetadata) (line 37) and return a successful [`PagedCollectionResult<T>`](group-01-result-error-handling.md#pagedcollectionresultt) (line 39).
-- **Why it's built this way**: history has no per-user state, so there is nothing to join; a dedicated mapper (versus an inline projection) is used because [`PushNotificationDTO`](#pushnotificationdto) is a richer, reused contract mapped in several places, and centralizing that mapping keeps the shape consistent (see ADR-001 on manual/Mapperly mapping).
+- **Why it's built this way**: history has no per-user state, so there is nothing to join; a dedicated mapper (versus an inline projection) is used because [`PushNotificationDTO`](#pushnotificationdto) is a richer, reused contract mapped in several places, and centralizing that mapping keeps the shape consistent (see [ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html) on manual/Mapperly mapping).
 - **Where it's used**: injected into [`NotificationsController`](#notificationscontroller)'s history endpoint (`NotificationsController.cs:30`).
 
 ---
@@ -471,7 +471,7 @@ four ever taking the others down.
   `InstallationId` (line 23), `Platform` (line 28), and `PushChannel` (line 33), each with `[Required]`
   and a `[MaxLength]` cap. The `InstallationId` is client-stable by design so that re-registering after
   a token rotation updates the same installation rather than creating a duplicate.
-- **Why it's built this way**: the doc comment attributes the shape to ADR-044 (native push
+- **Why it's built this way**: the doc comment attributes the shape to [ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html) (native push
   registration). A stable client id plus a rotating platform channel is the standard installation model
   both FCM v1 and APNs expect, and keeping ownership server-stamped keeps the trust boundary at the
   authenticated request.
@@ -803,7 +803,7 @@ four ever taking the others down.
   registered by `AddPushNotifications` because Notification is the host that maps the SignalR
   [NotificationHub](#notificationhub)), the generated `LiveChannelPushService` base (compiled from the
   `.Contracts` `.proto`, line 20), and `Grpc.Core.ServerCallContext`.
-- **Concept introduced, the live-channel ingress (ADR-039).** `[Rubric §6, CQRS & Event-Driven]`
+- **Concept introduced, the live-channel ingress ([ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html)).** `[Rubric §6, CQRS & Event-Driven]`
   assesses whether state changes travel as events; `[Rubric §7, Microservices Readiness]` assesses
   whether cross-process collaboration rides typed transports. The conference-day live layer (LivePolls,
   SessionQuestions) lives in the Engagement service, but only the Notification host owns the SignalR
@@ -820,7 +820,7 @@ four ever taking the others down.
   comment lines 13-17). `[Rubric §11, Security]`: this surface is reachable only on the internal
   service network (a dedicated internal port in Azure Container Apps, never routed by the Gateway), the
   same posture as the other internal gRPC services (for example `AttendeesGrpcService`). The trust
-  boundary is the network, not a bearer token. Transport-wise it rides the ADR-012 mixed-endpoint
+  boundary is the network, not a bearer token. Transport-wise it rides the [ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html) mixed-endpoint
   profile: Notification keeps its default endpoint `Http1AndHttp2` for SignalR WebSockets and serves
   this h2c gRPC ingress on a dedicated `Http2`-only endpoint.
 - **Where it's used**: mapped by the Notification service's `Program.cs`; invoked by
@@ -843,7 +843,7 @@ four ever taking the others down.
 - **Concept introduced, the best-effort cross-service adapter with a tight deadline.** `[Rubric §7,
   Microservices Readiness]` assesses whether a boundary crossing degrades gracefully; `[Rubric §29,
   Resilience & Business Continuity]` assesses whether a peer outage can take a caller down. This adapter
-  is fire-and-forget by contract (ADR-039): a private `static readonly TimeSpan PushDeadline =
+  is fire-and-forget by contract ([ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html)): a private `static readonly TimeSpan PushDeadline =
   TimeSpan.FromSeconds(2)` (line 26) is deliberately tighter than the shared resilience pipeline's 30s
   attempt timeout, because a live event that takes longer than that is already stale, and every failure
   (transport, resolution, broken circuit) is logged and swallowed, never thrown, so a publishing command
@@ -858,7 +858,7 @@ four ever taking the others down.
     channelKey, eventName)` (line 47) and returns, it never propagates.
   - `LogPushFailed` (lines 51-52): a source-generated `[LoggerMessage]` at `Warning` level.
 - **Why it's built this way**: the deadline keeps a publishing request from being held hostage by a slow
-  peer, and swallowing the exception keeps the best-effort contract (ADR-039) honest: the live event is
+  peer, and swallowing the exception keeps the best-effort contract ([ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html)) honest: the live event is
   a courtesy fan-out, not a guaranteed delivery, so its failure must not roll back the business command
   that produced it.
 - **Where it's used**: registered by `AddNotificationLiveChannelClient` in the Notification.Contracts
@@ -891,7 +891,7 @@ four ever taking the others down.
   override this with [SignalRLiveChannelPublisher](#signalrlivechannelpublisher) via
   `AddPushNotifications()`, or with their own transport (in ADC, a gRPC adapter that forwards to the
   host that maps the hub). Because the default resolves cleanly, no host is *forced* to configure a
-  real-time transport (ADR-039, live channels are best-effort by design).
+  real-time transport ([ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html), live channels are best-effort by design).
 - **Where it's used**: registered by the framework so `ILiveChannelPublisher` is always resolvable;
   `AddPushNotifications` swaps it for the SignalR implementation, and in ADC Engagement's composition
   root `services.Replace(...)` overwrites it with the [LiveChannelPublisherGrpcAdapter](#livechannelpublishergrpcadapter)
@@ -1014,7 +1014,7 @@ four ever taking the others down.
      configs for the two notification aggregates.
   3. `AddPushNotifications(configuration)` (line 25), which swaps in the SignalR adapters (and the
      optional Redis backplane) over the null defaults.
-  4. `AddNativePushNotifications(configuration)` (line 29), the ADR-044 third channel: a **no-op unless**
+  4. `AddNativePushNotifications(configuration)` (line 29), the [ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html) third channel: a **no-op unless**
      the `NativePush` config section is enabled and complete (doc comment lines 27-28), so it is safe to
      call in every environment.
   5. `services.AddControllers().AddNotificationControllers()` (line 32), splicing the Common notification
@@ -1046,7 +1046,7 @@ four ever taking the others down.
   pure payload.
 - **Why it's built this way**: raising a domain event inside `PushNotification.Create` (with `default`
   for the not-yet-assigned id) makes creation an announceable fact that flows through the outbox like any
-  other domain event (ADR-003), giving a persistable record and a future extension point.
+  other domain event ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)), giving a persistable record and a future extension point.
 - **Where it's used**: added to the aggregate's event list by `PushNotification.Create` and captured by
   the outbox on `SaveChangesAsync`. There is **no** `IDomainEventHandler<PushNotificationCreated>` in
   the codebase today: delivery happens synchronously inside the send handler after the inbox rows are
@@ -1116,7 +1116,7 @@ four ever taking the others down.
   channelKey, eventName, payloadJson, cancellationToken)` (lines 16-18). It invokes the hub's
   `ReceiveChannelEventMethod` constant so the client and server agree on the method name, and passes the
   channel key, event name, and opaque JSON payload straight through.
-- **Why it's built this way**: live channels are transient by contract (ADR-039), so this adapter just
+- **Why it's built this way**: live channels are transient by contract ([ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html)), so this adapter just
   addresses the group and sends, with no persistence and no per-recipient bookkeeping. A connection that
   is not subscribed at publish time simply never receives the event.
 - **Where it's used**: swapped in over [NullLiveChannelPublisher](#nulllivechannelpublisher) by
@@ -1200,7 +1200,7 @@ four ever taking the others down.
   [INotificationRecipientProvider](#inotificationrecipientprovider) (the audience),
   [IPushNotificationSender](#ipushnotificationsender) (the SignalR transport),
   [INativePushSender](group-07-persistence-ef-core.md#inativepushsender) (the OS-level transport, added
-  by ADR-044), [PushNotificationDTOMapper](#pushnotificationdtomapper) (the success-payload mapper), and
+  by [ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html)), [PushNotificationDTOMapper](#pushnotificationdtomapper) (the success-payload mapper), and
   `ILogger<>`; the persisted aggregates are [PushNotification](#pushnotification) and
   [UserNotification](#usernotification). Implements
   [ICommandHandler<in TCommand, TResult>](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)
@@ -1220,7 +1220,7 @@ four ever taking the others down.
   2. **create the audit aggregate** (lines 43-47) via `PushNotification.Create(...)` with
      `recipientIds.Count`; propagate errors on failure (lines 48-51), then add plus save (lines 53-56).
      This is where the aggregate's [PushNotificationCreated](#pushnotificationcreated) domain event is
-     captured to the outbox (ADR-003).
+     captured to the outbox ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)).
   3. **durable inbox** (lines 58-66): one `UserNotification.Create(recipientId, notification.Id)` row
      per recipient, added and saved. This is what lets a user retrieve a notification they missed while
      offline.
@@ -1229,7 +1229,7 @@ four ever taking the others down.
      failure is **non-fatal**: success calls `notification.MarkAsSent()` plus an info log (lines 77-78),
      failure calls `notification.MarkAsFailed()` plus an error log (lines 84-85); the failure becomes
      recorded *status*, not a thrown exception.
-  5. **best-effort native push** (lines 88-105, ADR-044): `nativePushSender.SendToUsersAsync(...)` in a
+  5. **best-effort native push** (lines 88-105, [ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html)): `nativePushSender.SendToUsersAsync(...)` in a
      second `try/catch` with its own justified `CA1031` suppression (line 100). This is the OS-level
      channel that can reach devices whose app is backgrounded or killed (doc comment lines 88-91). It is
      **purely additive**: the SignalR leg above already decided the audit status, so a native-push
@@ -1290,7 +1290,7 @@ four ever taking the others down.
   and the other internal gRPC surfaces, this endpoint is reachable only on the internal service network
   (a dedicated internal port in Azure Container Apps, never routed by the Gateway), so the trust boundary
   is the network. It is served on the same dedicated `Http2`-only "grpc" Kestrel endpoint as the
-  live-channel ingress (ADR-012 mixed-endpoint profile).
+  live-channel ingress ([ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html) mixed-endpoint profile).
 - **Where it's used**: mapped by the Notification service's `Program.cs`; the wire is dialed by its
   client half [UserNotificationExportServiceGrpcAdapter](#usernotificationexportservicegrpcadapter),
   which runs inside the Identity service's export aggregator and stitches this Notification slice into
@@ -1373,7 +1373,7 @@ four ever taking the others down.
   endpoint stays `Http1AndHttp2` for SignalR WebSockets, so its cleartext gRPC (h2c) lives on a dedicated
   `Http2`-only Kestrel endpoint named `grpc`, and discovery resolves `http://_grpc.notification` from the
   `services__notification__grpc__0` config entry (injected by the AppHost's `WithReference` locally and
-  by `infra/main.bicep` in production). ADR-012.
+  by `infra/main.bicep` in production). [ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html).
 - **Walkthrough**: one `extension(IServiceCollection services)` block (line 18) with two methods.
   - `AddNotificationLiveChannelClient(serviceName = "_grpc.notification")` (line 42): registers the
     typed `LiveChannelPushServiceClient` (line 44), then
@@ -1422,14 +1422,14 @@ four ever taking the others down.
 
 > MMCA.Common.API · `MMCA.Common.API.Controllers.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/Notifications/DevicesController.cs:25` · Level 4 · class (sealed)
 
-- **What it is**: the REST controller that lets any authenticated user manage THEIR own native push-device installations (ADR-044): `PUT /Notifications/Devices` upserts the installation (called after login and on token rotation), `DELETE /Notifications/Devices/{installationId}` removes it (called before logout).
+- **What it is**: the REST controller that lets any authenticated user manage THEIR own native push-device installations ([ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html)): `PUT /Notifications/Devices` upserts the installation (called after login and on token rotation), `DELETE /Notifications/Devices/{installationId}` removes it (called before logout).
 - **Depends on**: [`ApiControllerBase`](group-12-api-hosting-mapping.md#apicontrollerbase); [`IPushDeviceRegistrar`](group-07-persistence-ef-core.md#ipushdeviceregistrar) (the registry facade injected into the primary constructor, `DevicesController.cs:26`); [`ICurrentUserService`](group-08-auth.md#icurrentuserservice) (`DevicesController.cs:27`); [`Error`](group-01-result-error-handling.md#error) and [`Result`](group-01-result-error-handling.md#result); [`DeviceInstallationRequest`](group-10-notifications.md#deviceinstallationrequest); [`NotificationFeatures`](group-10-notifications.md#notificationfeatures). Externals: ASP.NET Core MVC (`[ApiController]`, `[Route]`, `[HttpPut]`, `[HttpDelete]`), `Asp.Versioning` (`[ApiVersion("1.0")]`), and `Microsoft.FeatureManagement.Mvc` (`[FeatureGate]`).
 - **Concept introduced, the ownership-stamped device controller.** This is the first controller in the group whose resources are addressed by **client-generated GUID** installation ids rather than server sequence ids (documented `DevicesController.cs:13-18`). Because the id is unguessable and ownership is stamped server-side from the authenticated user, the endpoint never trusts a caller-supplied owner. `[Rubric §11, Security]` assesses whether authorization and ownership are enforced at the boundary: the class-level `[Authorize]` (`DevicesController.cs:24`) requires authentication, and `UpsertAsync` re-derives `userId` from `ICurrentUserService.UserId` (`DevicesController.cs:37`) rather than the request body, so a user can only register a device against their own identity. `[Rubric §9, API & Contract Design]` assesses REST-shape consistency: both actions declare typed `[ProducesResponseType]` results (204 on success, 400 `ProblemDetails` on failure) and follow the same `HandleFailure`-or-success return shape as the rest of the group.
 - **Walkthrough**
   - Primary-constructor DI of the registrar and the current-user service (`DevicesController.cs:25-27`).
   - `UpsertAsync` (`DevicesController.cs:33`): reads `currentUserService.UserId`; a null user short-circuits to `Error.Unauthorized("PushDevice.Unauthorized", ...)` via `HandleFailure` (`DevicesController.cs:37-41`). Otherwise it calls `registrar.UpsertAsync(userId.Value, request, ...)` and returns `NoContent()` (204) or `HandleFailure(result.Errors)` (`DevicesController.cs:43-44`).
   - `DeleteAsync` (`DevicesController.cs:50`): takes the `installationId` from the route (`[HttpDelete("{installationId}")]`, `DevicesController.cs:48`) and calls `registrar.DeleteAsync`; the operation is idempotent (unknown ids succeed, per [`IPushDeviceRegistrar`](group-07-persistence-ef-core.md#ipushdeviceregistrar)), so a repeated logout-time delete still returns 204 (`DevicesController.cs:54-55`).
-- **Why it's built this way**: the whole controller is wrapped in `[FeatureGate(NotificationFeatures.PushNotifications)]` (`DevicesController.cs:23`), so when the `Notification.PushNotifications` flag is off the routes return 404 rather than surfacing dead endpoints. The registry indirection through [`IPushDeviceRegistrar`](group-07-persistence-ef-core.md#ipushdeviceregistrar) keeps the controller free of any push-provider detail; the default implementation is a no-op until a hub is configured (ADR-044).
+- **Why it's built this way**: the whole controller is wrapped in `[FeatureGate(NotificationFeatures.PushNotifications)]` (`DevicesController.cs:23`), so when the `Notification.PushNotifications` flag is off the routes return 404 rather than surfacing dead endpoints. The registry indirection through [`IPushDeviceRegistrar`](group-07-persistence-ef-core.md#ipushdeviceregistrar) keeps the controller free of any push-provider detail; the default implementation is a no-op until a hub is configured ([ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html)).
 - **Where it's used**: registered into the MVC application parts by the API-layer [`DependencyInjection`](#dependencyinjection)'s `AddNotificationControllers`; called by the native-client login/logout flow.
 
 ---
@@ -1518,12 +1518,12 @@ four ever taking the others down.
 
 - **What it is**: the Mapperly-generated mapper from the [`PushNotification`](group-10-notifications.md#pushnotification) domain entity to its [`PushNotificationDTO`](group-10-notifications.md#pushnotificationdto) response shape, implementing [`IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>`](group-12-api-hosting-mapping.md#ientitydtomappertentity-tentitydto-tidentifiertype) over `PushNotification` / `PushNotificationDTO` / `PushNotificationIdentifierType` (`PushNotificationDTOMapper.cs:13`).
 - **Depends on**: [`IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>`](group-12-api-hosting-mapping.md#ientitydtomappertentity-tentitydto-tidentifiertype), [`PushNotification`](group-10-notifications.md#pushnotification), [`PushNotificationDTO`](group-10-notifications.md#pushnotificationdto), [`PushNotificationStatus`](group-10-notifications.md#pushnotificationstatus); external `Riok.Mapperly.Abstractions` (`[Mapper]`, `[MapProperty]`).
-- **Concept**: compile-time DTO mapping via Mapperly (ADR-001). Rather than hand-writing property copies, the `[Mapper]` attribute (`PushNotificationDTOMapper.cs:11`) makes Mapperly generate the body of the `partial` `MapToDTO` at build time, so there is no reflection cost at runtime. `[Rubric §9, API & Contract Design]` assesses whether the domain type is kept off the wire: the mapper is the single place the entity is projected to its contract shape.
+- **Concept**: compile-time DTO mapping via Mapperly ([ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html)). Rather than hand-writing property copies, the `[Mapper]` attribute (`PushNotificationDTOMapper.cs:11`) makes Mapperly generate the body of the `partial` `MapToDTO` at build time, so there is no reflection cost at runtime. `[Rubric §9, API & Contract Design]` assesses whether the domain type is kept off the wire: the mapper is the single place the entity is projected to its contract shape.
 - **Walkthrough**
   - `MapToDTO(PushNotification entity)` (`PushNotificationDTOMapper.cs:17`): the generated one-to-one map, with one override, `[MapProperty(nameof(PushNotification.Status), nameof(PushNotificationDTO.Status), Use = nameof(MapStatusToString))]` (`PushNotificationDTOMapper.cs:16`) routes the enum through a custom converter.
   - `MapToDTOs(IReadOnlyCollection<PushNotification>)` (`PushNotificationDTOMapper.cs:20`): null-guards with `ArgumentNullException.ThrowIfNull` (`PushNotificationDTOMapper.cs:22`) then projects the collection with `MapToDTO` (`PushNotificationDTOMapper.cs:23`).
   - `MapStatusToString(PushNotificationStatus status)` (`PushNotificationDTOMapper.cs:26`): the private converter that renders the [`PushNotificationStatus`](group-10-notifications.md#pushnotificationstatus) enum as its `ToString()` name, so clients see a readable status string rather than a numeric code.
-- **Why it's built this way**: Mapperly keeps mapping fast and analyzer-checked while still allowing per-property overrides (the enum-to-string case) where a plain copy is wrong (ADR-001).
+- **Why it's built this way**: Mapperly keeps mapping fast and analyzer-checked while still allowing per-property overrides (the enum-to-string case) where a plain copy is wrong ([ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html)).
 - **Where it's used**: registered by the Application-layer `DependencyInjection` below (both as itself and as the `IEntityDTOMapper<...>` interface); consumed by the notification query/history use cases to shape responses for [`NotificationsController`](#notificationscontroller).
 
 ---

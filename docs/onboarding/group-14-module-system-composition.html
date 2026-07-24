@@ -134,7 +134,7 @@
           where the inward-pointing dependency rule gets physically realized (Infrastructure references
           Application references Domain references Shared), and where cross-cutting concerns are registered once
           for every module rather than per-feature. The two ADRs that explain <em>why</em> this shape exists are
-          ADR-008 (service-extraction topology) and ADR-006 (database-per-service).</p>
+          <a href="https://ivanball.github.io/docs/adr/008-service-extraction-topology.html" target="_blank" rel="noopener">ADR-008</a> (service-extraction topology) and <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a> (database-per-service).</p>
           <h2 id="the-module-contract-and-the-boundary-it-creates">The module contract and the boundary it creates</h2>
           <p>A <strong>module</strong> is the unit of cohesion above a feature slice, Conference, Engagement, Identity,
           Notification. Each one implements <a href="#imodule"><code>IModule</code></a>
@@ -155,7 +155,7 @@
           <code>GetSessionBookmarkCountHandler</code> still needs Engagement&#39;s <code>IBookmarkCountService</code>, so the disabled
           Engagement module contributes a stub, and the host then <em>replaces</em> that stub with a typed gRPC client
           pointed at the real Engagement process. Application code never learns which path it got; the transport
-          choice lives entirely at the composition edge (ADR-008). <code>[Rubric §2, Design Patterns]</code> applies here,
+          choice lives entirely at the composition edge (<a href="https://ivanball.github.io/docs/adr/008-service-extraction-topology.html" target="_blank" rel="noopener">ADR-008</a>). <code>[Rubric §2, Design Patterns]</code> applies here,
           this is a clean strategy/null-object pairing (real service vs. disabled stub vs. remote client) rather
           than scattered <code>if (moduleEnabled)</code> checks.</p>
           <h2 id="discovery-and-kahn-ordered-registration">Discovery and Kahn-ordered registration</h2>
@@ -276,13 +276,13 @@
           <a href="group-04-events-outbox.html#outboxprocessor"><code>OutboxProcessor</code></a>; the JWT/JWKS group
           (<a href="#jwtsettings"><code>JwtSettings</code></a> / <a href="#ijwtsettings"><code>IJwtSettings</code></a> with its algorithm-aware
           <code>IValidatableObject.Validate</code>, <code>JwtSettings.cs:16</code>, the <a href="#jwtsigningalgorithm"><code>JwtSigningAlgorithm</code></a>
-          enum, and <a href="#jwkssettings"><code>JwksSettings</code></a>) backing token signing and cross-service validation (ADR-004);
+          enum, and <a href="#jwkssettings"><code>JwksSettings</code></a>) backing token signing and cross-service validation (<a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a>);
           and <a href="#smtpsettings"><code>SmtpSettings</code></a> / <a href="#pushnotificationsettings"><code>PushNotificationSettings</code></a> for the
           email and SignalR-push pipelines.</p>
           <h2 id="the-two-routing-attributes">The two routing attributes</h2>
           <p>Two attributes, both in <code>MMCA.Common.Infrastructure</code>, both <code>Inherited = true</code> so they ride down a
           configuration class hierarchy, encode <em>where an entity is stored</em> declaratively, the per-entity half of
-          the database-per-service strategy (ADR-006).
+          the database-per-service strategy (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>).
           <a href="#usedatasourceattribute"><code>UseDataSourceAttribute</code></a> (<code>UseDataSourceAttribute.cs:12-17</code>) names the
           <strong>engine</strong> (<a href="group-07-persistence-ef-core.html#datasource"><code>DataSource</code></a>: SQL Server / Cosmos / SQLite)
           and is carried by the provider-specific configuration base classes, so choosing a base class chooses
@@ -316,7 +316,7 @@
           <code>app.Services.InitializeDatabaseAsync(applicationSettings, moduleLoader)</code> (<code>Program.cs:295</code>) applies
           migrations and runs the module seeders the loader collected. The exact same module assemblies, dropped
           into a monolith host with all four modules <code>Enabled</code>, would Kahn-sort into one in-process graph with no
-          gRPC clients, which is precisely the reversibility ADR-008 is after.</p>
+          gRPC clients, which is precisely the reversibility <a href="https://ivanball.github.io/docs/adr/008-service-extraction-topology.html" target="_blank" rel="noopener">ADR-008</a> is after.</p>
           <h3 id="assemblyreference">AssemblyReference</h3>
           <blockquote>
           <p>MMCA.Common.Application · <code>MMCA.Common.Application</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/AssemblyReference.cs:5</code> · Level 0 · class (static)</p>
@@ -440,7 +440,7 @@
           </li>
           <li><p><strong>Depends on</strong>: BCL only (<code>List&lt;string&gt;</code>, options binding). <code>[Rubric §7, Microservices Readiness]</code>.</p>
           </li>
-          <li><p><strong>Concept introduced, the module-extraction boundary expressed as configuration.</strong> <code>[Rubric §7, Microservices Readiness]</code> assesses whether a module can be lifted into its own service without rewriting application code. ADR-008 (&quot;service-extraction topology&quot;) is the <em>why</em>: when, say, Catalog is extracted, the host sets <code>&quot;Catalog&quot;: { &quot;Enabled&quot;: false }</code> and any module that still depends on it adds <code>&quot;RemoteDependencies&quot;: [ &quot;Catalog&quot; ]</code>. <a href="#moduleloader"><code>ModuleLoader</code></a> then skips the strict <code>RequiresDependencies</code> check for that name and lets the disabled module&#39;s <code>RegisterDisabledStubs</code> put the contract type in DI; the host afterwards <code>Replace</code>s the stub with a real gRPC client adapter (the XML doc, lines 11–36, walks through exactly this with a Catalog/Sales example). So extraction becomes a config + wiring change, not a code change.</p>
+          <li><p><strong>Concept introduced, the module-extraction boundary expressed as configuration.</strong> <code>[Rubric §7, Microservices Readiness]</code> assesses whether a module can be lifted into its own service without rewriting application code. <a href="https://ivanball.github.io/docs/adr/008-service-extraction-topology.html" target="_blank" rel="noopener">ADR-008</a> (&quot;service-extraction topology&quot;) is the <em>why</em>: when, say, Catalog is extracted, the host sets <code>&quot;Catalog&quot;: { &quot;Enabled&quot;: false }</code> and any module that still depends on it adds <code>&quot;RemoteDependencies&quot;: [ &quot;Catalog&quot; ]</code>. <a href="#moduleloader"><code>ModuleLoader</code></a> then skips the strict <code>RequiresDependencies</code> check for that name and lets the disabled module&#39;s <code>RegisterDisabledStubs</code> put the contract type in DI; the host afterwards <code>Replace</code>s the stub with a real gRPC client adapter (the XML doc, lines 11–36, walks through exactly this with a Catalog/Sales example). So extraction becomes a config + wiring change, not a code change.</p>
           </li>
           <li><p><strong>Walkthrough</strong>: <code>bool Enabled { get; init; } = true</code> (line 9), <code>init</code>-only, so it can&#39;t be mutated after binding. <code>List&lt;string&gt; RemoteDependencies { get; set; } = []</code> (line 38), note this one is <code>set</code>, not <code>init</code>, because ASP.NET Core&#39;s <code>IConfiguration</code> binder needs a settable collection to populate; the resulting <code>CA2227</code> (&quot;collection properties should be read-only&quot;) analyzer warning is suppressed with an inline <code>#pragma</code> (lines 37–39) and an explanatory comment, an acknowledged, documented trade-off rather than an oversight.</p>
           </li>
@@ -499,7 +499,7 @@
           </li>
           <li><p><strong>Walkthrough</strong>: five members, three of them with <strong>default interface implementations</strong> so a minimal module need only supply <code>Name</code> and <code>Register</code>: <code>Name</code> (line 12, required); <code>Dependencies =&gt; []</code> (line 17, default empty); <code>RequiresDependencies =&gt; false</code> (line 23, default tolerant); <code>Register(IServiceCollection, IConfigurationBuilder, ApplicationSettings)</code> (line 28, required); <code>RegisterDisabledStubs(IServiceCollection) { }</code> (line 34, default no-op). Note <code>Register</code> takes an <code>IConfigurationBuilder</code> (not a built <code>IConfiguration</code>) so a module can <em>add its own configuration sources</em> before its services bind them, which is exactly what the loader exploits to inject per-module JSON files.</p>
           </li>
-          <li><p><strong>Why it&#39;s built this way</strong>: see MMCA.Common <code>CLAUDE.md</code> (&quot;Module System&quot;) and ADR-008: making <code>IModule</code> the single boundary means extraction is a deployment/topology concern, not a rewrite. Default interface members keep the common case ceremony-free while leaving the extraction hooks available.</p>
+          <li><p><strong>Why it&#39;s built this way</strong>: see MMCA.Common <code>CLAUDE.md</code> (&quot;Module System&quot;) and <a href="https://ivanball.github.io/docs/adr/008-service-extraction-topology.html" target="_blank" rel="noopener">ADR-008</a>: making <code>IModule</code> the single boundary means extraction is a deployment/topology concern, not a rewrite. Default interface members keep the common case ceremony-free while leaving the extraction hooks available.</p>
           </li>
           <li><p><strong>Where it&#39;s used</strong>: implemented by every ADC module (<code>ConferenceModule</code>, <code>EngagementModule</code>, <code>IdentityModule</code>, <code>NotificationModule</code>, all Level 3). Discovered, sorted, and invoked by <a href="#moduleloader"><code>ModuleLoader</code></a> (Level 3).</p>
           </li>
@@ -613,7 +613,7 @@
           </li>
           <li><p><strong>Depends on</strong>: <code>System.Attribute</code> (BCL) only. Its resolved logical name is consumed downstream by the data-source machinery (<a href="group-07-persistence-ef-core.html#datasourceresolver"><code>DataSourceResolver</code></a>, <a href="group-07-persistence-ef-core.html#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a>) and mapped to a connection string through the <code>DataSources</code> configuration entries modelled by <a href="#datasourceentrysettings"><code>DataSourceEntrySettings</code></a> / <a href="#datasourcessettings"><code>DataSourcesSettings</code></a>.</p>
           </li>
-          <li><p><strong>Concept introduced, declarative database-per-service routing.</strong> <code>[Rubric §8, Data Architecture]</code> assesses how the model maps to physical stores; <code>[Rubric §7, Microservices Readiness]</code> assesses whether a module can be lifted out with its own database (ADR-006). The attribute&#39;s XML doc (<code>UseDatabaseAttribute.cs:9-14</code>) spells out the three-step resolution order for an entity&#39;s logical name: (1) this attribute on the concrete configuration class (inherited); (2) the module name derived from the entity namespace, the segment before <code>Domain</code>; (3) the literal <code>&quot;Default&quot;</code>, the top-level <code>ConnectionStrings</code> section. A logical name with no <code>DataSources</code> entry (or whose connection string equals the top-level one) collapses onto the <code>Default</code> physical source (<code>UseDatabaseAttribute.cs:15-17</code>), so a host that configures nothing behaves exactly like a single-database monolith. This &quot;convention with an explicit override&quot; shape is the load-bearing idea: most modules never apply the attribute and ride the namespace convention.</p>
+          <li><p><strong>Concept introduced, declarative database-per-service routing.</strong> <code>[Rubric §8, Data Architecture]</code> assesses how the model maps to physical stores; <code>[Rubric §7, Microservices Readiness]</code> assesses whether a module can be lifted out with its own database (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>). The attribute&#39;s XML doc (<code>UseDatabaseAttribute.cs:9-14</code>) spells out the three-step resolution order for an entity&#39;s logical name: (1) this attribute on the concrete configuration class (inherited); (2) the module name derived from the entity namespace, the segment before <code>Domain</code>; (3) the literal <code>&quot;Default&quot;</code>, the top-level <code>ConnectionStrings</code> section. A logical name with no <code>DataSources</code> entry (or whose connection string equals the top-level one) collapses onto the <code>Default</code> physical source (<code>UseDatabaseAttribute.cs:15-17</code>), so a host that configures nothing behaves exactly like a single-database monolith. This &quot;convention with an explicit override&quot; shape is the load-bearing idea: most modules never apply the attribute and ride the namespace convention.</p>
           </li>
           <li><p><strong>Walkthrough</strong>:</p>
           <ul>
@@ -622,7 +622,7 @@
           <li><code>Name</code> get-only property (<code>UseDatabaseAttribute.cs:25</code>) initialized from that parameter, the value the resolver reads.</li>
           </ul>
           </li>
-          <li><p><strong>Why it&#39;s built this way</strong>: an attribute keeps the database choice declarative and co-located with the entity configuration rather than buried in a registration method, and <code>Inherited = true</code> turns per-module assignment into one annotation instead of one per entity (ADR-006, database per microservice).</p>
+          <li><p><strong>Why it&#39;s built this way</strong>: an attribute keeps the database choice declarative and co-located with the entity configuration rather than buried in a registration method, and <code>Inherited = true</code> turns per-module assignment into one annotation instead of one per entity (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>, database per microservice).</p>
           </li>
           <li><p><strong>Where it&#39;s used</strong>: applied on concrete EF entity type configuration classes in the modules; read up front by the eager <a href="group-07-persistence-ef-core.html#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a> so routing does not depend on a model having been built.</p>
           </li>
@@ -646,7 +646,7 @@
           <li><code>DataSource</code> get-only property (<code>UseDataSourceAttribute.cs:16</code>) exposing the chosen engine. The XML doc (<code>UseDataSourceAttribute.cs:5-9</code>) records that it is read by <a href="group-07-persistence-ef-core.html#datasourceservice"><code>DataSourceService</code></a> at model-building time to populate the entity-to-source cache that <a href="group-07-persistence-ef-core.html#unitofwork"><code>UnitOfWork</code></a> uses to route each entity to the correct <a href="group-07-persistence-ef-core.html#applicationdbcontext"><code>ApplicationDbContext</code></a>.</li>
           </ul>
           </li>
-          <li><p><strong>Why it&#39;s built this way</strong>: keeping the engine on an attribute (inherited from a provider base class) means an entity&#39;s engine and database are both declarative metadata the registry can scan up front, which is what lets routing happen without first building an EF model (ADR-006).</p>
+          <li><p><strong>Why it&#39;s built this way</strong>: keeping the engine on an attribute (inherited from a provider base class) means an entity&#39;s engine and database are both declarative metadata the registry can scan up front, which is what lets routing happen without first building an EF model (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>).</p>
           </li>
           <li><p><strong>Where it&#39;s used</strong>: on the per-engine <code>EntityTypeConfiguration*</code> base classes and, through inheritance, every concrete configuration under them; read by <a href="group-07-persistence-ef-core.html#datasourceservice"><code>DataSourceService</code></a> / <a href="group-07-persistence-ef-core.html#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a>.</p>
           </li>
@@ -670,13 +670,13 @@
           <li><strong>The physical-factory warning (<code>DependencyInjection.cs:79-85</code>)</strong>: <a href="group-07-persistence-ef-core.html#dbcontextfactory"><code>DbContextFactory</code></a> is scoped (one per request) and <a href="group-07-persistence-ef-core.html#physicaldbcontextfactory"><code>PhysicalDbContextFactory</code></a> is a singleton that must <strong>never</strong> be converted to EF context pooling, because each raw context carries per-source constructor state that pooling would silently reuse across databases.</li>
           <li><strong>The Scrutor scan (<code>DependencyInjection.cs:105-109</code>)</strong> discovers every <code>IEntityTypeConfigurationBase&lt;,&gt;</code> in the Infrastructure assembly via <code>FromAssemblyOf&lt;ClassReference&gt;()</code> (<code>DependencyInjection.cs:106</code>) and registers each as its implemented interfaces, scoped to match the DbContext lifetime, closing the loop back to <a href="#classreference"><code>ClassReference</code></a>.</li>
           <li><strong><code>AddCaching</code> (<code>DependencyInjection.cs:149-168</code>)</strong> is a Redis-or-memory probe resolved once as a singleton: if an <code>IDistributedCache</code> is registered and is not the no-op <code>MemoryDistributedCache</code> (<code>DependencyInjection.cs:156</code>), it wraps the real distributed cache (and any <code>IConnectionMultiplexer</code>) in <code>DistributedCacheService</code>; otherwise it falls back to <code>MemoryCacheService</code> (<code>DependencyInjection.cs:164</code>).</li>
-          <li><strong><code>AddServices</code> (<code>DependencyInjection.cs:174-212</code>)</strong> registers the small services and encodes a subtle lifetime lesson: <a href="group-08-auth.html#tokenservice"><code>TokenService</code></a> is a <strong>singleton</strong> (<code>DependencyInjection.cs:186</code>) with a six-line comment explaining why (<code>DependencyInjection.cs:180-185</code>): a scoped lifetime disposed the RSA handle at end-of-request while IdentityModel&#39;s static <code>CryptoProviderCache</code> still held the cached signature provider wrapping it, throwing <code>ObjectDisposedException</code> on the next RS256 sign. <code>[Rubric §11, Security]</code> (correct signing-key lifecycle). It also sets the default <a href="group-04-events-outbox.html#imessagebus"><code>IMessageBus</code></a> to <a href="group-04-events-outbox.html#inprocessmessagebus"><code>InProcessMessageBus</code></a> (<code>DependencyInjection.cs:194</code>) and wires the inert no-op defaults for push (<code>DependencyInjection.cs:198-199</code>), native push (ADR-044, <code>203-204</code>), and file storage (ADR-045, <code>208</code>) so hosts can register the opt-in methods unconditionally.</li>
+          <li><strong><code>AddServices</code> (<code>DependencyInjection.cs:174-212</code>)</strong> registers the small services and encodes a subtle lifetime lesson: <a href="group-08-auth.html#tokenservice"><code>TokenService</code></a> is a <strong>singleton</strong> (<code>DependencyInjection.cs:186</code>) with a six-line comment explaining why (<code>DependencyInjection.cs:180-185</code>): a scoped lifetime disposed the RSA handle at end-of-request while IdentityModel&#39;s static <code>CryptoProviderCache</code> still held the cached signature provider wrapping it, throwing <code>ObjectDisposedException</code> on the next RS256 sign. <code>[Rubric §11, Security]</code> (correct signing-key lifecycle). It also sets the default <a href="group-04-events-outbox.html#imessagebus"><code>IMessageBus</code></a> to <a href="group-04-events-outbox.html#inprocessmessagebus"><code>InProcessMessageBus</code></a> (<code>DependencyInjection.cs:194</code>) and wires the inert no-op defaults for push (<code>DependencyInjection.cs:198-199</code>), native push (<a href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html" target="_blank" rel="noopener">ADR-044</a>, <code>203-204</code>), and file storage (<a href="https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html" target="_blank" rel="noopener">ADR-045</a>, <code>208</code>) so hosts can register the opt-in methods unconditionally.</li>
           <li><strong><code>AddBrokerMessaging</code> (<code>DependencyInjection.cs:372-421</code>)</strong> is the extraction pivot. It reads <a href="#messagebussettings"><code>MessageBusSettings.Provider</code></a>: on <code>InProcess</code> it returns immediately (<code>DependencyInjection.cs:381-384</code>), leaving the in-process bus in place; otherwise it calls <code>AddMassTransit</code> and then <strong><code>Replace</code>s</strong> the scoped <a href="group-04-events-outbox.html#imessagebus"><code>IMessageBus</code></a> with <a href="group-04-events-outbox.html#brokermessagebus"><code>BrokerMessageBus</code></a> (<code>DependencyInjection.cs:401</code>) and <a href="group-04-events-outbox.html#ieventbus"><code>IEventBus</code></a> with <code>BrokerEventBus</code> (<code>DependencyInjection.cs:407</code>), the deliberate exception to the <code>TryAdd</code> rule, because the in-process bus must not run alongside the broker. It also chooses the consumer-side <a href="group-04-events-outbox.html#efinboxstore"><code>IInboxStore</code></a> implementation from <code>settings.EnableInbox</code> (<code>DependencyInjection.cs:411-418</code>).</li>
           <li><strong>Transport wiring (<code>DependencyInjection.cs:475-550</code>)</strong> is factored into two private static helpers (<code>ResolveBrokerConnectionString</code> at <code>475-484</code>, <code>ConfigureBrokerTransport</code> at <code>504-550</code>) outside the extension block to keep <code>AddBrokerMessaging</code>&#39;s cyclomatic complexity below the analyzer threshold; both carry a justified <code>IDE0051</code> suppression (<code>DependencyInjection.cs:471-474</code>, <code>500-503</code>) documenting a Roslyn false positive where SDK 10.0.201+ cannot see references crossing the extension-block boundary. <code>[Rubric §29, Resilience &amp; Business Continuity]</code>: every receive endpoint gets an exponential-backoff <code>UseMessageRetry</code> policy (<code>DependencyInjection.cs:519-523</code>, <code>536-540</code>); <code>UseDelayedRedelivery</code> is intentionally not wired, with a comment explaining the Aspire RabbitMQ container lacks the delayed-message-exchange plugin (<code>DependencyInjection.cs:494-499</code>).</li>
           <li><strong><code>AddTypedServiceClient</code> (<code>DependencyInjection.cs:441-458</code>)</strong> wires a typed <code>HttpClient</code> to Aspire service discovery (<code>http://{serviceName}</code>, <code>DependencyInjection.cs:451-452</code>), attaches <a href="group-12-api-hosting-mapping.html#jwtforwardingdelegatinghandler"><code>JwtForwardingDelegatingHandler</code></a> (<code>DependencyInjection.cs:453</code>) so the inbound bearer token flows downstream, and adds the standard Polly resilience handler (<code>DependencyInjection.cs:456</code>); the doc notes gRPC is preferred for service-to-service contracts.</li>
           </ul>
           </li>
-          <li><p><strong>Why it&#39;s built this way</strong>: the <code>extension(IServiceCollection)</code> syntax keeps every Infrastructure registration in one file without a proliferation of static helper classes, and pushing all concrete choices into one composition root at the layer edge is what keeps Application and Domain free of framework references (ADR-006 for the database-per-service wiring, ADR-007/ADR-008 for the broker/extraction path). See the DI-sequence note in <code>MMCA.Common/CLAUDE.md</code>: hosts call <code>AddApplicationDecorators()</code> last so Scrutor can decorate handlers already registered, but the relative position of <code>AddInfrastructure</code> is not otherwise ordering-sensitive.</p>
+          <li><p><strong>Why it&#39;s built this way</strong>: the <code>extension(IServiceCollection)</code> syntax keeps every Infrastructure registration in one file without a proliferation of static helper classes, and pushing all concrete choices into one composition root at the layer edge is what keeps Application and Domain free of framework references (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a> for the database-per-service wiring, <a href="https://ivanball.github.io/docs/adr/007-grpc-extraction.html" target="_blank" rel="noopener">ADR-007</a>/<a href="https://ivanball.github.io/docs/adr/008-service-extraction-topology.html" target="_blank" rel="noopener">ADR-008</a> for the broker/extraction path). See the DI-sequence note in <code>MMCA.Common/CLAUDE.md</code>: hosts call <code>AddApplicationDecorators()</code> last so Scrutor can decorate handlers already registered, but the relative position of <code>AddInfrastructure</code> is not otherwise ordering-sensitive.</p>
           </li>
           <li><p><strong>Where it&#39;s used</strong>: called from each service host&#39;s <code>Program.cs</code> (the reference apps and the extracted <code>MMCA.ADC.*</code> service hosts) after <code>AddApplication()</code>; the optional methods (<code>AddBrokerMessaging</code>, <code>AddPushNotifications</code>, <code>AddNativePushNotifications</code>, <code>AddAzureBlobFileStorage</code>) are added by the specific hosts that need those channels.</p>
           </li>
@@ -698,7 +698,7 @@
           <li><strong>Concept introduced, per-source connection overrides for database-per-service.</strong>
           <code>[Rubric §8, Data Architecture]</code> (assesses deliberate persistence: which database an entity lives
           in, migrations, connection management). <code>[Rubric §7, Microservices Readiness]</code> (assesses whether a
-          module can be lifted into its own service). This type is the configuration half of ADR-006: a module
+          module can be lifted into its own service). This type is the configuration half of <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>: a module
           earns its own physical SQL database simply by adding a <code>DataSources:Sales</code> entry with its own
           <code>SQLServerConnectionString</code> (and optionally its own <code>SQLServerMigrationsAssembly</code>). Crucially, the
           <strong>fallback is the monolith</strong>: a module that omits an entry, or whose connection string equals the
@@ -711,7 +711,7 @@
           <code>SqliteConnectionString</code>, <code>SQLServerConnectionString</code>, and <code>SQLServerMigrationsAssembly</code>. The
           doc-comment example (lines 9-18) shows a real <code>DataSources:Conference</code> entry. The
           <code>SQLServerMigrationsAssembly</code> override is what lets each database have its own migrations project
-          (one migrations assembly per database, see ADR-006&#39;s design-time note).</li>
+          (one migrations assembly per database, see <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>&#39;s design-time note).</li>
           <li><strong>Why it&#39;s built this way</strong>: sealed and <code>init</code>-only for the same reason as every settings type
           here: immutable after binding, no inheritance surprises. The empty-string default (rather than
           <code>null</code>) makes &quot;did the operator set this?&quot; a simple <code>IsNullOrEmpty</code> check at fallback time.</li>
@@ -724,7 +724,7 @@
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Settings</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/FileStorageSettings.cs:10</code> · Level 0 · class (sealed)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: blob file-storage configuration bound from the <code>FileStorage</code> section (ADR-045). It
+          <li><strong>What it is</strong>: blob file-storage configuration bound from the <code>FileStorage</code> section (<a href="https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html" target="_blank" rel="noopener">ADR-045</a>). It
           carries two mutually-preferred auth paths (a managed-identity <code>ServiceUri</code> for production, a
           <code>ConnectionString</code> for local development) plus the target container name.</li>
           <li><strong>Depends on</strong>: <code>System.Uri</code> (BCL) only, no first-party dependency. Consumed by the
@@ -769,7 +769,7 @@
           every logical database falls back to. Any logical database with no <code>DataSources:*</code> override (or
           whose override is empty) uses these values, which is what collapses the whole application onto a
           single physical database, preserving monolith behaviour with zero configuration change (see
-          <a href="#datasourceentrysettings"><code>DataSourceEntrySettings</code></a> for the per-source side, and ADR-006 for the
+          <a href="#datasourceentrysettings"><code>DataSourceEntrySettings</code></a> for the per-source side, and <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a> for the
           whole strategy).</li>
           <li><strong>Walkthrough</strong>: five <code>get; init;</code> properties (<code>IConnectionStringSettings.cs:9-24</code>):
           <code>CosmosConnectionString</code>, <code>CosmosDatabaseName</code>, <code>SqliteConnectionString</code>,
@@ -845,12 +845,12 @@
           <a href="group-08-auth.html#ijwksprovider"><code>IJwksProvider</code></a> is registered
           (<a href="group-08-auth.html#rsajwksprovider"><code>RsaJwksProvider</code></a> vs. the empty no-op); pairs with
           <a href="#jwtsigningalgorithm"><code>JwtSigningAlgorithm</code></a>.</li>
-          <li><strong>Concept introduced, cross-service token validation via JWKS (ADR-004).</strong>
+          <li><strong>Concept introduced, cross-service token validation via JWKS (<a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a>).</strong>
           <code>[Rubric §11, Security]</code> (assesses key management and authN correctness). <code>[Rubric §7, Microservices Readiness]</code>. When modules are extracted into separate services they cannot share a
           symmetric HMAC secret without spreading the blast radius of a compromise across every service.
           Instead the Identity service holds only the RSA <em>private</em> key and publishes the matching <em>public</em>
           key as a JWK document; extracted services fetch it and validate tokens against it (the dual-fetch /
-          discovery story of ADR-004). <code>JwksSettings</code> is what populates that document.</li>
+          discovery story of <a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a>). <code>JwksSettings</code> is what populates that document.</li>
           <li><strong>Walkthrough</strong>: <code>SectionName = &quot;Jwks&quot;</code> (line 20). <code>Enabled</code> defaults to <code>false</code> (line 26) so an
           existing HMAC deployment does not start advertising an RSA key set by accident. <code>KeyId</code> (line 34,
           <code>[StringLength(64)]</code>) defaults to <code>&quot;default&quot;</code> and is published as the JWK <code>kid</code> claim, it <strong>must
@@ -928,7 +928,7 @@
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: native (mobile) push delivery configuration bound from the <code>NativePush</code> section
-          (ADR-044). It carries an on/off toggle plus the Azure Notification Hubs connection string and hub
+          (<a href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html" target="_blank" rel="noopener">ADR-044</a>). It carries an on/off toggle plus the Azure Notification Hubs connection string and hub
           name.</li>
           <li><strong>Depends on</strong>: nothing first-party (BCL strings only). Consumed by the native-push wiring, which
           selects between
@@ -999,7 +999,7 @@
           <a href="group-07-persistence-ef-core.html#datasourceresolver"><code>DataSourceResolver</code></a>.</li>
           <li><strong>Concept introduced, fail-fast validation of dictionary-shaped configuration.</strong>
           <code>[Rubric §8, Data Architecture]</code>, <code>[Rubric §7, Microservices Readiness]</code> (the per-module database
-          registry of ADR-006). Unlike the other settings here, this type is <strong>built directly from
+          registry of <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>). Unlike the other settings here, this type is <strong>built directly from
           configuration in <code>AddInfrastructure</code></strong> rather than through the options pipeline, the doc comment
           (lines 8-11) notes root-level dictionary sections do not bind cleanly through <code>IOptions&lt;T&gt;</code>. Its
           constructor (lines 23-41) enforces two invariants at construction time: no empty/whitespace logical
@@ -1032,7 +1032,7 @@
           exposes <em>both</em> key families so a single deployment can choose its mode: <code>SecretForKey</code> (HMAC) for
           HS256, and <code>RsaPrivateKeyPem</code> / <code>RsaPublicKeyPem</code> for RS256. The doc comment (lines 4-8) ties this
           to the extraction migration: switching deployments from HMAC to RSA is what lets the Identity service
-          sign tokens that other services validate via JWKS without sharing a symmetric secret (ADR-004).</li>
+          sign tokens that other services validate via JWKS without sharing a symmetric secret (<a href="https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html" target="_blank" rel="noopener">ADR-004</a>).</li>
           <li><strong>Walkthrough</strong>: eight <code>get; init;</code> members (<code>IJwSettings.cs:16-49</code>): <code>SigningAlgorithm</code>,
           <code>SecretForKey</code>, the nullable <code>RsaPrivateKeyPem</code> / <code>RsaPublicKeyPem</code> (kept in user-secrets / Key
           Vault, never <code>appsettings.json</code>, per the doc comment on line 27), <code>Issuer</code>, <code>Audience</code>,
@@ -1185,7 +1185,7 @@
           properties are <code>init</code>-only, so once the options are materialized from configuration they are
           immutable for the process lifetime.</p>
           <p><code>[Rubric §6: CQRS &amp; Event-Driven]</code> assesses how reliably domain state changes turn into dispatched
-          events. This type is the knob set for the at-least-once outbox pattern (ADR-003): <code>MaxRetries</code>
+          events. This type is the knob set for the at-least-once outbox pattern (<a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>): <code>MaxRetries</code>
           (<code>OutboxSettings.cs:21</code>, default 5) caps failed-message retries, and <code>ProcessingDelaySeconds</code>
           (<code>OutboxSettings.cs:40</code>, default 5) is the safety parameter that bounds the duplicate-dispatch
           window. The in-process path (save the aggregate and its outbox row, then dispatch and mark the row
@@ -1225,8 +1225,8 @@
           purge sweep runs, ignored when <code>RetentionDays</code> is <code>0</code>.</li>
           </ul>
           </li>
-          <li><p><strong>Why it&#39;s built this way</strong>: the defaults encode the framework&#39;s out-of-the-box posture (ADR-003
-          outbox, ADR-006 database-per-service): a monolith with no <code>Outbox</code> section gets a working
+          <li><p><strong>Why it&#39;s built this way</strong>: the defaults encode the framework&#39;s out-of-the-box posture (<a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>
+          outbox, <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a> database-per-service): a monolith with no <code>Outbox</code> section gets a working
           at-least-once processor writing to its single default database, while a multi-service deployment
           overrides <code>PollingIntervalSeconds</code>, <code>DataSource</code>, and <code>DatabaseName</code> to tune cost and routing. The
           <code>[Range]</code> guards give fail-fast validation at bind time rather than a bad value surfacing mid-cycle.</p>

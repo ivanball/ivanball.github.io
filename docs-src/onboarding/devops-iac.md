@@ -378,7 +378,7 @@ resource serviceDatabases '…/databases@…' = [
 ```
 
 [Rubric §8, Data Architecture] assesses deliberate persistence strategy including transactions,
-isolation, migrations, and bounded ownership. The four separate databases implement ADR-006: each
+isolation, migrations, and bounded ownership. The four separate databases implement [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html): each
 service owns exactly its data; no cross-database foreign keys exist; each service's outbox
 (`OutboxMessages` table) lives in its own database so the outbox processor never races for another
 service's rows. See [primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to) and
@@ -415,7 +415,7 @@ not a live store.
 the live per-service databases means every production restore scenario, bad migration, silent
 corruption, regulatory request for historical data, has a recovery path beyond the 7-day PITR
 window. The disaster-recovery runbook at `MMCA.ADC/infra/DISASTER-RECOVERY.md` documents the
-drilled restore procedure (ADR-009).
+drilled restore procedure ([ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html)).
 
 ### Azure Service Bus (`main.bicep:425–454`)
 
@@ -664,7 +664,7 @@ Identity is the JWT issuer and JWKS endpoint. Its JWT configuration:
 When `useRs256 = true`, the RSA private key (from Key Vault) signs tokens and the public key is
 published at `/.well-known/jwks.json`. Other services fetch this document through the Gateway
 (`Authentication__JwtBearer__Authority = 'http://${identityApp.name}'`) to validate tokens without
-a shared secret (ADR-004 "authentication dual-fetch"). The 15-minute access token lifetime limits
+a shared secret ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html) "authentication dual-fetch"). The 15-minute access token lifetime limits
 the blast radius of a leaked token.
 
 Identity is sized at 0.25 CPU / 0.5 Gi, the smallest Container Apps allocation. JWT operations
@@ -783,7 +783,7 @@ from Key Vault into containers at runtime, never touching disk or appearing in l
 
 | Rubric category | Where it appears in these files |
 |---|---|
-| §7 Microservices Readiness | Per-service databases (ADR-006); service-discovery env vars; gRPC transport selection |
+| §7 Microservices Readiness | Per-service databases ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)); service-discovery env vars; gRPC transport selection |
 | §8 Data Architecture | Four per-service databases; LTR policies; AtlDevCon archive retention; EF model-drift gate in deploy.yml (migrations applied by services at startup) |
 | §11 Security | UAMI/OIDC model; Key Vault-backed secrets; `adminUserEnabled: false`; `@secure()` parameters; no static credentials |
 | §13 Observability | Workspace-based App Insights; per-service `OTEL_SERVICE_NAME`; Application Map coverage; SLO alert rules |

@@ -3,7 +3,7 @@
 This chapter walks the GitHub Actions workflows that govern MMCA, from the framework's continuous
 integration and lockstep NuGet release in `MMCA.Common`, through the ADC application's build/test/deploy
 pipeline, end-to-end Playwright testing, cost-guard automation, performance load testing, and the one-time
-data-migration cutover that enacted the database-per-service architecture (ADR-006). (A seventh ADC
+data-migration cutover that enacted the database-per-service architecture ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)). (A seventh ADC
 workflow, `dr-drill.yml`, is summarized in the cross-workflow table at the end rather than given its own
 section.) For each workflow you
 will learn the triggers, the job/step sequence with file-and-line citations, and, critically, *why* each
@@ -280,7 +280,7 @@ references all thirteen at the same version number. If they could release indepe
 only some of them would import incompatible API surfaces, for example, an `Application` handler
 interface that references a `Shared` type that was renamed in `Shared` v2 but not yet reflected in the
 old `Application` v1. Lockstep eliminates this class of dependency mismatch entirely. This policy is
-**ADR-016** (lockstep versioning + the MassTransit-v8 pin), documented in `MMCA.Common/VERSIONING.md`
+**[ADR-016](https://ivanball.github.io/docs/adr/016-lockstep-versioning-masstransit-pin.html)** (lockstep versioning + the MassTransit-v8 pin), documented in `MMCA.Common/VERSIONING.md`
 and in `MMCA.Common/CLAUDE.md` ("consumers bump every entry together in their `Directory.Packages.props`,
 no phased rollout"), and enforced as a build gate (`DependencyVersionTests` fails the build if
 MassTransit's major reaches 9).
@@ -1090,16 +1090,16 @@ a threshold regression before the next conference is a proactive resilience meas
 
 A one-time, manually-triggered workflow that migrated the four empty per-service databases
 (`ADC_Identity`, `ADC_Conference`, `ADC_Engagement`, `ADC_Notification`) and copied the legacy
-`AtlDevCon` data into them, enacting ADR-006 (database-per-service) in production.
+`AtlDevCon` data into them, enacting [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) (database-per-service) in production.
 
 The workflow header (`cutover-per-service-dbs.yml:3-14`) states its scope: "ONE-TIME, manually-triggered
 workflow... Run this AFTER commit 1 is deployed and BEFORE commit 2 (the container-app flip) is merged."
 
-### Why this workflow exists, the ADR-006 context
+### Why this workflow exists, the [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) context
 
-Before ADR-006, all four ADC services shared a single `AtlDevCon` database and a single `OutboxMessages`
+Before [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html), all four ADC services shared a single `AtlDevCon` database and a single `OutboxMessages`
 table. Every service's `OutboxProcessor` polled the same table with no origin filter, they raced to
-claim each other's outbox rows. ADR-006 (2026-06-07) adopted database-per-service to eliminate this race
+claim each other's outbox rows. [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) (2026-06-07) adopted database-per-service to eliminate this race
 and give each service its own schema evolution path. The cutover workflow enacted that decision in
 production by:
 
@@ -1265,7 +1265,7 @@ contribute to a migration pattern that minimizes data loss risk and recovery tim
 | `MMCA.ADC/dr-drill.yml` | dispatch | No | No (restores a throwaway copy, then deletes it) |
 | `MMCA.ADC/cutover-per-service-dbs.yml` | dispatch (one-time) | N/A (complete) | Yes (one-time) |
 
-(`dr-drill.yml` is the ADR-009 §29 restore drill: it PITR-restores a *copy* of a chosen database, times the
+(`dr-drill.yml` is the [ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html) §29 restore drill: it PITR-restores a *copy* of a chosen database, times the
 restore for the RTO record, verifies it comes back Online, then deletes the copy, the live databases are
 never touched. It is not given its own section above, but it is part of the workflow set.)
 
@@ -1288,7 +1288,7 @@ uses OIDC federated identity (no static client secrets). The `.slnf`/`.slnx` tes
 | §17 DevOps & Deployment | The full workflow set collectively; SHA-tagged images; phased Bicep deploy; smoke+rollback |
 | §21 Accessibility | `ci.yml` `ui-e2e` axe-core WCAG 2.1 AA gate on every MMCA.Common push |
 | §28 Front-End Testing & Quality | `ci.yml` `ui-e2e` render smoke; `e2e.yml` full Playwright suite |
-| §29 Resilience & Business Continuity | `prod-azure` concurrency group; smoke+rollback in `deploy.yml`; outbox drain gate in `cutover`; `dr-drill.yml` PITR restore drill (ADR-009 objectives) |
+| §29 Resilience & Business Continuity | `prod-azure` concurrency group; smoke+rollback in `deploy.yml`; outbox drain gate in `cutover`; `dr-drill.yml` PITR restore drill ([ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html) objectives) |
 | §30 Compliance & Privacy | SBOM generation in `release.yml` and `deploy.yml`; license report in `deploy.yml` supply-chain job |
 | §31 Cost / FinOps | `cost-guard.yml` surge-drift detection and Monday notifications |
 | §32 Dependency & Supply-Chain | Lock files + source mapping in MMCA.Common; vulnerability audit in `ci.yml`; SBOM artifacts |

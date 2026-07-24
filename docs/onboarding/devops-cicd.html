@@ -113,7 +113,7 @@
           <p>This chapter walks the GitHub Actions workflows that govern MMCA, from the framework&#39;s continuous
           integration and lockstep NuGet release in <code>MMCA.Common</code>, through the ADC application&#39;s build/test/deploy
           pipeline, end-to-end Playwright testing, cost-guard automation, performance load testing, and the one-time
-          data-migration cutover that enacted the database-per-service architecture (ADR-006). (A seventh ADC
+          data-migration cutover that enacted the database-per-service architecture (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>). (A seventh ADC
           workflow, <code>dr-drill.yml</code>, is summarized in the cross-workflow table at the end rather than given its own
           section.) For each workflow you
           will learn the triggers, the job/step sequence with file-and-line citations, and, critically, <em>why</em> each
@@ -314,7 +314,7 @@
           only some of them would import incompatible API surfaces, for example, an <code>Application</code> handler
           interface that references a <code>Shared</code> type that was renamed in <code>Shared</code> v2 but not yet reflected in the
           old <code>Application</code> v1. Lockstep eliminates this class of dependency mismatch entirely. This policy is
-          <strong>ADR-016</strong> (lockstep versioning + the MassTransit-v8 pin), documented in <code>MMCA.Common/VERSIONING.md</code>
+          <strong><a href="https://ivanball.github.io/docs/adr/016-lockstep-versioning-masstransit-pin.html" target="_blank" rel="noopener">ADR-016</a></strong> (lockstep versioning + the MassTransit-v8 pin), documented in <code>MMCA.Common/VERSIONING.md</code>
           and in <code>MMCA.Common/CLAUDE.md</code> (&quot;consumers bump every entry together in their <code>Directory.Packages.props</code>,
           no phased rollout&quot;), and enforced as a build gate (<code>DependencyVersionTests</code> fails the build if
           MassTransit&#39;s major reaches 9).</p>
@@ -910,13 +910,13 @@
           <h3 id="what-it-is-6">What it is</h3>
           <p>A one-time, manually-triggered workflow that migrated the four empty per-service databases
           (<code>ADC_Identity</code>, <code>ADC_Conference</code>, <code>ADC_Engagement</code>, <code>ADC_Notification</code>) and copied the legacy
-          <code>AtlDevCon</code> data into them, enacting ADR-006 (database-per-service) in production.</p>
+          <code>AtlDevCon</code> data into them, enacting <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a> (database-per-service) in production.</p>
           <p>The workflow header (<code>cutover-per-service-dbs.yml:3-14</code>) states its scope: &quot;ONE-TIME, manually-triggered
           workflow... Run this AFTER commit 1 is deployed and BEFORE commit 2 (the container-app flip) is merged.&quot;</p>
-          <h3 id="why-this-workflow-exists-the-adr-006-context">Why this workflow exists, the ADR-006 context</h3>
-          <p>Before ADR-006, all four ADC services shared a single <code>AtlDevCon</code> database and a single <code>OutboxMessages</code>
+          <h3 id="why-this-workflow-exists-the-adr-006-context">Why this workflow exists, the <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a> context</h3>
+          <p>Before <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>, all four ADC services shared a single <code>AtlDevCon</code> database and a single <code>OutboxMessages</code>
           table. Every service&#39;s <code>OutboxProcessor</code> polled the same table with no origin filter, they raced to
-          claim each other&#39;s outbox rows. ADR-006 (2026-06-07) adopted database-per-service to eliminate this race
+          claim each other&#39;s outbox rows. <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a> (2026-06-07) adopted database-per-service to eliminate this race
           and give each service its own schema evolution path. The cutover workflow enacted that decision in
           production by:</p>
           <ol>
@@ -1091,7 +1091,7 @@
           <td>Yes (one-time)</td>
           </tr>
           </tbody></table></div>
-          <p>(<code>dr-drill.yml</code> is the ADR-009 §29 restore drill: it PITR-restores a <em>copy</em> of a chosen database, times the
+          <p>(<code>dr-drill.yml</code> is the <a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a> §29 restore drill: it PITR-restores a <em>copy</em> of a chosen database, times the
           restore for the RTO record, verifies it comes back Online, then deletes the copy, the live databases are
           never touched. It is not given its own section above, but it is part of the workflow set.)</p>
           <p>The Azure-mutating workflows (<code>deploy.yml</code>, <code>cutover-per-service-dbs.yml</code>) share the <code>prod-azure</code>
@@ -1141,7 +1141,7 @@
           </tr>
           <tr>
           <td>§29 Resilience &amp; Business Continuity</td>
-          <td><code>prod-azure</code> concurrency group; smoke+rollback in <code>deploy.yml</code>; outbox drain gate in <code>cutover</code>; <code>dr-drill.yml</code> PITR restore drill (ADR-009 objectives)</td>
+          <td><code>prod-azure</code> concurrency group; smoke+rollback in <code>deploy.yml</code>; outbox drain gate in <code>cutover</code>; <code>dr-drill.yml</code> PITR restore drill (<a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a> objectives)</td>
           </tr>
           <tr>
           <td>§30 Compliance &amp; Privacy</td>

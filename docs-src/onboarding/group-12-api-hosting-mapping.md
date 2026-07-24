@@ -16,7 +16,7 @@ Helpdesk, or an extracted microservice) drops into place so its own code is noth
 central rubric column is [Rubric §9, API & Contract Design] (consistent, versioned, standardized
 contracts and error shapes), with heavy supporting roles for [Rubric §10, Cross-Cutting Concerns],
 [Rubric §11, Security], [Rubric §13, Observability & Operability], [Rubric §7, Microservices
-Readiness], and (since ADR-027) [Rubric §27, Internationalization].
+Readiness], and (since [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)) [Rubric §27, Internationalization].
 
 **The composition root: `AddAPI` plus the builder extensions.** A host wires the edge through two
 static extension classes. [`DependencyInjection`](#dependencyinjection)'s `AddAPI`
@@ -27,7 +27,7 @@ scoped [`IdempotencyFilter`](#idempotencyfilter), wires the
 [`ModuleControllerFeatureProvider`](#modulecontrollerfeatureprovider) to hide disabled-module
 controllers, binds `IdempotencySettings`, turns on feature management with the
 [`DisabledFeatureHandler`](#disabledfeaturehandler), and registers the edge error-localization boundary
-(ADR-027, `DependencyInjection.cs:77`). [`WebApplicationBuilderExtensions`](#webapplicationbuilderextensions)
+([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html), `DependencyInjection.cs:77`). [`WebApplicationBuilderExtensions`](#webapplicationbuilderextensions)
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:23`)
 carries the identical builder-side setup every service shares: header-based API versioning
 (`AddCommonApiVersioning`, line 76), rate limiting (`AddCommonRateLimiting`, line 108), Brotli/Gzip
@@ -48,7 +48,7 @@ single place the middleware order is decided, and the order is deliberate: excep
 conditional HTTPS redirect → response compression → routing → CORS → authentication → rate limiter →
 [`SoftDeletedUserMiddleware`](#softdeletedusermiddleware) → authorization → output cache → JWKS/OIDC
 endpoints → controllers. Two of those positions are worth internalizing. The rate limiter runs
-**after** authentication on purpose (ADR-019, `WebApplicationExtensions.cs:97`): the global limiter
+**after** authentication on purpose ([ADR-019](https://ivanball.github.io/docs/adr/019-rate-limiting.html), `WebApplicationExtensions.cs:97`): the global limiter
 partitions by the authenticated principal and routes anonymous traffic down a no-limiter branch, so
 `HttpContext.User` must already be populated or every request would look anonymous and the per-user
 cap would never engage. And the HTTPS redirect is skipped for `application/grpc` traffic
@@ -57,7 +57,7 @@ cap would never engage. And the HTTPS redirect is skipped for `application/grpc`
 scheme and host (lines 72-77) so the OIDC discovery document advertises a `jwks_uri` the original
 caller can actually reach. `UseCommonRequestLocalization` (line 126) sets the request culture from
 the query string, culture cookie, then `Accept-Language`, so the edge error localization runs under
-the caller's culture (ADR-027).
+the caller's culture ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
 
 **Correlation and the soft-deleted-user gate.**
 [`CorrelationIdMiddleware`](#correlationidmiddleware)
@@ -128,7 +128,7 @@ special-purpose bases: [`AuthControllerBase`](#authcontrollerbase)
 register / refresh / revoke), [`OAuthControllerBase`](#oauthcontrollerbase)
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:32`, the Google
 / GitHub external-provider flow whose single-use exchange code keeps tokens out of the redirect URL,
-ADR-043), and [`ServiceInfoControllerBase`](#serviceinfocontrollerbase)
+[ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html)), and [`ServiceInfoControllerBase`](#serviceinfocontrollerbase)
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ServiceInfoControllerBase.cs:30`), whose
 dual-version `/ServiceInfo` (returning [`ServiceInfoResponse`](#serviceinforesponse) or
 [`ServiceInfoV2Response`](#serviceinfov2response)) proves the API-versioning machinery works across
@@ -151,7 +151,7 @@ path, then serializes concurrent duplicates behind a per-key `SemaphoreSlim` wit
 retry from a gateway or a flaky client cannot create duplicate resources.
 
 **The contract surface: mapping, JSON, and query filters.** The framework maps between the wire and
-the domain **by hand**, not with a runtime reflection mapper (ADR-001). Two interfaces in the
+the domain **by hand**, not with a runtime reflection mapper ([ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html)). Two interfaces in the
 Application layer define the shape: [`IEntityDTOMapper<TEntity, TEntityDTO,
 TIdentifierType>`](#ientitydtomappertentity-tentitydto-tidentifiertype) turns an entity into its DTO,
 and [`IEntityRequestMapper<TEntity, TCreateRequest,
@@ -206,7 +206,7 @@ lets user-independent GET endpoints stay cacheable even when the framework UI at
 to every request, with a `bypassRoles` escape hatch so a privileged caller who receives an elevated
 payload always reads fresh. And [`DatabaseInitializationExtensions`](#databaseinitializationextensions)
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:17`)
-migrates and seeds each physical data source a host owns, per the database-per-service model (ADR-006).
+migrates and seeds each physical data source a host owns, per the database-per-service model ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)).
 These are the [Rubric §7, Microservices Readiness], [Rubric §11, Security] (JWKS-based validation),
 and [Rubric §12, Performance & Scalability] (edge caching) concerns that make the same controller
 code run identically in a monolith and in a fleet of extracted services behind a YARP gateway.
@@ -245,7 +245,7 @@ never plumbing.
 
 - **What it is**: a static class that registers the external OAuth provider schemes (Google, GitHub) plus the short-lived cookie scheme that carries the external principal from the provider callback to the app's OAuth controller. It is the counterpart wiring that `AddCommonAuthentication` (JWT-only) deliberately leaves out.
 - **Depends on**: `AspNet.Security.OAuth.GitHub`, `Microsoft.AspNetCore.Authentication.Google`, and the ASP.NET Core authentication/DI/configuration BCL surface. First-party, it partners with the app's OAuth controller subclassing [OAuthControllerBase](#oauthcontrollerbase), whose `ExtractClaims` consumes the schemes registered here.
-- **Concept introduced (config-gated, additive auth registration).** The single `const string ExternalLoginScheme = "ExternalLogin"` (`ExternalAuthExtensions.cs:29`) is shared with the OAuth controller so the sign-in scheme name can never drift between the two halves of the flow. `[Rubric §11, Security]` assesses how authentication, secrets, and trust boundaries are handled; here each provider is gated on its `OAuth:<Provider>:ClientId` being present, and a missing client secret throws at startup (`ExternalAuthExtensions.cs:77` and `:91`) rather than silently half-configuring an auth scheme. `[Rubric §9, API & Contract Design]` is relevant because the extension is inert until configured: a host with no OAuth section keeps the JWT-only default untouched, the same opt-in posture as `AddPermissions` (ADR-020).
+- **Concept introduced (config-gated, additive auth registration).** The single `const string ExternalLoginScheme = "ExternalLogin"` (`ExternalAuthExtensions.cs:29`) is shared with the OAuth controller so the sign-in scheme name can never drift between the two halves of the flow. `[Rubric §11, Security]` assesses how authentication, secrets, and trust boundaries are handled; here each provider is gated on its `OAuth:<Provider>:ClientId` being present, and a missing client secret throws at startup (`ExternalAuthExtensions.cs:77` and `:91`) rather than silently half-configuring an auth scheme. `[Rubric §9, API & Contract Design]` is relevant because the extension is inert until configured: a host with no OAuth section keeps the JWT-only default untouched, the same opt-in posture as `AddPermissions` ([ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html)).
 - **Walkthrough**: `AddExternalAuthProviders(IConfiguration configuration)` (`ExternalAuthExtensions.cs:39`) reads the `OAuth` section (`:41`), derives `googleEnabled`/`githubEnabled` from whether each `ClientId` is non-empty (`:45-46`), and returns immediately when neither is set (`:50-53`) so environments without OAuth secrets are left exactly as `AddCommonAuthentication` left them. When at least one provider is configured it calls `services.AddAuthentication()` with no argument (`:57`), which appends schemes without resetting the JWT default. It then adds the `ExternalLogin` cookie (`:61-69`): `HttpOnly`, `SameSite=Lax` (sufficient because the OAuth round trip returns as a top-level GET navigation, avoiding the `Secure`+cross-site cost of `SameSite=None`), and a 10-minute expiry. Google (`:71-83`) and GitHub (`:85-100`) each set `SignInScheme = ExternalLoginScheme`, a fixed `CallbackPath`, and `SaveTokens = true`; GitHub additionally requests the `user:email` scope (`:97`) because it does not return email on the default scope, and the controller's `ClaimTypes.Email` lookup would otherwise fail.
 - **Why it's built this way**: the cookie is intentionally short-lived and single-purpose, it exists only to bridge the provider callback to the controller's `CompleteAsync`, which signs it out the moment the local JWT pair is minted. Splitting the OAuth scheme registration from `AddCommonAuthentication` keeps the JWT-only default (used by most tests and local dev) free of provider secrets.
 - **Where it's used**: called from the host composition of a service that exposes social login; pairs with the app's `OAuthController` (subclass of [OAuthControllerBase](#oauthcontrollerbase)).
@@ -289,11 +289,11 @@ never plumbing.
 - **Concept introduced (layered DI wiring at the API edge).** `[Rubric §3, Clean Architecture]` assesses whether each layer registers only its own concerns; this class wires controllers, JSON/XML formatters, filters, feature management, exception handlers, and health checks, all API-layer edges, and reaches down to Application only for `ModulesSettings`/`ModuleLoader`. `[Rubric §13, Observability & Operability]` and `[Rubric §17, DevOps]` both apply through `AddModuleHealthChecks` (`DependencyInjection.cs:169`), which projects module state into `/health` checks tagged `module` so `/health?tag=module` reports each module's status. `[Rubric §9, API & Contract Design]` is relevant, every method is opt-in and defaulted so a host wires only what it needs.
 - **Walkthrough**:
   - `AddAPI(ModulesSettings? modulesSettings = null, IConfiguration? configuration = null)` (`DependencyInjection.cs:42`) registers controllers with `ReturnHttpNotAcceptable = false` and the [UnhandledResultFailureFilter](#unhandledresultfailurefilter) global filter (`:44-48`), adds the [CurrencyJsonConverter](#currencyjsonconverter) to JSON options and XML DataContract formatters (`:49-50`), conditionally registers [ModuleControllerFeatureProvider](#modulecontrollerfeatureprovider) when `modulesSettings` is non-null (`:52-56`), conditionally binds `IdempotencySettings` from config with data-annotation validation on start (`:58-64`), registers the scoped [IdempotencyFilter](#idempotencyfilter) and [OwnerOrAdminFilter](group-08-auth.md#owneroradminfilter) (scoped because they depend on scoped services, `:66-68`), turns on feature management with `AddFeatureManagement()` plus the singleton [DisabledFeatureHandler](#disabledfeaturehandler) (`:73-74`), and finally calls `AddErrorLocalization()` (`:77`).
-  - `AddErrorLocalization()` (`:88`) registers ASP.NET localization, the singleton [IErrorLocalizer](#ierrorlocalizer) via `TryAddSingleton` (`:91`), and the framework's own [ErrorResources](#errorresources) source; `AddErrorResources<TResource>()` (`:103`) adds a module's resource anchor as another [ErrorResourceSource](#errorresourcesource) built from an `IStringLocalizerFactory` (`:105-106`). This is the ADR-027 edge error-localization boundary, keyed by `Error.Code`.
+  - `AddErrorLocalization()` (`:88`) registers ASP.NET localization, the singleton [IErrorLocalizer](#ierrorlocalizer) via `TryAddSingleton` (`:91`), and the framework's own [ErrorResources](#errorresources) source; `AddErrorResources<TResource>()` (`:103`) adds a module's resource anchor as another [ErrorResourceSource](#errorresourcesource) built from an `IStringLocalizerFactory` (`:105-106`). This is the [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) edge error-localization boundary, keyed by `Error.Code`.
   - `AddCommonExceptionHandlers()` (`:116`) registers ProblemDetails (adding a `requestId` from `TraceIdentifier`, `:118-120`) then five `IExceptionHandler`s in specificity order (`:121-125`): `OperationCanceled`, `DomainException`, `DbUpdate`, `Validation`, and [GlobalExceptionHandler](#globalexceptionhandler) as the catch-all. ASP.NET Core invokes them in registration order and stops at the first that handles the exception, hence most-specific first and the 500 fallback last.
   - `AddServerAuthSessionCookie(string apiBaseAddress)` (`:141`) wires the SSR-prerender auth path: `HttpContextAccessor`, memory cache, the scoped [CookieTokenReader](group-08-auth.md#cookietokenreader), a named `HttpClient` pointed at the internal API base address (`:149-150`), and the [CookieSessionRefresher](group-08-auth.md#cookiesessionrefresher) as a **singleton** (`:153`). The singleton is load-bearing: its in-flight map must be shared across requests for single-flight refresh to work.
   - `AddModuleHealthChecks(ModuleLoader moduleLoader)` (`:169`) adds one health check per module, `Healthy` for each enabled module and `Degraded` for each disabled one (`:173-188`), named `module-{Name}` and tagged `module`. It must run after [ModuleLoader](group-14-module-system-composition.md#moduleloader)'s `DiscoverAndRegister`.
-- **Why it's built this way**: bundling the API-edge concerns behind small, defaulted extension methods lets each host opt into exactly the surface it needs (a JWT-only test host skips `AddServerAuthSessionCookie`; a monolith with no disabled modules passes a null `modulesSettings`). The exception-handler ordering and the refresher's singleton lifetime are the two non-obvious, correctness-critical choices, both documented inline. Error localization is registered automatically by `AddAPI` so modules only add their own resources additively (ADR-027).
+- **Why it's built this way**: bundling the API-edge concerns behind small, defaulted extension methods lets each host opt into exactly the surface it needs (a JWT-only test host skips `AddServerAuthSessionCookie`; a monolith with no disabled modules passes a null `modulesSettings`). The exception-handler ordering and the refresher's singleton lifetime are the two non-obvious, correctness-critical choices, both documented inline. Error localization is registered automatically by `AddAPI` so modules only add their own resources additively ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
 - **Where it's used**: called from every service host's composition (`Program.cs` of the ADC/Store/Helpdesk API hosts and the integration-test hosts) to wire the shared API layer; `AddApplicationDecorators()` still runs last in the overall sequence (see `MMCA.Common/CLAUDE.md` DI ordering note).
 - **Caveats / not-in-source**: the relative ordering of `AddAPI` against `AddInfrastructure`/`AddApplication` in a given host is not fixed by this file; only `AddApplicationDecorators()` last is load-bearing.
 
@@ -439,7 +439,7 @@ never plumbing.
   - `GetAllForLookupAsync` (line 157): `GET /lookup`; returns `CollectionResult<BaseLookup<TIdentifierType>>`, a lightweight id/label pair, with `nameProperty` choosing the label.
   - `GetByIdAsync` (line 189): `GET /{id}`; `includeFKs` defaults to `true` for the single-entity case.
   - `HandleFailure` override (line 216): logs the first error at Warning (guarded by `Logger.IsEnabled`) before delegating to [`ApiControllerBase`](#apicontrollerbase)`.HandleFailure`, so the read path gets observability without changing the response mapping.
-- **Why it's built this way**: the controller stays thin: all filtering/sorting/paging lives in [`IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype), and manual DTO mapping (ADR-001) keeps entities off the wire. The controller only translates HTTP concerns: query strings, headers, status codes.
+- **Why it's built this way**: the controller stays thin: all filtering/sorting/paging lives in [`IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype), and manual DTO mapping ([ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html)) keeps entities off the wire. The controller only translates HTTP concerns: query strings, headers, status codes.
 - **Where it's used**: the base for every read-only module controller; extended by [`AggregateRootEntityControllerBase<TEntity, TEntityDTO, TIdentifierType, TCreateRequest>`](#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest) for entities that also create and delete.
 
 ### OAuthControllerBase
@@ -453,7 +453,7 @@ never plumbing.
   - `OAuthExchangeCodePrefix` and a 2-minute `OAuthExchangeCodeLifetime` (lines 42-43) namespace and time-box the server-side token stash; the short TTL matches the single redirect-then-POST round trip.
   - `GoogleLogin` (line 50) and `GitHubLogin` (line 58) both call `ChallengeProvider` (line 258), which stashes `returnUrl` and sets `RedirectUri = "/auth/oauth/complete"`.
   - `CompleteAsync` (line 75): after the middleware handles the provider callback, this reads the external cookie, extracts provider claims (`ExtractClaims`, line 171), calls `ExternalLoginAsync` (line 100) to find/create the local user and mint tokens, signs out the temporary external cookie (line 111), then mints a 32-byte hex `exchangeCode` (line 116), stashes the token pair in the cache under it, and redirects with only the code.
-  - Native heads (ADR-043): `GetAllowedMobileReturnUrl` (line 233) returns the stashed `returnUrl` as the redirect target only when it is an absolute URI whose custom scheme is listed in `OAuth:AllowedReturnUrlSchemes`; http/https never match (lines 236-237), so the allowlist cannot become an open redirect, and an empty allowlist preserves the exact web-only behavior.
+  - Native heads ([ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html)): `GetAllowedMobileReturnUrl` (line 233) returns the stashed `returnUrl` as the redirect target only when it is an absolute URI whose custom scheme is listed in `OAuth:AllowedReturnUrlSchemes`; http/https never match (lines 236-237), so the allowlist cannot become an open redirect, and an empty allowlist preserves the exact web-only behavior.
   - `ExchangeAsync` (line 138): `[AllowAnonymous]` `[HttpPost("exchange")]`; the UI swaps the code for the real [`AuthenticationResponse`](group-08-auth.md#authenticationresponse) out-of-band. Because that response is a struct, a cache miss yields a default value, so the miss is detected via an empty `AccessToken` (line 152); the code is then removed (`RemoveAsync`, line 158), making it single-use so a leaked or replayed code cannot mint a second token pair.
 - **Why it's built this way**: carrying tokens in a redirect is the classic OAuth token-leak vector; the single-use code plus a short-lived server-side stash closes it while keeping the client flow a plain redirect and one POST. The `AppendQuery` helper (line 249) deliberately uses `OriginalString` so native callback URIs match exactly.
 - **Caveats / not-in-source**: the provider scheme registration and the concrete `ExternalLoginAsync` implementation live outside this base ([`ExternalAuthExtensions`](#externalauthextensions) and the app's [`IAuthenticationService`](group-08-auth.md#iauthenticationservice)); this file assumes both are wired.
@@ -509,7 +509,7 @@ never plumbing.
 
 - **What it is**: An empty anchor type whose only job is to name the framework's error-message `.resx` set. Its sibling files (`ErrorResources.resx` / `ErrorResources.es.resx`) are keyed by a domain error's stable machine `Code` (for example `"PhoneNumber.Empty"`).
 - **Depends on**: Nothing at runtime; `IStringLocalizerFactory.Create(typeof(ErrorResources))` uses the type as the resource-lookup anchor (see the doc comment at `ErrorResources.cs:7`). Consumed through [ErrorResourceSource](#errorresourcesource) and [IErrorLocalizer](#ierrorlocalizer).
-- **Concept introduced: resource anchor types.** .NET's `IStringLocalizer` resolves translations by pairing a marker `Type` with `.resx` files that share its name and namespace. The class has no members (`ErrorResources.cs:9` declares `public sealed class ErrorResources;`) because it exists purely so the localizer factory can key on it. `[Rubric §27, i18n]` assesses whether user-facing text is externalized for translation; keying resources by the stable error `Code` (not by English prose) lets the same key resolve to any culture. See ADR-027 (multi-locale i18n).
+- **Concept introduced: resource anchor types.** .NET's `IStringLocalizer` resolves translations by pairing a marker `Type` with `.resx` files that share its name and namespace. The class has no members (`ErrorResources.cs:9` declares `public sealed class ErrorResources;`) because it exists purely so the localizer factory can key on it. `[Rubric §27, i18n]` assesses whether user-facing text is externalized for translation; keying resources by the stable error `Code` (not by English prose) lets the same key resolve to any culture. See [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) (multi-locale i18n).
 - **Walkthrough**: Body-less type declaration; there is nothing to trace beyond the declaration itself.
 - **Why it's built this way**: A dedicated anchor keeps the framework's own error translations discoverable and separate from each module's, which register their own additive resource anchors.
 - **Where it's used**: Registered as an [ErrorResourceSource](#errorresourcesource) at startup (Common first); resolved at the edge by [ErrorLocalizer](#errorlocalizer).
@@ -522,7 +522,7 @@ never plumbing.
 
 - **What it is**: A registered resource source that [IErrorLocalizer](#ierrorlocalizer) consults when translating an error code. It wraps one `IStringLocalizer` (backing one `.resx` set). Common registers one for its own [ErrorResources](#errorresources); each module registers its own additively.
 - **Depends on**: `Microsoft.Extensions.Localization.IStringLocalizer`; produced from [ErrorResources](#errorresources)-style anchors via `AddErrorResources<TResource>()`.
-- **Concept introduced: an ordered, additive localization registry.** Rather than one global resource file, the framework registers a set of `ErrorResourceSource` instances (Common first, then modules). The localizer enumerates them and returns the first match, so a module can add translations for its own codes without touching Common's file. `[Rubric §27, i18n]` and `[Rubric §7, Microservices Readiness]` both apply: the additive set means an extracted module carries its own translations. See ADR-027.
+- **Concept introduced: an ordered, additive localization registry.** Rather than one global resource file, the framework registers a set of `ErrorResourceSource` instances (Common first, then modules). The localizer enumerates them and returns the first match, so a module can add translations for its own codes without touching Common's file. `[Rubric §27, i18n]` and `[Rubric §7, Microservices Readiness]` both apply: the additive set means an extracted module carries its own translations. See [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html).
 - **Walkthrough**: Primary-constructor class exposing a single `public IStringLocalizer Localizer { get; }` property assigned from the injected `localizer` (`ErrorResourceSource.cs:15`). No behavior beyond holding the localizer.
 - **Why it's built this way**: Wrapping the localizer in a distinct type lets DI register several as an `IEnumerable<ErrorResourceSource>` in a defined order, which is the enumeration [ErrorLocalizer](#errorlocalizer) walks.
 - **Where it's used**: Injected as a collection into [ErrorLocalizer](#errorlocalizer); populated by the framework and by each module's `AddErrorResources<TResource>()` call.
@@ -548,7 +548,7 @@ never plumbing.
 
 - **What it is**: The contract for localizing a domain `Error`'s human-readable message at the HTTP edge, keyed by its stable machine `Code`. Domain, handler, and [Result](group-01-result-error-handling.md#result) code stays culture-agnostic; only the edge speaks a culture.
 - **Depends on**: Nothing beyond BCL; implemented by [ErrorLocalizer](#errorlocalizer) and consumed by [ErrorHttpMapping](#errorhttpmapping).
-- **Concept introduced: edge localization keyed by stable code.** The domain raises errors with a machine `Code` (for example `"PhoneNumber.Empty"`) plus an English message. `IErrorLocalizer.Localize(code, fallbackMessage)` translates that code against the current UI culture, returning the fallback unchanged when the code is empty or no resource has a key (`IErrorLocalizer.cs:11-17`). This keeps culture out of the [Error](group-01-result-error-handling.md#error) type and confines translation to the presentation boundary. `[Rubric §27, i18n]` assesses whether text is translatable without leaking locale into the core; the graceful fallback also satisfies `[Rubric §9, API & Contract Design]` since an untranslated code degrades to English rather than throwing. See ADR-027.
+- **Concept introduced: edge localization keyed by stable code.** The domain raises errors with a machine `Code` (for example `"PhoneNumber.Empty"`) plus an English message. `IErrorLocalizer.Localize(code, fallbackMessage)` translates that code against the current UI culture, returning the fallback unchanged when the code is empty or no resource has a key (`IErrorLocalizer.cs:11-17`). This keeps culture out of the [Error](group-01-result-error-handling.md#error) type and confines translation to the presentation boundary. `[Rubric §27, i18n]` assesses whether text is translatable without leaking locale into the core; the graceful fallback also satisfies `[Rubric §9, API & Contract Design]` since an untranslated code degrades to English rather than throwing. See [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html).
 - **Walkthrough**: Single method `string Localize(string code, string fallbackMessage)` (line 17). The XML doc pins the contract: empty code or no matching resource returns `fallbackMessage`.
 - **Why it's built this way**: An interface (not a concrete localizer) lets the edge depend on the abstraction while the additive resource-source enumeration lives in the implementation.
 - **Where it's used**: Resolved optionally in [ErrorHttpMapping.BuildErrorsExtension](#errorhttpmapping) and [UnhandledResultFailureFilter](#unhandledresultfailurefilter); a `null` localizer leaves messages in English.
@@ -627,7 +627,7 @@ never plumbing.
 
 - **What it is**: The default [IErrorLocalizer](#ierrorlocalizer) implementation: it resolves an error code against an ordered set of registered [ErrorResourceSource](#errorresourcesource)s (Common first, then modules) using the current UI culture, falling back to the caller's English message when the code is empty or unknown to every source.
 - **Depends on**: [IErrorLocalizer](#ierrorlocalizer), [ErrorResourceSource](#errorresourcesource); `Microsoft.Extensions.Localization.LocalizedString`.
-- **Concept introduced: first-match-wins over an ordered source list.** `[Rubric §27, i18n]` assesses translation coverage and layering. The localizer materializes the injected `IEnumerable<ErrorResourceSource>` into a read-only list once (`ErrorLocalizer.cs:13`) and, per lookup, walks it in registration order returning the first source whose localizer has the key. See ADR-027.
+- **Concept introduced: first-match-wins over an ordered source list.** `[Rubric §27, i18n]` assesses translation coverage and layering. The localizer materializes the injected `IEnumerable<ErrorResourceSource>` into a read-only list once (`ErrorLocalizer.cs:13`) and, per lookup, walks it in registration order returning the first source whose localizer has the key. See [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html).
 - **Walkthrough**: Primary constructor takes `IEnumerable<ErrorResourceSource> sources`, stored as `_sources` via a collection expression (line 13). `Localize` (line 16): returns `fallbackMessage` immediately when `code` is null or empty (lines 18-21); otherwise iterates `_sources`, reading `source.Localizer[code]` and returning `localized.Value` on the first hit where `!localized.ResourceNotFound` (lines 23-30); if no source matches, returns `fallbackMessage` (line 32).
 - **Why it's built this way**: `internal sealed` keeps the implementation behind the [IErrorLocalizer](#ierrorlocalizer) abstraction. Snapshotting the sources once avoids re-enumerating a DI collection on every request. First-match ordering lets Common ship base translations while modules override or extend additively.
 - **Where it's used**: Registered as the `IErrorLocalizer` for the edge; invoked by [ErrorHttpMapping.BuildErrorsExtension](#errorhttpmapping) and [UnhandledResultFailureFilter](#unhandledresultfailurefilter).
@@ -654,7 +654,7 @@ never plumbing.
 - **What it is**: The single source of truth that maps [ErrorType](group-01-result-error-handling.md#errortype) values to HTTP status codes and builds the `errors` extension array for RFC 9457 Problem Details responses. It keeps [ApiControllerBase](#apicontrollerbase) and [UnhandledResultFailureFilter](#unhandledresultfailurefilter) consistent without duplicating the mapping.
 - **Depends on**: [Error](group-01-result-error-handling.md#error), [ErrorType](group-01-result-error-handling.md#errortype), [IErrorLocalizer](#ierrorlocalizer); `System.Collections.Frozen`, ASP.NET Core `StatusCodes`.
 - **Concept introduced: the complete ErrorType-to-HTTP table.** `[Rubric §9, API & Contract Design]` (standardized error responses). The `FrozenDictionary<ErrorType, int>` (lines 21-31) is the table [ErrorType](group-01-result-error-handling.md#errortype) implies: `Validation` and `Invariant` to 400, `NotFound` to 404, `Conflict` to 409, `Unauthorized` to 401, `Forbidden` to 403, `UnprocessableEntity` to 422, `Failure` to 400. `FrozenDictionary` (not `Dictionary`) is chosen because the map is fixed at startup and read on every failing request, so lock-free optimal reads matter.
-- **Walkthrough**: `GetStatusCode(ErrorType)` (line 37) uses `GetValueOrDefault(errorType, 400)`, so any future unmapped error type degrades to 400 rather than throwing. `BuildErrorsExtension(IReadOnlyList<Error>, IErrorLocalizer?)` (line 48) projects each error into an anonymous object with `Code`, `Message`, `Type`, `Source`, and `Target`. The `Message` is localized at the edge via the optional [IErrorLocalizer](#ierrorlocalizer), keyed by the stable `Code` (ADR-027); a `null` localizer leaves the English `Message` unchanged, while `Code`, `Type`, `Source`, and `Target` stay verbatim so clients can still branch on them (lines 48-56).
+- **Walkthrough**: `GetStatusCode(ErrorType)` (line 37) uses `GetValueOrDefault(errorType, 400)`, so any future unmapped error type degrades to 400 rather than throwing. `BuildErrorsExtension(IReadOnlyList<Error>, IErrorLocalizer?)` (line 48) projects each error into an anonymous object with `Code`, `Message`, `Type`, `Source`, and `Target`. The `Message` is localized at the edge via the optional [IErrorLocalizer](#ierrorlocalizer), keyed by the stable `Code` ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)); a `null` localizer leaves the English `Message` unchanged, while `Code`, `Type`, `Source`, and `Target` stay verbatim so clients can still branch on them (lines 48-56).
 - **Why it's built this way**: Centralizing the mapping in one `internal static` class keeps controller and filter responses identical and prevents misuse from outside the API package. Threading the localizer through here (rather than into each call site) is what added edge localization without changing consumers' shape.
 - **Caveats / not-in-source**: A prior edition documented `BuildErrorsExtension(errors)` with no localizer parameter; the current signature takes an `IErrorLocalizer?` second argument (line 48). Trust the code.
 - **Where it's used**: Consumed by [ApiControllerBase](#apicontrollerbase) and [UnhandledResultFailureFilter](#unhandledresultfailurefilter) (both Level 3).
@@ -840,7 +840,7 @@ never plumbing.
 - **Depends on**: [`IJwksProvider`](group-08-auth.md#ijwksprovider) (resolved from DI at request
   time), whose implementation is [`RsaJwksProvider`](group-08-auth.md#rsajwksprovider);
   `Microsoft.IdentityModel.Tokens.JsonWebKeySet`.
-- **Concept: the public-key distribution endpoint of cross-service auth (ADR-004).** `[Rubric §11,
+- **Concept: the public-key distribution endpoint of cross-service auth ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)).** `[Rubric §11,
   Security]` and `[Rubric §7: Microservices Readiness]`: with RS256, only the Identity service
   holds the private key; every other service fetches the public keys here and validates tokens
   without a shared secret. The endpoint is `.AllowAnonymous()` (`JwksEndpointExtensions.cs:40`)
@@ -890,7 +890,7 @@ never plumbing.
   signing keys. When no issuer is configured it returns 404.
 - **Depends on**: [`JwksEndpointExtensions`](#jwksendpointextensions)`.DefaultJwksPath` to compose
   the `jwks_uri`; `IConfiguration` for `Jwt:Issuer`.
-- **Concept: OIDC discovery as the bootstrap for JWKS-based validation (ADR-004).** `[Rubric §7,
+- **Concept: OIDC discovery as the bootstrap for JWKS-based validation ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)).** `[Rubric §7,
   Microservices Readiness]` and `[Rubric §11: Security]`: `AddForwardedJwtBearer` sets an
   `Authority`, and the JWT bearer middleware fetches `{authority}/.well-known/openid-configuration`
   on startup to learn the issuer and the JWKS URL. This endpoint answers that fetch.
@@ -989,7 +989,7 @@ never plumbing.
   - `GetValidatedSigningKey(string)` (`:326`): decodes the Base64 HMAC key and throws if it is
     under 256 bits, so a too-short secret fails fast at startup.
 - **Why it's built this way**: two authentication entry points (`AddForwardedJwtBearer` vs
-  `AddCommonAuthentication`) are the framework's monolith-to-microservice hinge (ADR-004): the
+  `AddCommonAuthentication`) are the framework's monolith-to-microservice hinge ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)): the
   monolith validates in-process with a shared secret or local key, an extracted service validates
   against the issuer's published JWKS with no shared secret. The RS256 pin on both paths is
   deliberate defense-in-depth.
@@ -1008,7 +1008,7 @@ never plumbing.
   and ships a default `MapToDTOs(collection)` that fans `MapToDTO` across a collection.
 - **Depends on**: [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype)
   (constraint), [`IBaseDTO<TIdentifierType>`](#ibasedtotidentifiertype) (constraint).
-- **Concept introduced: manual DTO mapping (ADR-001).** `[Rubric §16: Maintainability]`: the
+- **Concept introduced: manual DTO mapping ([ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html)).** `[Rubric §16: Maintainability]`: the
   framework maps by hand in classes implementing this interface rather than using AutoMapper, so a
   missing mapping is a compile error, not a runtime surprise. `[Rubric §1: SOLID]`: the interface is
   single-purpose (ISP), and the default `MapToDTOs` (`IEntityDTOMapper.cs:27-32`) is a C# default
@@ -1018,7 +1018,7 @@ never plumbing.
   DTO to agree on the identifier type and require it be `notnull`, so a structurally unsound mapper
   will not compile. `MapToDTO(TEntity)` (`:22`) is the one required member; `MapToDTOs(...)` (`:27`)
   null-guards then projects with `Select` into a read-only collection.
-- **Why it's built this way**: see ADR-001: compile-time discoverability over reflective convenience.
+- **Why it's built this way**: see [ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html): compile-time discoverability over reflective convenience.
   Scrutor auto-registers every implementation as scoped during the module scan.
 - **Where it's used**: implemented by every concrete `*DTOMapper` in the ADC and Store Application
   layers; consumed by query handlers and entity read services.
@@ -1046,7 +1046,7 @@ never plumbing.
 - **Walkthrough**: one member, `CreateEntityAsync(TCreateRequest request, CancellationToken)`
   (`IEntityDTOMapper.cs:54`). Implementations call the entity's `Create(...)` factory and return its
   `Result`, threading validation errors through unchanged.
-- **Why it's built this way**: same ADR-001 rationale: explicit, compile-checked mapping. Keeping it
+- **Why it's built this way**: same [ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html) rationale: explicit, compile-checked mapping. Keeping it
   in the same file as the read mapper documents that a module supplies both directions per entity.
 - **Where it's used**: implemented by concrete `*RequestMapper` classes; consumed by the generic
   create-command handlers.
@@ -1068,7 +1068,7 @@ never plumbing.
 - **Concept: one canonical, ordered pipeline.** `[Rubric §10: Cross-Cutting Concerns]` and
   `[Rubric §13: Observability]`: the order is load-bearing (correlation must be set before anything
   downstream logs, auth must run before rate limiting so the per-user partition sees a principal).
-  `[Rubric §27: i18n]` also applies through the localization wiring (ADR-027).
+  `[Rubric §27: i18n]` also applies through the localization wiring ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
 - **Walkthrough**
   - Two internal constants, `PreForwardedSchemeKey` (`WebApplicationExtensions.cs:24`) and
     `PreForwardedHostKey` (`:35`), capture the transport scheme and host **before**
@@ -1079,7 +1079,7 @@ never plumbing.
     cleared for cloud proxies, `:63-64`) → a capture step storing the pre-forwarded scheme/host
     (`:72-77`) → HTTPS redirect *skipped for `application/grpc`* so h2c gRPC is not broken
     (`:87-89`) → response compression → routing → CORS (dev vs prod policy, `:93-95`) → authentication
-    → rate limiter (after auth on purpose per ADR-019, `:96-101`) → soft-deleted-user middleware →
+    → rate limiter (after auth on purpose per [ADR-019](https://ivanball.github.io/docs/adr/019-rate-limiting.html), `:96-101`) → soft-deleted-user middleware →
     authorization → output cache → the always-mapped `MapJwksEndpoint()`/`MapOidcDiscoveryEndpoint()`
     (`:111-112`) → `MapControllers()` (`:114`).
   - `UseCommonRequestLocalization()` (`:126`) adds `RequestLocalization` for
@@ -1107,7 +1107,7 @@ never plumbing.
   [`ApplicationSettings`](group-14-module-system-composition.md#applicationsettings), and
   [`ModuleLoader`](group-14-module-system-composition.md#moduleloader).
 - **Concept: strategy-driven, per-source database initialization.** `[Rubric §8: Data
-  Architecture]` and `[Rubric §17: DevOps & Deployment]`: because of database-per-service (ADR-006)
+  Architecture]` and `[Rubric §17: DevOps & Deployment]`: because of database-per-service ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html))
   every physical source a host touches is initialized independently, and the strategy chosen is what
   makes the difference between a permissive dev host and a production host that refuses to start
   against a stale schema.
@@ -1155,11 +1155,11 @@ never plumbing.
 ### SupportedCultures
 > MMCA.Common.Shared · `MMCA.Common.Shared.Globalization` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Globalization/SupportedCultures.cs:9` · Level 0 · class (static)
 
-- **What it is**: the framework-wide allowlist of supported UI cultures (ADR-027). A static class holding the default culture, the full supported set, the Development-only pseudo-localization locale, and two membership tests.
+- **What it is**: the framework-wide allowlist of supported UI cultures ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)). A static class holding the default culture, the full supported set, the Development-only pseudo-localization locale, and two membership tests.
 - **Depends on**: nothing first-party. Uses only BCL types (`IReadOnlyList<string>`, `StringComparison`).
 - **Concept introduced (internationalization allowlist as one source of truth).** `[Rubric §27, i18n]` (assesses whether locale support is centralized, discoverable, and drift-resistant rather than scattered string checks). Every consumer that decides "is this a language we support" reads this one list: the UI and service hosts' `UseRequestLocalization`, the culture switcher, and the Identity `User.PreferredCulture` guard. Adding a locale means adding a `.<culture>.resx` sibling set plus one entry here, with no other infrastructure change (`SupportedCultures.cs:3-8`).
 - **Walkthrough**: `Default = "en-US"` (`SupportedCultures.cs:12`) is the fallback used when no cookie, profile, or `Accept-Language` preference resolves. `All` (`SupportedCultures.cs:18`) is the supported set, default first (`[Default, "es"]`); both the request-localization options and the culture switcher iterate it. `PseudoLocale = "qps-Ploc"` (`SupportedCultures.cs:28`) is the Windows-standard pseudo-localization locale, deliberately **not** part of `All` so the translation-completeness fitness gate does not demand a `.qps-Ploc.resx` sibling; it is wired into request localization and the culture switcher in **Development only**, where it runtime-transforms every resolved resource string (accents, padding, bracket sentinel) to surface hard-coded strings, truncation, and string concatenation. `IsSupported(string?)` (`SupportedCultures.cs:35`) returns true for a non-empty culture matched case-insensitively against `All`; `IsPseudoLocale(string?)` (`SupportedCultures.cs:44`) tests case-insensitively against `PseudoLocale`.
-- **Why it's built this way**: a single `const`/`IReadOnlyList` allowlist keeps the localization middleware, the switcher UI, and the profile guard from drifting apart; separating `PseudoLocale` from `All` lets a diagnostic locale ship in Development without polluting the production culture set or the resx-completeness gate. See ADR-027 for the culture-resolution and pseudo-localization decision.
+- **Why it's built this way**: a single `const`/`IReadOnlyList` allowlist keeps the localization middleware, the switcher UI, and the profile guard from drifting apart; separating `PseudoLocale` from `All` lets a diagnostic locale ship in Development without polluting the production culture set or the resx-completeness gate. See [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) for the culture-resolution and pseudo-localization decision.
 - **Where it's used**: the UI/service host request-localization setup, the culture switcher component, the translation-completeness fitness test, and the Identity `User.PreferredCulture` validation.
 
 ### BaseLookup<TIdentifierType>

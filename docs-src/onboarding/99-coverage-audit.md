@@ -29,7 +29,7 @@ double-counted (each type maps to exactly one group).
 
 > **Regeneration note (re-verified against current source, polyglot-persistence update).** This audit
 > was regenerated after the **polyglot-persistence framework enhancement** (MMCA.Common commit
-> `74c0372`, ADR-018) and the matching ADC change. The net change since the previous pass (**+25**
+> `74c0372`, [ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)) and the matching ADC change. The net change since the previous pass (**+25**
 > distinct nodes: 1,826 → 1,851) is:
 > - **G03 (+3):** the cross-source specification helper, `CrossSourceSpecification` + its
 >   `ParameterReplacer` (Application layer) and the new `InlineSpecification<T,TId>` (Domain layer)
@@ -69,7 +69,7 @@ double-counted (each type maps to exactly one group).
 > TimeProvider adoption changed signatures without adding types: `TokenService` (G08),
 > `UserNotification.MarkAsRead` + the two notification read handlers (G10), `Event.RecordSessionizeRefresh`
 > (G17), `RefreshFromSessionizeHandler` (G18), and `AuthenticationService` (G23) now take or inject the
-> clock. ADR-019 (layered rate limiting) was added to the ADR set (001–019) and is cross-referenced where
+> clock. [ADR-019](https://ivanball.github.io/docs/adr/019-rate-limiting.html) (layered rate limiting) was added to the ADR set (001–019) and is cross-referenced where
 > rate limiting is taught (G08/G12).
 
 > **Regeneration note (re-verified against current source, v1.83.0 full drift sweep).** This audit was
@@ -77,7 +77,7 @@ double-counted (each type maps to exactly one group).
 > source of truth for the version / 13-package / 23-ADR figures). The net change since the permission pass
 > (**+2** distinct nodes: 1,867 to 1,869) is entirely in **G25 (+2):** `FixedTimeProvider` (the injected-`TimeProvider`
 > test clock in `MarkAllNotificationsReadHandlerTests.cs:65`) and `RateLimitPartitionTests`
-> (`MMCA.Common.API.Tests/Startup/RateLimitPartitionTests.cs:16`, ADR-019). Both are per-project test types
+> (`MMCA.Common.API.Tests/Startup/RateLimitPartitionTests.cs:16`, [ADR-019](https://ivanball.github.io/docs/adr/019-rate-limiting.html)). Both are per-project test types
 > and roll up by project (768 to 770), so the individually-sectioned count is unchanged at 1,099. No type was
 > added, removed, or regrouped outside G25.
 > - **Two moved declaration citations** were re-verified and corrected: `BaseDomainEvent`
@@ -89,10 +89,10 @@ double-counted (each type maps to exactly one group).
 >   commit `706df4d`); the G12 section now documents it.
 > - **Four ADRs finalized since the last pass (020-023) are now cross-referenced** where their patterns are
 >   taught. The code for all four predated the last guide pass (the types were already in the baseline), so
->   the sections existed but did not yet cite the ADRs: **ADR-020** (permission authorization) in G08 (the
+>   the sections existed but did not yet cite the ADRs: **[ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html)** (permission authorization) in G08 (the
 >   permission-policy sections + the `IPermissionRegistry`/`PermissionRegistry`/`PermissionRegistryBuilder`
->   registry), **ADR-021** (consumer inbox idempotency) in G04 (the `IInboxStore`/`EfInboxStore`/`InboxMessage`
->   sections), **ADR-022** (browser session-cookie auth) in G08 (the session-cookie subsystem), and **ADR-023**
+>   registry), **[ADR-021](https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html)** (consumer inbox idempotency) in G04 (the `IInboxStore`/`EfInboxStore`/`InboxMessage`
+>   sections), **[ADR-022](https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html)** (browser session-cookie auth) in G08 (the session-cookie subsystem), and **[ADR-023](https://ivanball.github.io/docs/adr/023-security-response-headers.html)**
 >   (security response headers + pluggable CSP) in G16 (`SecurityHeadersMiddleware`/`ICspPolicyProvider` in
 >   `MMCA.Common.Aspire`) and G24 (ADC's `BlazorCspPolicyProvider`).
 > - **G08 unit repack (no content lost).** Re-running `plan.ps1` repartitioned G08's sections units: the
@@ -112,7 +112,7 @@ double-counted (each type maps to exactly one group).
 > nodes (1,869 → 1,910), individually-sectioned 1,099 → **1,137**, rolled-up 770 → **773**, `###` sections
 > 883 → **931**. The change is **+73 added, 9 removed (all G25 test renames/consolidation), 0 regrouped**,
 > clustered around the post-v1.83 ADRs (`verify.ps1`: 0 missing; rubric 34/34):
-> - **i18n / multi-locale (ADR-027, supersedes ADR-011).** Server-side edge error localization keyed by
+> - **i18n / multi-locale ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html), supersedes [ADR-011](https://ivanball.github.io/docs/adr/011-single-locale-i18n.html)).** Server-side edge error localization keyed by
 >   `Error.Code`: **G12 (+5)** `ErrorLocalizer` / `IErrorLocalizer` / `ErrorResourceSource`
 >   (`MMCA.Common.API/Localization/`), `ErrorResources` (`MMCA.Common.API/Resources/ErrorResources.cs:9`),
 >   and `SupportedCultures` (`MMCA.Common.Shared/Globalization/SupportedCultures.cs:9`, re-homed from the
@@ -121,30 +121,30 @@ double-counted (each type maps to exactly one group).
 >   **G23 (+1)** `IdentityErrorResources`. Culture bootstrap + forwarding in **G15**: `MmcaCultureBootstrap`,
 >   `CultureDelegatingHandler`, `SharedResource`, the `IUserPreferenceReader/Writer` + `ApiUserPreferenceReader/Writer`
 >   pair, `UserPreferences` / `UserPreferencesRequest` (`MMCA.Common.UI/`).
-> - **Day/Dark theme (ADR-028).** **G15** `ThemeService` (`MMCA.Common.UI/Services/ThemeService.cs:16`) plus the
+> - **Day/Dark theme ([ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html)).** **G15** `ThemeService` (`MMCA.Common.UI/Services/ThemeService.cs:16`) plus the
 >   per-user preference plumbing above; **G23 (+6)** `ChangePreferences{Command,Handler,Request}` /
 >   `GetUserPreferences{Query,Handler}` / `UserPreferencesResponse` persist `PreferredCulture` / `PreferredTheme`.
 >   *Honest adoption note:* the `AddUserPreferences` EF migration is **not yet applied to the production ADC /
 >   Store Identity databases**, so the Profile preferences endpoint errors in prod until it is (stated in G23).
-> - **PII redaction (§30 / ADR-005).** **G02 (+2)** `PiiRedactor` + its private nested `RedactableProperty`
+> - **PII redaction (§30 / [ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html)).** **G02 (+2)** `PiiRedactor` + its private nested `RedactableProperty`
 >   (`MMCA.Common.Domain/Privacy/PiiRedactor.cs:24,123`, commit `b2b0aae`) mask `[Pii]`-marked members for
 >   log/telemetry-safe output; a new classifier rule routes `MMCA.Common.Domain.Privacy.*` to G02 beside the
 >   existing `PiiAttribute` / `IAnonymizable`.
 > - **G25 (+12 net, 874 total).** New reusable/fitness infra sectioned in full: `LocalizationResourceTestsBase`
->   + `TranslationCompletenessTests` (ADR-027 resx parity), `PiiErasureContractFitnessTests` + `DataSubjectSample`
->   (§30/ADR-005), `SliceCohesionTests`/`SliceCohesionTestsBase` (§5 VSA), `MarkupSnapshot`/`MarkupSnapshotResult`
+>   + `TranslationCompletenessTests` ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) resx parity), `PiiErasureContractFitnessTests` + `DataSubjectSample`
+>   (§30/[ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html)), `SliceCohesionTests`/`SliceCohesionTestsBase` (§5 VSA), `MarkupSnapshot`/`MarkupSnapshotResult`
 >   (§28), `ConstructorDependencyCountTests` / `FormsConventionTests` / `FrameworkVersionConsistencyTests`. New
 >   **`MMCA.Common.Benchmarks`** project (4 BenchmarkDotNet types: `SpecificationBenchmarks` / `SampleItem` /
 >   `MinValueSpec` / `ActiveSpec`, §12 perf smoke) added to the per-project rollup. The 9 removed are G25 renames
 >   (`OrganizerSpeaker*Tests` / `SpeakerProfileTests` / `AttendeeBookmarkEdgeCaseTests` → `CrossService*`;
 >   `IntegrationTestBase` / `*Fixture` / `*Collection` / `TestWebApplicationFactory` consolidated).
 > - **ADRs 024-034 are now cross-referenced** where their patterns are taught even when they added no type
->   (their code predated the baseline): **ADR-024** (two-channel notifications) in G10, **ADR-025** (startup
->   warm-up/readiness) in G16, **ADR-026** (two-tier caching) in G09, **ADR-029** (brute-force protection) /
->   **ADR-032** (password hashing) / **ADR-033** (resource-ownership, `OwnerOrAdminFilter`/`OwnershipHelper`,
->   Store-adopted) in G08, **ADR-030** (startup sole-migrator) in G07/G12, **ADR-031** (feature-flag management)
->   and **ADR-034** (generic entity controllers + dynamic query contract) in G12/G03. The primer's ADR table was
->   extended 019 → 034 and its §27 note rewritten (ADR-011 → ADR-027), with a new §20 day/dark-theme note (ADR-028).
+>   (their code predated the baseline): **[ADR-024](https://ivanball.github.io/docs/adr/024-push-notifications.html)** (two-channel notifications) in G10, **[ADR-025](https://ivanball.github.io/docs/adr/025-startup-warmup-readiness.html)** (startup
+>   warm-up/readiness) in G16, **[ADR-026](https://ivanball.github.io/docs/adr/026-caching-strategy.html)** (two-tier caching) in G09, **[ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html)** (brute-force protection) /
+>   **[ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html)** (password hashing) / **[ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html)** (resource-ownership, `OwnerOrAdminFilter`/`OwnershipHelper`,
+>   Store-adopted) in G08, **[ADR-030](https://ivanball.github.io/docs/adr/030-startup-sole-migrator.html)** (startup sole-migrator) in G07/G12, **[ADR-031](https://ivanball.github.io/docs/adr/031-feature-flag-management.html)** (feature-flag management)
+>   and **[ADR-034](https://ivanball.github.io/docs/adr/034-generic-entity-query-layer.html)** (generic entity controllers + dynamic query contract) in G12/G03. The primer's ADR table was
+>   extended 019 → 034 and its §27 note rewritten ([ADR-011](https://ivanball.github.io/docs/adr/011-single-locale-i18n.html) → [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)), with a new §20 day/dark-theme note ([ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html)).
 > - **Pipeline governance changes** (classifier/extractor, in the uncommittable workspace `Tools/invtool`): one
 >   new prefix rule `Domain.Privacy → G02`, one `Shared.Globalization → G12` (SupportedCultures), `Benchmarks → G25`
 >   test-detection, and an extractor exclusion of `build/facts` (the FACTS.md generator) so `FactsGenerator` no
@@ -159,7 +159,7 @@ double-counted (each type maps to exactly one group).
 > (`verify.ps1`: 0 missing; rubric 34/34). The change is **+34 added, 2 removed, 8 moved repo-to-repo, 1
 > two-to-one merge, 0 regrouped**, clustered around the move-to-Common extraction Waves 2-3 and the i18n
 > pseudo-localization gate:
-> - **Shared authentication workflow (ADR-032, Wave 3, MMCA.Common commit `69dfd53`).** **G08 (+4, 54 total):**
+> - **Shared authentication workflow ([ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html), Wave 3, MMCA.Common commit `69dfd53`).** **G08 (+4, 54 total):**
 >   `AuthenticationServiceBase<TUser>` (`MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:34`),
 >   `IAuthUser` (`MMCA.Common.Domain/Auth/IAuthUser.cs:10`), `OwnerOrAdminFilterOptions`
 >   (`MMCA.Common.API/Authorization/OwnerOrAdminFilterOptions.cs:11`), plus `AuthenticationValidators` moved in
@@ -173,11 +173,11 @@ double-counted (each type maps to exactly one group).
 >   and `ServerTokenStorageService` (into the new `MMCA.Common.UI.Web` project, whose `DependencyInjection` is
 >   also new), `WasmTokenStorageService`, `ChildEntityServiceBase`, and `ConfigurationOAuthUISettings` (a 2-to-1
 >   merge of ADC's `AdcOAuthUISettings` + `WasmOAuthUISettings`, the sole -1 in the node arithmetic). New for the
->   ADR-027 pseudo-localization gate: `PseudoLocalizer` / `PseudoStringLocalizer` / `PseudoStringLocalizerFactory` /
+>   [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) pseudo-localization gate: `PseudoLocalizer` / `PseudoStringLocalizer` / `PseudoStringLocalizerFactory` /
 >   `ResxMudLocalizer` (`MMCA.Common.UI/Globalization/`) and `MudTranslations`. **G16 (+1, 15 total):**
 >   `GatewayCorsExtensions`. Donor chapters shrank accordingly: G20 38 → 36, G21 71 → 70, G23 68 → 66, G24 35 → 30.
 > - **G22 (-1, 56 total):** `OwnBookmarkSpecification` deleted as dead code (zero call sites at prior HEAD
->   `89d8439`; its ownership-scoping role had already been superseded by the shared `OwnerOrAdminFilter`, ADR-033).
+>   `89d8439`; its ownership-scoping role had already been superseded by the shared `OwnerOrAdminFilter`, [ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html)).
 > - **G25 (+21 net, 895 total).** New sectioned infrastructure: six Testing.Architecture bases
 >   (`BrandColorTokenTestsBase`, `ConstructorDependencyCountTestsBase`, `DataResidencyTestsBase`,
 >   `FormsConventionTestsBase`, `FrameworkVersionConsistencyTestsBase`, `LocalizedTextConventionTestsBase`),
@@ -213,7 +213,7 @@ double-counted (each type maps to exactly one group).
 >   (Real-Time Polls & Session Q&A)"**, chapter file `group-23-engagement-live-layer.md` (89 types). All 89
 >   land mechanically in G22 via the broad `MMCA.ADC.Engagement` prefix rule, but G22's charter is explicitly
 >   the async Session-Bookmarks slice; the live layer (added whole in MMCA.ADC commits `58476d84`/`e2f304ea`)
->   is a synchronous, SignalR-hub-channel-driven (ADR-039), cross-service (gRPC) audience-interaction
+>   is a synchronous, SignalR-hub-channel-driven ([ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html)), cross-service (gRPC) audience-interaction
 >   capability with its own aggregates (`LivePoll`/`LivePollOption`/`LivePollVote`,
 >   `SessionQuestion`/`SessionQuestionUpvote`), 7 CQRS use-case folders, 2 controllers, and the
 >   HappeningNow / SessionLive / PresenterView UI. Approved with **mid-list placement directly after G22**
@@ -221,7 +221,7 @@ double-counted (each type maps to exactly one group).
 >   identity-module 23 -> 24, adc-host-composition 24 -> 25, testing-infrastructure 25 -> 26 (17 part files
 >   renamed content-unchanged, 3 stale assembled chapters deleted, 110 link occurrences fixed across 30 files).
 > - **Three approved regroups** (catch-all fallback landings, classifier O-override/prefix fixes dated
->   2026-07-10 in `Tools/invtool/classify.ps1`): the ADR-039 hub-channel trio `ILiveChannelPublisher` /
+>   2026-07-10 in `Tools/invtool/classify.ps1`): the [ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html) hub-channel trio `ILiveChannelPublisher` /
 >   `NullLiveChannelPublisher` / `SignalRLiveChannelPublisher` from the G07 fallback to **G10** (exact
 >   structural sibling of the push-sender trio); the Result JSON round-trip trio `ResultJsonConverterFactory` /
 >   `ResultConverter` / `PropertyReader` (`MMCA.Common.Shared/Serialization/ResultJsonConverterFactory.cs:15,35,95`)
@@ -232,7 +232,7 @@ double-counted (each type maps to exactly one group).
 > - **Per-group adds:** G04 +1 `OutboxFinalizer`
 >   (`MMCA.Common.Infrastructure/Persistence/Outbox/OutboxFinalizer.cs:12`, the v1.110.0 async outbox
 >   finalize); G05 +1 `QueryCacheKeyLocks` (nested in `CachingQueryDecorator.cs`, cache-stampede lock);
->   G12 +2 ADR-040 authenticated output caching (`OutputCacheOptionsExtensions.cs:6`,
+>   G12 +2 [ADR-040](https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html) authenticated output caching (`OutputCacheOptionsExtensions.cs:6`,
 >   `PublicEndpointOutputCachePolicy.cs:35`); G15 +1 `ChannelSubscription` (nested in
 >   `NotificationHubService.cs`, a new L2 cycle); G17 +7 two-event-home + live-validation contracts
 >   (`MMCA.ADC.Conference.Shared/Events/`: `CurrentEventSelector`, `CurrentEventDefaults`, `EventLiveInfo`,
@@ -260,8 +260,8 @@ double-counted (each type maps to exactly one group).
 >   adds have no duplicate guard was fixed (the guard exists at `Speaker.cs:296-303`; the unguarded add is
 >   `AddSpeakerQuestionAnswer`, `:353`); the `Event` walkthrough was refreshed including the new
 >   `QuestionModerationDefault` field (`Event.cs:54`, BR-233).
-> - **ADR cross-references:** ADR-039 (hub channels) is now cited in G10/G15 and throughout the new
->   live-layer chapter; ADR-040 (authenticated output caching) in G12/G20. **ADR-041 (observability) is not
+> - **ADR cross-references:** [ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html) (hub channels) is now cited in G10/G15 and throughout the new
+>   live-layer chapter; [ADR-040](https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html) (authenticated output caching) in G12/G20. **[ADR-041](https://ivanball.github.io/docs/adr/041-observability-and-telemetry.html) (observability) is not
 >   yet cross-referenced anywhere in the guide**; its natural home is the devops-aspire chapter, which is
 >   outside this pass's scope. Flagged for the next devops-touching pass rather than cited without
 >   re-verifying that chapter.
@@ -273,7 +273,7 @@ double-counted (each type maps to exactly one group).
 > **Regeneration note (re-verified against current source, v1.116.0 full drift sweep + G27 chapter authored).**
 > Regenerated at **framework v1.116.0** (MMCA.Common `09cf78e`, clean; MMCA.ADC `2632af6c`, clean; `FACTS.md`
 > is the source of truth for the version / **15-package** / **48-ADR (001-048)** figures, the fifteenth
-> package being `MMCA.Common.UI.Maui`, the one MAUI-TFM package, ADR-042). Net change since the v1.111.0 pass:
+> package being `MMCA.Common.UI.Maui`, the one MAUI-TFM package, [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)). Net change since the v1.111.0 pass:
 > **+210** distinct nodes (2,287 -> **2,497**), individually-sectioned 1,284 -> **1,465**, rolled-up 1,003 ->
 > **1,032**, `###` sections 1,143 -> **1,397** across the now-**27** chapters (`verify.ps1`: 0 missing; rubric
 > 34/34). The change is **+210 added, 0 removed, several repo-to-repo moves, 0 confident type-level regroups**,
@@ -291,7 +291,7 @@ double-counted (each type maps to exactly one group).
 >   external auth/links, local cache/notifications, connectivity/battery/accessibility, deep links) plus their
 >   **MAUI-native** (`MMCA.Common.UI.Maui/Capabilities/`), **browser-JS-interop** (`.../Capabilities/Browser/`),
 >   and **inert-fallback** (`.../Capabilities/Fallbacks/`) implementations, selected per host at DI composition
->   time (ADR-042/043/044/045). Why no existing group fit: G15 (the natural `MMCA.Common.UI.*` catch-all) is
+>   time ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)/043/044/045). Why no existing group fit: G15 (the natural `MMCA.Common.UI.*` catch-all) is
 >   generic MudBlazor building blocks/theme/base-pages, whereas this is a distinct one-contract-plus-three-adapters
 >   concern spanning three assemblies (`MMCA.Common.UI`, `MMCA.Common.UI.Web`, `MMCA.Common.UI.Maui`) unified by
 >   the platform-adapter pattern, not by MudBlazor. The classifier rules that carve G27 out ahead of the G15
@@ -301,13 +301,13 @@ double-counted (each type maps to exactly one group).
 >   directly after ADC Host Composition** (chapter slot 26, ID G27 append-only); renumber fallout: the testing
 >   chapter shifts to slot 27 (`group-27-testing-infrastructure.md`, its file name unchanged from the prior
 >   append-only-ID artifact, so no part renames or link rewrites were needed).
-> - **ADR-045 managed file storage / avatars (G07 +13, 70 -> 83).** `IFileStorageService`
+> - **[ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html) managed file storage / avatars (G07 +13, 70 -> 83).** `IFileStorageService`
 >   (`MMCA.Common.Application/Interfaces/Infrastructure/IFileStorageService.cs:11`), `AzureBlobFileStorageService`
 >   / `NullFileStorageService` (`MMCA.Common.Infrastructure/Services/`), `IImageProcessor` /
 >   `ImageSharpImageProcessor` (decode, auto-orient, exact-square crop, strip metadata, re-encode JPEG),
->   `ImageContentSniffer` (moved in from ADC's `SetUserAvatar` slice), `FileStorageSettings`, plus ADR-044's
+>   `ImageContentSniffer` (moved in from ADC's `SetUserAvatar` slice), `FileStorageSettings`, plus [ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html)'s
 >   `INativePushSender` / `IPushDeviceRegistrar` + Azure/Null impls landing in the same infrastructure group.
-> - **ADR-044 native push (G10 +8, 45 -> 53), shipped inert.** `AzureNotificationHubNativePushSender`
+> - **[ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html) native push (G10 +8, 45 -> 53), shipped inert.** `AzureNotificationHubNativePushSender`
 >   (`MMCA.Common.Infrastructure/Services/AzureNotificationHubNativePushSender.cs:14`), `DeviceInstallationRequest`
 >   (`MMCA.Common.Shared/Notifications/PushNotifications/DeviceInstallationRequest.cs:12`), the OS-level FCM/APNs
 >   third leg + `DevicesController` control plane. Honest security note captured while spot-checking: the class
@@ -316,13 +316,13 @@ double-counted (each type maps to exactly one group).
 >   (non-enumerable) `installationId` with no ownership check. The G10 overview now describes the code's actual
 >   behavior, not the comment's overclaim (code wins, per the guide's ground rule).
 > - **Other per-group adds:** G08 +2 (external-auth-broker contract `IExternalAuthBroker` /
->   `UnavailableExternalAuthBroker`, ADR-042/043); G12 +2 (ADR-043 app-association/deep-link endpoints
->   `AppAssociationEndpointExtensions` / `AppAssociationOptions`, hoisted from ADC, plus the ADR-046 versioning
->   and ADR-047 soft-deleted-user-revocation surfaces cross-referenced); G14 +2, G15 +1 net (most new UI
+>   `UnavailableExternalAuthBroker`, [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)/043); G12 +2 ([ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html) app-association/deep-link endpoints
+>   `AppAssociationEndpointExtensions` / `AppAssociationOptions`, hoisted from ADC, plus the [ADR-046](https://ivanball.github.io/docs/adr/046-http-api-versioning.html) versioning
+>   and [ADR-047](https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html) soft-deleted-user-revocation surfaces cross-referenced); G14 +2, G15 +1 net (most new UI
 >   capability surface was diverted to the G27 prefix rule ahead of the G15 catch-all, so net movement understates
->   churn); G17 +2, G18 +7 (`Sessions/UseCases/ExportCalendar` .ics slice, ADR-042), G20 +1 (`NowNextDTO` public
+>   churn); G17 +2, G18 +7 (`Sessions/UseCases/ExportCalendar` .ics slice, [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)), G20 +1 (`NowNextDTO` public
 >   snapshot), G21 +9 (calendar/QR export UI, OfflineBanner, PresenterLayout onto Common theme providers), G22
->   +11 (`UserEngagementExportService` cross-service gRPC export slice), G26 +3, G23/Identity +12 (ADR-045 user
+>   +11 (`UserEngagementExportService` cross-service gRPC export slice), G26 +3, G23/Identity +12 ([ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html) user
 >   avatar end to end: `SetUserAvatar`/`GetUserAvatar`/`RemoveUserAvatar` use-case family), G24/Host +4
 >   (device-capability DI wiring, `AppLockKeyMigration` one-time preference migrator), G25/Testing +46 (new
 >   reusable `RouteAuthorizationTestsBase` + OpenAPI/ProblemDetails/ServiceInfo-versioning contract bases + the
@@ -340,7 +340,7 @@ double-counted (each type maps to exactly one group).
 >   `ValidateToken`) + `:139-140` (the post-return header re-check); the G10 DevicesController DELETE
 >   overclaim above; a G10 `[ApiVersion]` citation range widened `:29-30` -> `:28-30`.
 > - Cycles **16** (unchanged this pass, re-verified via invtool). Edge resolution: **8,596** namespace-visible
->   (~97%), **237** globally-unique fallback, **26** dropped ambiguous. **ADR-041 (observability)** remains not
+>   (~97%), **237** globally-unique fallback, **26** dropped ambiguous. **[ADR-041](https://ivanball.github.io/docs/adr/041-observability-and-telemetry.html) (observability)** remains not
 >   cross-referenced in the guide; its natural home is the devops-aspire chapter, outside this pass's scope
 >   (still flagged, as at v1.111.0).
 
@@ -354,7 +354,7 @@ double-counted (each type maps to exactly one group).
 > regroups**, plus a **+64 net test-only rollup**. No new functional group was needed (`classify.ps1`:
 > **0 unmapped**).
 > - **G02 +1 (27 -> 28):** `IRowVersioned` (`MMCA.Common.Domain/Interfaces/IRowVersioned.cs:11`), the
->   opt-in optimistic-concurrency marker consumed by `EFRepository` and the audit interceptor (ADR-035
+>   opt-in optimistic-concurrency marker consumed by `EFRepository` and the audit interceptor ([ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html)
 >   cited from the source doc comment; the ADR text itself was not opened this pass).
 > - **G03 +1 (25 -> 26):** `FilterValueParser`
 >   (`MMCA.Common.Application/Services/Filtering/FilterValueParser.cs:8`), which ships the IN-operator
@@ -373,7 +373,7 @@ double-counted (each type maps to exactly one group).
 >   plus `ScorePollSignal` / `ScorePollTracker`
 >   (`Pages/SessionSelection/ScorePollTracker.cs:6,31`, commit `adee5058`), the AI-scoring poll recovery
 >   state machine.
-> - **G22 +5 (67 -> 72):** the durable ADR-039 live-channel publish queue, `LiveChannelPublishWorkItem` /
+> - **G22 +5 (67 -> 72):** the durable [ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html) live-channel publish queue, `LiveChannelPublishWorkItem` /
 >   `ILiveChannelPublishQueue` / `LiveChannelPublishQueue` (`Engagement.Application/Live/`) +
 >   `LiveChannelPublishProcessor` (`Engagement.Infrastructure/Live/LiveChannelPublishProcessor.cs:21`,
 >   commit `bf99b92a`).
@@ -403,7 +403,7 @@ double-counted (each type maps to exactly one group).
 >   projects; ADC.Conference.Application.Tests 139 -> 133 net decrease via consolidation).
 > - Cycles **16** (unchanged this pass, re-verified via invtool), but the **L6 persistence cycle grew from
 >   5 to 6 members** with `DeferredDispatch` added (section 3). Edge resolution: **8,868** namespace-visible
->   (~96%), **331** globally-unique fallback, **27** dropped ambiguous. **ADR-041 (observability)** remains
+>   (~96%), **331** globally-unique fallback, **27** dropped ambiguous. **[ADR-041](https://ivanball.github.io/docs/adr/041-observability-and-telemetry.html) (observability)** remains
 >   not cross-referenced in the guide (still flagged; its home is the devops-aspire chapter, outside scope).
 > - **Authoring-methodology note (honest process record).** Adding 90 nodes shifted `plan.ps1`'s write-unit
 >   packing boundaries mid-chapter across G10/G18/G25(Testing), so several pre-existing types were pushed
@@ -436,7 +436,7 @@ double-counted (each type maps to exactly one group).
 >   (adapter, `MMCA.Common.Infrastructure/Services/IntegrationEventPublisher.cs`) removed in the
 >   v1.123.0 IEventBus consolidation (Common commit `e5d25b5`, PR #104); callers publish through
 >   `IEventBus` directly and the chapter overview was rewritten to drop the adapter pattern.
-> - **G18 (no count change):** `GetNowNextQuery` now implements `IQueryCacheable` (ADR-042 Wave 8:
+> - **G18 (no count change):** `GetNowNextQuery` now implements `IQueryCacheable` ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) Wave 8:
 >   `CacheKey` under the Session-aggregate prefix, 30s `CacheDuration`); its citation moved
 >   `GetNowNextQuery.cs:11 -> :23` and its computed Level moved 0 -> 7, relocating its section within
 >   the chapter (old unit p05 -> p14).
@@ -564,14 +564,14 @@ DevOps/test chapters (noted).
 | §17 | DevOps & Deployment | [group-07](group-07-persistence-ef-core.md) (developed in [devops-cicd](devops-cicd.md)/[iac](devops-iac.md)) |
 | §18 | UI Architecture & Component Design | [group-08](group-08-auth.md) (developed in groups 15, 21) |
 | §19 | State Management & Data Flow | [group-08](group-08-auth.md) (developed in group-15) |
-| §20 | Design System, Theming & Consistency | [group-15](group-15-common-ui-framework.md) (incl. day/dark `ThemeService`, ADR-028) |
+| §20 | Design System, Theming & Consistency | [group-15](group-15-common-ui-framework.md) (incl. day/dark `ThemeService`, [ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html)) |
 | §21 | Accessibility (a11y) | [group-15](group-15-common-ui-framework.md) (developed in group-26/[devops-testing](devops-testing.md)) |
 | §22 | Responsive & Cross-Browser/Device | [group-15](group-15-common-ui-framework.md) |
 | §23 | Front-End Performance & Rendering | [group-15](group-15-common-ui-framework.md) |
 | §24 | Forms, Validation & UX Safety | [group-05](group-05-cqrs-pipeline.md) (developed in groups 06, 15, 21) |
 | §25 | Navigation, Routing & Information Architecture | [group-15](group-15-common-ui-framework.md) |
 | §26 | Front-End Security | [group-08](group-08-auth.md) |
-| §27 | Internationalization & Localization | [group-02](group-02-domain-building-blocks.md) (now multi-locale en-US + es per ADR-027, developed in groups 12/15/20/22/23; note in [primer §6](00-primer.md#6-the-34-category-architecture-evaluation-lens)) |
+| §27 | Internationalization & Localization | [group-02](group-02-domain-building-blocks.md) (now multi-locale en-US + es per [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html), developed in groups 12/15/20/22/23; note in [primer §6](00-primer.md#6-the-34-category-architecture-evaluation-lens)) |
 | §28 | Front-End Testing & Quality | [group-15](group-15-common-ui-framework.md) (developed in group-26) |
 | §29 | Resilience, Reliability & Business Continuity | [group-04](group-04-events-outbox.md) (developed in [devops-runbooks](devops-runbooks.md)) |
 | §30 | Compliance, Privacy & Data Governance | [group-02](group-02-domain-building-blocks.md) (developed in group-24) |
@@ -592,9 +592,9 @@ chapters. It also reports a 35th distinct `§N` token, `§1798`, which is the le
    *contract* and implementations are in `MMCA.Common`, but the `IHostedService`/startup invoker that
    actually runs seeding at boot lives in **consuming-app host code**, not in `MMCA.Common` source, so
    its exact wiring is noted as out-of-scope-for-source rather than asserted.
-2. **Engine extension points (Cosmos / SQLite) are supported, with a staged first adoption (ADR-018).** All
+2. **Engine extension points (Cosmos / SQLite) are supported, with a staged first adoption ([ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)).** All
    *current* production entity configs use the `…SQLServer` base, so in deployed ADC the polyglot paths
-   are not yet live. But the polyglot-persistence framework work (ADR-018) added the unified engine-aware
+   are not yet live. But the polyglot-persistence framework work ([ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)) added the unified engine-aware
    [`EntityTypeConfiguration<T,TId>`](group-07-persistence-ef-core.md#entitytypeconfigurationtentity-tidentifiertype)
    base, the cross-source [`CrossSourceSpecification`](group-03-querying-specifications.md#crosssourcespecification),
    the Cosmos-index skip in the degrade convention, SQLite `EnsureCreated`, and a fitness rule + new test

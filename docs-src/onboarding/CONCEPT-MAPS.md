@@ -63,7 +63,7 @@ flowchart TD
 Source dependencies point **inward** toward the Domain; each layer references only layers below it.
 Two deliberate exceptions: `UI` and `Grpc` depend on `Shared` **only** (UI for Blazor WASM
 compatibility, Grpc because it is pure transport). Enforced twice: a compile-time MSBuild layer guard
-**and** NetArchTest fitness tests (ADR-015).
+**and** NetArchTest fitness tests ([ADR-015](https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html)).
 
 ```mermaid
 flowchart TD
@@ -250,7 +250,7 @@ flowchart LR
 
 ---
 
-## 5. Request lifecycle, the CQRS decorator pipeline (ADR-014)
+## 5. Request lifecycle, the CQRS decorator pipeline ([ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html))
 
 Handlers are thin (one method); every cross-cutting concern is a decorator wrapping the next. Scrutor
 `TryDecorate` composes them; the **execution order is load-bearing**:
@@ -285,7 +285,7 @@ flowchart TD
 
 ---
 
-## 6. Event-driven integration, outbox dual-dispatch (ADR-003 / 010 / 021)
+## 6. Event-driven integration, outbox dual-dispatch ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html) / 010 / 021)
 
 Domain events are captured into an `OutboxMessage` row **in the same transaction** as the data
 (no dual-write bug). A background processor drains the outbox and dispatches both in-process and over
@@ -322,7 +322,7 @@ flowchart TD
 
 ---
 
-## 7. Modular monolith → extractable services (ADR-006 / 007 / 008 / 012)
+## 7. Modular monolith → extractable services ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) / 007 / 008 / 012)
 
 Modules implement `IModule` and are discovered + Kahn-ordered by `ModuleLoader`. The **same module
 code** runs as a single monolith host or as N service processes behind a YARP gateway, because
@@ -371,13 +371,13 @@ flowchart TD
 
 ---
 
-## 8. Persistence, database-per-service + polyglot engines (ADR-006 / 018 / 030)
+## 8. Persistence, database-per-service + polyglot engines ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) / 018 / 030)
 
 One concrete `SQLServerDbContext` over the abstract `ApplicationDbContext`, **one instance per
 database**. Each entity is engine-agnostic; a single `[UseDataSource(engine)]` attribute on its
 config class picks SQL Server, Cosmos, or SQLite. Cross-source relationships auto-degrade; the outbox
 is the cross-source consistency mechanism. Each service self-applies its EF migrations at boot
-(ADR-030).
+([ADR-030](https://ivanball.github.io/docs/adr/030-startup-sole-migrator.html)).
 
 ```mermaid
 flowchart TD
@@ -452,7 +452,7 @@ flowchart TD
 
 ---
 
-## 10. Notifications, two channels behind one sender (ADR-024)
+## 10. Notifications, two channels behind one sender ([ADR-024](https://ivanball.github.io/docs/adr/024-push-notifications.html))
 
 A durable in-app inbox **and** a transient SignalR push, both behind `IPushNotificationSender`, plus
 email. Recipient providers resolve who gets notified; the thin `MMCA.ADC.Notification` module hosts
@@ -485,8 +485,8 @@ flowchart TD
 
 A page is authored **once** as a Razor component in a per-module UI library; both the Blazor web host
 (Server + WASM) and the .NET MAUI host reference the same libraries, so it renders across Web,
-Android, iOS, macOS, Windows. Culture cookie + `IStringLocalizer` drive i18n (ADR-027); `ThemeService`
-drives day/dark (ADR-028).
+Android, iOS, macOS, Windows. Culture cookie + `IStringLocalizer` drive i18n ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)); `ThemeService`
+drives day/dark ([ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html)).
 
 ```mermaid
 flowchart TD

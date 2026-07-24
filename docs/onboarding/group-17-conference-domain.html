@@ -275,7 +275,7 @@
           <a href="#sessioncategoryitemchanged"><code>SessionCategoryItemChanged</code></a>, the <code>*QuestionAnswerChanged</code> set, and the
           rest, carry both the parent and child IDs (for example <code>RoomChanged(state, Id, room.Id, room.Name)</code> at
           <code>Event.cs:347</code>) so a consumer can target the precise change and the module can invalidate the right
-          output-cache tag. These are <strong>intra-module domain events</strong>: they ride the outbox (ADR-003) but are
+          output-cache tag. These are <strong>intra-module domain events</strong>: they ride the outbox (<a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>) but are
           consumed inside Conference. They do not cross the wire to other services; that is the job of
           integration events.</p>
           <p>The flow is exactly the outbox spine from <a href="group-04-events-outbox.html">G04</a>: a mutator buffers the event
@@ -303,7 +303,7 @@
           two aggregates.</p>
           <h2 id="read-models-and-the-ai-decision-support-feature">Read models and the AI decision-support feature</h2>
           <p>The largest cluster in <code>Conference.Shared</code> is the <strong>DTO</strong> layer, the wire contracts that decouple the
-          API from the domain entities (<code>[Rubric §9, API &amp; Contract Design]</code>; ADR-001 chose manual/Mapperly
+          API from the domain entities (<code>[Rubric §9, API &amp; Contract Design]</code>; <a href="https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html" target="_blank" rel="noopener">ADR-001</a> chose manual/Mapperly
           mapping over reflection-based AutoMapper). Most are straightforward projections:
           <a href="#eventdto"><code>EventDTO</code></a>, <a href="#sessiondto"><code>SessionDTO</code></a>, <a href="#speakerdto"><code>SpeakerDTO</code></a>,
           <a href="#conferencecategorydto"><code>ConferenceCategoryDTO</code></a>, <a href="#questiondto"><code>QuestionDTO</code></a>, <a href="#roomdto"><code>RoomDTO</code></a>,
@@ -329,7 +329,7 @@
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/ConferenceFeatures.cs:15</code>), gates only
           the Sessionize external sync that seeds the raw session data this dashboard then analyzes, wired
           through the <code>[FeatureGate]</code>/<code>IFeatureGated</code> mechanism from
-          <a href="group-05-cqrs-pipeline.html#ifeaturegated">G05</a> (<code>[Rubric §10, Cross-Cutting Concerns]</code>, ADR-031) on the
+          <a href="group-05-cqrs-pipeline.html#ifeaturegated">G05</a> (<code>[Rubric §10, Cross-Cutting Concerns]</code>, <a href="https://ivanball.github.io/docs/adr/031-feature-flag-management.html" target="_blank" rel="noopener">ADR-031</a>) on the
           <code>RefreshFromSessionizeCommand</code>, not on the scoring or dashboard handlers.</p>
           <h2 id="authorization-vocabulary-and-current-event-selection">Authorization vocabulary and current-event selection</h2>
           <p>Two more <code>Shared</code> helpers deserve a mention because they encode policy the whole module relies on.
@@ -341,7 +341,7 @@
           <code>ContentManagement</code> subsets (<code>ConferencePermissions.cs:33,49</code>) let a role grant an entire capability
           set or the narrower session-catalog-curation slice (sessions, speakers, and the category taxonomy) at
           once, a distinction capability checks express centrally and role checks cannot. This is the
-          permission-based authorization story (<code>[Rubric §11, Security]</code>, ADR-020), decided by the
+          permission-based authorization story (<code>[Rubric §11, Security]</code>, <a href="https://ivanball.github.io/docs/adr/020-permission-based-authorization.html" target="_blank" rel="noopener">ADR-020</a>), decided by the
           role-to-permission grants declared in the module&#39;s registration, not scattered across controllers.</p>
           <p><a href="#currenteventselector"><code>CurrentEventSelector</code></a>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/CurrentEventSelector.cs:10</code>) is
@@ -363,7 +363,7 @@
           <a href="#isessionbookmarkvalidationservice"><code>ISessionBookmarkValidationService</code></a> <em>interface</em>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/ISessionBookmarkValidationService.cs:10</code>),
           implemented in <code>Conference.Application</code> in-process, or by a gRPC adapter when the modules run as
-          separate services (ADR-007). When Conference is <em>disabled</em> in a host,
+          separate services (<a href="https://ivanball.github.io/docs/adr/007-grpc-extraction.html" target="_blank" rel="noopener">ADR-007</a>). When Conference is <em>disabled</em> in a host,
           <a href="#disabledsessionbookmarkvalidationservice"><code>DisabledSessionBookmarkValidationService</code></a> is registered
           as a null-object stub that approves every validation and returns an empty ID set: graceful
           degradation rather than a missing-dependency crash.</p>
@@ -393,7 +393,7 @@
           sets or clears <code>User.LinkedSpeakerId</code>, so the next JWT refresh carries the <code>speaker_id</code> claim
           (BR-209). This is the eventually-consistent replacement for what used to be a direct cross-module
           service call: the User-to-Speaker bidirectional link now survives the service split because it
-          travels as an event over the broker (ADR-006/ADR-008).</p>
+          travels as an event over the broker (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>/<a href="https://ivanball.github.io/docs/adr/008-service-extraction-topology.html" target="_blank" rel="noopener">ADR-008</a>).</p>
           </li>
           </ul>
           <h2 id="end-to-end-one-organizer-action">End-to-end: one organizer action</h2>
@@ -409,9 +409,9 @@
           aggregate, no event was hand-dispatched, and the same code path would behave identically whether
           Conference runs in the monolith or as its own service, which is exactly the property the framework
           groups (G01 through G14) exist to provide, here made concrete in a domain you can reason about. For the
-          <em>why</em> behind each design choice, ADR-001 (manual mapping), ADR-002 (navigation populators), ADR-003
-          (outbox), ADR-006/007/008 (database-per-service, gRPC, service topology), ADR-020 (permission-based
-          authorization), and ADR-031 (feature flags) are the primary references; the business rules themselves
+          <em>why</em> behind each design choice, <a href="https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html" target="_blank" rel="noopener">ADR-001</a> (manual mapping), <a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a> (navigation populators), <a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>
+          (outbox), <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>/007/008 (database-per-service, gRPC, service topology), <a href="https://ivanball.github.io/docs/adr/020-permission-based-authorization.html" target="_blank" rel="noopener">ADR-020</a> (permission-based
+          authorization), and <a href="https://ivanball.github.io/docs/adr/031-feature-flag-management.html" target="_blank" rel="noopener">ADR-031</a> (feature flags) are the primary references; the business rules themselves
           are catalogued in <code>MMCA.ADC/specifications.md</code>.</p>
           <h3 id="assemblyreference-classreference">AssemblyReference, ClassReference</h3>
           <p><a id="assemblyreference"></a><a id="classreference"></a></p>
@@ -542,7 +542,7 @@
           <li><p><strong>Concept introduced, the aggregate root as consistency boundary.</strong> <code>[Rubric §4, Domain-Driven Design]</code> (assesses aggregates with a single transactional boundary and correct child-entity lifecycle management). An <strong>aggregate root</strong> is the only entry point for mutations inside its boundary: nothing outside <code>Session</code> can add or remove a <code>SessionSpeaker</code> directly, all such operations go through <code>Session.AddSessionSpeaker</code> / <code>RemoveSessionSpeaker</code>, etc. This guarantees three things at once:</p>
           <ul>
           <li><strong>Invariant checking</strong>: <code>AddSessionSpeaker</code> rejects a duplicate speaker (<code>Session.cs:308-315</code>).</li>
-          <li><strong>Event emission</strong>: every structural change raises a domain event, making the change observable to other modules through the outbox (ADR-003) without the aggregate knowing who listens. <code>[Rubric §6, CQRS &amp; Event-Driven]</code>.</li>
+          <li><strong>Event emission</strong>: every structural change raises a domain event, making the change observable to other modules through the outbox (<a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>) without the aggregate knowing who listens. <code>[Rubric §6, CQRS &amp; Event-Driven]</code>.</li>
           <li><strong>Cascade soft-delete</strong>: <code>Delete()</code> (<code>Session.cs:263</code>) soft-deletes each non-deleted child before emitting <code>SessionChanged(Deleted)</code>, implementing BR-55 at the domain level rather than via a DB cascade or handler glue.</li>
           </ul>
           <p>The <code>private</code> constructors (<code>Session.cs:99</code> and <code>:101</code>) plus <code>static Result&lt;Session&gt; Create</code> (<code>Session.cs:150</code>) enforce that a <code>Session</code> is only ever built through a validated, event-emitting path.</p>
@@ -647,7 +647,7 @@
           <ul>
           <li><strong>What it is</strong>: the read/write DTO for one event-level question answer, linking an event to a metadata question with the answer text an organizer supplied. It is one of the three child-collection DTOs that <a href="#eventdto"><code>EventDTO</code></a> composes.</li>
           <li><strong>Depends on</strong>: <a href="group-12-api-hosting-mapping.html#ibasedtotidentifiertype"><code>IBaseDTO&lt;TIdentifierType&gt;</code></a> (over <code>EventQuestionAnswerIdentifierType</code>); the FK fields use the <code>EventIdentifierType</code> and <code>QuestionIdentifierType</code> aliases.</li>
-          <li><strong>Concept introduced, the child-collection DTO and <code>required</code>/<code>init</code> immutability.</strong> The DTO shape and the <a href="group-12-api-hosting-mapping.html#ibasedtotidentifiertype"><code>IBaseDTO</code></a> marker were taught in group-12; here is the family of child DTOs an aggregate DTO composes. <code>[Rubric §9, API &amp; Contract Design]</code> (DTOs decoupled from domain entities, stable contracts): this record is the wire shape clients see, the <a href="#eventquestionanswer"><code>EventQuestionAnswer</code></a> join entity never crosses the boundary. Cross-aggregate references appear as <strong>scalar FKs</strong> (<code>QuestionId</code>), never nested objects, consistent with database-per-service (ADR-006) where the related aggregate may live in a different source.</li>
+          <li><strong>Concept introduced, the child-collection DTO and <code>required</code>/<code>init</code> immutability.</strong> The DTO shape and the <a href="group-12-api-hosting-mapping.html#ibasedtotidentifiertype"><code>IBaseDTO</code></a> marker were taught in group-12; here is the family of child DTOs an aggregate DTO composes. <code>[Rubric §9, API &amp; Contract Design]</code> (DTOs decoupled from domain entities, stable contracts): this record is the wire shape clients see, the <a href="#eventquestionanswer"><code>EventQuestionAnswer</code></a> join entity never crosses the boundary. Cross-aggregate references appear as <strong>scalar FKs</strong> (<code>QuestionId</code>), never nested objects, consistent with database-per-service (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>) where the related aggregate may live in a different source.</li>
           <li><strong>Walkthrough</strong>: four <code>required init</code> properties (lines 12-21), <code>Id</code> (the strong id alias), <code>EventId</code> (FK to the parent event), <code>QuestionId</code> (FK to the question), and <code>AnswerValue</code> (the answer text). Being a <code>record class</code> with all-<code>required</code> members, it cannot be partially constructed and is immutable after creation.</li>
           <li><strong>Why it&#39;s built this way</strong>: modelling the join as a flat DTO with scalar FKs keeps the contract stable and portable across the service boundary, the same shape the sibling child DTOs use.</li>
           <li><strong>Where it&#39;s used</strong>: nested in <a href="#eventdto"><code>EventDTO.EventQuestionAnswers</code></a>; mapped from the <a href="#eventquestionanswer"><code>EventQuestionAnswer</code></a> entity by its Mapperly mapper (group-18).</li>
@@ -697,7 +697,7 @@
           <ul>
           <li><strong>What it is</strong>: the aggregate DTO for a conference event, the full wire shape a client reads or writes for the <a href="#event"><code>Event</code></a> aggregate, composing its three child collections (rooms, speaker associations, question answers) plus the event&#39;s own scalar fields and concurrency token.</li>
           <li><strong>Depends on</strong>: <a href="group-12-api-hosting-mapping.html#ibasedtotidentifiertype"><code>IBaseDTO&lt;TIdentifierType&gt;</code></a> and <a href="group-12-api-hosting-mapping.html#iconcurrencyaware"><code>IConcurrencyAware</code></a> (both implemented, line 9); composes <a href="#roomdto"><code>RoomDTO</code></a>, <a href="#eventspeakerdto"><code>EventSpeakerDTO</code></a>, <a href="#eventquestionanswerdto"><code>EventQuestionAnswerDTO</code></a>; carries <a href="#questionmoderationdefault"><code>QuestionModerationDefault</code></a>.</li>
-          <li><strong>Concept introduced, the aggregate DTO and optimistic-concurrency round-trip on the wire.</strong> <code>[Rubric §9, API &amp; Contract Design]</code> (aggregate DTOs compose child DTOs so a UI gets everything it needs in one call, ADR-001 manual/Mapperly mapping): <code>EventDTO</code> is the Level-2 &quot;composite&quot; that bundles the Level-1 children. <code>[Rubric §8, Data Architecture]</code> (optimistic concurrency): implementing <a href="group-12-api-hosting-mapping.html#iconcurrencyaware"><code>IConcurrencyAware</code></a> means the DTO round-trips the EF <code>RowVersion</code> token (line 16) so an update form can detect a concurrent edit. The inline <code>SuppressMessage</code> on <code>RowVersion</code> (line 15) documents that returning a <code>byte[]</code> is intentional, it is the raw rowversion token, and a second suppression on <code>VenueMapUrl</code> (line 40) records that a URL is stored as a plain string because it comes from external Sessionize input.</li>
+          <li><strong>Concept introduced, the aggregate DTO and optimistic-concurrency round-trip on the wire.</strong> <code>[Rubric §9, API &amp; Contract Design]</code> (aggregate DTOs compose child DTOs so a UI gets everything it needs in one call, <a href="https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html" target="_blank" rel="noopener">ADR-001</a> manual/Mapperly mapping): <code>EventDTO</code> is the Level-2 &quot;composite&quot; that bundles the Level-1 children. <code>[Rubric §8, Data Architecture]</code> (optimistic concurrency): implementing <a href="group-12-api-hosting-mapping.html#iconcurrencyaware"><code>IConcurrencyAware</code></a> means the DTO round-trips the EF <code>RowVersion</code> token (line 16) so an update form can detect a concurrent edit. The inline <code>SuppressMessage</code> on <code>RowVersion</code> (line 15) documents that returning a <code>byte[]</code> is intentional, it is the raw rowversion token, and a second suppression on <code>VenueMapUrl</code> (line 40) records that a URL is stored as a plain string because it comes from external Sessionize input.</li>
           <li><strong>Walkthrough</strong><ul>
           <li>Identity and concurrency: <code>Id</code> (<code>required</code>, line 12) and the nullable <code>RowVersion</code> (line 16).</li>
           <li>Required core: <code>Name</code>, <code>StartDate</code>, <code>EndDate</code> (<code>DateOnly</code>), and <code>TimeZone</code> (the IANA id used to compute the live window) are <code>required</code> (lines 19-31).</li>
@@ -798,7 +798,7 @@
           already-valid aggregate, not a domain value object that must guard its own invariants.</li>
           <li><strong>Why it&#39;s built this way</strong>: a positional record gives free structural equality and immutability with
           no boilerplate, which is all a read model needs. It is the row element of
-          <a href="#nownextdto"><code>NowNextDTO</code></a> rather than a standalone contract, so it lives in the same file (ADR-042
+          <a href="#nownextdto"><code>NowNextDTO</code></a> rather than a standalone contract, so it lives in the same file (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>
           Wave 8, cited in the doc comment <code>NowNextDTO.cs:4</code>).</li>
           <li><strong>Where it&#39;s used</strong>: nested as the <code>Now</code> and <code>Next</code> lists on <a href="#nownextdto"><code>NowNextDTO</code></a>; populated by
           the Conference now-next query handler and served on the public now-next endpoint behind the Android
@@ -852,10 +852,10 @@
           (FK to the parent session), and <code>CategoryItemId</code> (FK to the category item). <code>required</code> forces every
           member to be set at construction; <code>init</code> freezes them after. It shares its exact shape with
           <a href="#sessionspeakerdto"><code>SessionSpeakerDTO</code></a> (see there for the family walkthrough).</li>
-          <li><strong>Why it&#39;s built this way</strong>: a manually-declared record (mapped by hand or by a Mapperly mapper, ADR-001)
+          <li><strong>Why it&#39;s built this way</strong>: a manually-declared record (mapped by hand or by a Mapperly mapper, <a href="https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html" target="_blank" rel="noopener">ADR-001</a>)
           keeps the wire contract explicit and decoupled from the EF entity.</li>
           <li><strong>Where it&#39;s used</strong>: nested as <code>SessionCategoryItems</code> on <a href="#sessiondto"><code>SessionDTO</code></a>
-          (<code>SessionDTO.cs:75</code>); produced by the Conference session DTO mapper and navigation populators (ADR-002).</li>
+          (<code>SessionDTO.cs:75</code>); produced by the Conference session DTO mapper and navigation populators (<a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>).</li>
           </ul>
           <h3 id="sessionquestionanswerdto">SessionQuestionAnswerDTO</h3>
           <blockquote>
@@ -881,7 +881,7 @@
           answer value) lets the session own a replaceable collection of answers and lets the wire contract stay
           independent of the EF link entity.</li>
           <li><strong>Where it&#39;s used</strong>: nested as <code>SessionQuestionAnswers</code> on <a href="#sessiondto"><code>SessionDTO</code></a>
-          (<code>SessionDTO.cs:72</code>); produced by the session DTO mapper and navigation populators (ADR-002).</li>
+          (<code>SessionDTO.cs:72</code>); produced by the session DTO mapper and navigation populators (<a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>).</li>
           </ul>
           <h3 id="sessionspeakerdto">SessionSpeakerDTO</h3>
           <blockquote>
@@ -902,9 +902,9 @@
           member-for-member, while <a href="#sessionquestionanswerdto"><code>SessionQuestionAnswerDTO</code></a> adds one payload field.</li>
           <li><strong>Why it&#39;s built this way</strong>: giving each join its own surface DTO (rather than exposing a raw
           composite key) keeps the child collections on <a href="#sessiondto"><code>SessionDTO</code></a> diffable and lets the
-          contract stay independent of the EF link entities (ADR-001).</li>
+          contract stay independent of the EF link entities (<a href="https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html" target="_blank" rel="noopener">ADR-001</a>).</li>
           <li><strong>Where it&#39;s used</strong>: nested as <code>SessionSpeakers</code> on <a href="#sessiondto"><code>SessionDTO</code></a> (<code>SessionDTO.cs:69</code>);
-          produced by the session DTO mapper and navigation populators (ADR-002). This is the collection whose
+          produced by the session DTO mapper and navigation populators (<a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>). This is the collection whose
           populator gap once dropped speakers from the list (vs. get-by-id) query, so it is the one to check when
           a session list shows no speakers.</li>
           </ul>
@@ -950,8 +950,8 @@
           <li><strong>Why it&#39;s built this way</strong>: defaulting each child collection to <code>[]</code> means a list query that skips a
           populator returns an empty collection rather than a null reference; the trade-off is that a genuinely
           unpopulated collection is indistinguishable from an empty one, which is why the speakers-in-list
-          populator gap was a silent bug and not a crash. Manual DTO shaping (ADR-001) keeps the contract
-          explicit; navigation populators (ADR-002) fill the child collections on demand.</li>
+          populator gap was a silent bug and not a crash. Manual DTO shaping (<a href="https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html" target="_blank" rel="noopener">ADR-001</a>) keeps the contract
+          explicit; navigation populators (<a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>) fill the child collections on demand.</li>
           <li><strong>Where it&#39;s used</strong>: returned by the Conference session read endpoints (get-by-id and paged list) and
           mapped from the <code>Session</code> aggregate by the session DTO mapper; consumed by the Conference UI session
           pages and the session-detail views.</li>
@@ -991,7 +991,7 @@
           <li><strong>Why it&#39;s built this way</strong>: returning <a href="group-01-result-error-handling.html#result"><code>Result</code></a> rather than
           throwing lets Engagement fold a validation failure into its own command result; keeping the interface
           in <code>Shared</code> (not <code>Application</code>) is what lets a disabled-stub or gRPC implementation be swapped in
-          without Engagement seeing Conference&#39;s internals (ADR-007 gRPC extraction, ADR-008 service topology).</li>
+          without Engagement seeing Conference&#39;s internals (<a href="https://ivanball.github.io/docs/adr/007-grpc-extraction.html" target="_blank" rel="noopener">ADR-007</a> gRPC extraction, <a href="https://ivanball.github.io/docs/adr/008-service-extraction-topology.html" target="_blank" rel="noopener">ADR-008</a> service topology).</li>
           <li><strong>Where it&#39;s used</strong>: injected into Engagement&#39;s bookmark command handlers; implemented by
           Conference.Application in-process, by a Conference gRPC adapter across services, and by
           <a href="#disabledsessionbookmarkvalidationservice"><code>DisabledSessionBookmarkValidationService</code></a> when Conference
@@ -1028,7 +1028,7 @@
           </li>
           <li><strong>Why it&#39;s built this way</strong>: returning cached completed tasks (no allocation of async state machines)
           keeps the stub cheap on a path that runs per request; the collection literal <code>[]</code> gives a benign empty
-          answer. Making degradation explicit and named (not a null service) is the governance point (ADR-008
+          answer. Making degradation explicit and named (not a null service) is the governance point (<a href="https://ivanball.github.io/docs/adr/008-service-extraction-topology.html" target="_blank" rel="noopener">ADR-008</a>
           service topology).</li>
           <li><strong>Where it&#39;s used</strong>: registered in the Engagement service&#39;s <code>Program.cs</code> (via the module&#39;s
           <code>RegisterDisabledStubs()</code>) to satisfy
@@ -1272,7 +1272,7 @@
           <a href="group-12-api-hosting-mapping.html#ientitydtomappertentity-tentitydto-tidentifiertype"><code>IEntityDTOMapper&lt;CategoryItem, CategoryItemDTO, CategoryItemIdentifierType&gt;</code></a>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Categories/DTOs/CategoryItemDTOMapper.cs:12</code>)
           is a <code>[Mapper] partial class</code>, the source generator writes the field-by-field copy at compile time
-          (ADR-001), so there is no reflection cost and a shape mismatch is a build error.</li>
+          (<a href="https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html" target="_blank" rel="noopener">ADR-001</a>), so there is no reflection cost and a shape mismatch is a build error.</li>
           </ol>
           </li>
           <li><strong>Walkthrough</strong>: four members (<code>CategoryItemDTO.cs:11-20</code>), <code>Id</code> (the <code>IBaseDTO</code> contract), the
@@ -1532,7 +1532,7 @@
           <li><strong>Concept, the cross-context read DTO.</strong> <code>[Rubric §7, Microservices Readiness]</code> and <code>[Rubric §8, Data Architecture]</code>. Like <a href="#conferencecategorydto"><code>ConferenceCategoryDTO</code></a> it is a concurrency-aware
           aggregate DTO with nested child collections, but it also surfaces <code>LinkedUserId</code>
           (<code>SpeakerDTO.cs:58</code>), a <em>nullable, cross-database</em> FK to an Identity <code>User</code>. That id is a scalar, not an
-          EF navigation, because the User and Speaker live in separate databases (ADR-006); the link is reconciled
+          EF navigation, because the User and Speaker live in separate databases (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>); the link is reconciled
           by events (see <a href="#speakerchanged"><code>SpeakerChanged</code></a> and <a href="#speakerlinkedtouser"><code>SpeakerLinkedToUser</code></a>),
           never a cross-database join. Three URL-ish fields (<code>LinkedInUrl</code>/<code>GitHubUrl</code>/<code>WebsiteUrl</code>) carry a
           scoped <code>[SuppressMessage(... CA1056 ...)]</code> (<code>SpeakerDTO.cs:46,50,54</code>) because they are stored as strings
@@ -1579,7 +1579,7 @@
           <li><strong>Walkthrough</strong>: three positional members (lines 13-15), <code>State</code>, <code>CategoryId</code>, and <code>Title</code>; <code>State</code>
           and <code>CategoryId</code> are forwarded to the base constructor (line 16), <code>Title</code> is the record&#39;s own added
           property.</li>
-          <li><strong>Why it&#39;s built this way</strong>: one lifecycle event per aggregate keeps the event surface small (ADR-010
+          <li><strong>Why it&#39;s built this way</strong>: one lifecycle event per aggregate keeps the event surface small (<a href="https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html" target="_blank" rel="noopener">ADR-010</a>
           contract-versioning applies to the shared base), and <code>State</code> lets a handler branch on the transition
           rather than subscribing to three separate types.</li>
           <li><strong>Where it&#39;s used</strong>: raised from <a href="#category"><code>Category</code></a>&#39;s <code>Create</code>/<code>Update</code>/<code>Delete</code>; dispatched
@@ -1613,7 +1613,7 @@
           <li><strong>Depends on</strong>: <a href="group-04-events-outbox.html#basedomainevent"><code>BaseDomainEvent</code></a> (base record) and the <a href="group-02-domain-building-blocks.html#domainentitystate"><code>DomainEntityState</code></a> enum; the module id aliases <code>SessionIdentifierType</code>, <code>SessionCategoryItemIdentifierType</code>, <code>CategoryItemIdentifierType</code> (BCL scalars behind the alias). No NuGet dependency.</li>
           <li><strong>Concept introduced, the child-collection domain event.</strong> <code>[Rubric §6, CQRS &amp; Event-Driven]</code> (assesses whether state changes are announced as first-class events rather than leaked as side effects) and <code>[Rubric §4, Domain-Driven Design]</code> (assesses whether the aggregate root is the sole author of change inside its consistency boundary). The aggregate-root-level events later in this part (<a href="#sessionchanged"><code>SessionChanged</code></a>, <a href="#speakerchanged"><code>SpeakerChanged</code></a>) derive from <a href="group-04-events-outbox.html#entitychangedeventtidentifiertype"><code>EntityChangedEvent&lt;TIdentifierType&gt;</code></a>; this event and its four siblings instead derive <strong>directly</strong> from <a href="group-04-events-outbox.html#basedomainevent"><code>BaseDomainEvent</code></a> because a join/child row has no independent lifecycle event of its own to reuse. It carries three ids so a handler can react without reloading: the parent <a href="#session"><code>Session</code></a>, the join entity, and the <a href="#categoryitem"><code>CategoryItem</code></a> that was linked. How a raised event reaches the outbox and in-process handlers is taught once in <a href="group-04-events-outbox.html">Group 04</a>; this part only produces them.</li>
           <li><strong>Walkthrough</strong>: a positional <code>sealed record class</code> with four members (<code>SessionCategoryItemChanged.cs:13-17</code>): <code>State</code> (the <a href="group-02-domain-building-blocks.html#domainentitystate"><code>DomainEntityState</code></a>, <code>Added</code> or <code>Deleted</code> for a join row), <code>SessionId</code>, <code>SessionCategoryItemId</code>, and <code>CategoryItemId</code>. Being a record, structural equality and immutability come for free; the primary-constructor parameters are the only state.</li>
-          <li><strong>Why it&#39;s built this way</strong>: publishing the ids rather than the entity keeps the event a flat, serializable fact (it must survive an outbox round-trip, ADR-003) and keeps a handler from touching the aggregate&#39;s internals. Raising a distinct event per join type (rather than one generic &quot;session updated&quot;) lets read-side cache invalidation and projections target exactly what moved.</li>
+          <li><strong>Why it&#39;s built this way</strong>: publishing the ids rather than the entity keeps the event a flat, serializable fact (it must survive an outbox round-trip, <a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>) and keeps a handler from touching the aggregate&#39;s internals. Raising a distinct event per join type (rather than one generic &quot;session updated&quot;) lets read-side cache invalidation and projections target exactly what moved.</li>
           <li><strong>Where it&#39;s used</strong>: raised inside <a href="#session"><code>Session</code></a>&#39;s category-item add/remove methods; consumed by in-process <code>IDomainEventHandler</code> implementations and captured by the outbox in <code>SaveChangesAsync</code>.</li>
           </ul>
           <hr>
@@ -1712,7 +1712,7 @@
           <li><strong>Depends on</strong>: <a href="group-04-events-outbox.html#baseintegrationevent"><code>BaseIntegrationEvent</code></a> (base); aliases <code>UserIdentifierType</code>, <code>SpeakerIdentifierType</code>.</li>
           <li><strong>Concept introduced, the integration event (vs the domain event).</strong> <code>[Rubric §7, Microservices Readiness]</code> (assesses whether cross-module coupling runs through published contracts a peer can consume without a code reference back) and <code>[Rubric §9, API &amp; Contract Design]</code> (the async message <em>is</em> a public contract). Two things distinguish it from every event above. First, it derives from <a href="group-04-events-outbox.html#baseintegrationevent"><code>BaseIntegrationEvent</code></a>, not <code>BaseDomainEvent</code>: a domain event stays inside the producing module, an integration event is meant to cross a module/service boundary over the broker (RabbitMQ locally, Azure Service Bus in production) via the outbox. Second, it lives in the <code>.Shared</code> project, not <code>.Domain</code>, precisely so the subscribing Identity module can reference the contract without pulling in Conference&#39;s domain model. Per the XML doc (<code>SpeakerLinkedToUser.cs:11-16</code>), it replaced a former direct in-process service call (<code>IUserSpeakerLinkService.LinkSpeakerAsync</code>), making the bidirectional User-Speaker link eventually consistent across boundaries.</li>
           <li><strong>Walkthrough</strong>: <code>sealed record class SpeakerLinkedToUser(UserIdentifierType UserId, SpeakerIdentifierType SpeakerId) : BaseIntegrationEvent</code> (<code>SpeakerLinkedToUser.cs:20-23</code>). Just the two ids of the link; the receiver needs nothing more to set <code>LinkedSpeakerId</code>.</li>
-          <li><strong>Why it&#39;s built this way</strong>: modeling the link as a published fact rather than a synchronous call is the outbox/eventual-consistency story (ADR-003); it lets Identity and Conference run as separate services with no shared database and no cross-database FK.</li>
+          <li><strong>Why it&#39;s built this way</strong>: modeling the link as a published fact rather than a synchronous call is the outbox/eventual-consistency story (<a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>); it lets Identity and Conference run as separate services with no shared database and no cross-database FK.</li>
           <li><strong>Where it&#39;s used</strong>: published by the Conference link-command handler; consumed by Identity&#39;s <code>SpeakerLinkedToUserHandler</code>.</li>
           </ul>
           <hr>
@@ -1763,7 +1763,7 @@
           <li><strong>Walkthrough</strong>, in teaching order:<ul>
           <li><strong><code>[IdValueGenerated]</code></strong> on the class (<code>Event.cs:16</code>): marks the id as database-generated; the factory reads this at runtime via <code>typeof(Event).IsIdValueGenerated</code>.</li>
           <li><strong>Scalar state</strong> (<code>Event.cs:20-60</code>): <code>Name</code>, <code>Description?</code>, <code>StartDate</code>/<code>EndDate</code> (<code>DateOnly</code>), <code>TimeZone</code>, <code>SessionizeCode?</code>, <code>VenueAddress?</code>, <code>VenueMapUrl?</code>, <code>WiFiInfo?</code>, <code>IsPublished</code>, <code>QuestionModerationDefault</code> (the BR-233 default status a newly submitted live-layer question gets), and the nullable <code>LastSessionizeRefreshOn</code>/<code>LastSessionizeRefreshBy</code> refresh-audit pair. All have private setters.</li>
-          <li><strong>Child collections</strong> (<code>Event.cs:62-78</code>): private <code>List&lt;Room&gt;</code>/<code>List&lt;EventSpeaker&gt;</code>/<code>List&lt;EventQuestionAnswer&gt;</code> exposed as <code>IReadOnlyCollection&lt;...&gt;</code> marked <code>[Navigation(IsCollection = true)]</code> for the populator (ADR-002).</li>
+          <li><strong>Child collections</strong> (<code>Event.cs:62-78</code>): private <code>List&lt;Room&gt;</code>/<code>List&lt;EventSpeaker&gt;</code>/<code>List&lt;EventQuestionAnswer&gt;</code> exposed as <code>IReadOnlyCollection&lt;...&gt;</code> marked <code>[Navigation(IsCollection = true)]</code> for the populator (<a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>).</li>
           <li><strong>Constructors</strong> (<code>Event.cs:81-107</code>): a parameterless EF constructor that seeds non-null strings, plus a private ctor used by the factory.</li>
           <li><strong><code>Create</code></strong> (<code>Event.cs:125</code>): combines <code>EnsureNameIsValid</code> + <code>EnsureTimeZoneIsValid</code> + <code>EnsureDateRangeIsValid</code>; on success builds the instance, assigns <code>Id</code> as <code>default</code> when id-value-generated (else the passed id), sets <code>QuestionModerationDefault</code>, and raises <code>EventChanged(Added)</code>. Returns <a href="group-01-result-error-handling.html#result"><code>Result&lt;Event&gt;</code></a>.</li>
           <li><strong><code>Update</code></strong> (<code>Event.cs:182</code>): re-validates the same three invariants, writes the scalars, raises <code>EventChanged(Updated)</code>.</li>
@@ -1922,7 +1922,7 @@
           <li><strong>Marker</strong> <code>[IdValueGenerated]</code> (line 15): Category PKs are DB-generated; Sessionize imports still
           supply explicit ids via <code>IDENTITY_INSERT</code>.</li>
           <li><strong>Fields</strong> (lines 19-31): <code>Title</code>, <code>Sort</code>, <code>Type?</code>, the private list, and <code>CategoryItems</code> tagged
-          <code>[Navigation(IsCollection = true)]</code> (ADR-002, signals the populator this is a child collection).</li>
+          <code>[Navigation(IsCollection = true)]</code> (<a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>, signals the populator this is a child collection).</li>
           <li><strong>EF ctor</strong> (line 34): parameterless, private, sets <code>Title = string.Empty</code> to satisfy the
           non-nullable field before EF assigns columns.</li>
           <li><code>Create</code> (lines 54-75): validate via <code>CategoryInvariants.EnsureTitleIsValid</code> then resolve whether
@@ -1938,7 +1938,7 @@
           </ul>
           </li>
           <li><p><strong>Why it&#39;s built this way</strong>: a single class owning uniqueness, cascade-delete and event emission
-          keeps consistency rules in one place. ADR-002 explains why <code>SetCategoryItems</code> exists: when category
+          keeps consistency rules in one place. <a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a> explains why <code>SetCategoryItems</code> exists: when category
           and items share a database EF <code>Include()</code> loads them together; when they could cross databases the
           populator queries separately and calls <code>SetCategoryItems</code>, the aggregate is agnostic to the path.</p>
           </li>
@@ -2074,7 +2074,7 @@
           <li><strong>Concept</strong>: the aggregate-root pattern (see <a href="#category"><code>Category</code></a>) plus a <strong>cross-module link
           field</strong> and <strong>value-object composition</strong>. <code>[Rubric §7, Microservices Readiness]</code> and <code>[Rubric §8, Data Architecture]</code>: <code>LinkedUserId</code> (line 55) is a nullable <em>scalar</em> FK to <code>User</code> in the Identity
           database, it cannot be an EF navigation because the two entities live in different databases
-          (ADR-006). <code>Email</code> is a value object, so an invalid email can never be stored.</li>
+          (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>). <code>Email</code> is a value object, so an invalid email can never be stored.</li>
           <li><strong>Walkthrough</strong><ul>
           <li><code>FullName</code> (line 58): a computed <code>=&gt;</code> property (<code>$&quot;{FirstName} {LastName}&quot;</code>), not stored.</li>
           <li><code>Create</code> (lines 110-157): parses <code>email</code> into an <a href="group-02-domain-building-blocks.html#email"><code>Email</code></a>
@@ -2090,7 +2090,7 @@
           <em>before</em> <code>base.Delete()</code> (line 232), clears <code>LinkedUserId</code> within the Conference context (line 239),
           then emits <code>SpeakerChanged(Deleted, …, previousLinkedUserId)</code> (line 241) so the cross-context
           integration-event handler can clear <code>User.LinkedSpeakerId</code> in Identity. The event carries enough
-          data for the handler to act without a synchronous call back (ADR-003).</li>
+          data for the handler to act without a synchronous call back (<a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>).</li>
           <li><code>LinkUser</code>/<code>UnlinkUser</code> (lines 250-282): guard against already-linked / not-linked (BR-209), set or
           clear <code>LinkedUserId</code>, and emit <code>SpeakerChanged(Updated)</code>.</li>
           <li><code>AddSpeakerCategoryItem</code>/<code>RemoveSpeakerCategoryItem</code> (lines 292-337) and the
@@ -2104,8 +2104,8 @@
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: <code>LinkedUserId</code> as a nullable scalar (not a navigation) is the direct
-          consequence of database-per-service (ADR-006): the bidirectional User↔Speaker link is maintained
-          through integration events (ADR-003) and gRPC, never a cross-database FK. (Per the project memory,
+          consequence of database-per-service (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>): the bidirectional User↔Speaker link is maintained
+          through integration events (<a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a>) and gRPC, never a cross-database FK. (Per the project memory,
           speaker locality is modeled as a <code>CategoryItem</code>, not a <code>Speaker.Location</code> field, hence the
           <code>SpeakerCategoryItem</code> collection rather than a scalar location property.)</li>
           <li><strong>Where it&#39;s used</strong>: read by <code>IEntityQueryService</code>, mutated by the speaker handlers, and referenced
