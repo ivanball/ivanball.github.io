@@ -5,7 +5,9 @@
 Accepted (2026-07-10). Amended (2026-07-10): explicit query-string variance parity with the
 built-in default policy (the initial release accidentally dropped it, collapsing every query
 variant of a path onto one cache entry), plus an opt-in `bypassRoles` escape hatch for endpoints
-whose payload is elevated for one privileged role.
+whose payload is elevated for one privileged role. Amended (2026-07-25): a shared Redis-backed
+output-cache store is now the expected posture for any multi-replica deployment; the per-replica
+in-memory store is the single-replica case, not the accepted default (see Trade-offs).
 
 ## Context
 
@@ -75,9 +77,29 @@ handle role-shaped variance, not identity-shaped variance.
 - Consumers must audit which named policies move to `AddPublicEndpointPolicy`. Policies on
   permission-gated endpoints (e.g. an organizer dashboard) must NOT move; if such an endpoint
   needs caching, that is a separate decision with per-user vary rules.
-- The output-cache store remains per-replica in-memory unless a Redis-backed store is wired;
-  under scale-out, tag eviction propagates only to the replica that handled the mutation. The
-  bounded staleness window (policy expiration) is the accepted limit, consistent with the
-  existing 5-minute TTLs.
+- The output-cache store must be Redis-backed wherever the service runs more than one replica.
+  **This supersedes the original trade-off, which accepted a per-replica in-memory store and its
+  bounded staleness window.** That acceptance did not survive contact with the deployed topology:
+  ADC's Conference service and Store's Catalog service both run `maxReplicas: 2`, so every
+  `EvictByTagAsync` reached only the replica that handled the mutation and the other kept serving
+  the pre-edit payload for the full 5-minute TTL. An organizer renaming a session, or an admin
+  repricing a product, saw the change apply to roughly half of subsequent reads at random. Each
+  replica also filled its own copy of the cache, doubling cold-database traffic on exactly the
+  Basic-tier databases this policy exists to protect, and in Store's case a few multi-megabyte
+  image entries per replica crowded out the product and category JSON that matters most.
+
+  Both apps had Redis provisioned and already wired as `IDistributedCache`, so closing this was a
+  registration (`AddStackExchangeRedisOutputCache`) rather than new infrastructure. Note that
+  `AddOutputCache` registers its store with `TryAdd`, so an explicit Redis registration wins
+  regardless of call order.
+
+  A single-replica service may still use the in-memory store: with one replica there is no
+  propagation problem to solve. The rule is about replica count, not about environment.
+
+- Tag eviction only reaches caches the mutating process can address. A mutation owned by a
+  DIFFERENT service cannot evict this one's entries at all, and no store choice fixes that: ADC's
+  bookmark counts are written by Engagement and read through Conference, so they carry a short TTL
+  instead of relying on eviction. When adding a cached endpoint, check which process owns every
+  write that can change its payload.
 - Cache hit rate becomes meaningful for authenticated load tests; k6 scripts that log in now
   exercise the same cache path as anonymous ones.
