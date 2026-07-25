@@ -7,16 +7,24 @@
   <meta name="description" content="A long-form series turning a production .NET framework's architecture decisions into teachable patterns: the Result railway, the outbox, database-per-service, JWKS auth, fitness functions, and more.">
   <link rel="canonical" href="https://ivanball.github.io/writing.html">
   <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Writing · Ivan Ball-llovera">
   <meta property="og:description" content="Deep dives on enterprise .NET architecture: the Result railway, the transactional outbox, database-per-service, JWKS auth, fitness functions, and more.">
   <meta property="og:url" content="https://ivanball.github.io/writing.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Writing · Ivan Ball-llovera">
+  <meta name="twitter:description" content="Deep dives on enterprise .NET architecture: the Result railway, the transactional outbox, database-per-service, JWKS auth, fitness functions, and more.">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <!-- BEGIN articles-jsonld -->
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"ItemList","name":"Deep dives on enterprise .NET","description":"A long-form series turning the MMCA framework's architecture decisions into teachable patterns.","numberOfItems":25,"itemListElement":[{"@type":"ListItem","position":1,"item":{"@type":"TechArticle","headline":"Open-sourced and graded against 34 categories","description":"Why I open-sourced a production .NET framework and scored it against a 34-category architecture rubric, gaps and all.","url":"https://medium.com/@ivanball76/i-open-sourced-the-enterprise-net-77f9200f3728","image":"https://ivanball.github.io/assets/img/articles/article-01.png","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":2,"item":{"@type":"TechArticle","headline":"Modular monolith to microservices","description":"The cornerstone idea: build the monolith now and extract a service later with no rewrite, via module discovery, gRPC contracts, and a YARP gateway.","url":"https://medium.com/@ivanball76/modular-monolith-to-microservices-without-the-rewrite-8c3603614f12","image":"https://ivanball.github.io/assets/img/articles/article-02.png","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":3,"item":{"@type":"TechArticle","headline":"The 34-category architecture rubric","description":"A two-axis rubric for scoring architecture on maturity and implementation, so 'good architecture' stops being a vibe.","url":"https://medium.com/@ivanball76/what-good-architecture-actually-means-a-34-category-rubric-you-can-score-yourself-against-4002291a6b6a","image":"https://ivanball.github.io/assets/img/articles/article-03.png","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":4,"item":{"@type":"TechArticle","headline":"The Result railway in C#","description":"Model expected failures as Result values with a transport-agnostic error type, and keep exceptions for the genuinely exceptional.","url":"https://medium.com/@ivanball76/stop-throwing-exceptions-for-control-flow-the-result-railway-in-c-7a02050b554e","image":"https://ivanball.github.io/assets/img/articles/article-04.png","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":5,"item":{"@type":"TechArticle","headline":"Kill the anemic domain model","description":"Push behavior into rich aggregates with factory methods and invariants instead of bags of public setters.","url":"https://medium.com/@ivanball76/kill-the-anemic-domain-model-rich-aggregates-with-factory-methods-that-return-result-44f2e3d89794","image":"https://ivanball.github.io/assets/img/articles/article-05.png","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":6,"item":{"@type":"TechArticle","headline":"Specifications over LINQ spaghetti","description":"Compose queries from reusable specification objects instead of scattering LINQ across handlers.","url":"https://medium.com/@ivanball76/specifications-over-linq-spaghetti-composable-reusable-query-intent-8a40dafcbd3d","image":"https://ivanball.github.io/assets/img/articles/article-06.png","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":7,"item":{"@type":"TechArticle","headline":"The CQRS decorator pipeline","description":"Thin command and query handlers wrapped by a Scrutor decorator chain whose order is load-bearing.","url":"https://medium.com/@ivanball76/the-cqrs-decorator-pipeline-logging-caching-and-transactions-without-touching-a-handler-fb7679b8bde8","image":"https://ivanball.github.io/assets/img/articles/article-07.png","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":8,"item":{"@type":"TechArticle","headline":"Compose validators, don't copy them","description":"A validation kit that composes FluentValidation rules instead of copy-pasting them across features.","url":"https://medium.com/@ivanball76/compose-validators-dont-copy-them-a-reusable-fluentvalidation-kit-8865a6003a9c","image":"https://ivanball.github.io/assets/img/articles/article-08.png","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":9,"item":{"@type":"TechArticle","headline":"The transactional outbox","description":"Events that survive a crash: persist them atomically with your data, then dispatch at least once.","url":"https://medium.com/@ivanball76/the-transactional-outbox-in-net-10-never-lose-an-event-again-f5a9b7a89e51","image":"https://ivanball.github.io/assets/img/articles/article-09.png","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":10,"item":{"@type":"TechArticle","headline":"Database-per-service inside a monolith","description":"Give each module its own database and outbox before you extract it, so extraction changes hosting, not data.","url":"https://medium.com/@ivanball76/database-per-service-inside-a-monolith-and-why-265092eb03f1","image":"https://ivanball.github.io/assets/img/articles/article-10.png","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":11,"item":{"@type":"TechArticle","headline":"Polyglot persistence: one model, three engines","description":"SQL Server, Cosmos, and SQLite behind a single entity model, with the engine chosen by attribute.","url":"https://medium.com/@ivanball76/one-entity-model-three-databases-polyglot-persistence-behind-a-single-attribute-760e77974d5d","image":"https://ivanball.github.io/assets/img/articles/article-11.png","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":12,"item":{"@type":"TechArticle","headline":"Navigation populators","description":"Eager-load relationships that cross containers and data sources without N+1 or a leaky abstraction.","url":"https://medium.com/@ivanball76/ef-core-include-chains-are-a-trap-navigation-populators-decouple-eager-loading-c378fa4497ac","image":"https://ivanball.github.io/assets/img/articles/article-12.png","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":13,"item":{"@type":"TechArticle","headline":"Optimistic concurrency: RowVersion round-trips","description":"Carry the RowVersion from database to DTO and back, so a concurrent edit fails fast as a conflict instead of silently overwriting.","url":"https://medium.com/@ivanball76/optimistic-concurrency-that-survives-the-round-trip-rowversion-from-database-to-dto-and-back-93d4a794716f","image":"https://ivanball.github.io/assets/img/articles/article-13.png","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":14,"item":{"@type":"TechArticle","headline":"Self-ordering modules","description":"Modules declare their dependencies and load in topological order, so registration is never hand-sequenced.","url":"https://medium.com/@ivanball76/self-ordering-modules-discovered-kahn-ordered-and-extractable-2ce7283a26b5","image":"https://ivanball.github.io/assets/img/articles/article-14.png","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":15,"item":{"@type":"TechArticle","headline":"Event-schema versioning","description":"Every integration event carries a schema version; breaking changes get a new event type and an upcaster, never a silent reshape.","url":"https://medium.com/@ivanball76/event-schema-versioning-never-silently-reshape-an-event-93cd5d4a156d","image":"https://ivanball.github.io/assets/img/articles/article-15.png","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":16,"item":{"@type":"TechArticle","headline":"JWKS cross-service auth","description":"Validate another service's RS256 tokens via JWKS discovery, with no shared secret crossing a boundary.","url":"https://medium.com/@ivanball76/cross-service-auth-without-a-shared-secret-jwks-dual-fetch-478e6f688c7e","image":"https://ivanball.github.io/assets/img/articles/article-16.png","datePublished":"2026-07-14T11:17:47Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":17,"item":{"@type":"TechArticle","headline":"Password hashing done right","description":"The non-negotiables of password storage in .NET, done correctly and tested.","url":"https://medium.com/@ivanball76/password-hashing-done-right-pbkdf2-sha512-600k-iterations-timing-safe-d64ddb802403","image":"https://ivanball.github.io/assets/img/articles/article-17.png","datePublished":"2026-07-15T12:22:21Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":18,"item":{"@type":"TechArticle","headline":"Idempotency in one attribute","description":"Dedup client retries with an Idempotency-Key header and cached replay, plus a consumer-side inbox for brokers.","url":"https://medium.com/@ivanball76/idempotency-in-one-attribute-safe-retries-for-http-apis-065848fd03f4","image":"https://ivanball.github.io/assets/img/articles/article-18.png","datePublished":"2026-07-16T13:46:11Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":19,"item":{"@type":"TechArticle","headline":"The self-invalidating cache","description":"A caching decorator where commands invalidate and queries populate, plus an authenticated output-cache tier at the API edge.","url":"https://medium.com/@ivanball76/the-self-invalidating-cache-that-lives-in-the-pipeline-not-your-handlers-e11548062d2f","image":"https://ivanball.github.io/assets/img/articles/article-19.png","datePublished":"2026-07-17T12:07:08Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":20,"item":{"@type":"TechArticle","headline":"Problem Details across HTTP and gRPC","description":"One error contract mapped consistently to HTTP Problem Details and gRPC status.","url":"https://medium.com/@ivanball76/problem-details-across-http-and-grpc-rfc-9457-9f20157cf7de","image":"https://ivanball.github.io/assets/img/articles/article-20.png","datePublished":"2026-07-20T13:33:53Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":21,"item":{"@type":"TechArticle","headline":"Notifications as a vertical slice","description":"A notifications feature built as a clean vertical slice across every layer.","url":"https://medium.com/@ivanball76/notifications-as-a-vertical-slice-in-app-inbox-real-time-push-native-push-and-email-c59d5a4f3b69","image":"https://ivanball.github.io/assets/img/articles/article-21.png","datePublished":"2026-07-21T12:01:10Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":22,"item":{"@type":"TechArticle","headline":"Live channels over one SignalR hub","description":"Sub-second ephemeral events (polls, Q&A, live counts) fanned out over the existing notification hub, with nothing persisted.","url":"https://medium.com/@ivanball76/ephemeral-by-design-sub-second-live-channels-over-one-signalr-hub-0248050e0c8b","image":"https://ivanball.github.io/assets/img/articles/article-22.png","datePublished":"2026-07-22T11:40:19Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":23,"item":{"@type":"TechArticle","headline":"Delete AutoMapper: manual DTO mapping","description":"Why source-generated, per-entity mappers beat reflection-based mapping for clarity and speed.","url":"https://medium.com/@ivanball76/delete-automapper-explicit-compile-time-dto-mapping-that-you-can-actually-test-9c7013cc5d3f","image":"https://ivanball.github.io/assets/img/articles/article-23.png","datePublished":"2026-07-23T11:52:24Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":24,"item":{"@type":"TechArticle","headline":"Permission-based authorization over roles","description":"A capability layer over RBAC: permission policies that resolve on demand from a central registry.","url":"https://medium.com/@ivanball76/permission-based-authorization-capabilities-over-role-checks-ea6574cbee27","image":"https://ivanball.github.io/assets/img/articles/article-24.png","datePublished":"2026-07-24T11:34:48Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":25,"item":{"@type":"TechArticle","headline":"Browser session-cookie auth for Blazor SSR","description":"HttpOnly session cookies and an SSR-time scheme so [Authorize] passes during prerender, with the API still the boundary.","url":"https://medium.com/@ivanball76/browser-session-cookie-auth-for-blazor-ssr-surviving-the-f5-eb0ea317820e","image":"https://ivanball.github.io/assets/img/articles/article-25.png","datePublished":"2026-07-25T12:25:21Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}}]}</script>
+  <!-- END articles-jsonld -->
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
   <link rel="stylesheet" href="assets/css/styles.css">
   <script defer src="assets/js/main.js"></script>
+  <script defer src="assets/js/analytics.js"></script>
   <script defer src="assets/data/articles.js"></script>
   <script defer src="assets/js/writing.js"></script>
 </head>
@@ -34,6 +42,7 @@
           <li><a href="index.html">Home</a></li>
           <li><a href="resume.html">Résumé</a></li>
           <li><a href="platform.html">Platform</a></li>
+          <li><a href="docs/index.html">Reference</a></li>
           <li><a href="writing.html" aria-current="page">Writing</a></li>
           <li><a href="speaking.html">Speaking</a></li>
           <li><a href="contact.html">Contact</a></li>
@@ -59,14 +68,509 @@
 
         <p class="count-note" style="margin-bottom:0.75rem">The series is rolling out on Medium. Titles and summaries are below; each "Read on Medium" link activates as that piece publishes.</p>
 
+        <div class="btn-row" style="margin-bottom:1.75rem">
+          <a class="btn btn--primary" href="https://medium.com/@ivanball76" target="_blank" rel="noopener">Follow the series on Medium ↗</a>
+          <a class="btn btn--ghost" href="feed.xml">Subscribe by RSS</a>
+          <a class="btn btn--ghost" href="docs/index.html">Read the reference library</a>
+        </div>
+
         <div class="filters" id="article-filters" role="group" aria-label="Filter articles by topic"></div>
         <p class="count-note" id="article-count" aria-live="polite"></p>
 
+        <!-- Cards are GENERATED into the region below by tools/build-docs.mjs from
+             assets/data/articles.js. Do not hand-edit them: edit the data file and rebuild
+             (cd tools && npm run build). assets/js/writing.js filters these nodes in place. -->
         <div class="grid grid--3" id="articles-grid">
-          <noscript>
-            <p>This article index is rendered with JavaScript. The full series is published on
-            <a href="https://medium.com/@ivanball76" target="_blank" rel="noopener">Medium</a>.</p>
-          </noscript>
+          <!-- BEGIN articles -->
+          <article class="card card--link article-card" data-cat="orient">
+            <div class="thumb"><img src="assets/img/articles/article-01.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Orientation · No. 1</span>
+              <h3>Open-sourced and graded against 34 categories</h3>
+              <p>Why I open-sourced a production .NET framework and scored it against a 34-category architecture rubric, gaps and all.</p>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/i-open-sourced-the-enterprise-net-77f9200f3728" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="orient">
+            <div class="thumb"><img src="assets/img/articles/article-02.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Orientation · No. 2</span>
+              <h3>Modular monolith to microservices</h3>
+              <p>The cornerstone idea: build the monolith now and extract a service later with no rewrite, via module discovery, gRPC contracts, and a YARP gateway.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/006-database-per-service.html">ADR 006</a></li><li class="tag tag--accent"><a href="docs/adr/007-grpc-extraction.html">ADR 007</a></li><li class="tag tag--accent"><a href="docs/adr/008-service-extraction-topology.html">ADR 008</a></li></ul>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/modular-monolith-to-microservices-without-the-rewrite-8c3603614f12" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="orient">
+            <div class="thumb"><img src="assets/img/articles/article-03.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Orientation · No. 3</span>
+              <h3>The 34-category architecture rubric</h3>
+              <p>A two-axis rubric for scoring architecture on maturity and implementation, so &#39;good architecture&#39; stops being a vibe.</p>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/what-good-architecture-actually-means-a-34-category-rubric-you-can-score-yourself-against-4002291a6b6a" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="core">
+            <div class="thumb"><img src="assets/img/articles/article-04.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Core patterns · No. 4</span>
+              <h3>The Result railway in C#</h3>
+              <p>Model expected failures as Result values with a transport-agnostic error type, and keep exceptions for the genuinely exceptional.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/013-result-pattern.html">ADR 013</a></li></ul>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/stop-throwing-exceptions-for-control-flow-the-result-railway-in-c-7a02050b554e" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="core">
+            <div class="thumb"><img src="assets/img/articles/article-05.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Core patterns · No. 5</span>
+              <h3>Kill the anemic domain model</h3>
+              <p>Push behavior into rich aggregates with factory methods and invariants instead of bags of public setters.</p>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/kill-the-anemic-domain-model-rich-aggregates-with-factory-methods-that-return-result-44f2e3d89794" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="core">
+            <div class="thumb"><img src="assets/img/articles/article-06.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Core patterns · No. 6</span>
+              <h3>Specifications over LINQ spaghetti</h3>
+              <p>Compose queries from reusable specification objects instead of scattering LINQ across handlers.</p>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/specifications-over-linq-spaghetti-composable-reusable-query-intent-8a40dafcbd3d" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="core">
+            <div class="thumb"><img src="assets/img/articles/article-07.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Core patterns · No. 7</span>
+              <h3>The CQRS decorator pipeline</h3>
+              <p>Thin command and query handlers wrapped by a Scrutor decorator chain whose order is load-bearing.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/014-cqrs-decorator-pipeline.html">ADR 014</a></li><li class="tag tag--accent"><a href="docs/adr/031-feature-flag-management.html">ADR 031</a></li></ul>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/the-cqrs-decorator-pipeline-logging-caching-and-transactions-without-touching-a-handler-fb7679b8bde8" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="core">
+            <div class="thumb"><img src="assets/img/articles/article-08.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Core patterns · No. 8</span>
+              <h3>Compose validators, don&#39;t copy them</h3>
+              <p>A validation kit that composes FluentValidation rules instead of copy-pasting them across features.</p>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/compose-validators-dont-copy-them-a-reusable-fluentvalidation-kit-8865a6003a9c" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="core">
+            <div class="thumb"><img src="assets/img/articles/article-09.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Core patterns · No. 9</span>
+              <h3>The transactional outbox</h3>
+              <p>Events that survive a crash: persist them atomically with your data, then dispatch at least once.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/003-outbox-dual-dispatch.html">ADR 003</a></li></ul>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/the-transactional-outbox-in-net-10-never-lose-an-event-again-f5a9b7a89e51" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="data">
+            <div class="thumb"><img src="assets/img/articles/article-10.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Data &amp; persistence · No. 10</span>
+              <h3>Database-per-service inside a monolith</h3>
+              <p>Give each module its own database and outbox before you extract it, so extraction changes hosting, not data.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/006-database-per-service.html">ADR 006</a></li></ul>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/database-per-service-inside-a-monolith-and-why-265092eb03f1" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="data">
+            <div class="thumb"><img src="assets/img/articles/article-11.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Data &amp; persistence · No. 11</span>
+              <h3>Polyglot persistence: one model, three engines</h3>
+              <p>SQL Server, Cosmos, and SQLite behind a single entity model, with the engine chosen by attribute.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/018-polyglot-persistence.html">ADR 018</a></li></ul>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/one-entity-model-three-databases-polyglot-persistence-behind-a-single-attribute-760e77974d5d" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="data">
+            <div class="thumb"><img src="assets/img/articles/article-12.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Data &amp; persistence · No. 12</span>
+              <h3>Navigation populators</h3>
+              <p>Eager-load relationships that cross containers and data sources without N+1 or a leaky abstraction.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/002-navigation-populators.html">ADR 002</a></li></ul>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/ef-core-include-chains-are-a-trap-navigation-populators-decouple-eager-loading-c378fa4497ac" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="data">
+            <div class="thumb"><img src="assets/img/articles/article-13.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Data &amp; persistence · No. 13</span>
+              <h3>Optimistic concurrency: RowVersion round-trips</h3>
+              <p>Carry the RowVersion from database to DTO and back, so a concurrent edit fails fast as a conflict instead of silently overwriting.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/035-optimistic-concurrency.html">ADR 035</a></li></ul>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/optimistic-concurrency-that-survives-the-round-trip-rowversion-from-database-to-dto-and-back-93d4a794716f" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="data">
+            <div class="thumb"><img src="assets/img/articles/article-14.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Data &amp; persistence · No. 14</span>
+              <h3>Self-ordering modules</h3>
+              <p>Modules declare their dependencies and load in topological order, so registration is never hand-sequenced.</p>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/self-ordering-modules-discovered-kahn-ordered-and-extractable-2ce7283a26b5" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="data">
+            <div class="thumb"><img src="assets/img/articles/article-15.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Data &amp; persistence · No. 15</span>
+              <h3>Event-schema versioning</h3>
+              <p>Every integration event carries a schema version; breaking changes get a new event type and an upcaster, never a silent reshape.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/010-integration-event-schema-versioning.html">ADR 010</a></li></ul>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/event-schema-versioning-never-silently-reshape-an-event-93cd5d4a156d" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="auth">
+            <div class="thumb"><img src="assets/img/articles/article-16.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Auth &amp; the edge · No. 16</span>
+              <h3>JWKS cross-service auth</h3>
+              <p>Validate another service&#39;s RS256 tokens via JWKS discovery, with no shared secret crossing a boundary.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/004-authentication-dual-fetch.html">ADR 004</a></li></ul>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/cross-service-auth-without-a-shared-secret-jwks-dual-fetch-478e6f688c7e" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="auth">
+            <div class="thumb"><img src="assets/img/articles/article-17.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Auth &amp; the edge · No. 17</span>
+              <h3>Password hashing done right</h3>
+              <p>The non-negotiables of password storage in .NET, done correctly and tested.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/032-password-hashing.html">ADR 032</a></li></ul>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/password-hashing-done-right-pbkdf2-sha512-600k-iterations-timing-safe-d64ddb802403" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="auth">
+            <div class="thumb"><img src="assets/img/articles/article-18.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Auth &amp; the edge · No. 18</span>
+              <h3>Idempotency in one attribute</h3>
+              <p>Dedup client retries with an Idempotency-Key header and cached replay, plus a consumer-side inbox for brokers.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/017-request-idempotency.html">ADR 017</a></li><li class="tag tag--accent"><a href="docs/adr/021-consumer-inbox-idempotency.html">ADR 021</a></li></ul>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/idempotency-in-one-attribute-safe-retries-for-http-apis-065848fd03f4" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="auth">
+            <div class="thumb"><img src="assets/img/articles/article-19.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Auth &amp; the edge · No. 19</span>
+              <h3>The self-invalidating cache</h3>
+              <p>A caching decorator where commands invalidate and queries populate, plus an authenticated output-cache tier at the API edge.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/026-caching-strategy.html">ADR 026</a></li><li class="tag tag--accent"><a href="docs/adr/040-authenticated-output-caching-for-public-reads.html">ADR 040</a></li></ul>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/the-self-invalidating-cache-that-lives-in-the-pipeline-not-your-handlers-e11548062d2f" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="auth">
+            <div class="thumb"><img src="assets/img/articles/article-20.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Auth &amp; the edge · No. 20</span>
+              <h3>Problem Details across HTTP and gRPC</h3>
+              <p>One error contract mapped consistently to HTTP Problem Details and gRPC status.</p>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/problem-details-across-http-and-grpc-rfc-9457-9f20157cf7de" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="auth">
+            <div class="thumb"><img src="assets/img/articles/article-21.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Auth &amp; the edge · No. 21</span>
+              <h3>Notifications as a vertical slice</h3>
+              <p>A notifications feature built as a clean vertical slice across every layer.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/024-push-notifications.html">ADR 024</a></li></ul>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/notifications-as-a-vertical-slice-in-app-inbox-real-time-push-native-push-and-email-c59d5a4f3b69" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="auth">
+            <div class="thumb"><img src="assets/img/articles/article-22.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Auth &amp; the edge · No. 22</span>
+              <h3>Live channels over one SignalR hub</h3>
+              <p>Sub-second ephemeral events (polls, Q&amp;A, live counts) fanned out over the existing notification hub, with nothing persisted.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/039-live-channel-push.html">ADR 039</a></li></ul>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/ephemeral-by-design-sub-second-live-channels-over-one-signalr-hub-0248050e0c8b" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="auth">
+            <div class="thumb"><img src="assets/img/articles/article-23.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Auth &amp; the edge · No. 23</span>
+              <h3>Delete AutoMapper: manual DTO mapping</h3>
+              <p>Why source-generated, per-entity mappers beat reflection-based mapping for clarity and speed.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/001-manual-dto-mapping.html">ADR 001</a></li></ul>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/delete-automapper-explicit-compile-time-dto-mapping-that-you-can-actually-test-9c7013cc5d3f" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="auth">
+            <div class="thumb"><img src="assets/img/articles/article-24.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Auth &amp; the edge · No. 24</span>
+              <h3>Permission-based authorization over roles</h3>
+              <p>A capability layer over RBAC: permission policies that resolve on demand from a central registry.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/020-permission-based-authorization.html">ADR 020</a></li></ul>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/permission-based-authorization-capabilities-over-role-checks-ea6574cbee27" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="auth">
+            <div class="thumb"><img src="assets/img/articles/article-25.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Auth &amp; the edge · No. 25</span>
+              <h3>Browser session-cookie auth for Blazor SSR</h3>
+              <p>HttpOnly session cookies and an SSR-time scheme so [Authorize] passes during prerender, with the API still the boundary.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/022-browser-session-cookie-auth.html">ADR 022</a></li></ul>
+              <div class="card-foot"><a href="https://medium.com/@ivanball76/browser-session-cookie-auth-for-blazor-ssr-surviving-the-f5-eb0ea317820e" target="_blank" rel="noopener">Read on Medium ↗</a></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="auth">
+            <div class="thumb"><img src="assets/img/articles/article-26.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Auth &amp; the edge · No. 26</span>
+              <h3>External OAuth login behind your own JWTs</h3>
+              <p>Sign in with Google or GitHub without leaking provider tokens: external identity exchanged for your own JWTs at the boundary.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/036-external-oauth-login.html">ADR 036</a></li></ul>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="auth">
+            <div class="thumb"><img src="assets/img/articles/article-27.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Auth &amp; the edge · No. 27</span>
+              <h3>One rotating refresh token</h3>
+              <p>A short-lived JWT plus one server-stored refresh token that rotates on every use, with reuse detection that makes a stolen token end its own session.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/050-jwt-refresh-token-rotation.html">ADR 050</a></li></ul>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="auth">
+            <div class="thumb"><img src="assets/img/articles/article-28.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Auth &amp; the edge · No. 28</span>
+              <h3>Generic entity controllers</h3>
+              <p>A write-once REST surface every entity inherits, plus a bounded dynamic query contract that is never open SQL.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/034-generic-entity-query-layer.html">ADR 034</a></li></ul>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="auth">
+            <div class="thumb"><img src="assets/img/articles/article-29.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Auth &amp; the edge · No. 29</span>
+              <h3>Resource-ownership authorization</h3>
+              <p>Beyond roles and permissions: which rows you may touch, enforced per resource.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/033-resource-ownership-authorization.html">ADR 033</a></li></ul>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="auth">
+            <div class="thumb"><img src="assets/img/articles/article-30.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Auth &amp; the edge · No. 30</span>
+              <h3>Rate limiting and brute-force protection</h3>
+              <p>Two layers that cover the whole API edge: endpoint rate limits plus lockout-based brute-force defense on identity.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/019-rate-limiting.html">ADR 019</a></li><li class="tag tag--accent"><a href="docs/adr/029-authentication-brute-force-protection.html">ADR 029</a></li></ul>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="run">
+            <div class="thumb"><img src="assets/img/articles/article-31.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Run &amp; extract · No. 31</span>
+              <h3>Aspire: one command</h3>
+              <p>Model services, databases, and the broker as one Aspire graph that runs from laptop to Azure with one command.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/023-security-response-headers.html">ADR 023</a></li><li class="tag tag--accent"><a href="docs/adr/025-startup-warmup-readiness.html">ADR 025</a></li><li class="tag tag--accent"><a href="docs/adr/041-observability-and-telemetry.html">ADR 041</a></li></ul>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="run">
+            <div class="thumb"><img src="assets/img/articles/article-32.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Run &amp; extract · No. 32</span>
+              <h3>Extracting a module to a gRPC service</h3>
+              <p>A step-by-step extraction of an in-process module into its own gRPC service, database, and auth.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/007-grpc-extraction.html">ADR 007</a></li><li class="tag tag--accent"><a href="docs/adr/008-service-extraction-topology.html">ADR 008</a></li><li class="tag tag--accent"><a href="docs/adr/012-grpc-host-transport.html">ADR 012</a></li></ul>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="run">
+            <div class="thumb"><img src="assets/img/articles/article-33.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Run &amp; extract · No. 33</span>
+              <h3>Resilience and recovery objectives</h3>
+              <p>Standard resilience on every outbound client, plus declared RTO/RPO and a drilled restore.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/009-resilience-and-recovery-objectives.html">ADR 009</a></li></ul>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="proof">
+            <div class="thumb"><img src="assets/img/articles/article-34.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Proof &amp; getting started · No. 34</span>
+              <h3>Architecture fitness functions</h3>
+              <p>Architecture rules that fail the build: a compile-time layer guard plus a shared NetArchTest rule library.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/015-architecture-fitness-functions.html">ADR 015</a></li></ul>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="proof">
+            <div class="thumb"><img src="assets/img/articles/article-35.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Proof &amp; getting started · No. 35</span>
+              <h3>The test pyramid</h3>
+              <p>How the framework&#39;s tests stack up: fast unit and architecture tests at the base, E2E at the tip.</p>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="proof">
+            <div class="thumb"><img src="assets/img/articles/article-36.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Proof &amp; getting started · No. 36</span>
+              <h3>Soft-delete vs the right to erasure</h3>
+              <p>Soft-delete for lifecycle, anonymization plus outbox purge for GDPR/CCPA erasure, and why both exist.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/005-soft-delete-vs-erasure.html">ADR 005</a></li></ul>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="proof">
+            <div class="thumb"><img src="assets/img/articles/article-37.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Proof &amp; getting started · No. 37</span>
+              <h3>A reusable Blazor UI framework</h3>
+              <p>A shared Blazor and MudBlazor UI layer with accessibility enforced by axe in CI.</p>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="proof">
+            <div class="thumb"><img src="assets/img/articles/article-38.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Proof &amp; getting started · No. 38</span>
+              <h3>i18n and theming on one preference pipeline</h3>
+              <p>A culture choice and a theme choice ride the same cookie, profile column, and login reconciliation: one persistence path, two switches.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/027-multi-locale-i18n.html">ADR 027</a></li><li class="tag tag--accent"><a href="docs/adr/028-dark-theme-mode.html">ADR 028</a></li></ul>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="proof">
+            <div class="thumb"><img src="assets/img/articles/article-39.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Proof &amp; getting started · No. 39</span>
+              <h3>Build your first module</h3>
+              <p>A hands-on walkthrough of building a new module across all five layers.</p>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="proof">
+            <div class="thumb"><img src="assets/img/articles/article-40.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Proof &amp; getting started · No. 40</span>
+              <h3>Write your first fitness test</h3>
+              <p>Author your first architecture fitness test and watch it fail the build on a violation.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/015-architecture-fitness-functions.html">ADR 015</a></li></ul>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="proof">
+            <div class="thumb"><img src="assets/img/articles/article-41.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Proof &amp; getting started · No. 41</span>
+              <h3>Two real apps on one framework</h3>
+              <p>A case study: a conference platform and an e-commerce store built on the same kernel.</p>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="proof">
+            <div class="thumb"><img src="assets/img/articles/article-42.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Proof &amp; getting started · No. 42</span>
+              <h3>One Blazor UI, two hosts</h3>
+              <p>The same Blazor components run in a browser and inside a MAUI hybrid app; small per-capability contracts reach native hardware without ever asking &#39;am I on mobile?&#39;.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/042-device-capability-abstraction.html">ADR 042</a></li><li class="tag tag--accent"><a href="docs/adr/043-mobile-deep-links-and-native-oauth-callback.html">ADR 043</a></li></ul>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="data">
+            <div class="thumb"><img src="assets/img/articles/article-43.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Data &amp; persistence · No. 43</span>
+              <h3>Managed file storage: uploads you don&#39;t have to trust</h3>
+              <p>Attacker-controlled bytes become safe avatars: content sniffing, metadata stripping, re-encoding, and pluggable blob storage.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/045-managed-file-storage-and-avatars.html">ADR 045</a></li></ul>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="auth">
+            <div class="thumb"><img src="assets/img/articles/article-44.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Auth &amp; the edge · No. 44</span>
+              <h3>HTTP API versioning, proven not just claimed</h3>
+              <p>Header-based versioning introduced without breaking a single caller, plus a fitness contract that proves two live versions coexist.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/046-http-api-versioning.html">ADR 046</a></li></ul>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="core">
+            <div class="thumb"><img src="assets/img/articles/article-45.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Core patterns · No. 45</span>
+              <h3>Feature flags in the CQRS pipeline</h3>
+              <p>Gate commands and queries at the outermost decorator, so a handler never checks a flag and a disabled feature is rejected before any work runs.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/031-feature-flag-management.html">ADR 031</a></li></ul>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="data">
+            <div class="thumb"><img src="assets/img/articles/article-46.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Data &amp; persistence · No. 46</span>
+              <h3>Field-level encryption in EF Core</h3>
+              <p>An AES-256-GCM value converter that keeps a PII column ciphertext even for someone who can query the database.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/037-field-level-encryption-at-rest.html">ADR 037</a></li></ul>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="auth">
+            <div class="thumb"><img src="assets/img/articles/article-47.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Auth &amp; the edge · No. 47</span>
+              <h3>Security headers and CSP for Blazor</h3>
+              <p>One middleware stamps hardened response headers on every host, with the Blazor CSP resolved through a pluggable provider.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/023-security-response-headers.html">ADR 023</a></li></ul>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="run">
+            <div class="thumb"><img src="assets/img/articles/article-48.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Run &amp; extract · No. 48</span>
+              <h3>Observability by default</h3>
+              <p>A shared OpenTelemetry baseline with CQRS duration metrics, correlation IDs, and outbox-poll span filtering, exported to Azure Monitor.</p>
+              <ul class="tags" style="margin-bottom:0.85rem"><li class="tag tag--accent"><a href="docs/adr/041-observability-and-telemetry.html">ADR 041</a></li></ul>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <article class="card card--link article-card" data-cat="proof">
+            <div class="thumb"><img src="assets/img/articles/article-49.png" alt="" loading="lazy"></div>
+            <div class="body">
+              <span class="kicker">Proof &amp; getting started · No. 49</span>
+              <h3>The series index</h3>
+              <p>The full series index and recommended reading order.</p>
+              <div class="card-foot"><span class="coming-soon">● Coming soon</span></div>
+            </div>
+          </article>
+          <!-- END articles -->
+        </div>
+
+        <div class="subscribe" data-newsletter-wrap hidden>
+          <h2 style="margin:0 0 0.4rem">Get each deep dive by email</h2>
+          <p class="mb-0" style="max-width:60ch">One message per article, no digests and no other mail. Medium followers are rented; an email list is the one audience I own.</p>
+          <form class="subscribe-form" data-newsletter method="post" target="_blank">
+            <label class="sr-only" for="subscribe-email">Email address</label>
+            <input id="subscribe-email" type="email" name="email" required placeholder="you@example.com" autocomplete="email">
+            <button class="btn btn--primary" type="submit">Subscribe</button>
+          </form>
         </div>
       </div>
     </section>
@@ -79,6 +583,7 @@
         <ul class="footer-links">
           <li><a href="resume.html">Résumé</a></li>
           <li><a href="platform.html">Platform</a></li>
+          <li><a href="docs/index.html">Reference</a></li>
           <li><a href="writing.html">Writing</a></li>
           <li><a href="speaking.html">Speaking</a></li>
           <li><a href="contact.html">Contact</a></li>

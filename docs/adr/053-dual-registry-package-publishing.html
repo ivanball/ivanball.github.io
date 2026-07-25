@@ -3,22 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ADR-008: Extraction of the Modular Monolith into Per-Module Services + Gateway · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted.">
-  <link rel="canonical" href="https://ivanball.github.io/docs/adr/008-service-extraction-topology.html">
+  <title>ADR-053: Dual-Registry Package Publishing (nuget.org plus GitHub Packages) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-07-25).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/053-dual-registry-package-publishing.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
-  <meta property="og:title" content="ADR-008: Extraction of the Modular Monolith into Per-Module Services + Gateway">
-  <meta property="og:description" content="Accepted.">
-  <meta property="og:url" content="https://ivanball.github.io/docs/adr/008-service-extraction-topology.html">
+  <meta property="og:title" content="ADR-053: Dual-Registry Package Publishing (nuget.org plus GitHub Packages)">
+  <meta property="og:description" content="Accepted (2026-07-25).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/053-dual-registry-package-publishing.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ADR-008: Extraction of the Modular Monolith into Per-Module Services + Gateway">
-  <meta name="twitter:description" content="Accepted.">
+  <meta name="twitter:title" content="ADR-053: Dual-Registry Package Publishing (nuget.org plus GitHub Packages)">
+  <meta name="twitter:description" content="Accepted (2026-07-25).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"008 · Extraction of the Modular Monolith into Per-Module Services + Gateway","item":"https://ivanball.github.io/docs/adr/008-service-extraction-topology.html"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)","item":"https://ivanball.github.io/docs/adr/053-dual-registry-package-publishing.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
@@ -63,7 +63,7 @@
         <span aria-hidden="true">/</span>
         <a href="../../docs/adr/index.html">Architecture Decision Records</a>
         <span aria-hidden="true">/</span>
-        <span class="current">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</span>
+        <span class="current">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</span>
       </nav>
       <div class="doc-layout">
       <aside class="doc-sidebar">
@@ -79,7 +79,7 @@
         <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
         <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
         <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
-        <li><a href="008-service-extraction-topology.html" aria-current="page">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
         <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
         <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
         <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
@@ -124,94 +124,108 @@
         <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
         <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
         <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
-        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html" aria-current="page">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
           </ol>
         </nav>
       </details>
     </aside>
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
-          <h1 id="adr-008-extraction-of-the-modular-monolith-into-per-module-services--gateway">ADR-008: Extraction of the Modular Monolith into Per-Module Services + Gateway</h1>
+          <h1 id="adr-053-dual-registry-package-publishing-nugetorg-plus-github-packages">ADR-053: Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted.</p>
+          <p>Accepted (2026-07-25).</p>
           <h2 id="context">Context</h2>
-          <p>ADC began as a modular monolith: one <code>MMCA.ADC.WebAPI</code> host loaded every module (Identity, Conference,
-          Engagement, Notification) in-process via the <code>ModuleLoader</code>, sharing one database and dispatching
-          domain/integration events in-process. The modular structure — per-module Domain/Application/
-          Infrastructure/API/Shared, with strict module isolation enforced by the architecture tests — was always
-          maintained, but everything deployed and scaled as a single unit.</p>
-          <p>Two forces pushed past that:</p>
+          <p>The fifteen <code>MMCA.Common.*</code> packages have shipped to GitHub Packages since the first release. That
+          was the right default while the framework had exactly one consumer group (this account&#39;s own
+          repositories), which already authenticate to GitHub for other reasons.</p>
+          <p>It stopped being right the moment the framework was documented publicly. GitHub Packages&#39; <strong>NuGet</strong>
+          registry requires a personal access token with <code>read:packages</code> for a restore, <strong>even when the
+          package and its repository are public</strong>: only the Container registry supports anonymous pulls. The
+          practical consequences:</p>
           <ul>
-          <li><strong>Uneven scale + cost.</strong> Traffic is lopsided — the public Conference read paths spike around the event
-          while Identity/Engagement/Notification stay flat (the 2026 conference peaked at ~67 concurrent, almost
-          all on the Conference surface). Scaling one monolith means scaling everything.</li>
-          <li><strong>Fault &amp; deploy isolation.</strong> A bad deploy or a runaway path in one module took the others down with
-          it, and every change redeployed the whole surface.</li>
+          <li>The <code>dotnet add package MMCA.Common.API</code> line printed in the README, in the getting-started guide,
+          and in a two-dozen-article series fails for every reader who runs it. They get a 401, not a
+          package.</li>
+          <li>A reader who wants to try the framework must first create a GitHub PAT and hand-write a
+          <code>nuget.config</code> with credentials. That is a larger ask than the framework itself, and it happens
+          before they have seen any value.</li>
+          <li>The packages are invisible to discovery. A nuget.org search API query for <code>MMCA.Common</code> returns
+          <code>totalHits: 0</code>, so the primary place .NET developers look for libraries has never heard of them.</li>
+          <li>There is no download signal. Package downloads are the only honest adoption metric available for a
+          library, and GitHub Packages does not surface one publicly.</li>
           </ul>
-          <p>The modular boundaries were already clean enough to split along; the question was how to extract
-          <strong>without rewriting business logic</strong> or losing the ability to reason about — and revert — the system.</p>
+          <p>Consumers inside this workspace (MMCA.ADC, MMCA.Store, MMCA.Helpdesk) are unaffected by any of this:
+          they already restore successfully, and their <code>local.props</code> source mode bypasses packages entirely.
+          So this is purely about people outside the account.</p>
           <h2 id="decision">Decision</h2>
-          <p>Extract <strong>one service host per module</strong> — <code>MMCA.ADC.{Identity,Conference,Engagement,Notification}.Service</code>
-          — and front them with a single <strong>YARP reverse-proxy Gateway</strong> (<code>MMCA.ADC.Gateway</code>, pinned to
-          <code>https://localhost:6001</code>). Delete the combined <code>MMCA.ADC.WebAPI</code> host.</p>
+          <p>Every release publishes to <strong>both</strong> registries, from the same tag, in the same workflow run.</p>
           <ul>
-          <li><strong>Each service is the monolith with one module enabled.</strong> The hosts still run <code>ModuleLoader</code>, just with
-          <code>Modules:{Module}:Enabled=true</code> for their own module; disabled peers are satisfied by <code>Disabled*</code> stubs.
-          The Domain/Application/Shared code is identical whether it runs in-process or extracted.</li>
-          <li><strong>The Gateway is the only client entry point.</strong> It owns the route→service map (<code>/Auth</code>, <code>/Events</code>,
-          <code>/Bookmarks</code>, <code>/hubs</code>, <code>/.well-known</code>, …); clients (Blazor/MAUI) never address a service directly. It
-          has no DbContext or controllers: security-headers middleware (ADR-023), CORS, static files, a
-          <code>/privacy</code> minimal-API endpoint, and the route forwarders (ADC; Store&#39;s Gateway is the same minus the
-          static files).</li>
-          <li><strong>Cross-service communication uses edge transports:</strong> synchronous calls over gRPC contracts (ADR-007);
-          asynchronous flows over the outbox → MassTransit broker (ADR-003, ADR-006). Token validation is
-          federated via JWKS through the Gateway (ADR-004). Each service owns its own database (ADR-006).</li>
-          <li><strong>Transport stays at the edge, enforced.</strong> <code>MicroserviceExtractionTests</code> in the architecture suite
-          forbid gRPC / MassTransit / Protobuf dependencies in any Domain, Application, or Shared assembly, so the
-          core stays host-agnostic and the split stays reversible.</li>
+          <li><code>release.yml</code> keeps its existing <code>dotnet nuget push</code> to <code>https://nuget.pkg.github.com/ivanball/index.json</code>
+          unchanged, and gains a second push to <code>https://api.nuget.org/v3/index.json</code> with
+          <code>--skip-duplicate</code>. Both the main (ubuntu) job and the MAUI (windows) job push to both registries,
+          so the lockstep release stays whole across all fifteen packages (ADR-042 splits the MAUI package
+          into its own job).</li>
+          <li>The nuget.org push is <strong>conditional on the <code>NUGET_API_KEY</code> secret being present</strong>, and is skipped
+          rather than failed when it is absent. A fork, or this repo before the secret is provisioned,
+          still produces a complete GitHub Packages release. The secret is surfaced through a job-level
+          <code>env</code> block because the <code>secrets</code> context is not available in a step-level <code>if</code>.</li>
+          <li>The API key is scoped to push only, with the glob pattern <code>MMCA.Common.*</code>, and the <code>MMCA.</code> ID
+          prefix is reserved on nuget.org so the package ids cannot be taken by anyone else.</li>
+          <li><strong>nuget.org is the documented install path.</strong> README, guides, and articles point there. GitHub
+          Packages is retained as a mirror, not deprecated: it is where prerelease and internal-consumer
+          restores keep working with no change.</li>
+          <li>Package listing metadata is treated as part of the deliverable, not an afterthought:
+          <code>PackageProjectUrl</code>, <code>PackageIcon</code>, <code>PackageTags</code>, and a per-package <code>Description</code> are set once in
+          <code>Directory.Build.props</code>, and the repository README is packed into every package as its
+          <code>PackageReadmeFile</code>, so the listing page is the funnel.</li>
+          <li><strong>No backfill.</strong> nuget.org starts at the first release published after this decision. Older
+          versions remain available on GitHub Packages only.</li>
           </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
-          <li><strong>No business-logic rewrite.</strong> Because a service is just the monolith with one module enabled,
-          extraction was a hosting/wiring change, not a domain change — and the module-isolation tests already
-          guaranteed modules didn&#39;t reach into each other&#39;s internals.</li>
-          <li><strong>One entry point.</strong> A single Gateway keeps client config trivial (one pinned URL the MAUI app bakes
-          in), centralizes CORS and auth-forwarding, and lets the internal services run cleartext h2c without
-          exposing that to clients.</li>
-          <li><strong>Per-module split (not coarser or finer).</strong> The module already was the consistency and ownership
-          boundary; one service per module maps deploy/scale units onto boundaries the team already reasons about.</li>
-          <li><strong>Reversible by construction.</strong> Transport at the edge + the <code>ModuleLoader</code> mean a service can be
-          re-collapsed into a combined host (or peers co-hosted) by changing configuration, not code — useful
-          insurance for a small team adopting microservices.</li>
+          <li><strong>The install line has to be true.</strong> Documentation that cannot be followed is worse than no
+          documentation, because the reader concludes the project is broken rather than that the registry is
+          unusual. Every other adoption improvement is downstream of this one.</li>
+          <li><strong>Publishing to both costs one workflow step.</strong> There is no maintenance split: the same nupkgs
+          produced by the same pack step go to two feeds, so the registries cannot drift in content.</li>
+          <li><strong>Skipping beats failing on a missing secret.</strong> A release workflow that hard-fails without a
+          secret turns a credential problem into a broken release, and would break any fork outright.</li>
+          <li><strong>nuget.org is irreversible per version, so the conservative scope is right.</strong> <code>--skip-duplicate</code>
+          keeps a re-run idempotent, and starting clean avoids publishing a long tail of old versions that
+          nobody asked for and that can never be deleted (only unlisted).</li>
+          <li><strong>Reserving the ID prefix is cheap insurance.</strong> Package ids on nuget.org are first-come; an
+          unreserved <code>MMCA.</code> namespace is a supply-chain risk (ADR-038 covers provenance for the artifacts
+          themselves).</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>Operational complexity.</strong> Four deployables plus a Gateway, service discovery, a broker, and
-          per-service databases — versus one process. Mitigated locally by Aspire orchestration and in prod by
-          Bicep / Azure Container Apps.</li>
-          <li><strong>Distributed-systems semantics.</strong> Cross-service consistency is eventual (outbox + integration events);
-          there are no cross-service transactions or cross-database FKs (ADR-006). Bidirectional gRPC pairs
-          (Conference ↔ Engagement) need deliberate startup handling (ADR-007).</li>
-          <li><strong>Transport constraints leak into hosting.</strong> The REST services run <code>Http2</code>-only on cleartext for h2c
-          gRPC, while Notification runs <code>Http1AndHttp2</code> for its SignalR WebSocket upgrade — a per-host Kestrel
-          nuance that didn&#39;t exist in the monolith.</li>
-          <li><strong>Duplicated host wiring.</strong> Each service repeats the same pipeline setup; shared concerns live in
-          <code>MMCA.Common.API</code> / <code>ServiceDefaults</code> to limit the drift.</li>
+          <li><strong>A published version can never be withdrawn.</strong> nuget.org allows unlisting, not deletion. A bad
+          release is now permanent public history, which raises the stakes on the release gates (the SBOM
+          hard gate, the package-consumption job, and the Helpdesk source-build canary all already run
+          before a tag ships).</li>
+          <li><strong>Two registries can report different availability.</strong> nuget.org indexing lags a push by minutes,
+          so immediately after a release the two feeds disagree briefly. Consumers pinned to exact versions
+          are unaffected; anyone restoring the newest version within that window may not see it yet.</li>
+          <li><strong>Public download counts cut both ways.</strong> A visible number that stays near zero is a discouraging
+          signal. Accepted deliberately: an honest adoption metric is worth more than no metric, and it is
+          the input to the whole distribution effort.</li>
+          <li><strong>The API key is a new secret to rotate.</strong> It sits alongside the existing deployment credentials
+          and inherits the same rotation obligation, with the mitigation that its scope is push-only and
+          glob-limited to <code>MMCA.Common.*</code>.</li>
+          <li><strong>Prefix reservation is a manual, account-level action</strong> that cannot be expressed in this
+          repository, so the decision is only half-enforceable by code review.</li>
           </ul>
-          <h2 id="applicability">Applicability</h2>
-          <p>This ADR is framed around ADC (the first repo extracted), but the same topology is now the framework&#39;s
-          <strong>standard extraction shape</strong>, not an ADC-only choice. MMCA.Store followed it: one service host per
-          module (<code>MMCA.Store.{Catalog,Identity,Sales}.Service</code>) behind a single <code>MMCA.Store.Gateway</code> (also
-          pinned to <code>https://localhost:6001</code>), with its combined <code>MMCA.Store.WebAPI</code> host likewise deleted.
-          Store&#39;s cross-service topology differs in transport detail (see ADR-012 — both apps now run Profile A),
-          but the extraction shape is identical.</p>
           <h2 id="related">Related</h2>
-          <p>ADR-003 (outbox dual dispatch), ADR-004 (cross-service token validation via JWKS), ADR-006 (database
-          per service), and ADR-007 (gRPC cross-service calls) are the facet decisions that sit under this extraction.</p>
+          <p>ADR-016 (lockstep versioning: every package ships at one version, so both registries receive the
+          same fifteen ids per release),
+          ADR-038 (supply-chain provenance: the SBOM hard gate, lock files, and vulnerability audit that all
+          run before either push),
+          ADR-042 (the MAUI package&#39;s separate windows job, which needs the same dual push to keep the
+          release whole).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/008-service-extraction-topology.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/053-dual-registry-package-publishing.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
       </div>

@@ -27,13 +27,15 @@ There are no tests and no linter. The generator prints a summary line (pages wri
 `index.html`, `resume.html`, `platform.html`, `writing.html`, `speaking.html`, `contact.html`, `404.html`. There is no templating: the header/footer/nav markup is **duplicated across every page** (and separately inside `tools/build-docs.mjs` as `headerHtml`/`footerHtml`). A nav or footer change means editing all top-level pages AND the generator, then rebuilding `docs/`.
 
 Single edit points:
-- **Writing page cards**: `assets/data/articles.js` (`window.ARTICLES` + `ARTICLE_CATEGORIES`, rendered by `assets/js/writing.js`). An empty `url` renders a "Coming soon" card; paste the Medium URL to publish.
+- **Writing page cards**: `assets/data/articles.js` (`window.ARTICLES` + `ARTICLE_CATEGORIES`). An empty `url` renders a "Coming soon" card; paste the Medium URL **and** the publication instant into `date` to publish. **These cards are now static markup generated at build time**, so editing the data file is not enough: re-run `cd tools && npm run build` and commit the regenerated `writing.html`, `feed.xml`, and `sitemap.xml` with it. `assets/js/writing.js` only filters the generated nodes in place; it no longer renders them.
+- **Platform ADR card copy**: `assets/data/adr-cards.js`, keyed by ADR number. The list itself is enumerated from `docs-src/adr/`, so a new ADR appears on the page and in the counts with no edit here; an entry only replaces the generated fallback with better copy.
+- **Analytics and email capture**: `assets/js/analytics.js` (GA4 measurement ID + newsletter form action). Both are placeholders and both no-op until replaced: no request is made and the subscribe form stays hidden. Search-console verification is a meta tag and lives commented in `index.html`'s head, because a crawler will not accept a JS-injected tag.
 - **Published email**: `EMAIL_USER` / `EMAIL_DOMAIN` at the top of `assets/js/main.js` (assembled in JS to deter scraping).
 - **Resume**: replace the PDF in `assets/files/` and edit `resume.html`.
 
 `assets/js/main.js` is loaded with `defer` on every page: theme toggle (localStorage key `mmca-theme`; each page also has an inline head script that applies the stored theme before paint), mobile nav, footer year, doc sidebar. `assets/css/styles.css` is the single stylesheet (light + dark via `data-theme` on `<html>`); `assets/css/docs.css` layers doc-page prose/layout on top of it.
 
-`sitemap.xml` is maintained by hand: bump the relevant `lastmod` when a page's content changes.
+`sitemap.xml` and `feed.xml` are **generated** by `tools/build-docs.mjs`, not hand-maintained. The sitemap covers every root page plus every generated document (120+ URLs, up from a hand-listed 11 that omitted the whole library); `lastmod` comes from each source file's last git commit date, with anything uncommitted dated today. The feed lists the published articles from `articles.js`, pointing at Medium.
 
 ### 2. Generated reference library (`docs/` from `docs-src/`)
 
@@ -45,6 +47,17 @@ Single edit points:
 - `docs-src/onboarding/`: the onboarding chapters, their ONLY home; the workspace `Tools/invtool` pipeline writes here directly. Underscore-prefixed files are working files and are skipped by the build.
 
 `tools/build-docs.mjs` renders each markdown file into a full page in the site shell (sidebar, breadcrumb, canonical/OG meta) under `docs/`. **The generated HTML in `docs/` is committed: never hand-edit it; edit `docs-src/` and rebuild.** A docs-src edit is not done until the rebuild ran and both the source and regenerated output are committed together.
+
+The generator also writes into **marked regions of the hand-authored root pages**, so derived content cannot drift from its source. Each region is delimited by `<!-- BEGIN name -->` / `<!-- END name -->`, and a missing marker fails the build rather than silently no-oping:
+
+| Region | Page | Derived from |
+|---|---|---|
+| `articles`, `articles-jsonld` | `writing.html` | `assets/data/articles.js` |
+| `adr-list`, `adr-count`, `adr-stat` | `platform.html` | `docs-src/adr/*.md` + `assets/data/adr-cards.js` |
+| `scorecards` | `platform.html` | the `**Maturity index**` / `**Implementation index**` lines in `docs-src/governance/*-ArchitectureScorecard.md` |
+| `library-cards` | `platform.html` | the four `docs-src/` collection sizes |
+
+Never hand-edit inside a region: the next build overwrites it.
 
 Generator behaviors worth knowing before touching it or the markdown:
 

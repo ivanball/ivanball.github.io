@@ -7,17 +7,23 @@
   <meta name="description" content="Accepted. The framework plumbing is complete, covered by unit and integration tests (DataSourceResolverTests, CrossDataSourceDegradeConventionTests,…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/018-polyglot-persistence.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-018: Polyglot Persistence (Multiple Storage Engines Behind One Model)">
   <meta property="og:description" content="Accepted. The framework plumbing is complete, covered by unit and integration tests (DataSourceResolverTests, CrossDataSourceDegradeConventionTests,…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/018-polyglot-persistence.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-018: Polyglot Persistence (Multiple Storage Engines Behind One Model)">
+  <meta name="twitter:description" content="Accepted. The framework plumbing is complete, covered by unit and integration tests (DataSourceResolverTests, CrossDataSourceDegradeConventionTests,…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)","item":"https://ivanball.github.io/docs/adr/018-polyglot-persistence.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -32,7 +38,8 @@
         <ul class="nav-links" id="nav-links">
           <li><a href="../../index.html">Home</a></li>
           <li><a href="../../resume.html">Résumé</a></li>
-          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
           <li><a href="../../writing.html">Writing</a></li>
           <li><a href="../../speaking.html">Speaking</a></li>
           <li><a href="../../contact.html">Contact</a></li>
@@ -61,7 +68,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 52 ADRs</summary>
+        <summary>All 53 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -117,6 +124,7 @@
         <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
         <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
         <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
           </ol>
         </nav>
       </details>

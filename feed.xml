@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Ivan Ball-llovera: deep dives on enterprise .NET</title>
+    <link>https://ivanball.github.io/writing.html</link>
+    <atom:link href="https://ivanball.github.io/feed.xml" rel="self" type="application/rss+xml"/>
+    <description>A long-form series turning a production .NET framework's architecture decisions into teachable patterns: the Result railway, the transactional outbox, database-per-service, JWKS auth, fitness functions, and more.</description>
+    <language>en-us</language>
+    <lastBuildDate>Sat, 25 Jul 2026 19:55:48 GMT</lastBuildDate>
+    <managingEditor>noreply@ivanball.github.io (Ivan Ball-llovera)</managingEditor>
+    <item>
+      <title>Browser session-cookie auth for Blazor SSR</title>
+      <link>https://medium.com/@ivanball76/browser-session-cookie-auth-for-blazor-ssr-surviving-the-f5-eb0ea317820e</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/browser-session-cookie-auth-for-blazor-ssr-surviving-the-f5-eb0ea317820e</guid>
+      <pubDate>Sat, 25 Jul 2026 12:25:21 GMT</pubDate>
+      <description>HttpOnly session cookies and an SSR-time scheme so [Authorize] passes during prerender, with the API still the boundary.</description>
+      <category>Auth &amp; the edge</category>
+      <category>ADR 022</category>
+    </item>
+    <item>
+      <title>Permission-based authorization over roles</title>
+      <link>https://medium.com/@ivanball76/permission-based-authorization-capabilities-over-role-checks-ea6574cbee27</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/permission-based-authorization-capabilities-over-role-checks-ea6574cbee27</guid>
+      <pubDate>Fri, 24 Jul 2026 11:34:48 GMT</pubDate>
+      <description>A capability layer over RBAC: permission policies that resolve on demand from a central registry.</description>
+      <category>Auth &amp; the edge</category>
+      <category>ADR 020</category>
+    </item>
+    <item>
+      <title>Delete AutoMapper: manual DTO mapping</title>
+      <link>https://medium.com/@ivanball76/delete-automapper-explicit-compile-time-dto-mapping-that-you-can-actually-test-9c7013cc5d3f</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/delete-automapper-explicit-compile-time-dto-mapping-that-you-can-actually-test-9c7013cc5d3f</guid>
+      <pubDate>Thu, 23 Jul 2026 11:52:24 GMT</pubDate>
+      <description>Why source-generated, per-entity mappers beat reflection-based mapping for clarity and speed.</description>
+      <category>Auth &amp; the edge</category>
+      <category>ADR 001</category>
+    </item>
+    <item>
+      <title>Live channels over one SignalR hub</title>
+      <link>https://medium.com/@ivanball76/ephemeral-by-design-sub-second-live-channels-over-one-signalr-hub-0248050e0c8b</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/ephemeral-by-design-sub-second-live-channels-over-one-signalr-hub-0248050e0c8b</guid>
+      <pubDate>Wed, 22 Jul 2026 11:40:19 GMT</pubDate>
+      <description>Sub-second ephemeral events (polls, Q&amp;A, live counts) fanned out over the existing notification hub, with nothing persisted.</description>
+      <category>Auth &amp; the edge</category>
+      <category>ADR 039</category>
+    </item>
+    <item>
+      <title>Notifications as a vertical slice</title>
+      <link>https://medium.com/@ivanball76/notifications-as-a-vertical-slice-in-app-inbox-real-time-push-native-push-and-email-c59d5a4f3b69</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/notifications-as-a-vertical-slice-in-app-inbox-real-time-push-native-push-and-email-c59d5a4f3b69</guid>
+      <pubDate>Tue, 21 Jul 2026 12:01:10 GMT</pubDate>
+      <description>A notifications feature built as a clean vertical slice across every layer.</description>
+      <category>Auth &amp; the edge</category>
+      <category>ADR 024</category>
+    </item>
+    <item>
+      <title>Problem Details across HTTP and gRPC</title>
+      <link>https://medium.com/@ivanball76/problem-details-across-http-and-grpc-rfc-9457-9f20157cf7de</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/problem-details-across-http-and-grpc-rfc-9457-9f20157cf7de</guid>
+      <pubDate>Mon, 20 Jul 2026 13:33:53 GMT</pubDate>
+      <description>One error contract mapped consistently to HTTP Problem Details and gRPC status.</description>
+      <category>Auth &amp; the edge</category>
+    </item>
+    <item>
+      <title>The self-invalidating cache</title>
+      <link>https://medium.com/@ivanball76/the-self-invalidating-cache-that-lives-in-the-pipeline-not-your-handlers-e11548062d2f</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/the-self-invalidating-cache-that-lives-in-the-pipeline-not-your-handlers-e11548062d2f</guid>
+      <pubDate>Fri, 17 Jul 2026 12:07:08 GMT</pubDate>
+      <description>A caching decorator where commands invalidate and queries populate, plus an authenticated output-cache tier at the API edge.</description>
+      <category>Auth &amp; the edge</category>
+      <category>ADR 026</category>
+      <category>ADR 040</category>
+    </item>
+    <item>
+      <title>Idempotency in one attribute</title>
+      <link>https://medium.com/@ivanball76/idempotency-in-one-attribute-safe-retries-for-http-apis-065848fd03f4</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/idempotency-in-one-attribute-safe-retries-for-http-apis-065848fd03f4</guid>
+      <pubDate>Thu, 16 Jul 2026 13:46:11 GMT</pubDate>
+      <description>Dedup client retries with an Idempotency-Key header and cached replay, plus a consumer-side inbox for brokers.</description>
+      <category>Auth &amp; the edge</category>
+      <category>ADR 017</category>
+      <category>ADR 021</category>
+    </item>
+    <item>
+      <title>Password hashing done right</title>
+      <link>https://medium.com/@ivanball76/password-hashing-done-right-pbkdf2-sha512-600k-iterations-timing-safe-d64ddb802403</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/password-hashing-done-right-pbkdf2-sha512-600k-iterations-timing-safe-d64ddb802403</guid>
+      <pubDate>Wed, 15 Jul 2026 12:22:21 GMT</pubDate>
+      <description>The non-negotiables of password storage in .NET, done correctly and tested.</description>
+      <category>Auth &amp; the edge</category>
+      <category>ADR 032</category>
+    </item>
+    <item>
+      <title>JWKS cross-service auth</title>
+      <link>https://medium.com/@ivanball76/cross-service-auth-without-a-shared-secret-jwks-dual-fetch-478e6f688c7e</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/cross-service-auth-without-a-shared-secret-jwks-dual-fetch-478e6f688c7e</guid>
+      <pubDate>Tue, 14 Jul 2026 11:17:47 GMT</pubDate>
+      <description>Validate another service&#39;s RS256 tokens via JWKS discovery, with no shared secret crossing a boundary.</description>
+      <category>Auth &amp; the edge</category>
+      <category>ADR 004</category>
+    </item>
+    <item>
+      <title>Event-schema versioning</title>
+      <link>https://medium.com/@ivanball76/event-schema-versioning-never-silently-reshape-an-event-93cd5d4a156d</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/event-schema-versioning-never-silently-reshape-an-event-93cd5d4a156d</guid>
+      <description>Every integration event carries a schema version; breaking changes get a new event type and an upcaster, never a silent reshape.</description>
+      <category>Data &amp; persistence</category>
+      <category>ADR 010</category>
+    </item>
+    <item>
+      <title>Self-ordering modules</title>
+      <link>https://medium.com/@ivanball76/self-ordering-modules-discovered-kahn-ordered-and-extractable-2ce7283a26b5</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/self-ordering-modules-discovered-kahn-ordered-and-extractable-2ce7283a26b5</guid>
+      <description>Modules declare their dependencies and load in topological order, so registration is never hand-sequenced.</description>
+      <category>Data &amp; persistence</category>
+    </item>
+    <item>
+      <title>Optimistic concurrency: RowVersion round-trips</title>
+      <link>https://medium.com/@ivanball76/optimistic-concurrency-that-survives-the-round-trip-rowversion-from-database-to-dto-and-back-93d4a794716f</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/optimistic-concurrency-that-survives-the-round-trip-rowversion-from-database-to-dto-and-back-93d4a794716f</guid>
+      <description>Carry the RowVersion from database to DTO and back, so a concurrent edit fails fast as a conflict instead of silently overwriting.</description>
+      <category>Data &amp; persistence</category>
+      <category>ADR 035</category>
+    </item>
+    <item>
+      <title>Navigation populators</title>
+      <link>https://medium.com/@ivanball76/ef-core-include-chains-are-a-trap-navigation-populators-decouple-eager-loading-c378fa4497ac</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/ef-core-include-chains-are-a-trap-navigation-populators-decouple-eager-loading-c378fa4497ac</guid>
+      <description>Eager-load relationships that cross containers and data sources without N+1 or a leaky abstraction.</description>
+      <category>Data &amp; persistence</category>
+      <category>ADR 002</category>
+    </item>
+    <item>
+      <title>Polyglot persistence: one model, three engines</title>
+      <link>https://medium.com/@ivanball76/one-entity-model-three-databases-polyglot-persistence-behind-a-single-attribute-760e77974d5d</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/one-entity-model-three-databases-polyglot-persistence-behind-a-single-attribute-760e77974d5d</guid>
+      <description>SQL Server, Cosmos, and SQLite behind a single entity model, with the engine chosen by attribute.</description>
+      <category>Data &amp; persistence</category>
+      <category>ADR 018</category>
+    </item>
+    <item>
+      <title>Database-per-service inside a monolith</title>
+      <link>https://medium.com/@ivanball76/database-per-service-inside-a-monolith-and-why-265092eb03f1</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/database-per-service-inside-a-monolith-and-why-265092eb03f1</guid>
+      <description>Give each module its own database and outbox before you extract it, so extraction changes hosting, not data.</description>
+      <category>Data &amp; persistence</category>
+      <category>ADR 006</category>
+    </item>
+    <item>
+      <title>The transactional outbox</title>
+      <link>https://medium.com/@ivanball76/the-transactional-outbox-in-net-10-never-lose-an-event-again-f5a9b7a89e51</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/the-transactional-outbox-in-net-10-never-lose-an-event-again-f5a9b7a89e51</guid>
+      <description>Events that survive a crash: persist them atomically with your data, then dispatch at least once.</description>
+      <category>Core patterns</category>
+      <category>ADR 003</category>
+    </item>
+    <item>
+      <title>Compose validators, don&#39;t copy them</title>
+      <link>https://medium.com/@ivanball76/compose-validators-dont-copy-them-a-reusable-fluentvalidation-kit-8865a6003a9c</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/compose-validators-dont-copy-them-a-reusable-fluentvalidation-kit-8865a6003a9c</guid>
+      <description>A validation kit that composes FluentValidation rules instead of copy-pasting them across features.</description>
+      <category>Core patterns</category>
+    </item>
+    <item>
+      <title>The CQRS decorator pipeline</title>
+      <link>https://medium.com/@ivanball76/the-cqrs-decorator-pipeline-logging-caching-and-transactions-without-touching-a-handler-fb7679b8bde8</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/the-cqrs-decorator-pipeline-logging-caching-and-transactions-without-touching-a-handler-fb7679b8bde8</guid>
+      <description>Thin command and query handlers wrapped by a Scrutor decorator chain whose order is load-bearing.</description>
+      <category>Core patterns</category>
+      <category>ADR 014</category>
+      <category>ADR 031</category>
+    </item>
+    <item>
+      <title>Specifications over LINQ spaghetti</title>
+      <link>https://medium.com/@ivanball76/specifications-over-linq-spaghetti-composable-reusable-query-intent-8a40dafcbd3d</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/specifications-over-linq-spaghetti-composable-reusable-query-intent-8a40dafcbd3d</guid>
+      <description>Compose queries from reusable specification objects instead of scattering LINQ across handlers.</description>
+      <category>Core patterns</category>
+    </item>
+    <item>
+      <title>Kill the anemic domain model</title>
+      <link>https://medium.com/@ivanball76/kill-the-anemic-domain-model-rich-aggregates-with-factory-methods-that-return-result-44f2e3d89794</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/kill-the-anemic-domain-model-rich-aggregates-with-factory-methods-that-return-result-44f2e3d89794</guid>
+      <description>Push behavior into rich aggregates with factory methods and invariants instead of bags of public setters.</description>
+      <category>Core patterns</category>
+    </item>
+    <item>
+      <title>The Result railway in C#</title>
+      <link>https://medium.com/@ivanball76/stop-throwing-exceptions-for-control-flow-the-result-railway-in-c-7a02050b554e</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/stop-throwing-exceptions-for-control-flow-the-result-railway-in-c-7a02050b554e</guid>
+      <description>Model expected failures as Result values with a transport-agnostic error type, and keep exceptions for the genuinely exceptional.</description>
+      <category>Core patterns</category>
+      <category>ADR 013</category>
+    </item>
+    <item>
+      <title>The 34-category architecture rubric</title>
+      <link>https://medium.com/@ivanball76/what-good-architecture-actually-means-a-34-category-rubric-you-can-score-yourself-against-4002291a6b6a</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/what-good-architecture-actually-means-a-34-category-rubric-you-can-score-yourself-against-4002291a6b6a</guid>
+      <description>A two-axis rubric for scoring architecture on maturity and implementation, so &#39;good architecture&#39; stops being a vibe.</description>
+      <category>Orientation</category>
+    </item>
+    <item>
+      <title>Modular monolith to microservices</title>
+      <link>https://medium.com/@ivanball76/modular-monolith-to-microservices-without-the-rewrite-8c3603614f12</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/modular-monolith-to-microservices-without-the-rewrite-8c3603614f12</guid>
+      <description>The cornerstone idea: build the monolith now and extract a service later with no rewrite, via module discovery, gRPC contracts, and a YARP gateway.</description>
+      <category>Orientation</category>
+      <category>ADR 006</category>
+      <category>ADR 007</category>
+      <category>ADR 008</category>
+    </item>
+    <item>
+      <title>Open-sourced and graded against 34 categories</title>
+      <link>https://medium.com/@ivanball76/i-open-sourced-the-enterprise-net-77f9200f3728</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/i-open-sourced-the-enterprise-net-77f9200f3728</guid>
+      <description>Why I open-sourced a production .NET framework and scored it against a 34-category architecture rubric, gaps and all.</description>
+      <category>Orientation</category>
+    </item>
+  </channel>
+</rss>
