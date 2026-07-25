@@ -165,12 +165,23 @@
           <code>--skip-duplicate</code>. Both the main (ubuntu) job and the MAUI (windows) job push to both registries,
           so the lockstep release stays whole across all fifteen packages (ADR-042 splits the MAUI package
           into its own job).</li>
-          <li>The nuget.org push is <strong>conditional on the <code>NUGET_API_KEY</code> secret being present</strong>, and is skipped
-          rather than failed when it is absent. A fork, or this repo before the secret is provisioned,
-          still produces a complete GitHub Packages release. The secret is surfaced through a job-level
-          <code>env</code> block because the <code>secrets</code> context is not available in a step-level <code>if</code>.</li>
-          <li>The API key is scoped to push only, with the glob pattern <code>MMCA.Common.*</code>, and the <code>MMCA.</code> ID
-          prefix is reserved on nuget.org so the package ids cannot be taken by anyone else.</li>
+          <li><strong>Authentication to nuget.org is trusted publishing, not a stored API key.</strong> Each publishing job
+          requests a GitHub OIDC token (<code>permissions: id-token: write</code>) and exchanges it through
+          <code>NuGet/login@v1</code> for an API key valid for one hour, immediately before the push. No long-lived
+          credential exists in the repository. nuget.org itself now marks API keys &quot;Not recommended&quot; and
+          redirects its own API-keys page to trusted publishing.</li>
+          <li>The exchange is authorized by a <strong>policy on nuget.org pinned to the permanent GitHub ids</strong> of the
+          owner (<code>ivanball</code>, #9340301), the repository (<code>MMCA.Common</code>, #1190658420), and <strong>this workflow
+          file</strong>. Those ids are what defeat a resurrection attack: deleting the repo and recreating it under
+          the same name produces different ids, and the policy stops matching.</li>
+          <li><strong>One policy covers both jobs</strong>, because it keys on the workflow file rather than the job. Each
+          job still needs its own <code>id-token: write</code> permission and its own exchange: a short-lived key is
+          single-use and cannot cross a job boundary.</li>
+          <li>The nuget.org steps are guarded by <code>github.repository_owner == &#39;ivanball&#39;</code>, so a fork completes a
+          full GitHub Packages release instead of failing on an exchange it can never satisfy.</li>
+          <li>The <code>MMCA.</code> ID prefix is reserved on nuget.org so the package ids cannot be taken by anyone else.
+          API keys remain available for a manual push from a command line, which trusted publishing does
+          not cover, but no automated path uses one.</li>
           <li><strong>nuget.org is the documented install path.</strong> README, guides, and articles point there. GitHub
           Packages is retained as a mirror, not deprecated: it is where prerelease and internal-consumer
           restores keep working with no change.</li>
@@ -188,8 +199,13 @@
           unusual. Every other adoption improvement is downstream of this one.</li>
           <li><strong>Publishing to both costs one workflow step.</strong> There is no maintenance split: the same nupkgs
           produced by the same pack step go to two feeds, so the registries cannot drift in content.</li>
-          <li><strong>Skipping beats failing on a missing secret.</strong> A release workflow that hard-fails without a
-          secret turns a credential problem into a broken release, and would break any fork outright.</li>
+          <li><strong>A credential that cannot be stored cannot be leaked.</strong> A stored key would also have carried a
+          365-day maximum lifetime, and expiry is the failure mode a presence check cannot catch: the secret
+          is still there, so the step still runs, and the release fails at the push. Trusted publishing
+          removes the rotation obligation rather than scheduling it.</li>
+          <li><strong>The owner guard beats a secret-presence guard.</strong> It states the actual condition (this is the
+          canonical repository) instead of inferring it from configuration, and it keeps a fork&#39;s release
+          working.</li>
           <li><strong>nuget.org is irreversible per version, so the conservative scope is right.</strong> <code>--skip-duplicate</code>
           keeps a re-run idempotent, and starting clean avoids publishing a long tail of old versions that
           nobody asked for and that can never be deleted (only unlisted).</li>
@@ -209,17 +225,25 @@
           <li><strong>Public download counts cut both ways.</strong> A visible number that stays near zero is a discouraging
           signal. Accepted deliberately: an honest adoption metric is worth more than no metric, and it is
           the input to the whole distribution effort.</li>
-          <li><strong>The API key is a new secret to rotate.</strong> It sits alongside the existing deployment credentials
-          and inherits the same rotation obligation, with the mitigation that its scope is push-only and
-          glob-limited to <code>MMCA.Common.*</code>.</li>
+          <li><strong>The workflow file name is now load-bearing.</strong> The trusted-publishing policy names
+          <code>release.yml</code>, so renaming or splitting that file silently breaks publishing until the policy is
+          edited on nuget.org. That is the price of binding the credential to a specific workflow, and it is
+          the same property that makes the credential safe.</li>
+          <li><strong>Publishing configuration now lives in two places</strong>, the workflow and an account-level policy
+          that no reviewer can see in a pull request. A stored secret had the same split; this trades an
+          invisible secret for an invisible policy, and gains a policy that cannot be exfiltrated.</li>
+          <li><strong>The policy is scoped to an owner, not to a package glob.</strong> It authorizes publishing for every
+          package owned by <code>ivanball</code>, which is broader than a glob-limited key would have been. Acceptable
+          because the counterweight is far tighter: the exchange only happens from one repository&#39;s one
+          workflow file.</li>
           <li><strong>Prefix reservation is a manual, account-level action</strong> that cannot be expressed in this
-          repository, so the decision is only half-enforceable by code review.</li>
+          repository, so that half of the decision is not enforceable by code review.</li>
           </ul>
           <h2 id="related">Related</h2>
           <p>ADR-016 (lockstep versioning: every package ships at one version, so both registries receive the
           same fifteen ids per release),
           ADR-038 (supply-chain provenance: the SBOM hard gate, lock files, and vulnerability audit that all
-          run before either push),
+          run before either push; keyless publishing extends that posture to the credential itself),
           ADR-042 (the MAUI package&#39;s separate windows job, which needs the same dual push to keep the
           release whole).</p>
           
