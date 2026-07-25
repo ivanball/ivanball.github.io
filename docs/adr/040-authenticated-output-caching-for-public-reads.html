@@ -191,13 +191,21 @@
           <li><p>The output-cache store must be Redis-backed wherever the service runs more than one replica.
           <strong>This supersedes the original trade-off, which accepted a per-replica in-memory store and its
           bounded staleness window.</strong> That acceptance did not survive contact with the deployed topology:
-          ADC&#39;s Conference service and Store&#39;s Catalog service both run <code>maxReplicas: 2</code>, so every
-          <code>EvictByTagAsync</code> reached only the replica that handled the mutation and the other kept serving
-          the pre-edit payload for the full 5-minute TTL. An organizer renaming a session, or an admin
-          repricing a product, saw the change apply to roughly half of subsequent reads at random. Each
-          replica also filled its own copy of the cache, doubling cold-database traffic on exactly the
-          Basic-tier databases this policy exists to protect, and in Store&#39;s case a few multi-megabyte
-          image entries per replica crowded out the product and category JSON that matters most.</p>
+          ADC&#39;s Conference service and Store&#39;s Catalog service both run <code>minReplicas: 1, maxReplicas: 2</code>
+          with an HTTP scale rule at 50 concurrent requests, so every <code>EvictByTagAsync</code> reached only the
+          replica that handled the mutation and the other kept serving the pre-edit payload for the full
+          5-minute TTL.</p>
+          <p><strong>Be precise about when this bites: it is a LATENT defect, not a continuously active one.</strong> Both
+          services sit at one live replica at ordinary traffic (verified 2026-07-25), and at one replica
+          there is nothing to propagate. The staleness appears only once the scale rule adds the second
+          replica, which is to say under exactly the load the cache exists to absorb: ADC conference day
+          (~67 peak concurrent) and a Store traffic spike. At that point an organizer renaming a session,
+          or an admin repricing a product, sees the change apply to roughly half of subsequent reads at
+          random. Each replica also fills its own copy, doubling cold-database traffic on the Basic-tier
+          databases this policy protects, and in Store&#39;s case a few multi-megabyte image entries per
+          replica crowd out the product and category JSON that matters most.</p>
+          <p>A defect that only surfaces at peak is a worse one to carry, not a lesser one: it cannot be
+          reproduced in the steady state and it arrives when there is least room to diagnose it.</p>
           <p>Both apps had Redis provisioned and already wired as <code>IDistributedCache</code>, so closing this was a
           registration (<code>AddStackExchangeRedisOutputCache</code>) rather than new infrastructure. Note that
           <code>AddOutputCache</code> registers its store with <code>TryAdd</code>, so an explicit Redis registration wins
