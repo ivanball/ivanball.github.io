@@ -281,6 +281,27 @@ Strong in-app resilience (Polly, SQL retry, outbox, health probes), now with a f
 
 ---
 
+## 🟢 Resolved 2026-07-25 (performance program 2)
+
+Second evidence-led performance pass over Common/ADC/Store. ADC's share shipped as three PRs plus
+the v1.127.0 framework sweep.
+
+- [x] **Output cache shared across replicas.** Conference registered `AddOutputCache` with no store while running `maxReplicas: 2`, so every `EvictByTagAsync` reached only the replica that handled the mutation: the other served the pre-edit schedule/speaker payload for the full 5-minute TTL, and each replica filled its own copy, doubling cold reads against the Basic-tier database. Redis was already provisioned and wired as `IDistributedCache`. **ADR-040's original trade-off (per-replica in-memory accepted) is superseded**; see its 2026-07-25 amendment.
+- [x] **The uncached anonymous junction/lookup reads are cached and evict properly.** `CategoryItems` (hit on every `PublicSessionDetail` view via `CategoryItemLookupService`, so each view was an uncached full-table read), `SessionCategoryItems`, `SpeakerCategoryItems` and `EventSpeakers` now carry their parent's policy and evict both parents' tags on mutation, which they previously could not do at all (no `IOutputCacheStore` was injected). `SessionSpeakers` already evicted correctly and only needed the attribute. **Correction to the deferred item, which listed seven controllers:** `EventQuestionAnswers` and `SessionQuestionAnswers` are `[Authorize]` with per-caller BR-8 scoping, so caching them would be a correctness bug. Five, not seven.
+- [x] **AI scoring stopped flushing the whole public surface.** `SessionScoringProcessor` evicted the root `conference` tag twice per run, and every Conference policy carries it, so an organizer starting a scoring run during the event emptied events/speakers/rooms/categories/questions along with the sessions it changed. Now `conference:sessions`.
+- [x] **Bookmark counts no longer served stale for 5 minutes.** The count changes on an Engagement mutation, in another process with no handle on Conference's cache store, so no eviction can reach it from either side and speakers (neither Organizer nor ContentEditor) got no admin bypass. Moved to a 60s policy: a short TTL is the only lever available from this side.
+- [x] **Attendee feedback out of the public payloads.** `Session.SessionQuestionAnswers` and `Event.EventQuestionAnswers` were `[Navigation]`, so `includeChildren=true` shipped per-attendee feedback on the session grid (every page, every user), session detail, the speaker dashboard, and the events call that exists only to build a room-name dictionary. Those collections grow with attendance, not with the schedule, and they are the one child set here that is not public data.
+- [x] **Speaker session lists filtered server-side.** `PublicSpeakerDetail`, the organizer `SpeakerDetail` and `SpeakerDashboardService` each fetched the entire session catalog with all children and filtered in memory; the dashboard also appends a cache-bust by design, so every dashboard load was a full uncached catalog read. A virtual `SpeakerId` filter on the paged endpoint (the `SpeakersController` `EventId` precedent) resolves the `SessionSpeaker` join to a `Session.Id IN (...)` specification, **ANDed with the BR-132 public filter, never substituted for it**.
+- [x] **`LivePoll(SessionId, Status)` indexed.** `GetOpenPollsHandler` filters on both, which is the session Live page and presenter view read once per attendee per structural poll event, and only `EventId` was indexed.
+- [x] **Prerender double-fetch guarded** on `PublicSessionDetail` and `PublicSpeakerDetail`.
+- [x] **Load and CWV coverage.** `conference-read-load.js` exercised only `includeChildren=false` paths, which is why the feedback-payload regression was invisible to load evidence; it now also reads the `includeChildren=true` shapes with a payload-size growth tripwire. `/conference/sessions`, the heaviest public surface, gained a CWV budget.
+
+### Deferred from that program (record the choice)
+
+- [ ] **TD · Batch the feedback submit.** `EventFeedback`/`SessionFeedback` loop one HTTP POST per answered question over a 10-question set, so one button press is 10 sequential Gateway-to-Conference round trips, each its own transaction, outbox write and audit stamp. Needs a batch upsert command and endpoint.
+- [ ] **TD · Session-scoped live-poll management endpoint.** `SessionLive` fetches event-wide polls and filters client-side. Not a type-compatible swap: `GetEventPollsAsync` returns `LivePollDTO` while the session-scoped call returns `LivePollResultsDTO`, and the event list is organizer-only today with speakers deliberately falling back on 403, so it needs an authorization decision too.
+- [ ] **TD · `GetOpenPollsHandler` issues two queries per poll.** The same N+1 shape the `SessionQuestionViewBuilder` fix removed, left one file over. Theoretical at ADC's scale (1-3 open polls), so recorded rather than fixed.
+
 ## Deliberate / accepted (recorded decisions, not scheduled work)
 Conscious, recorded choices, not pending work (the former `TECHDEBT.md` accepted-risk section):
 - **Single-region deployment** (no multi-region failover) — accepted in `infra/DISASTER-RECOVERY.md`; the real load (~67 peak concurrent in 2026) doesn't justify the cost/complexity.
