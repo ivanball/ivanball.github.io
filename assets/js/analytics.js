@@ -23,8 +23,8 @@
   "use strict";
 
   /* --- 1. Google Analytics 4 ------------------------------------------- */
-  /* Replace with your Measurement ID, e.g. "G-ABC1234XYZ". */
-  var GA4_MEASUREMENT_ID = "G-XXXXXXXXXX";
+  /* Property "ivanball.github.io", web stream "Personal site". */
+  var GA4_MEASUREMENT_ID = "G-79V9WXLJ1V";
 
   /* --- 2. Newsletter form action --------------------------------------- */
   /* e.g. "https://buttondown.com/api/emails/embed-subscribe/ivanball" */
