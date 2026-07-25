@@ -7,17 +7,23 @@
   <meta name="description" content="Accepted ADRs explaining why the core cross-cutting patterns exist. Read these before changing a pattern they describe — they capture context and…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/index.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Architecture Decision Records">
   <meta property="og:description" content="Accepted ADRs explaining why the core cross-cutting patterns exist. Read these before changing a pattern they describe — they capture context and…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/index.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Architecture Decision Records">
+  <meta name="twitter:description" content="Accepted ADRs explaining why the core cross-cutting patterns exist. Read these before changing a pattern they describe — they capture context and…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"Overview","item":"https://ivanball.github.io/docs/adr/index.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -32,7 +38,8 @@
         <ul class="nav-links" id="nav-links">
           <li><a href="../../index.html">Home</a></li>
           <li><a href="../../resume.html">Résumé</a></li>
-          <li><a href="../../platform.html" aria-current="page">Platform</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
           <li><a href="../../writing.html">Writing</a></li>
           <li><a href="../../speaking.html">Speaking</a></li>
           <li><a href="../../contact.html">Contact</a></li>
@@ -61,7 +68,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 52 ADRs</summary>
+        <summary>All 53 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html" aria-current="page">Overview</a></li>
@@ -117,6 +124,7 @@
         <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
         <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
         <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
           </ol>
         </nav>
       </details>
@@ -393,6 +401,11 @@
           <td><a href="052-background-job-execution.html">052</a></td>
           <td>Background job execution (bounded queue + hosted drain)</td>
           <td>In-process work that outlives a request runs as a bounded <code>Channel&lt;T&gt;</code> singleton plus a <code>SingleReader</code> <code>BackgroundService</code> drain, never an untracked <code>Task</code> started from a controller: the host can then cancel and await it on shutdown instead of a deploy killing it mid-run. Full mode encodes what the work is worth (<code>DropOldest</code> for ephemeral broadcasts, whose drops are only visible through the <code>itemDropped</code> callback since <code>TryWrite</code> always succeeds; <code>Wait</code> plus non-blocking <code>TryWrite</code> for expensive runs, which refuse rather than discard). Expensive work dedups by natural key across queue AND execution, refusing duplicates with 409. Post-commit work attaches to a domain event so ADR-003 deferral supplies the commit boundary. Instances: <code>LiveChannelPublishQueue</code> (ADR-039), <code>SessionScoringQueue</code>.</td>
+          </tr>
+          <tr>
+          <td><a href="053-dual-registry-package-publishing.html">053</a></td>
+          <td>Dual-registry package publishing (trusted publishing)</td>
+          <td>Every release pushes the same nupkgs to nuget.org <strong>and</strong> GitHub Packages from one tag, because the GitHub Packages NuGet registry requires a <code>read:packages</code> PAT even for public packages, so the documented <code>dotnet add package MMCA.Common.API</code> failed for everyone outside the account. nuget.org becomes the documented install path and the only public download signal; GitHub Packages is retained as a mirror. Auth is <strong>keyless</strong>: each publishing job exchanges its GitHub OIDC token via <code>NuGet/login@v1</code> for a one-hour key, authorized by a nuget.org policy pinned to the permanent GitHub ids of owner, repository, and workflow file (nuget.org now marks API keys &quot;Not recommended&quot;). No stored secret, therefore no rotation and no expiry-failure mode; the workflow file name becomes load-bearing in exchange. A <code>github.repository_owner</code> guard keeps forks releasing to GitHub Packages. Listing metadata (<code>PackageProjectUrl</code>, <code>PackageIcon</code>, <code>PackageTags</code>, per-package <code>Description</code>, packed README) is part of the deliverable. No backfill: nuget.org starts at the first release after this decision.</td>
           </tr>
           </tbody></table></div>
           <h2 id="writing-a-new-adr">Writing a new ADR</h2>

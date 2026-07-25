@@ -6,8 +6,22 @@
   <title>Ivan Ball-llovera · Senior Software Architect</title>
   <meta name="description" content="Ivan Ball-llovera is a Senior Software Architect with 25+ years building cloud-native systems on the Microsoft stack: .NET, Azure, Domain-Driven Design, Clean Architecture, CQRS, and microservices.">
   <link rel="canonical" href="https://ivanball.github.io/">
+  <!-- Search engine verification. These are the ONLY two values that cannot be scripted: a crawler
+       will not accept a token injected by JavaScript, so each has to be pasted into the served HTML.
+       1. Google:  https://search.google.com/search-console -> add a URL-prefix property for
+                   https://ivanball.github.io/ -> HTML tag method -> paste the content value below
+                   and uncomment the line.
+       2. Bing:    https://www.bing.com/webmasters -> import from Search Console, or use its own
+                   meta tag the same way.
+       Search Console is the more valuable of the two: it reports which queries already surface the
+       docs, which is the input to every future title decision.
+  <meta name="google-site-verification" content="PASTE_GOOGLE_TOKEN_HERE">
+  <meta name="msvalidate.01" content="PASTE_BING_TOKEN_HERE">
+  -->
   <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Ivan Ball-llovera · Senior Software Architect">
   <meta property="og:description" content="25+ years building cloud-native systems on the Microsoft stack: .NET, Azure, DDD, Clean Architecture, CQRS, and microservices.">
   <meta property="og:url" content="https://ivanball.github.io/">
@@ -19,6 +33,7 @@
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
   <link rel="stylesheet" href="assets/css/styles.css">
   <script defer src="assets/js/main.js"></script>
+  <script defer src="assets/js/analytics.js"></script>
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -51,6 +66,7 @@
           <li><a href="index.html" aria-current="page">Home</a></li>
           <li><a href="resume.html">Résumé</a></li>
           <li><a href="platform.html">Platform</a></li>
+          <li><a href="docs/index.html">Reference</a></li>
           <li><a href="writing.html">Writing</a></li>
           <li><a href="speaking.html">Speaking</a></li>
           <li><a href="contact.html">Contact</a></li>
@@ -207,6 +223,7 @@
         <ul class="footer-links">
           <li><a href="resume.html">Résumé</a></li>
           <li><a href="platform.html">Platform</a></li>
+          <li><a href="docs/index.html">Reference</a></li>
           <li><a href="writing.html">Writing</a></li>
           <li><a href="speaking.html">Speaking</a></li>
           <li><a href="contact.html">Contact</a></li>

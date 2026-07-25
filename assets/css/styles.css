@@ -432,6 +432,45 @@ a.adr:hover .adr-title { color: var(--accent); }
 }
 .count-note { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.25rem; }
 
+/* The ADR reference on an article card links into the published record. It has to stay legible
+   against the accent-soft tag background in both themes, so it inherits the tag's color. */
+.tag--accent a { color: inherit; text-decoration: none; }
+.tag--accent a:hover { text-decoration: underline; }
+
+/* The cards are static markup now, so the topic filter hides them in place. `.card` sets a display
+   value, and an author display rule beats the UA stylesheet's [hidden] rule, so this has to be
+   stated explicitly or filtering would appear to do nothing. */
+.article-card[hidden] { display: none; }
+
+/* ----- Email capture -----
+   Authored hidden and revealed by assets/js/analytics.js only once a list endpoint is configured,
+   so the site never shows a form that would silently drop addresses. */
+.subscribe {
+  margin-top: 2.5rem;
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border));
+  border-radius: var(--radius);
+  padding: 1.5rem;
+}
+.subscribe[hidden] { display: none; }
+.subscribe-form { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1rem; }
+.subscribe-form input {
+  flex: 1 1 16rem;
+  min-width: 0;
+  padding: 0.6rem 0.8rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.subscribe-form input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
 /* ----- Callout ----- */
 .callout {
   background: var(--accent-soft);

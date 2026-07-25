@@ -7,16 +7,41 @@
   <meta name="description" content="MMCA is an open-source .NET 10 platform: a 15-package framework (DDD, Clean Architecture, CQRS) plus reference apps that extract a modular monolith into microservices, proven in production on Azure.">
   <link rel="canonical" href="https://ivanball.github.io/platform.html">
   <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="The MMCA Platform · Ivan Ball-llovera">
   <meta property="og:description" content="An open-source .NET 10 framework (15 packages) plus reference apps that take a modular monolith to microservices, proven in production on Azure.">
   <meta property="og:url" content="https://ivanball.github.io/platform.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="The MMCA Platform · Ivan Ball-llovera">
+  <meta name="twitter:description" content="An open-source .NET 10 framework (15 packages) plus reference apps that take a modular monolith to microservices, proven in production on Azure.">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
   <link rel="stylesheet" href="assets/css/styles.css">
   <script defer src="assets/js/main.js"></script>
+  <script defer src="assets/js/analytics.js"></script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "MMCA",
+    "alternateName": "Modular Monolith Clean Architecture",
+    "description": "An open-source .NET 10 framework of fifteen NuGet packages for building a modular monolith you can extract services out of later, without a rewrite: DDD, Clean Architecture, CQRS, a transactional outbox, database-per-module, and architecture fitness functions that fail the build.",
+    "url": "https://ivanball.github.io/platform.html",
+    "codeRepository": "https://github.com/ivanball/MMCA.Common",
+    "programmingLanguage": [{ "@type": "ComputerLanguage", "name": "C#" }],
+    "runtimePlatform": ".NET 10",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "author": {
+      "@type": "Person",
+      "name": "Ivan Ball-llovera",
+      "url": "https://ivanball.github.io/"
+    },
+    "keywords": "modular monolith, clean architecture, DDD, CQRS, microservices, .NET, Blazor, Aspire, EF Core, transactional outbox"
+  }
+  </script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -32,6 +57,7 @@
           <li><a href="index.html">Home</a></li>
           <li><a href="resume.html">Résumé</a></li>
           <li><a href="platform.html" aria-current="page">Platform</a></li>
+          <li><a href="docs/index.html">Reference</a></li>
           <li><a href="writing.html">Writing</a></li>
           <li><a href="speaking.html">Speaking</a></li>
           <li><a href="contact.html">Contact</a></li>
@@ -55,14 +81,17 @@
           <h1 style="margin:0 0 0.75rem">The MMCA platform</h1>
           <p style="font-size:1.12rem;max-width:70ch">A production-grade .NET 10 platform that demonstrates modern enterprise architecture end to end: an open-source framework of fifteen NuGet packages plus real applications that prove the patterns under live traffic. The design goal is one sentence: build the monolith now, extract a service later, without a rewrite.</p>
           <div class="btn-row" style="margin-top:1.25rem">
-            <a class="btn btn--primary" href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">View on GitHub ↗</a>
+            <a class="btn btn--primary" href="docs/guides/common-GETTING-STARTED.html">Get started in 15 minutes →</a>
+            <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">View on GitHub ↗</a>
             <a class="btn btn--ghost" href="writing.html">Read the deep dives</a>
           </div>
         </div>
         <div class="stats">
           <div class="stat"><div class="num">15</div><div class="label">NuGet packages</div></div>
-          <div class="stat"><div class="num">51</div><div class="label">Architecture Decision Records</div></div>
-          <div class="stat"><div class="num">91</div><div class="label">Architecture fitness tests</div></div>
+          <!-- BEGIN adr-stat -->
+          <div class="stat"><div class="num">53</div><div class="label">Architecture Decision Records</div></div>
+          <!-- END adr-stat -->
+          <div class="stat"><div class="num">93</div><div class="label">Architecture fitness tests</div></div>
           <div class="stat"><div class="num">3</div><div class="label">Reference applications</div></div>
         </div>
       </div>
@@ -195,15 +224,27 @@
           <h2>A two-axis architecture scorecard</h2>
           <p>Every repo is scored against a 34-category rubric on two axes, Maturity (how complete the decision is) and Implementation (how well it is realized in code), with evidence and recorded gaps rather than a single vanity number.</p>
         </div>
-        <div class="grid grid--2">
-          <div class="card">
+        <!-- Scores are GENERATED from docs-src/governance/*-ArchitectureScorecard.md, the same files
+             published under /docs/governance/, so a re-score cannot leave this page stale. -->
+        <div class="grid grid--3">
+          <!-- BEGIN scorecards -->
+          <a class="card card--link" href="docs/governance/common-ArchitectureScorecard.html">
             <h3>MMCA.Common <span class="muted" style="font-weight:400">(framework)</span></h3>
-            <p class="mb-0"><strong>Maturity 96.3%</strong> · <strong>Implementation 84.6%</strong><br><span class="muted">Across all 34 categories; i18n is scored since multi-locale support shipped.</span></p>
-          </div>
-          <div class="card">
+            <p class="mb-0"><strong>Maturity 96.9%</strong> · <strong>Implementation 84.6%</strong><br><span class="muted">Scored across all 34 categories, every score citing the code that earns it.</span></p>
+          </a>
+          <a class="card card--link" href="docs/governance/adc-ArchitectureScorecard.html">
             <h3>MMCA.ADC <span class="muted" style="font-weight:400">(conference app)</span></h3>
-            <p class="mb-0"><strong>Maturity 97.8%</strong> · <strong>Implementation 86.3%</strong><br><span class="muted">Scored the same way, then remediated and re-scored as the apps evolved.</span></p>
-          </div>
+            <p class="mb-0"><strong>Maturity 97.2%</strong> · <strong>Implementation 85.9%</strong><br><span class="muted">Scored across all 34 categories, every score citing the code that earns it.</span></p>
+          </a>
+          <a class="card card--link" href="docs/governance/store-ArchitectureScorecard.html">
+            <h3>MMCA.Store <span class="muted" style="font-weight:400">(e-commerce app)</span></h3>
+            <p class="mb-0"><strong>Maturity 98.4%</strong> · <strong>Implementation 83.6%</strong><br><span class="muted">Scored across all 34 categories, every score citing the code that earns it.</span></p>
+          </a>
+          <!-- END scorecards -->
+        </div>
+        <div class="btn-row" style="margin-top:1.5rem">
+          <a class="btn btn--ghost" href="docs/governance/index.html">Read the full scorecards →</a>
+          <a class="btn btn--ghost" href="docs/governance/ArchitectureEvaluationCriteria.html">See the 34-category rubric</a>
         </div>
       </div>
     </section>
@@ -214,9 +255,12 @@
         <div class="section-head">
           <p class="eyebrow">Why, not just what</p>
           <h2>Architecture Decision Records</h2>
-          <p>Fifty-one ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
+          <!-- BEGIN adr-count -->
+          <p>53 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
+          <!-- END adr-count -->
         </div>
         <div class="adr-list">
+          <!-- BEGIN adr-list -->
           <a class="adr" href="docs/adr/001-manual-dto-mapping.html"><span class="adr-num">001</span><span><span class="adr-title">Manual DTO mapping</span><span class="adr-sum">Per-entity source-generated mappers chosen over reflection-based AutoMapper.</span></span></a>
           <a class="adr" href="docs/adr/002-navigation-populators.html"><span class="adr-num">002</span><span><span class="adr-title">Navigation populators</span><span class="adr-sum">Cross-container and cross-source eager loading via an explicit populator contract.</span></span></a>
           <a class="adr" href="docs/adr/003-outbox-dual-dispatch.html"><span class="adr-num">003</span><span><span class="adr-title">Outbox dual dispatch</span><span class="adr-sum">Outbox plus in-process dispatch plus a background processor for at-least-once delivery.</span></span></a>
@@ -237,7 +281,7 @@
           <a class="adr" href="docs/adr/018-polyglot-persistence.html"><span class="adr-num">018</span><span><span class="adr-title">Polyglot persistence</span><span class="adr-sum">SQL Server, Cosmos, and SQLite behind one model; engine is an attribute on the config.</span></span></a>
           <a class="adr" href="docs/adr/019-rate-limiting.html"><span class="adr-num">019</span><span><span class="adr-title">Layered rate limiting</span><span class="adr-sum">An always-on global limiter caps authenticated callers per user and exempts infra traffic.</span></span></a>
           <a class="adr" href="docs/adr/020-permission-based-authorization.html"><span class="adr-num">020</span><span><span class="adr-title">Permission-based authorization</span><span class="adr-sum">An opt-in capability layer over RBAC; permission policies resolve on demand from a registry.</span></span></a>
-          <a class="adr" href="docs/adr/021-consumer-inbox-idempotency.html"><span class="adr-num">021</span><span><span class="adr-title">Consumer-side inbox idempotency</span><span class="adr-sum">An opt-in inbox dedups broker redeliveries by message id in the consumer's own database.</span></span></a>
+          <a class="adr" href="docs/adr/021-consumer-inbox-idempotency.html"><span class="adr-num">021</span><span><span class="adr-title">Consumer-side inbox idempotency</span><span class="adr-sum">An opt-in inbox dedups broker redeliveries by message id in the consumer&#39;s own database.</span></span></a>
           <a class="adr" href="docs/adr/022-browser-session-cookie-auth.html"><span class="adr-num">022</span><span><span class="adr-title">Browser session-cookie auth</span><span class="adr-sum">HttpOnly cookies plus an SSR-time non-validating scheme so [Authorize] passes during prerender.</span></span></a>
           <a class="adr" href="docs/adr/023-security-response-headers.html"><span class="adr-num">023</span><span><span class="adr-title">Security-response headers plus CSP</span><span class="adr-sum">Hardened security-headers middleware with a pluggable CSP that cannot break Blazor.</span></span></a>
           <a class="adr" href="docs/adr/024-push-notifications.html"><span class="adr-num">024</span><span><span class="adr-title">Two-channel user notifications</span><span class="adr-sum">One use case writes a durable inbox and fires a transient SignalR push; transport is pluggable.</span></span></a>
@@ -248,7 +292,7 @@
           <a class="adr" href="docs/adr/029-authentication-brute-force-protection.html"><span class="adr-num">029</span><span><span class="adr-title">Brute-force login protection</span><span class="adr-sum">Email-keyed login lockout with exponential backoff plus a per-IP registration cap, covering the anonymous surface the rate limiter exempts.</span></span></a>
           <a class="adr" href="docs/adr/030-startup-sole-migrator.html"><span class="adr-num">030</span><span><span class="adr-title">Startup sole-migrator</span><span class="adr-sum">Each service applies its own EF migrations at boot and is the sole migrator; no deploy-step backstop.</span></span></a>
           <a class="adr" href="docs/adr/031-feature-flag-management.html"><span class="adr-num">031</span><span><span class="adr-title">Feature-flag management</span><span class="adr-sum">One flag name enforced on two surfaces: a controller gate and the outermost CQRS decorator; disabled reads as 404.</span></span></a>
-          <a class="adr" href="docs/adr/032-password-hashing.html"><span class="adr-num">032</span><span><span class="adr-title">Password hashing with legacy migration</span><span class="adr-sum">PBKDF2 with 600k iterations for new passwords; legacy records still verify and migrate on the owner's next password set.</span></span></a>
+          <a class="adr" href="docs/adr/032-password-hashing.html"><span class="adr-num">032</span><span><span class="adr-title">Password hashing with legacy migration</span><span class="adr-sum">PBKDF2 with 600k iterations for new passwords; legacy records still verify and migrate on the owner&#39;s next password set.</span></span></a>
           <a class="adr" href="docs/adr/033-resource-ownership-authorization.html"><span class="adr-num">033</span><span><span class="adr-title">Resource-ownership authorization</span><span class="adr-sum">A row-level ownership axis beside RBAC: an owner-or-admin filter rejects mismatches and a specification row-scopes queries.</span></span></a>
           <a class="adr" href="docs/adr/034-generic-entity-query-layer.html"><span class="adr-num">034</span><span><span class="adr-title">Generic entity controllers</span><span class="adr-sum">Every entity inherits a REST surface plus a bounded query contract: sparse fields, typed filters, sort, and pagination.</span></span></a>
           <a class="adr" href="docs/adr/035-optimistic-concurrency.html"><span class="adr-num">035</span><span><span class="adr-title">Optimistic concurrency (RowVersion)</span><span class="adr-sum">A RowVersion token round-trips through DTOs so a stale write surfaces as HTTP 409, gated by a fitness rule.</span></span></a>
@@ -259,7 +303,7 @@
           <a class="adr" href="docs/adr/040-authenticated-output-caching-for-public-reads.html"><span class="adr-num">040</span><span><span class="adr-title">Authenticated output caching</span><span class="adr-sum">Public, user-independent GET endpoints cache even when requests carry a Bearer token; identity-dependent payloads never qualify.</span></span></a>
           <a class="adr" href="docs/adr/041-observability-and-telemetry.html"><span class="adr-num">041</span><span><span class="adr-title">Observability and telemetry</span><span class="adr-sum">A shared OpenTelemetry baseline plus CQRS duration metrics, correlation IDs, head sampling, and outbox-poll span filtering.</span></span></a>
           <a class="adr" href="docs/adr/042-device-capability-abstraction.html"><span class="adr-num">042</span><span><span class="adr-title">Device capability abstraction (MAUI)</span><span class="adr-sum">Per-capability contracts with browser fallbacks; the MAUI package overrides them for native heads (the fifteenth package).</span></span></a>
-          <a class="adr" href="docs/adr/043-mobile-deep-links-and-native-oauth-callback.html"><span class="adr-num">043</span><span><span class="adr-title">Mobile deep links and OAuth callback</span><span class="adr-sum">Allow-listed custom-scheme OAuth completion for MAUI plus app-association files served by each app's web host.</span></span></a>
+          <a class="adr" href="docs/adr/043-mobile-deep-links-and-native-oauth-callback.html"><span class="adr-num">043</span><span><span class="adr-title">Mobile deep links and OAuth callback</span><span class="adr-sum">Allow-listed custom-scheme OAuth completion for MAUI plus app-association files served by each app&#39;s web host.</span></span></a>
           <a class="adr" href="docs/adr/044-native-push-delivery.html"><span class="adr-num">044</span><span><span class="adr-title">Native push delivery</span><span class="adr-sum">A third notification channel: OS-level FCM/APNs push via Azure Notification Hubs reaches backgrounded and killed apps; the inbox stays the source of truth.</span></span></a>
           <a class="adr" href="docs/adr/045-managed-file-storage-and-avatars.html"><span class="adr-num">045</span><span><span class="adr-title">Managed file storage and avatars</span><span class="adr-sum">Pluggable blob storage plus an image processor that strips all metadata and re-encodes uploads; avatars land as 256x256 JPEGs in a public-read container.</span></span></a>
           <a class="adr" href="docs/adr/046-http-api-versioning.html"><span class="adr-num">046</span><span><span class="adr-title">HTTP API versioning strategy</span><span class="adr-sum">Header-based versioning wired in one call; supported and deprecated versions are reported on every response, with a fitness contract asserting the headers.</span></span></a>
@@ -268,6 +312,9 @@
           <a class="adr" href="docs/adr/049-library-configureawait-policy.html"><span class="adr-num">049</span><span><span class="adr-title">Library-scoped ConfigureAwait policy</span><span class="adr-sum">Framework packages await with ConfigureAwait(false), enforced by CA2007 at error severity; application repos keep the analyzer off because ASP.NET Core has no synchronization context.</span></span></a>
           <a class="adr" href="docs/adr/050-jwt-refresh-token-rotation.html"><span class="adr-num">050</span><span><span class="adr-title">JWT + single rotating refresh token</span><span class="adr-sum">A short-lived stateless JWT plus one server-stored, opaque refresh token per user that rotates on every use; each rotation slides a fixed inactivity window, and a mismatch revokes the chain.</span></span></a>
           <a class="adr" href="docs/adr/051-client-auth-token-lifecycle.html"><span class="adr-num">051</span><span><span class="adr-title">Client-side auth token lifecycle across render modes</span><span class="adr-sum">One ITokenRefresher abstraction with head-specific strategies: browser heads refresh through the same-origin proxy cookie, MAUI refreshes directly and persists the rotated pair in OS SecureStorage.</span></span></a>
+          <a class="adr" href="docs/adr/052-background-job-execution.html"><span class="adr-num">052</span><span><span class="adr-title">Background job execution</span><span class="adr-sum">Work that outlives a request runs as a bounded channel plus a single-reader hosted drain, never an untracked task, so the host can cancel and await it on shutdown.</span></span></a>
+          <a class="adr" href="docs/adr/053-dual-registry-package-publishing.html"><span class="adr-num">053</span><span><span class="adr-title">Dual-registry package publishing</span><span class="adr-sum">Every release pushes the same packages to nuget.org and GitHub Packages from one tag, authenticated by a short-lived OIDC exchange rather than a stored key; nuget.org is the documented install path because the GitHub registry needs a token even for public packages.</span></span></a>
+          <!-- END adr-list -->
         </div>
 
         <div class="btn-row" style="margin-top:2rem">
@@ -286,9 +333,12 @@
           <h2>The reference library</h2>
           <p>The full architecture documentation, maintained in this site's repository as its canonical home and rendered as browsable pages: every Architecture Decision Record, the governance scorecards, the guides and specifications, and the complete onboarding guide that walks the codebase type by type.</p>
         </div>
+        <!-- Cards are GENERATED from the docs-src/ collections by tools/build-docs.mjs, so their
+             counts cannot drift from what is actually published. -->
         <div class="grid grid--2">
+          <!-- BEGIN library-cards -->
           <a class="card card--link" href="docs/adr/index.html">
-            <span class="kicker" style="color:var(--accent)">51 records</span>
+            <span class="kicker" style="color:var(--accent)">53 records</span>
             <h3 style="margin:.35rem 0 .5rem">Architecture Decision Records</h3>
             <p class="mb-0">The context, decision, rationale, and trade-offs behind every cross-cutting pattern, from manual DTO mapping and the outbox to JWKS auth, caching, and supply-chain provenance. Numbered, dated, and cross-linked.</p>
             <div class="card-foot" style="margin-top:1rem"><span style="font-weight:600;color:var(--accent)">Browse the ADRs →</span></div>
@@ -311,9 +361,54 @@
             <p class="mb-0">The narrative layer: the getting-started guide for adopting the framework, business specifications and workflow analyses for both applications, and per-concern reference notes.</p>
             <div class="card-foot" style="margin-top:1rem"><span style="font-weight:600;color:var(--accent)">Browse the guides →</span></div>
           </a>
+          <!-- END library-cards -->
         </div>
+
         <div class="btn-row" style="margin-top:1.75rem">
           <a class="btn btn--ghost" href="docs/index.html">Open the reference library →</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Start here -->
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Start here</p>
+          <h2>Use it, read it, or follow along</h2>
+          <p>The framework is Apache 2.0 and published to nuget.org. The fastest way in is the reference app: one module wired end to end through all five layers, with the extraction path already in place.</p>
+        </div>
+        <div class="grid grid--3">
+          <div class="card">
+            <h3>Try the reference app</h3>
+            <p>MMCA.Helpdesk is a runnable seed built against the framework, and the worked companion to the getting-started guide. Every step in the guide maps to real code in that repo.</p>
+            <div class="card-foot"><a href="docs/guides/common-GETTING-STARTED.html">Getting started →</a></div>
+          </div>
+          <div class="card">
+            <h3>Install the packages</h3>
+            <p>Fifteen packages, released in lockstep at one version. One reference is usually enough to start: each package brings the layers below it.</p>
+            <div class="card-foot"><a href="https://www.nuget.org/packages/MMCA.Common.API" target="_blank" rel="noopener">MMCA.Common.API on nuget.org ↗</a></div>
+          </div>
+          <div class="card">
+            <h3>Read the code</h3>
+            <p>The framework and the reference app are public. The two production applications that track it are the source of the case-study material in the docs.</p>
+            <div class="card-foot"><a href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">MMCA.Common on GitHub ↗</a></div>
+          </div>
+        </div>
+        <div class="btn-row" style="margin-top:1.75rem">
+          <a class="btn btn--primary" href="https://medium.com/@ivanball76" target="_blank" rel="noopener">Follow the series on Medium ↗</a>
+          <a class="btn btn--ghost" href="writing.html">Browse all articles</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Helpdesk" target="_blank" rel="noopener">MMCA.Helpdesk ↗</a>
+        </div>
+
+        <div class="subscribe" data-newsletter-wrap hidden>
+          <h2 style="margin:0 0 0.4rem">Get each deep dive by email</h2>
+          <p class="mb-0" style="max-width:60ch">One message per article, no digests and no other mail.</p>
+          <form class="subscribe-form" data-newsletter method="post" target="_blank">
+            <label class="sr-only" for="platform-subscribe-email">Email address</label>
+            <input id="platform-subscribe-email" type="email" name="email" required placeholder="you@example.com" autocomplete="email">
+            <button class="btn btn--primary" type="submit">Subscribe</button>
+          </form>
         </div>
       </div>
     </section>
@@ -326,6 +421,7 @@
         <ul class="footer-links">
           <li><a href="resume.html">Résumé</a></li>
           <li><a href="platform.html">Platform</a></li>
+          <li><a href="docs/index.html">Reference</a></li>
           <li><a href="writing.html">Writing</a></li>
           <li><a href="speaking.html">Speaking</a></li>
           <li><a href="contact.html">Contact</a></li>

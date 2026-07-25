@@ -21,6 +21,8 @@
  */
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, copyFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
+import vm from "node:vm";
 import path from "node:path";
 import { Marked } from "marked";
 
@@ -33,6 +35,20 @@ const GOV_SRC = path.join(DOCS_SRC, "governance");
 const GUIDES_SRC = path.join(DOCS_SRC, "guides");
 const SITE = "https://ivanball.github.io";
 const SRC_GITHUB = "https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/";
+const MEDIUM_PROFILE = "https://medium.com/@ivanball76";
+const BUILD_DATE = new Date().toISOString().slice(0, 10);
+
+/* The seven hand-authored pages at the repo root. The generator does not own them, but it does own
+   three things inside them: the marked regions below, the sitemap entry, and (for writing.html and
+   platform.html) content derived from data files rather than typed by hand. */
+const ROOT_PAGES = [
+  { file: "index.html", priority: "1.0", loc: `${SITE}/` },
+  { file: "resume.html", priority: "0.9" },
+  { file: "platform.html", priority: "0.9" },
+  { file: "writing.html", priority: "0.9" },
+  { file: "speaking.html", priority: "0.7" },
+  { file: "contact.html", priority: "0.6" },
+];
 
 /* ----- small helpers ----- */
 const norm = (p) => path.resolve(p).toLowerCase();
@@ -100,6 +116,63 @@ function metaDescription(md) {
     .trim();
   if (text.length > 155) text = text.slice(0, 152).replace(/\s+\S*$/, "") + "…";
   return text;
+}
+
+/* ----- data files (hand-maintained, read at build time) -----
+   assets/data/*.js assign onto `window` so the browser can load them directly with a <script> tag.
+   Evaluating them in a VM sandbox with a fake `window` lets the build read exactly the same data
+   the page reads, with no duplicate copy to drift. */
+function loadWindowData(relPath) {
+  const src = readFileSync(path.join(WEBSITE_ROOT, relPath), "utf8");
+  const sandbox = { window: {} };
+  vm.createContext(sandbox);
+  vm.runInContext(src, sandbox, { filename: relPath });
+  return sandbox.window;
+}
+const { ARTICLES = [], ARTICLE_CATEGORIES = [] } = loadWindowData("assets/data/articles.js");
+const { ADR_CARDS = {} } = loadWindowData("assets/data/adr-cards.js");
+
+/* Replace the content between `<!-- BEGIN name -->` and `<!-- END name -->`. Throws rather than
+   silently no-oping, because a missing marker means the page quietly stops being regenerated. */
+function replaceRegion(html, name, content, file) {
+  const re = new RegExp(`([ \\t]*<!-- BEGIN ${name} -->\\r?\\n)[\\s\\S]*?([ \\t]*<!-- END ${name} -->)`);
+  if (!re.test(html)) {
+    throw new Error(`${file}: missing region markers for "${name}" (<!-- BEGIN ${name} --> ... <!-- END ${name} -->)`);
+  }
+  return html.replace(re, (_m, open, close) => `${open}${content}\n${close}`);
+}
+
+/* Last commit date per repo-relative path, in one git call. Used for sitemap <lastmod>: file mtimes
+   are useless here because a fresh clone stamps every file with the checkout time. Anything with
+   uncommitted changes is dated today, since that is what is about to be published. */
+function gitDates() {
+  const dates = new Map();
+  const dirty = new Set();
+  try {
+    const log = execFileSync("git", ["log", "--name-only", "--no-renames", "--pretty=format:%cs"],
+      { cwd: WEBSITE_ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    let current = null;
+    for (const line of log.split(/\r?\n/)) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(line)) { current = line; continue; }
+      if (!line.trim() || !current) { continue; }
+      if (!dates.has(line)) { dates.set(line, current); }   // log is newest-first
+    }
+    const status = execFileSync("git", ["status", "--porcelain"],
+      { cwd: WEBSITE_ROOT, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
+    for (const line of status.split(/\r?\n/)) {
+      const p = line.slice(3).trim();
+      if (p) { dirty.add(p.replace(/^"|"$/g, "")); }
+    }
+  } catch {
+    /* not a git checkout: every lastmod falls back to the build date */
+  }
+  return {
+    for(relPath) {
+      const p = toPosix(relPath);
+      if (dirty.has(p)) { return BUILD_DATE; }
+      return dates.get(p) || BUILD_DATE;
+    },
+  };
 }
 
 /* ----- collections ----- */
@@ -303,10 +376,13 @@ function renderMarkdown(md, ctx) {
 }
 
 /* ----- page shell ----- */
+/* Kept byte-identical to the nav in the seven hand-authored root pages: there is no templating in
+   this repo, so a nav change means editing those pages AND this list, then rebuilding. */
 const NAV_ITEMS = [
   ["index.html", "Home"],
   ["resume.html", "Résumé"],
   ["platform.html", "Platform"],
+  ["docs/index.html", "Reference"],
   ["writing.html", "Writing"],
   ["speaking.html", "Speaking"],
   ["contact.html", "Contact"],
@@ -319,7 +395,8 @@ function assetPrefix(outRel) {
 
 function headerHtml(prefix) {
   const links = NAV_ITEMS.map(([href, label]) => {
-    const cur = href === "platform.html" ? ' aria-current="page"' : "";
+    /* every page this generator emits lives under docs/, so Reference is the current section */
+    const cur = href === "docs/index.html" ? ' aria-current="page"' : "";
     return `          <li><a href="${prefix}${href}"${cur}>${label}</a></li>`;
   }).join("\n");
   return `  <header class="site-header">
@@ -380,10 +457,13 @@ function mermaidHtml(prefix) {
   </script>`;
 }
 
-function page({ outRel, title, description, contentHtml, hasMermaid }) {
+function page({ outRel, title, description, contentHtml, hasMermaid, jsonLd }) {
   const prefix = assetPrefix(outRel);
   const canonical = `${SITE}/${outRel}`;
   const fullTitle = `${title} · MMCA · Ivan Ball-llovera`;
+  const ld = jsonLd
+    ? `\n  <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`
+    : "";
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -393,17 +473,22 @@ function page({ outRel, title, description, contentHtml, hasMermaid }) {
   <meta name="description" content="${escapeAttr(description)}">
   <link rel="canonical" href="${escapeAttr(canonical)}">
   <link rel="icon" href="${prefix}assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="${SITE}/feed.xml">
   <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="${escapeAttr(title)}">
   <meta property="og:description" content="${escapeAttr(description)}">
   <meta property="og:url" content="${escapeAttr(canonical)}">
   <meta property="og:image" content="${SITE}/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="${SITE}/assets/img/og-image.png">
+  <meta name="twitter:title" content="${escapeAttr(title)}">
+  <meta name="twitter:description" content="${escapeAttr(description)}">
+  <meta name="twitter:image" content="${SITE}/assets/img/og-image.png">${ld}
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
   <link rel="stylesheet" href="${prefix}assets/css/styles.css">
   <link rel="stylesheet" href="${prefix}assets/css/docs.css">
   <script defer src="${prefix}assets/js/main.js"></script>
+  <script defer src="${prefix}assets/js/analytics.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -439,6 +524,24 @@ ${items}
         </nav>
       </details>
     </aside>`;
+}
+
+/* Machine-readable twin of breadcrumbHtml below: the visual trail has existed for a while with no
+   markup behind it, so search results could not show the hierarchy. */
+function breadcrumbJsonLd(col, currentLabel, outRel) {
+  const crumbs = [
+    ["Platform", `${SITE}/platform.html`],
+    ["Reference", `${SITE}/docs/index.html`],
+    [col.title, `${SITE}/${col.outDir}/index.html`],
+    [currentLabel, `${SITE}/${outRel}`],
+  ];
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: crumbs.map(([name, item], i) => ({
+      "@type": "ListItem", position: i + 1, name, item,
+    })),
+  };
 }
 
 function breadcrumbHtml(col, prefix, currentLabel) {
@@ -497,6 +600,7 @@ ${docFootHtml(col, doc)}
       description: doc.desc || `${col.title}: ${doc.title}.`,
       contentHtml: content,
       hasMermaid: ctx.hasMermaid,
+      jsonLd: breadcrumbJsonLd(col, currentLabel, doc.outRel),
     });
     writeFileSync(path.join(WEBSITE_ROOT, doc.outRel), html);
     written++;
@@ -566,5 +670,234 @@ if (existsSync(mermaidSrc)) {
   copyFileSync(mermaidSrc, mermaidDst);
 }
 
+/* ============================================================================
+   Root-page generation: writing.html cards, the platform ADR list, feed.xml,
+   sitemap.xml.
+
+   These live in hand-authored pages, but their CONTENT is derived, so it is
+   generated into marked regions rather than typed. The writing page in
+   particular used to render entirely client-side, which meant crawlers saw one
+   <noscript> paragraph instead of the article index.
+   ============================================================================ */
+
+const adrByNum = new Map(adrFiles.map((f) => [f.slice(0, 3), f]));
+const catLabels = new Map(ARTICLE_CATEGORIES.map((c) => [c.key, c.label]));
+const publishedArticles = ARTICLES.filter((a) => a.url).sort((a, b) => b.n - a.n);
+
+/* "ADR 006/007/008" -> ["006", "007", "008"] */
+function adrNumbers(adr) {
+  const m = /^ADR\s+([\d/\s]+)$/.exec(String(adr || "").trim());
+  return m ? m[1].split("/").map((s) => s.trim()).filter(Boolean) : [];
+}
+function adrHref(num, prefix = "") {
+  const f = adrByNum.get(String(num).padStart(3, "0"));
+  return f ? `${prefix}docs/adr/${f.replace(/\.md$/i, ".html")}` : null;
+}
+
+/* Same markup assets/js/writing.js used to build at runtime, with two additions: the ADR reference
+   becomes a real link into the published record (internal link equity the client-rendered version
+   could never contribute), and the category rides a data attribute so filtering can hide and show
+   these nodes instead of replacing them. */
+function articleCardHtml(a) {
+  const thumb = a.hero
+    ? `<img src="${escapeAttr(a.hero)}" alt="" loading="lazy">`
+    : `<span class="thumb-num" aria-hidden="true">${a.n}</span>`;
+  const tags = adrNumbers(a.adr).map((n) => {
+    const href = adrHref(n);
+    const label = `ADR ${n}`;
+    return href
+      ? `<li class="tag tag--accent"><a href="${escapeAttr(href)}">${escapeHtml(label)}</a></li>`
+      : `<li class="tag tag--accent">${escapeHtml(label)}</li>`;
+  }).join("");
+  const foot = a.url
+    ? `<a href="${escapeAttr(a.url)}" target="_blank" rel="noopener">Read on Medium ↗</a>`
+    : `<span class="coming-soon">● Coming soon</span>`;
+  return `          <article class="card card--link article-card" data-cat="${escapeAttr(a.cat)}">
+            <div class="thumb">${thumb}</div>
+            <div class="body">
+              <span class="kicker">${escapeHtml(catLabels.get(a.cat) || "Article")} · No. ${a.n}</span>
+              <h3>${escapeHtml(a.title)}</h3>
+              <p>${escapeHtml(a.summary)}</p>
+${tags ? `              <ul class="tags" style="margin-bottom:0.85rem">${tags}</ul>\n` : ""}              <div class="card-foot">${foot}</div>
+            </div>
+          </article>`;
+}
+
+/* ----- writing.html ----- */
+{
+  const file = "writing.html";
+  const abs = path.join(WEBSITE_ROOT, file);
+  let html = readFileSync(abs, "utf8");
+
+  html = replaceRegion(html, "articles", ARTICLES.map(articleCardHtml).join("\n"), file);
+
+  const itemList = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: "Deep dives on enterprise .NET",
+    description: "A long-form series turning the MMCA framework's architecture decisions into teachable patterns.",
+    numberOfItems: publishedArticles.length,
+    itemListElement: publishedArticles
+      .slice()
+      .sort((a, b) => a.n - b.n)
+      .map((a, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        item: {
+          "@type": "TechArticle",
+          headline: a.title,
+          description: a.summary,
+          url: a.url,
+          image: `${SITE}/${a.hero}`,
+          ...(a.date ? { datePublished: a.date } : {}),
+          author: { "@type": "Person", name: "Ivan Ball-llovera", url: SITE },
+        },
+      })),
+  };
+  html = replaceRegion(html, "articles-jsonld",
+    `  <script type="application/ld+json">${JSON.stringify(itemList)}</script>`, file);
+
+  writeFileSync(abs, html);
+}
+
+/* ----- platform.html: ADR count, ADR list, scorecard indices, library cards ----- */
+{
+  const file = "platform.html";
+  const abs = path.join(WEBSITE_ROOT, file);
+  let html = readFileSync(abs, "utf8");
+
+  /* Scorecard headline indices, parsed out of the same governance markdown that gets published.
+     A re-score updates those files, so this page cannot drift behind them any more. */
+  const SCORED_REPOS = [
+    { file: "common-ArchitectureScorecard.md", name: "MMCA.Common", kind: "framework" },
+    { file: "adc-ArchitectureScorecard.md", name: "MMCA.ADC", kind: "conference app" },
+    { file: "store-ArchitectureScorecard.md", name: "MMCA.Store", kind: "e-commerce app" },
+  ];
+  const scoreCards = SCORED_REPOS.map((repo) => {
+    const md = readFileSync(path.join(GOV_SRC, repo.file), "utf8");
+    const grab = (label) => {
+      const m = new RegExp(`\\*\\*${label} index\\*\\*[^\\n]*?\\*\\*([\\d.]+%)\\*\\*`).exec(md);
+      if (!m) { throw new Error(`${repo.file}: could not parse the ${label} index`); }
+      return m[1];
+    };
+    const slug = repo.file.replace(/\.md$/i, ".html");
+    return `          <a class="card card--link" href="docs/governance/${slug}">
+            <h3>${escapeHtml(repo.name)} <span class="muted" style="font-weight:400">(${escapeHtml(repo.kind)})</span></h3>
+            <p class="mb-0"><strong>Maturity ${grab("Maturity")}</strong> · <strong>Implementation ${grab("Implementation")}</strong><br><span class="muted">Scored across all 34 categories, every score citing the code that earns it.</span></p>
+          </a>`;
+  }).join("\n");
+  html = replaceRegion(html, "scorecards", scoreCards, file);
+
+  html = replaceRegion(html, "adr-stat",
+    `          <div class="stat"><div class="num">${adrFiles.length}</div><div class="label">Architecture Decision Records</div></div>`,
+    file);
+
+  const onbCol = collections.find((c) => c.id === "onboarding");
+  const groupChapters = onbFiles.filter((f) => /^group-\d/.test(f)).length;
+  const libraryCards = [
+    ["docs/adr/index.html", `${adrFiles.length} records`, "Architecture Decision Records",
+      "The context, decision, rationale, and trade-offs behind every cross-cutting pattern, from manual DTO mapping and the outbox to JWKS auth, caching, and supply-chain provenance. Numbered, dated, and cross-linked.",
+      "Browse the ADRs →"],
+    ["docs/onboarding/index.html", `${onbCol.docs.length - 1} documents`, "Onboarding guide",
+      `A teaching guide for an engineer new to the codebase: a primer, a mechanically extracted type inventory, ${groupChapters} group chapters walking every first-party type, five DevOps chapters, concept maps, and a coverage audit.`,
+      "Open the guide →"],
+    ["docs/governance/index.html", `${govFiles.length} artifacts`, "Architecture governance",
+      "The 34-category evaluation rubric, plus an evidence-based scorecard and remediation backlog for each repo. Every score cites the code that earns it.",
+      "Read the scorecards →"],
+    ["docs/guides/index.html", `${guideFiles.length} guides`, "Guides &amp; specifications",
+      "The narrative layer: the getting-started guide for adopting the framework, business specifications and workflow analyses for both applications, and per-concern reference notes.",
+      "Browse the guides →"],
+  ].map(([href, count, title, body, cta]) =>
+`          <a class="card card--link" href="${href}">
+            <span class="kicker" style="color:var(--accent)">${count}</span>
+            <h3 style="margin:.35rem 0 .5rem">${title}</h3>
+            <p class="mb-0">${body}</p>
+            <div class="card-foot" style="margin-top:1rem"><span style="font-weight:600;color:var(--accent)">${cta}</span></div>
+          </a>`).join("\n");
+  html = replaceRegion(html, "library-cards", libraryCards, file);
+
+  const cards = adrFiles.map((f) => {
+    const num = f.slice(0, 3);
+    const hand = ADR_CARDS[num];
+    const doc = docsMeta.find((d) => d.col.id === "adr" && d.file === f);
+    const title = hand?.title || (doc ? doc.title.replace(/^ADR[-\s]?\d+:\s*/i, "") : num);
+    const summary = hand?.summary || (doc ? doc.desc : "");
+    return `          <a class="adr" href="docs/adr/${f.replace(/\.md$/i, ".html")}"><span class="adr-num">${num}</span><span><span class="adr-title">${escapeHtml(title)}</span><span class="adr-sum">${escapeHtml(summary)}</span></span></a>`;
+  }).join("\n");
+
+  html = replaceRegion(html, "adr-list", cards, file);
+  html = replaceRegion(html, "adr-count",
+    `          <p>${adrFiles.length} ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>`,
+    file);
+
+  writeFileSync(abs, html);
+}
+
+/* ----- feed.xml -----
+   The aggregators and feed readers subscribe to this; Morning Dew's Dew Submitter takes a feed URL
+   once instead of a link per article. Entries point at Medium (where the article lives), not at the
+   site, so a subscriber lands on the real thing. */
+{
+  const items = publishedArticles.map((a) => {
+    const pub = a.date ? `\n      <pubDate>${new Date(a.date).toUTCString()}</pubDate>` : "";
+    const adrs = adrNumbers(a.adr).map((n) => `\n      <category>ADR ${n}</category>`).join("");
+    return `    <item>
+      <title>${escapeHtml(a.title)}</title>
+      <link>${escapeHtml(a.url)}</link>
+      <guid isPermaLink="true">${escapeHtml(a.url)}</guid>${pub}
+      <description>${escapeHtml(a.summary)}</description>
+      <category>${escapeHtml(catLabels.get(a.cat) || "Article")}</category>${adrs}
+    </item>`;
+  }).join("\n");
+
+  const feed = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Ivan Ball-llovera: deep dives on enterprise .NET</title>
+    <link>${SITE}/writing.html</link>
+    <atom:link href="${SITE}/feed.xml" rel="self" type="application/rss+xml"/>
+    <description>A long-form series turning a production .NET framework's architecture decisions into teachable patterns: the Result railway, the transactional outbox, database-per-service, JWKS auth, fitness functions, and more.</description>
+    <language>en-us</language>
+    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
+    <managingEditor>noreply@ivanball.github.io (Ivan Ball-llovera)</managingEditor>
+${items}
+  </channel>
+</rss>
+`;
+  writeFileSync(path.join(WEBSITE_ROOT, "feed.xml"), feed);
+}
+
+/* ----- sitemap.xml -----
+   Generated, because the hand-maintained file listed 11 URLs and omitted every individual document:
+   the deepest and most linkable content on the site was invisible to crawlers. */
+let sitemapUrls = 0;
+{
+  const dates = gitDates();
+  const entries = [];
+
+  for (const p of ROOT_PAGES) {
+    entries.push({ loc: p.loc || `${SITE}/${p.file}`, lastmod: dates.for(p.file), priority: p.priority });
+  }
+  entries.push({ loc: `${SITE}/docs/index.html`, lastmod: dates.for("docs/index.html"), priority: "0.8" });
+  for (const col of collections) {
+    for (const doc of col.docs) {
+      entries.push({
+        loc: `${SITE}/${doc.outRel}`,
+        lastmod: dates.for(path.relative(WEBSITE_ROOT, doc.absSrc)),
+        priority: doc.file === col.indexSrc ? "0.8" : "0.6",
+      });
+    }
+  }
+
+  const body = entries.map((e) =>
+    `  <url>\n    <loc>${escapeHtml(e.loc)}</loc>\n    <lastmod>${e.lastmod}</lastmod>\n    <priority>${e.priority}</priority>\n  </url>`
+  ).join("\n");
+  writeFileSync(path.join(WEBSITE_ROOT, "sitemap.xml"),
+    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>\n`);
+  sitemapUrls = entries.length;
+}
+
 console.log(`Wrote ${written} pages (${collections.map((c) => `${c.docs.length} ${c.id}`).join(", ")}). Mermaid on ${mermaidPages} page(s).`);
 console.log(`Mermaid bundle vendored: ${existsSync(mermaidDst)}`);
+console.log(`Rendered ${ARTICLES.length} article cards into writing.html (${publishedArticles.length} published) and ${adrFiles.length} ADR cards into platform.html.`);
+console.log(`Generated feed.xml (${publishedArticles.length} items) and sitemap.xml (${sitemapUrls} URLs).`);
