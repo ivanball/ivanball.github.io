@@ -41,6 +41,10 @@ const PATHS = [
 
 const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
 
+/* The search dialog is identical on all 126 pages, so it is exercised once
+   rather than on every page in the list. */
+const SEARCH_PATH = "/index.html";
+
 const browser = await puppeteer.launch({
   args: ["--no-sandbox", "--disable-dev-shm-usage"],
 });
@@ -63,11 +67,30 @@ for (const p of PATHS) {
       (tags) => window.axe.run(document, { runOnly: { type: "tag", values: tags } }),
       TAGS
     );
+
+    /* The search dialog is display:none until opened, so the pass above cannot
+       see it: its contrast, its labelling and its result list would go unchecked
+       on a site where it is reachable from every page. Open it once, with real
+       results on screen, and check that state too. */
+    let openResult = { violations: [] };
+    if (p === SEARCH_PATH) {
+      await page.evaluate(() => document.querySelector("[data-search-open]").click());
+      await page.type("#site-search-input", "outbox", { delay: 5 });
+      await page.waitForFunction(() => document.querySelectorAll(".search-result").length > 0, { timeout: 10000 });
+      openResult = await page.evaluate(
+        (tags) => window.axe.run(document, { runOnly: { type: "tag", values: tags } }),
+        TAGS
+      );
+    }
     await page.close();
 
     for (const v of result.violations) {
       violationCount += v.nodes.length;
       failures.push({ page: p, theme, id: v.id, impact: v.impact, help: v.help, nodes: v.nodes.map((n) => n.target.join(" ")) });
+    }
+    for (const v of openResult.violations) {
+      violationCount += v.nodes.length;
+      failures.push({ page: `${p} (search open)`, theme, id: v.id, impact: v.impact, help: v.help, nodes: v.nodes.map((n) => n.target.join(" ")) });
     }
   }
 }
@@ -75,7 +98,7 @@ for (const p of PATHS) {
 await browser.close();
 
 if (failures.length === 0) {
-  console.log(`axe-core: no WCAG 2.1 AA violations across ${PATHS.length} pages in light and dark.`);
+  console.log(`axe-core: no WCAG 2.1 AA violations across ${PATHS.length} pages in light and dark, including the search dialog open with results.`);
   process.exit(0);
 }
 

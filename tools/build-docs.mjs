@@ -482,13 +482,42 @@ ${links}
         </ul>
       </nav>
       <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
         <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
           <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
         </button>
         <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
       </div>
     </div>
-  </header>`;
+  </header>
+${searchDialogHtml()}`;
+}
+
+/* The search dialog lives on every page, stamped inside the site-header region.
+   A native <dialog> is used deliberately: it brings the focus trap, the Esc
+   handling, inertness of the page behind it and the ::backdrop for free, which
+   is a lot of accessibility to get wrong by hand. It is empty markup until
+   assets/js/search.js fetches the index on first open. */
+function searchDialogHtml() {
+  return `  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>Esc</kbd> to close</span>
+      <span><kbd>"quotes"</kbd> for every word</span>
+    </p>
+  </dialog>`;
 }
 
 function footerHtml(prefix, tagline = "Reference docs generated from source.") {
@@ -539,6 +568,7 @@ function headAssetsHtml(prefix, extraCss = "") {
   <link rel="preload" href="${prefix}assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="${prefix}assets/css/styles.css">${css}
   <script defer src="${prefix}assets/js/main.js"></script>
+  <script defer src="${prefix}assets/js/search.js"></script>
   <script defer src="${prefix}assets/js/analytics.js"></script>`;
 }
 
@@ -718,6 +748,110 @@ mkdirSync(path.join(WEBSITE_ROOT, "docs", "guides"), { recursive: true });
 
 let written = 0, mermaidPages = 0, tocPages = 0;
 
+/* ============================================================================
+   Search index
+   ----------------------------------------------------------------------------
+   The corpus is 7.6 MB of markdown, so a full-text index is not something you
+   can hand a browser. This indexes one record per H2 SECTION instead, which is
+   also the right granularity for a reference library: a hit lands on the
+   section that answers the question, not on a 500 KB chapter.
+
+   Each record carries a bounded excerpt for display and prose matching, plus
+   the distinct `code identifiers` found in that section. Those identifiers are
+   what people actually search this library for (a type name, a method, a
+   package), they are cheap to extract, and they let a query match text that the
+   truncated excerpt had to drop.
+
+   Everything is root-absolute so a result works from any depth, including the
+   404 page. The output is deterministic: same sources in, byte-identical file
+   out, which the CI freshness gate depends on.
+   ============================================================================ */
+const SEARCH_RECORDS = [];
+let searchIndexBytes = 0;
+const EXCERPT_CHARS = 180;
+const MAX_IDENTIFIERS = 12;
+/* 00-inventory.md alone has hundreds of H2s. Past this many sections a document
+   contributes its own long tail of near-identical rows and nothing else. */
+const MAX_SECTIONS_PER_DOC = 60;
+
+/* Split markdown into H2 sections, skipping fenced code (a "## " line inside a
+   fence is not a heading, and the renderer does not treat it as one either).
+   Returns the lead text before the first H2, then one entry per section, in
+   document order, so it can be zipped with the ids the renderer already
+   assigned in ctx.toc. */
+function splitSections(md) {
+  const lines = md.split(/\r?\n/);
+  const lead = [];
+  const sections = [];
+  let current = null;
+  let fenced = false;
+  for (const line of lines) {
+    if (/^\s{0,3}(```|~~~)/.test(line)) { fenced = !fenced; }
+    if (!fenced && /^##\s+\S/.test(line)) {
+      current = { body: [] };
+      sections.push(current);
+      continue;
+    }
+    (current ? current.body : lead).push(line);
+  }
+  return { lead: lead.join("\n"), sections: sections.map((s) => s.body.join("\n")) };
+}
+
+/* Markdown to a flat, human-readable excerpt. Code fences, tables and images go
+   entirely: a table of 40 type names reads as noise in a result list. */
+function toExcerpt(md) {
+  const text = md
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/~~~[\s\S]*?~~~/g, " ")
+    /* Heading lines are navigation, not prose. Without this the excerpt for a
+       document record opened by restating the title directly above it. */
+    .replace(/^\s{0,3}#{1,6}\s.*$/gm, " ")
+    .replace(/^\s*\|.*$/gm, " ")                  // table rows
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")        // images
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")      // links -> text
+    .replace(/<[^>]+>/g, " ")
+    .replace(/[`*_>#|]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (text.length <= EXCERPT_CHARS) return text;
+  return text.slice(0, EXCERPT_CHARS - 1).replace(/\s+\S*$/, "") + "…";
+}
+
+/* Distinct `backticked` identifiers, longest-first so the most specific names
+   survive the cap.
+
+   The inner text is captured loosely and then reduced to its base name, because
+   this codebase writes generics and calls inside the ticks: a strict
+   [A-Za-z0-9_.] pattern silently indexed NOTHING for
+   `PagedCollectionResult<EventDTO>`, which is precisely the kind of term someone
+   opens this search to find. Both the base name and any type argument are kept,
+   so either half of `Result<Ticket>` finds the section. */
+function identifiersIn(md) {
+  const found = new Set();
+  for (const m of md.matchAll(/`([^`\n]{3,80})`/g)) {
+    for (const part of m[1].split(/[<>(),\s[\]{}]+/)) {
+      const name = part.replace(/[?;:.]+$/, "").replace(/^[@#.]+/, "");
+      if (/^[A-Za-z_][A-Za-z0-9_.]{2,48}$/.test(name)) { found.add(name); }
+    }
+  }
+  return [...found].sort((a, b) => b.length - a.length || a.localeCompare(b)).slice(0, MAX_IDENTIFIERS);
+}
+
+function addSearchRecord({ url, section, doc, kind, source }) {
+  const excerpt = toExcerpt(source);
+  const ids = identifiersIn(source);
+  /* A SECTION with no prose and no identifiers is a divider, not a destination.
+     A DOCUMENT record is always kept: its title is the main thing people search
+     for, and an ADR's lead is nothing but that title, so dropping empty ones
+     took all 56 ADRs out of the index by their own name. */
+  if (section && !excerpt && !ids.length) return;
+  const rec = { u: url, d: doc, k: kind };
+  if (section) rec.t = section;
+  if (excerpt) rec.x = excerpt;
+  if (ids.length) rec.i = ids.join(" ");
+  SEARCH_RECORDS.push(rec);
+}
+
 /* Everything under docs/ is generated from docs-src/. The build only ever wrote files,
    so deleting or renaming a source left its rendered page behind: still committed, still
    reachable by URL, just absent from every sidebar and the sitemap. Track what this run
@@ -733,6 +867,26 @@ for (const col of collections) {
     const prefix = assetPrefix(doc.outRel);
     const aside = tocHtml(ctx.toc);
     if (aside) tocPages++;
+
+    /* Index this document: one record for the document itself (its lead text),
+       then one per H2. ctx.toc holds the ids the renderer just assigned, in
+       document order, so zipping it with the split source keeps every anchor
+       exactly in step with the page. */
+    {
+      const { lead, sections } = splitSections(doc.md);
+      const docUrl = `/${toPosix(doc.outRel)}`;
+      addSearchRecord({ url: docUrl, section: "", doc: doc.title, kind: col.title, source: lead });
+      const limit = Math.min(sections.length, ctx.toc.length, MAX_SECTIONS_PER_DOC);
+      for (let i = 0; i < limit; i++) {
+        addSearchRecord({
+          url: `${docUrl}#${ctx.toc[i].id}`,
+          section: ctx.toc[i].text,
+          doc: doc.title,
+          kind: col.title,
+          source: sections[i],
+        });
+      }
+    }
     const content =
 `    <div class="container doc-container">
 ${breadcrumbHtml(col, prefix, currentLabel)}
@@ -1174,6 +1328,64 @@ ${bar("Implementation", grab("Implementation"), true)}
   writeFileSync(abs, html);
 }
 
+/* ----- search index: the hand-authored root pages + the article series -----
+   Read back from the FINAL html so what gets indexed is what a visitor sees,
+   including the regions this build just stamped (the ADR list, the article
+   cards, the package stack). Parsing the output also means a new hand-authored
+   section is indexed with no extra bookkeeping. */
+{
+  const stripTags = (s) => s.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ").trim();
+
+  for (const [file] of NAV_ITEMS.filter(([h]) => h !== "docs/index.html")) {
+    const html = readFileSync(path.join(WEBSITE_ROOT, file), "utf8");
+    const main = /<main[^>]*>([\s\S]*?)<\/main>/.exec(html);
+    if (!main) continue;
+    const title = stripTags((/<title>([\s\S]*?)<\/title>/.exec(html) || [, file])[1])
+      .replace(/\s*·\s*Ivan Ball-llovera\s*$/, "").trim();
+    const url = file === "index.html" ? "/" : `/${file}`;
+
+    /* Everything down to the first h2 describes the page itself. */
+    const body = main[1];
+    const firstH2 = body.search(/<h2[\s>]/);
+    const lead = stripTags(firstH2 === -1 ? body : body.slice(0, firstH2));
+    SEARCH_RECORDS.push({
+      u: url, d: title, k: "Site",
+      x: lead.length > EXCERPT_CHARS ? lead.slice(0, EXCERPT_CHARS - 1).replace(/\s+\S*$/, "") + "…" : lead,
+    });
+
+    /* Then one record per h2 section. Root pages carry no heading ids, so these
+       link to the page rather than to an anchor. */
+    const parts = body.split(/<h2[^>]*>/).slice(1);
+    for (const part of parts) {
+      const close = part.indexOf("</h2>");
+      if (close === -1) continue;
+      const heading = stripTags(part.slice(0, close));
+      if (!heading || heading.toLowerCase() === "all articles") continue;
+      const text = stripTags(part.slice(close + 5));
+      SEARCH_RECORDS.push({
+        u: url, t: heading, d: title, k: "Site",
+        x: text.length > EXCERPT_CHARS ? text.slice(0, EXCERPT_CHARS - 1).replace(/\s+\S*$/, "") + "…" : text,
+      });
+    }
+  }
+
+  /* The published series. These leave the site (they live on Medium), so the
+     result list marks them and the link opens in a new tab. */
+  for (const a of publishedArticles) {
+    SEARCH_RECORDS.push({
+      u: a.url, t: a.title, d: `Article no. ${a.n}`,
+      k: catLabels.get(a.cat) || "Writing", x: a.summary, e: 1,
+    });
+  }
+
+  const outPath = path.join(WEBSITE_ROOT, "assets", "data", "search-index.json");
+  const payload = JSON.stringify({ v: 1, n: SEARCH_RECORDS.length, r: SEARCH_RECORDS });
+  writeFileSync(outPath, payload);
+  searchIndexBytes = payload.length;
+}
+
 /* ----- feed.xml -----
    The aggregators and feed readers subscribe to this; Morning Dew's Dew Submitter takes a feed URL
    once instead of a link per article. Entries point at Medium (where the article lives), not at the
@@ -1252,6 +1464,7 @@ console.log(`Wrote ${written} pages (${collections.map((c) => `${c.docs.length} 
 if (pruned.length) console.log(`Pruned ${pruned.length} orphaned page(s) whose source is gone: ${pruned.join(", ")}`);
 console.log(`Mermaid bundle vendored: ${existsSync(mermaidDst)}. Fonts vendored: ${fontsCopied}/${FONT_FILES.length}.`);
 console.log(`Highlighted ${HIGHLIGHTED_BLOCKS} code block(s) at build time. On-this-page rail on ${tocPages} page(s).`);
+console.log(`Search index: ${SEARCH_RECORDS.length} records, ${(searchIndexBytes / 1024).toFixed(0)} KB (fetched once, on first search).`);
 console.log(`Rendered ${ARTICLES.length} article cards into writing.html (${publishedArticles.length} published) and ${adrFiles.length} ADR cards into platform.html.`);
 console.log(`Generated feed.xml (${publishedArticles.length} items) and sitemap.xml (${sitemapUrls} URLs).`);
 
