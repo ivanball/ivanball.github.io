@@ -54,6 +54,19 @@ Single edit points:
 
 **404.html is the one root page stamped with a root-absolute (`/`) prefix.** GitHub Pages serves it for a miss at any depth (`/docs/adr/typo.html`), where a relative `assets/css/styles.css` resolves under *that* directory and 404s in turn: the page rendered completely unstyled, with dead nav links, exactly where a visitor least needs a broken page. The prefix is chosen in the root-page loop in `tools/build-docs.mjs`; the two tags outside the regions (`favicon`) are root-absolute by hand.
 
+### Site search
+
+Global search lives in a native `<dialog>` stamped into the `site-header` region, so it is on all 126 pages: the magnifier button in the nav, `Ctrl`/`Cmd`+`K` anywhere, or `/` when not already typing. `<dialog>` is deliberate: the focus trap, `Esc`, page inertness and the backdrop come from the platform instead of hand-written JS.
+
+- **The index is generated** into `assets/data/search-index.json` by `tools/build-docs.mjs` (~920 records, ~420 KB raw and ~105 KB over the wire). `assets/js/search.js` fetches it **once, on first open**, so a visitor who never searches pays nothing.
+- **One record per H2 section**, not per page. The corpus is 7.6 MB of markdown, so a full-text index is not something you can hand a browser, and section granularity is the better answer anyway: a hit lands on the section that answers the question rather than on a 500 KB chapter. `MAX_SECTIONS_PER_DOC` caps the long tail (`00-inventory.md` alone has hundreds of H2s).
+- Each record carries a bounded excerpt **plus the distinct `backticked` identifiers** in that section. Those identifiers are what people search this library for, and they let a query match text the truncated excerpt had to drop. `identifiersIn()` reduces `PagedCollectionResult<EventDTO>` to its parts: a stricter pattern indexed *nothing* for the generic forms this codebase actually writes.
+- Anchors come from `ctx.toc`, the ids the renderer already assigned, zipped with the source split by `splitSections()` (which skips fenced code, so a `## ` line inside a fence is not mistaken for a heading). Do not re-slug independently: heading ids are deduplicated per document and would drift.
+- Root pages are indexed by **reading back the final HTML**, so what is indexed is what a visitor sees, including regions this build just stamped. Published articles come from `articles.js` and are marked as leaving the site.
+- Search is **AND across terms**: every term must appear somewhere in the record. Two terms narrow rather than widen, which also means a document record whose title covers only one of them drops out while its sections survive.
+- URLs in the index are root-absolute so a result works from any depth, including the 404 page.
+- The a11y gate opens the dialog on `index.html` in both themes and re-runs axe against it. A dialog is `display:none` until opened, so without that step its contrast and labelling would never be checked.
+
 ### Design system
 
 - **Type**: Inter Variable (text/UI) + JetBrains Mono (code, eyebrows, stat figures, tags). Both self-hosted: **the build copies the woff2 files out of the `@fontsource*` devDependencies into `assets/fonts/`**, the same way `mermaid.min.js` is vendored, so the site makes no third-party request. Latin subset only, and the `@font-face` `unicode-range` in `styles.css` is copied verbatim from fontsource: a glyph outside it (the `→`/`↗` arrows, the theme-toggle symbols) falls back to the system font instead of pulling a second file. The two above-the-fold faces are preloaded from `headAssetsHtml`. A missing package means no copy and no build failure: the stack degrades to the system fonts it already listed.

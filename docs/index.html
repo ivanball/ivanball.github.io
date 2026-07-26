@@ -28,6 +28,7 @@
   <link rel="stylesheet" href="../assets/css/styles.css">
   <link rel="stylesheet" href="../assets/css/docs.css">
   <script defer src="../assets/js/main.js"></script>
+  <script defer src="../assets/js/search.js"></script>
   <script defer src="../assets/js/analytics.js"></script>
 </head>
 <body>
@@ -51,6 +52,9 @@
         </ul>
       </nav>
       <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
         <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
           <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
         </button>
@@ -58,6 +62,22 @@
       </div>
     </div>
   </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>Esc</kbd> to close</span>
+    </p>
+  </dialog>
 
   <main id="main">
     <div class="page-head">
