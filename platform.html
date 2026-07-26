@@ -89,7 +89,7 @@
         <div class="stats">
           <div class="stat"><div class="num">15</div><div class="label">NuGet packages</div></div>
           <!-- BEGIN adr-stat -->
-          <div class="stat"><div class="num">53</div><div class="label">Architecture Decision Records</div></div>
+          <div class="stat"><div class="num">55</div><div class="label">Architecture Decision Records</div></div>
           <!-- END adr-stat -->
           <div class="stat"><div class="num">93</div><div class="label">Architecture fitness tests</div></div>
           <div class="stat"><div class="num">3</div><div class="label">Reference applications</div></div>
@@ -256,7 +256,7 @@
           <p class="eyebrow">Why, not just what</p>
           <h2>Architecture Decision Records</h2>
           <!-- BEGIN adr-count -->
-          <p>53 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
+          <p>55 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
           <!-- END adr-count -->
         </div>
         <div class="adr-list">
@@ -314,6 +314,8 @@
           <a class="adr" href="docs/adr/051-client-auth-token-lifecycle.html"><span class="adr-num">051</span><span><span class="adr-title">Client-side auth token lifecycle across render modes</span><span class="adr-sum">One ITokenRefresher abstraction with head-specific strategies: browser heads refresh through the same-origin proxy cookie, MAUI refreshes directly and persists the rotated pair in OS SecureStorage.</span></span></a>
           <a class="adr" href="docs/adr/052-background-job-execution.html"><span class="adr-num">052</span><span><span class="adr-title">Background job execution</span><span class="adr-sum">Work that outlives a request runs as a bounded channel plus a single-reader hosted drain, never an untracked task, so the host can cancel and await it on shutdown.</span></span></a>
           <a class="adr" href="docs/adr/053-dual-registry-package-publishing.html"><span class="adr-num">053</span><span><span class="adr-title">Dual-registry package publishing</span><span class="adr-sum">Every release pushes the same packages to nuget.org and GitHub Packages from one tag, authenticated by a short-lived OIDC exchange rather than a stored key; nuget.org is the documented install path because the GitHub registry needs a token even for public packages.</span></span></a>
+          <a class="adr" href="docs/adr/054-saga-compensation-and-reconciliation.html"><span class="adr-num">054</span><span><span class="adr-title">Choreographed Saga Compensation with a Reconciliation Backstop</span><span class="adr-sum">Accepted (2026-07-25).</span></span></a>
+          <a class="adr" href="docs/adr/055-repository-and-specification-contract.html"><span class="adr-num">055</span><span><span class="adr-title">Repository plus Specification as the Data-Access Contract</span><span class="adr-sum">Accepted (2026-07-25).</span></span></a>
           <!-- END adr-list -->
         </div>
 
@@ -338,7 +340,7 @@
         <div class="grid grid--2">
           <!-- BEGIN library-cards -->
           <a class="card card--link" href="docs/adr/index.html">
-            <span class="kicker" style="color:var(--accent)">53 records</span>
+            <span class="kicker" style="color:var(--accent)">55 records</span>
             <h3 style="margin:.35rem 0 .5rem">Architecture Decision Records</h3>
             <p class="mb-0">The context, decision, rationale, and trade-offs behind every cross-cutting pattern, from manual DTO mapping and the outbox to JWKS auth, caching, and supply-chain provenance. Numbered, dated, and cross-linked.</p>
             <div class="card-foot" style="margin-top:1rem"><span style="font-weight:600;color:var(--accent)">Browse the ADRs →</span></div>

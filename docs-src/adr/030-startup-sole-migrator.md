@@ -25,7 +25,7 @@ at startup, before the new revision serves traffic. There is deliberately **no**
 migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
 
 - **Set in prod for every service.** `MMCA.Store/infra/main.bicep:707,807,895` (Identity/Catalog/Sales)
-  and `MMCA.ADC/infra/main.bicep:964,1118,1226,1360` (Identity/Conference/Engagement/Notification) all set
+  and `MMCA.ADC/infra/main.bicep:981,1141,1249,1383` (Identity/Conference/Engagement/Notification) all set
   `DatabaseInitStrategy = 'Migrate'`.
 - **One applier per revision.** Each service runs `minReplicas: 1`, so the startup `MigrateAsync` is not
   racing sibling replicas of the same revision. (Since the 2026-07-19 outbox lease revision, ADR-003,
@@ -33,10 +33,10 @@ migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
   is scale-out safe by construction, so above one replica the setting is a cost/migration choice.)
 - **No deploy-step backstop, on purpose.** Both `deploy.yml` files carry an explicit comment that there
   is *no external `sqlcmd` migration backstop* and that each service is the **sole migrator**
-  (`MMCA.Store/.github/workflows/deploy.yml:789`, `MMCA.ADC/.github/workflows/deploy.yml:974`). The
+  (`MMCA.Store/.github/workflows/deploy.yml:861-869`, `MMCA.ADC/.github/workflows/deploy.yml:1015-1025`). The
   `sqlcmd` that *is* installed in the pipeline is a connectivity/readiness probe, not a migration apply.
 - **Build-time drift gate, not a runtime apply.** CI runs
-  `dotnet ef migrations has-pending-model-changes` (Store `deploy.yml:164`, ADC `deploy.yml:228`) so a
+  `dotnet ef migrations has-pending-model-changes` (Store `deploy.yml:166`, ADC `deploy.yml:233`) so a
   model that has drifted from its migrations fails the build — but that gate only *detects*; it never
   applies anything. The container does the applying.
 - **This overrides the framework's documented "None for production" default**, accepting auto-migrate-on-

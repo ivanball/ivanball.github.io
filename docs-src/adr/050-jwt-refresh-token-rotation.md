@@ -80,7 +80,10 @@ with a token mismatch triggering revocation.
   supply only app-specific hooks (the claim set, deactivated-account gates, the registration side-effect).
   The rotation, reuse-detection, and lifetime logic is identical across both apps because it lives once in
   the base. ADC's external OAuth path (ADR-036) issues the same single rotating refresh token when it
-  exchanges an external identity for the local token pair (`AuthenticationService.cs:202,203`).
+  exchanges an external identity for the local token pair: the refresh token is minted and stored
+  (`AuthenticationService.cs:218,219`), the access token is minted
+  (`AuthenticationService.cs:233`), and the response is built
+  (`AuthenticationService.cs:235`).
 
 ## Rationale
 - **Short access token plus refresh keeps the hot path stateless.** Every service validates the access

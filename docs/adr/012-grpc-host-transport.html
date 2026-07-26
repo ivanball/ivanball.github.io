@@ -4,19 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ADR-012: gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted.">
+  <meta name="description" content="Accepted (re-verified against source 2026-07-25).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/012-grpc-host-transport.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-012: gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)">
-  <meta property="og:description" content="Accepted.">
+  <meta property="og:description" content="Accepted (re-verified against source 2026-07-25).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/012-grpc-host-transport.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-012: gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)">
-  <meta name="twitter:description" content="Accepted.">
+  <meta name="twitter:description" content="Accepted (re-verified against source 2026-07-25).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)","item":"https://ivanball.github.io/docs/adr/012-grpc-host-transport.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -68,7 +68,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 ADRs</summary>
+        <summary>All 55 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -125,6 +125,8 @@
         <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
         <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
         <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -133,7 +135,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-012-grpc-host-transport-convention-http2-only-h2c-vs-http1andhttp2--alpn">ADR-012: gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted.</p>
+          <p>Accepted (re-verified against source 2026-07-25).</p>
           <h2 id="update-2026-06-22-store-converged-to-profile-a">Update (2026-06-22): Store converged to Profile A</h2>
           <p>Store originally chose Profile B, but its cross-service gRPC failed in Azure Container Apps. With
           <code>Http1AndHttp2</code> Kestrel + <code>transport: &#39;auto&#39;</code> ingress on a <strong>cleartext</strong> endpoint there is no ALPN, so
@@ -188,13 +190,54 @@
           <code>http://&lt;app&gt;-notification:8081</code>.</li>
           <li><strong>Probes and gateway: unchanged.</strong> The default endpoint still answers the kubelet&#39;s HTTP/1.1
           <code>httpGet</code> probes (no TCP-probe workaround needed, unlike full Profile A hosts), and the gateway
-          never routes the gRPC endpoint (it is service-to-service only).</li>
+          never routes the gRPC endpoint (it is service-to-service only).
+          <em>(The probes half of this bullet was superseded on 2026-07-25: Notification&#39;s probes now target a
+          third, dedicated Http1-only listener, and no ADC host uses TCP probes. The gateway half still
+          holds. See the 2026-07-25 update below.)</em></li>
           </ul>
           <p>Rule refinement: a service that needs the HTTP/1.1 Upgrade handshake AND must serve inbound cleartext
           gRPC uses this <strong>mixed-endpoint profile</strong>: Profile B protocols on the default endpoint, a Profile A
           <code>Http2</code>-only named endpoint for gRPC, discovery via the named-endpoint scheme, and (in ACA) an
           additional internal TCP port. It costs one extra port everywhere (appsettings, launch profile, Bicep)
           and is only worth it when both constraints genuinely meet in one host.</p>
+          <h2 id="update-2026-07-25-probe-listeners-are-adcs-answer-not-tcp-probes-and-gateway-routed-jwks-is-a-local-only-rule">Update (2026-07-25): probe listeners are ADC&#39;s answer, not TCP probes; and gateway-routed JWKS is a local-only rule</h2>
+          <p>Two claims above were written from an earlier state of the code and no longer describe either app.</p>
+          <p><strong>1. ADC probes never touch the traffic endpoint; TCP probes are Store-only.</strong> Every ADC service now
+          adds a dedicated <code>Http1</code>-only Kestrel listener whose only job is to answer the platform&#39;s HTTP/1.1
+          <code>httpGet</code> probes, on a port that is never exposed via ingress:</p>
+          <ul>
+          <li>The three Profile A hosts (Identity, Conference, Engagement) listen on <strong>8081</strong>. Bicep injects
+          <code>HealthProbe__Port=8081</code> (<code>MMCA.ADC/infra/main.bicep:957</code>, <code>:1126</code>, <code>:1235</code>) and points startup,
+          liveness, and readiness at it (<code>main.bicep:1045-1070</code> for Identity). The listener is added by
+          <code>KestrelConfiguration.ConfigureHttp2WithHealthProbe</code>, called from each service&#39;s
+          <code>Program.cs</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:80</code>).</li>
+          <li>The mixed-endpoint host (Notification) listens on <strong>8082</strong>, one port above its <code>grpc</code> endpoint:
+          <code>HealthProbe__Port=8082</code> at <code>main.bicep:1367</code>, with all three probes on 8082 at
+          <code>main.bicep:1414-1439</code>. The listener is added by
+          <code>KestrelConfiguration.ConfigureMixedEndpointsWithHealthProbe</code>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/KestrelConfiguration.cs:23-35</code>), strictly
+          additive on top of the config-declared 8080 and 8081 endpoints, explicitly so that all four
+          services probe the same way.</li>
+          </ul>
+          <p>So Notification&#39;s default endpoint no longer serves the probes either, and the parenthetical
+          contrast with &quot;full Profile A hosts&quot; was backwards: those hosts use the same dedicated-listener
+          pattern, not TCP probes. <strong><code>tcpSocket</code> probes survive only in MMCA.Store</strong>, on Identity
+          (<code>MMCA.Store/infra/main.bicep:733-734</code>) and Catalog (<code>:814-815</code>), where the Http2-only default
+          endpoint would answer an HTTP/1.1 <code>httpGet</code> with GOAWAY <code>HTTP_1_1_REQUIRED</code>. The trade is real: a
+          TCP probe only proves the listener is bound, while the dedicated listener lets readiness run the
+          actual <code>/health/ready</code> check (warmup gate plus the DB-aware check), which is why ADC moved.</p>
+          <p><strong>2. <code>WithJwksDiscovery(identity, gateway)</code> is local Aspire wiring, not ADC&#39;s production rule.</strong>
+          The two-argument call sites are all in the AppHost
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:273-275</code>), which configures the local
+          Aspire environment only. In production ACA, ADC&#39;s Bicep hardcodes the <strong>direct in-cluster authority</strong>
+          <code>http://${identityApp.name}</code> on every token-validating service: Conference (<code>main.bicep:1140</code>),
+          Engagement (<code>:1248</code>), and Notification (<code>:1382</code>). Identity&#39;s own ingress is <code>transport: &#39;http2&#39;</code>
+          (<code>main.bicep:921</code>), so envoy accepts the HTTP/1.1 JwtBearer metadata fetch and carries it to the
+          container. That is exactly the arrangement the Store update above describes, so the
+          &quot;JWKS authority differs by environment&quot; nuance is <strong>not</strong> Store-specific: both apps route discovery
+          through the gateway locally and use the direct in-cluster authority in production. Read the Profile A
+          JWKS bullet below as the local-development rule plus the reason the direct authority cannot be used
+          from a default backchannel outside ACA.</p>
           <h2 id="context">Context</h2>
           <p>Once modules were extracted into separate service hosts (ADR-008) that call each other synchronously
           over gRPC (ADR-007), each service&#39;s Kestrel had to serve <strong>both</strong> REST traffic (HTTP/1.1 from the
@@ -229,10 +272,14 @@
           <code>VersionPolicy = RequestVersionExact</code>). <code>RequestVersionOrLower</code> would silently downgrade to HTTP/1.1,
           which the Http2-only backend rejects with <code>HTTP_1_1_REQUIRED</code>, so the policy must be <em>exact</em>. In Azure
           Container Apps, ingress must be <code>transport: http2</code>.</li>
-          <li><strong>JWKS discovery:</strong> <code>WithJwksDiscovery(identity, gateway)</code>. The default JwtBearer metadata
+          <li><strong>JWKS discovery (local):</strong> <code>WithJwksDiscovery(identity, gateway)</code>. The default JwtBearer metadata
           backchannel is HTTP/1.1 and <strong>cannot</strong> reach the Http2-only Identity endpoint directly, so the
           authority is set to the <strong>gateway</strong> HTTPS origin; the gateway terminates TLS, speaks HTTP/1.1 + 2
-          via ALPN, and routes <code>/.well-known/*</code> on to Identity over HTTP/2 (ADR-004).</li>
+          via ALPN, and routes <code>/.well-known/*</code> on to Identity over HTTP/2 (ADR-004). This is the
+          <strong>local Aspire</strong> wiring only (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:273-275</code>).
+          <strong>In production ACA both apps set the direct in-cluster authority</strong> <code>http://&lt;identity app&gt;</code> and let
+          the <code>transport: &#39;http2&#39;</code> ingress carry the HTTP/1.1 metadata fetch to the container: see the
+          2026-07-25 update above for the ADC Bicep anchors.</li>
           <li><strong>Exception:</strong> the Notification service keeps <code>Http1AndHttp2</code> on its default endpoint because
           SignalR&#39;s WebSocket transport needs the HTTP/1.1 Upgrade handshake. Since 2026-07-09 it also serves
           one inbound gRPC edge from a dedicated <code>Http2</code>-only named endpoint (the mixed-endpoint profile in

@@ -1,15 +1,15 @@
 # ADR-033: Resource-Ownership Authorization (Row-Level + Action Filter)
 
 ## Status
-Accepted (2026-07-02).
+Accepted (2026-07-02, revised 2026-07-25).
 
 ## Context
 ADR-020 added a permission (capability) layer over RBAC: it answers "what may this **role** do",
 resolving a role to a permission so an endpoint can require a capability instead of a role name. It
 explicitly scoped out the orthogonal question, "is this **my** order", recording that "per-resource
 ownership (a customer may read only their own data) stays a separate concern (`OwnerOrAdminFilter`),
-and a route needing both composes the two" (`ADRs/020-permission-based-authorization.md:72`,
-`020-permission-based-authorization.md:73`).
+and a route needing both composes the two" (`ADRs/020-permission-based-authorization.md:74`,
+`020-permission-based-authorization.md:75`).
 
 That carve-out names a mechanism that already ships in framework code but had no decision record of
 its own. RBAC and permissions are principal-scoped: a customer with the Customer role may read orders,
@@ -30,7 +30,7 @@ enforcement points keyed on the caller's owner claim (`customer_id` by default) 
 bypass role (`Admin` by default).
 
 - **Single-resource action filter.** `OwnerOrAdminFilter`
-  (`Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:20`) is a sealed
+  (`Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:30`) is a sealed
   `IAsyncActionFilter` whose primary constructor takes `ICurrentUserService` and
   `IOptions<OwnerOrAdminFilterOptions>`. Its ownership vocabulary comes from
   `OwnerOrAdminFilterOptions`
@@ -39,11 +39,11 @@ bypass role (`Admin` by default).
   (`OwnerOrAdminFilterOptions.cs:14`), `BypassRole` `"Admin"` (`OwnerOrAdminFilterOptions.cs:17`), and
   `OwnerParameterName` `"id"` (`OwnerOrAdminFilterOptions.cs:24`), so a host that configures nothing
   behaves exactly as before. It short-circuits to the action for the bypass role
-  (`OwnershipHelper.IsAdmin(currentUserService, settings.BypassRole)`, `OwnerOrAdminFilter.cs:32`);
+  (`OwnershipHelper.IsAdmin(currentUserService, settings.BypassRole)`, `OwnerOrAdminFilter.cs:42`);
   otherwise it reads the caller's owner claim via `GetClaimValue<int>(settings.OwnerClaimType)`
-  (`OwnerOrAdminFilter.cs:38`) and returns `ForbidResult` (HTTP 403) if the claim is missing
-  (`OwnerOrAdminFilter.cs:40`, `OwnerOrAdminFilter.cs:42`) or if the requested owner parameter resolves
-  to an int that does not equal the claim (`OwnerOrAdminFilter.cs:46`, `OwnerOrAdminFilter.cs:49`).
+  (`OwnerOrAdminFilter.cs:48`) and returns `ForbidResult` (HTTP 403) if the claim is missing
+  (`OwnerOrAdminFilter.cs:50`, `OwnerOrAdminFilter.cs:52`) or if the requested owner parameter resolves
+  to an int that does not equal the claim (`OwnerOrAdminFilter.cs:72`, `OwnerOrAdminFilter.cs:74`).
   `TryGetOwnerParameter` reads that parameter from a **route value**
   (`/customers/{id}`) or, when the route lacks it, from a **model-bound query/body argument**
   (`?userId=42`), so the guard also covers list/query routes that carry the owner as a bound
@@ -62,7 +62,7 @@ bypass role (`Admin` by default).
   role) applies no filter.
 - **The bypass role is the single override on both.** `OwnershipHelper.IsAdmin`
   (`Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:17`) compares
-  `ICurrentUserService.Role` (`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ICurrentUserService.cs:18`)
+  `ICurrentUserService.Role` (`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ICurrentUserService.cs:22`)
   to its `bypassRole` argument (`"Admin"` by default) case-insensitively (`OwnershipHelper.cs:20`). Both
   enforcement points consult it, so a caller in the bypass role sees and touches any resource through
   either path.
@@ -93,16 +93,22 @@ ownership specification scopes list/get queries:
 `ShoppingCartsController` builds a `ShoppingCartByCustomerSpecification`
 (`MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:53`,
 `MMCA.Store/.../Sales.Application/ShoppingCarts/Specifications/ShoppingCartByCustomerSpecification.cs:19`,
-which filters by `Id` because a cart is keyed by customer, `ShoppingCartByCustomerSpecification.cs:23`)
+which filters by `Id` because a cart is keyed by customer, `ShoppingCartByCustomerSpecification.cs:24`)
 and `OrdersController` builds an `OrdersByCustomerSpecification`
-(`MMCA.Store/.../Sales.API/Controllers/OrdersController.cs:53`,
+(`MMCA.Store/.../Sales.API/Controllers/OrdersController.cs:54`,
 `MMCA.Store/.../Sales.Application/Orders/Specifications/OrdersByCustomerSpecification.cs:13`, filtering
-by `CustomerId`, `OrdersByCustomerSpecification.cs:17`), passing it into each query (for example
-`OrdersController.cs:68`). `OrdersController` does not use the class-level filter for its mutating
+by `CustomerId`, `OrdersByCustomerSpecification.cs:18`), passing it into each query (for example
+`OrdersController.cs:69`). `OrdersController` does not use the class-level filter for its mutating
 routes; it runs an explicit per-mutation ownership check, `ValidateOwnershipAsync`
-(`OrdersController.cs:293`), that reuses `OwnershipHelper.IsAdmin` (`OrdersController.cs:51`) and
-deliberately returns **404 NotFound** rather than 403 so it does not reveal that another customer's
-order exists (`OrdersController.cs:291`, `OrdersController.cs:316`).
+(`OrdersController.cs:303`), that reuses `OwnershipHelper.IsAdmin` (`OrdersController.cs:52`) to let
+the bypass role through. Its two denial branches return different statuses on purpose:
+
+- **Missing owner claim** (the caller carries no `customer_id`): `Error.Forbidden`, a 403
+  (`OrdersController.cs:311`, `OrdersController.cs:313`). Nothing was looked up, so there is no
+  resource whose existence a 403 could leak; this matches the filter's own missing-claim `ForbidResult`.
+- **Owner mismatch** (the claim is present but the order is someone else's): `Error.NotFound`, a 404
+  rather than a 403 (`OrdersController.cs:324`, `OrdersController.cs:326`), so the response does not
+  reveal that another customer's order exists.
 
 MMCA.ADC's Engagement module is the first host to configure the filter's vocabulary rather than take
 the defaults. `AddModuleEngagementAPI`
@@ -160,7 +166,7 @@ that is its only caller. ADC's `BookmarksController` needs no annotation: both f
   claim as "admin").
 - **The filter assumes the owner parameter equals the owning id.** `OwnerOrAdminFilter` compares its
   configured owner parameter, resolved from either a route value or a model-bound argument, against the
-  configured owner claim (`OwnerOrAdminFilter.cs:46`). That holds where the resource is keyed by the
+  configured owner claim (`OwnerOrAdminFilter.cs:72`). That holds where the resource is keyed by the
   owner (the cart, the customer profile, a user's own bookmarks) but not where a resource has a separate
   id and a foreign-key owner; those (orders) need the spec or an explicit per-id check instead.
 - **This is ownership, not ABAC.** It answers "is this row mine" against a single id claim with an admin
@@ -169,7 +175,19 @@ that is its only caller. ADC's `BookmarksController` needs no annotation: both f
 
 ## Related
 ADR-020 (the role/permission RBAC layer this complements, and whose explicit
-`020-permission-based-authorization.md:72` scope-out this fills), ADR-034 (the generic entity query
+`020-permission-based-authorization.md:74` scope-out this fills), ADR-034 (the generic entity query
 pipeline / `IEntityQueryService` the collection-scoping `Specification` slots into), ADR-013 (failures
 surface as `Result`/HTTP at the edge, the filter as a 403 `ForbidResult`), ADR-004 (the validated
 principal and owner claim both enforcement points trust).
+
+## Revision (2026-07-25)
+An audit against the code. No behavior changed; the ADR text did.
+
+1. **The per-mutation check's failure shape was described as one branch, and it is two.**
+   `ValidateOwnershipAsync` was recorded as deliberately returning 404 rather than 403. That is true
+   only of the owner-mismatch branch. The missing-claim branch returns `Error.Forbidden` (403), which
+   leaks nothing because no lookup has happened yet. Adoption now states each branch separately.
+2. **Refreshed line anchors** for `OwnerOrAdminFilter` (the class doc comment grew and the
+   deny-by-default `[AllowMissingOwner]` fallback was inserted between the claim check and the
+   owner comparison, so the mismatch citations moved further than the rest), `ICurrentUserService.Role`,
+   both Store ownership specifications, `OrdersController`, and the ADR-020 carve-out quote.

@@ -4,19 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ADR-053: Dual-Registry Package Publishing (nuget.org plus GitHub Packages) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-25).">
+  <meta name="description" content="Accepted (2026-07-25). Amended (2026-07-25) to put the pre-decision Context statements in the past tense, to restate the MMCA. ID prefix reservation as…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/053-dual-registry-package-publishing.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-053: Dual-Registry Package Publishing (nuget.org plus GitHub Packages)">
-  <meta property="og:description" content="Accepted (2026-07-25).">
+  <meta property="og:description" content="Accepted (2026-07-25). Amended (2026-07-25) to put the pre-decision Context statements in the past tense, to restate the MMCA. ID prefix reservation as…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/053-dual-registry-package-publishing.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-053: Dual-Registry Package Publishing (nuget.org plus GitHub Packages)">
-  <meta name="twitter:description" content="Accepted (2026-07-25).">
+  <meta name="twitter:description" content="Accepted (2026-07-25). Amended (2026-07-25) to put the pre-decision Context statements in the past tense, to restate the MMCA. ID prefix reservation as…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)","item":"https://ivanball.github.io/docs/adr/053-dual-registry-package-publishing.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -68,7 +68,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 ADRs</summary>
+        <summary>All 55 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -125,6 +125,8 @@
         <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
         <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
         <li><a href="053-dual-registry-package-publishing.html" aria-current="page">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -133,7 +135,10 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-053-dual-registry-package-publishing-nugetorg-plus-github-packages">ADR-053: Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-25).</p>
+          <p>Accepted (2026-07-25). Amended (2026-07-25) to put the pre-decision Context statements in the past
+          tense, to restate the <code>MMCA.</code> ID prefix reservation as pending rather than done, to scope the
+          &quot;documented install path&quot; claim to what is actually updated, and to split the packaging metadata
+          between <code>Directory.Build.props</code> and the per-package csproj files.</p>
           <h2 id="context">Context</h2>
           <p>The fifteen <code>MMCA.Common.*</code> packages have shipped to GitHub Packages since the first release. That
           was the right default while the framework had exactly one consumer group (this account&#39;s own
@@ -144,13 +149,13 @@
           practical consequences:</p>
           <ul>
           <li>The <code>dotnet add package MMCA.Common.API</code> line printed in the README, in the getting-started guide,
-          and in a two-dozen-article series fails for every reader who runs it. They get a 401, not a
+          and in a two-dozen-article series failed for every reader who ran it. They got a 401, not a
           package.</li>
           <li>A reader who wants to try the framework must first create a GitHub PAT and hand-write a
           <code>nuget.config</code> with credentials. That is a larger ask than the framework itself, and it happens
           before they have seen any value.</li>
-          <li>The packages are invisible to discovery. A nuget.org search API query for <code>MMCA.Common</code> returns
-          <code>totalHits: 0</code>, so the primary place .NET developers look for libraries has never heard of them.</li>
+          <li>The packages were invisible to discovery. A nuget.org search API query for <code>MMCA.Common</code> returned
+          <code>totalHits: 0</code>, so the primary place .NET developers look for libraries had never heard of them.</li>
           <li>There is no download signal. Package downloads are the only honest adoption metric available for a
           library, and GitHub Packages does not surface one publicly.</li>
           </ul>
@@ -179,16 +184,21 @@
           single-use and cannot cross a job boundary.</li>
           <li>The nuget.org steps are guarded by <code>github.repository_owner == &#39;ivanball&#39;</code>, so a fork completes a
           full GitHub Packages release instead of failing on an exchange it can never satisfy.</li>
-          <li>The <code>MMCA.</code> ID prefix is reserved on nuget.org so the package ids cannot be taken by anyone else.
-          API keys remain available for a manual push from a command line, which trusted publishing does
-          not cover, but no automated path uses one.</li>
-          <li><strong>nuget.org is the documented install path.</strong> README, guides, and articles point there. GitHub
-          Packages is retained as a mirror, not deprecated: it is where prerelease and internal-consumer
-          restores keep working with no change.</li>
+          <li><strong>An <code>MMCA.</code> ID prefix reservation is requested and still pending</strong>, so the ids are not yet
+          protected from being taken by anyone else: the published ids report <code>verified: false</code> in the
+          nuget.org search index as of 2026-07-25. Reservation is a manual account-level action (see
+          Trade-offs), which is why it cannot be closed out from this repository. API keys remain available
+          for a manual push from a command line, which trusted publishing does not cover, but no automated
+          path uses one.</li>
+          <li><strong>nuget.org is the documented install path.</strong> The README already installs with a plain
+          <code>dotnet add package</code> and carries the nuget.org badges, and the getting-started guide is moved onto
+          the same path in this change. GitHub Packages is retained as a mirror, not deprecated: it is where
+          prerelease and internal-consumer restores keep working with no change.</li>
           <li>Package listing metadata is treated as part of the deliverable, not an afterthought:
-          <code>PackageProjectUrl</code>, <code>PackageIcon</code>, <code>PackageTags</code>, and a per-package <code>Description</code> are set once in
-          <code>Directory.Build.props</code>, and the repository README is packed into every package as its
-          <code>PackageReadmeFile</code>, so the listing page is the funnel.</li>
+          <code>PackageProjectUrl</code>, <code>PackageIcon</code>, and <code>PackageTags</code> are set once in <code>Directory.Build.props</code>,
+          which also packs the icon and sets <code>PackageReadmeFile</code>. Each package&#39;s <code>Description</code> and its
+          <code>README.md</code> pack item stay in the individual csproj, so every package carries its own one-line
+          pitch above the shared repository README, and the listing page is the funnel.</li>
           <li><strong>No backfill.</strong> nuget.org starts at the first release published after this decision. Older
           versions remain available on GitHub Packages only.</li>
           </ul>

@@ -3,7 +3,9 @@
 ## Status
 Accepted (2026-07-10). Amended (2026-07-23) to document the `Telemetry:DisableHttpClientMetrics` and
 `Telemetry:DisableRuntimeMetrics` cost knobs and to correct the meter/activity-source literal
-citations.
+citations. Amended (2026-07-25) to describe how the CQRS logging decorators actually record duration
+(a per-path `RecordDuration` helper, not a `finally`) and to rebase the decorator outcome-tag, outbox
+poll-span, and `OutboxProcess` parent-context citations onto their current lines.
 
 ## Context
 The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
@@ -36,12 +38,16 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
 - **Custom RED metrics from the CQRS pipeline.** A single meter `MMCA.Common.Cqrs`
   (`Source/Core/MMCA.Common.Application/UseCases/Decorators/CqrsMetrics.cs:15`) publishes two duration
   histograms: `cqrs.command.duration` (`CqrsMetrics.cs:20`) and `cqrs.query.duration`
-  (`CqrsMetrics.cs:26`), both in milliseconds. The logging decorators record them in a `finally` so
-  every path is measured: `CqrsMetrics.CommandDuration.Record(...)` tagged by `command` and `outcome`
-  (`Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingCommandDecorator.cs:58`) and the
-  query equivalent (`Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingQueryDecorator.cs:59`).
-  The `outcome` tag takes `completed`, `failed` (a `Result` failure), or `exception`
-  (`LoggingCommandDecorator.cs:30`, `:38`, `:52`), so count gives rate, the tag gives errors, and the
+  (`CqrsMetrics.cs:26`), both in milliseconds. Every path is measured without a `finally`: each
+  logging decorator routes all three of its exits through a private `RecordDuration` helper, so the
+  measurement cannot be skipped. The command helper calls `CqrsMetrics.CommandDuration.Record(...)`
+  tagged by `command` and `outcome`
+  (`Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingCommandDecorator.cs:70`) and the
+  query helper does the same for `QueryDuration`
+  (`Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingQueryDecorator.cs:68`).
+  The `outcome` tag takes `completed`, `failed` (a `Result` failure), or `exception`, one call site per
+  path (`LoggingCommandDecorator.cs:47`, `:42`, `:56`; the query equivalents at
+  `LoggingQueryDecorator.cs:44`, `:39`, `:53`), so count gives rate, the tag gives errors, and the
   histogram gives duration. The Aspire host subscribes the meter by literal name
   (`Extensions.cs:158`).
 
@@ -85,11 +91,13 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
 - **Outbox poll spans are filtered out of export.** `OutboxPollFilterProcessor`
   (`Source/Hosting/MMCA.Common.Aspire/Telemetry/OutboxPollFilterProcessor.cs:15`), registered before
   the exporters (`Extensions.cs:172`), clears the `Recorded` flag on the recurring `OutboxPoll` span
-  and its children (`OutboxPollFilterProcessor.cs:42`). The poll query runs inside that span
-  (`OutboxProcessor.cs:266`, named at `OutboxProcessor.cs:56`), so steady-state polling does not flood
-  Application Insights. Real outbox work is untouched: each per-message `OutboxProcess` span is started
-  under an explicit parent context restored from the message's stored trace and span ids
-  (`OutboxProcessor.cs:416`), so it is never a child of the poll span.
+  and its children (`OutboxPollFilterProcessor.cs:42`). The poll query runs inside that span, opened at
+  the top of `FetchCandidatesAsync` (`OutboxProcessor.cs:269`, named at `OutboxProcessor.cs:56`), so
+  steady-state polling does not flood Application Insights. Real outbox work is untouched: each
+  per-message `OutboxProcess` span is started by `StartOutboxActivity` (`OutboxProcessor.cs:440`) under
+  an explicit parent context restored from the message's stored trace and span ids
+  (`OutboxProcessor.cs:447`, span started at `OutboxProcessor.cs:452`), so it is never a child of the
+  poll span.
 
 - **Dual exporters, either or both.** `AddOpenTelemetryExporters` enables OTLP when
   `OTEL_EXPORTER_OTLP_ENDPOINT` is present (`Extensions.cs:250`, the Aspire dashboard sets it) and

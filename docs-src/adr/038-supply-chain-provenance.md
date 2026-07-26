@@ -5,7 +5,7 @@ Accepted (2026-07-06; revised 2026-07-21).
 
 ## Context
 MMCA.Common is a published framework: it packs its NuGet packages and pushes them to GitHub Packages
-on every `v*` tag (release.yml:59-60), where the two production apps and the reference seed consume
+on every `v*` tag (release.yml:3-5), where the two production apps and the reference seed consume
 them. A published framework is a supply-chain amplifier: a vulnerable, substituted, or unreproducible
 dependency does not stay in one repo, it ships downstream to every consumer. Rubric §32 (Dependency &
 Supply-Chain Management) is weighted higher for exactly this reason: its default weight rises to 3 for
@@ -18,7 +18,7 @@ MassTransit-v8 license pin), but it deliberately stops there. The four controls 
 establish provenance and integrity, an SBOM release gate, committed lock files, a CI vulnerability
 audit, and package source mapping, already live in the release and CI workflows,
 `Directory.Build.props`, and `nuget.config`, and are summarized for consumers in SECURITY.md
-(SECURITY.md:32-41). No ADR owned them as a single coherent posture. This record does, and it exceeds
+(SECURITY.md:33-42). No ADR owned them as a single coherent posture. This record does, and it exceeds
 ADR-016's scope: ADR-016 gestures at lock files as sweep mechanics, this ADR owns supply-chain
 integrity as the decision.
 
@@ -27,31 +27,31 @@ Treat supply-chain integrity as a set of build-gating controls, the same invaria
 posture ADR-015 applies to architecture rules. Four controls, each a hard gate:
 
 1. **A CycloneDX SBOM is a hard release gate.** The release workflow installs the CycloneDX tool and
-   generates a JSON software bill of materials for the whole solution into `./sbom` (release.yml:45-49).
+   generates a JSON software bill of materials for the whole solution into `./sbom` (release.yml:53-56).
    It then fails the release (`exit 1`) when generation produced no output
-   (`test -n "$(ls -A ./sbom ...)"`, release.yml:50), and the upload step sets `if-no-files-found:
-   error` (release.yml:52-57). This step was promoted from `continue-on-error` (its tooling-validation
-   phase) to a blocking gate (release.yml:41-44), so every published version ships a verifiable SBOM or
+   (`test -n "$(ls -A ./sbom ...)"`, release.yml:58), and the upload step sets `if-no-files-found:
+   error` (release.yml:60-65). This step was promoted from `continue-on-error` (its tooling-validation
+   phase) to a blocking gate (release.yml:49-52), so every published version ships a verifiable SBOM or
    no packages are pushed.
 
 2. **NuGet lock files are committed for reproducible restores.** `RestorePackagesWithLockFile` is set
    repo-wide (Directory.Build.props:8), so each project records its full resolved transitive graph in a
    committed `packages.lock.json` (for example Source/Core/MMCA.Common.Domain/packages.lock.json).
-   Restore in CI and in release runs against that committed graph (ci.yml:30-31, release.yml:25-26), so
+   Restore in CI and in release runs against that committed graph (ci.yml:102-104, release.yml:33-34), so
    the versions CI vets and the release packs are the ones on record.
 
 3. **CI fails on any non-suppressed vulnerable package.** The audit step runs
-   `dotnet list MMCA.Common.slnx package --vulnerable --include-transitive` (ci.yml:36-38) and fails the
-   build (`exit 1`) on any vulnerable-package row (ci.yml:45-52). Accepted advisories are the sole
+   `dotnet list MMCA.Common.slnx package --vulnerable --include-transitive` (ci.yml:110-113) and fails the
+   build (`exit 1`) on any vulnerable-package row (ci.yml:122-127). Accepted advisories are the sole
    exception, and their single source of truth is the `NuGetAuditSuppress` list in
    `Directory.Build.props`. Because `dotnet list --vulnerable` ignores `NuGetAuditSuppress`, the step
    re-derives that accept-list itself by reading the `GHSA-*` ids out of `Directory.Build.props`
-   (ci.yml:40-48). The accepted-advisory list is currently empty: the one prior entry, the SQLite
+   (ci.yml:115-120). The accepted-advisory list is currently empty: the one prior entry, the SQLite
    advisory GHSA-2m69-gcr7-jv3q (CVE-2025-6965), was suppressed from 2026-06-19 while SQLitePCLRaw
    shipped no patched build. SQLitePCLRaw 2.1.12 (published 2026-07-14) delivered the patched build, so
    the suppression was removed on 2026-07-20 and replaced with a direct fix: a
    `SQLitePCLRaw.bundle_e_sqlite3` pin tracked in `Directory.Packages.props` (Directory.Packages.props:42),
-   referenced directly by `MMCA.Common.Infrastructure` (MMCA.Common.Infrastructure.csproj:23-25) so the
+   referenced directly by `MMCA.Common.Infrastructure` (MMCA.Common.Infrastructure.csproj:26-28) so the
    patched version flows to consumers through the published package graph, the same pattern used for
    the MessagePack pin. This complements the build-time audit: `NuGetAudit` with `NuGetAuditMode=all`
    (Directory.Build.props:9-10)
@@ -70,11 +70,11 @@ posture ADR-015 applies to architecture rules. Four controls, each a hard gate:
 ## Rationale
 - **Provenance is a gate, not a document.** A hard-failing SBOM step means the bill of materials
   cannot silently go missing on a release: the artifact is produced or the release stops
-  (release.yml:50, release.yml:57). That is the §32 provenance criterion enforced, not merely asserted
+  (release.yml:58, release.yml:65). That is the §32 provenance criterion enforced, not merely asserted
   (ArchitectureEvaluationCriteria.md:808).
 - **One accept-list, re-applied where the tool ignores it.** The audit keeps `Directory.Build.props`
   as the only place an advisory is accepted, and re-reads that file in CI precisely because
-  `dotnet list --vulnerable` does not honor `NuGetAuditSuppress` (ci.yml:40-42). A `NuGetAuditSuppress`
+  `dotnet list --vulnerable` does not honor `NuGetAuditSuppress` (ci.yml:115-117). A `NuGetAuditSuppress`
   item is the sanctioned way to accept an advisory, paired with a dated rationale in an adjacent
   comment, so a reviewer sees every accepted advisory in one place rather than a blanket suppression.
   No suppressions are active today: the accept-list is empty after the 2026-07-20/21 SQLite fix.
@@ -87,14 +87,14 @@ posture ADR-015 applies to architecture rules. Four controls, each a hard gate:
 
 ## Trade-offs
 - **The SBOM is generated and archived, not yet signed or attested.** The gate proves a bill of
-  materials exists for each release (release.yml:50); it does not add cryptographic attestation or
+  materials exists for each release (release.yml:58); it does not add cryptographic attestation or
   signature verification of the pushed packages. That is a possible follow-up, not a claim made here.
 - **Accept-list drift is possible.** A `NuGetAuditSuppress` entry silences the audit for that id until
   someone removes it, and its accompanying rationale comment is a review reminder, not an automated
   expiry. No entries are active today, but the mechanism carries this cost whenever an advisory is
   accepted.
 - **Audit granularity is text-matched.** The CI step matches vulnerable rows and `GHSA-*` ids by
-  parsing tool output (ci.yml:43-48). It is deliberately simple and depends on the `dotnet list`
+  parsing tool output (ci.yml:120-125). It is deliberately simple and depends on the `dotnet list`
   output shape rather than a structured feed.
 - **Source mapping constrains where packages come from.** Restricting to nuget.org (nuget.config:15)
   is the point, but it means adding a dependency from any other feed is a deliberate `nuget.config`
@@ -106,5 +106,5 @@ governance from versioning and licensing into supply-chain provenance and integr
 (architecture invariants enforced as build-gating fitness functions; the same gate-the-build posture
 applied here to dependencies), ADR-010 (integration-event schema versioning; another release-discipline
 control that turns a contract into an enforced signal). See SECURITY.md ("Dependency & supply-chain
-security", SECURITY.md:32-41) for the consumer-facing summary and rubric §32
+security", SECURITY.md:33-42) for the consumer-facing summary and rubric §32
 (ArchitectureEvaluationCriteria.md:799-817) for the evaluation criteria.
