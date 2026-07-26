@@ -27,7 +27,7 @@ cd tools && PORT=8080 npm run resume-pdf
 cd tools && PORT=8080 npm run a11y
 ```
 
-The generator prints a summary: pages written per collection, mermaid page count, article and ADR card counts, feed and sitemap sizes, pruned orphans, and dead cross-links. Check it after a build. A non-zero dead-link count usually means a wrong relative path in the markdown, not a deliberate reference to something unpublished.
+The generator prints a summary: pages written per collection, mermaid page count, vendored font count, highlighted code blocks, on-this-page rails, article and ADR card counts, feed and sitemap sizes, pruned orphans, and dead cross-links. Check it after a build. A non-zero dead-link count usually means a wrong relative path in the markdown, not a deliberate reference to something unpublished.
 
 CI (`.github/workflows/ci.yml`) runs three jobs on push and PR:
 
@@ -46,11 +46,21 @@ Single edit points:
 - **Platform ADR card copy**: `assets/data/adr-cards.js`, keyed by ADR number. The list itself is enumerated from `docs-src/adr/`, so a new ADR appears on the page and in the counts with no edit here; an entry only replaces the generated fallback with better copy.
 - **Analytics and email capture**: `assets/js/analytics.js` (GA4 measurement ID + newsletter form action). Both are placeholders and both no-op until replaced: no request is made and the subscribe form stays hidden. Search-console verification is a meta tag and lives commented in `index.html`'s head, because a crawler will not accept a JS-injected tag.
 - **Published email**: `EMAIL_USER` / `EMAIL_DOMAIN` at the top of `assets/js/main.js` (assembled in JS to deter scraping). Deliberately absent from the `ContactPage` JSON-LD for the same reason.
-- **Figures that come from MMCA.Common**: `assets/data/platform-facts.js` (packages, fitness tests, reference apps, rubric categories). CI checks out this repo alone and cannot read `MMCA.Common/FACTS.md`, so they are mirrored here and stamped into `index.html`, `platform.html`, and `resume.html`. Refresh them during the consumer sweep after a framework release. The ADR count is NOT here: it is counted from `docs-src/adr/`.
+- **Figures that come from MMCA.Common**: `assets/data/platform-facts.js` (packages, fitness tests, reference apps, rubric categories). CI checks out this repo alone and cannot read `MMCA.Common/FACTS.md`, so they are mirrored here and stamped into `index.html`, `platform.html`, and `resume.html`. Refresh them during the consumer sweep after a framework release. The ADR count is NOT here: it is counted from `docs-src/adr/`. The same file also owns `packageLayers`, the package list grouped by layer that renders the stack on `platform.html`; **the build throws if its package count disagrees with `packages`**, which is the point (the hand-typed pill list it replaced had drifted to 13 while the prose beside it still said fifteen).
 - **Resume**: edit `resume.html`, then re-export the PDF with `npm run resume-pdf` (it renders the page through the `@media print` block). Do not hand-replace the PDF: exporting it separately is what let it drift a month behind the page it sits on.
 - **Article hero images**: drop the 1600x840 `article-NN.png` into `assets/img/articles/` and run `npm run images`. The PNGs are the source heroes uploaded to Medium and stay in the repo; pages reference only the derived 800px `.webp` (about 97% smaller across the 50).
 
-`assets/js/main.js` is loaded with `defer` on every page: theme toggle (localStorage key `mmca-theme`; each page also has an inline head script that applies the stored theme before paint), mobile nav, footer year, doc sidebar. `assets/css/styles.css` is the single stylesheet (light + dark via `data-theme` on `<html>`); `assets/css/docs.css` layers doc-page prose/layout on top of it.
+`assets/js/main.js` is loaded with `defer` on every page: theme toggle (localStorage key `mmca-theme`; each page also has an inline head script that applies the stored theme before paint), mobile nav, footer year, doc sidebar, scroll reveal, and the on-this-page rail's active state. `assets/css/styles.css` is the single stylesheet (light + dark via `data-theme` on `<html>`); `assets/css/docs.css` layers doc-page prose/layout on top of it.
+
+**404.html is the one root page stamped with a root-absolute (`/`) prefix.** GitHub Pages serves it for a miss at any depth (`/docs/adr/typo.html`), where a relative `assets/css/styles.css` resolves under *that* directory and 404s in turn: the page rendered completely unstyled, with dead nav links, exactly where a visitor least needs a broken page. The prefix is chosen in the root-page loop in `tools/build-docs.mjs`; the two tags outside the regions (`favicon`) are root-absolute by hand.
+
+### Design system
+
+- **Type**: Inter Variable (text/UI) + JetBrains Mono (code, eyebrows, stat figures, tags). Both self-hosted: **the build copies the woff2 files out of the `@fontsource*` devDependencies into `assets/fonts/`**, the same way `mermaid.min.js` is vendored, so the site makes no third-party request. Latin subset only, and the `@font-face` `unicode-range` in `styles.css` is copied verbatim from fontsource: a glyph outside it (the `→`/`↗` arrows, the theme-toggle symbols) falls back to the system font instead of pulling a second file. The two above-the-fold faces are preloaded from `headAssetsHtml`. A missing package means no copy and no build failure: the stack degrades to the system fonts it already listed.
+- **Tokens**: a type scale (`--step--2`..`--step-4`), a spacing scale (`--space-1`..`--space-9`), and the light/dark palettes. Prefer the scale tokens over new ad-hoc rem values.
+- **The ink surface** (`.ink`): the dark band used for the home hero and one feature panel per page. It is dark in **both** themes (it is the signature surface and it matches the article hero art), so it re-declares the token set locally rather than flipping with `data-theme`. Anything nested inside it inherits legible values automatically.
+- **Whole-card links**: `a.card` / `.meter-card` must stay in the `text-decoration: none` opt-out list near the top of `styles.css`. Without it, every line of body copy inside a card that is itself an anchor renders underlined, which is how the library and scorecard cards used to look.
+- Accessibility is enforced, not assumed: any palette change has to survive `npm run a11y` in **both** themes before it lands.
 
 `sitemap.xml` and `feed.xml` are **generated** by `tools/build-docs.mjs`, not hand-maintained. The sitemap covers every root page plus every generated document (120+ URLs, up from a hand-listed 11 that omitted the whole library); `lastmod` comes from each source file's last git commit date, with anything uncommitted dated today. The feed lists the published articles from `articles.js`, pointing at Medium; its `lastBuildDate` is the newest article's publication instant, **not** the wall clock, so consecutive builds are byte-identical and the CI freshness gate is meaningful.
 
@@ -72,6 +82,8 @@ The generator also writes into **marked regions of the hand-authored root pages*
 | `head-assets`, `site-header`, `site-footer` | **all 7 root pages** | `NAV_ITEMS` / `FOOTER_LINKS` in the generator, which also stamp the 119 docs pages |
 | `subscribe` | `writing.html`, `platform.html` | one `subscribeHtml()`, differing only in the input id |
 | `articles`, `articles-jsonld`, `article-categories` | `writing.html` | `assets/data/articles.js` |
+| `featured-articles` | `index.html` | the three most recently published entries in `assets/data/articles.js`, with their hero art |
+| `package-layers` | `platform.html` | `packageLayers` in `assets/data/platform-facts.js` |
 | `adr-list`, `adr-count` | `platform.html` | `docs-src/adr/*.md` + `assets/data/adr-cards.js` |
 | `platform-stats` | `platform.html` | ADR count from `docs-src/adr/` + `assets/data/platform-facts.js` |
 | `scorecards` | `platform.html` | the `**Maturity index**` / `**Implementation index**` lines in `docs-src/governance/*-ArchitectureScorecard.md` |
@@ -90,7 +102,9 @@ Generator behaviors worth knowing before touching it or the markdown:
 - **Heading slugs are GitHub-compatible and computed from the literal heading text**, so headings with C# generics like `PagedCollectionResult<T>` slug to `pagedcollectionresultt` and existing cross-links keep working. Do not "fix" angle brackets in headings.
 - **Inline `<...>` that is not real HTML is escaped**, via the `REAL_HTML_TAGS` whitelist: `<br>`/`<a id=...>` etc. pass through, C# pseudo-tags like `<T>` or `<in TEntity>` render as visible text. If a doc needs a new HTML element, add it to the whitelist.
 - **`.md` cross-links are rewritten to `.html`** within the library.
-- **Mermaid**: ` ```mermaid ` fences become `<pre class="mermaid">` rendered client-side; `assets/js/mermaid.min.js` is vendored by the build (copied from the `mermaid` devDependency) and lazy-loaded only on pages that contain diagrams. Keep diagram labels free of curly braces.
+- **Mermaid**: ` ```mermaid ` fences become `<pre class="mermaid">` rendered client-side; `assets/js/mermaid.min.js` is vendored by the build (copied from the `mermaid` devDependency) and lazy-loaded only on pages that contain diagrams. Keep diagram labels free of curly braces. Diagrams run on the `base` theme with `themeVariables` pinned to the site tokens, because the stock mermaid themes ship a lavender/beige palette that reads as a foreign object dropped into the page.
+- **Syntax highlighting happens at BUILD time** (highlight.js in the `code` renderer), so no highlighter ships to the reader: the output is plain `<span class="hljs-*">` markup coloured by `docs.css` from the site's own tokens, and the corner label comes from `data-lang`. A fence whose language highlight.js has no grammar for (`bicep`) keeps its label and renders as plain text rather than being mis-tokenized. Add a display name to `LANG_LABELS` when a new fence language appears.
+- **On-this-page rail**: H2s are collected while rendering and become a third column (`.doc-layout--toc`) on documents with at least `TOC_MIN_HEADINGS` sections. It is the first thing dropped below 1180px, since the collection sidebar already answers "where am I". `main.js` only adds the active state.
 
 ## Conventions
 

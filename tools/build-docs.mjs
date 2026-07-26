@@ -25,6 +25,7 @@ import { execFileSync } from "node:child_process";
 import vm from "node:vm";
 import path from "node:path";
 import { Marked } from "marked";
+import hljs from "highlight.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WEBSITE_ROOT = path.resolve(HERE, "..");
@@ -323,6 +324,21 @@ let CTX = null; // { srcDir, outRel, hasMermaid }
    report the count and the build can be audited. */
 const DEAD_LINKS = [];
 
+/* Code fences are highlighted at build time (see the `code` renderer). Counted for
+   the build summary so a language that silently stopped resolving is visible. */
+let HIGHLIGHTED_BLOCKS = 0;
+/* Display names for the corner label on a code block. Anything not listed shows the
+   fence's own language token, which is already the right answer for most of them. */
+const LANG_LABELS = {
+  csharp: "C#", cs: "C#", bash: "Shell", sh: "Shell", powershell: "PowerShell",
+  json: "JSON", jsonc: "JSON", xml: "XML", yaml: "YAML", yml: "YAML", sql: "SQL", ini: "INI",
+  /* bicep has no highlight.js grammar, so those blocks keep this label and render as
+     plain text rather than being mis-tokenized as something else. */
+  bicep: "Bicep",
+  js: "JavaScript", javascript: "JavaScript", ts: "TypeScript", typescript: "TypeScript",
+  html: "HTML", css: "CSS", diff: "Diff", text: "Text", plaintext: "Text",
+};
+
 function rewriteHref(href) {
   if (!href) return href;
   if (/^(https?:|mailto:|tel:|#|\/)/i.test(href)) return href;      // external / anchor / absolute
@@ -350,6 +366,11 @@ function makeRenderer(slugCounts) {
     heading({ tokens, depth, text }) {
       const id = uniqueId(text);
       const inner = this.parser.parseInline(tokens);
+      /* Collect the H2s for the on-this-page rail. Plain text only: the rail is a
+         narrow column, so inline code and links inside a heading are flattened. */
+      if (depth === 2 && CTX.toc) {
+        CTX.toc.push({ id, text: String(text).replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[`*_]/g, "").trim() });
+      }
       return `<h${depth} id="${escapeAttr(id)}">${inner}</h${depth}>\n`;
     },
     html({ text }) {
@@ -373,8 +394,25 @@ function makeRenderer(slugCounts) {
         CTX.hasMermaid = true;
         return `<pre class="mermaid">${escapeHtml(text)}</pre>\n`;
       }
-      const cls = language ? ` class="language-${escapeAttr(language)}"` : "";
-      return `<pre class="doc-pre"><code${cls}>${escapeHtml(text)}</code></pre>\n`;
+      /* Highlighting happens HERE, at build time, so no highlighter ships to the
+         reader: the output is plain <span class="hljs-*"> markup coloured by
+         docs.css from the site's own tokens. An unknown or absent language falls
+         back to escaped plain text, exactly as before. */
+      let body = escapeHtml(text);
+      let langClass = language ? ` language-${escapeAttr(language)}` : "";
+      /* highlight.js resolves its own aliases (jsonc -> json). A fence whose language
+         it has no grammar for at all (bicep) keeps its label and renders plain. */
+      if (language && hljs.getLanguage(language)) {
+        try {
+          body = hljs.highlight(text, { language, ignoreIllegals: true }).value;
+          langClass += " hljs";
+          HIGHLIGHTED_BLOCKS++;
+        } catch {
+          body = escapeHtml(text);
+        }
+      }
+      const label = language ? ` data-lang="${escapeAttr(LANG_LABELS[language] || language)}"` : "";
+      return `<pre class="doc-pre"${label}><code class="${langClass.trim()}">${body}</code></pre>\n`;
     },
   };
 }
@@ -492,7 +530,13 @@ function subscribeHtml(idPrefix) {
    per-page OG and Twitter values) is genuinely per-page and stays hand-authored. */
 function headAssetsHtml(prefix, extraCss = "") {
   const css = extraCss ? `\n  <link rel="stylesheet" href="${prefix}${extraCss}">` : "";
+  /* The two fonts used by every page above the fold are preloaded: without it they
+     are only discovered when the stylesheet finishes parsing, which is a visible
+     swap on the h1. `crossorigin` is required on a font preload even same-origin,
+     or the browser fetches the file twice. */
   return `  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="${prefix}assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="${prefix}assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="${prefix}assets/css/styles.css">${css}
   <script defer src="${prefix}assets/js/main.js"></script>
   <script defer src="${prefix}assets/js/analytics.js"></script>`;
@@ -509,7 +553,29 @@ function mermaidHtml(prefix) {
       try {
         // Diagrams are static, first-party content, so "loose" is safe here and
         // lets the flowchart labels keep their <br/> / <i> formatting.
-        window.mermaid.initialize({ startOnLoad: false, securityLevel: "loose", theme: dark ? "dark" : "default" });
+        // themeVariables pin the diagram palette to the site's own tokens: the
+        // stock mermaid themes ship a lavender/beige scheme that read as a
+        // foreign object dropped into the page.
+        var themeVariables = dark ? {
+          background: "#131e2b", primaryColor: "#17263f", primaryTextColor: "#e9eff7",
+          primaryBorderColor: "#3b4e64", lineColor: "#7aa5ff", secondaryColor: "#10303a",
+          tertiaryColor: "#1b2837", mainBkg: "#17263f", nodeBorder: "#3b4e64",
+          clusterBkg: "#111b28", clusterBorder: "#2a3a4d", titleColor: "#e9eff7",
+          edgeLabelBackground: "#131e2b", textColor: "#e9eff7"
+        } : {
+          background: "#ffffff", primaryColor: "#e6edfd", primaryTextColor: "#101a25",
+          primaryBorderColor: "#1a4fd6", lineColor: "#1a4fd6", secondaryColor: "#ddf0f2",
+          tertiaryColor: "#f4f7fb", mainBkg: "#e6edfd", nodeBorder: "#1a4fd6",
+          clusterBkg: "#f4f7fb", clusterBorder: "#dbe3ec", titleColor: "#101a25",
+          edgeLabelBackground: "#ffffff", textColor: "#101a25"
+        };
+        window.mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: "loose",
+          theme: "base",
+          fontFamily: '"Inter Variable", -apple-system, "Segoe UI", Roboto, sans-serif',
+          themeVariables: themeVariables
+        });
         window.mermaid.run({ querySelector: "pre.mermaid" });
       } catch (e) { /* leave the diagram source visible on failure */ }
     });
@@ -614,6 +680,25 @@ function breadcrumbHtml(col, prefix, currentLabel) {
       </nav>`;
 }
 
+/* On-this-page rail. Only rendered when a document has enough sections to be worth
+   navigating: below that it is chrome competing with the collection sidebar, and the
+   three-column layout would collapse to two mostly-empty rails. */
+const TOC_MIN_HEADINGS = 4;
+function tocHtml(toc) {
+  if (!toc || toc.length < TOC_MIN_HEADINGS) return "";
+  const items = toc
+    .map((h) => `            <li><a href="#${escapeAttr(h.id)}">${escapeHtml(h.text)}</a></li>`)
+    .join("\n");
+  return `        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+${items}
+            </ul>
+          </nav>
+        </aside>`;
+}
+
 function docFootHtml(col, doc) {
   const prefix = assetPrefix(doc.outRel);
   const parts = [`<a class="btn btn--ghost" href="${prefix}${col.outDir}/index.html">← Back to ${escapeHtml(col.title)}</a>`];
@@ -631,7 +716,7 @@ mkdirSync(path.join(WEBSITE_ROOT, "docs", "onboarding"), { recursive: true });
 mkdirSync(path.join(WEBSITE_ROOT, "docs", "governance"), { recursive: true });
 mkdirSync(path.join(WEBSITE_ROOT, "docs", "guides"), { recursive: true });
 
-let written = 0, mermaidPages = 0;
+let written = 0, mermaidPages = 0, tocPages = 0;
 
 /* Everything under docs/ is generated from docs-src/. The build only ever wrote files,
    so deleting or renaming a source left its rendered page behind: still committed, still
@@ -640,22 +725,25 @@ let written = 0, mermaidPages = 0;
 const WRITTEN_DOCS = new Set();
 for (const col of collections) {
   for (const doc of col.docs) {
-    const ctx = { srcDir: col.srcDir, outRel: doc.outRel, hasMermaid: false };
+    const ctx = { srcDir: col.srcDir, outRel: doc.outRel, hasMermaid: false, toc: [] };
     const body = renderMarkdown(doc.md, ctx);
     if (ctx.hasMermaid) mermaidPages++;
     const isIndex = doc.file === col.indexSrc;
     const currentLabel = isIndex ? "Overview" : doc.label;
     const prefix = assetPrefix(doc.outRel);
+    const aside = tocHtml(ctx.toc);
+    if (aside) tocPages++;
     const content =
 `    <div class="container doc-container">
 ${breadcrumbHtml(col, prefix, currentLabel)}
-      <div class="doc-layout">
+      <div class="doc-layout${aside ? " doc-layout--toc" : ""}">
 ${sidebarHtml(col, doc.outRel)}
         <article class="doc-content">
           <p class="eyebrow doc-kicker">${escapeHtml(col.kicker)}</p>
 ${body.split("\n").map((l) => "          " + l).join("\n")}
 ${docFootHtml(col, doc)}
         </article>
+${aside}
       </div>
     </div>`;
     const html = page({
@@ -678,42 +766,41 @@ ${docFootHtml(col, doc)}
   const prefix = assetPrefix(outRel);
   const onb = collections.find((c) => c.id === "onboarding");
   const onbContent = onb.docs.length - 1; // exclude the index page itself
+  const hub = [
+    ["adr/index.html", `${adrFiles.length} records`, "Architecture Decision Records",
+      "The context, decision, rationale, and trade-offs behind every cross-cutting pattern, from manual DTO mapping and the outbox to JWKS auth, caching, and supply-chain provenance. Numbered, dated, and cross-linked.",
+      "Browse the ADRs →"],
+    ["onboarding/index.html", `${onbContent} documents`, "Onboarding Guide",
+      `A teaching guide for an engineer new to the codebase: a primer, a mechanically extracted type inventory, ${onbFiles.filter((f) => /^group-\d/.test(f)).length} group chapters walking every first-party type, five DevOps chapters, concept maps, and a coverage audit.`,
+      "Open the guide →"],
+    ["governance/index.html", `${govFiles.length} artifacts`, "Architecture Governance",
+      "The 34-category evaluation rubric, plus an evidence-based scorecard and remediation backlog for each repo (framework, e-commerce, conference). Every score cites the code that earns it.",
+      "Read the scorecards →"],
+    ["guides/index.html", `${guideFiles.length} guides`, "Guides &amp; Specifications",
+      "The narrative layer: the getting-started guide for adopting the framework, business specifications and workflow analyses for both applications, and per-concern notes on accessibility, resilience, responsiveness, versioning, and cost.",
+      "Browse the guides →"],
+  ].map(([href, count, title, body, cta]) =>
+`          <a class="card card--link" href="${href}">
+            <span class="kicker kicker--accent">${count}</span>
+            <h2>${title}</h2>
+            <p>${body}</p>
+            <div class="card-foot"><span class="go">${cta}</span></div>
+          </a>`).join("\n");
   const content =
-`    <section class="section">
+`    <div class="page-head">
       <div class="container">
-        <div class="section-head">
-          <p class="eyebrow">Platform · Reference library</p>
-          <h1 style="margin:0 0 0.75rem">Reference library</h1>
-          <p style="font-size:1.12rem;max-width:70ch">The architecture documentation behind the MMCA platform, published from its canonical home in this site's repository. Every Architecture Decision Record, the governance scorecards, the guides, and the complete onboarding guide, rendered as browsable pages, evidence and trade-offs included.</p>
-          <div class="btn-row" style="margin-top:1.25rem">
-            <a class="btn btn--ghost" href="${prefix}platform.html">← Back to the platform overview</a>
-          </div>
+        <p class="eyebrow">Platform · Reference library</p>
+        <h1>Reference library</h1>
+        <p class="lede">The architecture documentation behind the MMCA platform, published from its canonical home in this site's repository. Every Architecture Decision Record, the governance scorecards, the guides, and the complete onboarding guide, rendered as browsable pages, evidence and trade-offs included.</p>
+        <div class="btn-row">
+          <a class="btn btn--ghost" href="${prefix}platform.html">← Back to the platform overview</a>
         </div>
+      </div>
+    </div>
+    <section class="section">
+      <div class="container">
         <div class="grid grid--2">
-          <a class="card card--link" href="adr/index.html">
-            <span class="kicker" style="color:var(--accent)">${adrFiles.length} records</span>
-            <h2 style="margin:.35rem 0 .5rem">Architecture Decision Records</h2>
-            <p class="mb-0">The context, decision, rationale, and trade-offs behind every cross-cutting pattern, from manual DTO mapping and the outbox to JWKS auth, caching, and supply-chain provenance. Numbered, dated, and cross-linked.</p>
-            <div class="card-foot" style="margin-top:1rem"><span class="doc-cta">Browse the ADRs →</span></div>
-          </a>
-          <a class="card card--link" href="onboarding/index.html">
-            <span class="kicker" style="color:var(--accent)">${onbContent} documents</span>
-            <h2 style="margin:.35rem 0 .5rem">Onboarding Guide</h2>
-            <p class="mb-0">A teaching guide for an engineer new to the codebase: a primer, a mechanically extracted type inventory, ${onbFiles.filter((f) => /^group-\d/.test(f)).length} group chapters walking every first-party type, five DevOps chapters, concept maps, and a coverage audit.</p>
-            <div class="card-foot" style="margin-top:1rem"><span class="doc-cta">Open the guide →</span></div>
-          </a>
-          <a class="card card--link" href="governance/index.html">
-            <span class="kicker" style="color:var(--accent)">${govFiles.length} artifacts</span>
-            <h2 style="margin:.35rem 0 .5rem">Architecture Governance</h2>
-            <p class="mb-0">The 34-category evaluation rubric, plus an evidence-based scorecard and remediation backlog for each repo (framework, e-commerce, conference). Every score cites the code that earns it.</p>
-            <div class="card-foot" style="margin-top:1rem"><span class="doc-cta">Read the scorecards →</span></div>
-          </a>
-          <a class="card card--link" href="guides/index.html">
-            <span class="kicker" style="color:var(--accent)">${guideFiles.length} guides</span>
-            <h2 style="margin:.35rem 0 .5rem">Guides & Specifications</h2>
-            <p class="mb-0">The narrative layer: the getting-started guide for adopting the framework, business specifications and workflow analyses for both applications, and per-concern notes on accessibility, resilience, responsiveness, versioning, and cost.</p>
-            <div class="card-foot" style="margin-top:1rem"><span class="doc-cta">Browse the guides →</span></div>
-          </a>
+${hub}
         </div>
       </div>
     </section>`;
@@ -752,6 +839,28 @@ const mermaidSrc = path.join(HERE, "node_modules", "mermaid", "dist", "mermaid.m
 const mermaidDst = path.join(WEBSITE_ROOT, "assets", "js", "mermaid.min.js");
 if (existsSync(mermaidSrc)) {
   copyFileSync(mermaidSrc, mermaidDst);
+}
+
+/* ----- vendor the web fonts -----
+   Self-hosted so the site makes no third-party request and needs no font CDN in a
+   CSP. Latin subset only; the @font-face unicode-range in styles.css is copied from
+   the same fontsource packages, so a glyph outside it falls back to the system font
+   instead of pulling a second file. Missing package = no copy and no failure: the
+   font stack degrades to the system sans/mono it already listed. */
+const FONT_FILES = [
+  ["@fontsource-variable/inter", "inter-latin-wght-normal.woff2"],
+  ["@fontsource-variable/inter", "inter-latin-wght-italic.woff2"],
+  ["@fontsource/jetbrains-mono", "jetbrains-mono-latin-400-normal.woff2"],
+  ["@fontsource/jetbrains-mono", "jetbrains-mono-latin-700-normal.woff2"],
+];
+const FONT_DIR = path.join(WEBSITE_ROOT, "assets", "fonts");
+mkdirSync(FONT_DIR, { recursive: true });
+let fontsCopied = 0;
+for (const [pkg, file] of FONT_FILES) {
+  const src = path.join(HERE, "node_modules", ...pkg.split("/"), "files", file);
+  if (!existsSync(src)) continue;
+  copyFileSync(src, path.join(FONT_DIR, file));
+  fontsCopied++;
 }
 
 /* ============================================================================
@@ -837,11 +946,16 @@ ${tags ? `              <ul class="tags" style="margin-bottom:0.85rem">${tags}</
     const abs = path.join(WEBSITE_ROOT, file);
     let html = readFileSync(abs, "utf8");
 
-    /* 404.html is served from arbitrary depths by GitHub Pages, but its links are
-       root-relative-by-convention like the rest, so every root page uses no prefix. */
-    html = replaceRegion(html, "head-assets", headAssetsHtml(""), file);
-    html = replaceRegion(html, "site-header", headerHtml("", file), file);
-    html = replaceRegion(html, "site-footer", footerHtml("", "Built as a static site."), file);
+    /* 404.html is the one root page that gets a root-absolute prefix. GitHub Pages
+       serves it for a miss at ANY depth (/docs/adr/typo.html), where a relative
+       "assets/css/styles.css" resolves under that directory and 404s in turn: the
+       page rendered completely unstyled, which is exactly where a visitor least
+       needs a broken page. The nav links had the same problem. This site is a user
+       site at the domain root, so "/" is the correct prefix. */
+    const prefix = file === "404.html" ? "/" : "";
+    html = replaceRegion(html, "head-assets", headAssetsHtml(prefix), file);
+    html = replaceRegion(html, "site-header", headerHtml(prefix, file), file);
+    html = replaceRegion(html, "site-footer", footerHtml(prefix, "Built as a static site."), file);
 
     const idPrefix = SUBSCRIBE_PAGES.get(file);
     if (idPrefix) html = replaceRegion(html, "subscribe", subscribeHtml(idPrefix), file);
@@ -864,6 +978,29 @@ ${tags ? `              <ul class="tags" style="margin-bottom:0.85rem">${tags}</
     stat(adrFiles.length, "Architecture Decision Records"),
     stat(2, "Atlanta tech conferences organized"),
   ].join("\n"), file);
+
+  /* ----- featured writing -----
+     The home page used to carry three hand-written summaries of articles, which meant
+     three more places to keep in sync with articles.js and no hero image on any of
+     them. These are the three most recently published pieces, rendered from the same
+     data and the same hero art as the Writing page, and they refresh themselves the
+     moment a new Medium URL lands in articles.js. */
+  const featured = publishedArticles
+    .slice()
+    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || b.n - a.n)
+    .slice(0, 3);
+  html = replaceRegion(html, "featured-articles",
+    featured.map((a) =>
+`          <a class="card card--link article-card" href="${escapeAttr(a.url)}" target="_blank" rel="noopener">
+            <div class="thumb"><img src="${escapeAttr(webHero(a.hero))}" alt="" width="${HERO_W}" height="${HERO_H}" loading="lazy" decoding="async"></div>
+            <div class="body">
+              <span class="kicker">${escapeHtml(catLabels.get(a.cat) || "Article")} · No. ${a.n}</span>
+              <h3>${escapeHtml(a.title)}</h3>
+              <p>${escapeHtml(a.summary)}</p>
+              <div class="card-foot"><span class="go">Read on Medium ↗</span></div>
+            </div>
+          </a>`).join("\n"), file);
+
   writeFileSync(abs, html);
 }
 
@@ -947,9 +1084,19 @@ ${tags ? `              <ul class="tags" style="margin-bottom:0.85rem">${tags}</
       return m[1];
     };
     const slug = repo.file.replace(/\.md$/i, ".html");
-    return `          <a class="card card--link" href="docs/governance/${slug}">
-            <h3>${escapeHtml(repo.name)} <span class="muted" style="font-weight:400">(${escapeHtml(repo.kind)})</span></h3>
-            <p class="mb-0"><strong>Maturity ${grab("Maturity")}</strong> · <strong>Implementation ${grab("Implementation")}</strong><br><span class="muted">Scored across all 34 categories, every score citing the code that earns it.</span></p>
+    /* Two axes read as two bars. The percentage is both the bar width and the printed
+       value, so the visual and the number cannot disagree, and a screen reader still
+       gets "Maturity 96.9%" as plain text. */
+    const bar = (label, value, alt) =>
+`            <span class="meter${alt ? " meter--alt" : ""}">
+              <span class="meter-label">${label}</span>
+              <span class="meter-track"><span class="meter-fill" style="width:${value}"></span></span>
+              <span class="meter-value">${value}</span>
+            </span>`;
+    return `          <a class="meter-card card--link" href="docs/governance/${slug}">
+            <span class="meter-title"><strong>${escapeHtml(repo.name)}</strong> <span class="meter-role">${escapeHtml(repo.kind)}</span></span>
+${bar("Maturity", grab("Maturity"), false)}
+${bar("Implementation", grab("Implementation"), true)}
           </a>`;
   }).join("\n");
   html = replaceRegion(html, "scorecards", scoreCards, file);
@@ -963,6 +1110,28 @@ ${tags ? `              <ul class="tags" style="margin-bottom:0.85rem">${tags}</
     stat(PLATFORM_FACTS.fitnessTests, "Architecture fitness tests"),
     stat(PLATFORM_FACTS.referenceApps, "Reference applications"),
   ].join("\n"), file);
+
+  /* ----- the package stack -----
+     Rendered from PLATFORM_FACTS.packageLayers so the list and the "15 packages"
+     figure come from one place. The check below is the point of the exercise: the
+     hand-typed pill list this replaced had drifted to 13 entries while the prose
+     beside it still said fifteen, and nothing caught it. */
+  const layers = PLATFORM_FACTS.packageLayers || [];
+  const layerPackages = layers.flatMap((l) => l.items);
+  if (layerPackages.length !== PLATFORM_FACTS.packages) {
+    throw new Error(
+      `platform-facts.js: packageLayers lists ${layerPackages.length} package(s) but packages is ${PLATFORM_FACTS.packages}. ` +
+      "Update both from MMCA.Common/FACTS.md.");
+  }
+  const packageLayers = layers.map((l) =>
+`          <li class="layer${l.edge ? " layer--edge" : ""}">
+            <span class="layer-name">${l.name}</span>
+            <span>
+              <span class="pill-list">${l.items.map((p) => `<span class="pill">${escapeHtml(p)}</span>`).join("")}</span>
+              <span class="layer-note">${l.note}</span>
+            </span>
+          </li>`).join("\n");
+  html = replaceRegion(html, "package-layers", packageLayers, file);
 
   const onbCol = collections.find((c) => c.id === "onboarding");
   const groupChapters = onbFiles.filter((f) => /^group-\d/.test(f)).length;
@@ -981,10 +1150,10 @@ ${tags ? `              <ul class="tags" style="margin-bottom:0.85rem">${tags}</
       "Browse the guides →"],
   ].map(([href, count, title, body, cta]) =>
 `          <a class="card card--link" href="${href}">
-            <span class="kicker" style="color:var(--accent)">${count}</span>
-            <h3 style="margin:.35rem 0 .5rem">${title}</h3>
-            <p class="mb-0">${body}</p>
-            <div class="card-foot" style="margin-top:1rem"><span style="font-weight:600;color:var(--accent)">${cta}</span></div>
+            <span class="kicker kicker--accent">${count}</span>
+            <h3>${title}</h3>
+            <p>${body}</p>
+            <div class="card-foot"><span class="go">${cta}</span></div>
           </a>`).join("\n");
   html = replaceRegion(html, "library-cards", libraryCards, file);
 
@@ -1081,7 +1250,8 @@ let sitemapUrls = 0;
 
 console.log(`Wrote ${written} pages (${collections.map((c) => `${c.docs.length} ${c.id}`).join(", ")}). Mermaid on ${mermaidPages} page(s).`);
 if (pruned.length) console.log(`Pruned ${pruned.length} orphaned page(s) whose source is gone: ${pruned.join(", ")}`);
-console.log(`Mermaid bundle vendored: ${existsSync(mermaidDst)}`);
+console.log(`Mermaid bundle vendored: ${existsSync(mermaidDst)}. Fonts vendored: ${fontsCopied}/${FONT_FILES.length}.`);
+console.log(`Highlighted ${HIGHLIGHTED_BLOCKS} code block(s) at build time. On-this-page rail on ${tocPages} page(s).`);
 console.log(`Rendered ${ARTICLES.length} article cards into writing.html (${publishedArticles.length} published) and ${adrFiles.length} ADR cards into platform.html.`);
 console.log(`Generated feed.xml (${publishedArticles.length} items) and sitemap.xml (${sitemapUrls} URLs).`);
 

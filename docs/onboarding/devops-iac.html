@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"Infrastructure as Code, ADC Azure Deployment","item":"https://ivanball.github.io/docs/onboarding/devops-iac.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">Infrastructure as Code, ADC Azure Deployment</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Guide contents</summary>
@@ -134,7 +136,7 @@
           <hr>
           <h2 id="how-the-pieces-fit-together">How the pieces fit together</h2>
           <p>Before diving into individual files, here is the end-to-end picture:</p>
-          <pre class="doc-pre"><code>GitHub Actions (deploy.yml)
+          <pre class="doc-pre"><code class="">GitHub Actions (deploy.yml)
             │
             ├─ Phase 1 ─ azure/arm-deploy → infra/foundation.bicep
             │               (ACR + Log Analytics, long-lived, rarely changes)
@@ -262,7 +264,7 @@
           <code>uniqueString(resourceGroup().id, environmentName)</code>. All generated resource names incorporate it,
           ensuring uniqueness within the subscription while remaining deterministic across re-runs.</p>
           <h3 id="log-analytics-workspace-foundationbicep2838">Log Analytics Workspace (<code>foundation.bicep:28–38</code>)</h3>
-          <pre class="doc-pre"><code>name: &#39;${prefix}-logs-${resourceToken}&#39;
+          <pre class="doc-pre"><code class="">name: &#39;${prefix}-logs-${resourceToken}&#39;
           sku:  PerGB2018
           retentionInDays: 30</code></pre>
           <p>PerGB2018 is the pay-as-you-go tier. The 30-day minimum is Azure&#39;s floor for this SKU, shorter
@@ -275,7 +277,7 @@
           point: container-app stdout/stderr, ASP.NET Core structured logs, and OpenTelemetry traces all
           land in the same Log Analytics table set, queryable with Kusto.</p>
           <h3 id="azure-container-registry-foundationbicep4355">Azure Container Registry (<code>foundation.bicep:43–55</code>)</h3>
-          <pre class="doc-pre"><code>sku: Basic
+          <pre class="doc-pre"><code class="">sku: Basic
           adminUserEnabled: false   // #11/#17, managed-identity pull only</code></pre>
           <p>The <code>adminUserEnabled: false</code> setting (<code>foundation.bicep:53</code>) is the central credential-hardening
           decision for image pull. Without it, every container app would need a stored registry admin
@@ -372,7 +374,7 @@
           managed identity can revoke only the app rule without touching the namespace root.</p>
           <h3 id="application-insights-mainbicep149159">Application Insights (<code>main.bicep:149–159</code>)</h3>
           <p>A workspace-based App Insights component backed by the foundation Log Analytics workspace:</p>
-          <pre class="doc-pre"><code class="language-bicep">resource appInsights &#39;Microsoft.Insights/components@2020-02-02&#39; = {
+          <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">resource appInsights &#39;Microsoft.Insights/components@2020-02-02&#39; = {
             kind: &#39;web&#39;
             properties: {
               Application_Type: &#39;web&#39;
@@ -444,7 +446,7 @@
           operator an automated signal for the three most meaningful failure modes: error rate, latency, and
           dependency failures.</p>
           <h3 id="cost-budget-mainbicep284312">Cost budget (<code>main.bicep:284–312</code>)</h3>
-          <pre class="doc-pre"><code class="language-bicep">resource costBudget &#39;Microsoft.Consumption/budgets@2023-11-01&#39; = if (enableBudget) {
+          <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">resource costBudget &#39;Microsoft.Consumption/budgets@2023-11-01&#39; = if (enableBudget) {
             properties: {
               amount: monthlyBudgetAmount      // default: $200 USD
               timeGrain: &#39;Monthly&#39;
@@ -472,7 +474,7 @@
           notifications make the cap actionable.</p>
           <h3 id="sql-server-and-databases-mainbicep317410">SQL Server and databases (<code>main.bicep:317–410</code>)</h3>
           <p><strong>SQL Server</strong> (<code>main.bicep:317–328</code>):</p>
-          <pre class="doc-pre"><code>name: &#39;${prefix}-sql-${resourceToken}&#39;
+          <pre class="doc-pre"><code class="">name: &#39;${prefix}-sql-${resourceToken}&#39;
           version: &#39;12.0&#39;
           minimalTlsVersion: &#39;1.2&#39;
           publicNetworkAccess: &#39;Enabled&#39;</code></pre>
@@ -490,7 +492,7 @@
           The comment at <code>main.bicep:339–344</code> is the canonical explanation: the data was fully copied into
           the per-service databases; this is the archive, not the live store.</p>
           <p><strong>Per-service databases</strong> (<code>main.bicep:377–393</code>), <code>[Rubric §8, Data Architecture]</code>:</p>
-          <pre class="doc-pre"><code class="language-bicep">var serviceDatabaseNames = [
+          <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">var serviceDatabaseNames = [
             &#39;ADC_Identity&#39;
             &#39;ADC_Conference&#39;
             &#39;ADC_Engagement&#39;
@@ -515,7 +517,7 @@
           migrations, independent outbox, and can be moved to its own server later without application
           changes.</p>
           <p><strong>Long-term backup retention (LTR)</strong> (<code>main.bicep:399–410</code>):</p>
-          <pre class="doc-pre"><code class="language-bicep">resource serviceDatabaseLtr &#39;…/backupLongTermRetentionPolicies@…&#39; = [
+          <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">resource serviceDatabaseLtr &#39;…/backupLongTermRetentionPolicies@…&#39; = [
             for (dbName, i) in serviceDatabaseNames: {
               properties: {
                 weeklyRetention:  &#39;P4W&#39;
@@ -536,7 +538,7 @@
           window. The disaster-recovery runbook at <code>MMCA.ADC/infra/DISASTER-RECOVERY.md</code> documents the
           drilled restore procedure (<a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a>).</p>
           <h3 id="azure-service-bus-mainbicep425454">Azure Service Bus (<code>main.bicep:425–454</code>)</h3>
-          <pre class="doc-pre"><code>sku: Standard   // Basic rejected: MassTransit requires topics, Basic supports queues only
+          <pre class="doc-pre"><code class="">sku: Standard   // Basic rejected: MassTransit requires topics, Basic supports queues only
           minimumTlsVersion: &#39;1.2&#39;</code></pre>
           <p>The Standard tier comment at <code>main.bicep:420–424</code> is the explanation of a constraint that has
           bitten the project before (it was absent in early production and is now documented in the memory
@@ -559,7 +561,7 @@
           <p>These events cross service boundaries asynchronously via the outbox + MassTransit; the Service Bus
           namespace is the transport that carries them in production (RabbitMQ fills the same role locally).</p>
           <h3 id="container-apps-environment-mainbicep459472">Container Apps environment (<code>main.bicep:459–472</code>)</h3>
-          <pre class="doc-pre"><code class="language-bicep">resource containerAppEnv &#39;…/managedEnvironments@2024-03-01&#39; = {
+          <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">resource containerAppEnv &#39;…/managedEnvironments@2024-03-01&#39; = {
             properties: {
               appLogsConfiguration: {
                 destination: &#39;log-analytics&#39;
@@ -577,7 +579,7 @@
           names as hostnames within the environment.</p>
           <h3 id="uami-and-acr-credential-model-mainbicep474487">UAMI and ACR credential model (<code>main.bicep:474–487</code>)</h3>
           <p>[Rubric §11, Security] assesses credential handling as one of its primary axes.</p>
-          <pre class="doc-pre"><code class="language-bicep">resource appsIdentity &#39;Microsoft.ManagedIdentity/userAssignedIdentities@…&#39; existing = {
+          <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">resource appsIdentity &#39;Microsoft.ManagedIdentity/userAssignedIdentities@…&#39; existing = {
             name: &#39;adc-prod-apps-identity&#39;
           }
           
@@ -591,7 +593,7 @@
           (also a UAMI, used by GitHub Actions via OIDC) has <code>Contributor</code> but not <code>Microsoft.Authorization/ roleAssignments/write</code>, creating role assignments requires elevated permissions deliberately
           withheld from the CI identity.</p>
           <p>Every container app resource declares the same identity:</p>
-          <pre class="doc-pre"><code class="language-bicep">identity: {
+          <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">identity: {
             type: &#39;UserAssigned&#39;
             userAssignedIdentities: { &#39;${appsIdentity.id}&#39;: {} }
           }</code></pre>
@@ -601,24 +603,24 @@
           ACA environment presents the UAMI&#39;s credentials to ACR when pulling, replacing what would
           otherwise be an admin-user password stored in a Container App secret.</p>
           <p>The GitHub Actions deploy identity authenticates to Azure via <strong>OIDC</strong> (<code>deploy.yml:257–262</code>):</p>
-          <pre class="doc-pre"><code class="language-yaml">- name: Log in to Azure
-            uses: azure/login@v3
-            with:
-              client-id: ${{ secrets.AZURE_CLIENT_ID }}
-              tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-              subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}</code></pre>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Log</span> <span class="hljs-string">in</span> <span class="hljs-string">to</span> <span class="hljs-string">Azure</span>
+            <span class="hljs-attr">uses:</span> <span class="hljs-string">azure/login@v3</span>
+            <span class="hljs-attr">with:</span>
+              <span class="hljs-attr">client-id:</span> <span class="hljs-string">${{</span> <span class="hljs-string">secrets.AZURE_CLIENT_ID</span> <span class="hljs-string">}}</span>
+              <span class="hljs-attr">tenant-id:</span> <span class="hljs-string">${{</span> <span class="hljs-string">secrets.AZURE_TENANT_ID</span> <span class="hljs-string">}}</span>
+              <span class="hljs-attr">subscription-id:</span> <span class="hljs-string">${{</span> <span class="hljs-string">secrets.AZURE_SUBSCRIPTION_ID</span> <span class="hljs-string">}}</span></code></pre>
           <p>No <code>client-secret</code> is present, this is the OIDC federated credential flow: GitHub&#39;s OIDC
           provider issues a short-lived JWT for the workflow run, Azure AD validates it against the
           registered federation, and issues a scoped access token that expires when the workflow ends. There
           are zero long-lived Azure credentials in the repository.</p>
           <h3 id="key-vault-and-runtime-secrets-mainbicep489554">Key Vault and runtime secrets (<code>main.bicep:489–554</code>)</h3>
-          <pre class="doc-pre"><code class="language-bicep">resource keyVault &#39;…/vaults@…&#39; existing = {
+          <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">resource keyVault &#39;…/vaults@…&#39; existing = {
             name: &#39;adckv${resourceToken}&#39;
           }</code></pre>
           <p>Key Vault is also bootstrapped out-of-band. The Bicep <code>deploy</code> creates or updates eleven secret
           resources (<code>main.bicep:500–554</code>), writing the parameter values into the vault. Each Container App
           then references secrets by Key Vault URI via the shared UAMI:</p>
-          <pre class="doc-pre"><code class="language-bicep">secrets: [
+          <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">secrets: [
             {
               name: &#39;sql-connection-string&#39;
               keyVaultUrl: kvIdentitySqlConn.properties.secretUri
@@ -720,7 +722,7 @@
           environments and resolves the endpoint from that env var key.</p>
           <h4 id="identity-service-specifics-mainbicep559685">Identity Service specifics (<code>main.bicep:559–685</code>)</h4>
           <p>Identity is the JWT issuer and JWKS endpoint. Its JWT configuration:</p>
-          <pre class="doc-pre"><code class="language-bicep">{ name: &#39;Jwt__SigningAlgorithm&#39;,   value: useRs256 ? &#39;RS256&#39; : &#39;HS256&#39; }
+          <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">{ name: &#39;Jwt__SigningAlgorithm&#39;,   value: useRs256 ? &#39;RS256&#39; : &#39;HS256&#39; }
           { name: &#39;Jwt__Issuer&#39;,            value: &#39;https://${prefix}-gateway.${...defaultDomain}&#39; }
           { name: &#39;Jwt__AccessTokenExpirationMinutes&#39;, value: &#39;15&#39; }
           { name: &#39;Jwt__RefreshTokenExpirationDays&#39;,   value: &#39;7&#39; }</code></pre>
@@ -735,7 +737,7 @@
           <p>Conference is the largest service (0.5 CPU / 1 Gi, <code>main.bicep:726</code>), reflecting its 14 REST
           controllers, its AI scoring path (Anthropic API), and its role as the read-heavy entry point for
           the event/session catalog. The Anthropic API key is injected only when <code>hasAnthropic = true</code>:</p>
-          <pre class="doc-pre"><code class="language-bicep">secrets: union(
+          <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">secrets: union(
             [ ... sql and service bus ... ],
             hasAnthropic ? [{ name: &#39;anthropic-api-key&#39;, keyVaultUrl: ..., identity: appsIdentity.id }] : []
           )</code></pre>
@@ -747,7 +749,7 @@
           <ol>
           <li><code>transport: &#39;http&#39;</code> instead of <code>&#39;http2&#39;</code>, SignalR WebSocket requires an HTTP/1.1 Upgrade
           handshake (<code>main.bicep:890</code>).</li>
-          <li>It has a <code>readiness</code> probe (<code>main.bicep:963–972</code>) in addition to startup and liveness:<pre class="doc-pre"><code class="language-bicep">{ type: &#39;readiness&#39;, httpGet: { path: &#39;/health/ready&#39;, port: 8080, scheme: &#39;HTTP&#39; } }</code></pre>
+          <li>It has a <code>readiness</code> probe (<code>main.bicep:963–972</code>) in addition to startup and liveness:<pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">{ type: &#39;readiness&#39;, httpGet: { path: &#39;/health/ready&#39;, port: 8080, scheme: &#39;HTTP&#39; } }</code></pre>
           ACA ingress holds traffic until <code>GET /health/ready</code> returns 200, which happens only after the
           WarmupHostedService has fetched the JWKS document from Identity. Without this, SignalR
           connections made during warmup would fail because the JWT validator is not yet initialized.</li>
@@ -756,26 +758,26 @@
           <p>Gateway is the sole externally-reachable back-end entry point (<code>external: true</code>,
           <code>allowInsecure: false</code>, <code>main.bicep:1001–1006</code>). It is a pure YARP reverse proxy: no DbContext, no
           JWT issuing, no module. Its env configuration is entirely service-discovery entries and CORS:</p>
-          <pre class="doc-pre"><code class="language-bicep">{ name: &#39;Cors__AllowedOrigins__0&#39;, value: &#39;https://${prefix}-ui.${...defaultDomain}&#39; }</code></pre>
+          <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">{ name: &#39;Cors__AllowedOrigins__0&#39;, value: &#39;https://${prefix}-ui.${...defaultDomain}&#39; }</code></pre>
           <p>CORS is scoped to exactly the UI&#39;s FQDN, not a wildcard. Gateway uses HTTP probes with a
           readiness gate (<code>main.bicep:1050–1057</code>) because its warmup involves establishing connections to
           all back-end services.</p>
           <h4 id="ui-specifics-mainbicep10851177">UI specifics (<code>main.bicep:1085–1177</code>)</h4>
           <p>UI is the other externally-reachable app (<code>external: true</code>). Two non-obvious configuration points:</p>
           <p><strong>Sticky sessions</strong> (<code>main.bicep:1104–1106</code>):</p>
-          <pre class="doc-pre"><code class="language-bicep">stickySessions: { affinity: &#39;sticky&#39; }</code></pre>
+          <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">stickySessions: { affinity: &#39;sticky&#39; }</code></pre>
           <p>Blazor Server runs the component model as a stateful SignalR circuit on the server. If a request
           from a browser is load-balanced to a different replica than the one holding the circuit, the
           circuit drops. Sticky session affinity pins each browser session to one replica.</p>
           <p><strong>Dual API endpoints</strong> (<code>main.bicep:1123–1125</code>):</p>
-          <pre class="doc-pre"><code class="language-bicep">{ name: &#39;Api__ApiEndpoint&#39;,     value: &#39;http://${gatewayApp.name}&#39; }
+          <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">{ name: &#39;Api__ApiEndpoint&#39;,     value: &#39;http://${gatewayApp.name}&#39; }
           { name: &#39;Api__WasmApiEndpoint&#39;, value: &#39;https://${gatewayApp.properties.configuration.ingress.fqdn}&#39; }</code></pre>
           <p>Server-side Blazor rendering uses the internal Gateway URL (skipping public DNS, TLS termination,
           and the Envoy round-trip). WebAssembly code running in the browser must use the external FQDN,
           it has no access to the internal ACA DNS. The UI serves the WASM endpoint URL via a <code>/client-config</code>
           endpoint so the WASM app can discover the gateway without the URL being baked into the WASM build.</p>
           <h3 id="outputs-mainbicep11821188">Outputs (<code>main.bicep:1182–1188</code>)</h3>
-          <pre class="doc-pre"><code class="language-bicep">output acrLoginServer     string = acr.properties.loginServer
+          <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">output acrLoginServer     string = acr.properties.loginServer
           output gatewayFqdn        string = gatewayApp.properties.configuration.ingress.fqdn
           output uiFqdn             string = uiApp.properties.configuration.ingress.fqdn
           output sqlServerFqdn      string = sqlServer.properties.fullyQualifiedDomainName
@@ -789,7 +791,7 @@
           <hr>
           <h2 id="deployment-model-summary">Deployment model summary</h2>
           <p>The complete credential chain:</p>
-          <pre class="doc-pre"><code>GitHub OIDC token (ephemeral, per-workflow-run)
+          <pre class="doc-pre"><code class="">GitHub OIDC token (ephemeral, per-workflow-run)
             → Azure AD federated credential → deploy UAMI access token
               → Bicep deployment (Contributor on acc-rg)
                 → writes Key Vault secrets (Key Vault Secrets Officer on adckv…)
@@ -856,6 +858,21 @@
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#how-the-pieces-fit-together">How the pieces fit together</a></li>
+            <li><a href="#azureyaml-the-azd-project-definition">azure.yaml, the azd project definition</a></li>
+            <li><a href="#infrafoundationbicep-long-lived-shared-infrastructure">infra/foundation.bicep, long-lived shared infrastructure</a></li>
+            <li><a href="#deployment-parameters-assembled-at-deploy-time-not-committed">Deployment parameters, assembled at deploy time, not committed</a></li>
+            <li><a href="#inframainbicep-the-full-application-infrastructure">infra/main.bicep, the full application infrastructure</a></li>
+            <li><a href="#deployment-model-summary">Deployment model summary</a></li>
+            <li><a href="#rubric-category-cross-reference">Rubric category cross-reference</a></li>
+            <li><a href="#not-determinable-from-source">Not determinable from source</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

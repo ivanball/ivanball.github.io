@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Store · Business Workflow Analysis","item":"https://ivanball.github.io/docs/guides/store-BusinessWorkflows.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">Store · Business Workflow Analysis</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>All guides</summary>
@@ -335,7 +337,7 @@
           <h3 id="11-user-registration">1.1 User Registration</h3>
           <p><strong>Entry Point:</strong> <code>POST /auth/register</code> — <code>AuthController.RegisterAsync()</code> — AllowAnonymous</p>
           <p><strong>Execution Path:</strong></p>
-          <pre class="doc-pre"><code>AuthController.RegisterAsync()
+          <pre class="doc-pre"><code class="">AuthController.RegisterAsync()
             -&gt; AuthenticationService.RegisterAsync()
               -&gt; Repository: check email uniqueness
               -&gt; PasswordHasher.HashPassword() (PBKDF2-HMAC-SHA512, 600k iterations, per-user salt)
@@ -371,7 +373,7 @@
           <h3 id="12-user-login">1.2 User Login</h3>
           <p><strong>Entry Point:</strong> <code>POST /auth/login</code> — <code>AuthController.LoginAsync()</code> — AllowAnonymous</p>
           <p><strong>Execution Path:</strong></p>
-          <pre class="doc-pre"><code>AuthController.LoginAsync()
+          <pre class="doc-pre"><code class="">AuthController.LoginAsync()
             -&gt; AuthenticationService.LoginAsync()
               -&gt; Repository: find User by email
               -&gt; PasswordHasher.VerifyPassword() (constant-time comparison)
@@ -399,7 +401,7 @@
           <h3 id="13-token-refresh">1.3 Token Refresh</h3>
           <p><strong>Entry Point:</strong> <code>POST /auth/refresh</code> — AllowAnonymous</p>
           <p><strong>Execution Path:</strong></p>
-          <pre class="doc-pre"><code>AuthController.RefreshAsync()
+          <pre class="doc-pre"><code class="">AuthController.RefreshAsync()
             -&gt; TokenService.GetPrincipalFromExpiredToken() (validates structure, allows expired)
             -&gt; Extract user_id claim -&gt; fetch User
             -&gt; Validate RefreshToken matches + not expired + user active
@@ -419,7 +421,7 @@
           <h3 id="15-change-password">1.5 Change Password</h3>
           <p><strong>Entry Point:</strong> <code>PUT /auth/password</code> — Requires Authorization</p>
           <p><strong>Execution Path:</strong></p>
-          <pre class="doc-pre"><code>AuthController.ChangePasswordAsync()
+          <pre class="doc-pre"><code class="">AuthController.ChangePasswordAsync()
             -&gt; ChangePasswordHandler.Handle()
               -&gt; Verify current password
               -&gt; Hash new password
@@ -491,7 +493,7 @@
           <h3 id="21-category-management">2.1 Category Management</h3>
           <h4 id="create-category">Create Category</h4>
           <p><strong>Entry Point:</strong> <code>POST /categories</code> — Admin only, <code>[Idempotent]</code></p>
-          <pre class="doc-pre"><code>CategoriesController.CreateAsync()
+          <pre class="doc-pre"><code class="">CategoriesController.CreateAsync()
             -&gt; CreateCategoryHandler
               -&gt; CategoryCreateRequestValidator (name: required, max 255)
               -&gt; Category.Create(id, name, parentCategoryId?) -&gt; publishes CategoryCreated
@@ -499,7 +501,7 @@
           <p><strong>Response:</strong> 201 Created with <code>CategoryDTO</code></p>
           <h4 id="rename-category">Rename Category</h4>
           <p><strong>Entry Point:</strong> <code>PUT /categories/{id}/name</code> — Admin only</p>
-          <pre class="doc-pre"><code>CategoriesController.RenameAsync()
+          <pre class="doc-pre"><code class="">CategoriesController.RenameAsync()
             -&gt; RenameCategoryHandler
               -&gt; Validate name (max 255)
               -&gt; Fetch category -&gt; category.Rename(name)
@@ -546,7 +548,7 @@
           <h3 id="22-product-management">2.2 Product Management</h3>
           <h4 id="create-product">Create Product</h4>
           <p><strong>Entry Point:</strong> <code>POST /products</code> — Admin only, <code>[Idempotent]</code></p>
-          <pre class="doc-pre"><code>ProductsController.CreateAsync()
+          <pre class="doc-pre"><code class="">ProductsController.CreateAsync()
             -&gt; CreateProductHandler
               -&gt; Validate: name (required, max 100), description (max 4000), brand (max 100, no whitespace if provided)
               -&gt; Product.Create() factory -&gt; publishes ProductCreated
@@ -622,7 +624,7 @@
           <h3 id="23-product-variant-management">2.3 Product Variant Management</h3>
           <h4 id="add-product-variant">Add Product Variant</h4>
           <p><strong>Entry Point:</strong> <code>POST /products/{id}/productvariants</code> — Admin only</p>
-          <pre class="doc-pre"><code>ProductVariantsController.CreateAsync()
+          <pre class="doc-pre"><code class="">ProductVariantsController.CreateAsync()
             -&gt; AddVariantHandler
               -&gt; Validate: SKU (max 50), Price (positive Money)
               -&gt; IProductVariantService.SkuExistsAsync() -&gt; global SKU uniqueness check
@@ -646,7 +648,7 @@
           <h3 id="31-shopping-cart">3.1 Shopping Cart</h3>
           <h4 id="add-item-to-cart">Add Item to Cart</h4>
           <p><strong>Entry Point:</strong> <code>POST /shoppingcarts/{customerId}/shoppingcartitems</code> — Authenticated (owner or admin via <code>OwnerOrAdminFilter</code>)</p>
-          <pre class="doc-pre"><code>ShoppingCartsController.CreateShoppingCartItemAsync()
+          <pre class="doc-pre"><code class="">ShoppingCartsController.CreateShoppingCartItemAsync()
             -&gt; AddItemHandler
               -&gt; Validate quantity &gt; 0
               -&gt; IProductVariantService.ExistsAsync() [cross-module: Catalog]
@@ -676,14 +678,14 @@
           <p><strong>Entry Point:</strong> <code>GET /shoppingcarts/{id}</code> — Authenticated + OwnerOrAdmin</p>
           <p>Returns the customer&#39;s cart with optional children (items). Returns an empty DTO (not 404) if no cart exists (lazy cart pattern).</p>
           <h4 id="shopping-cart-status-state-machine">Shopping Cart Status State Machine</h4>
-          <pre class="doc-pre"><code>Active --(MarkAsCheckedOut)--&gt; CheckedOut
+          <pre class="doc-pre"><code class="">Active --(MarkAsCheckedOut)--&gt; CheckedOut
             ^                                |
             +----(Reactivate on AddItem)-----+
                   (clears all items)</code></pre>
           <hr>
           <h3 id="32-checkout-cart-to-order--primary-business-workflow">3.2 Checkout (Cart to Order) — Primary Business Workflow</h3>
           <p><strong>Entry Point:</strong> <code>PUT /shoppingcarts/{customerId}/checkout</code> — Authenticated, marked <code>ITransactional</code> and <code>ICacheInvalidating</code></p>
-          <pre class="doc-pre"><code>ShoppingCartsController.CheckOutAsync()
+          <pre class="doc-pre"><code class="">ShoppingCartsController.CheckOutAsync()
             -&gt; CheckOutHandler
               -&gt; Fetch ShoppingCart with items
               -&gt; Collect productVariantIds from cart items
@@ -727,7 +729,7 @@
           <hr>
           <h3 id="33-order-lifecycle">3.3 Order Lifecycle</h3>
           <h4 id="order-status-state-machine">Order Status State Machine</h4>
-          <pre class="doc-pre"><code>                    +------------------------------------------+
+          <pre class="doc-pre"><code class="">                    +------------------------------------------+
                               |                                          |
                               v                                          |
           PendingPayment --&gt; PaymentInitiated --&gt; Paid -----------&gt; Delivered
@@ -745,7 +747,7 @@
           <p><strong>Terminal States:</strong> Cancelled, Delivered</p>
           <h4 id="create-stripe-checkout-session">Create Stripe Checkout Session</h4>
           <p><strong>Entry Point:</strong> <code>POST /orders/{id}/checkout</code> — Authenticated (owner or admin)</p>
-          <pre class="doc-pre"><code>OrdersController.CreateCheckoutSessionAsync()
+          <pre class="doc-pre"><code class="">OrdersController.CreateCheckoutSessionAsync()
             -&gt; CreateCheckoutSessionHandler
               -&gt; Fetch Order with OrderLines
               -&gt; IPaymentService.CreateCheckoutSessionAsync()
@@ -763,7 +765,7 @@
           <p><strong>External Interaction:</strong> Stripe API — creates payment session with order line items</p>
           <h4 id="stripe-payment-webhook">Stripe Payment Webhook</h4>
           <p><strong>Entry Point:</strong> <code>POST /payments/webhook</code> — AllowAnonymous, <code>ITransactional</code>, <code>ICacheInvalidating</code></p>
-          <pre class="doc-pre"><code>PaymentsController.HandleWebhookAsync()
+          <pre class="doc-pre"><code class="">PaymentsController.HandleWebhookAsync()
             -&gt; ProcessPaymentWebhookHandler
               -&gt; IPaymentService.ParseWebhookEvent() (Stripe signature verification)
               -&gt; Route by event type:
@@ -791,7 +793,7 @@
           <p>Validates status is Paid. Status -&gt; Delivered. Publishes <code>OrderDelivered</code>.</p>
           <h4 id="cancel-order">Cancel Order</h4>
           <p><strong>Entry Point:</strong> <code>PUT /orders/{id}/cancel</code> — Owner or Admin</p>
-          <pre class="doc-pre"><code>OrdersController.CancelAsync()
+          <pre class="doc-pre"><code class="">OrdersController.CancelAsync()
             -&gt; CancelOrderHandler
               -&gt; Fetch Order with OrderLines
               -&gt; order.MarkAsCancelled()
@@ -1153,7 +1155,7 @@
           </tbody></table></div>
           <hr>
           <h2 id="8-end-to-end-customer-journey">8. End-to-End Customer Journey</h2>
-          <pre class="doc-pre"><code>1. Register          POST /auth/register        -&gt; User + Customer created, tokens issued
+          <pre class="doc-pre"><code class="">1. Register          POST /auth/register        -&gt; User + Customer created, tokens issued
           2. Browse Catalog    GET /products               -&gt; View products with variants and prices
           3. Add to Cart       POST /shoppingcarts/{id}/shoppingcartitems  -&gt; Cart created/updated
           4. Adjust Cart       PUT/DELETE cart items        -&gt; Modify quantities or remove items
@@ -1242,6 +1244,23 @@
           <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/guides/store-BusinessWorkflows.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#workflow-list-summary">Workflow List Summary</a></li>
+            <li><a href="#1-identity-module-workflows">1. Identity Module Workflows</a></li>
+            <li><a href="#2-catalog-module-workflows">2. Catalog Module Workflows</a></li>
+            <li><a href="#3-sales-module-workflows">3. Sales Module Workflows</a></li>
+            <li><a href="#4-ui-workflows">4. UI Workflows</a></li>
+            <li><a href="#5-cross-module-interactions">5. Cross-Module Interactions</a></li>
+            <li><a href="#6-external-interactions">6. External Interactions</a></li>
+            <li><a href="#7-cross-cutting-concerns-participating-in-workflows">7. Cross-Cutting Concerns Participating in Workflows</a></li>
+            <li><a href="#8-end-to-end-customer-journey">8. End-to-End Customer Journey</a></li>
+            <li><a href="#9-potentially-missing-or-incomplete-workflows">9. Potentially Missing or Incomplete Workflows</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

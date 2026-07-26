@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"ADC · Business Specifications","item":"https://ivanball.github.io/docs/guides/adc-specifications.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">ADC · Business Specifications</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>All guides</summary>
@@ -1132,19 +1134,19 @@
           <p><strong>Important:</strong> Sessionize refresh <strong>only</strong> syncs Conference master data (categories, questions, rooms, speakers, sessions). User-generated data — EventQuestionAnswers, SessionQuestionAnswers, SpeakerQuestionAnswers, and UserSessionBookmarks — is <strong>never modified</strong> by a Sessionize refresh. Locally soft-deleted entities (BR-136) are skipped during refresh.</p>
           <p><strong>Postconditions:</strong> Local data reflects the current state of the Sessionize schedule.</p>
           <p><strong>Response body</strong> (<code>POST /api/events/{id}/refresh</code>, HTTP 200):</p>
-          <pre class="doc-pre"><code class="language-json">{
-            &quot;categoriesSynced&quot;: 5,
-            &quot;categoryItemsSynced&quot;: 18,
-            &quot;questionsSynced&quot;: 6,
-            &quot;roomsSynced&quot;: 8,
-            &quot;speakersSynced&quot;: 42,
-            &quot;sessionsSynced&quot;: 35,
-            &quot;skippedSoftDeleted&quot;: 2,
-            &quot;warnings&quot;: [
-              &quot;Session &#39;Lightning Talk X&#39; has zero duration (StartsAt equals EndsAt) — stored as-is per BR-122&quot;,
-              &quot;Skipped 2 soft-deleted entities present in Sessionize response (BR-136)&quot;
-            ]
-          }</code></pre>
+          <pre class="doc-pre" data-lang="JSON"><code class="language-json hljs"><span class="hljs-punctuation">{</span>
+            <span class="hljs-attr">&quot;categoriesSynced&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">5</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;categoryItemsSynced&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">18</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;questionsSynced&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">6</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;roomsSynced&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">8</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;speakersSynced&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">42</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;sessionsSynced&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">35</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;skippedSoftDeleted&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">2</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;warnings&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
+              <span class="hljs-string">&quot;Session &#x27;Lightning Talk X&#x27; has zero duration (StartsAt equals EndsAt) — stored as-is per BR-122&quot;</span><span class="hljs-punctuation">,</span>
+              <span class="hljs-string">&quot;Skipped 2 soft-deleted entities present in Sessionize response (BR-136)&quot;</span>
+            <span class="hljs-punctuation">]</span>
+          <span class="hljs-punctuation">}</span></code></pre>
           <ul>
           <li><code>*Synced</code> counts reflect total entities created or updated (not just new ones)</li>
           <li><code>skippedSoftDeleted</code> counts entities present in Sessionize response but skipped because they are locally soft-deleted (BR-136)</li>
@@ -2087,7 +2089,7 @@
           </tr>
           </tbody></table></div>
           <h3 id="event-lifecycle">Event Lifecycle</h3>
-          <pre class="doc-pre"><code>Unpublished (default, IsPublished = false)
+          <pre class="doc-pre"><code class="">Unpublished (default, IsPublished = false)
             → Published (IsPublished = true, visible to all users, engagement enabled)
             → Unpublished (IsPublished = false, hidden from public endpoints)</code></pre>
           <p>Unpublished events and their sessions are visible <strong>only to organizers</strong>. Publishing an event makes it and its sessions visible to all users via public endpoints.</p>
@@ -3319,12 +3321,12 @@
           <hr>
           <h3 id="111-error-response-format">11.1 Error Response Format</h3>
           <p>All error responses use the <strong>RFC 9457 ProblemDetails</strong> format (the successor to RFC 7807, same structure):</p>
-          <pre class="doc-pre"><code class="language-json">{
-            &quot;type&quot;: &quot;https://tools.ietf.org/html/rfc9457&quot;,
-            &quot;title&quot;: &quot;Business rule violation&quot;,
-            &quot;status&quot;: 400,
-            &quot;detail&quot;: &quot;A user can bookmark a session only once.&quot;
-          }</code></pre>
+          <pre class="doc-pre" data-lang="JSON"><code class="language-json hljs"><span class="hljs-punctuation">{</span>
+            <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;https://tools.ietf.org/html/rfc9457&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;title&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Business rule violation&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;status&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">400</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;detail&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;A user can bookmark a session only once.&quot;</span>
+          <span class="hljs-punctuation">}</span></code></pre>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -3395,31 +3397,31 @@
           </tr>
           </tbody></table></div>
           <p><strong>Validation errors</strong> (422) include a field-level <code>errors</code> dictionary:</p>
-          <pre class="doc-pre"><code class="language-json">{
-            &quot;type&quot;: &quot;https://tools.ietf.org/html/rfc9457&quot;,
-            &quot;title&quot;: &quot;Validation failed&quot;,
-            &quot;status&quot;: 422,
-            &quot;errors&quot;: {
-              &quot;Title&quot;: [&quot;&#39;Title&#39; must not be empty.&quot;],
-              &quot;StartsAt&quot;: [&quot;&#39;StartsAt&#39; must be before &#39;EndsAt&#39;.&quot;]
-            }
-          }</code></pre>
+          <pre class="doc-pre" data-lang="JSON"><code class="language-json hljs"><span class="hljs-punctuation">{</span>
+            <span class="hljs-attr">&quot;type&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;https://tools.ietf.org/html/rfc9457&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;title&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Validation failed&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;status&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">422</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;errors&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+              <span class="hljs-attr">&quot;Title&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">&quot;&#x27;Title&#x27; must not be empty.&quot;</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+              <span class="hljs-attr">&quot;StartsAt&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">&quot;&#x27;StartsAt&#x27; must be before &#x27;EndsAt&#x27;.&quot;</span><span class="hljs-punctuation">]</span>
+            <span class="hljs-punctuation">}</span>
+          <span class="hljs-punctuation">}</span></code></pre>
           <p><strong>Environment behavior:</strong> In development, the <code>detail</code> field includes the full exception message and stack trace. In production, business rule violations (DomainException) include the rule message; unhandled exceptions return a generic message with no internal details.</p>
           <hr>
           <h3 id="112-pagination-response-contract-clarifies-br-11-br-18">11.2 Pagination Response Contract (clarifies BR-11, BR-18)</h3>
           <p>Paginated endpoints (<code>GET</code> with <code>pageNumber</code> and <code>pageSize</code> parameters) return:</p>
           <p><strong>Response body</strong> — <code>PagedResult&lt;T&gt;</code>:</p>
-          <pre class="doc-pre"><code class="language-json">{
-            &quot;items&quot;: [ ... ],
-            &quot;paginationMetadata&quot;: {
-              &quot;totalItemCount&quot;: 47,
-              &quot;pageSize&quot;: 10,
-              &quot;currentPage&quot;: 2,
-              &quot;totalPageCount&quot;: 5,
-              &quot;firstRowOnPage&quot;: 11,
-              &quot;lastRowOnPage&quot;: 20
-            }
-          }</code></pre>
+          <pre class="doc-pre" data-lang="JSON"><code class="language-json hljs"><span class="hljs-punctuation">{</span>
+            <span class="hljs-attr">&quot;items&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span> ... <span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;paginationMetadata&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+              <span class="hljs-attr">&quot;totalItemCount&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">47</span><span class="hljs-punctuation">,</span>
+              <span class="hljs-attr">&quot;pageSize&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">10</span><span class="hljs-punctuation">,</span>
+              <span class="hljs-attr">&quot;currentPage&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">2</span><span class="hljs-punctuation">,</span>
+              <span class="hljs-attr">&quot;totalPageCount&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">5</span><span class="hljs-punctuation">,</span>
+              <span class="hljs-attr">&quot;firstRowOnPage&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">11</span><span class="hljs-punctuation">,</span>
+              <span class="hljs-attr">&quot;lastRowOnPage&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">20</span>
+            <span class="hljs-punctuation">}</span>
+          <span class="hljs-punctuation">}</span></code></pre>
           <p><strong>Response header</strong> — <code>X-Pagination</code> contains the same <code>PaginationMetadata</code> object serialized as JSON, for clients that prefer reading metadata from headers.</p>
           <p><strong>Defaults and constraints:</strong></p>
           <ul>
@@ -3631,10 +3633,10 @@
           <p>Lookup endpoints return lightweight Id + display name pairs for populating dropdowns, autocomplete, and reference selectors. Available on all aggregate root entities.</p>
           <p><strong>Endpoint pattern:</strong> <code>GET /api/{entities}/lookup</code></p>
           <p><strong>Response body</strong> — array of <code>LookupItem</code>:</p>
-          <pre class="doc-pre"><code class="language-json">[
-            { &quot;id&quot;: 1, &quot;name&quot;: &quot;Atlanta Developers Conference 2025&quot; },
-            { &quot;id&quot;: 2, &quot;name&quot;: &quot;Atlanta Developers Conference 2026&quot; }
-          ]</code></pre>
+          <pre class="doc-pre" data-lang="JSON"><code class="language-json hljs"><span class="hljs-punctuation">[</span>
+            <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;id&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;name&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Atlanta Developers Conference 2025&quot;</span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;id&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">2</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">&quot;name&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Atlanta Developers Conference 2026&quot;</span> <span class="hljs-punctuation">}</span>
+          <span class="hljs-punctuation">]</span></code></pre>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -3853,19 +3855,19 @@
           <strong>Preconditions:</strong> None (self-registration is open — BR-211)</p>
           <p><strong>Endpoint:</strong> <code>POST /auth/register</code></p>
           <p><strong>Request body:</strong></p>
-          <pre class="doc-pre"><code class="language-json">{
-            &quot;email&quot;: &quot;attendee@example.com&quot;,
-            &quot;password&quot;: &quot;SecureP@ss1&quot;,
-            &quot;firstName&quot;: &quot;Alice&quot;,
-            &quot;lastName&quot;: &quot;Smith&quot;,
-            &quot;deviceId&quot;: &quot;a1b2c3d4-...&quot;,
-            &quot;deviceFormFactor&quot;: &quot;phone&quot;,
-            &quot;devicePlatform&quot;: &quot;iOS&quot;,
-            &quot;deviceModel&quot;: &quot;iPhone 15&quot;,
-            &quot;deviceManufacturer&quot;: &quot;Apple&quot;,
-            &quot;deviceName&quot;: &quot;My iPhone&quot;,
-            &quot;deviceType&quot;: &quot;Physical&quot;
-          }</code></pre>
+          <pre class="doc-pre" data-lang="JSON"><code class="language-json hljs"><span class="hljs-punctuation">{</span>
+            <span class="hljs-attr">&quot;email&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;attendee@example.com&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;password&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;SecureP@ss1&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;firstName&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Alice&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;lastName&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Smith&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;deviceId&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;a1b2c3d4-...&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;deviceFormFactor&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;phone&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;devicePlatform&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;iOS&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;deviceModel&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;iPhone 15&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;deviceManufacturer&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Apple&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;deviceName&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;My iPhone&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;deviceType&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Physical&quot;</span>
+          <span class="hljs-punctuation">}</span></code></pre>
           <p><strong>Required fields:</strong> <code>email</code>, <code>password</code>, <code>firstName</code>, <code>lastName</code>
           <strong>Optional fields:</strong> All device fields (provided by MAUI clients only)</p>
           <p><strong>Main Flow:</strong></p>
@@ -3880,11 +3882,11 @@
           <li>Returns access token response</li>
           </ol>
           <p><strong>Response body:</strong></p>
-          <pre class="doc-pre"><code class="language-json">{
-            &quot;accessToken&quot;: &quot;eyJhbGciOiJIUzI1NiIs...&quot;,
-            &quot;expiresIn&quot;: 3600,
-            &quot;tokenType&quot;: &quot;Bearer&quot;
-          }</code></pre>
+          <pre class="doc-pre" data-lang="JSON"><code class="language-json hljs"><span class="hljs-punctuation">{</span>
+            <span class="hljs-attr">&quot;accessToken&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;eyJhbGciOiJIUzI1NiIs...&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;expiresIn&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-number">3600</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;tokenType&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Bearer&quot;</span>
+          <span class="hljs-punctuation">}</span></code></pre>
           <p><strong>Response codes:</strong></p>
           <ul>
           <li>HTTP 201 — user created, JWT returned</li>
@@ -3903,17 +3905,17 @@
           <strong>Preconditions:</strong> User has a registered account</p>
           <p><strong>Endpoint:</strong> <code>POST /auth/login</code></p>
           <p><strong>Request body:</strong></p>
-          <pre class="doc-pre"><code class="language-json">{
-            &quot;email&quot;: &quot;attendee@example.com&quot;,
-            &quot;password&quot;: &quot;SecureP@ss1&quot;,
-            &quot;deviceId&quot;: &quot;a1b2c3d4-...&quot;,
-            &quot;deviceFormFactor&quot;: &quot;phone&quot;,
-            &quot;devicePlatform&quot;: &quot;iOS&quot;,
-            &quot;deviceModel&quot;: &quot;iPhone 15&quot;,
-            &quot;deviceManufacturer&quot;: &quot;Apple&quot;,
-            &quot;deviceName&quot;: &quot;My iPhone&quot;,
-            &quot;deviceType&quot;: &quot;Physical&quot;
-          }</code></pre>
+          <pre class="doc-pre" data-lang="JSON"><code class="language-json hljs"><span class="hljs-punctuation">{</span>
+            <span class="hljs-attr">&quot;email&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;attendee@example.com&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;password&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;SecureP@ss1&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;deviceId&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;a1b2c3d4-...&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;deviceFormFactor&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;phone&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;devicePlatform&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;iOS&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;deviceModel&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;iPhone 15&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;deviceManufacturer&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Apple&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;deviceName&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;My iPhone&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;deviceType&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Physical&quot;</span>
+          <span class="hljs-punctuation">}</span></code></pre>
           <p><strong>Required fields:</strong> <code>email</code>, <code>password</code>
           <strong>Optional fields:</strong> All device fields (provided by MAUI clients only)</p>
           <p><strong>Main Flow:</strong></p>
@@ -3969,10 +3971,10 @@
           <strong>Preconditions:</strong> User is authenticated with a valid JWT</p>
           <p><strong>Endpoint:</strong> <code>PUT /auth/password</code></p>
           <p><strong>Request body:</strong></p>
-          <pre class="doc-pre"><code class="language-json">{
-            &quot;currentPassword&quot;: &quot;OldSecureP@ss1&quot;,
-            &quot;newPassword&quot;: &quot;NewSecureP@ss2&quot;
-          }</code></pre>
+          <pre class="doc-pre" data-lang="JSON"><code class="language-json hljs"><span class="hljs-punctuation">{</span>
+            <span class="hljs-attr">&quot;currentPassword&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;OldSecureP@ss1&quot;</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;newPassword&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;NewSecureP@ss2&quot;</span>
+          <span class="hljs-punctuation">}</span></code></pre>
           <p><strong>Required fields:</strong> <code>currentPassword</code>, <code>newPassword</code></p>
           <p><strong>Main Flow:</strong></p>
           <ol>
@@ -4164,14 +4166,14 @@
           <h3 id="125-shared-auth-layer-common-razor-library">12.5 Shared Auth Layer (Common Razor Library)</h3>
           <p>The Web UI (Blazor) and MAUI UI share a common Razor class library for UI components. Authentication is abstracted through a shared interface with platform-specific implementations.</p>
           <h4 id="auth-service-abstraction">Auth Service Abstraction</h4>
-          <pre class="doc-pre"><code>IAuthenticationService
+          <pre class="doc-pre"><code class="">IAuthenticationService
           ├── RegisterAsync(RegisterRequest, ipAddress?) → Result&lt;AuthenticationResponse&gt;
           ├── LoginAsync(LoginRequest) → Result&lt;AuthenticationResponse&gt;
           ├── RefreshTokenAsync(RefreshTokenRequest) → Result&lt;AuthenticationResponse&gt;
           ├── RevokeTokenAsync(userId) → Result
           ├── ChangePasswordAsync(userId, ChangePasswordRequest) → Result</code></pre>
           <p>The UI layer wraps this with platform-specific <code>IAuthService</code> implementations that add client-side concerns:</p>
-          <pre class="doc-pre"><code>IAuthService (UI abstraction)
+          <pre class="doc-pre"><code class="">IAuthService (UI abstraction)
           ├── RegisterAsync(RegisterRequest) → AuthResult
           ├── LoginAsync(LoginRequest) → AuthResult
           ├── LogoutAsync() → void
@@ -4328,6 +4330,26 @@
           <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/guides/adc-specifications.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#1-system-overview">1. System Overview</a></li>
+            <li><a href="#2-domain-model">2. Domain Model</a></li>
+            <li><a href="#3-business-rules">3. Business Rules</a></li>
+            <li><a href="#4-use-cases--business-processes">4. Use Cases / Business Processes</a></li>
+            <li><a href="#5-workflows--state-transitions">5. Workflows &amp; State Transitions</a></li>
+            <li><a href="#6-events--side-effects">6. Events &amp; Side Effects</a></li>
+            <li><a href="#7-business-constraints--invariants">7. Business Constraints &amp; Invariants</a></li>
+            <li><a href="#8-external-integrations-business-perspective">8. External Integrations (Business Perspective)</a></li>
+            <li><a href="#9-glossary">9. Glossary</a></li>
+            <li><a href="#ddd-structural-summary">DDD Structural Summary</a></li>
+            <li><a href="#10-specification-clarifications--addenda">10. Specification Clarifications &amp; Addenda</a></li>
+            <li><a href="#11-api-contract-specifications">11. API Contract Specifications</a></li>
+            <li><a href="#12-authentication--identity-architecture">12. Authentication &amp; Identity Architecture</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

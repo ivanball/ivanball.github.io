@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"Aspire Orchestration and Containers","item":"https://ivanball.github.io/docs/onboarding/devops-aspire.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">Aspire Orchestration and Containers</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Guide contents</summary>
@@ -134,7 +136,7 @@
           <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2, architectural styles</a>.</p>
           <hr>
           <h2 id="the-one-command-local-run">The one-command local run</h2>
-          <pre class="doc-pre"><code>dotnet run --project Source/Hosting/MMCA.ADC.AppHost</code></pre>
+          <pre class="doc-pre"><code class="">dotnet run --project Source/Hosting/MMCA.ADC.AppHost</code></pre>
           <p>That command brings up everything the application needs locally: four SQL Server databases, Redis,
           RabbitMQ with management UI, a MailDev SMTP interceptor, four extracted microservice processes, a YARP
           gateway pinned to <code>https://localhost:6001</code>, and the Blazor UI pinned to <code>https://localhost:6002</code>. The
@@ -167,7 +169,7 @@
           <code>ContainerLifetime.Persistent</code> option keeps the container alive across AppHost restarts, preserving
           data and avoiding re-seeding during inner-loop development (Program.cs:12-13 comment). Four databases are
           carved from it (Program.cs:32-35):</p>
-          <pre class="doc-pre"><code>adc-identity    →  ADC_Identity     (Identity service)
+          <pre class="doc-pre"><code class="">adc-identity    →  ADC_Identity     (Identity service)
           adc-conference  →  ADC_Conference   (Conference service)
           adc-engagement  →  ADC_Engagement   (Engagement service)
           adc-notification →  ADC_Notification (Notification service)</code></pre>
@@ -177,7 +179,7 @@
           and <code>ICacheService</code> (<code>DistributedCacheService</code>). All four service hosts receive a <code>WithReference(redis)</code>
           and <code>WaitFor(redis)</code>.</p>
           <p><strong>RabbitMQ</strong> is provisioned via a framework helper (Program.cs:60-61):</p>
-          <pre class="doc-pre"><code class="language-csharp">var rabbit = builder.AddMessageBroker()
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> rabbit = builder.AddMessageBroker()
               .WithLifetime(ContainerLifetime.Persistent);</code></pre>
           <p><code>AddMessageBroker()</code> lives in <code>MMCA.Common.Aspire.Hosting</code> (Common.Aspire.Hosting/Extensions.cs:32-38)
           and wraps <code>builder.AddRabbitMQ(name).WithManagementPlugin()</code>, the management plugin exposes the admin
@@ -187,10 +189,10 @@
           provisioned here: it exists on the persistent container as a frozen archive and rollback path, but the
           AppHost no longer creates or migrates it.</p>
           <p><strong>MailDev</strong> is a plain Docker container (Program.cs:67-70):</p>
-          <pre class="doc-pre"><code class="language-csharp">var mailDev = builder.AddContainer(&quot;maildev&quot;, &quot;maildev/maildev&quot;)
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> mailDev = builder.AddContainer(<span class="hljs-string">&quot;maildev&quot;</span>, <span class="hljs-string">&quot;maildev/maildev&quot;</span>)
               .WithLifetime(ContainerLifetime.Persistent)
-              .WithHttpEndpoint(targetPort: 1080, port: 1080, name: &quot;http&quot;)
-              .WithEndpoint(targetPort: 1025, port: 1025, name: &quot;smtp&quot;, scheme: &quot;tcp&quot;);</code></pre>
+              .WithHttpEndpoint(targetPort: <span class="hljs-number">1080</span>, port: <span class="hljs-number">1080</span>, name: <span class="hljs-string">&quot;http&quot;</span>)
+              .WithEndpoint(targetPort: <span class="hljs-number">1025</span>, port: <span class="hljs-number">1025</span>, name: <span class="hljs-string">&quot;smtp&quot;</span>, scheme: <span class="hljs-string">&quot;tcp&quot;</span>);</code></pre>
           <p>The web UI at <code>http://localhost:1080</code> lets developers inspect every email the app sends. The SMTP port
           1025 matches the <code>Smtp:Port</code> in <code>appsettings.json</code>. No other Aspire helper was needed because MailDev
           is a third-party image with no matching Aspire hosting package.</p>
@@ -205,20 +207,20 @@
           until <a href="https://ivanball.github.io/docs/adr/018-polyglot-persistence.html" target="_blank" rel="noopener">ADR-018</a>; the rename to <code>WithSQLServerDataSource</code> gives it a consistent <code>With*DataSource</code> shape with
           the two polyglot siblings below, a breaking API change swept across consumers in one lockstep release,
           <a href="https://ivanball.github.io/docs/adr/016-lockstep-versioning-masstransit-pin.html" target="_blank" rel="noopener">ADR-016</a>.)</p>
-          <pre class="doc-pre"><code class="language-csharp">public static IResourceBuilder&lt;ProjectResource&gt; WithSQLServerDataSource(
-              this IResourceBuilder&lt;ProjectResource&gt; service,
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> IResourceBuilder&lt;ProjectResource&gt; <span class="hljs-title">WithSQLServerDataSource</span>(<span class="hljs-params">
+              <span class="hljs-keyword">this</span> IResourceBuilder&lt;ProjectResource&gt; service,
               IResourceBuilder&lt;SqlServerDatabaseResource&gt; database,
-              string logicalName)
+              <span class="hljs-built_in">string</span> logicalName</span>)</span>
           {
               ArgumentNullException.ThrowIfNull(service);
               ArgumentNullException.ThrowIfNull(database);
           
-              return service
+              <span class="hljs-keyword">return</span> service
                   .WithReference(database)
                   .WaitFor(database)
-                  .WithEnvironment($&quot;DataSources__{logicalName}__SQLServerConnectionString&quot;,
+                  .WithEnvironment(<span class="hljs-string">$&quot;DataSources__<span class="hljs-subst">{logicalName}</span>__SQLServerConnectionString&quot;</span>,
                                    database.Resource.ConnectionStringExpression)
-                  .WithEnvironment(&quot;ConnectionStrings__SQLServerConnectionString&quot;,
+                  .WithEnvironment(<span class="hljs-string">&quot;ConnectionStrings__SQLServerConnectionString&quot;</span>,
                                    database.Resource.ConnectionStringExpression);
           }</code></pre>
           <p>It injects the connection string twice. <code>DataSources__{logicalName}__SQLServerConnectionString</code> feeds
@@ -246,8 +248,8 @@
           <p>Services are declared in this order: Notification, Engagement, Conference, Identity (Program.cs:90-186).
           Declaration order matters because the gateway and UI references are added after all four are declared
           (Program.cs:240-283). Each service follows the same pattern:</p>
-          <pre class="doc-pre"><code class="language-csharp">builder.AddProject&lt;Projects.MMCA_ADC_{Module}_Service&gt;(&quot;{name}&quot;, launchProfileName: &quot;https&quot;)
-              .WithSQLServerDataSource({moduleDb}, &quot;{Module}&quot;)
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">builder.AddProject&lt;Projects.MMCA_ADC_{Module}_Service&gt;(<span class="hljs-string">&quot;{name}&quot;</span>, launchProfileName: <span class="hljs-string">&quot;https&quot;</span>)
+              .WithSQLServerDataSource({moduleDb}, <span class="hljs-string">&quot;{Module}&quot;</span>)
               .WithReference(redis)
               .WithBroker(rabbit)
               .WaitFor(redis)
@@ -259,7 +261,7 @@
           meaning each service waits for RabbitMQ to be healthy before starting and has the environment variable
           that makes <code>AddBrokerMessaging()</code> in its <code>Program.cs</code> select the RabbitMQ transport.</p>
           <p><strong>Conference service</strong> has one extra line (Program.cs:164):</p>
-          <pre class="doc-pre"><code class="language-csharp">.WithEnvironment(&quot;Seeding__IncludeSampleConferenceData&quot;, &quot;true&quot;)</code></pre>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">.WithEnvironment(<span class="hljs-string">&quot;Seeding__IncludeSampleConferenceData&quot;</span>, <span class="hljs-string">&quot;true&quot;</span>)</code></pre>
           <p>This seeds sample speakers and sessions so the public browse grids are non-empty for the Playwright E2E
           suite. The comment (Program.cs:161-163) explicitly restricts this to local dev and E2E CI; production
           leaves this unset.</p>
@@ -270,11 +272,11 @@
           Key Vault are used instead.</p>
           <h3 id="grpc-cross-service-references">gRPC cross-service references</h3>
           <p>Three directed edges express the gRPC topology (Program.cs:220-225):</p>
-          <pre class="doc-pre"><code class="language-csharp">// Notification → Identity
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Notification → Identity</span>
           notificationService.WithReference(identityService).WaitFor(identityService);
-          // Engagement → Conference
+          <span class="hljs-comment">// Engagement → Conference</span>
           engagementService.WithReference(conferenceService).WaitFor(conferenceService);
-          // Conference → Engagement (reverse edge, deliberately no WaitFor)
+          <span class="hljs-comment">// Conference → Engagement (reverse edge, deliberately no WaitFor)</span>
           conferenceService.WithReference(engagementService);</code></pre>
           <p><code>WithReference</code> on a project resource injects <code>services__{name}__http__0</code> (and <code>https__0</code>) environment
           variables into the consumer. The <code>AddTypedGrpcClient&lt;T&gt;(serviceName)</code> call in each service&#39;s
@@ -293,7 +295,7 @@
           on the typed gRPC clients, means a slow-starting peer never blocks the whole stack from reaching a
           healthy state.</p>
           <h3 id="the-gateway">The Gateway</h3>
-          <pre class="doc-pre"><code class="language-csharp">var gateway = builder.AddProject&lt;Projects.MMCA_ADC_Gateway&gt;(&quot;gateway&quot;)
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> gateway = builder.AddProject&lt;Projects.MMCA_ADC_Gateway&gt;(<span class="hljs-string">&quot;gateway&quot;</span>)
               .WithReference(notificationService)
               .WithReference(engagementService)
               .WithReference(conferenceService)
@@ -303,7 +305,7 @@
               .WaitFor(conferenceService)
               .WaitFor(identityService)
               .WithExternalHttpEndpoints()
-              .WithEndpoint(&quot;https&quot;, endpoint =&gt; endpoint.Port = 6001);</code></pre>
+              .WithEndpoint(<span class="hljs-string">&quot;https&quot;</span>, endpoint =&gt; endpoint.Port = <span class="hljs-number">6001</span>);</code></pre>
           <p>Program.cs:240-250. The gateway has no <code>WithSQLServerDataSource</code>, no <code>WithReference(redis)</code>, and no
           <code>WithBroker</code>. It is stateless: no database, no cache, no broker traffic. The four <code>WithReference</code> calls
           are purely for Aspire service-discovery injection, they make the gateway able to resolve
@@ -319,7 +321,7 @@
           a Kestrel <code>Http2</code>-only endpoint rejects. The solution (Program.cs:259-261 and
           Common.Aspire.Hosting/Extensions.cs:81-111) is <code>WithJwksDiscovery</code>, which sets
           <code>Authentication__JwtBearer__Authority</code> to the <strong>gateway&#39;s</strong> HTTPS endpoint rather than Identity&#39;s:</p>
-          <pre class="doc-pre"><code class="language-csharp">notificationService.WithJwksDiscovery(identityService, gateway);
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">notificationService.WithJwksDiscovery(identityService, gateway);
           engagementService.WithJwksDiscovery(identityService, gateway);
           conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
           <p>The gateway accepts both HTTP/1.1 and HTTP/2 via ALPN, and its <code>/.well-known/*</code> forwarder routes the
@@ -330,7 +332,7 @@
           Routing that fetch through the gateway rather than hitting Identity directly keeps the internal topology
           (cleartext h2c) invisible to callers.</p>
           <h3 id="the-blazor-ui">The Blazor UI</h3>
-          <pre class="doc-pre"><code class="language-csharp">var ui = builder.AddProject&lt;Projects.MMCA_ADC_UI_Web&gt;(&quot;ui&quot;, launchProfileName: &quot;https&quot;)
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> ui = builder.AddProject&lt;Projects.MMCA_ADC_UI_Web&gt;(<span class="hljs-string">&quot;ui&quot;</span>, launchProfileName: <span class="hljs-string">&quot;https&quot;</span>)
               .WithExternalHttpEndpoints()
               .WithReference(gateway)
               .WithReference(notificationService)
@@ -339,8 +341,8 @@
               .WithReference(identityService)
               .WaitFor(gateway)
               ...
-              .WithEndpoint(&quot;https&quot;, endpoint =&gt; endpoint.Port = 6002);
-          identityService.WithEnvironment(&quot;OAuth__UIBaseUrl&quot;, ui.GetEndpoint(&quot;https&quot;));</code></pre>
+              .WithEndpoint(<span class="hljs-string">&quot;https&quot;</span>, endpoint =&gt; endpoint.Port = <span class="hljs-number">6002</span>);
+          identityService.WithEnvironment(<span class="hljs-string">&quot;OAuth__UIBaseUrl&quot;</span>, ui.GetEndpoint(<span class="hljs-string">&quot;https&quot;</span>));</code></pre>
           <p>Program.cs:267-283. The UI waits for the gateway (and transitively the four services), ensuring it
           does not open to traffic while the backend is still cold. Port 6002 is pinned for the same reason as
           6001, E2E tests and out-of-Aspire clients need a stable address. The <code>identityService.WithEnvironment</code>
@@ -648,7 +650,7 @@
           <hr>
           <h2 id="startup-ordering-summary">Startup ordering summary</h2>
           <p>The health-based <code>WaitFor</code> chain imposes this ordering:</p>
-          <pre class="doc-pre"><code>SQL Server container health
+          <pre class="doc-pre"><code class="">SQL Server container health
             └─ Database resources health (adc-identity, adc-conference, adc-engagement, adc-notification)
                  ├─ Identity Service  (WaitFor: identityDb, redis, mailDev, rabbit)
                  ├─ Conference Service (WaitFor: conferenceDb, redis, mailDev, rabbit)
@@ -678,6 +680,23 @@
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#the-one-command-local-run">The one-command local run</a></li>
+            <li><a href="#mmcaadcapphost-the-orchestration-project">MMCA.ADC.AppHost, the orchestration project</a></li>
+            <li><a href="#where-service-defaults-come-from-mmcacommonaspire-not-a-local-project">Where service defaults come from, MMCA.Common.Aspire, not a local project</a></li>
+            <li><a href="#mmcacommonaspire-the-framework-service-defaults-package">MMCA.Common.Aspire, the framework service-defaults package</a></li>
+            <li><a href="#mmcacommonaspirehosting-the-apphost-extensions-package">MMCA.Common.Aspire.Hosting, the AppHost extensions package</a></li>
+            <li><a href="#the-six-dockerfiles">The six Dockerfiles</a></li>
+            <li><a href="#local-to-cloud-parity">Local-to-cloud parity</a></li>
+            <li><a href="#the-yarp-gateways-role">The YARP Gateway&#39;s role</a></li>
+            <li><a href="#startup-ordering-summary">Startup ordering summary</a></li>
+            <li><a href="#not-determinable-from-source">Not determinable from source</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

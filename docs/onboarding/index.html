@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"Overview","item":"https://ivanball.github.io/docs/onboarding/index.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">Overview</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Guide contents</summary>
@@ -153,7 +155,7 @@
           <p><strong>First-party type</strong> = any type declared in <code>MMCA.Common</code> or <code>MMCA.ADC</code> source. The .NET BCL and
           external NuGet packages are <em>not</em> first-party, they are &quot;external Level 0&quot;, explained <strong>once</strong> in the
           <a href="00-primer.html">primer</a>, never per class.</p>
-          <pre class="doc-pre"><code>Level(C) = 0                              if C references only external (BCL/NuGet) types
+          <pre class="doc-pre"><code class="">Level(C) = 0                              if C references only external (BCL/NuGet) types
           Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pre>
           <p>When a type must reference a first-party type whose home group appears <strong>later</strong>, that forward
           reference is allowed (functional cohesion can outrank strict progressive disclosure) and is
@@ -463,7 +465,7 @@
           </ul>
           <hr>
           <h2 id="the-companion-projects-context">The companion projects (context)</h2>
-          <pre class="doc-pre"><code>MMCA.Common , shared framework, published as 15 NuGet packages (DDD/Clean Arch/CQRS base classes)
+          <pre class="doc-pre"><code class="">MMCA.Common , shared framework, published as 15 NuGet packages (DDD/Clean Arch/CQRS base classes)
              ├── consumed by MMCA.ADC   (Atlanta Developers Conference app, the focus of this guide)
              └── consumed by MMCA.Store  (e-commerce app, out of scope here)</code></pre>
           <p>This guide covers <strong>MMCA.Common</strong> (the framework) and <strong>MMCA.ADC</strong> (one consumer). <code>MMCA.Store</code> is out
@@ -475,6 +477,18 @@
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#how-the-guide-is-organized-two-axes">How the guide is organized, two axes</a></li>
+            <li><a href="#chapters">Chapters</a></li>
+            <li><a href="#legend-how-to-read-a-type-section">Legend, how to read a type section</a></li>
+            <li><a href="#suggested-reading-paths">Suggested reading paths</a></li>
+            <li><a href="#the-companion-projects-context">The companion projects (context)</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

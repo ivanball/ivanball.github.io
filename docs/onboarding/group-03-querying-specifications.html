@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"3. Querying: Specifications, Filtering & the Entity Query Service","item":"https://ivanball.github.io/docs/onboarding/group-03-querying-specifications.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">3. Querying: Specifications, Filtering &amp; the Entity Query Service</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Guide contents</summary>
@@ -1684,6 +1686,19 @@
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#the-specification-pattern-the-trusted-predicate">The Specification pattern, the trusted predicate</a></li>
+            <li><a href="#dynamic-filtering-one-strategy-per-clr-type">Dynamic filtering, one Strategy per CLR type</a></li>
+            <li><a href="#sorting-sparse-fieldsets-and-paging-arithmetic">Sorting, sparse fieldsets, and paging arithmetic</a></li>
+            <li><a href="#the-pipeline-two-paths-and-one-contract">The pipeline, two paths and one contract</a></li>
+            <li><a href="#the-query-service-the-public-face">The query service, the public face</a></li>
+            <li><a href="#end-to-end-one-list-request">End to end, one list request</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

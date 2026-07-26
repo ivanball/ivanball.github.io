@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"4. Domain & Integration Events + Outbox Dual-Dispatch","item":"https://ivanball.github.io/docs/onboarding/group-04-events-outbox.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">4. Domain &amp; Integration Events + Outbox Dual-Dispatch</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Guide contents</summary>
@@ -1552,6 +1554,21 @@
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#the-two-kinds-of-event">The two kinds of event</a></li>
+            <li><a href="#raising-and-capturing-where-the-outbox-is-written">Raising and capturing: where the outbox is written</a></li>
+            <li><a href="#the-routing-split-local-events-dispatch-in-process-integration-events-wait-for-the-bus">The routing split: local events dispatch in-process, integration events wait for the bus</a></li>
+            <li><a href="#the-safety-net-how-the-processor-schedules-itself">The safety net: how the processor schedules itself</a></li>
+            <li><a href="#failures-dead-letters-and-keeping-the-table-and-telemetry-bounded">Failures, dead-letters, and keeping the table (and telemetry) bounded</a></li>
+            <li><a href="#the-pluggable-transport-in-process-versus-broker">The pluggable transport: in-process versus broker</a></li>
+            <li><a href="#consuming-from-the-broker-the-inbox-and-the-generic-consumer">Consuming from the broker: the inbox and the generic consumer</a></li>
+            <li><a href="#putting-it-together-one-events-life">Putting it together, one event&#39;s life</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

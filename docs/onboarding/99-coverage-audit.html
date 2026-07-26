@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"Phase 4, Coverage Audit","item":"https://ivanball.github.io/docs/onboarding/99-coverage-audit.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">Phase 4, Coverage Audit</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Guide contents</summary>
@@ -1008,7 +1010,7 @@
           </ol>
           <hr>
           <h2 id="6-how-to-regenerate-this-audit">6. How to regenerate this audit</h2>
-          <pre class="doc-pre"><code># from C:\Projects\MMCA\Tools\invtool
+          <pre class="doc-pre"><code class=""># from C:\Projects\MMCA\Tools\invtool
           dotnet run -- out  ../../MMCA.Common/Source ../../MMCA.Common/Tests ../../MMCA.ADC/Source ../../MMCA.ADC/Tests
           pwsh -File classify.ps1   # -&gt; 00-group-taxonomy.md + _groups.tsv (0 unmapped check)
           pwsh -File plan.ps1       # -&gt; _typemap.tsv + _units/* + _workplan.json
@@ -1023,6 +1025,19 @@
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#1-coverage-reconciliation">1. Coverage reconciliation</a></li>
+            <li><a href="#2-exceptions-log-every-deliberate-omission-with-reason">2. Exceptions log (every deliberate omission, with reason)</a></li>
+            <li><a href="#3-grouping--ordering-verification">3. Grouping &amp; ordering verification</a></li>
+            <li><a href="#4-rubric-coverage-matrix">4. Rubric coverage matrix</a></li>
+            <li><a href="#5-open-questions--not-determinable-from-source">5. Open questions / not determinable from source</a></li>
+            <li><a href="#6-how-to-regenerate-this-audit">6. How to regenerate this audit</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

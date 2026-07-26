@@ -27,6 +27,8 @@
   <!-- END articles-jsonld -->
   <!-- BEGIN head-assets -->
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="assets/css/styles.css">
   <script defer src="assets/js/main.js"></script>
   <script defer src="assets/js/analytics.js"></script>
@@ -72,21 +74,24 @@
   <!-- END site-header -->
 
   <main id="main">
-    <section class="section">
+    <div class="page-head">
       <div class="container">
-        <div class="section-head">
-          <p class="eyebrow">Writing</p>
-          <h1 style="margin:0 0 0.6rem">Deep dives on enterprise .NET</h1>
-          <p style="max-width:72ch">A long-form series that turns the MMCA framework's architecture decisions into teachable patterns, every claim grounded in real source. Read in order it is a curriculum: the first few orient you, the middle ones cover the core patterns, data, and the API edge, and the last group is proof and getting started.</p>
-        </div>
-
-        <p class="count-note" style="margin-bottom:0.75rem">The series is rolling out on Medium. Titles and summaries are below; each "Read on Medium" link activates as that piece publishes.</p>
-
-        <div class="btn-row" style="margin-bottom:1.75rem">
+        <p class="eyebrow">Writing</p>
+        <h1>Deep dives on enterprise .NET</h1>
+        <p class="lede">A long-form series that turns the MMCA framework's architecture decisions into teachable patterns, every claim grounded in real source. Read in order it is a curriculum: the first few orient you, the middle ones cover the core patterns, data, and the API edge, and the last group is proof and getting started.</p>
+        <div class="btn-row">
           <a class="btn btn--primary" href="https://medium.com/@ivanball76" target="_blank" rel="noopener">Follow the series on Medium ↗</a>
           <a class="btn btn--ghost" href="feed.xml">Subscribe by RSS</a>
           <a class="btn btn--ghost" href="docs/index.html">Read the reference library</a>
         </div>
+      </div>
+    </div>
+
+    <section class="section">
+      <div class="container">
+        <!-- Sans, not the mono .count-note: that class is for the short live counter
+             below the filters, and a full sentence set in mono reads as code. -->
+        <p class="muted" style="max-width:80ch">The series is rolling out on Medium. Titles and summaries are below; each "Read on Medium" link activates as that piece publishes.</p>
 
         <!-- Visually hidden: the 50 cards below are h3s, so without an h2 the page skips a
              heading level. A per-category h2 would fight the in-place filter, which hides

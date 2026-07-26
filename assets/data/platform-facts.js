@@ -17,6 +17,21 @@
 window.PLATFORM_FACTS = {
   /* FACTS.md "Published packages" */
   packages: 15,
+  /* The same 15 packages, grouped by the layer they serve, for the stack on
+     platform.html. The count above is derived from this list at build time, so a
+     package added here cannot leave the headline figure behind (the hand-typed
+     pill list this replaced had drifted to 13 while the copy still said fifteen).
+     `edge` marks the layers that exist to make extraction possible. */
+  packageLayers: [
+    { name: "Shared", note: "Result pattern, value objects, error handling, DTOs", items: ["MMCA.Common.Shared"] },
+    { name: "Domain", note: "Entities, aggregate roots, domain events, specifications", items: ["MMCA.Common.Domain"] },
+    { name: "Application", note: "CQRS handlers, the decorator pipeline, the module system", items: ["MMCA.Common.Application"] },
+    { name: "Infrastructure", note: "EF Core multi-engine, repositories, caching, outbox, message bus", items: ["MMCA.Common.Infrastructure"] },
+    { name: "API &amp; transport", note: "Controllers, middleware, idempotency, JWKS, gRPC contracts", items: ["MMCA.Common.API", "MMCA.Common.Grpc"], edge: true },
+    { name: "UI", note: "Blazor shared components, MudBlazor theme, web and MAUI clients", items: ["MMCA.Common.UI", "MMCA.Common.UI.Web", "MMCA.Common.UI.Maui"] },
+    { name: "Hosting", note: "Aspire service defaults, OpenTelemetry, health checks, broker wiring", items: ["MMCA.Common.Aspire", "MMCA.Common.Aspire.Hosting"], edge: true },
+    { name: "Testing", note: "Integration bases, architecture rule library, Playwright and bUnit harnesses", items: ["MMCA.Common.Testing", "MMCA.Common.Testing.Architecture", "MMCA.Common.Testing.E2E", "MMCA.Common.Testing.UI"] },
+  ],
   /* FACTS.md "Architecture fitness functions": test methods, not base classes */
   fitnessTests: 93,
   /* Store, ADC, Helpdesk */

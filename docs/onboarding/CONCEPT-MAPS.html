@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"MMCA Concept & Pattern Maps","item":"https://ivanball.github.io/docs/onboarding/CONCEPT-MAPS.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">MMCA Concept &amp; Pattern Maps</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Guide contents</summary>
@@ -753,6 +755,28 @@
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#1-system-context-two-codebases--the-13-packages">1. System context, two codebases + the 13 packages</a></li>
+            <li><a href="#2-clean-architecture-the-layered-dependency-rule">2. Clean Architecture, the layered dependency rule</a></li>
+            <li><a href="#3-the-25-functional-groups-dependency--build-order">3. The 25 functional groups, dependency / build order</a></li>
+            <li><a href="#4-core-framework-patterns-how-the-building-blocks-compose">4. Core framework patterns, how the building blocks compose</a></li>
+            <li><a href="#5-request-lifecycle-the-cqrs-decorator-pipeline-adr-014">5. Request lifecycle, the CQRS decorator pipeline (ADR-014)</a></li>
+            <li><a href="#6-event-driven-integration-outbox-dual-dispatch-adr-003--010--021">6. Event-driven integration, outbox dual-dispatch (ADR-003 / 010 / 021)</a></li>
+            <li><a href="#7-modular-monolith--extractable-services-adr-006--007--008--012">7. Modular monolith → extractable services (ADR-006 / 007 / 008 / 012)</a></li>
+            <li><a href="#8-persistence-database-per-service--polyglot-engines-adr-006--018--030">8. Persistence, database-per-service + polyglot engines (ADR-006 / 018 / 030)</a></li>
+            <li><a href="#9-authentication--authorization-stack">9. Authentication &amp; Authorization stack</a></li>
+            <li><a href="#10-notifications-two-channels-behind-one-sender-adr-024">10. Notifications, two channels behind one sender (ADR-024)</a></li>
+            <li><a href="#11-ui-write-once-render-everywhere--i18n--theming">11. UI, write-once render everywhere + i18n + theming</a></li>
+            <li><a href="#12-adc-business-modules-bounded-contexts-end-to-end">12. ADC business modules, bounded contexts end-to-end</a></li>
+            <li><a href="#13-the-34-adrs-grouped-by-theme">13. The 34 ADRs, grouped by theme</a></li>
+            <li><a href="#14-the-34-category-evaluation-rubric">14. The 34-category evaluation rubric</a></li>
+            <li><a href="#15-how-the-axes-fit-together-reading-map">15. How the axes fit together (reading map)</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>
@@ -785,7 +809,29 @@
       try {
         // Diagrams are static, first-party content, so "loose" is safe here and
         // lets the flowchart labels keep their <br/> / <i> formatting.
-        window.mermaid.initialize({ startOnLoad: false, securityLevel: "loose", theme: dark ? "dark" : "default" });
+        // themeVariables pin the diagram palette to the site's own tokens: the
+        // stock mermaid themes ship a lavender/beige scheme that read as a
+        // foreign object dropped into the page.
+        var themeVariables = dark ? {
+          background: "#131e2b", primaryColor: "#17263f", primaryTextColor: "#e9eff7",
+          primaryBorderColor: "#3b4e64", lineColor: "#7aa5ff", secondaryColor: "#10303a",
+          tertiaryColor: "#1b2837", mainBkg: "#17263f", nodeBorder: "#3b4e64",
+          clusterBkg: "#111b28", clusterBorder: "#2a3a4d", titleColor: "#e9eff7",
+          edgeLabelBackground: "#131e2b", textColor: "#e9eff7"
+        } : {
+          background: "#ffffff", primaryColor: "#e6edfd", primaryTextColor: "#101a25",
+          primaryBorderColor: "#1a4fd6", lineColor: "#1a4fd6", secondaryColor: "#ddf0f2",
+          tertiaryColor: "#f4f7fb", mainBkg: "#e6edfd", nodeBorder: "#1a4fd6",
+          clusterBkg: "#f4f7fb", clusterBorder: "#dbe3ec", titleColor: "#101a25",
+          edgeLabelBackground: "#ffffff", textColor: "#101a25"
+        };
+        window.mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: "loose",
+          theme: "base",
+          fontFamily: '"Inter Variable", -apple-system, "Segoe UI", Roboto, sans-serif',
+          themeVariables: themeVariables
+        });
         window.mermaid.run({ querySelector: "pre.mermaid" });
       } catch (e) { /* leave the diagram source visible on failure */ }
     });

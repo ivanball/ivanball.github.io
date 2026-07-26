@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"16. Aspire Orchestration & Service Defaults","item":"https://ivanball.github.io/docs/onboarding/group-16-aspire-orchestration.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">16. Aspire Orchestration &amp; Service Defaults</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Guide contents</summary>
@@ -389,6 +391,19 @@
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#the-orchestrator-declaring-the-resource-graph">The orchestrator: declaring the resource graph</a></li>
+            <li><a href="#startup-ordering-and-the-grpc-deadlock-avoidance-trick">Startup ordering and the gRPC deadlock-avoidance trick</a></li>
+            <li><a href="#the-service-baseline-addservicedefaults">The service baseline: AddServiceDefaults()</a></li>
+            <li><a href="#warm-up-defeating-aca-cold-start">Warm-up: defeating ACA cold-start</a></li>
+            <li><a href="#security-headers-and-cors-at-the-host-edge">Security headers and CORS at the host edge</a></li>
+            <li><a href="#how-it-all-fits-at-runtime">How it all fits at runtime</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

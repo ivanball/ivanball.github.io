@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"19. ADC Conference - Infrastructure & Persistence","item":"https://ivanball.github.io/docs/onboarding/group-19-conference-infrastructure.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">19. ADC Conference - Infrastructure &amp; Persistence</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Guide contents</summary>
@@ -843,6 +845,22 @@
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#engine-agnostic-entities-engine-chosen-by-the-config-base-class">Engine-agnostic entities, engine chosen by the config base class</a></li>
+            <li><a href="#each-config-inherits-the-cross-cutting-behavior-then-adds-entity-specifics">Each config inherits the cross-cutting behavior, then adds entity specifics</a></li>
+            <li><a href="#dbsets-the-context-shape-and-how-the-configurations-are-actually-found">DbSets, the context shape, and how the configurations are actually found</a></li>
+            <li><a href="#seeding-two-real-events-always-sample-data-only-in-dev-and-ci">Seeding: two real events always, sample data only in dev and CI</a></li>
+            <li><a href="#the-sessionize-adapter">The Sessionize adapter</a></li>
+            <li><a href="#the-anthropic-ai-scoring-adapter">The Anthropic AI scoring adapter</a></li>
+            <li><a href="#scoring-runs-on-a-hosted-drain-not-on-the-request-thread">Scoring runs on a hosted drain, not on the request thread</a></li>
+            <li><a href="#di-wiring-and-a-deliberate-resilience-override">DI wiring and a deliberate resilience override</a></li>
+            <li><a href="#how-it-fits-together-at-runtime">How it fits together at runtime</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

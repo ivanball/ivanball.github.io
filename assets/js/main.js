@@ -88,11 +88,74 @@
     }
   }
 
+  /* ----- Scroll reveal -----
+     Opt-in via data-reveal. The CSS only hides the element inside a
+     (prefers-reduced-motion: no-preference) block, so if this never runs, or the
+     visitor asked for reduced motion, the content is visible either way. Elements
+     are unobserved once shown: this is a one-shot entrance, not a scroll effect. */
+  function initReveal() {
+    var targets = document.querySelectorAll("[data-reveal]");
+    if (!targets.length) { return; }
+    var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced || !("IntersectionObserver" in window)) {
+      targets.forEach(function (el) { el.classList.add("is-in"); });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) { return; }
+        entry.target.classList.add("is-in");
+        io.unobserve(entry.target);
+      });
+    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.05 });
+    targets.forEach(function (el) { io.observe(el); });
+  }
+
+  /* ----- On-this-page rail -----
+     Highlights the heading currently in view on long reference documents. The
+     rail itself is generated at build time, so this only adds the active state. */
+  function initDocToc() {
+    var links = document.querySelectorAll(".doc-toc a");
+    if (!links.length || !("IntersectionObserver" in window)) { return; }
+    var byId = {};
+    var headings = [];
+    links.forEach(function (link) {
+      var id = link.getAttribute("href").slice(1);
+      var heading = document.getElementById(id);
+      if (!heading) { return; }
+      byId[id] = link;
+      headings.push(heading);
+    });
+    if (!headings.length) { return; }
+
+    var visible = [];
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        var id = entry.target.id;
+        var at = visible.indexOf(id);
+        if (entry.isIntersecting && at === -1) { visible.push(id); }
+        else if (!entry.isIntersecting && at !== -1) { visible.splice(at, 1); }
+      });
+      /* Pick the topmost heading still in the band; falling back to the last one
+         passed keeps a section marked while the reader is in the middle of it. */
+      var current = null;
+      headings.forEach(function (h) {
+        if (visible.indexOf(h.id) !== -1 && !current) { current = h.id; }
+      });
+      if (!current) { return; }
+      links.forEach(function (link) { link.removeAttribute("aria-current"); });
+      if (byId[current]) { byId[current].setAttribute("aria-current", "true"); }
+    }, { rootMargin: "-84px 0px -70% 0px", threshold: 0 });
+    headings.forEach(function (h) { io.observe(h); });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     initThemeToggle();
     initNavToggle();
     initEmail();
     initYear();
     initDocSidebar();
+    initReveal();
+    initDocToc();
   });
 })();
