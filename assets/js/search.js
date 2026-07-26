@@ -37,13 +37,7 @@
         return r.json();
       })
       .then(function (data) {
-        records = (data && data.r ? data.r : []).map(function (rec) {
-          /* One lowercase blob per record, built once. Everything the query can
-             match lives here; the original fields stay for display. */
-          rec._h = [rec.t, rec.d, rec.k, rec.x, rec.i].filter(Boolean).join(" ").toLowerCase();
-          rec._t = (rec.t || rec.d || "").toLowerCase();
-          return rec;
-        });
+        records = (data && data.r ? data.r : []).map(prepare);
         loading = false;
         setStatus("");
         if (input.value.trim()) { run(input.value); }
@@ -55,60 +49,154 @@
       });
   }
 
+  /* ----- normalization -----
+     Punctuation collapses to a single space on BOTH sides of a comparison, so a
+     phrase search for "soft delete" still finds "Soft-Delete". This corpus is
+     full of hyphenated terms (database-per-service, dual-dispatch), and a phrase
+     search that misses all of them would be a trap rather than a feature.
+     Dots survive, so `MMCA.Common.API` stays one token. */
+  function normalize(s) {
+    return String(s).toLowerCase().replace(/[^a-z0-9_.#+]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+  /* Per-record searchable fields, weighted by how much a hit in each one means.
+     A document record has no section title, so its document title carries the
+     title weight: it IS the title of the thing. */
+  function prepare(rec) {
+    var fields = [];
+    if (rec.t) { fields.push({ w: 40, s: normalize(rec.t) }); }
+    if (rec.d) { fields.push({ w: rec.t ? 20 : 40, s: normalize(rec.d) }); }
+    if (rec.i) { fields.push({ w: 25, s: normalize(rec.i) }); }
+    if (rec.x) { fields.push({ w: 8, s: normalize(rec.x) }); }
+    if (rec.k) { fields.push({ w: 5, s: normalize(rec.k) }); }
+    rec._fields = fields;
+    rec._h = fields.map(function (f) { return f.s; }).join(" ");
+    rec._t = normalize(rec.t || rec.d || "");
+    return rec;
+  }
+
   /* ----- query parsing -----
-     Wrapping the query in double quotes requires EVERY word; bare words match
-     ANY of them. Broad by default is the right behavior for a reference library,
-     where a visitor rarely knows which words the author used, and quoting is the
-     familiar way to ask for the narrow reading. Smart quotes count too, because
-     they are what a paste from a document carries. */
+     The grammar, smallest thing that covers how people actually type:
 
+       outbox stripe            bare words, OR by default
+       outbox AND stripe        both required
+       "dual dispatch"          the phrase, as a whole
+       "soft delete" AND gdpr   mix freely
+
+     AND and OR are operators only in UPPERCASE, so searching for the word "and"
+     still works. AND binds tighter than OR, which is the convention everywhere
+     else: the query becomes OR-groups of AND-ed items, and a record qualifies if
+     any one group matches completely. Smart quotes count, because that is what a
+     paste from a document carries; an unterminated quote runs to the end rather
+     than failing, since it is almost always a query still being typed. */
   function parseQuery(raw) {
-    var q = String(raw).trim();
-    var quoted = /^["“”](.+)["“”]$/.exec(q);
-    return quoted
-      ? { text: quoted[1].trim(), all: true }
-      : { text: q, all: false };
-  }
+    var s = String(raw);
+    var items = [];
+    var ops = [];
+    var i = 0;
+    var expectOperand = true;
 
-  /* ----- scoring -----
-     A hit in the section heading outranks a hit in the identifier list, which
-     outranks a hit in the excerpt. On top of that, the number of query words a
-     record covers dominates everything else: in OR mode a record matching two
-     words must beat a record matching one, however strongly it matches it. */
+    while (i < s.length) {
+      var ch = s.charAt(i);
+      if (/\s/.test(ch)) { i++; continue; }
 
-  function terms(q) {
-    return q.toLowerCase().split(/[^a-z0-9_.#+]+/i).filter(function (t) { return t.length > 1; });
-  }
-
-  function score(rec, ts, phrase, requireAll) {
-    var total = 0;
-    var matched = 0;
-    for (var i = 0; i < ts.length; i++) {
-      var t = ts[i];
-      if (rec._h.indexOf(t) === -1) {
-        if (requireAll) { return 0; }
+      if (ch === '"' || ch === "“" || ch === "”") {
+        var close = s.length;
+        for (var j = i + 1; j < s.length; j++) {
+          var c = s.charAt(j);
+          if (c === '"' || c === "“" || c === "”") { close = j; break; }
+        }
+        var phrase = normalize(s.slice(i + 1, close));
+        i = close + 1;
+        if (!phrase) { continue; }
+        if (!expectOperand) { ops.push("OR"); }
+        items.push({ phrase: true, norm: phrase });
+        expectOperand = false;
         continue;
       }
-      matched++;
-      if (rec._t.indexOf(t) !== -1) { total += 40; }
-      if (rec.i && rec.i.toLowerCase().indexOf(t) !== -1) { total += 25; }
-      if (rec.x && rec.x.toLowerCase().indexOf(t) !== -1) { total += 8; }
-      /* Whole-word beats a substring: "outbox" should not lose to "outboxes". */
-      if (new RegExp("\\b" + t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b").test(rec._h)) { total += 12; }
-    }
-    if (!matched) { return 0; }
-    /* Coverage outweighs depth. Without this a single word hit in a title (77)
-       would outrank a record covering two words in its excerpt (16). */
-    total += matched * 60;
 
-    if (phrase.length >= MIN_QUERY) {
-      if (rec._t.indexOf(phrase) !== -1) {
-        total += 120;
-        /* Specificity: "Outbox Pattern with Dual Dispatch" is a better answer for
-           "outbox" than a 74-character section heading that merely contains the
-           word. Short titles that match are more likely to be ABOUT the query. */
-        if (rec._t.length <= 60) { total += 30; }
-      } else if (rec._h.indexOf(phrase) !== -1) { total += 45; }
+      var end = i;
+      while (end < s.length && !/[\s"“”]/.test(s.charAt(end))) { end++; }
+      var token = s.slice(i, end);
+      i = end;
+
+      if (token === "AND" || token === "OR") {
+        /* A leading or doubled operator is noise from a half-typed query. */
+        if (!expectOperand) { ops.push(token); expectOperand = true; }
+        continue;
+      }
+      var term = normalize(token);
+      if (!term) { continue; }
+      if (!expectOperand) { ops.push("OR"); }
+      /* A token that normalizes to several words (someone typed a-b) behaves as
+         the phrase it visibly is. */
+      items.push({ phrase: term.indexOf(" ") !== -1, norm: term });
+      expectOperand = false;
+    }
+
+    /* AND binds tighter: fold the item list into OR-groups. */
+    var groups = [];
+    var current = [];
+    for (var k = 0; k < items.length; k++) {
+      if (k > 0 && ops[k - 1] === "OR") { groups.push(current); current = []; }
+      current.push(items[k]);
+    }
+    if (current.length) { groups.push(current); }
+
+    return { items: items, groups: groups };
+  }
+
+  /* How strongly one item matches one record: the best field it appears in,
+     plus a bonus for landing on a whole word rather than inside one, plus a
+     bonus for a phrase, which is a far more specific thing to have matched. */
+  function matchItem(rec, item) {
+    var best = 0;
+    for (var i = 0; i < rec._fields.length; i++) {
+      var f = rec._fields[i];
+      if (f.s.indexOf(item.norm) === -1) { continue; }
+      var whole = new RegExp("(^| )" + escapeRe(item.norm) + "( |$)").test(f.s);
+      var w = f.w + (whole ? 12 : 0) + (item.phrase ? 35 : 0);
+      if (w > best) { best = w; }
+    }
+    return best;
+  }
+
+  function score(rec, parsed) {
+    /* One pass per item, reused by both the group test and the ranking. */
+    var weights = [];
+    var matchedCount = 0;
+    for (var i = 0; i < parsed.items.length; i++) {
+      var w = matchItem(rec, parsed.items[i]);
+      weights.push(w);
+      if (w > 0) { matchedCount++; }
+    }
+    if (!matchedCount) { return 0; }
+
+    /* Eligible if any OR-group matched in full. */
+    var eligible = false;
+    var index = 0;
+    for (var g = 0; g < parsed.groups.length && !eligible; g++) {
+      var whole = true;
+      for (var n = 0; n < parsed.groups[g].length; n++) {
+        if (weights[index + n] <= 0) { whole = false; }
+      }
+      if (whole) { eligible = true; }
+      index += parsed.groups[g].length;
+    }
+    if (!eligible) { return 0; }
+
+    var total = 0;
+    for (var m = 0; m < weights.length; m++) { total += weights[m]; }
+    /* Coverage outweighs depth: a record covering two of the query's words beats
+       one that merely matches a single word very strongly. */
+    total += matchedCount * 60;
+    /* Specificity: "Outbox Pattern with Dual Dispatch" is a better answer for
+       "outbox" than a 74-character heading that merely contains the word. */
+    if (rec._t.length <= 60 && rec._fields.length && rec._fields[0].w >= 40 &&
+        parsed.items.some(function (it) { return rec._t.indexOf(it.norm) !== -1; })) {
+      total += 30;
     }
     /* A document's own record is the better landing spot than one of its
        sections when both match comparably: the reader gets the whole record. */
@@ -117,16 +205,24 @@
   }
 
   function search(parsed) {
-    var ts = terms(parsed.text);
-    if (!ts.length) { return []; }
-    var phrase = parsed.text.toLowerCase();
+    if (!parsed.items.length) { return []; }
     var hits = [];
     for (var i = 0; i < records.length; i++) {
-      var s = score(records[i], ts, phrase, parsed.all);
+      var s = score(records[i], parsed);
       if (s > 0) { hits.push({ rec: records[i], s: s }); }
     }
     hits.sort(function (a, b) { return b.s - a.s; });
     return hits.slice(0, MAX_RESULTS);
+  }
+
+  /* How the query was read, echoed back under the input. This is the only
+     documentation the operators get, and it is the moment it is useful. */
+  function describe(parsed) {
+    return parsed.groups.map(function (group) {
+      return group.map(function (it) {
+        return it.phrase ? '"' + it.norm + '"' : it.norm;
+      }).join(" AND ");
+    }).join(" OR ");
   }
 
   /* ----- rendering ----- */
@@ -136,19 +232,20 @@
       .replace(/"/g, "&quot;");
   }
 
-  /* Mark the matched terms in already-escaped text. Done on the escaped string
-     so a record can never inject markup. */
-  function mark(text, ts) {
+  /* Mark the matched items in already-escaped text. Done on the escaped string
+     so a record can never inject markup. A phrase is marked tolerantly, with the
+     same punctuation-insensitivity the matching used, so highlighting "soft
+     delete" lights up "Soft-Delete" rather than silently missing it. */
+  function mark(text, items) {
     var out = escapeHtml(text);
-    for (var i = 0; i < ts.length; i++) {
-      var safe = ts[i].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      out = out.replace(new RegExp("(" + safe + ")(?![^<]*>)", "ig"), "<mark>$1</mark>");
+    for (var i = 0; i < items.length; i++) {
+      var pattern = items[i].norm.split(" ").map(escapeRe).join("[^a-z0-9]+");
+      out = out.replace(new RegExp("(" + pattern + ")(?![^<]*>)", "ig"), "<mark>$1</mark>");
     }
     return out;
   }
 
-  function render(hits, q) {
-    var ts = terms(q);
+  function render(hits, items) {
     list.innerHTML = hits.map(function (hit, i) {
       var r = hit.rec;
       var heading = r.t || r.d;
@@ -157,9 +254,9 @@
       return '<li class="search-result"' + (i === 0 ? ' data-active="true"' : "") + '>' +
         '<a href="' + escapeHtml(r.u) + '"' + external + '>' +
           '<span class="search-kind">' + escapeHtml(r.k) + (r.e ? " ↗" : "") + '</span>' +
-          '<span class="search-title">' + mark(heading, ts) + '</span>' +
+          '<span class="search-title">' + mark(heading, items) + '</span>' +
           '<span class="search-context">' + escapeHtml(context) + '</span>' +
-          (r.x ? '<span class="search-excerpt">' + mark(r.x, ts) + '</span>' : "") +
+          (r.x ? '<span class="search-excerpt">' + mark(r.x, items) + '</span>' : "") +
         '</a></li>';
     }).join("");
     active = hits.length ? 0 : -1;
@@ -171,23 +268,24 @@
     lastQuery = q;
     if (!records) { load(); return; }
     var parsed = parseQuery(q);
-    if (parsed.text.length < MIN_QUERY) {
+    var longest = parsed.items.reduce(function (n, it) { return Math.max(n, it.norm.length); }, 0);
+    if (!parsed.items.length || longest < MIN_QUERY) {
       list.innerHTML = "";
       active = -1;
-      setStatus(parsed.text ? "Keep typing…" : "");
+      setStatus(q.trim() ? "Keep typing…" : "");
       return;
     }
     var hits = search(parsed);
-    render(hits, parsed.text);
+    render(hits, parsed.items);
+    var reading = parsed.items.length > 1 ? " · " + describe(parsed) : "";
     if (!hits.length) {
-      setStatus("No results for “" + parsed.text + "”" + (parsed.all ? " with every word." : "."));
+      setStatus("No results for " + describe(parsed) + ".");
       return;
     }
-    /* Say which reading was used, so a wide result set is understood rather than
-       mistaken for noise, and quoting is discoverable from the outcome. */
-    var many = terms(parsed.text).length > 1;
-    setStatus(hits.length + (hits.length === MAX_RESULTS ? "+ results" : " result" + (hits.length === 1 ? "" : "s")) +
-      (many ? (parsed.all ? " · every word" : " · any word") : ""));
+    /* Echoing the reading back is what makes the operators discoverable: a
+       two-word query visibly reports itself as "a OR b", which is also how a
+       visitor learns AND exists. */
+    setStatus(hits.length + (hits.length === MAX_RESULTS ? "+ results" : " result" + (hits.length === 1 ? "" : "s")) + reading);
   }
 
   /* ----- keyboard navigation ----- */
