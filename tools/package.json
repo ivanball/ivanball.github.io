@@ -10,6 +10,7 @@
   "scripts": {
     "build": "node build-docs.mjs",
     "images": "node build-images.mjs",
+    "og-image": "node build-og-image.mjs",
     "a11y": "node a11y-check.mjs",
     "resume-pdf": "node build-resume-pdf.mjs"
   },
