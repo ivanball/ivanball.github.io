@@ -68,7 +68,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 ADRs</summary>
+        <summary>All 55 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -125,6 +125,8 @@
         <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
         <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
         <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -133,7 +135,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-036-external-oauth-login-federated-googlegithub-with-local-jwt-exchange">ADR-036: External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043, email-verified account-takeover guard before linking added 2026-07-21).</p>
+          <p>Accepted (2026-07-02, migration attribution corrected 2026-07-06, native-callback redirect branch added 2026-07-17 per ADR-043, email-verified account-takeover guard before linking added 2026-07-21, provider-email validation ahead of the by-email lookup documented 2026-07-25).</p>
           <h2 id="context">Context</h2>
           <p>The framework&#39;s Identity story so far is entirely first-party: a user registers with an email and
           password, the credentials are hashed (ADR-032), and Identity mints its own RS256 JWT pair. Every auth
@@ -187,15 +189,21 @@
           <code>ExternalLoginAsync</code> (app-level,
           <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:123</code>)
           first looks the user up by <code>LoginProvider</code> + <code>ProviderKey</code> (<code>AuthenticationService.cs:144</code>). Missing,
-          it looks up by email (<code>AuthenticationService.cs:158</code>) and, when a local or other-provider account
-          already owns that email, applies an account-takeover guard before linking: it asks
-          <code>IExternalLoginEmailVerifier.IsCurrentExternalLoginEmailVerifiedAsync</code> (<code>AuthenticationService.cs:173</code>)
+          it <strong>validates the provider-supplied email before it searches on it</strong>: <code>Email.Create(email)</code>
+          (<code>AuthenticationService.cs:164</code>) is checked as a <code>Result</code>, and an unparseable claim value <strong>rejects</strong>
+          the sign-in with an <code>Error.Validation</code> carrying code <code>Auth.ExternalEmailInvalid</code>
+          (<code>AuthenticationService.cs:168</code>). This address is the one email in the system no request-level
+          validator has already gated (it arrives in an OAuth claim, not in a validated request), and the
+          by-email lookup that follows (<code>AuthenticationService.cs:174</code>) compares against the validated <code>Email</code>
+          value object rather than the raw claim string. When a local or other-provider account
+          already owns that email, it applies an account-takeover guard before linking: it asks
+          <code>IExternalLoginEmailVerifier.IsCurrentExternalLoginEmailVerifiedAsync</code> (<code>AuthenticationService.cs:189</code>)
           whether the provider asserted the incoming email as verified, and when it did not it <strong>rejects</strong> the
-          sign-in with <code>Auth.ExternalEmailNotVerified</code> (defined inline at <code>AuthenticationService.cs:179</code>)
+          sign-in with <code>Auth.ExternalEmailNotVerified</code> (defined inline at <code>AuthenticationService.cs:195</code>)
           instead of linking, so an unverified provider assertion cannot claim an existing local account. Only
           when the provider did assert a verified email does it <strong>link</strong> the external provider to that account
-          (<code>User.LinkExternalProvider</code>, <code>AuthenticationService.cs:184</code>). When no account owns the email it
-          <strong>creates</strong> a new <code>Attendee</code> via <code>User.CreateExternal</code> (<code>AuthenticationService.cs:190</code>; an external
+          (<code>User.LinkExternalProvider</code>, <code>AuthenticationService.cs:200</code>). When no account owns the email it
+          <strong>creates</strong> a new <code>Attendee</code> via <code>User.CreateExternal</code> (<code>AuthenticationService.cs:206</code>; an external
           user has empty password hash/salt and carries <code>LoginProvider</code> / <code>ProviderKey</code>). In the link and
           create cases it rotates the refresh token, saves, and mints the access token, so the caller receives
           the same <code>AuthenticationResponse</code> shape as a local login.</li>
@@ -268,7 +276,7 @@
           <code>email_verified</code> claim passes the guard; GitHub&#39;s OAuth flow asserts nothing, so a GitHub sign-in
           whose email matches an existing account is rejected with <code>Auth.ExternalEmailNotVerified</code>, not linked.
           The framework itself still performs no such check: <code>Auth.ExternalEmailNotVerified</code> is defined inline
-          in ADC&#39;s override (<code>AuthenticationService.cs:179</code>), and a non-adopting host (Store, Helpdesk) gets only
+          in ADC&#39;s override (<code>AuthenticationService.cs:195</code>), and a non-adopting host (Store, Helpdesk) gets only
           the framework&#39;s not-supported default (<code>Auth.ExternalLoginNotSupported</code>,
           <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/IAuthenticationService.cs:74</code>), so the guard is
           ADC&#39;s own edge, not a framework guarantee.</li>

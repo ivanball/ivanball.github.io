@@ -68,7 +68,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 ADRs</summary>
+        <summary>All 55 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -125,6 +125,8 @@
         <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
         <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
         <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -209,7 +211,10 @@
           supply only app-specific hooks (the claim set, deactivated-account gates, the registration side-effect).
           The rotation, reuse-detection, and lifetime logic is identical across both apps because it lives once in
           the base. ADC&#39;s external OAuth path (ADR-036) issues the same single rotating refresh token when it
-          exchanges an external identity for the local token pair (<code>AuthenticationService.cs:202,203</code>).</li>
+          exchanges an external identity for the local token pair: the refresh token is minted and stored
+          (<code>AuthenticationService.cs:218,219</code>), the access token is minted
+          (<code>AuthenticationService.cs:233</code>), and the response is built
+          (<code>AuthenticationService.cs:235</code>).</li>
           </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>

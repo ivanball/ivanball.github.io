@@ -68,7 +68,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 ADRs</summary>
+        <summary>All 55 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -125,6 +125,8 @@
         <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
         <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
         <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -135,7 +137,9 @@
           <h2 id="status">Status</h2>
           <p>Accepted (2026-06-27). Updated 2026-07-02 (the check/increment/reset call sequence was hoisted
           into <code>AuthenticationServiceBase&lt;TUser&gt;</code>; the adoption note and the &quot;convention the consumer must
-          call&quot; trade-off were rewritten to match).</p>
+          call&quot; trade-off were rewritten to match). Updated 2026-07-25 (the backoff formula now shows the
+          clamped shift exponent; the counter-atomicity claim was corrected to the accepted non-atomic
+          read-modify-write, and the native-counter window claim was dropped).</p>
           <h2 id="context">Context</h2>
           <p>ADR-019&#39;s global rate limiter is <strong>authenticated-only</strong>: it caps requests per authenticated principal
           and deliberately <em>exempts</em> anonymous traffic. That leaves the highest-value anonymous attack surface —
@@ -153,8 +157,12 @@
           <ul>
           <li><strong>Login lockout (email-keyed).</strong> <code>IncrementFailedAttemptsAsync(email)</code> counts consecutive failures in
           a window (<code>FailedAttemptWindowMinutes</code>, default 30). Once <code>MaxFailedAttempts</code> (default 5) is reached it
-          writes a lockout key with <strong>exponential backoff</strong> <code>min(1 &lt;&lt; excessAttempts, MaxLockoutSeconds)</code> (cap
-          default 300s). <code>CheckLockoutAsync(email)</code> returns <code>Result.Failure(Error.Unauthorized( &quot;Auth.TooManyAttempts&quot;, …))</code> while locked, and <code>ResetFailedAttemptsAsync(email)</code> clears both the
+          writes a lockout key with <strong>exponential backoff</strong>
+          <code>Math.Min(1 &lt;&lt; Math.Min(excessAttempts, 30), MaxLockoutSeconds)</code> (cap default 300s). The inner clamp
+          on the exponent is load-bearing: C# masks int shift counts to 5 bits, so an unclamped <code>1 &lt;&lt; 31</code> is
+          negative and <code>1 &lt;&lt; 32</code> wraps back to 1, silently shrinking (or negating) the lockout TTL for a
+          sufficiently persistent attacker. <code>1 &lt;&lt; 30</code> already exceeds any permitted <code>MaxLockoutSeconds</code>, so deep
+          excess always lands on the cap. <code>CheckLockoutAsync(email)</code> returns <code>Result.Failure(Error.Unauthorized( &quot;Auth.TooManyAttempts&quot;, …))</code> while locked, and <code>ResetFailedAttemptsAsync(email)</code> clears both the
           attempt and lockout keys on a successful login.</li>
           <li><strong>Registration throttle (IP-keyed).</strong> <code>CheckRegistrationRateLimitAsync(ip)</code> fails with
           <code>Error.Unauthorized(&quot;Auth.RegistrationRateLimitExceeded&quot;, …)</code> once <code>MaxRegistrationsPerIpPerHour</code>
@@ -170,11 +178,19 @@
           variant targeted the same account but got three independent counters. A malformed address, which
           never matches a user but still increments a counter, falls back to the same trim-and-lowercase shape
           so its variants collapse too.</li>
-          <li><strong>Counters increment atomically.</strong> <code>ICacheService.IncrementAsync</code> is a default interface member whose
-          Redis implementation uses <code>INCR</code>; the read-modify-write it replaced let concurrent attempts overwrite
-          each other&#39;s increments, so a burst of parallel guesses could stay under <code>MaxFailedAttempts</code>
-          indefinitely. On a store with a native counter the window is also anchored to the first attempt
-          rather than sliding on every write.</li>
+          <li><strong>Counter increments are a read-modify-write, not atomic, by decision.</strong>
+          <code>ICacheService.IncrementAsync</code> is a default interface member shaped as get, add one, set.
+          <code>DistributedCacheService</code> overrides it but keeps that same shape instead of issuing Redis <code>INCR</code>:
+          <code>INCR</code> writes a Redis <em>string</em> while <code>StackExchangeRedisCache</code> stores every entry as a Redis <em>hash</em>,
+          so mixing the two formats at one key makes the next read of that counter fail with <code>WRONGTYPE</code>, which
+          surfaces as a 500 on the login and registration endpoints that own it. A readable counter was worth
+          more than an atomic one. <code>MemoryCacheService</code> does not override the member either, so memory mode runs
+          the same default. The accepted cost, in the code&#39;s own words: parallel attempts can overwrite each
+          other&#39;s increments, so a burst of genuinely concurrent guesses can undercount and stay below
+          <code>MaxFailedAttempts</code>. Sequential guessing, which is what a credential-stuffing run against one account
+          looks like, still trips the lockout. Because every shipped implementation writes the value back with
+          its TTL, the TTL is refreshed on every write: the attempt and registration windows slide rather than
+          staying anchored to the first attempt, which only ever tightens the limit.</li>
           <li><strong>Counters are cache-scoped and TTL-bounded.</strong> They live in the same swappable <code>ICacheService</code>
           substrate as ADR-026 (in-process memory in the monolith, distributed/Redis when wired) and self-expire
           via cache TTL — a lockout is inherently ephemeral, so expiry <em>is</em> the reset.</li>

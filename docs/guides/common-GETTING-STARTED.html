@@ -140,9 +140,12 @@
           </ul>
           <p><strong>Decide how to consume MMCA.Common (two modes, switchable in one file):</strong></p>
           <ol>
-          <li><strong>NuGet (GitHub Packages)</strong> is the production path for any standalone app. It needs a <code>GITHUB_TOKEN</code>
-          environment variable with <code>packages:read</code> scope, and a <code>nuget.config</code> that maps the <code>MMCA.*</code>
-          pattern to the GitHub feed (shown in Phase 1).</li>
+          <li><strong>NuGet (nuget.org)</strong> is the production path for any standalone app. The <code>MMCA.Common.*</code> packages
+          are published to nuget.org, so <code>dotnet add package MMCA.Common.API</code> (or any other package in the
+          set) restores with no token, no credentials, and no extra feed. GitHub Packages is kept as a
+          mirror of the same releases rather than the primary path: its NuGet registry requires a personal
+          access token with <code>read:packages</code> even for public packages, so reach for it only if you already
+          restore from it. See <a href="../adr/053-dual-registry-package-publishing.html">ADR-053</a>.</li>
           <li><strong>Local source (<code>UseLocalMMCA</code>)</strong> references <code>../MMCA.Common/Source/</code> directly via <code>local.props</code>.
           Use this when your app sits in the same workspace as MMCA.Common and you want to co-develop the
           framework and the app together. It needs no token (MMCA.Common itself restores only from nuget.org).</li>
@@ -271,10 +274,27 @@
           <h3 id="globaljson-nugetconfig-localpropstemplate"><code>global.json</code>, <code>nuget.config</code>, <code>local.props.template</code></h3>
           <pre class="doc-pre"><code class="language-jsonc">// global.json: all three apps run on Microsoft Testing Platform (xUnit v3), not VSTest
           { &quot;test&quot;: { &quot;runner&quot;: &quot;Microsoft.Testing.Platform&quot; } }</code></pre>
-          <pre class="doc-pre"><code class="language-xml">&lt;!-- nuget.config (NuGet mode): MMCA.* from GitHub Packages, everything else from nuget.org --&gt;
+          <pre class="doc-pre"><code class="language-xml">&lt;!-- nuget.config (NuGet mode): everything, MMCA.* included, comes from nuget.org. No credentials.
+               The single `*` mapping is also supply-chain hygiene: it stops a package from another feed being
+               substituted for one you expect. This is MMCA.Common&#39;s own nuget.config shape. --&gt;
           &lt;configuration&gt;
             &lt;packageSources&gt;
-              &lt;add key=&quot;github-mmca&quot; value=&quot;https://nuget.pkg.github.com/&lt;your-org&gt;/index.json&quot; /&gt;
+              &lt;clear /&gt;
+              &lt;add key=&quot;nuget.org&quot; value=&quot;https://api.nuget.org/v3/index.json&quot; /&gt;
+            &lt;/packageSources&gt;
+            &lt;packageSourceMapping&gt;
+              &lt;packageSource key=&quot;nuget.org&quot;&gt;&lt;package pattern=&quot;*&quot; /&gt;&lt;/packageSource&gt;
+            &lt;/packageSourceMapping&gt;
+          &lt;/configuration&gt;</code></pre>
+          <p>You only need the GitHub Packages mirror in two cases: you are pinning a version released before
+          nuget.org publishing began (there was no backfill, so those versions exist on GitHub Packages only),
+          or your organization already restores <code>MMCA.*</code> from that feed. In that case add the feed <em>beside</em>
+          nuget.org, source-map <code>MMCA.*</code> to it, and supply a token. Note the <code>auditSources</code> block: GitHub
+          Packages serves no NuGet vulnerability data, so an unrestricted audit reports NU1900 against it.</p>
+          <pre class="doc-pre"><code class="language-xml">&lt;!-- Optional: MMCA.* from the GitHub Packages mirror. Needs a token with read:packages. --&gt;
+          &lt;configuration&gt;
+            &lt;packageSources&gt;
+              &lt;add key=&quot;github-mmca&quot; value=&quot;https://nuget.pkg.github.com/ivanball/index.json&quot; /&gt;
               &lt;add key=&quot;nuget.org&quot; value=&quot;https://api.nuget.org/v3/index.json&quot; /&gt;
             &lt;/packageSources&gt;
             &lt;auditSources&gt;            &lt;!-- GitHub Packages serves no vuln data; restrict audit to nuget.org --&gt;
@@ -295,7 +315,8 @@
           <pre class="doc-pre"><code class="language-xml">&lt;!-- local.props.template: copy to local.props (gitignored) to build against MMCA.Common source.
                Directory.Build.targets reads UseLocalMMCA and swaps each MMCA.Common.* PackageReference for a
                ProjectReference under LocalMMCAPath. The MMCA.Helpdesk scaffold ships local.props ACTIVE (so it
-               builds with no GitHub token); delete it to consume the published packages via the feed above. --&gt;
+               builds straight against framework source); delete it to consume the published packages from
+               nuget.org instead. --&gt;
           &lt;Project&gt;
             &lt;PropertyGroup&gt;
               &lt;UseLocalMMCA&gt;true&lt;/UseLocalMMCA&gt;

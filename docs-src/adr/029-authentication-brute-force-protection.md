@@ -3,7 +3,9 @@
 ## Status
 Accepted (2026-06-27). Updated 2026-07-02 (the check/increment/reset call sequence was hoisted
 into `AuthenticationServiceBase<TUser>`; the adoption note and the "convention the consumer must
-call" trade-off were rewritten to match).
+call" trade-off were rewritten to match). Updated 2026-07-25 (the backoff formula now shows the
+clamped shift exponent; the counter-atomicity claim was corrected to the accepted non-atomic
+read-modify-write, and the native-counter window claim was dropped).
 
 ## Context
 ADR-019's global rate limiter is **authenticated-only**: it caps requests per authenticated principal
@@ -23,8 +25,12 @@ table.
 
 - **Login lockout (email-keyed).** `IncrementFailedAttemptsAsync(email)` counts consecutive failures in
   a window (`FailedAttemptWindowMinutes`, default 30). Once `MaxFailedAttempts` (default 5) is reached it
-  writes a lockout key with **exponential backoff** `min(1 << excessAttempts, MaxLockoutSeconds)` (cap
-  default 300s). `CheckLockoutAsync(email)` returns `Result.Failure(Error.Unauthorized(
+  writes a lockout key with **exponential backoff**
+  `Math.Min(1 << Math.Min(excessAttempts, 30), MaxLockoutSeconds)` (cap default 300s). The inner clamp
+  on the exponent is load-bearing: C# masks int shift counts to 5 bits, so an unclamped `1 << 31` is
+  negative and `1 << 32` wraps back to 1, silently shrinking (or negating) the lockout TTL for a
+  sufficiently persistent attacker. `1 << 30` already exceeds any permitted `MaxLockoutSeconds`, so deep
+  excess always lands on the cap. `CheckLockoutAsync(email)` returns `Result.Failure(Error.Unauthorized(
   "Auth.TooManyAttempts", …))` while locked, and `ResetFailedAttemptsAsync(email)` clears both the
   attempt and lockout keys on a successful login.
 - **Registration throttle (IP-keyed).** `CheckRegistrationRateLimitAsync(ip)` fails with
@@ -41,11 +47,19 @@ table.
   variant targeted the same account but got three independent counters. A malformed address, which
   never matches a user but still increments a counter, falls back to the same trim-and-lowercase shape
   so its variants collapse too.
-- **Counters increment atomically.** `ICacheService.IncrementAsync` is a default interface member whose
-  Redis implementation uses `INCR`; the read-modify-write it replaced let concurrent attempts overwrite
-  each other's increments, so a burst of parallel guesses could stay under `MaxFailedAttempts`
-  indefinitely. On a store with a native counter the window is also anchored to the first attempt
-  rather than sliding on every write.
+- **Counter increments are a read-modify-write, not atomic, by decision.**
+  `ICacheService.IncrementAsync` is a default interface member shaped as get, add one, set.
+  `DistributedCacheService` overrides it but keeps that same shape instead of issuing Redis `INCR`:
+  `INCR` writes a Redis *string* while `StackExchangeRedisCache` stores every entry as a Redis *hash*,
+  so mixing the two formats at one key makes the next read of that counter fail with `WRONGTYPE`, which
+  surfaces as a 500 on the login and registration endpoints that own it. A readable counter was worth
+  more than an atomic one. `MemoryCacheService` does not override the member either, so memory mode runs
+  the same default. The accepted cost, in the code's own words: parallel attempts can overwrite each
+  other's increments, so a burst of genuinely concurrent guesses can undercount and stay below
+  `MaxFailedAttempts`. Sequential guessing, which is what a credential-stuffing run against one account
+  looks like, still trips the lockout. Because every shipped implementation writes the value back with
+  its TTL, the TTL is refreshed on every write: the attempt and registration windows slide rather than
+  staying anchored to the first attempt, which only ever tightens the limit.
 - **Counters are cache-scoped and TTL-bounded.** They live in the same swappable `ICacheService`
   substrate as ADR-026 (in-process memory in the monolith, distributed/Redis when wired) and self-expire
   via cache TTL — a lockout is inherently ephemeral, so expiry *is* the reset.

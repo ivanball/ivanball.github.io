@@ -1,7 +1,7 @@
 # ADR-026: Two-Tier Caching: a Swappable `ICacheService` Substrate plus an HTTP Output-Cache Edge
 
 ## Status
-Accepted (2026-06-27, amended 2026-07-10, 2026-07-23).
+Accepted (2026-06-27, amended 2026-07-10, 2026-07-23, 2026-07-25).
 
 ## Context
 The framework needs caching in two distinct places. Inside the application pipeline, query results
@@ -29,7 +29,7 @@ Cache in two tiers, each with its own substrate.
   Caching decorators, `LoginProtectionService`) depends only on this interface, never on a concrete
   cache or on Redis.
 - **The backing store is chosen at startup, not in code.** `AddCaching()`
-  (`MMCA.Common.Infrastructure/DependencyInjection.cs:150`, called from `AddInfrastructure`) registers
+  (`MMCA.Common.Infrastructure/DependencyInjection.cs:149`, called from `AddInfrastructure`) registers
   `DistributedCacheService` when a real `IDistributedCache` is present (one that is not the in-memory
   `MemoryDistributedCache`, i.e. Aspire registered Redis), and otherwise `MemoryCacheService`. The
   monolith with no distributed cache gets in-process caching for free; a host that wires Redis gets the
@@ -68,6 +68,18 @@ Cache in two tiers, each with its own substrate.
   `MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:109-113`). ADC Conference and Store Catalog
   register these policies on their public read controllers; ADR-040 records that the built-in default
   policy served 0% of logged-in (bearer-carrying) traffic on conference day.
+- **The output-cache store itself is Redis-backed wherever a service runs more than one replica.**
+  `AddOutputCache` defaults to a per-replica in-memory store, so a tag eviction reaches only the replica
+  that served the mutation. Both adopters now register a shared store inside the same
+  redis-connection-string conditional that wires Tier 1: ADC Conference
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:129`) and Store Catalog
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:88`) both call
+  `builder.Services.AddStackExchangeRedisOutputCache(...)`. `AddOutputCache` registers its store with
+  `TryAdd`, so the explicit registration wins regardless of call order, and with no Redis configured the
+  in-memory store still applies, which is correct at a single replica. ADR-040's 2026-07-25 amendment
+  makes the shared store the expected posture for any multi-replica deployment. The practical effect is
+  that both tiers ride the same Redis instance: Tier 1 through `IDistributedCache`, Tier 2 through the
+  output-cache store.
 
 ## Rationale
 - **One substrate, swapped by environment.** Keeping `ICacheService` as the only thing application code
@@ -93,11 +105,11 @@ Cache in two tiers, each with its own substrate.
   container. All seven services now register `AddRedisClient("redis")` immediately alongside
   `AddRedisDistributedCache("redis")`, gated by the same redis-connection-string conditional, precisely so
   the multiplexer is present for SCAN-based prefix eviction (ADC Conference
-  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:112,117`, Notification
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:113,118`, Notification
   `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:99,104`, Engagement
   `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:88,93`, Identity
   `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:109,114`; Store Catalog
-  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:72,77`, Sales
+  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:73,78`, Sales
   `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:76,81`, Identity
   `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:77,82`). So whenever Redis is
   configured, prefix-based invalidation against Redis is live and cached entries are evicted on write; the
@@ -105,9 +117,26 @@ Cache in two tiers, each with its own substrate.
   within seconds instead. Single-key `RemoveAsync` is unaffected in either mode.
 - **Distributed mode pays serialization and a network hop.** Values cross the wire as JSON; large or
   hot objects cost more than the in-process path.
+- **Counter increments are not atomic, and that is the accepted position.**
+  `ICacheService.IncrementAsync` is a default interface member implemented as a read-modify-write
+  (`MMCA.Common.Application/Interfaces/ICacheService.cs:57`), and `DistributedCacheService` overrides it
+  with the same read-modify-write shape rather than Redis `INCR`
+  (`MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:122-128`). The reason is a storage
+  format mismatch, documented at the implementation
+  (`MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:104-121`): `INCR` writes a Redis
+  string, while `StackExchangeRedisCache` stores every entry as a Redis hash (`absexp` / `sldexp` /
+  `data`, read back with `HMGET`). An `INCR`-written counter therefore makes the next read of that key
+  fail with `WRONGTYPE`, which surfaces as a 500 on whatever endpoint owns the counter (registration and
+  login, in the ADR-029 case). A counter has to live in the same storage format as the reads that
+  consult it, so readability wins over atomicity here: the ADR-029 brute-force and rate-limit counters
+  can undercount under genuinely concurrent increments, and an occasional lost increment is the accepted
+  cost of a counter that is always readable.
 - **Output caching is opt-in per service.** A read-heavy service that forgets to register a real
   `AddOutputCache` policy gets no edge caching (the `NoCache` base is the safe default), the same
-  audit-the-inventory caveat as other opt-in capabilities (ADR-019/020/021).
+  audit-the-inventory caveat as other opt-in capabilities (ADR-019/020/021). Adopting a policy is only
+  half the decision: the store behind it is per-replica memory unless the service registers the shared
+  Redis output-cache store (Tier 2 above), which is what a multi-replica adopter needs for tag eviction
+  to reach every replica (ADR-040).
 
 ## Related
 ADR-014 (the Caching decorators and `IQueryCacheable` / `ICacheInvalidating` markers that consume this
@@ -134,10 +163,25 @@ Three substrate corrections from a code review.
    replacement was tracked, deleting the tracking record for an entry that was still cached. That
    entry was then live but invisible to `RemoveByPrefixAsync` and clearable only by its TTL. The
    callback now skips `EvictionReason.Replaced`; genuine evictions still clean up.
-3. **`ICacheService.IncrementAsync`.** A default interface member (so no implementer breaks) with a
-   Redis `INCR` override, added for the ADR-029 counters whose read-modify-write could lose
-   concurrent increments.
+3. **`ICacheService.IncrementAsync`.** A default interface member (so no implementer breaks), added as
+   the single entry point for the ADR-029 counters. It is a read-modify-write, and
+   `DistributedCacheService` deliberately keeps that shape rather than reaching for Redis `INCR`: see
+   the counter trade-off above for the storage-format reason and why the non-atomicity is accepted.
 
 The query-cache stampede lock also moved to a fixed-width `KeyedSemaphoreStripe`. The previous
 per-key dictionary was documented as bounded by the set of distinct cache keys, which holds only for
 parameterless keys; any `CacheKey` embedding a user id or filter value grew it without bound.
+
+## Revision (2026-07-25)
+An audit against the code. No behavior changed; the ADR text did.
+
+1. **The `IncrementAsync` entry above was wrong.** It described a Redis `INCR` override. There is no
+   such override, and none is intended: both the default interface member and
+   `DistributedCacheService`'s implementation are read-modify-write, because a counter written by
+   `INCR` (a Redis string) cannot be read back by the hash-shaped `StackExchangeRedisCache` path that
+   consults it. The resulting non-atomicity is recorded in Trade-offs as the accepted position, not as
+   an open defect.
+2. **Tier 2 now records the output-cache store, not just the policies.** ADC Conference and Store
+   Catalog back the output cache with Redis when Redis is configured, so tag eviction crosses replicas;
+   the in-memory store remains the single-replica case. This tracks ADR-040's 2026-07-25 amendment.
+3. **Refreshed line anchors** for `AddCaching` and for the two adopters' paired Redis registrations.

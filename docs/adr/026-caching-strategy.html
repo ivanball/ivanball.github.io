@@ -4,19 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ADR-026: Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-06-27, amended 2026-07-10, 2026-07-23).">
+  <meta name="description" content="Accepted (2026-06-27, amended 2026-07-10, 2026-07-23, 2026-07-25).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/026-caching-strategy.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-026: Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge">
-  <meta property="og:description" content="Accepted (2026-06-27, amended 2026-07-10, 2026-07-23).">
+  <meta property="og:description" content="Accepted (2026-06-27, amended 2026-07-10, 2026-07-23, 2026-07-25).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/026-caching-strategy.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-026: Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge">
-  <meta name="twitter:description" content="Accepted (2026-06-27, amended 2026-07-10, 2026-07-23).">
+  <meta name="twitter:description" content="Accepted (2026-06-27, amended 2026-07-10, 2026-07-23, 2026-07-25).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge","item":"https://ivanball.github.io/docs/adr/026-caching-strategy.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -68,7 +68,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 ADRs</summary>
+        <summary>All 55 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -125,6 +125,8 @@
         <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
         <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
         <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -133,7 +135,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-026-two-tier-caching-a-swappable-icacheservice-substrate-plus-an-http-output-cache-edge">ADR-026: Two-Tier Caching: a Swappable <code>ICacheService</code> Substrate plus an HTTP Output-Cache Edge</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-27, amended 2026-07-10, 2026-07-23).</p>
+          <p>Accepted (2026-06-27, amended 2026-07-10, 2026-07-23, 2026-07-25).</p>
           <h2 id="context">Context</h2>
           <p>The framework needs caching in two distinct places. Inside the application pipeline, query results
           are memoized and invalidated on mutation (the Caching decorators of ADR-014, keyed by
@@ -157,7 +159,7 @@
           Caching decorators, <code>LoginProtectionService</code>) depends only on this interface, never on a concrete
           cache or on Redis.</li>
           <li><strong>The backing store is chosen at startup, not in code.</strong> <code>AddCaching()</code>
-          (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:150</code>, called from <code>AddInfrastructure</code>) registers
+          (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:149</code>, called from <code>AddInfrastructure</code>) registers
           <code>DistributedCacheService</code> when a real <code>IDistributedCache</code> is present (one that is not the in-memory
           <code>MemoryDistributedCache</code>, i.e. Aspire registered Redis), and otherwise <code>MemoryCacheService</code>. The
           monolith with no distributed cache gets in-process caching for free; a host that wires Redis gets the
@@ -197,6 +199,18 @@
           <code>MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:109-113</code>). ADC Conference and Store Catalog
           register these policies on their public read controllers; ADR-040 records that the built-in default
           policy served 0% of logged-in (bearer-carrying) traffic on conference day.</li>
+          <li><strong>The output-cache store itself is Redis-backed wherever a service runs more than one replica.</strong>
+          <code>AddOutputCache</code> defaults to a per-replica in-memory store, so a tag eviction reaches only the replica
+          that served the mutation. Both adopters now register a shared store inside the same
+          redis-connection-string conditional that wires Tier 1: ADC Conference
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:129</code>) and Store Catalog
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:88</code>) both call
+          <code>builder.Services.AddStackExchangeRedisOutputCache(...)</code>. <code>AddOutputCache</code> registers its store with
+          <code>TryAdd</code>, so the explicit registration wins regardless of call order, and with no Redis configured the
+          in-memory store still applies, which is correct at a single replica. ADR-040&#39;s 2026-07-25 amendment
+          makes the shared store the expected posture for any multi-replica deployment. The practical effect is
+          that both tiers ride the same Redis instance: Tier 1 through <code>IDistributedCache</code>, Tier 2 through the
+          output-cache store.</li>
           </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -224,11 +238,11 @@
           container. All seven services now register <code>AddRedisClient(&quot;redis&quot;)</code> immediately alongside
           <code>AddRedisDistributedCache(&quot;redis&quot;)</code>, gated by the same redis-connection-string conditional, precisely so
           the multiplexer is present for SCAN-based prefix eviction (ADC Conference
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:112,117</code>, Notification
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:113,118</code>, Notification
           <code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:99,104</code>, Engagement
           <code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:88,93</code>, Identity
           <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:109,114</code>; Store Catalog
-          <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:72,77</code>, Sales
+          <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:73,78</code>, Sales
           <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:76,81</code>, Identity
           <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:77,82</code>). So whenever Redis is
           configured, prefix-based invalidation against Redis is live and cached entries are evicted on write; the
@@ -236,9 +250,26 @@
           within seconds instead. Single-key <code>RemoveAsync</code> is unaffected in either mode.</li>
           <li><strong>Distributed mode pays serialization and a network hop.</strong> Values cross the wire as JSON; large or
           hot objects cost more than the in-process path.</li>
+          <li><strong>Counter increments are not atomic, and that is the accepted position.</strong>
+          <code>ICacheService.IncrementAsync</code> is a default interface member implemented as a read-modify-write
+          (<code>MMCA.Common.Application/Interfaces/ICacheService.cs:57</code>), and <code>DistributedCacheService</code> overrides it
+          with the same read-modify-write shape rather than Redis <code>INCR</code>
+          (<code>MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:122-128</code>). The reason is a storage
+          format mismatch, documented at the implementation
+          (<code>MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:104-121</code>): <code>INCR</code> writes a Redis
+          string, while <code>StackExchangeRedisCache</code> stores every entry as a Redis hash (<code>absexp</code> / <code>sldexp</code> /
+          <code>data</code>, read back with <code>HMGET</code>). An <code>INCR</code>-written counter therefore makes the next read of that key
+          fail with <code>WRONGTYPE</code>, which surfaces as a 500 on whatever endpoint owns the counter (registration and
+          login, in the ADR-029 case). A counter has to live in the same storage format as the reads that
+          consult it, so readability wins over atomicity here: the ADR-029 brute-force and rate-limit counters
+          can undercount under genuinely concurrent increments, and an occasional lost increment is the accepted
+          cost of a counter that is always readable.</li>
           <li><strong>Output caching is opt-in per service.</strong> A read-heavy service that forgets to register a real
           <code>AddOutputCache</code> policy gets no edge caching (the <code>NoCache</code> base is the safe default), the same
-          audit-the-inventory caveat as other opt-in capabilities (ADR-019/020/021).</li>
+          audit-the-inventory caveat as other opt-in capabilities (ADR-019/020/021). Adopting a policy is only
+          half the decision: the store behind it is per-replica memory unless the service registers the shared
+          Redis output-cache store (Tier 2 above), which is what a multi-replica adopter needs for tag eviction
+          to reach every replica (ADR-040).</li>
           </ul>
           <h2 id="related">Related</h2>
           <p>ADR-014 (the Caching decorators and <code>IQueryCacheable</code> / <code>ICacheInvalidating</code> markers that consume this
@@ -264,13 +295,28 @@
           replacement was tracked, deleting the tracking record for an entry that was still cached. That
           entry was then live but invisible to <code>RemoveByPrefixAsync</code> and clearable only by its TTL. The
           callback now skips <code>EvictionReason.Replaced</code>; genuine evictions still clean up.</li>
-          <li><strong><code>ICacheService.IncrementAsync</code>.</strong> A default interface member (so no implementer breaks) with a
-          Redis <code>INCR</code> override, added for the ADR-029 counters whose read-modify-write could lose
-          concurrent increments.</li>
+          <li><strong><code>ICacheService.IncrementAsync</code>.</strong> A default interface member (so no implementer breaks), added as
+          the single entry point for the ADR-029 counters. It is a read-modify-write, and
+          <code>DistributedCacheService</code> deliberately keeps that shape rather than reaching for Redis <code>INCR</code>: see
+          the counter trade-off above for the storage-format reason and why the non-atomicity is accepted.</li>
           </ol>
           <p>The query-cache stampede lock also moved to a fixed-width <code>KeyedSemaphoreStripe</code>. The previous
           per-key dictionary was documented as bounded by the set of distinct cache keys, which holds only for
           parameterless keys; any <code>CacheKey</code> embedding a user id or filter value grew it without bound.</p>
+          <h2 id="revision-2026-07-25">Revision (2026-07-25)</h2>
+          <p>An audit against the code. No behavior changed; the ADR text did.</p>
+          <ol>
+          <li><strong>The <code>IncrementAsync</code> entry above was wrong.</strong> It described a Redis <code>INCR</code> override. There is no
+          such override, and none is intended: both the default interface member and
+          <code>DistributedCacheService</code>&#39;s implementation are read-modify-write, because a counter written by
+          <code>INCR</code> (a Redis string) cannot be read back by the hash-shaped <code>StackExchangeRedisCache</code> path that
+          consults it. The resulting non-atomicity is recorded in Trade-offs as the accepted position, not as
+          an open defect.</li>
+          <li><strong>Tier 2 now records the output-cache store, not just the policies.</strong> ADC Conference and Store
+          Catalog back the output cache with Redis when Redis is configured, so tag eviction crosses replicas;
+          the in-memory store remains the single-replica case. This tracks ADR-040&#39;s 2026-07-25 amendment.</li>
+          <li><strong>Refreshed line anchors</strong> for <code>AddCaching</code> and for the two adopters&#39; paired Redis registrations.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>

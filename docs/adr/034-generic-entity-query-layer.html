@@ -4,19 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ADR-034: Generic Entity Controllers with a Dynamic Query Contract · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-06-30). Amended (2026-07-23): the filter strategy registry now also covers long/long? via LongFilterStrategy.">
+  <meta name="description" content="Accepted (2026-06-30). Amended (2026-07-23): the filter strategy registry now also covers long/long? via LongFilterStrategy. Amended (2026-07-25): the…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/034-generic-entity-query-layer.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-034: Generic Entity Controllers with a Dynamic Query Contract">
-  <meta property="og:description" content="Accepted (2026-06-30). Amended (2026-07-23): the filter strategy registry now also covers long/long? via LongFilterStrategy.">
+  <meta property="og:description" content="Accepted (2026-06-30). Amended (2026-07-23): the filter strategy registry now also covers long/long? via LongFilterStrategy. Amended (2026-07-25): the…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/034-generic-entity-query-layer.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-034: Generic Entity Controllers with a Dynamic Query Contract">
-  <meta name="twitter:description" content="Accepted (2026-06-30). Amended (2026-07-23): the filter strategy registry now also covers long/long? via LongFilterStrategy.">
+  <meta name="twitter:description" content="Accepted (2026-06-30). Amended (2026-07-23): the filter strategy registry now also covers long/long? via LongFilterStrategy. Amended (2026-07-25): the…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"034 · Generic Entity Controllers with a Dynamic Query Contract","item":"https://ivanball.github.io/docs/adr/034-generic-entity-query-layer.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -68,7 +68,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 ADRs</summary>
+        <summary>All 55 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -125,6 +125,8 @@
         <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
         <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
         <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -134,7 +136,8 @@
           <h1 id="adr-034-generic-entity-controllers-with-a-dynamic-query-contract">ADR-034: Generic Entity Controllers with a Dynamic Query Contract</h1>
           <h2 id="status">Status</h2>
           <p>Accepted (2026-06-30). Amended (2026-07-23): the filter strategy registry now also
-          covers <code>long</code>/<code>long?</code> via <code>LongFilterStrategy</code>.</p>
+          covers <code>long</code>/<code>long?</code> via <code>LongFilterStrategy</code>. Amended (2026-07-25): the keyed
+          by-id fast path is named <code>TryGetFastPathIncludes</code> in code; citations rebased.</p>
           <h2 id="context">Context</h2>
           <p>Every module exposes many entities, and most of them need the same read and write
           surface: list, page, look up for a dropdown, fetch by id, create, delete. Hand
@@ -174,7 +177,7 @@
           <li><p><strong>Sparse fieldsets via <code>fields</code>.</strong> A comma-separated <code>fields</code> query parameter
           (<code>EntityControllerBase.cs:77</code>, <code>:121</code>, <code>:193</code>) drives a server-side projection:
           <code>QueryFieldService.ApplyFieldSelection</code>
-          (<code>Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:154</code>) builds a
+          (<code>Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:146</code>) builds a
           <code>MemberInit</code> expression that selects only the requested writable properties so
           only those columns leave the database.</p>
           </li>
@@ -184,16 +187,16 @@
           which parses <code>filters[Property].operator</code> / <code>filters[Property].value</code> query keys
           (<code>Source/Presentation/MMCA.Common.API/ModelBinders/QueryFilterModelBinder.cs:24</code>).
           <code>QueryFilterService.ApplyFilters</code>
-          (<code>Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:73</code>)
+          (<code>Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:76</code>)
           resolves a <code>IFilterStrategy</code>
           (<code>Source/Core/MMCA.Common.Application/Services/Filtering/IFilterStrategy.cs:6</code>)
           per property CLR type from a strategy registry (string, bool, int, long, DateTime,
-          decimal, Guid and their nullables, <code>QueryFilterService.cs:26-42</code>), each strategy
+          decimal, Guid and their nullables, <code>QueryFilterService.cs:29-45</code>), each strategy
           declaring its <code>SupportedOperators</code> (<code>IFilterStrategy.cs:24</code>). Extra types register
-          via <code>QueryFilterService.RegisterStrategy</code> (<code>QueryFilterService.cs:57</code>).</p>
+          via <code>QueryFilterService.RegisterStrategy</code> (<code>QueryFilterService.cs:60</code>).</p>
           </li>
-          <li><p><strong>Sort.</strong> <code>sortColumn</code> / <code>sortDirection</code> (<code>EntityControllerBase.cs:119</code>)
-          feed <code>QueryFieldService.ApplySorting</code> (<code>QueryFieldService.cs:120</code>), an
+          <li><p><strong>Sort.</strong> <code>sortColumn</code> / <code>sortDirection</code> (<code>EntityControllerBase.cs:119-120</code>)
+          feed <code>QueryFieldService.ApplySorting</code> (<code>QueryFieldService.cs:112</code>), an
           <code>OrderBy(&quot;&lt;col&gt; ascending|descending&quot;)</code> over the entity property the DTO name
           maps to.</p>
           </li>
@@ -210,7 +213,7 @@
           <code>EntityQueryPipeline.MaxUnboundedResultLimit = 1000</code>
           (<code>Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:23</code>)
           caps any unpaginated query with <code>query.Take(MaxUnboundedResultLimit)</code>
-          (<code>EntityQueryPipeline.cs:104</code>, <code>:151</code>), so even a direct service caller that omits
+          (<code>EntityQueryPipeline.cs:102</code>, <code>:148</code>), so even a direct service caller that omits
           pagination cannot trigger an unbounded full-table load.</p>
           </li>
           <li><p><strong>Two include paths.</strong> <code>includeFKs</code> / <code>includeChildren</code>
@@ -230,13 +233,13 @@
           <li><strong>Bounded dynamic querying, not open SQL.</strong> Filtering is dynamic over the wire but
           not unbounded in the engine: each property is filtered only by a registered
           <code>IFilterStrategy</code> whose <code>SupportedOperators</code> are validated before the database is
-          touched (<code>QueryFilterService.ValidateFilters</code>, <code>QueryFilterService.cs:126</code>,
-          invoked at <code>Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:187</code>),
+          touched (<code>QueryFilterService.ValidateFilters</code>, <code>QueryFilterService.cs:111</code>,
+          invoked at <code>Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:227</code>),
           and <code>MaxUnboundedResultLimit</code> (<code>EntityQueryPipeline.cs:23</code>) plus the <code>MaxPageSize</code>
           clamp (<code>EntityControllerBase.cs:127</code>) bound the result size.</li>
           <li><strong>Composes with manual DTO mapping (ADR-001).</strong> Entities are projected to DTOs by
           an injected <code>IEntityDTOMapper</code> (<code>EntityQueryService.cs:35</code>, <code>:51</code>) via
-          <code>DTOMapper.MapToDTOs</code> (<code>EntityQueryService.cs:222</code>); a <code>DTOToEntityPropertyMap</code>
+          <code>DTOMapper.MapToDTOs</code> (<code>EntityQueryService.cs:262</code>); a <code>DTOToEntityPropertyMap</code>
           (<code>EntityQueryService.cs:61</code>) translates DTO field names to entity property paths
           for filter and sort, so the wire contract speaks DTO names while the engine speaks
           entity names.</li>
@@ -253,11 +256,11 @@
           <li><strong>Dynamic filtering is an injection and over-fetch surface.</strong> Arbitrary
           client-supplied property/operator/value triples are an attack surface; it is
           bounded by validating properties and operators up front
-          (<code>QueryFilterService.ValidateFilters</code>, <code>QueryFilterService.cs:126</code>), routing each
+          (<code>QueryFilterService.ValidateFilters</code>, <code>QueryFilterService.cs:111</code>), routing each
           type through its registered <code>IFilterStrategy</code> rather than free-form expression
           evaluation, and capping rows with <code>MaxUnboundedResultLimit</code>
           (<code>EntityQueryPipeline.cs:23</code>). Sparse fieldsets reject non-writable properties at
-          projection (<code>QueryFieldService.cs:167</code>).</li>
+          projection (<code>QueryFieldService.cs:181</code>).</li>
           <li><strong>Generic endpoints are less self-documenting than bespoke ones.</strong> One generic
           shape per entity is consistent but conveys less domain intent than a named,
           purpose-built endpoint; the query contract (filter key syntax, operators) must be
@@ -299,11 +302,23 @@
           <code>TotalItemCount</code>, telling callers the set was exactly that size; it now issues a count query only
           when the materialized rows actually reach the cap. <code>PaginationMetadata.PageSize</code> reports the size
           the pipeline applied rather than the one requested.</li>
-          <li><strong>The keyed by-id fast path is reachable again.</strong> <code>IsPrimaryKeyOnlyLookup</code> treated <code>includeFKs</code> as
+          <li><strong>The keyed by-id fast path is reachable again.</strong> The fast-path predicate treated <code>includeFKs</code> as
           disqualifying while <code>GetByIdAsync</code> defaults it to <code>true</code>, so every REST by-id read fell through to
           the dynamic-filter pipeline (a parsed string predicate, <code>TOP 1000</code>, and a client-side
           <code>FirstOrDefault</code>) where a keyed <code>TOP 1 WHERE Id = @id</code> would do. The flags now disqualify only when
           the entity actually has navigations to include.</li>
+          </ol>
+          <h2 id="revision-2026-07-25">Revision (2026-07-25)</h2>
+          <p>Citation maintenance from an ADR audit. No decision or behavior changed; the source anchors above were
+          rebased to their current declaration and call-site lines.</p>
+          <ol>
+          <li><strong>The fast-path predicate is named <code>TryGetFastPathIncludes</code>.</strong> Revision item 4 above referred to it
+          as <code>IsPrimaryKeyOnlyLookup</code>, a symbol that no longer exists in the framework source. The current
+          method (<code>Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:122</code>, called from the
+          by-id fast path at <code>EntityQueryService.cs:90</code>) both decides whether the request is a plain key
+          lookup and returns the navigations it must eager-load. The described behavior is unchanged:
+          requested include flags no longer disqualify on their own, and only unsupported (cross-source)
+          includes send the read back to the pipeline (<code>EntityQueryService.cs:145-148</code>).</li>
           </ol>
           
         <div class="doc-foot btn-row">

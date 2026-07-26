@@ -1,7 +1,7 @@
 # ADR-012: gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)
 
 ## Status
-Accepted.
+Accepted (re-verified against source 2026-07-25).
 
 ## Update (2026-06-22): Store converged to Profile A
 Store originally chose Profile B, but its cross-service gRPC failed in Azure Container Apps. With
@@ -60,12 +60,57 @@ per host. The resolution is to split protocols across two Kestrel endpoints in o
 - **Probes and gateway: unchanged.** The default endpoint still answers the kubelet's HTTP/1.1
   `httpGet` probes (no TCP-probe workaround needed, unlike full Profile A hosts), and the gateway
   never routes the gRPC endpoint (it is service-to-service only).
+  *(The probes half of this bullet was superseded on 2026-07-25: Notification's probes now target a
+  third, dedicated Http1-only listener, and no ADC host uses TCP probes. The gateway half still
+  holds. See the 2026-07-25 update below.)*
 
 Rule refinement: a service that needs the HTTP/1.1 Upgrade handshake AND must serve inbound cleartext
 gRPC uses this **mixed-endpoint profile**: Profile B protocols on the default endpoint, a Profile A
 `Http2`-only named endpoint for gRPC, discovery via the named-endpoint scheme, and (in ACA) an
 additional internal TCP port. It costs one extra port everywhere (appsettings, launch profile, Bicep)
 and is only worth it when both constraints genuinely meet in one host.
+
+## Update (2026-07-25): probe listeners are ADC's answer, not TCP probes; and gateway-routed JWKS is a local-only rule
+
+Two claims above were written from an earlier state of the code and no longer describe either app.
+
+**1. ADC probes never touch the traffic endpoint; TCP probes are Store-only.** Every ADC service now
+adds a dedicated `Http1`-only Kestrel listener whose only job is to answer the platform's HTTP/1.1
+`httpGet` probes, on a port that is never exposed via ingress:
+
+- The three Profile A hosts (Identity, Conference, Engagement) listen on **8081**. Bicep injects
+  `HealthProbe__Port=8081` (`MMCA.ADC/infra/main.bicep:957`, `:1126`, `:1235`) and points startup,
+  liveness, and readiness at it (`main.bicep:1045-1070` for Identity). The listener is added by
+  `KestrelConfiguration.ConfigureHttp2WithHealthProbe`, called from each service's
+  `Program.cs` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:80`).
+- The mixed-endpoint host (Notification) listens on **8082**, one port above its `grpc` endpoint:
+  `HealthProbe__Port=8082` at `main.bicep:1367`, with all three probes on 8082 at
+  `main.bicep:1414-1439`. The listener is added by
+  `KestrelConfiguration.ConfigureMixedEndpointsWithHealthProbe`
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/KestrelConfiguration.cs:23-35`), strictly
+  additive on top of the config-declared 8080 and 8081 endpoints, explicitly so that all four
+  services probe the same way.
+
+So Notification's default endpoint no longer serves the probes either, and the parenthetical
+contrast with "full Profile A hosts" was backwards: those hosts use the same dedicated-listener
+pattern, not TCP probes. **`tcpSocket` probes survive only in MMCA.Store**, on Identity
+(`MMCA.Store/infra/main.bicep:733-734`) and Catalog (`:814-815`), where the Http2-only default
+endpoint would answer an HTTP/1.1 `httpGet` with GOAWAY `HTTP_1_1_REQUIRED`. The trade is real: a
+TCP probe only proves the listener is bound, while the dedicated listener lets readiness run the
+actual `/health/ready` check (warmup gate plus the DB-aware check), which is why ADC moved.
+
+**2. `WithJwksDiscovery(identity, gateway)` is local Aspire wiring, not ADC's production rule.**
+The two-argument call sites are all in the AppHost
+(`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:273-275`), which configures the local
+Aspire environment only. In production ACA, ADC's Bicep hardcodes the **direct in-cluster authority**
+`http://${identityApp.name}` on every token-validating service: Conference (`main.bicep:1140`),
+Engagement (`:1248`), and Notification (`:1382`). Identity's own ingress is `transport: 'http2'`
+(`main.bicep:921`), so envoy accepts the HTTP/1.1 JwtBearer metadata fetch and carries it to the
+container. That is exactly the arrangement the Store update above describes, so the
+"JWKS authority differs by environment" nuance is **not** Store-specific: both apps route discovery
+through the gateway locally and use the direct in-cluster authority in production. Read the Profile A
+JWKS bullet below as the local-development rule plus the reason the direct authority cannot be used
+from a default backchannel outside ACA.
 
 ## Context
 Once modules were extracted into separate service hosts (ADR-008) that call each other synchronously
@@ -103,10 +148,14 @@ Use when services must **serve** gRPC on cleartext (any bidirectional / inbound 
   `VersionPolicy = RequestVersionExact`). `RequestVersionOrLower` would silently downgrade to HTTP/1.1,
   which the Http2-only backend rejects with `HTTP_1_1_REQUIRED`, so the policy must be *exact*. In Azure
   Container Apps, ingress must be `transport: http2`.
-- **JWKS discovery:** `WithJwksDiscovery(identity, gateway)`. The default JwtBearer metadata
+- **JWKS discovery (local):** `WithJwksDiscovery(identity, gateway)`. The default JwtBearer metadata
   backchannel is HTTP/1.1 and **cannot** reach the Http2-only Identity endpoint directly, so the
   authority is set to the **gateway** HTTPS origin; the gateway terminates TLS, speaks HTTP/1.1 + 2
-  via ALPN, and routes `/.well-known/*` on to Identity over HTTP/2 (ADR-004).
+  via ALPN, and routes `/.well-known/*` on to Identity over HTTP/2 (ADR-004). This is the
+  **local Aspire** wiring only (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:273-275`).
+  **In production ACA both apps set the direct in-cluster authority** `http://<identity app>` and let
+  the `transport: 'http2'` ingress carry the HTTP/1.1 metadata fetch to the container: see the
+  2026-07-25 update above for the ADC Bicep anchors.
 - **Exception:** the Notification service keeps `Http1AndHttp2` on its default endpoint because
   SignalR's WebSocket transport needs the HTTP/1.1 Upgrade handshake. Since 2026-07-09 it also serves
   one inbound gRPC edge from a dedicated `Http2`-only named endpoint (the mixed-endpoint profile in

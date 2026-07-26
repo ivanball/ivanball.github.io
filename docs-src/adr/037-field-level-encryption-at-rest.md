@@ -1,7 +1,7 @@
 # ADR-037: Field-Level Encryption at Rest (AES-256-GCM EF Converter)
 
 ## Status
-Accepted (2026-07-06).
+Accepted (2026-07-06; revised 2026-07-24, 2026-07-25).
 
 ## Context
 Transparent database encryption (TDE) protects the data files as a whole, but it decrypts
@@ -32,51 +32,52 @@ Provide a single framework-owned EF Core value converter that transparently encr
 rest with authenticated encryption, applied per property in an entity configuration.
 
 1. **A sealed EF value converter.** `EncryptedStringConverter`
-   (`Source/Core/MMCA.Common.Infrastructure/Persistence/Encryption/EncryptedStringConverter.cs:28`) is a
+   (`Source/Core/MMCA.Common.Infrastructure/Persistence/Encryption/EncryptedStringConverter.cs:42`) is a
    `ValueConverter<string, string>` in the `MMCA.Common.Infrastructure.Persistence.Encryption` namespace
    (`EncryptedStringConverter.cs:5`). It encrypts on write and decrypts on read, so application and domain
    code keep an ordinary `string` property and never see ciphertext. It is applied per property:
-   `builder.Property(e => e.Email).HasConversion(new EncryptedStringConverter(encryptionKey))`
-   (`EncryptedStringConverter.cs:12`, `:15`).
+   `builder.Property(e => e.SocialSecurityNumber).HasConversion(new EncryptedStringConverter(encryptionKey))`
+   (`EncryptedStringConverter.cs:14`, `:15`). The documented example targets a stored-only field rather
+   than a lookup key, for the reason recorded in the 2026-07-24 revision below.
 
 2. **AES-256-GCM authenticated encryption.** Both directions use `AesGcm`
-   (`EncryptedStringConverter.cs:70`, `:99`), which provides confidentiality **and** integrity. The key
+   (`EncryptedStringConverter.cs:84`, `:113`), which provides confidentiality **and** integrity. The key
    must be exactly 32 bytes (256 bits): the constructor null-checks it
-   (`ArgumentNullException.ThrowIfNull`, `EncryptedStringConverter.cs:45`) and throws `ArgumentException`
-   on any other length (`EncryptedStringConverter.cs:46`, `:48`). `GenerateKey()` produces a
+   (`ArgumentNullException.ThrowIfNull`, `EncryptedStringConverter.cs:59`) and throws `ArgumentException`
+   on any other length (`EncryptedStringConverter.cs:60`, `:62`). `GenerateKey()` produces a
    cryptographically random 32-byte key via `RandomNumberGenerator.GetBytes(32)`
-   (`EncryptedStringConverter.cs:58`). The nonce and tag sizes are fixed constants: `NonceSize = 12`
-   (96 bits, NIST recommended, `EncryptedStringConverter.cs:31`) and `TagSize = 16`
-   (128 bits, `EncryptedStringConverter.cs:34`).
+   (`EncryptedStringConverter.cs:72`). The nonce and tag sizes are fixed constants: `NonceSize = 12`
+   (96 bits, NIST recommended, `EncryptedStringConverter.cs:45`) and `TagSize = 16`
+   (128 bits, `EncryptedStringConverter.cs:48`).
 
 3. **Self-describing storage layout, Base64 in a string column.** Encrypt writes UTF-8 plaintext bytes
-   (`EncryptedStringConverter.cs:65`), draws a fresh random nonce (`EncryptedStringConverter.cs:66`),
-   runs `AesGcm.Encrypt` (`EncryptedStringConverter.cs:71`), then concatenates
-   `[nonce (12)] [ciphertext (N)] [tag (16)]` (`EncryptedStringConverter.cs:73`, `:74`) and Base64-encodes
-   the result (`EncryptedStringConverter.cs:79`). Decrypt reverses it: `FromBase64String`
-   (`EncryptedStringConverter.cs:87`), a length guard that throws `CryptographicException` when the input
-   is shorter than nonce plus tag (`EncryptedStringConverter.cs:89`, `:90`), spans that slice out the
-   nonce, ciphertext, and tag (`EncryptedStringConverter.cs:92`, `:94`, `:95`), `AesGcm.Decrypt` which
-   validates the tag while decrypting (`EncryptedStringConverter.cs:100`), and a UTF-8 decode
-   (`EncryptedStringConverter.cs:102`). The layout is transparent to application code.
+   (`EncryptedStringConverter.cs:79`), draws a fresh random nonce (`EncryptedStringConverter.cs:80`),
+   runs `AesGcm.Encrypt` (`EncryptedStringConverter.cs:85`), then concatenates
+   `[nonce (12)] [ciphertext (N)] [tag (16)]` (`EncryptedStringConverter.cs:87`, `:88`) and Base64-encodes
+   the result (`EncryptedStringConverter.cs:93`). Decrypt reverses it: `FromBase64String`
+   (`EncryptedStringConverter.cs:101`), a length guard that throws `CryptographicException` when the input
+   is shorter than nonce plus tag (`EncryptedStringConverter.cs:103`, `:104`), spans that slice out the
+   nonce, ciphertext, and tag (`EncryptedStringConverter.cs:106`, `:108`, `:109`), `AesGcm.Decrypt` which
+   validates the tag while decrypting (`EncryptedStringConverter.cs:114`), and a UTF-8 decode
+   (`EncryptedStringConverter.cs:116`). The layout is transparent to application code.
 
 4. **Ciphertext is non-deterministic.** A fresh random nonce per encryption
-   (`EncryptedStringConverter.cs:66`) means the same plaintext encrypts to different ciphertext on every
+   (`EncryptedStringConverter.cs:80`) means the same plaintext encrypts to different ciphertext on every
    write (proven at `Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/EncryptedStringConverterTests.cs:38`,
    and distinct plaintexts differ at `EncryptedStringConverterTests.cs:24`). The consequence is deliberate:
    an encrypted column cannot be equality-filtered, index-seeked, sorted, or joined on in the database.
 
 5. **Empty and null values pass through unencrypted.** Both directions short-circuit on a null-or-empty
-   string (`EncryptedStringConverter.cs:62`, `:84`), so a NULL or empty column stays as-is rather than
+   string (`EncryptedStringConverter.cs:76`, `:98`), so a NULL or empty column stays as-is rather than
    becoming ciphertext (tests at `EncryptedStringConverterTests.cs:82` and `:95`).
 
 6. **Key management is the consumer's responsibility, supplied as a constructor argument.** The converter
-   takes a raw `byte[]` key on construction (`EncryptedStringConverter.cs:40`); there is no DI
+   takes a raw `byte[]` key on construction (`EncryptedStringConverter.cs:54`); there is no DI
    registration, no options type, and no key-provider abstraction in the Infrastructure layer (a grep of
    `MMCA.Common.Infrastructure` for encryption options or a key-provider interface finds only the converter
    itself). The adopting entity configuration passes the key in. The XML documentation directs consumers to
    store that key in Azure Key Vault, user-secrets, or environment variables, never hardcoded
-   (`EncryptedStringConverter.cs:19`, `:20`, `:21`).
+   (`EncryptedStringConverter.cs:33`, `:34`, `:35`).
 
 7. **Unit-tested but not yet adopted.** `EncryptedStringConverterTests`
    (`Tests/Core/MMCA.Common.Infrastructure.Tests/Persistence/EncryptedStringConverterTests.cs:6`) covers a
@@ -94,15 +95,15 @@ rest with authenticated encryption, applied per property in an entity configurat
 
 ## Rationale
 - **Authenticated, not merely confidential.** AES-GCM binds a 128-bit tag to the ciphertext
-  (`EncryptedStringConverter.cs:34`, `:71`), so a tampered or truncated value fails to decrypt via the tag
-  check in `AesGcm.Decrypt` (`EncryptedStringConverter.cs:100`) rather than silently returning corrupted
+  (`EncryptedStringConverter.cs:48`, `:85`), so a tampered or truncated value fails to decrypt via the tag
+  check in `AesGcm.Decrypt` (`EncryptedStringConverter.cs:114`) rather than silently returning corrupted
   plaintext, and a value too short to even hold a nonce and tag is rejected up front
-  (`EncryptedStringConverter.cs:89`). At-rest integrity comes for free with confidentiality.
+  (`EncryptedStringConverter.cs:103`). At-rest integrity comes for free with confidentiality.
 - **One framework-owned primitive.** As with password hashing (ADR-032), the algorithm, key size, nonce
   size, and storage layout are decided once in a single shared type, so a future hardening is one edit that
   every eventual adopter inherits rather than per-app crypto scattered across modules.
 - **Non-determinism is the right confidentiality default.** A random nonce per write
-  (`EncryptedStringConverter.cs:66`) defeats equality and frequency analysis over the ciphertext, which a
+  (`EncryptedStringConverter.cs:80`) defeats equality and frequency analysis over the ciphertext, which a
   deterministic scheme would leak; the cost is queryability, which is the correct trade for a genuinely
   sensitive column that the application reads by primary key rather than by the encrypted value.
 - **Transparent at the EF boundary.** Because the conversion lives on the property mapping
@@ -116,20 +117,20 @@ rest with authenticated encryption, applied per property in an entity configurat
   ADR-005 names this converter as the mechanism for erasure fields that must remain retrievable
   (`ADRs/005-soft-delete-vs-erasure.md:17`), but that pairing is available, not yet applied. This is the same
   shipped-but-unadopted posture ADR-018 records for polyglot persistence.
-- **Encrypted columns are not queryable.** The random nonce (`EncryptedStringConverter.cs:66`) makes
+- **Encrypted columns are not queryable.** The random nonce (`EncryptedStringConverter.cs:80`) makes
   ciphertext non-deterministic, so there is no equality filter, index seek, sort, or join on an encrypted
   column. A field that must be both encrypted and looked up needs a separate deterministic scheme or a blind
   index, neither of which this converter provides.
 - **Key management is entirely the consumer's, with no rotation story.** The converter takes a raw key
-  (`EncryptedStringConverter.cs:40`) and the stored layout is nonce plus ciphertext plus tag only, carrying
-  no key identifier or version (`EncryptedStringConverter.cs:73`). Rotating the key therefore requires bulk
+  (`EncryptedStringConverter.cs:54`) and the stored layout is nonce plus ciphertext plus tag only, carrying
+  no key identifier or version (`EncryptedStringConverter.cs:87`). Rotating the key therefore requires bulk
   re-encryption, there is no built-in decrypt-with-old / encrypt-with-new path, and losing the key makes the
   data permanently unrecoverable. Envelope encryption and key versioning are out of scope for this converter.
 - **Per-property wiring, not a global switch.** Encryption is opted into one `HasConversion` call at a time
   in each entity configuration (`EncryptedStringConverter.cs:12`), so a column that should be encrypted but is
   never wired silently stays plaintext, the same audit-the-inventory caveat as ADR-005.
 - **Storage and CPU overhead.** Every value grows by 28 bytes (12-byte nonce plus 16-byte tag,
-  `EncryptedStringConverter.cs:31`, `:34`) before Base64 inflation, and every read and write performs an
+  `EncryptedStringConverter.cs:45`, `:48`) before Base64 inflation, and every read and write performs an
   AES-GCM operation.
 - **Test coverage stops at the too-short guard.** Integrity rests on AES-GCM's tag (a property of the
   primitive), and the only malformed-input regression test is the short-ciphertext case
@@ -155,3 +156,14 @@ The usage example was changed off `Email` for exactly that reason: applying the 
 address the authentication flow looks up by value would have broken login silently rather than
 loudly. A lookup key that must stay searchable needs a separate deterministic surface, such as a
 keyed hash stored alongside the encrypted column.
+
+## Revision (2026-07-25)
+Documentation-only correction, no behavior change. Item 1 of the Decision still illustrated the
+converter with `builder.Property(e => e.Email)`, contradicting the 2026-07-24 revision above: the
+shipped XML-doc example targets `SocialSecurityNumber`, a stored-only field, precisely because an
+authentication-lookup column would fail silently. The Decision now quotes the shipped example.
+
+Every `EncryptedStringConverter.cs` line citation in this record was also rebased. The 2026-07-24
+revision added the non-determinism constraint paragraph to the type's XML documentation, which
+pushed the class declaration and the whole implementation body down by fourteen lines; the anchors
+here had not moved with it and now point at the current lines.

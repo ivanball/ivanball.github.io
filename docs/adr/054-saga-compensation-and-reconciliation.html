@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ADR-054: Choreographed Saga Compensation with a Reconciliation Backstop · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-07-25).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/054-saga-compensation-and-reconciliation.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-054: Choreographed Saga Compensation with a Reconciliation Backstop">
+  <meta property="og:description" content="Accepted (2026-07-25).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/054-saga-compensation-and-reconciliation.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-054: Choreographed Saga Compensation with a Reconciliation Backstop">
+  <meta name="twitter:description" content="Accepted (2026-07-25).">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"054 · Choreographed Saga Compensation with a Reconciliation Backstop","item":"https://ivanball.github.io/docs/adr/054-saga-compensation-and-reconciliation.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">054 · Choreographed Saga Compensation with a Reconciliation Backstop</span>
+      </nav>
+      <div class="doc-layout">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 55 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html" aria-current="page">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-054-choreographed-saga-compensation-with-a-reconciliation-backstop">ADR-054: Choreographed Saga Compensation with a Reconciliation Backstop</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-07-25).</p>
+          <h2 id="context">Context</h2>
+          <p>Checkout spans a boundary no transaction covers. <code>CheckOutHandler</code> commits the order insert, the cart
+          transition and the atomic conditional stock decrements in one local transaction
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:91-102</code>),
+          but the money moves at Stripe and the confirmation arrives later, as a webhook, from outside the
+          database. Two failure shapes follow directly:</p>
+          <ul>
+          <li><strong>A later step invalidates an earlier one.</strong> Cancelling an order leaves stock that checkout already
+          committed. The decrement cannot be rolled back, because its transaction closed minutes ago.</li>
+          <li><strong>The external confirmation never arrives.</strong> A dropped webhook (endpoint outage past Stripe&#39;s retry
+          window, a misconfigured secret) leaves the order in <code>PaymentInitiated</code> forever with its stock held.</li>
+          </ul>
+          <p>Neighbouring records answer adjacent questions and deliberately not this one. ADR-003 gets an event
+          out of the process at least once. ADR-021 stops a broker redelivery from being applied twice at the
+          consume edge. ADR-006 decides database-per-service and records &quot;no cross-database transactions, no
+          two-phase commit&quot; only as a <strong>cost</strong> it accepts. None of them says what a multi-step workflow does
+          when step two fails or step three never reports back. That is the decision recorded here:
+          consistency without a distributed transaction.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Multi-step workflows are <strong>choreographed sagas</strong>: each step raises a domain event, and the follow-up
+          or compensating action lives in its own handler. A <strong>periodic reconciliation sweep</strong> is the
+          saga-timeout backstop for steps that depend on an external system.</p>
+          <ul>
+          <li><strong>Compensation is a domain-event handler, never code in the command handler.</strong> <code>CancelOrderHandler</code>
+          performs the guarded transition and saves, and nothing else
+          (<code>.../Orders/UseCases/Cancel/CancelOrderHandler.cs:42-49</code>); restoring stock is
+          <code>OrderCancelledSagaHandler : IDomainEventHandler&lt;OrderCancelled&gt;</code>
+          (<code>.../Orders/Saga/OrderCancelledSagaHandler.cs:31-34</code>) and notifying the customer of a failed
+          payment is <code>OrderPaymentFailedSagaHandler</code> (<code>.../Orders/Saga/OrderPaymentFailedSagaHandler.cs:20-22</code>).
+          A new compensating action is a new handler, not an edit to the command.</li>
+          <li><strong>Each handler runs in its own DI scope.</strong> Domain-event handlers are registered as singletons
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:117-122</code>), so every one
+          opens a scope through <code>IServiceScopeFactory</code> and resolves its own <code>IUnitOfWork</code>
+          (<code>OrderCancelledSagaHandler.cs:41-42</code>, <code>OrderPaymentFailedSagaHandler.cs:29-31</code>,
+          <code>.../Infrastructure/Services/PaymentReconciliationService.cs:93,136</code>). Compensation therefore
+          commits on its own, after the originating save, rather than joining the transaction it is
+          compensating for.</li>
+          <li><strong>Idempotency is a persisted marker committed by the SAME <code>SaveChanges</code> as the compensating
+          writes.</strong> <code>Order.InventoryRestored</code> (<code>.../Domain/Orders/Order.cs:42-48</code>) is the marker;
+          <code>MarkInventoryRestored</code> refuses a second call and refuses a non-cancelled order
+          (<code>Order.cs:262-285</code>). The handler checks the marker first
+          (<code>OrderCancelledSagaHandler.cs:56-62</code>), applies the increases through a pure domain service
+          (<code>.../Domain/Services/InventoryRestorationDomainService.cs:14-27</code>), then one
+          <code>SaveChangesAsync</code> commits the increases and the marker together
+          (<code>OrderCancelledSagaHandler.cs:77-85</code>). Same database, one transaction: the marker cannot exist
+          without the writes it guards, and the writes cannot land unmarked.</li>
+          <li><strong>Redelivery is the retry mechanism.</strong> A failing in-process handler leaves its outbox row
+          unprocessed (<code>MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:255-277</code>) and the
+          <code>OutboxProcessor</code> re-dispatches the pure domain event on a later cycle
+          (<code>MMCA.Common/.../Outbox/OutboxProcessor.cs:366-369</code>), with the bounded retries, backoff and
+          dead-lettering ADR-003 already defines. Handlers whose work is a pure side effect and must not
+          force a redelivery swallow their own failures instead
+          (<code>OrderPaymentFailedSagaHandler.cs:52-55</code>; the packaged form is
+          <code>MMCA.Common/.../DomainEvents/SafeDomainEventHandler.cs:14-32</code>).</li>
+          <li><strong>Concurrent redeliveries are serialized by the <code>RowVersion</code> concurrency token.</strong> Every auditable
+          entity carries one (<code>MMCA.Common/.../Entities/AuditableBaseEntity.cs:39</code>), configured as a
+          concurrency token on every non-owned auditable type
+          (<code>MMCA.Common/.../DbContexts/ApplicationDbContext.cs:270-290</code>, ADR-035). Two deliveries that both
+          pass the marker check carry the same original token into their update: one commits, the other gets
+          <code>DbUpdateConcurrencyException</code> and its outbox retry then finds the committed marker and skips.</li>
+          <li><strong>A periodic sweep drives the transitions a lost webhook would have.</strong>
+          <code>PaymentReconciliationService</code> (<code>.../Infrastructure/Services/PaymentReconciliationService.cs:33-38</code>)
+          is registered as a hosted service by the Sales module&#39;s infrastructure
+          (<code>.../Infrastructure/DependencyInjection.cs:34-36</code>). Each cycle selects the oldest orders that have
+          sat in <code>PaymentInitiated</code> past a cutoff, ordered, bounded and projected to ids entirely in SQL
+          (<code>PaymentReconciliationService.cs:105-113</code>) over a dedicated filtered index
+          (<code>.../Persistence/EntityConfiguration/OrderConfiguration.cs:61-67</code>), asks Stripe for the session&#39;s
+          authoritative status, and applies the matching transition: paid to <code>MarkAsPaid</code>, expired to
+          <code>MarkAsPaymentFailed</code>, still open to nothing (<code>PaymentReconciliationService.cs:184-206</code>). It is
+          configuration-gated (<code>.../Infrastructure/Settings/PaymentReconciliationSettings.cs:13-36</code>, defaults
+          of a 10-minute interval, a 30-minute stuck age and a 50-order batch, carried in
+          <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:49-54</code>).</li>
+          <li><strong>The sweep gets no private path into the aggregate, and loses races on purpose.</strong> It calls the same
+          guarded transitions as the webhook handler
+          (<code>.../Orders/UseCases/ProcessPaymentWebhook/ProcessPaymentWebhookHandler.cs:67,98</code>) and the
+          client-initiated check (<code>.../Orders/UseCases/VerifyPayment/VerifyPaymentHandler.cs:64</code>). It reloads
+          each order tracked in its own scope and re-checks the status under the fresh load
+          (<code>PaymentReconciliationService.cs:147-151</code>), and a <code>DbUpdateConcurrencyException</code> from a webhook
+          that won the race is logged and skipped, not retried
+          (<code>PaymentReconciliationService.cs:171-176</code>).</li>
+          </ul>
+          <p>The loop shape is deliberate and shared: an enablement gate, a startup delay, a per-cycle <code>try</code>/<code>catch</code>
+          that never kills the loop, and every wait through <code>TimeProvider</code>
+          (<code>PaymentReconciliationService.cs:41-80</code>). MMCA.Common ships exactly that shape as a base class,
+          <code>PeriodicBackgroundService</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PeriodicBackgroundService.cs:20-87</code>),
+          but <strong>nothing derives from it yet</strong>: its only subclass in any of the four repos is the test double in
+          its own unit tests
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Services/PeriodicBackgroundServiceTests.cs:104</code>),
+          and Store&#39;s sweep hand-rolls the equivalent loop.</p>
+          <p><strong>Adoption is one module.</strong> This pattern lives in MMCA.Store&#39;s Sales module only: the two saga
+          handlers and the one reconciliation sweep above. MMCA.ADC and MMCA.Helpdesk have no compensating saga
+          handler and no reconciliation sweep today. The record exists because the mechanism (compensate, mark,
+          reconcile) is the framework&#39;s stated answer to cross-boundary consistency, not because it is broadly
+          adopted.</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>No two-phase commit is available, and none is wanted.</strong> Transactions are per data source and
+          best-effort sequential (ADR-006), and an external payment provider cannot enlist in a database
+          transaction at all. Compensation plus reconciliation is the only mechanism left, so the decision is
+          how to make it disciplined rather than whether to use it.</li>
+          <li><strong>Choreography fits a workflow whose state is already on the aggregate.</strong> <code>Order.Status</code> plus
+          <code>Order.InventoryRestored</code> <em>are</em> the saga state. An orchestrator would add a state machine and a
+          persistence store to track what the aggregate already records.</li>
+          <li><strong>A marker committed with its writes beats a marker written after them.</strong> Because both land in one
+          <code>SaveChanges</code> against one database, idempotency is a database invariant rather than handler
+          discipline. This is strictly stronger than ADR-021&#39;s inbox, which records the message after the
+          handlers succeed and therefore keeps a narrow crash window open.</li>
+          <li><strong>Throwing is the correct failure mode.</strong> The outbox already owns retry policy, backoff and
+          dead-lettering, so a handler that cannot complete should fail loudly and let redelivery re-run it
+          rather than invent local retries.</li>
+          <li><strong>The sweep needs no new infrastructure.</strong> The authoritative answer already lives at the provider,
+          so a bounded, indexed poll plus the existing guarded transitions is enough: no timer message, no
+          scheduler, no saga-timeout store.</li>
+          <li><strong>Reusing the domain transitions keeps one state machine.</strong> The sweep cannot reach a state the
+          webhook could not, because it goes through the same <code>Result</code>-returning methods (ADR-013).</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Inconsistency is bounded, not eliminated.</strong> Between the cancellation commit and the compensation
+          commit, stock is held against a cancelled order. Between a dropped webhook and the sweep, an order
+          sits in <code>PaymentInitiated</code> with stock held for up to the stuck age plus one poll interval (30 plus
+          10 minutes at the shipped defaults). That window is the price of not having a distributed
+          transaction.</li>
+          <li><strong>Compensation is best-effort per line.</strong> <code>RestoreInventory</code> skips an order line whose
+          <code>InventoryItem</code> row is missing (<code>InventoryRestorationDomainService.cs:20-21</code>) and the marker still
+          commits, so that quantity is never restored and nothing retries it. Tolerable only because an
+          inventory row is auto-created for every variant, which makes a missing row mean the variant itself
+          is gone.</li>
+          <li><strong>Redelivery re-runs every handler of the event, not the failed one.</strong> The dispatcher iterates
+          handlers sequentially with no per-handler isolation
+          (<code>MMCA.Common/.../Services/DomainEventDispatcher.cs:55-64</code>), so one throwing handler also skips the
+          handlers after it, and a redelivery re-runs the ones that already succeeded. Every handler on a
+          shared event must be idempotent or must swallow.</li>
+          <li><strong>The sweep is not replica-leased.</strong> The outbox processor claims rows with a lease before working
+          them (ADR-003); the sweep takes no such claim, so at the configured <code>maxReplicas: 2</code>
+          (<code>MMCA.Store/infra/main.bicep:922</code>) two replicas can pick the same stuck order and each spend a
+          Stripe status call. Correctness holds through the concurrency token; the duplicated external call
+          does not deduplicate.</li>
+          <li><strong>Every compensating action needs its own marker.</strong> There is no generic mechanism: the ADR-021
+          inbox dedups broker messages between services, not in-process handler re-runs. A second compensating
+          action means a second persisted marker or a naturally idempotent operation, decided by the author.</li>
+          <li><strong>The loop scaffolding is duplicated.</strong> Store&#39;s sweep reimplements what <code>PeriodicBackgroundService</code>
+          packages, so the two can drift until the sweep is rebased onto the base class.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p>ADR-003 (the outbox delivery and retry this leans on for compensation redelivery; this record says
+          what the redelivered handler must do), ADR-006 (which accepts &quot;no cross-database transaction&quot; as a
+          cost without saying how it is paid; this is the payment), ADR-021 (dedup of broker redeliveries
+          between services, complementary to the aggregate marker that dedups in-process handler re-runs),
+          ADR-035 (the <code>RowVersion</code> token that serializes concurrent compensations and lets the sweep lose a
+          race to a webhook), ADR-014 (the command pipeline whose commit compensation runs after), ADR-052
+          (in-process background work, the hosted-service family this sweep belongs to, with a fixed-interval
+          poll instead of a queue drain), ADR-013 (the <code>Result</code>-returning guarded transitions the sweep reuses
+          rather than bypassing).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/054-saga-compensation-and-reconciliation.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

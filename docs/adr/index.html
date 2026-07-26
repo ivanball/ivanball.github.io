@@ -68,7 +68,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 53 ADRs</summary>
+        <summary>All 55 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html" aria-current="page">Overview</a></li>
@@ -125,6 +125,8 @@
         <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
         <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
         <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -200,7 +202,7 @@
           <tr>
           <td><a href="012-grpc-host-transport.html">012</a></td>
           <td>gRPC-host transport convention</td>
-          <td>Two coherent profiles; the Kestrel choice forces the gateway-forward mode + JWKS routing. <strong>Both consumers default to Profile A</strong> (<code>Http2</code>-only h2c + gateway-routed JWKS) after Store converged on 2026-06-22; Profile B (<code>Http1AndHttp2</code> + ALPN) is retained only for the SignalR/WebSocket hosts (ADC&#39;s Notification service and Store&#39;s Sales service). Since 2026-07-09 ADC&#39;s Notification runs a <strong>mixed-endpoint profile</strong>: <code>Http1AndHttp2</code> default endpoint plus a dedicated <code>Http2</code>-only named <code>grpc</code> endpoint for the ADR-039 live-channel push ingress.</td>
+          <td>Two coherent profiles; the Kestrel choice forces the gateway-forward mode + JWKS routing. <strong>Both consumers default to Profile A</strong> (<code>Http2</code>-only h2c) after Store converged on 2026-06-22; Profile B (<code>Http1AndHttp2</code> + ALPN) is retained only for the SignalR/WebSocket hosts (ADC&#39;s Notification service and Store&#39;s Sales service). Since 2026-07-09 ADC&#39;s Notification runs a <strong>mixed-endpoint profile</strong>: <code>Http1AndHttp2</code> default endpoint plus a dedicated <code>Http2</code>-only named <code>grpc</code> endpoint for the ADR-039 live-channel push ingress. Corrected 2026-07-25: gateway-routed JWKS is the local Aspire wiring only, both consumers inject the direct in-cluster Identity authority in production; and probe posture splits three ways (ADC hosts get a dedicated Http1-only probe listener, Store&#39;s <code>Http2</code>-only hosts use TCP probes).</td>
           </tr>
           <tr>
           <td><a href="013-result-pattern.html">013</a></td>
@@ -270,7 +272,7 @@
           <tr>
           <td><a href="026-caching-strategy.html">026</a></td>
           <td>Two-tier caching (swappable substrate + output-cache edge)</td>
-          <td>One <code>ICacheService</code> abstraction whose backing store is chosen at startup (<code>AddCaching</code> picks <code>DistributedCacheService</code> when Aspire registered Redis, else <code>MemoryCacheService</code>) with prefix invalidation and a 30s default TTL; a second HTTP output-cache tier (<code>UseOutputCache</code>, per-host policies) serves public reads at the edge (since ADR-040, authenticated requests too on registered public endpoints). Distinct from ADR-014&#39;s caching decorators (which consume this substrate). Every service now registers <code>AddRedisClient</code> alongside the distributed cache, so SCAN-based prefix invalidation is live whenever Redis is configured; the TTL backstops only the no-Redis case (amended 2026-07-23).</td>
+          <td>One <code>ICacheService</code> abstraction whose backing store is chosen at startup (<code>AddCaching</code> picks <code>DistributedCacheService</code> when Aspire registered Redis, else <code>MemoryCacheService</code>) with prefix invalidation and a 30s default TTL; a second HTTP output-cache tier (<code>UseOutputCache</code>, per-host policies) serves public reads at the edge (since ADR-040, authenticated requests too on registered public endpoints). Distinct from ADR-014&#39;s caching decorators (which consume this substrate). Every service now registers <code>AddRedisClient</code> alongside the distributed cache, so SCAN-based prefix invalidation is live whenever Redis is configured; the TTL backstops only the no-Redis case (amended 2026-07-23). Amended 2026-07-25: the output-cache store itself is Redis-backed wherever Redis is configured (ADR-040), and <code>IncrementAsync</code> is deliberately a read-modify-write on every backing store, not a Redis <code>INCR</code>, because <code>INCR</code> writes a string while the cache stores hashes.</td>
           </tr>
           <tr>
           <td><a href="027-multi-locale-i18n.html">027</a></td>
@@ -320,7 +322,7 @@
           <tr>
           <td><a href="036-external-oauth-login.html">036</a></td>
           <td>External OAuth login (Google/GitHub)</td>
-          <td><code>AddExternalAuthProviders</code> federates third-party sign-in behind a short-lived <code>ExternalLogin</code> cookie; <code>OAuthControllerBase</code> completes the handshake and swaps a single-use, 2-minute cached code for the app&#39;s local JWT pair (tokens never ride the redirect URL). The local <code>User</code> links by provider+key, by email (guarded since 2026-07-19: ADC rejects the link with <code>ExternalEmailNotVerified</code> when the provider did not assert the email verified), or is created externally (<code>CreateExternal</code>, <code>LoginProvider</code>/<code>ProviderKey</code> fields). Config-gated per provider (<code>OAuth:&lt;Provider&gt;:ClientId</code>), inert until configured; adopted by MMCA.ADC only (MMCA.Store does not wire it).</td>
+          <td><code>AddExternalAuthProviders</code> federates third-party sign-in behind a short-lived <code>ExternalLogin</code> cookie; <code>OAuthControllerBase</code> completes the handshake and swaps a single-use, 2-minute cached code for the app&#39;s local JWT pair (tokens never ride the redirect URL). The local <code>User</code> links by provider+key, by email (validated through <code>Email.Create</code> first, rejecting an unparseable provider email with <code>ExternalEmailInvalid</code>, then guarded since 2026-07-19: ADC rejects the link with <code>ExternalEmailNotVerified</code> when the provider did not assert the email verified), or is created externally (<code>CreateExternal</code>, <code>LoginProvider</code>/<code>ProviderKey</code> fields). Config-gated per provider (<code>OAuth:&lt;Provider&gt;:ClientId</code>), inert until configured; adopted by MMCA.ADC only (MMCA.Store does not wire it).</td>
           </tr>
           <tr>
           <td><a href="037-field-level-encryption-at-rest.html">037</a></td>
@@ -406,6 +408,16 @@
           <td><a href="053-dual-registry-package-publishing.html">053</a></td>
           <td>Dual-registry package publishing (trusted publishing)</td>
           <td>Every release pushes the same nupkgs to nuget.org <strong>and</strong> GitHub Packages from one tag, because the GitHub Packages NuGet registry requires a <code>read:packages</code> PAT even for public packages, so the documented <code>dotnet add package MMCA.Common.API</code> failed for everyone outside the account. nuget.org becomes the documented install path and the only public download signal; GitHub Packages is retained as a mirror. Auth is <strong>keyless</strong>: each publishing job exchanges its GitHub OIDC token via <code>NuGet/login@v1</code> for a one-hour key, authorized by a nuget.org policy pinned to the permanent GitHub ids of owner, repository, and workflow file (nuget.org now marks API keys &quot;Not recommended&quot;). No stored secret, therefore no rotation and no expiry-failure mode; the workflow file name becomes load-bearing in exchange. A <code>github.repository_owner</code> guard keeps forks releasing to GitHub Packages. Listing metadata (<code>PackageProjectUrl</code>, <code>PackageIcon</code>, <code>PackageTags</code>, per-package <code>Description</code>, packed README) is part of the deliverable. No backfill: nuget.org starts at the first release after this decision.</td>
+          </tr>
+          <tr>
+          <td><a href="054-saga-compensation-and-reconciliation.html">054</a></td>
+          <td>Saga compensation + reconciliation backstop</td>
+          <td>Cross-boundary consistency without two-phase commit, the question ADR-003 / ADR-006 / ADR-021 each leave open. Each workflow step raises a domain event and the compensating action lives in its own handler (<code>OrderCancelledSagaHandler</code>, <code>OrderPaymentFailedSagaHandler</code>) running in its own DI scope, so it commits after (not inside) the originating transaction. Idempotency is a persisted aggregate marker (<code>Order.InventoryRestored</code>) committed by the SAME <code>SaveChanges</code> as the compensating writes, which is stronger than ADR-021&#39;s record-after-success inbox; concurrent redeliveries are serialized by the ADR-035 <code>RowVersion</code> token. A periodic <code>PaymentReconciliationService</code> sweep is the saga-timeout backstop, asking Stripe for authoritative session status and driving the same guarded transitions a lost webhook would have, losing races to the webhook by design. Adopted in MMCA.Store&#39;s Sales module only.</td>
+          </tr>
+          <tr>
+          <td><a href="055-repository-and-specification-contract.html">055</a></td>
+          <td>Repository + Specification data-access contract</td>
+          <td>The read contract is ISP-split into <code>IEntityReader</code> (id lookups) and <code>IEntityQuerier</code> (collections, projections, counts), composed by <code>IReadRepository</code>, which alone exposes the raw <code>IQueryable</code> surfaces. <code>ApplicationLayer_DoesNotUseRawQueryableSurfaces</code> fails the build on <code>.Table</code> / <code>.TableNoTracking*</code> in Application code (opt-in per repo: Common and ADC today, with a documented <code>AllowedFiles</code> ratchet), because a raw-queryable handler is EF-coupled and cannot move behind a gRPC boundary later. Predicates are composable <code>Specification</code> expression trees (And / Or / Not / Inline) fed into the same query pipeline. The split is shipped but not yet consumed: <code>IUnitOfWork</code> still hands out only the composites. Referenced but never decided by ADR-018 / ADR-033 / ADR-035 / ADR-048.</td>
           </tr>
           </tbody></table></div>
           <h2 id="writing-a-new-adr">Writing a new ADR</h2>

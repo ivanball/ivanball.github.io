@@ -2,7 +2,8 @@
 
 ## Status
 Accepted (2026-06-30). Amended (2026-07-23): the filter strategy registry now also
-covers `long`/`long?` via `LongFilterStrategy`.
+covers `long`/`long?` via `LongFilterStrategy`. Amended (2026-07-25): the keyed
+by-id fast path is named `TryGetFastPathIncludes` in code; citations rebased.
 
 ## Context
 Every module exposes many entities, and most of them need the same read and write
@@ -47,7 +48,7 @@ contract, supplied by two controller bases over a shared query pipeline.
 3. **Sparse fieldsets via `fields`.** A comma-separated `fields` query parameter
    (`EntityControllerBase.cs:77`, `:121`, `:193`) drives a server-side projection:
    `QueryFieldService.ApplyFieldSelection`
-   (`Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:154`) builds a
+   (`Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:146`) builds a
    `MemberInit` expression that selects only the requested writable properties so
    only those columns leave the database.
 
@@ -57,16 +58,16 @@ contract, supplied by two controller bases over a shared query pipeline.
    which parses `filters[Property].operator` / `filters[Property].value` query keys
    (`Source/Presentation/MMCA.Common.API/ModelBinders/QueryFilterModelBinder.cs:24`).
    `QueryFilterService.ApplyFilters`
-   (`Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:73`)
+   (`Source/Core/MMCA.Common.Application/Services/Filtering/QueryFilterService.cs:76`)
    resolves a `IFilterStrategy`
    (`Source/Core/MMCA.Common.Application/Services/Filtering/IFilterStrategy.cs:6`)
    per property CLR type from a strategy registry (string, bool, int, long, DateTime,
-   decimal, Guid and their nullables, `QueryFilterService.cs:26-42`), each strategy
+   decimal, Guid and their nullables, `QueryFilterService.cs:29-45`), each strategy
    declaring its `SupportedOperators` (`IFilterStrategy.cs:24`). Extra types register
-   via `QueryFilterService.RegisterStrategy` (`QueryFilterService.cs:57`).
+   via `QueryFilterService.RegisterStrategy` (`QueryFilterService.cs:60`).
 
-5. **Sort.** `sortColumn` / `sortDirection` (`EntityControllerBase.cs:119`)
-   feed `QueryFieldService.ApplySorting` (`QueryFieldService.cs:120`), an
+5. **Sort.** `sortColumn` / `sortDirection` (`EntityControllerBase.cs:119-120`)
+   feed `QueryFieldService.ApplySorting` (`QueryFieldService.cs:112`), an
    `OrderBy("<col> ascending|descending")` over the entity property the DTO name
    maps to.
 
@@ -83,7 +84,7 @@ contract, supplied by two controller bases over a shared query pipeline.
    `EntityQueryPipeline.MaxUnboundedResultLimit = 1000`
    (`Source/Core/MMCA.Common.Application/Services/Query/EntityQueryPipeline.cs:23`)
    caps any unpaginated query with `query.Take(MaxUnboundedResultLimit)`
-   (`EntityQueryPipeline.cs:104`, `:151`), so even a direct service caller that omits
+   (`EntityQueryPipeline.cs:102`, `:148`), so even a direct service caller that omits
    pagination cannot trigger an unbounded full-table load.
 
 8. **Two include paths.** `includeFKs` / `includeChildren`
@@ -101,13 +102,13 @@ contract, supplied by two controller bases over a shared query pipeline.
 - **Bounded dynamic querying, not open SQL.** Filtering is dynamic over the wire but
   not unbounded in the engine: each property is filtered only by a registered
   `IFilterStrategy` whose `SupportedOperators` are validated before the database is
-  touched (`QueryFilterService.ValidateFilters`, `QueryFilterService.cs:126`,
-  invoked at `Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:187`),
+  touched (`QueryFilterService.ValidateFilters`, `QueryFilterService.cs:111`,
+  invoked at `Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:227`),
   and `MaxUnboundedResultLimit` (`EntityQueryPipeline.cs:23`) plus the `MaxPageSize`
   clamp (`EntityControllerBase.cs:127`) bound the result size.
 - **Composes with manual DTO mapping (ADR-001).** Entities are projected to DTOs by
   an injected `IEntityDTOMapper` (`EntityQueryService.cs:35`, `:51`) via
-  `DTOMapper.MapToDTOs` (`EntityQueryService.cs:222`); a `DTOToEntityPropertyMap`
+  `DTOMapper.MapToDTOs` (`EntityQueryService.cs:262`); a `DTOToEntityPropertyMap`
   (`EntityQueryService.cs:61`) translates DTO field names to entity property paths
   for filter and sort, so the wire contract speaks DTO names while the engine speaks
   entity names.
@@ -123,11 +124,11 @@ contract, supplied by two controller bases over a shared query pipeline.
 - **Dynamic filtering is an injection and over-fetch surface.** Arbitrary
   client-supplied property/operator/value triples are an attack surface; it is
   bounded by validating properties and operators up front
-  (`QueryFilterService.ValidateFilters`, `QueryFilterService.cs:126`), routing each
+  (`QueryFilterService.ValidateFilters`, `QueryFilterService.cs:111`), routing each
   type through its registered `IFilterStrategy` rather than free-form expression
   evaluation, and capping rows with `MaxUnboundedResultLimit`
   (`EntityQueryPipeline.cs:23`). Sparse fieldsets reject non-writable properties at
-  projection (`QueryFieldService.cs:167`).
+  projection (`QueryFieldService.cs:181`).
 - **Generic endpoints are less self-documenting than bespoke ones.** One generic
   shape per entity is consistent but conveys less domain intent than a named,
   purpose-built endpoint; the query contract (filter key syntax, operators) must be
@@ -170,8 +171,20 @@ have.
    `TotalItemCount`, telling callers the set was exactly that size; it now issues a count query only
    when the materialized rows actually reach the cap. `PaginationMetadata.PageSize` reports the size
    the pipeline applied rather than the one requested.
-4. **The keyed by-id fast path is reachable again.** `IsPrimaryKeyOnlyLookup` treated `includeFKs` as
+4. **The keyed by-id fast path is reachable again.** The fast-path predicate treated `includeFKs` as
    disqualifying while `GetByIdAsync` defaults it to `true`, so every REST by-id read fell through to
    the dynamic-filter pipeline (a parsed string predicate, `TOP 1000`, and a client-side
    `FirstOrDefault`) where a keyed `TOP 1 WHERE Id = @id` would do. The flags now disqualify only when
    the entity actually has navigations to include.
+
+## Revision (2026-07-25)
+Citation maintenance from an ADR audit. No decision or behavior changed; the source anchors above were
+rebased to their current declaration and call-site lines.
+
+1. **The fast-path predicate is named `TryGetFastPathIncludes`.** Revision item 4 above referred to it
+   as `IsPrimaryKeyOnlyLookup`, a symbol that no longer exists in the framework source. The current
+   method (`Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:122`, called from the
+   by-id fast path at `EntityQueryService.cs:90`) both decides whether the request is a plain key
+   lookup and returns the navigations it must eager-load. The described behavior is unchanged:
+   requested include flags no longer disqualify on their own, and only unsupported (cross-source)
+   includes send the read back to the pipeline (`EntityQueryService.cs:145-148`).

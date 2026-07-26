@@ -1,7 +1,10 @@
 # ADR-053: Dual-Registry Package Publishing (nuget.org plus GitHub Packages)
 
 ## Status
-Accepted (2026-07-25).
+Accepted (2026-07-25). Amended (2026-07-25) to put the pre-decision Context statements in the past
+tense, to restate the `MMCA.` ID prefix reservation as pending rather than done, to scope the
+"documented install path" claim to what is actually updated, and to split the packaging metadata
+between `Directory.Build.props` and the per-package csproj files.
 
 ## Context
 The fifteen `MMCA.Common.*` packages have shipped to GitHub Packages since the first release. That
@@ -14,13 +17,13 @@ package and its repository are public**: only the Container registry supports an
 practical consequences:
 
 - The `dotnet add package MMCA.Common.API` line printed in the README, in the getting-started guide,
-  and in a two-dozen-article series fails for every reader who runs it. They get a 401, not a
+  and in a two-dozen-article series failed for every reader who ran it. They got a 401, not a
   package.
 - A reader who wants to try the framework must first create a GitHub PAT and hand-write a
   `nuget.config` with credentials. That is a larger ask than the framework itself, and it happens
   before they have seen any value.
-- The packages are invisible to discovery. A nuget.org search API query for `MMCA.Common` returns
-  `totalHits: 0`, so the primary place .NET developers look for libraries has never heard of them.
+- The packages were invisible to discovery. A nuget.org search API query for `MMCA.Common` returned
+  `totalHits: 0`, so the primary place .NET developers look for libraries had never heard of them.
 - There is no download signal. Package downloads are the only honest adoption metric available for a
   library, and GitHub Packages does not surface one publicly.
 
@@ -50,16 +53,21 @@ Every release publishes to **both** registries, from the same tag, in the same w
   single-use and cannot cross a job boundary.
 - The nuget.org steps are guarded by `github.repository_owner == 'ivanball'`, so a fork completes a
   full GitHub Packages release instead of failing on an exchange it can never satisfy.
-- The `MMCA.` ID prefix is reserved on nuget.org so the package ids cannot be taken by anyone else.
-  API keys remain available for a manual push from a command line, which trusted publishing does
-  not cover, but no automated path uses one.
-- **nuget.org is the documented install path.** README, guides, and articles point there. GitHub
-  Packages is retained as a mirror, not deprecated: it is where prerelease and internal-consumer
-  restores keep working with no change.
+- **An `MMCA.` ID prefix reservation is requested and still pending**, so the ids are not yet
+  protected from being taken by anyone else: the published ids report `verified: false` in the
+  nuget.org search index as of 2026-07-25. Reservation is a manual account-level action (see
+  Trade-offs), which is why it cannot be closed out from this repository. API keys remain available
+  for a manual push from a command line, which trusted publishing does not cover, but no automated
+  path uses one.
+- **nuget.org is the documented install path.** The README already installs with a plain
+  `dotnet add package` and carries the nuget.org badges, and the getting-started guide is moved onto
+  the same path in this change. GitHub Packages is retained as a mirror, not deprecated: it is where
+  prerelease and internal-consumer restores keep working with no change.
 - Package listing metadata is treated as part of the deliverable, not an afterthought:
-  `PackageProjectUrl`, `PackageIcon`, `PackageTags`, and a per-package `Description` are set once in
-  `Directory.Build.props`, and the repository README is packed into every package as its
-  `PackageReadmeFile`, so the listing page is the funnel.
+  `PackageProjectUrl`, `PackageIcon`, and `PackageTags` are set once in `Directory.Build.props`,
+  which also packs the icon and sets `PackageReadmeFile`. Each package's `Description` and its
+  `README.md` pack item stay in the individual csproj, so every package carries its own one-line
+  pitch above the shared repository README, and the listing page is the funnel.
 - **No backfill.** nuget.org starts at the first release published after this decision. Older
   versions remain available on GitHub Packages only.
 
