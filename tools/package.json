@@ -9,13 +9,16 @@
   },
   "scripts": {
     "build": "node build-docs.mjs",
-    "images": "node build-images.mjs"
+    "images": "node build-images.mjs",
+    "a11y": "node a11y-check.mjs"
   },
   "dependencies": {
     "marked": "^15.0.0"
   },
   "devDependencies": {
+    "axe-core": "^4.12.1",
     "mermaid": "^11.0.0",
+    "puppeteer": "^25.3.0",
     "sharp": "^0.35.3"
   }
 }
