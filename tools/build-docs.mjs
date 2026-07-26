@@ -19,7 +19,7 @@
  * Re-run whenever the source docs change:  npm install && npm run build
  * No runtime JS dependency ships to readers: everything is pre-rendered.
  */
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, copyFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, copyFileSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import vm from "node:vm";
@@ -131,6 +131,10 @@ function loadWindowData(relPath) {
 }
 const { ARTICLES = [], ARTICLE_CATEGORIES = [] } = loadWindowData("assets/data/articles.js");
 const { ADR_CARDS = {} } = loadWindowData("assets/data/adr-cards.js");
+const { PLATFORM_FACTS = {} } = loadWindowData("assets/data/platform-facts.js");
+
+const stat = (num, label) =>
+  `          <div class="stat"><div class="num">${num}</div><div class="label">${label}</div></div>`;
 
 /* Replace the content between `<!-- BEGIN name -->` and `<!-- END name -->`. Throws rather than
    silently no-oping, because a missing marker means the page quietly stops being regenerated. */
@@ -312,6 +316,13 @@ for (const col of collections) {
 /* ----- markdown rendering with link rewriting + mermaid + code ----- */
 let CTX = null; // { srcDir, outRel, hasMermaid }
 
+/* A relative .md link whose target is not in the published set degrades to a plain
+   span rather than a broken href. That is the right rendering, but it used to happen
+   silently: 44 links pointing at "../00-primer.md" (a sibling, so the "../" was simply
+   wrong) sat dead in the published guide unnoticed. Collect them so the summary can
+   report the count and the build can be audited. */
+const DEAD_LINKS = [];
+
 function rewriteHref(href) {
   if (!href) return href;
   if (/^(https?:|mailto:|tel:|#|\/)/i.test(href)) return href;      // external / anchor / absolute
@@ -347,7 +358,10 @@ function makeRenderer(slugCounts) {
     link({ href, title, tokens }) {
       const text = this.parser.parseInline(tokens);
       const nh = rewriteHref(href);
-      if (nh === null) return `<span class="doc-deadlink" title="Reference outside the published set">${text}</span>`;
+      if (nh === null) {
+        DEAD_LINKS.push({ page: CTX.outRel, href, text: text.replace(/<[^>]*>/g, "") });
+        return `<span class="doc-deadlink" title="Reference outside the published set">${text}</span>`;
+      }
       const ext = /^https?:/i.test(nh);
       const t = title ? ` title="${escapeAttr(title)}"` : "";
       const attrs = ext ? ' target="_blank" rel="noopener"' : "";
@@ -393,10 +407,29 @@ function assetPrefix(outRel) {
   return "../".repeat(depth);
 }
 
-function headerHtml(prefix) {
+/* Matches the --bg custom property in styles.css for each theme, so mobile browser
+   chrome follows the page instead of staying stuck on the light default. */
+const THEME_COLOR_META = `  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">`;
+
+/* The footer link set. Root pages listed all six; the generated docs pages listed only
+   four. That divergence had no reason behind it, so both now use the full set. */
+const FOOTER_LINKS = [
+  ["resume.html", "Résumé"],
+  ["platform.html", "Platform"],
+  ["docs/index.html", "Reference"],
+  ["writing.html", "Writing"],
+  ["speaking.html", "Speaking"],
+  ["contact.html", "Contact"],
+];
+
+/* `active` is the NAV_ITEMS href of the page being stamped. Pages generated under docs/
+   pass nothing and default to the Reference entry. Hand-authored root pages pass their
+   own href, which is the ONLY thing that used to differ between their seven copies of
+   this markup: one of them had drifted and listed Reference twice. */
+function headerHtml(prefix, active = "docs/index.html") {
   const links = NAV_ITEMS.map(([href, label]) => {
-    /* every page this generator emits lives under docs/, so Reference is the current section */
-    const cur = href === "docs/index.html" ? ' aria-current="page"' : "";
+    const cur = href === active ? ' aria-current="page"' : "";
     return `          <li><a href="${prefix}${href}"${cur}>${label}</a></li>`;
   }).join("\n");
   return `  <header class="site-header">
@@ -420,23 +453,49 @@ ${links}
   </header>`;
 }
 
-function footerHtml(prefix) {
+function footerHtml(prefix, tagline = "Reference docs generated from source.") {
+  const links = FOOTER_LINKS
+    .map(([href, label]) => `          <li><a href="${prefix}${href}">${label}</a></li>`)
+    .join("\n");
   return `  <footer class="site-footer">
     <div class="container">
       <div class="footer-grid">
         <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
         <ul class="footer-links">
-          <li><a href="${prefix}resume.html">Résumé</a></li>
-          <li><a href="${prefix}platform.html">Platform</a></li>
-          <li><a href="${prefix}docs/index.html">Reference</a></li>
-          <li><a href="${prefix}writing.html">Writing</a></li>
+${links}
           <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
           <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
         </ul>
       </div>
-      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. ${tagline}</p>
     </div>
   </footer>`;
+}
+
+/* Authored hidden and revealed by analytics.js only once a list URL exists, so a
+   half-configured site never shows a form that silently drops addresses. The id prefix
+   keeps the label/input pairing unique on pages that both carry the block. */
+function subscribeHtml(idPrefix) {
+  return `        <div class="subscribe" data-newsletter-wrap hidden>
+          <h2 style="margin:0 0 0.4rem">Get each deep dive by email</h2>
+          <p class="mb-0" style="max-width:60ch">One message per article, no digests and no other mail.</p>
+          <form class="subscribe-form" data-newsletter method="post" target="_blank">
+            <label class="sr-only" for="${idPrefix}-subscribe-email">Email address</label>
+            <input id="${idPrefix}-subscribe-email" type="email" name="email" required placeholder="you@example.com" autocomplete="email">
+            <button class="btn btn--primary" type="submit">Subscribe</button>
+          </form>
+        </div>`;
+}
+
+/* The contiguous tail of every <head>: the pre-paint theme reader, the stylesheet, and
+   the two deferred scripts. Everything above it (title, description, canonical, the
+   per-page OG and Twitter values) is genuinely per-page and stays hand-authored. */
+function headAssetsHtml(prefix, extraCss = "") {
+  const css = extraCss ? `\n  <link rel="stylesheet" href="${prefix}${extraCss}">` : "";
+  return `  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="stylesheet" href="${prefix}assets/css/styles.css">${css}
+  <script defer src="${prefix}assets/js/main.js"></script>
+  <script defer src="${prefix}assets/js/analytics.js"></script>`;
 }
 
 function mermaidHtml(prefix) {
@@ -469,6 +528,7 @@ function page({ outRel, title, description, contentHtml, hasMermaid, jsonLd }) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+${THEME_COLOR_META}
   <title>${escapeHtml(fullTitle)}</title>
   <meta name="description" content="${escapeAttr(description)}">
   <link rel="canonical" href="${escapeAttr(canonical)}">
@@ -480,15 +540,13 @@ function page({ outRel, title, description, contentHtml, hasMermaid, jsonLd }) {
   <meta property="og:description" content="${escapeAttr(description)}">
   <meta property="og:url" content="${escapeAttr(canonical)}">
   <meta property="og:image" content="${SITE}/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${escapeAttr(title)}">
   <meta name="twitter:description" content="${escapeAttr(description)}">
   <meta name="twitter:image" content="${SITE}/assets/img/og-image.png">${ld}
-  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
-  <link rel="stylesheet" href="${prefix}assets/css/styles.css">
-  <link rel="stylesheet" href="${prefix}assets/css/docs.css">
-  <script defer src="${prefix}assets/js/main.js"></script>
-  <script defer src="${prefix}assets/js/analytics.js"></script>
+${headAssetsHtml(prefix, "assets/css/docs.css")}
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -574,6 +632,12 @@ mkdirSync(path.join(WEBSITE_ROOT, "docs", "governance"), { recursive: true });
 mkdirSync(path.join(WEBSITE_ROOT, "docs", "guides"), { recursive: true });
 
 let written = 0, mermaidPages = 0;
+
+/* Everything under docs/ is generated from docs-src/. The build only ever wrote files,
+   so deleting or renaming a source left its rendered page behind: still committed, still
+   reachable by URL, just absent from every sidebar and the sitemap. Track what this run
+   produced so the orphans can be removed at the end. */
+const WRITTEN_DOCS = new Set();
 for (const col of collections) {
   for (const doc of col.docs) {
     const ctx = { srcDir: col.srcDir, outRel: doc.outRel, hasMermaid: false };
@@ -603,6 +667,7 @@ ${docFootHtml(col, doc)}
       jsonLd: breadcrumbJsonLd(col, currentLabel, doc.outRel),
     });
     writeFileSync(path.join(WEBSITE_ROOT, doc.outRel), html);
+    WRITTEN_DOCS.add(toPosix(doc.outRel));
     written++;
   }
 }
@@ -660,7 +725,26 @@ ${docFootHtml(col, doc)}
     hasMermaid: false,
   });
   writeFileSync(path.join(WEBSITE_ROOT, outRel), html);
+  WRITTEN_DOCS.add(toPosix(outRel));
   written++;
+}
+
+/* ----- prune orphaned output -----
+   Any .html under docs/ that this run did not produce has lost its markdown source.
+   Removing it here keeps the committed output a faithful mirror of docs-src/ instead of
+   accumulating pages that nothing links to but search engines can still reach. */
+const pruned = [];
+{
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const abs = path.join(dir, entry.name);
+      if (entry.isDirectory()) { walk(abs); continue; }
+      if (!entry.name.endsWith(".html")) continue;
+      const rel = toPosix(path.relative(WEBSITE_ROOT, abs));
+      if (!WRITTEN_DOCS.has(rel)) { rmSync(abs); pruned.push(rel); }
+    }
+  };
+  walk(path.join(WEBSITE_ROOT, "docs"));
 }
 
 /* ----- vendor mermaid (only referenced by pages that contain diagrams) ----- */
@@ -694,13 +778,26 @@ function adrHref(num, prefix = "") {
   return f ? `${prefix}docs/adr/${f.replace(/\.md$/i, ".html")}` : null;
 }
 
+/* articles.js points `hero` at the 1600x840 PNG, because that file is the source hero
+   uploaded to Medium when a piece publishes. The site serves the 800px WebP that
+   `npm run images` derives from it (about 97% smaller across the 50 heroes). Keeping the
+   swap here means the data file keeps naming the real source and no page references a
+   35 MB asset. If a WebP is missing, fall back to the PNG rather than emit a broken src. */
+const HERO_W = 800;
+const HERO_H = 420;
+
+function webHero(hero) {
+  const webp = hero.replace(/\.png$/i, ".webp");
+  return existsSync(path.join(WEBSITE_ROOT, webp)) ? webp : hero;
+}
+
 /* Same markup assets/js/writing.js used to build at runtime, with two additions: the ADR reference
    becomes a real link into the published record (internal link equity the client-rendered version
    could never contribute), and the category rides a data attribute so filtering can hide and show
    these nodes instead of replacing them. */
 function articleCardHtml(a) {
   const thumb = a.hero
-    ? `<img src="${escapeAttr(a.hero)}" alt="" loading="lazy">`
+    ? `<img src="${escapeAttr(webHero(a.hero))}" alt="" width="${HERO_W}" height="${HERO_H}" loading="lazy" decoding="async">`
     : `<span class="thumb-num" aria-hidden="true">${a.n}</span>`;
   const tags = adrNumbers(a.adr).map((n) => {
     const href = adrHref(n);
@@ -723,6 +820,68 @@ ${tags ? `              <ul class="tags" style="margin-bottom:0.85rem">${tags}</
           </article>`;
 }
 
+/* ----- the shared shell on every hand-authored root page -----
+   The header, footer, head asset tags, and subscribe block used to be copy-pasted into
+   all seven pages, with a ninth and tenth copy living in this file for the generated
+   docs pages. Eight edit sites for one nav change, and 404.html had already drifted into
+   listing "Reference" twice. Now every page is stamped from the same functions, so the
+   nav lives in NAV_ITEMS alone. Per-page uniqueness (title, description, canonical, the
+   OG and Twitter values, aria-current) stays outside these regions. */
+{
+  const SUBSCRIBE_PAGES = new Map([
+    ["writing.html", "writing"],
+    ["platform.html", "platform"],
+  ]);
+
+  for (const [file] of NAV_ITEMS.filter(([h]) => h !== "docs/index.html").concat([["404.html"]])) {
+    const abs = path.join(WEBSITE_ROOT, file);
+    let html = readFileSync(abs, "utf8");
+
+    /* 404.html is served from arbitrary depths by GitHub Pages, but its links are
+       root-relative-by-convention like the rest, so every root page uses no prefix. */
+    html = replaceRegion(html, "head-assets", headAssetsHtml(""), file);
+    html = replaceRegion(html, "site-header", headerHtml("", file), file);
+    html = replaceRegion(html, "site-footer", footerHtml("", "Built as a static site."), file);
+
+    const idPrefix = SUBSCRIBE_PAGES.get(file);
+    if (idPrefix) html = replaceRegion(html, "subscribe", subscribeHtml(idPrefix), file);
+
+    writeFileSync(abs, html);
+  }
+}
+
+/* ----- index.html stat row -----
+   The ADR count is the rigor signal that was missing here: years, packages, and
+   conferences say experience and community, but nothing said the decisions are written
+   down. Generated for the same reason as the platform stats, so it tracks docs-src/. */
+{
+  const file = "index.html";
+  const abs = path.join(WEBSITE_ROOT, file);
+  let html = readFileSync(abs, "utf8");
+  html = replaceRegion(html, "home-stats", [
+    stat("25+", "Years on the Microsoft stack"),
+    stat(PLATFORM_FACTS.packages, "Open-source NuGet packages"),
+    stat(adrFiles.length, "Architecture Decision Records"),
+    stat(2, "Atlanta tech conferences organized"),
+  ].join("\n"), file);
+  writeFileSync(abs, html);
+}
+
+/* ----- resume.html platform figures -----
+   The resume is the page a recruiter reads, and it was the page whose numbers had gone
+   stale: it claimed 91 fitness tests and 51 ADRs against the real 93 and 55. Same sources
+   as the platform stats now, so the two pages cannot disagree again. */
+{
+  const file = "resume.html";
+  const abs = path.join(WEBSITE_ROOT, file);
+  let html = readFileSync(abs, "utf8");
+  html = replaceRegion(html, "resume-platform-facts",
+    `            <li>Built Blazor (MudBlazor) and .NET MAUI clients; enforced quality with xUnit v3, Playwright E2E, ${PLATFORM_FACTS.fitnessTests} architecture-fitness tests, and automated accessibility testing (axe, WCAG 2.1 AA: zero violations).</li>
+            <li>Documented decisions with ${adrFiles.length} ADRs and a ${PLATFORM_FACTS.rubricCategories}-category architecture-review rubric; built Roslyn-based code-inventory tooling and AI/multi-agent development workflows.</li>`,
+    file);
+  writeFileSync(abs, html);
+}
+
 /* ----- writing.html ----- */
 {
   const file = "writing.html";
@@ -730,6 +889,13 @@ ${tags ? `              <ul class="tags" style="margin-bottom:0.85rem">${tags}</
   let html = readFileSync(abs, "utf8");
 
   html = replaceRegion(html, "articles", ARTICLES.map(articleCardHtml).join("\n"), file);
+
+  /* Only the category list, not the whole ARTICLES array. The cards are static markup
+     now, so shipping articles.js to the browser sent 18 KB of summaries and URLs that
+     nothing read. writing.js reads window.ARTICLE_CATEGORIES and filters in place. */
+  html = replaceRegion(html, "article-categories",
+    `  <script>window.ARTICLE_CATEGORIES=${JSON.stringify(ARTICLE_CATEGORIES)};</script>`,
+    file);
 
   const itemList = {
     "@context": "https://schema.org",
@@ -788,9 +954,15 @@ ${tags ? `              <ul class="tags" style="margin-bottom:0.85rem">${tags}</
   }).join("\n");
   html = replaceRegion(html, "scorecards", scoreCards, file);
 
-  html = replaceRegion(html, "adr-stat",
-    `          <div class="stat"><div class="num">${adrFiles.length}</div><div class="label">Architecture Decision Records</div></div>`,
-    file);
+  /* The ADR count is derived from docs-src/; the other three mirror MMCA.Common via
+     assets/data/platform-facts.js. All four used to be hand-typed here and in
+     resume.html, and the two pages had already drifted apart. */
+  html = replaceRegion(html, "platform-stats", [
+    stat(PLATFORM_FACTS.packages, "NuGet packages"),
+    stat(adrFiles.length, "Architecture Decision Records"),
+    stat(PLATFORM_FACTS.fitnessTests, "Architecture fitness tests"),
+    stat(PLATFORM_FACTS.referenceApps, "Reference applications"),
+  ].join("\n"), file);
 
   const onbCol = collections.find((c) => c.id === "onboarding");
   const groupChapters = onbFiles.filter((f) => /^group-\d/.test(f)).length;
@@ -838,6 +1010,16 @@ ${tags ? `              <ul class="tags" style="margin-bottom:0.85rem">${tags}</
    once instead of a link per article. Entries point at Medium (where the article lives), not at the
    site, so a subscriber lands on the real thing. */
 {
+  /* Derived from the newest published article, NOT from the wall clock. A build-time
+     timestamp here rewrote feed.xml on every run, which made the build non-idempotent
+     and would make a "rebuild and check git diff is clean" CI gate fail every time.
+     The feed's content genuinely last changed when the newest article was published. */
+  const newest = publishedArticles
+    .map((a) => (a.date ? Date.parse(a.date) : NaN))
+    .filter((t) => !Number.isNaN(t))
+    .reduce((max, t) => (t > max ? t : max), 0);
+  const feedLastBuild = new Date(newest).toUTCString();
+
   const items = publishedArticles.map((a) => {
     const pub = a.date ? `\n      <pubDate>${new Date(a.date).toUTCString()}</pubDate>` : "";
     const adrs = adrNumbers(a.adr).map((n) => `\n      <category>ADR ${n}</category>`).join("");
@@ -858,7 +1040,7 @@ ${tags ? `              <ul class="tags" style="margin-bottom:0.85rem">${tags}</
     <atom:link href="${SITE}/feed.xml" rel="self" type="application/rss+xml"/>
     <description>A long-form series turning a production .NET framework's architecture decisions into teachable patterns: the Result railway, the transactional outbox, database-per-service, JWKS auth, fitness functions, and more.</description>
     <language>en-us</language>
-    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
+    <lastBuildDate>${feedLastBuild}</lastBuildDate>
     <managingEditor>noreply@ivanball.github.io (Ivan Ball-llovera)</managingEditor>
 ${items}
   </channel>
@@ -898,6 +1080,22 @@ let sitemapUrls = 0;
 }
 
 console.log(`Wrote ${written} pages (${collections.map((c) => `${c.docs.length} ${c.id}`).join(", ")}). Mermaid on ${mermaidPages} page(s).`);
+if (pruned.length) console.log(`Pruned ${pruned.length} orphaned page(s) whose source is gone: ${pruned.join(", ")}`);
 console.log(`Mermaid bundle vendored: ${existsSync(mermaidDst)}`);
 console.log(`Rendered ${ARTICLES.length} article cards into writing.html (${publishedArticles.length} published) and ${adrFiles.length} ADR cards into platform.html.`);
 console.log(`Generated feed.xml (${publishedArticles.length} items) and sitemap.xml (${sitemapUrls} URLs).`);
+
+/* Dead cross-links: rendered as plain text, never as a broken href, so they cannot
+   break a page. Reported here because a link pointing outside the published set is
+   usually a typo in the source markdown (a wrong "../" prefix), not a deliberate
+   reference to something unpublished. Grouped by target so a systematic mistake
+   stands out from the genuine one-offs. */
+if (DEAD_LINKS.length === 0) {
+  console.log("Dead cross-links: none.");
+} else {
+  const byTarget = new Map();
+  for (const d of DEAD_LINKS) byTarget.set(d.href, (byTarget.get(d.href) || 0) + 1);
+  const ranked = [...byTarget.entries()].sort((a, b) => b[1] - a[1]);
+  console.log(`Dead cross-links: ${DEAD_LINKS.length} across ${new Set(DEAD_LINKS.map((d) => d.page)).size} page(s), rendered as plain text.`);
+  for (const [href, count] of ranked) console.log(`  ${String(count).padStart(3)}x  ${href}`);
+}

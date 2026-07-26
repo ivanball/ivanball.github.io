@@ -118,7 +118,7 @@ A browser request to `GET /Sessions` enters the Gateway, is forwarded as HTTP/2 
 - **Concept introduced, the `extension(IServiceCollection)` registration facade and permission
   grants.** The class body is a C# preview `extension(IServiceCollection services)` block
   (`DependencyInjection.cs:16`), the codebase-wide idiom for DI registration (see
-  [primer §4](../00-primer.md#4-c-14-preview-features-in-play)); the methods read as instance calls
+  [primer §4](00-primer.md#4-c-14-preview-features-in-play)); the methods read as instance calls
   on `services` without a formal `this` parameter. `[Rubric §7, Microservices Readiness]` (assesses
   whether a module registers itself with one self-contained call so it can boot in its own service
   host): `AddConferenceModule` is exactly that single entry point.

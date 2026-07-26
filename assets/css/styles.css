@@ -256,6 +256,9 @@ code, kbd { font-family: var(--font-mono); font-size: 0.92em; }
 .hero h1 { margin: 0 0 0.6rem; }
 .hero .role { font-size: 1.25rem; font-weight: 600; color: var(--accent); margin: 0 0 1rem; }
 .hero .lede { font-size: 1.12rem; color: var(--text-muted); max-width: 60ch; }
+/* Carries a photo now. The gradient and initials styling stay as the fallback for a
+   non-img .avatar, and as the backdrop while the photo decodes. object-fit keeps a
+   non-square source from stretching. */
 .avatar {
   width: 168px; height: 168px;
   border-radius: 50%;
@@ -265,6 +268,7 @@ code, kbd { font-family: var(--font-mono); font-size: 0.92em; }
   font-size: 3.4rem; font-weight: 800; letter-spacing: -0.04em;
   box-shadow: var(--shadow);
   flex-shrink: 0;
+  object-fit: cover;
 }
 @media (max-width: 760px) {
   .hero-grid { grid-template-columns: 1fr; gap: 1.5rem; }

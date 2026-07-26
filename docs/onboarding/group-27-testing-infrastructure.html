@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>27. Testing &amp; Quality Infrastructure · MMCA · Ivan Ball-llovera</title>
   <meta name="description" content="What this group covers. Everything the codebase uses to prove itself: the four reusable test-support packages that ship out of…">
   <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/group-27-testing-infrastructure.html">
@@ -14,6 +16,8 @@
   <meta property="og:description" content="What this group covers. Everything the codebase uses to prove itself: the four reusable test-support packages that ship out of…">
   <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/group-27-testing-infrastructure.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="27. Testing &amp; Quality Infrastructure">
   <meta name="twitter:description" content="What this group covers. Everything the codebase uses to prove itself: the four reusable test-support packages that ship out of…">
@@ -3048,7 +3052,7 @@
           asserts, <strong>Moq</strong> for test doubles, and <strong>coverlet</strong> for coverage (see for example
           <code>MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/MMCA.Common.Testing.Tests.csproj:8</code>). The lone
           exception is <code>MMCA.Common.Benchmarks</code>, a <strong>BenchmarkDotNet</strong> executable (not a test project). See
-          <span class="doc-deadlink" title="Reference outside the published set">primer §3</span> for the platform/runner
+          <a href="00-primer.html#3-the-external-stack-bcl--nuget--external-level-0">primer §3</a> for the platform/runner
           externals. MMCA.Common&#39;s CI runs the whole solution behind a discovery floor,
           <code>--minimum-expected-tests 2000</code> (<code>MMCA.Common/.github/workflows/ci.yml:144</code>), so a regression that
           silently stops discovering thousands of tests fails the build instead of passing quietly.</li>
@@ -3375,6 +3379,8 @@
           <li><a href="../../platform.html">Platform</a></li>
           <li><a href="../../docs/index.html">Reference</a></li>
           <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
           <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
           <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
         </ul>

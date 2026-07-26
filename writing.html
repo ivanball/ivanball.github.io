@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Writing · Ivan Ball-llovera</title>
   <meta name="description" content="A long-form series turning a production .NET framework's architecture decisions into teachable patterns: the Result railway, the outbox, database-per-service, JWKS auth, fitness functions, and more.">
   <link rel="canonical" href="https://ivanball.github.io/writing.html">
@@ -14,6 +16,8 @@
   <meta property="og:description" content="Deep dives on enterprise .NET architecture: the Result railway, the transactional outbox, database-per-service, JWKS auth, fitness functions, and more.">
   <meta property="og:url" content="https://ivanball.github.io/writing.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Writing · Ivan Ball-llovera">
   <meta name="twitter:description" content="Deep dives on enterprise .NET architecture: the Result railway, the transactional outbox, database-per-service, JWKS auth, fitness functions, and more.">
@@ -21,16 +25,25 @@
   <!-- BEGIN articles-jsonld -->
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"ItemList","name":"Deep dives on enterprise .NET","description":"A long-form series turning the MMCA framework's architecture decisions into teachable patterns.","numberOfItems":26,"itemListElement":[{"@type":"ListItem","position":1,"item":{"@type":"TechArticle","headline":"Open-sourced and graded against 34 categories","description":"Why I open-sourced a production .NET framework and scored it against a 34-category architecture rubric, gaps and all.","url":"https://medium.com/@ivanball76/i-open-sourced-the-enterprise-net-77f9200f3728","image":"https://ivanball.github.io/assets/img/articles/article-01.png","datePublished":"2026-06-22T22:41:45Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":2,"item":{"@type":"TechArticle","headline":"Modular monolith to microservices","description":"The cornerstone idea: build the monolith now and extract a service later with no rewrite, via module discovery, gRPC contracts, and a YARP gateway.","url":"https://medium.com/@ivanball76/modular-monolith-to-microservices-without-the-rewrite-8c3603614f12","image":"https://ivanball.github.io/assets/img/articles/article-02.png","datePublished":"2026-06-24T23:44:46Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":3,"item":{"@type":"TechArticle","headline":"The 34-category architecture rubric","description":"A two-axis rubric for scoring architecture on maturity and implementation, so 'good architecture' stops being a vibe.","url":"https://medium.com/@ivanball76/what-good-architecture-actually-means-a-34-category-rubric-you-can-score-yourself-against-4002291a6b6a","image":"https://ivanball.github.io/assets/img/articles/article-03.png","datePublished":"2026-06-25T23:34:59Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":4,"item":{"@type":"TechArticle","headline":"The Result railway in C#","description":"Model expected failures as Result values with a transport-agnostic error type, and keep exceptions for the genuinely exceptional.","url":"https://medium.com/@ivanball76/stop-throwing-exceptions-for-control-flow-the-result-railway-in-c-7a02050b554e","image":"https://ivanball.github.io/assets/img/articles/article-04.png","datePublished":"2026-06-27T13:17:31Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":5,"item":{"@type":"TechArticle","headline":"Kill the anemic domain model","description":"Push behavior into rich aggregates with factory methods and invariants instead of bags of public setters.","url":"https://medium.com/@ivanball76/kill-the-anemic-domain-model-rich-aggregates-with-factory-methods-that-return-result-44f2e3d89794","image":"https://ivanball.github.io/assets/img/articles/article-05.png","datePublished":"2026-06-29T12:38:35Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":6,"item":{"@type":"TechArticle","headline":"Specifications over LINQ spaghetti","description":"Compose queries from reusable specification objects instead of scattering LINQ across handlers.","url":"https://medium.com/@ivanball76/specifications-over-linq-spaghetti-composable-reusable-query-intent-8a40dafcbd3d","image":"https://ivanball.github.io/assets/img/articles/article-06.png","datePublished":"2026-06-30T22:20:05Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":7,"item":{"@type":"TechArticle","headline":"The CQRS decorator pipeline","description":"Thin command and query handlers wrapped by a Scrutor decorator chain whose order is load-bearing.","url":"https://medium.com/@ivanball76/the-cqrs-decorator-pipeline-logging-caching-and-transactions-without-touching-a-handler-fb7679b8bde8","image":"https://ivanball.github.io/assets/img/articles/article-07.png","datePublished":"2026-07-01T21:31:01Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":8,"item":{"@type":"TechArticle","headline":"Compose validators, don't copy them","description":"A validation kit that composes FluentValidation rules instead of copy-pasting them across features.","url":"https://medium.com/@ivanball76/compose-validators-dont-copy-them-a-reusable-fluentvalidation-kit-8865a6003a9c","image":"https://ivanball.github.io/assets/img/articles/article-08.png","datePublished":"2026-07-06T22:20:33Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":9,"item":{"@type":"TechArticle","headline":"The transactional outbox","description":"Events that survive a crash: persist them atomically with your data, then dispatch at least once.","url":"https://medium.com/@ivanball76/the-transactional-outbox-in-net-10-never-lose-an-event-again-f5a9b7a89e51","image":"https://ivanball.github.io/assets/img/articles/article-09.png","datePublished":"2026-07-07T12:17:41Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":10,"item":{"@type":"TechArticle","headline":"Database-per-service inside a monolith","description":"Give each module its own database and outbox before you extract it, so extraction changes hosting, not data.","url":"https://medium.com/@ivanball76/database-per-service-inside-a-monolith-and-why-265092eb03f1","image":"https://ivanball.github.io/assets/img/articles/article-10.png","datePublished":"2026-07-08T12:16:31Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":11,"item":{"@type":"TechArticle","headline":"Polyglot persistence: one model, three engines","description":"SQL Server, Cosmos, and SQLite behind a single entity model, with the engine chosen by attribute.","url":"https://medium.com/@ivanball76/one-entity-model-three-databases-polyglot-persistence-behind-a-single-attribute-760e77974d5d","image":"https://ivanball.github.io/assets/img/articles/article-11.png","datePublished":"2026-07-09T14:20:41Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":12,"item":{"@type":"TechArticle","headline":"Navigation populators","description":"Eager-load relationships that cross containers and data sources without N+1 or a leaky abstraction.","url":"https://medium.com/@ivanball76/ef-core-include-chains-are-a-trap-navigation-populators-decouple-eager-loading-c378fa4497ac","image":"https://ivanball.github.io/assets/img/articles/article-12.png","datePublished":"2026-07-11T00:13:54Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":13,"item":{"@type":"TechArticle","headline":"Optimistic concurrency: RowVersion round-trips","description":"Carry the RowVersion from database to DTO and back, so a concurrent edit fails fast as a conflict instead of silently overwriting.","url":"https://medium.com/@ivanball76/optimistic-concurrency-that-survives-the-round-trip-rowversion-from-database-to-dto-and-back-93d4a794716f","image":"https://ivanball.github.io/assets/img/articles/article-13.png","datePublished":"2026-07-11T10:42:46Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":14,"item":{"@type":"TechArticle","headline":"Self-ordering modules","description":"Modules declare their dependencies and load in topological order, so registration is never hand-sequenced.","url":"https://medium.com/@ivanball76/self-ordering-modules-discovered-kahn-ordered-and-extractable-2ce7283a26b5","image":"https://ivanball.github.io/assets/img/articles/article-14.png","datePublished":"2026-07-12T16:36:58Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":15,"item":{"@type":"TechArticle","headline":"Event-schema versioning","description":"Every integration event carries a schema version; breaking changes get a new event type and an upcaster, never a silent reshape.","url":"https://medium.com/@ivanball76/event-schema-versioning-never-silently-reshape-an-event-93cd5d4a156d","image":"https://ivanball.github.io/assets/img/articles/article-15.png","datePublished":"2026-07-13T11:24:59Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":16,"item":{"@type":"TechArticle","headline":"JWKS cross-service auth","description":"Validate another service's RS256 tokens via JWKS discovery, with no shared secret crossing a boundary.","url":"https://medium.com/@ivanball76/cross-service-auth-without-a-shared-secret-jwks-dual-fetch-478e6f688c7e","image":"https://ivanball.github.io/assets/img/articles/article-16.png","datePublished":"2026-07-14T11:17:47Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":17,"item":{"@type":"TechArticle","headline":"Password hashing done right","description":"The non-negotiables of password storage in .NET, done correctly and tested.","url":"https://medium.com/@ivanball76/password-hashing-done-right-pbkdf2-sha512-600k-iterations-timing-safe-d64ddb802403","image":"https://ivanball.github.io/assets/img/articles/article-17.png","datePublished":"2026-07-15T12:22:21Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":18,"item":{"@type":"TechArticle","headline":"Idempotency in one attribute","description":"Dedup client retries with an Idempotency-Key header and cached replay, plus a consumer-side inbox for brokers.","url":"https://medium.com/@ivanball76/idempotency-in-one-attribute-safe-retries-for-http-apis-065848fd03f4","image":"https://ivanball.github.io/assets/img/articles/article-18.png","datePublished":"2026-07-16T13:46:11Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":19,"item":{"@type":"TechArticle","headline":"The self-invalidating cache","description":"A caching decorator where commands invalidate and queries populate, plus an authenticated output-cache tier at the API edge.","url":"https://medium.com/@ivanball76/the-self-invalidating-cache-that-lives-in-the-pipeline-not-your-handlers-e11548062d2f","image":"https://ivanball.github.io/assets/img/articles/article-19.png","datePublished":"2026-07-17T12:07:08Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":20,"item":{"@type":"TechArticle","headline":"Problem Details across HTTP and gRPC","description":"One error contract mapped consistently to HTTP Problem Details and gRPC status.","url":"https://medium.com/@ivanball76/problem-details-across-http-and-grpc-rfc-9457-9f20157cf7de","image":"https://ivanball.github.io/assets/img/articles/article-20.png","datePublished":"2026-07-20T13:33:53Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":21,"item":{"@type":"TechArticle","headline":"Notifications as a vertical slice","description":"A notifications feature built as a clean vertical slice across every layer.","url":"https://medium.com/@ivanball76/notifications-as-a-vertical-slice-in-app-inbox-real-time-push-native-push-and-email-c59d5a4f3b69","image":"https://ivanball.github.io/assets/img/articles/article-21.png","datePublished":"2026-07-21T12:01:10Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":22,"item":{"@type":"TechArticle","headline":"Live channels over one SignalR hub","description":"Sub-second ephemeral events (polls, Q&A, live counts) fanned out over the existing notification hub, with nothing persisted.","url":"https://medium.com/@ivanball76/ephemeral-by-design-sub-second-live-channels-over-one-signalr-hub-0248050e0c8b","image":"https://ivanball.github.io/assets/img/articles/article-22.png","datePublished":"2026-07-22T11:40:19Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":23,"item":{"@type":"TechArticle","headline":"Delete AutoMapper: manual DTO mapping","description":"Why source-generated, per-entity mappers beat reflection-based mapping for clarity and speed.","url":"https://medium.com/@ivanball76/delete-automapper-explicit-compile-time-dto-mapping-that-you-can-actually-test-9c7013cc5d3f","image":"https://ivanball.github.io/assets/img/articles/article-23.png","datePublished":"2026-07-23T11:52:24Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":24,"item":{"@type":"TechArticle","headline":"Permission-based authorization over roles","description":"A capability layer over RBAC: permission policies that resolve on demand from a central registry.","url":"https://medium.com/@ivanball76/permission-based-authorization-capabilities-over-role-checks-ea6574cbee27","image":"https://ivanball.github.io/assets/img/articles/article-24.png","datePublished":"2026-07-24T11:34:48Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":25,"item":{"@type":"TechArticle","headline":"Browser session-cookie auth for Blazor SSR","description":"HttpOnly session cookies and an SSR-time scheme so [Authorize] passes during prerender, with the API still the boundary.","url":"https://medium.com/@ivanball76/browser-session-cookie-auth-for-blazor-ssr-surviving-the-f5-eb0ea317820e","image":"https://ivanball.github.io/assets/img/articles/article-25.png","datePublished":"2026-07-25T12:25:21Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}},{"@type":"ListItem","position":26,"item":{"@type":"TechArticle","headline":"External OAuth login behind your own JWTs","description":"Sign in with Google or GitHub without leaking provider tokens: external identity exchanged for your own JWTs at the boundary.","url":"https://medium.com/@ivanball76/google-and-github-login-without-leaking-tokens-external-oauth-behind-your-own-jwts-d68ba5e3aca4","image":"https://ivanball.github.io/assets/img/articles/article-26.png","datePublished":"2026-07-26T14:22:48Z","author":{"@type":"Person","name":"Ivan Ball-llovera","url":"https://ivanball.github.io"}}}]}</script>
   <!-- END articles-jsonld -->
+  <!-- BEGIN head-assets -->
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
   <link rel="stylesheet" href="assets/css/styles.css">
   <script defer src="assets/js/main.js"></script>
   <script defer src="assets/js/analytics.js"></script>
-  <script defer src="assets/data/articles.js"></script>
+  <!-- END head-assets -->
+  <!-- The cards below are static markup emitted by the build, so the browser no longer
+       needs window.ARTICLES (18 KB of summaries and URLs it never read). writing.js only
+       filters the rendered nodes, and the only data it needs is the category list, which
+       the build inlines here. Edit assets/data/articles.js and rebuild to change it. -->
+  <!-- BEGIN article-categories -->
+  <script>window.ARTICLE_CATEGORIES=[{"key":"all","label":"All"},{"key":"orient","label":"Orientation"},{"key":"core","label":"Core patterns"},{"key":"data","label":"Data & persistence"},{"key":"auth","label":"Auth & the edge"},{"key":"run","label":"Run & extract"},{"key":"proof","label":"Proof & getting started"}];</script>
+  <!-- END article-categories -->
   <script defer src="assets/js/writing.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
 
+  <!-- BEGIN site-header -->
   <header class="site-header">
     <div class="container nav">
       <a class="brand" href="index.html">
@@ -56,6 +69,7 @@
       </div>
     </div>
   </header>
+  <!-- END site-header -->
 
   <main id="main">
     <section class="section">
@@ -74,6 +88,11 @@
           <a class="btn btn--ghost" href="docs/index.html">Read the reference library</a>
         </div>
 
+        <!-- Visually hidden: the 50 cards below are h3s, so without an h2 the page skips a
+             heading level. A per-category h2 would fight the in-place filter, which hides
+             cards without regrouping them. -->
+        <h2 class="sr-only">All articles</h2>
+
         <div class="filters" id="article-filters" role="group" aria-label="Filter articles by topic"></div>
         <p class="count-note" id="article-count" aria-live="polite"></p>
 
@@ -83,7 +102,7 @@
         <div class="grid grid--3" id="articles-grid">
           <!-- BEGIN articles -->
           <article class="card card--link article-card" data-cat="orient">
-            <div class="thumb"><img src="assets/img/articles/article-01.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-01.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Orientation · No. 1</span>
               <h3>Open-sourced and graded against 34 categories</h3>
@@ -92,7 +111,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="orient">
-            <div class="thumb"><img src="assets/img/articles/article-02.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-02.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Orientation · No. 2</span>
               <h3>Modular monolith to microservices</h3>
@@ -102,7 +121,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="orient">
-            <div class="thumb"><img src="assets/img/articles/article-03.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-03.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Orientation · No. 3</span>
               <h3>The 34-category architecture rubric</h3>
@@ -111,7 +130,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="core">
-            <div class="thumb"><img src="assets/img/articles/article-04.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-04.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Core patterns · No. 4</span>
               <h3>The Result railway in C#</h3>
@@ -121,7 +140,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="core">
-            <div class="thumb"><img src="assets/img/articles/article-05.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-05.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Core patterns · No. 5</span>
               <h3>Kill the anemic domain model</h3>
@@ -130,7 +149,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="core">
-            <div class="thumb"><img src="assets/img/articles/article-06.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-06.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Core patterns · No. 6</span>
               <h3>Specifications over LINQ spaghetti</h3>
@@ -140,7 +159,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="core">
-            <div class="thumb"><img src="assets/img/articles/article-07.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-07.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Core patterns · No. 7</span>
               <h3>The CQRS decorator pipeline</h3>
@@ -150,7 +169,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="core">
-            <div class="thumb"><img src="assets/img/articles/article-08.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-08.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Core patterns · No. 8</span>
               <h3>Compose validators, don&#39;t copy them</h3>
@@ -159,7 +178,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="core">
-            <div class="thumb"><img src="assets/img/articles/article-09.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-09.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Core patterns · No. 9</span>
               <h3>The transactional outbox</h3>
@@ -169,7 +188,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="data">
-            <div class="thumb"><img src="assets/img/articles/article-10.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-10.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Data &amp; persistence · No. 10</span>
               <h3>Database-per-service inside a monolith</h3>
@@ -179,7 +198,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="data">
-            <div class="thumb"><img src="assets/img/articles/article-11.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-11.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Data &amp; persistence · No. 11</span>
               <h3>Polyglot persistence: one model, three engines</h3>
@@ -189,7 +208,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="data">
-            <div class="thumb"><img src="assets/img/articles/article-12.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-12.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Data &amp; persistence · No. 12</span>
               <h3>Navigation populators</h3>
@@ -199,7 +218,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="data">
-            <div class="thumb"><img src="assets/img/articles/article-13.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-13.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Data &amp; persistence · No. 13</span>
               <h3>Optimistic concurrency: RowVersion round-trips</h3>
@@ -209,7 +228,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="data">
-            <div class="thumb"><img src="assets/img/articles/article-14.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-14.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Data &amp; persistence · No. 14</span>
               <h3>Self-ordering modules</h3>
@@ -218,7 +237,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="data">
-            <div class="thumb"><img src="assets/img/articles/article-15.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-15.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Data &amp; persistence · No. 15</span>
               <h3>Event-schema versioning</h3>
@@ -228,7 +247,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-16.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-16.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 16</span>
               <h3>JWKS cross-service auth</h3>
@@ -238,7 +257,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-17.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-17.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 17</span>
               <h3>Password hashing done right</h3>
@@ -248,7 +267,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-18.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-18.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 18</span>
               <h3>Idempotency in one attribute</h3>
@@ -258,7 +277,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-19.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-19.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 19</span>
               <h3>The self-invalidating cache</h3>
@@ -268,7 +287,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-20.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-20.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 20</span>
               <h3>Problem Details across HTTP and gRPC</h3>
@@ -277,7 +296,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-21.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-21.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 21</span>
               <h3>Notifications as a vertical slice</h3>
@@ -287,7 +306,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-22.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-22.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 22</span>
               <h3>Live channels over one SignalR hub</h3>
@@ -297,7 +316,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-23.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-23.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 23</span>
               <h3>Delete AutoMapper: manual DTO mapping</h3>
@@ -307,7 +326,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-24.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-24.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 24</span>
               <h3>Permission-based authorization over roles</h3>
@@ -317,7 +336,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-25.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-25.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 25</span>
               <h3>Browser session-cookie auth for Blazor SSR</h3>
@@ -327,7 +346,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-26.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-26.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 26</span>
               <h3>External OAuth login behind your own JWTs</h3>
@@ -337,7 +356,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-27.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-27.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 27</span>
               <h3>One rotating refresh token</h3>
@@ -347,7 +366,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-28.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-28.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 28</span>
               <h3>Generic entity controllers</h3>
@@ -357,7 +376,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-29.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-29.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 29</span>
               <h3>Resource-ownership authorization</h3>
@@ -367,7 +386,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-30.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-30.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 30</span>
               <h3>Rate limiting and brute-force protection</h3>
@@ -377,7 +396,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="run">
-            <div class="thumb"><img src="assets/img/articles/article-31.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-31.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Run &amp; extract · No. 31</span>
               <h3>Aspire: one command</h3>
@@ -387,7 +406,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="run">
-            <div class="thumb"><img src="assets/img/articles/article-32.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-32.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Run &amp; extract · No. 32</span>
               <h3>Extracting a module to a gRPC service</h3>
@@ -397,7 +416,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="run">
-            <div class="thumb"><img src="assets/img/articles/article-33.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-33.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Run &amp; extract · No. 33</span>
               <h3>Resilience and recovery objectives</h3>
@@ -407,7 +426,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="proof">
-            <div class="thumb"><img src="assets/img/articles/article-34.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-34.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Proof &amp; getting started · No. 34</span>
               <h3>Architecture fitness functions</h3>
@@ -417,7 +436,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="proof">
-            <div class="thumb"><img src="assets/img/articles/article-35.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-35.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Proof &amp; getting started · No. 35</span>
               <h3>The test pyramid</h3>
@@ -426,7 +445,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="proof">
-            <div class="thumb"><img src="assets/img/articles/article-36.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-36.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Proof &amp; getting started · No. 36</span>
               <h3>Soft-delete vs the right to erasure</h3>
@@ -436,7 +455,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="proof">
-            <div class="thumb"><img src="assets/img/articles/article-37.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-37.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Proof &amp; getting started · No. 37</span>
               <h3>A reusable Blazor UI framework</h3>
@@ -445,7 +464,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="proof">
-            <div class="thumb"><img src="assets/img/articles/article-38.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-38.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Proof &amp; getting started · No. 38</span>
               <h3>i18n and theming on one preference pipeline</h3>
@@ -455,7 +474,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="proof">
-            <div class="thumb"><img src="assets/img/articles/article-39.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-39.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Proof &amp; getting started · No. 39</span>
               <h3>Build your first module</h3>
@@ -464,7 +483,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="proof">
-            <div class="thumb"><img src="assets/img/articles/article-40.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-40.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Proof &amp; getting started · No. 40</span>
               <h3>Write your first fitness test</h3>
@@ -474,7 +493,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="proof">
-            <div class="thumb"><img src="assets/img/articles/article-41.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-41.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Proof &amp; getting started · No. 41</span>
               <h3>Two real apps on one framework</h3>
@@ -483,7 +502,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="proof">
-            <div class="thumb"><img src="assets/img/articles/article-42.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-42.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Proof &amp; getting started · No. 42</span>
               <h3>One Blazor UI, two hosts</h3>
@@ -493,7 +512,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="data">
-            <div class="thumb"><img src="assets/img/articles/article-43.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-43.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Data &amp; persistence · No. 43</span>
               <h3>Managed file storage: uploads you don&#39;t have to trust</h3>
@@ -503,7 +522,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-44.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-44.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 44</span>
               <h3>HTTP API versioning, proven not just claimed</h3>
@@ -513,7 +532,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="core">
-            <div class="thumb"><img src="assets/img/articles/article-45.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-45.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Core patterns · No. 45</span>
               <h3>Feature flags in the CQRS pipeline</h3>
@@ -523,7 +542,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="data">
-            <div class="thumb"><img src="assets/img/articles/article-46.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-46.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Data &amp; persistence · No. 46</span>
               <h3>Field-level encryption in EF Core</h3>
@@ -533,7 +552,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-47.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-47.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 47</span>
               <h3>Security headers and CSP for Blazor</h3>
@@ -543,7 +562,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="run">
-            <div class="thumb"><img src="assets/img/articles/article-48.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-48.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Run &amp; extract · No. 48</span>
               <h3>Observability by default</h3>
@@ -553,7 +572,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="core">
-            <div class="thumb"><img src="assets/img/articles/article-49.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-49.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Core patterns · No. 49</span>
               <h3>Saga compensation and the reconciliation backstop</h3>
@@ -563,7 +582,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="proof">
-            <div class="thumb"><img src="assets/img/articles/article-50.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-50.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Proof &amp; getting started · No. 50</span>
               <h3>The series index</h3>
@@ -574,19 +593,22 @@
           <!-- END articles -->
         </div>
 
+        <!-- BEGIN subscribe -->
         <div class="subscribe" data-newsletter-wrap hidden>
           <h2 style="margin:0 0 0.4rem">Get each deep dive by email</h2>
-          <p class="mb-0" style="max-width:60ch">One message per article, no digests and no other mail. Medium followers are rented; an email list is the one audience I own.</p>
+          <p class="mb-0" style="max-width:60ch">One message per article, no digests and no other mail.</p>
           <form class="subscribe-form" data-newsletter method="post" target="_blank">
-            <label class="sr-only" for="subscribe-email">Email address</label>
-            <input id="subscribe-email" type="email" name="email" required placeholder="you@example.com" autocomplete="email">
+            <label class="sr-only" for="writing-subscribe-email">Email address</label>
+            <input id="writing-subscribe-email" type="email" name="email" required placeholder="you@example.com" autocomplete="email">
             <button class="btn btn--primary" type="submit">Subscribe</button>
           </form>
         </div>
+        <!-- END subscribe -->
       </div>
     </section>
   </main>
 
+  <!-- BEGIN site-footer -->
   <footer class="site-footer">
     <div class="container">
       <div class="footer-grid">
@@ -605,5 +627,6 @@
       <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Built as a static site.</p>
     </div>
   </footer>
+  <!-- END site-footer -->
 </body>
 </html>

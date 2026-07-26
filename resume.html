@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Résumé · Ivan Ball-llovera</title>
   <meta name="description" content="Résumé of Ivan Ball-llovera, Senior Software Architect: 25+ years on the Microsoft stack across Assurant, Hitachi Solutions, Ultimate Software, and Miami-Dade County. Azure, .NET, DDD, Clean Architecture, CQRS.">
   <link rel="canonical" href="https://ivanball.github.io/resume.html">
@@ -14,18 +16,44 @@
   <meta property="og:description" content="Senior Software Architect, 25+ years on the Microsoft stack. Azure, .NET, DDD, Clean Architecture, CQRS, microservices.">
   <meta property="og:url" content="https://ivanball.github.io/resume.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Résumé · Ivan Ball-llovera">
   <meta name="twitter:description" content="Senior Software Architect, 25+ years on the Microsoft stack. Azure, .NET, DDD, Clean Architecture, CQRS, microservices.">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "ProfilePage",
+    "mainEntity": {
+      "@type": "Person",
+      "name": "Ivan Ball-llovera",
+      "jobTitle": "Senior Software Architect",
+      "url": "https://ivanball.github.io/resume.html",
+      "image": "https://ivanball.github.io/assets/img/ivan-ball-llovera.jpg",
+      "sameAs": [
+        "https://github.com/ivanball",
+        "https://www.linkedin.com/in/ivan-ball-llovera-6549a911"
+      ],
+      "address": { "@type": "PostalAddress", "addressLocality": "Douglasville", "addressRegion": "GA", "addressCountry": "US" },
+      "knowsAbout": [".NET", "C#", "Azure", "Domain-Driven Design", "Clean Architecture", "CQRS", "Microservices", "Blazor", ".NET Aspire", "Event-Driven Architecture"],
+      "alumniOf": { "@type": "CollegeOrUniversity", "name": "University of Havana" },
+      "worksFor": { "@type": "Organization", "name": "Assurant" }
+    }
+  }
+  </script>
+  <!-- BEGIN head-assets -->
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
   <link rel="stylesheet" href="assets/css/styles.css">
   <script defer src="assets/js/main.js"></script>
   <script defer src="assets/js/analytics.js"></script>
+  <!-- END head-assets -->
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
 
+  <!-- BEGIN site-header -->
   <header class="site-header">
     <div class="container nav">
       <a class="brand" href="index.html">
@@ -51,6 +79,7 @@
       </div>
     </div>
   </header>
+  <!-- END site-header -->
 
   <main id="main">
     <section class="section">
@@ -165,8 +194,10 @@
             <li>Authored a 15-package shared framework (DDD, Clean Architecture, CQRS) published to GitHub Packages and consumed by an e-commerce app (Stripe) and a conference app.</li>
             <li>Implemented database-per-service with an at-least-once outbox plus dual dispatch, soft-delete, automatic audit stamping, and GDPR/CCPA anonymization.</li>
             <li>Deployed to Azure with Bicep IaC, Service Bus, Container Apps, App Insights, and Log Analytics, using OIDC / managed-identity authentication; orchestrated locally with .NET Aspire.</li>
-            <li>Built Blazor (MudBlazor) and .NET MAUI clients; enforced quality with xUnit v3, Playwright E2E, 91 architecture-fitness tests, and automated accessibility testing (axe, WCAG 2.1 AA: zero violations).</li>
-            <li>Documented decisions with 51 ADRs and a 34-category architecture-review rubric; built Roslyn-based code-inventory tooling and AI/multi-agent development workflows.</li>
+            <!-- BEGIN resume-platform-facts -->
+            <li>Built Blazor (MudBlazor) and .NET MAUI clients; enforced quality with xUnit v3, Playwright E2E, 93 architecture-fitness tests, and automated accessibility testing (axe, WCAG 2.1 AA: zero violations).</li>
+            <li>Documented decisions with 55 ADRs and a 34-category architecture-review rubric; built Roslyn-based code-inventory tooling and AI/multi-agent development workflows.</li>
+            <!-- END resume-platform-facts -->
           </ul>
           <p><a href="platform.html">Read the full platform breakdown →</a></p>
         </div>
@@ -186,11 +217,11 @@
           <div>
             <h2>Certifications</h2>
             <ul class="lead-list" style="margin-top:0.5rem">
-              <li><span class="check">✓</span><span><strong>Azure Administrator Associate</strong> (AZ-104, 2025)</span></li>
-              <li><span class="check">✓</span><span><strong>Azure AI Fundamentals</strong> (AI-900, 2024)</span></li>
-              <li><span class="check">✓</span><span><strong>Azure Data Fundamentals</strong> (DP-900, 2021)</span></li>
-              <li><span class="check">✓</span><span><strong>Azure Fundamentals</strong> (AZ-900, 2021)</span></li>
-              <li><span class="check">→</span><span><span class="muted">In progress (2026): Azure Solutions Architect Expert (AZ-305), Azure AI Engineer Associate (AI-102), with AZ-400 and the GitHub Copilot certification to follow.</span></span></li>
+              <li><span class="check" aria-hidden="true">✓</span><span><strong>Azure Administrator Associate</strong> (AZ-104, 2025)</span></li>
+              <li><span class="check" aria-hidden="true">✓</span><span><strong>Azure AI Fundamentals</strong> (AI-900, 2024)</span></li>
+              <li><span class="check" aria-hidden="true">✓</span><span><strong>Azure Data Fundamentals</strong> (DP-900, 2021)</span></li>
+              <li><span class="check" aria-hidden="true">✓</span><span><strong>Azure Fundamentals</strong> (AZ-900, 2021)</span></li>
+              <li><span class="check" aria-hidden="true">→</span><span><span class="muted">In progress (2026): Azure Solutions Architect Expert (AZ-305), Azure AI Engineer Associate (AI-102), with AZ-400 and the GitHub Copilot certification to follow.</span></span></li>
             </ul>
             <p class="muted" style="font-size:0.92rem;margin-top:0.75rem">Earlier Microsoft certifications (retired programs, 2006 – 2016): MCSA SQL Server 2012, MCSA Web Applications (ASP.NET MVC), plus MCTS/MCPD .NET and Solution Architecture credentials.</p>
           </div>
@@ -204,6 +235,7 @@
     </section>
   </main>
 
+  <!-- BEGIN site-footer -->
   <footer class="site-footer">
     <div class="container">
       <div class="footer-grid">
@@ -222,5 +254,6 @@
       <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Built as a static site.</p>
     </div>
   </footer>
+  <!-- END site-footer -->
 </body>
 </html>

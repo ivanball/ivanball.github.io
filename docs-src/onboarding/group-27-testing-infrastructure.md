@@ -2542,7 +2542,7 @@ A few cross-cutting facts hold for every row, so they are stated once here rathe
   asserts, **Moq** for test doubles, and **coverlet** for coverage (see for example
   `MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/MMCA.Common.Testing.Tests.csproj:8`). The lone
   exception is `MMCA.Common.Benchmarks`, a **BenchmarkDotNet** executable (not a test project). See
-  [primer §3](../00-primer.md#3-the-external-stack-bcl--nuget--external-level-0) for the platform/runner
+  [primer §3](00-primer.md#3-the-external-stack-bcl--nuget--external-level-0) for the platform/runner
   externals. MMCA.Common's CI runs the whole solution behind a discovery floor,
   `--minimum-expected-tests 2000` (`MMCA.Common/.github/workflows/ci.yml:144`), so a regression that
   silently stops discovering thousands of tests fails the build instead of passing quietly.

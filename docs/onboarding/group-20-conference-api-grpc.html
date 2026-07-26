@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>20. ADC Conference - API, gRPC Contracts &amp; Service Host · MMCA · Ivan Ball-llovera</title>
   <meta name="description" content="This chapter is the edge of the Conference bounded context, the layer that turns the rich Conference domain (G17) and its CQRS slices (G18) into a…">
   <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/group-20-conference-api-grpc.html">
@@ -14,6 +16,8 @@
   <meta property="og:description" content="This chapter is the edge of the Conference bounded context, the layer that turns the rich Conference domain (G17) and its CQRS slices (G18) into a…">
   <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/group-20-conference-api-grpc.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="20. ADC Conference - API, gRPC Contracts &amp; Service Host">
   <meta name="twitter:description" content="This chapter is the edge of the Conference bounded context, the layer that turns the rich Conference domain (G17) and its CQRS slices (G18) into a…">
@@ -211,7 +215,7 @@
           <li><strong>Concept introduced, the <code>extension(IServiceCollection)</code> registration facade and permission
           grants.</strong> The class body is a C# preview <code>extension(IServiceCollection services)</code> block
           (<code>DependencyInjection.cs:16</code>), the codebase-wide idiom for DI registration (see
-          <span class="doc-deadlink" title="Reference outside the published set">primer §4</span>); the methods read as instance calls
+          <a href="00-primer.html#4-c-14-preview-features-in-play">primer §4</a>); the methods read as instance calls
           on <code>services</code> without a formal <code>this</code> parameter. <code>[Rubric §7, Microservices Readiness]</code> (assesses
           whether a module registers itself with one self-contained call so it can boot in its own service
           host): <code>AddConferenceModule</code> is exactly that single entry point.
@@ -1510,6 +1514,8 @@
           <li><a href="../../platform.html">Platform</a></li>
           <li><a href="../../docs/index.html">Reference</a></li>
           <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
           <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
           <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
         </ul>

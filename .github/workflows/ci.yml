@@ -1,0 +1,114 @@
+name: CI
+
+# Pushing to main publishes the live site, so these checks exist to catch a bad
+# push before it is served rather than after. The freshness job is the important
+# one: everything under docs/ plus sitemap.xml, feed.xml, and the marked regions
+# of the root pages is generated, and keeping it in step with docs-src/ used to
+# rest entirely on remembering to run the build.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  freshness:
+    name: Generated output is current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # <lastmod> in sitemap.xml comes from each file's last commit date, so a
+          # shallow clone would rewrite every entry and fail the diff for no reason.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: tools/package-lock.json
+
+      # Skips the puppeteer browser download; this job only runs the generator.
+      - run: npm ci
+        working-directory: tools
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: "true"
+
+      # Fails on its own if a BEGIN/END marker went missing or a scorecard index
+      # stopped parsing, both of which throw rather than silently no-op.
+      - name: Rebuild the reference library
+        run: npm run build
+        working-directory: tools
+
+      - name: Check nothing changed
+        run: |
+          if ! git diff --exit-code --stat; then
+            echo "::error::Generated output is stale. Run 'cd tools && npm run build' and commit the result."
+            exit 1
+          fi
+
+  links:
+    name: Internal links resolve
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # http-server rather than a simpler static server: linkinator crawls
+      # concurrently and a single-threaded server drops connections, which is
+      # reported as BROKEN on files that are perfectly fine.
+      - name: Serve
+        run: |
+          npx --yes http-server . -p 8080 --silent &
+          npx --yes wait-on http://127.0.0.1:8080/index.html
+
+      # Pointed at the directory root, not index.html: linkinator only recurses
+      # into URLs beneath the entry point's own path.
+      # Internal links are this repo's own responsibility and must resolve.
+      - name: Check internal links
+        run: npx --yes linkinator@6 http://127.0.0.1:8080/ --recurse --skip "^https://" --format csv
+
+      # Same crawl without the skip, so outbound links get checked too. External
+      # links break for reasons outside this repo (rate limits, sites that block
+      # CI egress), so this reports but never fails the build.
+      - name: Check external links (advisory)
+        continue-on-error: true
+        run: npx --yes linkinator@6 http://127.0.0.1:8080/ --recurse --format csv
+
+  a11y:
+    name: Accessibility (WCAG 2.1 AA)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: tools/package-lock.json
+
+      - run: npm ci
+        working-directory: tools
+
+      - name: Serve
+        run: |
+          npx --yes http-server . -p 8080 --silent &
+          npx --yes wait-on http://127.0.0.1:8080/index.html
+
+      # axe-core through puppeteer, every page type in both themes.
+      # See tools/a11y-check.mjs for why not pa11y-ci.
+      - name: Run axe-core
+        run: npm run a11y
+        working-directory: tools
+        env:
+          PORT: "8080"

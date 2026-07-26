@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Ivan Ball-llovera · Senior Software Architect</title>
   <meta name="description" content="Ivan Ball-llovera is a Senior Software Architect with 25+ years building cloud-native systems on the Microsoft stack: .NET, Azure, Domain-Driven Design, Clean Architecture, CQRS, and microservices.">
   <link rel="canonical" href="https://ivanball.github.io/">
@@ -20,14 +22,18 @@
   <meta property="og:description" content="25+ years building cloud-native systems on the Microsoft stack: .NET, Azure, DDD, Clean Architecture, CQRS, and microservices.">
   <meta property="og:url" content="https://ivanball.github.io/">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Ivan Ball-llovera · Senior Software Architect">
   <meta name="twitter:description" content="25+ years building cloud-native systems on the Microsoft stack: .NET, Azure, DDD, Clean Architecture, CQRS, and microservices.">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <!-- BEGIN head-assets -->
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
   <link rel="stylesheet" href="assets/css/styles.css">
   <script defer src="assets/js/main.js"></script>
   <script defer src="assets/js/analytics.js"></script>
+  <!-- END head-assets -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -35,7 +41,7 @@
     "name": "Ivan Ball-llovera",
     "jobTitle": "Senior Software Architect",
     "url": "https://ivanball.github.io/",
-    "image": "https://ivanball.github.io/assets/img/og-image.png",
+    "image": "https://ivanball.github.io/assets/img/ivan-ball-llovera.jpg",
     "sameAs": [
       "https://github.com/ivanball",
       "https://www.linkedin.com/in/ivan-ball-llovera-6549a911"
@@ -49,6 +55,7 @@
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
 
+  <!-- BEGIN site-header -->
   <header class="site-header">
     <div class="container nav">
       <a class="brand" href="index.html">
@@ -74,6 +81,7 @@
       </div>
     </div>
   </header>
+  <!-- END site-header -->
 
   <main id="main">
     <!-- Hero -->
@@ -90,17 +98,23 @@
             <a class="btn btn--ghost" href="contact.html">Get in touch</a>
           </div>
         </div>
-        <div class="avatar" aria-hidden="true">IB</div>
+        <!-- alt is empty on purpose: the h1 immediately beside it already gives the
+             name, so describing the portrait too would just repeat it to a screen
+             reader. Eager and fetchpriority high because it is above the fold. -->
+        <img class="avatar" src="assets/img/ivan-ball-llovera.webp" alt="" width="168" height="168" fetchpriority="high">
       </div>
     </section>
 
     <!-- Stats -->
     <section class="section" style="padding-top:0">
       <div class="container">
-        <div class="stats stats--3">
+        <div class="stats">
+          <!-- BEGIN home-stats -->
           <div class="stat"><div class="num">25+</div><div class="label">Years on the Microsoft stack</div></div>
           <div class="stat"><div class="num">15</div><div class="label">Open-source NuGet packages</div></div>
+          <div class="stat"><div class="num">55</div><div class="label">Architecture Decision Records</div></div>
           <div class="stat"><div class="num">2</div><div class="label">Atlanta tech conferences organized</div></div>
+          <!-- END home-stats -->
         </div>
       </div>
     </section>
@@ -210,6 +224,7 @@
     </section>
   </main>
 
+  <!-- BEGIN site-footer -->
   <footer class="site-footer">
     <div class="container">
       <div class="footer-grid">
@@ -228,5 +243,6 @@
       <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Built as a static site.</p>
     </div>
   </footer>
+  <!-- END site-footer -->
 </body>
 </html>

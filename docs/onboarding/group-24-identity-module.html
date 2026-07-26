@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure) · MMCA · Ivan Ball-llovera</title>
   <meta name="description" content="What this chapter covers. This is the Identity bounded context of MMCA.ADC, the module that owns who a person is across every ADC surface: web,…">
   <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/group-24-identity-module.html">
@@ -14,6 +16,8 @@
   <meta property="og:description" content="What this chapter covers. This is the Identity bounded context of MMCA.ADC, the module that owns who a person is across every ADC surface: web,…">
   <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/group-24-identity-module.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="24. ADC Identity Module (Users, Profiles, GDPR Export/Erasure)">
   <meta name="twitter:description" content="What this chapter covers. This is the Identity bounded context of MMCA.ADC, the module that owns who a person is across every ADC surface: web,…">
@@ -1225,7 +1229,7 @@
           <ul>
           <li><strong>What it is</strong>: the FluentValidation rule set for a self-service password change. It requires the caller to supply a non-empty current password and holds the new password to the shared strong-password policy.</li>
           <li><strong>Depends on</strong>: FluentValidation&#39;s <code>AbstractValidator&lt;T&gt;</code> (NuGet), <a href="group-08-auth.html#changepasswordrequest"><code>ChangePasswordRequest</code></a> (the request DTO from <code>MMCA.Common.Shared.Auth</code>), and <a href="group-06-validation.html#strongpasswordrulest"><code>StrongPasswordRules&lt;T&gt;</code></a> from <code>MMCA.Common.Application.Validation</code>.</li>
-          <li><strong>Concept reinforced, composable rule sets over copy-pasted rules.</strong> <code>[Rubric §24, Forms, Validation &amp; UX Safety]</code> assesses whether input rules are declared once and applied consistently at every entry point. FluentValidation&#39;s <code>Include</code> (<code>ChangePasswordRequestValidator.cs:18</code>) splices an entire other validator&#39;s rules into this one, so the password-complexity policy lives in exactly one framework type and this validator only states <em>which property</em> it applies to. The validator itself is discovered by assembly scan and executed by the CQRS validating decorator, so the API controller never calls it directly (see the pipeline in <span class="doc-deadlink" title="Reference outside the published set">00-primer.md</span>).</li>
+          <li><strong>Concept reinforced, composable rule sets over copy-pasted rules.</strong> <code>[Rubric §24, Forms, Validation &amp; UX Safety]</code> assesses whether input rules are declared once and applied consistently at every entry point. FluentValidation&#39;s <code>Include</code> (<code>ChangePasswordRequestValidator.cs:18</code>) splices an entire other validator&#39;s rules into this one, so the password-complexity policy lives in exactly one framework type and this validator only states <em>which property</em> it applies to. The validator itself is discovered by assembly scan and executed by the CQRS validating decorator, so the API controller never calls it directly (see the pipeline in <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">00-primer.md</a>).</li>
           <li><strong>Walkthrough</strong><ul>
           <li>Constructor (<code>ChangePasswordRequestValidator.cs:13</code>): the whole type is rules declared in a constructor, which is the FluentValidation idiom.</li>
           <li><code>CurrentPassword</code> (lines 15-16): <code>NotEmpty()</code> with the message &quot;Current password is required.&quot; and, importantly, an explicit <code>WithErrorCode(&quot;User.CurrentPassword.Required&quot;)</code>. The stable error code (not the human message) is what the API surfaces and what a client can branch on.</li>
@@ -1534,6 +1538,8 @@
           <li><a href="../../platform.html">Platform</a></li>
           <li><a href="../../docs/index.html">Reference</a></li>
           <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
           <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
           <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
         </ul>

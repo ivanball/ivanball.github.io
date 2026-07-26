@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters) · MMCA · Ivan Ball-llovera</title>
   <meta name="description" content="What this group covers. A single Blazor UI codebase in MMCA.Common.UI renders on three very different heads: Blazor Server (server-side render +…">
   <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/group-26-device-capability-layer.html">
@@ -14,6 +16,8 @@
   <meta property="og:description" content="What this group covers. A single Blazor UI codebase in MMCA.Common.UI renders on three very different heads: Blazor Server (server-side render +…">
   <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/group-26-device-capability-layer.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)">
   <meta name="twitter:description" content="What this group covers. A single Blazor UI codebase in MMCA.Common.UI renders on three very different heads: Blazor Server (server-side render +…">
@@ -162,7 +166,7 @@
           (<code>MMCA.Common.UI.Maui/DependencyInjection.cs:25</code>), which ships in the separate MAUI-TFM package
           <code>MMCA.Common.UI.Maui</code> (the one package built outside <code>MMCA.Common.slnx</code>, <a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>). Both of those DI
           classes use the C# <code>extension(IServiceCollection)</code> member idiom the codebase favours for registration
-          (see the <span class="doc-deadlink" title="Reference outside the published set">primer</span>). The lifetime choices are
+          (see the <a href="00-primer.html#c-extensiont-types--read-this-once">primer</a>). The lifetime choices are
           deliberate: the browser services are <code>Scoped</code> (one per Blazor circuit) so per-user state never leaks
           across circuits, while the MAUI services are <code>Singleton</code> because a native head is single-user and its
           stateful services wrap app-global platform events.</p>
@@ -1040,7 +1044,7 @@
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the device-capability registration entry point (<code>DependencyInjection.cs:8-15</code>). It TryAdd-registers a safe default for every capability contract so shared components resolve them on any head, then lets heads override with plain <code>Add</code> registrations, last registration wins for single-service resolution.</li>
-          <li><strong>Depends on</strong>: the whole contract set in this namespace plus their <code>Fallbacks</code> and <code>Browser</code> implementations (<code>DependencyInjection.cs:3-4</code>); <code>Microsoft.Extensions.DependencyInjection</code> and its <code>Extensions</code> (for <code>TryAdd*</code>). It uses C# <code>extension(IServiceCollection)</code> members (<code>:18</code>), the workspace&#39;s DI-registration idiom (see <span class="doc-deadlink" title="Reference outside the published set">primer</span>).</li>
+          <li><strong>Depends on</strong>: the whole contract set in this namespace plus their <code>Fallbacks</code> and <code>Browser</code> implementations (<code>DependencyInjection.cs:3-4</code>); <code>Microsoft.Extensions.DependencyInjection</code> and its <code>Extensions</code> (for <code>TryAdd*</code>). It uses C# <code>extension(IServiceCollection)</code> members (<code>:18</code>), the workspace&#39;s DI-registration idiom (see <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer</a>).</li>
           <li><strong>Concept introduced</strong>: the <strong>two-phase, last-wins composition</strong> that is the load-bearing mechanism of this whole group, made concrete. <code>AddDeviceCapabilityDefaults</code> <code>TryAdd</code>-registers a neutral default for every contract (<code>DependencyInjection.cs:24-63</code>); because <code>TryAdd</code> is a no-op when a service already exists, calling it repeatedly is idempotent, and because plain <code>Add</code> after it wins for single-service resolution, a head layers its real implementations on top without unregistering anything. <code>AddBrowserDeviceCapabilities</code> (<code>:73-88</code>) is the browser override phase.<ul>
           <li><code>[Rubric §2, Design Patterns]</code> §2 assesses idiomatic patterns. This is the Null Object pattern at DI scale: every contract has an inert default, so no consumer ever resolves a missing service.</li>
           <li><code>[Rubric §18, UI Architecture]</code> §18 assesses host-agnostic composition. Platform variance is confined to which registrations run at composition time; the component tree is identical across heads.</li>
@@ -1745,7 +1749,7 @@
           <ul>
           <li><strong>What it is</strong> - the inert default for <a href="#igeocodingservice"><code>IGeocodingService</code></a>: a geocoder that geocodes nothing. It reports itself unsupported and hands back <code>null</code> for every address, which is exactly the &quot;no coordinate hint available&quot; state the contract is designed around.</li>
           <li><strong>Depends on</strong> - implements <a href="#igeocodingservice"><code>IGeocodingService</code></a>; returns <a href="#geopoint"><code>GeoPoint</code></a><code>?</code>. No other first-party or external dependency beyond <code>System.Threading.Tasks</code> (<code>Task.FromResult</code>).</li>
-          <li><strong>Concept introduced - the null-object capability fallback.</strong> This is the first of five inert &quot;Null…&quot; defaults in this unit, so teach the shape once here. Every device capability in this group is an interface (biometrics, geolocation, media picking, push, and so on), and shared Blazor components resolve those interfaces directly. But a plain web head has no native geocoder, and a prerendering circuit has no JavaScript yet, so <em>something</em> must be in the container or resolution throws. The framework fills the container with a Null-Object implementation for every contract (the <span class="doc-deadlink" title="Reference outside the published set">Null Object pattern</span>: a real, substitutable instance whose methods do nothing observable rather than a <code>null</code> reference). The two moving parts here are the <code>IsSupported</code> flag (a component reads it and hides the affordance) and the operation itself (a component that ignores <code>IsSupported</code> and calls anyway still gets a safe, <code>null</code> answer, never an exception). <code>AddDeviceCapabilityDefaults</code> <code>TryAdd</code>-registers this class as a singleton (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:33</code>), and a native or richer head later overrides it with a plain <code>Add</code>, so last-registration-wins swaps the real implementation in without the shared component knowing.<ul>
+          <li><strong>Concept introduced - the null-object capability fallback.</strong> This is the first of five inert &quot;Null…&quot; defaults in this unit, so teach the shape once here. Every device capability in this group is an interface (biometrics, geolocation, media picking, push, and so on), and shared Blazor components resolve those interfaces directly. But a plain web head has no native geocoder, and a prerendering circuit has no JavaScript yet, so <em>something</em> must be in the container or resolution throws. The framework fills the container with a Null-Object implementation for every contract (the <a href="00-primer.html#3-conventions-and-idioms">Null Object pattern</a>: a real, substitutable instance whose methods do nothing observable rather than a <code>null</code> reference). The two moving parts here are the <code>IsSupported</code> flag (a component reads it and hides the affordance) and the operation itself (a component that ignores <code>IsSupported</code> and calls anyway still gets a safe, <code>null</code> answer, never an exception). <code>AddDeviceCapabilityDefaults</code> <code>TryAdd</code>-registers this class as a singleton (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:33</code>), and a native or richer head later overrides it with a plain <code>Add</code>, so last-registration-wins swaps the real implementation in without the shared component knowing.<ul>
           <li>[Rubric §2 - Design Patterns] §2 assesses whether classic patterns are applied where they earn their keep; this is a textbook Null Object, a do-nothing implementation that removes null-checks from every caller.</li>
           <li>[Rubric §1 - SOLID] §1 assesses SOLID adherence; the substitutability here is Liskov and Dependency-Inversion in practice, components depend on the abstraction and any implementation (null or native) satisfies it interchangeably.</li>
           <li>[Rubric §22 - Responsive / Cross-Browser] §22 assesses graceful behavior across heads and browsers; the null default is what lets one shared component tree run unchanged on web, where geocoding does not exist.</li>
@@ -1875,6 +1879,8 @@
           <li><a href="../../platform.html">Platform</a></li>
           <li><a href="../../docs/index.html">Reference</a></li>
           <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
           <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
           <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
         </ul>
