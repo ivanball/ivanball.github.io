@@ -10,7 +10,8 @@
   "scripts": {
     "build": "node build-docs.mjs",
     "images": "node build-images.mjs",
-    "a11y": "node a11y-check.mjs"
+    "a11y": "node a11y-check.mjs",
+    "resume-pdf": "node build-resume-pdf.mjs"
   },
   "dependencies": {
     "marked": "^15.0.0"

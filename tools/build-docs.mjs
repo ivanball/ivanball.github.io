@@ -850,6 +850,23 @@ ${tags ? `              <ul class="tags" style="margin-bottom:0.85rem">${tags}</
   }
 }
 
+/* ----- index.html stat row -----
+   The ADR count is the rigor signal that was missing here: years, packages, and
+   conferences say experience and community, but nothing said the decisions are written
+   down. Generated for the same reason as the platform stats, so it tracks docs-src/. */
+{
+  const file = "index.html";
+  const abs = path.join(WEBSITE_ROOT, file);
+  let html = readFileSync(abs, "utf8");
+  html = replaceRegion(html, "home-stats", [
+    stat("25+", "Years on the Microsoft stack"),
+    stat(PLATFORM_FACTS.packages, "Open-source NuGet packages"),
+    stat(adrFiles.length, "Architecture Decision Records"),
+    stat(2, "Atlanta tech conferences organized"),
+  ].join("\n"), file);
+  writeFileSync(abs, html);
+}
+
 /* ----- resume.html platform figures -----
    The resume is the page a recruiter reads, and it was the page whose numbers had gone
    stale: it claimed 91 fitness tests and 51 ADRs against the real 93 and 55. Same sources
