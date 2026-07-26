@@ -22,14 +22,17 @@
   <meta name="twitter:title" content="Résumé · Ivan Ball-llovera">
   <meta name="twitter:description" content="Senior Software Architect, 25+ years on the Microsoft stack. Azure, .NET, DDD, Clean Architecture, CQRS, microservices.">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <!-- BEGIN head-assets -->
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
   <link rel="stylesheet" href="assets/css/styles.css">
   <script defer src="assets/js/main.js"></script>
   <script defer src="assets/js/analytics.js"></script>
+  <!-- END head-assets -->
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
 
+  <!-- BEGIN site-header -->
   <header class="site-header">
     <div class="container nav">
       <a class="brand" href="index.html">
@@ -55,6 +58,7 @@
       </div>
     </div>
   </header>
+  <!-- END site-header -->
 
   <main id="main">
     <section class="section">
@@ -169,8 +173,10 @@
             <li>Authored a 15-package shared framework (DDD, Clean Architecture, CQRS) published to GitHub Packages and consumed by an e-commerce app (Stripe) and a conference app.</li>
             <li>Implemented database-per-service with an at-least-once outbox plus dual dispatch, soft-delete, automatic audit stamping, and GDPR/CCPA anonymization.</li>
             <li>Deployed to Azure with Bicep IaC, Service Bus, Container Apps, App Insights, and Log Analytics, using OIDC / managed-identity authentication; orchestrated locally with .NET Aspire.</li>
+            <!-- BEGIN resume-platform-facts -->
             <li>Built Blazor (MudBlazor) and .NET MAUI clients; enforced quality with xUnit v3, Playwright E2E, 93 architecture-fitness tests, and automated accessibility testing (axe, WCAG 2.1 AA: zero violations).</li>
             <li>Documented decisions with 55 ADRs and a 34-category architecture-review rubric; built Roslyn-based code-inventory tooling and AI/multi-agent development workflows.</li>
+            <!-- END resume-platform-facts -->
           </ul>
           <p><a href="platform.html">Read the full platform breakdown →</a></p>
         </div>
@@ -208,6 +214,7 @@
     </section>
   </main>
 
+  <!-- BEGIN site-footer -->
   <footer class="site-footer">
     <div class="container">
       <div class="footer-grid">
@@ -226,5 +233,6 @@
       <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Built as a static site.</p>
     </div>
   </footer>
+  <!-- END site-footer -->
 </body>
 </html>
