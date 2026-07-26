@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"5. CQRS: Commands, Queries & the Decorator Pipeline","item":"https://ivanball.github.io/docs/onboarding/group-05-cqrs-pipeline.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">5. CQRS: Commands, Queries &amp; the Decorator Pipeline</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Guide contents</summary>
@@ -175,7 +177,7 @@
           <p>The subtle rule is <strong>registration order vs. execution order</strong>. <code>TryDecorate</code> applies decorators in
           <em>reverse</em> registration order, the <strong>last</strong> one registered becomes the <strong>outermost</strong> wrapper. So the
           command registrations (<code>DependencyInjection.cs:94-98</code>), read top-to-bottom, list innermost-first:</p>
-          <pre class="doc-pre"><code>FeatureGateCommandDecorator         ← outermost (registered last)
+          <pre class="doc-pre"><code class="">FeatureGateCommandDecorator         ← outermost (registered last)
             → LoggingCommandDecorator
               → CachingCommandDecorator
                 → ValidatingCommandDecorator
@@ -183,7 +185,7 @@
                     → ConcreteHandler               ← the actual business logic</code></pre>
           <p>The query side (<code>DependencyInjection.cs:101-103</code>) is lighter, there is nothing to validate or commit
           on a read:</p>
-          <pre class="doc-pre"><code>FeatureGateQueryDecorator
+          <pre class="doc-pre"><code class="">FeatureGateQueryDecorator
             → LoggingQueryDecorator
               → CachingQueryDecorator
                 → ConcreteHandler</code></pre>
@@ -652,6 +654,19 @@
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#the-shape-thin-handlers-fat-pipeline">The shape: thin handlers, fat pipeline</a></li>
+            <li><a href="#how-the-pipeline-is-assembled-scrutor-registration-vs-execution-order">How the pipeline is assembled (Scrutor, registration vs. execution order)</a></li>
+            <li><a href="#why-this-exact-order-and-what-each-layer-guards">Why this exact order, and what each layer guards</a></li>
+            <li><a href="#opt-in-by-marker-interface-pay-only-for-what-you-use">Opt-in by marker interface, pay only for what you use</a></li>
+            <li><a href="#two-supporting-pieces-and-a-worked-example">Two supporting pieces, and a worked example</a></li>
+            <li><a href="#where-this-fits-and-the-failure-mode-contract">Where this fits, and the failure-mode contract</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

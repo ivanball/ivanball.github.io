@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"20. ADC Conference - API, gRPC Contracts & Service Host","item":"https://ivanball.github.io/docs/onboarding/group-20-conference-api-grpc.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">20. ADC Conference - API, gRPC Contracts &amp; Service Host</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Guide contents</summary>
@@ -1501,6 +1503,23 @@
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#the-controller-hierarchy-almost-everything-is-inherited">The controller hierarchy, almost everything is inherited</a></li>
+            <li><a href="#authorization-at-the-edge-three-shapes-not-one">Authorization at the edge, three shapes not one</a></li>
+            <li><a href="#the-request-records-the-inbound-write-shapes">The request records, the inbound write shapes</a></li>
+            <li><a href="#where-the-generic-shape-gives-way-filtering-caching-and-calendars">Where the generic shape gives way: filtering, caching, and calendars</a></li>
+            <li><a href="#two-more-deviations-versioning-and-decision-support">Two more deviations, versioning and decision support</a></li>
+            <li><a href="#the-module-entry-point-and-seeder-how-conference-plugs-in">The module entry point and seeder, how Conference plugs in</a></li>
+            <li><a href="#the-grpc-edge-conference-as-both-server-and-client">The gRPC edge, Conference as both server and client</a></li>
+            <li><a href="#the-service-host-kestrel-first-and-why">The service host: Kestrel first, and why</a></li>
+            <li><a href="#output-caching-and-warm-up-the-two-performance-extension-points">Output caching and warm-up, the two performance extension points</a></li>
+            <li><a href="#the-runtime-picture-one-host-two-transports">The runtime picture, one host, two transports</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

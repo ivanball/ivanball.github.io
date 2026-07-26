@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"Operational Scripts & Runbooks","item":"https://ivanball.github.io/docs/onboarding/devops-runbooks.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">Operational Scripts &amp; Runbooks</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Guide contents</summary>
@@ -662,6 +664,25 @@
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#azure-setupsh-one-time-azure-bootstrap">azure-setup.sh, One-time Azure bootstrap</a></li>
+            <li><a href="#the-database-per-service-cutover-story">The database-per-service cutover story</a></li>
+            <li><a href="#copy-atldevcon-to-per-service-dbsazureps1-azure-data-copy">copy-atldevcon-to-per-service-dbs.azure.ps1, Azure data copy</a></li>
+            <li><a href="#migrate-atldevcon-to-per-service-dbsps1-local-data-copy-wrapper">migrate-atldevcon-to-per-service-dbs.ps1, local data copy wrapper</a></li>
+            <li><a href="#migrate-atldevcon-to-per-service-dbssql-local-sql-copy-script">migrate-atldevcon-to-per-service-dbs.sql, local SQL copy script</a></li>
+            <li><a href="#infradisaster-recoverymd-dr-runbook">infra/DISASTER-RECOVERY.md, DR runbook</a></li>
+            <li><a href="#infrapost-cutover-atldevcon-downgrademd-archive-downgrade-runbook">infra/POST-CUTOVER-atldevcon-downgrade.md, archive downgrade runbook</a></li>
+            <li><a href="#play-store-captureps1-android-screenshot-capture">play-store-capture.ps1, Android screenshot capture</a></li>
+            <li><a href="#play-store-composeps1-play-store-screenshot-compositor">play-store-compose.ps1, Play Store screenshot compositor</a></li>
+            <li><a href="#the-database-per-service-cutover-in-full-context">The database-per-service cutover in full context</a></li>
+            <li><a href="#rubric-tag-summary">Rubric tag summary</a></li>
+            <li><a href="#not-determinable-from-source">Not determinable from source</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

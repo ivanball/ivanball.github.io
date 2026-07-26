@@ -41,6 +41,8 @@
   </script>
   <!-- BEGIN head-assets -->
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="assets/css/styles.css">
   <script defer src="assets/js/main.js"></script>
   <script defer src="assets/js/analytics.js"></script>
@@ -78,14 +80,16 @@
   <!-- END site-header -->
 
   <main id="main">
+    <div class="page-head">
+      <div class="container">
+        <p class="eyebrow">Contact</p>
+        <h1>Let's connect</h1>
+        <p class="lede">Happy to talk architecture, the MMCA platform, speaking at your conference or user group, or comparing notes on .NET and Azure. The fastest ways to reach me:</p>
+      </div>
+    </div>
+
     <section class="section">
       <div class="container">
-        <div class="section-head">
-          <p class="eyebrow">Contact</p>
-          <h1 style="margin:0 0 0.6rem">Let's connect</h1>
-          <p style="max-width:65ch">Happy to talk architecture, the MMCA platform, speaking at your conference or user group, or comparing notes on .NET and Azure. The fastest ways to reach me:</p>
-        </div>
-
         <div class="contact-methods">
           <a class="contact-card js-email" data-subject="Hello from your website">
             <span class="ic" aria-hidden="true">✉</span>
@@ -112,6 +116,37 @@
 
         <div class="callout" style="margin-top:2.5rem">
           <p class="mb-0">Based in Douglasville, GA (Greater Atlanta), working across US time zones. For the full background, see my <a href="resume.html">résumé</a> or explore <a href="platform.html">the MMCA platform</a>.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Closing block: the page is short, and without it the footer floated in the
+         middle of an empty viewport on a desktop screen. -->
+    <section class="section section--alt">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">While you are here</p>
+          <h2>Three places to start</h2>
+        </div>
+        <div class="grid grid--3" data-reveal>
+          <a class="card card--link" href="platform.html">
+            <span class="kicker kicker--accent">Open source</span>
+            <h3>The MMCA platform</h3>
+            <p>A .NET 10 framework and three reference apps, graded in the open against a 34-category rubric.</p>
+            <div class="card-foot"><span class="go">See the architecture →</span></div>
+          </a>
+          <a class="card card--link" href="writing.html">
+            <span class="kicker kicker--accent">Writing</span>
+            <h3>Deep dives on enterprise .NET</h3>
+            <p>A long-form series turning each architecture decision into a teachable pattern, grounded in real source.</p>
+            <div class="card-foot"><span class="go">Browse the series →</span></div>
+          </a>
+          <a class="card card--link" href="speaking.html">
+            <span class="kicker kicker--accent">Community</span>
+            <h3>Talks and conferences</h3>
+            <p>Two Atlanta conferences, user-group talks on Clean Architecture and DDD, and mentoring in English and Spanish.</p>
+            <div class="card-foot"><span class="go">See the talks →</span></div>
+          </a>
         </div>
       </div>
     </section>

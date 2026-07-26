@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Store · Navigation Flow","item":"https://ivanball.github.io/docs/guides/store-NavigationFlow.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">Store · Navigation Flow</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>All guides</summary>
@@ -257,6 +259,18 @@
           <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/guides/store-NavigationFlow.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#actors">Actors</a></li>
+            <li><a href="#1-anonymous-user">1. Anonymous User</a></li>
+            <li><a href="#2-customer-authenticated-user">2. Customer (Authenticated User)</a></li>
+            <li><a href="#3-admin">3. Admin</a></li>
+            <li><a href="#authorization-model">Authorization Model</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>
@@ -289,7 +303,29 @@
       try {
         // Diagrams are static, first-party content, so "loose" is safe here and
         // lets the flowchart labels keep their <br/> / <i> formatting.
-        window.mermaid.initialize({ startOnLoad: false, securityLevel: "loose", theme: dark ? "dark" : "default" });
+        // themeVariables pin the diagram palette to the site's own tokens: the
+        // stock mermaid themes ship a lavender/beige scheme that read as a
+        // foreign object dropped into the page.
+        var themeVariables = dark ? {
+          background: "#131e2b", primaryColor: "#17263f", primaryTextColor: "#e9eff7",
+          primaryBorderColor: "#3b4e64", lineColor: "#7aa5ff", secondaryColor: "#10303a",
+          tertiaryColor: "#1b2837", mainBkg: "#17263f", nodeBorder: "#3b4e64",
+          clusterBkg: "#111b28", clusterBorder: "#2a3a4d", titleColor: "#e9eff7",
+          edgeLabelBackground: "#131e2b", textColor: "#e9eff7"
+        } : {
+          background: "#ffffff", primaryColor: "#e6edfd", primaryTextColor: "#101a25",
+          primaryBorderColor: "#1a4fd6", lineColor: "#1a4fd6", secondaryColor: "#ddf0f2",
+          tertiaryColor: "#f4f7fb", mainBkg: "#e6edfd", nodeBorder: "#1a4fd6",
+          clusterBkg: "#f4f7fb", clusterBorder: "#dbe3ec", titleColor: "#101a25",
+          edgeLabelBackground: "#ffffff", textColor: "#101a25"
+        };
+        window.mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: "loose",
+          theme: "base",
+          fontFamily: '"Inter Variable", -apple-system, "Segoe UI", Roboto, sans-serif',
+          themeVariables: themeVariables
+        });
         window.mermaid.run({ querySelector: "pre.mermaid" });
       } catch (e) { /* leave the diagram source visible on failure */ }
     });

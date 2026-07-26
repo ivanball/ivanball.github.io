@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <!-- BEGIN head-assets -->
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="assets/css/styles.css">
   <script defer src="assets/js/main.js"></script>
   <script defer src="assets/js/analytics.js"></script>
@@ -82,17 +84,15 @@
 
   <main id="main">
     <!-- Intro -->
-    <section class="section">
+    <div class="page-head">
       <div class="container">
-        <div class="section-head">
-          <p class="eyebrow">Featured work · Open source</p>
-          <h1 style="margin:0 0 0.75rem">The MMCA platform</h1>
-          <p style="font-size:1.12rem;max-width:70ch">A production-grade .NET 10 platform that demonstrates modern enterprise architecture end to end: an open-source framework of fifteen NuGet packages plus real applications that prove the patterns under live traffic. The design goal is one sentence: build the monolith now, extract a service later, without a rewrite.</p>
-          <div class="btn-row" style="margin-top:1.25rem">
-            <a class="btn btn--primary" href="docs/guides/common-GETTING-STARTED.html">Get started in 15 minutes →</a>
-            <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">View on GitHub ↗</a>
-            <a class="btn btn--ghost" href="writing.html">Read the deep dives</a>
-          </div>
+        <p class="eyebrow">Featured work · Open source</p>
+        <h1>The MMCA platform</h1>
+        <p class="lede">A production-grade .NET 10 platform that demonstrates modern enterprise architecture end to end: an open-source framework of fifteen NuGet packages plus real applications that prove the patterns under live traffic. The design goal is one sentence: build the monolith now, extract a service later, without a rewrite.</p>
+        <div class="btn-row">
+          <a class="btn btn--primary" href="docs/guides/common-GETTING-STARTED.html">Get started in 15 minutes →</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">View on GitHub ↗</a>
+          <a class="btn btn--ghost" href="writing.html">Read the deep dives</a>
         </div>
         <div class="stats">
           <!-- BEGIN platform-stats -->
@@ -103,7 +103,7 @@
           <!-- END platform-stats -->
         </div>
       </div>
-    </section>
+    </div>
 
     <!-- The framework -->
     <section class="section section--alt">
@@ -113,23 +113,70 @@
           <h2>MMCA.Common</h2>
           <p>A NuGet package framework for building modular-monolith applications with DDD, Clean Architecture, and CQRS, and the extension points to extract a module into its own microservice later. Fifteen packages release in lockstep and span every layer.</p>
         </div>
-        <ul class="pill-list">
-          <li class="pill">MMCA.Common.Shared</li>
-          <li class="pill">MMCA.Common.Domain</li>
-          <li class="pill">MMCA.Common.Application</li>
-          <li class="pill">MMCA.Common.Infrastructure</li>
-          <li class="pill">MMCA.Common.API</li>
-          <li class="pill">MMCA.Common.Grpc</li>
-          <li class="pill">MMCA.Common.UI</li>
-          <li class="pill">MMCA.Common.Aspire</li>
-          <li class="pill">MMCA.Common.Aspire.Hosting</li>
-          <li class="pill">MMCA.Common.Testing</li>
-          <li class="pill">MMCA.Common.Testing.Architecture</li>
-          <li class="pill">MMCA.Common.Testing.E2E</li>
-          <li class="pill">MMCA.Common.Testing.UI</li>
+        <!-- GENERATED from assets/data/platform-facts.js (packageLayers). The build fails
+             if the package count there disagrees with the headline figure. -->
+        <ul class="layers">
+          <!-- BEGIN package-layers -->
+          <li class="layer">
+            <span class="layer-name">Shared</span>
+            <span>
+              <span class="pill-list"><span class="pill">MMCA.Common.Shared</span></span>
+              <span class="layer-note">Result pattern, value objects, error handling, DTOs</span>
+            </span>
+          </li>
+          <li class="layer">
+            <span class="layer-name">Domain</span>
+            <span>
+              <span class="pill-list"><span class="pill">MMCA.Common.Domain</span></span>
+              <span class="layer-note">Entities, aggregate roots, domain events, specifications</span>
+            </span>
+          </li>
+          <li class="layer">
+            <span class="layer-name">Application</span>
+            <span>
+              <span class="pill-list"><span class="pill">MMCA.Common.Application</span></span>
+              <span class="layer-note">CQRS handlers, the decorator pipeline, the module system</span>
+            </span>
+          </li>
+          <li class="layer">
+            <span class="layer-name">Infrastructure</span>
+            <span>
+              <span class="pill-list"><span class="pill">MMCA.Common.Infrastructure</span></span>
+              <span class="layer-note">EF Core multi-engine, repositories, caching, outbox, message bus</span>
+            </span>
+          </li>
+          <li class="layer layer--edge">
+            <span class="layer-name">API &amp; transport</span>
+            <span>
+              <span class="pill-list"><span class="pill">MMCA.Common.API</span><span class="pill">MMCA.Common.Grpc</span></span>
+              <span class="layer-note">Controllers, middleware, idempotency, JWKS, gRPC contracts</span>
+            </span>
+          </li>
+          <li class="layer">
+            <span class="layer-name">UI</span>
+            <span>
+              <span class="pill-list"><span class="pill">MMCA.Common.UI</span><span class="pill">MMCA.Common.UI.Web</span><span class="pill">MMCA.Common.UI.Maui</span></span>
+              <span class="layer-note">Blazor shared components, MudBlazor theme, web and MAUI clients</span>
+            </span>
+          </li>
+          <li class="layer layer--edge">
+            <span class="layer-name">Hosting</span>
+            <span>
+              <span class="pill-list"><span class="pill">MMCA.Common.Aspire</span><span class="pill">MMCA.Common.Aspire.Hosting</span></span>
+              <span class="layer-note">Aspire service defaults, OpenTelemetry, health checks, broker wiring</span>
+            </span>
+          </li>
+          <li class="layer">
+            <span class="layer-name">Testing</span>
+            <span>
+              <span class="pill-list"><span class="pill">MMCA.Common.Testing</span><span class="pill">MMCA.Common.Testing.Architecture</span><span class="pill">MMCA.Common.Testing.E2E</span><span class="pill">MMCA.Common.Testing.UI</span></span>
+              <span class="layer-note">Integration bases, architecture rule library, Playwright and bUnit harnesses</span>
+            </span>
+          </li>
+          <!-- END package-layers -->
         </ul>
 
-        <div class="grid grid--3" style="margin-top:2rem">
+        <div class="grid grid--3" style="margin-top:2rem" data-reveal>
           <div class="card">
             <h3>Strict layered core</h3>
             <p class="mb-0">Shared → Domain → Application → Infrastructure → API/Grpc. The Result pattern carries expected failures, entities are rich aggregates with factory methods, and queries compose from specifications instead of LINQ spaghetti.</p>
@@ -156,17 +203,17 @@
         </div>
         <div class="grid grid--3">
           <div class="card">
-            <span class="kicker" style="color:var(--accent)">Conference</span>
+            <span class="kicker kicker--accent">Conference</span>
             <h3>MMCA.ADC</h3>
             <p class="mb-0">A production-deployed conference platform: four microservices (Identity, Conference, Engagement, Notification) behind a YARP gateway, cross-service JWKS auth, bidirectional gRPC, polyglot persistence, and load testing at conference-day scale. It powered the Atlanta Cloud + AI Conference.</p>
           </div>
           <div class="card">
-            <span class="kicker" style="color:var(--accent)">E-commerce</span>
+            <span class="kicker kicker--accent">E-commerce</span>
             <h3>MMCA.Store</h3>
             <p class="mb-0">An e-commerce app refactored from a monolith into three microservices (Catalog, Sales, Identity) with Stripe payments, output caching, role-based access control, and an accessible Blazor and .NET MAUI UI.</p>
           </div>
           <div class="card">
-            <span class="kicker" style="color:var(--accent)">Reference seed</span>
+            <span class="kicker kicker--accent">Reference seed</span>
             <h3>MMCA.Helpdesk</h3>
             <p class="mb-0">The deliberately minimal seed: a single Tickets module exercised through all five layers. It is the worked companion to the framework's getting-started guide and the easiest entry point for exploring the patterns.</p>
           </div>
@@ -182,7 +229,7 @@
           <h2>From one graph, laptop to cloud</h2>
           <p>Orchestrated locally with .NET Aspire, then deployed to Azure Container Apps from the same declarative model.</p>
         </div>
-        <div class="grid grid--2">
+        <div class="figure-row" data-reveal>
           <figure>
             <div class="shot"><img src="assets/img/aspire-dashboard.jpg" alt="The .NET Aspire dashboard showing the MMCA services, databases, and message broker running locally" loading="lazy"></div>
             <figcaption>The .NET Aspire dashboard: services, databases, and the broker as one orchestrated graph.</figcaption>
@@ -234,19 +281,46 @@
         </div>
         <!-- Scores are GENERATED from docs-src/governance/*-ArchitectureScorecard.md, the same files
              published under /docs/governance/, so a re-score cannot leave this page stale. -->
-        <div class="grid grid--3">
+        <div class="grid grid--3" data-reveal>
           <!-- BEGIN scorecards -->
-          <a class="card card--link" href="docs/governance/common-ArchitectureScorecard.html">
-            <h3>MMCA.Common <span class="muted" style="font-weight:400">(framework)</span></h3>
-            <p class="mb-0"><strong>Maturity 96.9%</strong> · <strong>Implementation 84.6%</strong><br><span class="muted">Scored across all 34 categories, every score citing the code that earns it.</span></p>
+          <a class="meter-card card--link" href="docs/governance/common-ArchitectureScorecard.html">
+            <span class="meter-title"><strong>MMCA.Common</strong> <span class="meter-role">framework</span></span>
+            <span class="meter">
+              <span class="meter-label">Maturity</span>
+              <span class="meter-track"><span class="meter-fill" style="width:96.9%"></span></span>
+              <span class="meter-value">96.9%</span>
+            </span>
+            <span class="meter meter--alt">
+              <span class="meter-label">Implementation</span>
+              <span class="meter-track"><span class="meter-fill" style="width:84.6%"></span></span>
+              <span class="meter-value">84.6%</span>
+            </span>
           </a>
-          <a class="card card--link" href="docs/governance/adc-ArchitectureScorecard.html">
-            <h3>MMCA.ADC <span class="muted" style="font-weight:400">(conference app)</span></h3>
-            <p class="mb-0"><strong>Maturity 97.2%</strong> · <strong>Implementation 85.9%</strong><br><span class="muted">Scored across all 34 categories, every score citing the code that earns it.</span></p>
+          <a class="meter-card card--link" href="docs/governance/adc-ArchitectureScorecard.html">
+            <span class="meter-title"><strong>MMCA.ADC</strong> <span class="meter-role">conference app</span></span>
+            <span class="meter">
+              <span class="meter-label">Maturity</span>
+              <span class="meter-track"><span class="meter-fill" style="width:97.2%"></span></span>
+              <span class="meter-value">97.2%</span>
+            </span>
+            <span class="meter meter--alt">
+              <span class="meter-label">Implementation</span>
+              <span class="meter-track"><span class="meter-fill" style="width:85.9%"></span></span>
+              <span class="meter-value">85.9%</span>
+            </span>
           </a>
-          <a class="card card--link" href="docs/governance/store-ArchitectureScorecard.html">
-            <h3>MMCA.Store <span class="muted" style="font-weight:400">(e-commerce app)</span></h3>
-            <p class="mb-0"><strong>Maturity 98.4%</strong> · <strong>Implementation 83.6%</strong><br><span class="muted">Scored across all 34 categories, every score citing the code that earns it.</span></p>
+          <a class="meter-card card--link" href="docs/governance/store-ArchitectureScorecard.html">
+            <span class="meter-title"><strong>MMCA.Store</strong> <span class="meter-role">e-commerce app</span></span>
+            <span class="meter">
+              <span class="meter-label">Maturity</span>
+              <span class="meter-track"><span class="meter-fill" style="width:98.4%"></span></span>
+              <span class="meter-value">98.4%</span>
+            </span>
+            <span class="meter meter--alt">
+              <span class="meter-label">Implementation</span>
+              <span class="meter-track"><span class="meter-fill" style="width:83.6%"></span></span>
+              <span class="meter-value">83.6%</span>
+            </span>
           </a>
           <!-- END scorecards -->
         </div>
@@ -348,28 +422,28 @@
         <div class="grid grid--2">
           <!-- BEGIN library-cards -->
           <a class="card card--link" href="docs/adr/index.html">
-            <span class="kicker" style="color:var(--accent)">55 records</span>
-            <h3 style="margin:.35rem 0 .5rem">Architecture Decision Records</h3>
-            <p class="mb-0">The context, decision, rationale, and trade-offs behind every cross-cutting pattern, from manual DTO mapping and the outbox to JWKS auth, caching, and supply-chain provenance. Numbered, dated, and cross-linked.</p>
-            <div class="card-foot" style="margin-top:1rem"><span style="font-weight:600;color:var(--accent)">Browse the ADRs →</span></div>
+            <span class="kicker kicker--accent">55 records</span>
+            <h3>Architecture Decision Records</h3>
+            <p>The context, decision, rationale, and trade-offs behind every cross-cutting pattern, from manual DTO mapping and the outbox to JWKS auth, caching, and supply-chain provenance. Numbered, dated, and cross-linked.</p>
+            <div class="card-foot"><span class="go">Browse the ADRs →</span></div>
           </a>
           <a class="card card--link" href="docs/onboarding/index.html">
-            <span class="kicker" style="color:var(--accent)">38 documents</span>
-            <h3 style="margin:.35rem 0 .5rem">Onboarding guide</h3>
-            <p class="mb-0">A teaching guide for an engineer new to the codebase: a primer, a mechanically extracted type inventory, 27 group chapters walking every first-party type, five DevOps chapters, concept maps, and a coverage audit.</p>
-            <div class="card-foot" style="margin-top:1rem"><span style="font-weight:600;color:var(--accent)">Open the guide →</span></div>
+            <span class="kicker kicker--accent">38 documents</span>
+            <h3>Onboarding guide</h3>
+            <p>A teaching guide for an engineer new to the codebase: a primer, a mechanically extracted type inventory, 27 group chapters walking every first-party type, five DevOps chapters, concept maps, and a coverage audit.</p>
+            <div class="card-foot"><span class="go">Open the guide →</span></div>
           </a>
           <a class="card card--link" href="docs/governance/index.html">
-            <span class="kicker" style="color:var(--accent)">7 artifacts</span>
-            <h3 style="margin:.35rem 0 .5rem">Architecture governance</h3>
-            <p class="mb-0">The 34-category evaluation rubric, plus an evidence-based scorecard and remediation backlog for each repo. Every score cites the code that earns it.</p>
-            <div class="card-foot" style="margin-top:1rem"><span style="font-weight:600;color:var(--accent)">Read the scorecards →</span></div>
+            <span class="kicker kicker--accent">7 artifacts</span>
+            <h3>Architecture governance</h3>
+            <p>The 34-category evaluation rubric, plus an evidence-based scorecard and remediation backlog for each repo. Every score cites the code that earns it.</p>
+            <div class="card-foot"><span class="go">Read the scorecards →</span></div>
           </a>
           <a class="card card--link" href="docs/guides/index.html">
-            <span class="kicker" style="color:var(--accent)">14 guides</span>
-            <h3 style="margin:.35rem 0 .5rem">Guides &amp; specifications</h3>
-            <p class="mb-0">The narrative layer: the getting-started guide for adopting the framework, business specifications and workflow analyses for both applications, and per-concern reference notes.</p>
-            <div class="card-foot" style="margin-top:1rem"><span style="font-weight:600;color:var(--accent)">Browse the guides →</span></div>
+            <span class="kicker kicker--accent">14 guides</span>
+            <h3>Guides &amp; specifications</h3>
+            <p>The narrative layer: the getting-started guide for adopting the framework, business specifications and workflow analyses for both applications, and per-concern reference notes.</p>
+            <div class="card-foot"><span class="go">Browse the guides →</span></div>
           </a>
           <!-- END library-cards -->
         </div>

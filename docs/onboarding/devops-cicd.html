@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"CI/CD and Operations","item":"https://ivanball.github.io/docs/onboarding/devops-cicd.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">CI/CD and Operations</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Guide contents</summary>
@@ -145,17 +147,17 @@
           deployments are reproducible. This workflow embodies §17 as the automated gate that every MMCA.Common
           change must pass before it can influence downstream consumers.</p>
           <h3 id="triggers">Triggers</h3>
-          <pre class="doc-pre"><code class="language-yaml"># ci.yml:3-7
-          on:
-            pull_request:
-              branches: [main]
-            push:
-              branches: [main]</code></pre>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># ci.yml:3-7</span>
+          <span class="hljs-attr">on:</span>
+            <span class="hljs-attr">pull_request:</span>
+              <span class="hljs-attr">branches:</span> [<span class="hljs-string">main</span>]
+            <span class="hljs-attr">push:</span>
+              <span class="hljs-attr">branches:</span> [<span class="hljs-string">main</span>]</code></pre>
           <p>Every push to <code>main</code> and every pull-request targeting <code>main</code> runs both jobs. There is no manual trigger,
           the gate is always-on.</p>
-          <pre class="doc-pre"><code class="language-yaml"># ci.yml:9-10
-          env:
-            FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true</code></pre>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># ci.yml:9-10</span>
+          <span class="hljs-attr">env:</span>
+            <span class="hljs-attr">FORCE_JAVASCRIPT_ACTIONS_TO_NODE24:</span> <span class="hljs-literal">true</span></code></pre>
           <p>This env var forces GitHub&#39;s bundled JavaScript actions to use the Node 24 runtime, avoiding deprecation
           warnings that would surface as build noise under <code>TreatWarningsAsErrors</code>-minded practice.</p>
           <h3 id="job-build-and-test">Job: <code>build-and-test</code></h3>
@@ -163,16 +165,16 @@
           case-sensitive, so path-casing bugs that Windows masks are caught in CI. This is a deliberate choice
           documented in <code>MMCA.Common/CLAUDE.md</code> (&quot;CI runs on Ubuntu, file paths are case-sensitive&quot;).</p>
           <p><strong>Step 1, Checkout with full history</strong> (<code>ci.yml:16-18</code>):</p>
-          <pre class="doc-pre"><code class="language-yaml">- uses: actions/checkout@v5
-            with:
-              fetch-depth: 0 # MinVer needs full history</code></pre>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/checkout@v5</span>
+            <span class="hljs-attr">with:</span>
+              <span class="hljs-attr">fetch-depth:</span> <span class="hljs-number">0</span> <span class="hljs-comment"># MinVer needs full history</span></code></pre>
           <p><code>fetch-depth: 0</code> fetches all tags and the complete git history. Without it, MinVer (the version-derivation
           tool) cannot walk back to find the nearest <code>vX.Y.Z</code> tag and would produce an unstable pre-release version
           string. Shallow clones (the GitHub default of depth 1) silently break reproducible versioning.</p>
           <p><strong>Step 2, .NET 10 setup</strong> (<code>ci.yml:20-22</code>): <code>actions/setup-dotnet@v5</code> pinned to <code>10.0.x</code> ensures the
           runner matches the <code>&lt;TargetFramework&gt;net10.0&lt;/TargetFramework&gt;</code> in every project.</p>
           <p><strong>Step 3, Restore</strong> (<code>ci.yml:24-25</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">dotnet restore MMCA.Common.slnx</code></pre>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet restore MMCA.Common.slnx</code></pre>
           <p>MMCA.Common uses NuGet lock files (<code>RestorePackagesWithLockFile</code>) and pins <code>packageSourceMapping</code> to
           nuget.org only, no <code>GITHUB_TOKEN</code> is needed to restore. This is explicitly documented in
           <code>MMCA.Common/CLAUDE.md</code> (&quot;MMCA.Common builds/tests locally with NO token&quot;). The lock file makes the
@@ -182,7 +184,7 @@
           supply-chain risks are visible. The pinned source mapping plus committed lock files are the §32
           implementation: a compromised or mutated transitive package cannot silently enter the build.</p>
           <p><strong>Step 4, Build in Release mode</strong> (<code>ci.yml:27-28</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">dotnet build MMCA.Common.slnx -c Release --no-restore</code></pre>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet build MMCA.Common.slnx -c Release --no-restore</code></pre>
           <p>Building in <code>Release</code> mode matters because the five analyzers (Meziantou, SonarAnalyzer, StyleCop,
           Roslynator, Microsoft.VisualStudio.Threading) run at error severity. Some analyzer rules only trigger
           in Release (e.g. certain null-forgiving suppression patterns). <code>TreatWarningsAsErrors</code> is globally
@@ -191,14 +193,14 @@
           <p>[Rubric §15, Best Practices &amp; Code Quality] (quality enforcement via analyzers at error severity) is
           realized here: the build <em>is</em> the static-analysis gate.</p>
           <p><strong>Step 5, Vulnerability audit</strong> (<code>ci.yml:30-46</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">dotnet list MMCA.Common.slnx package --vulnerable --include-transitive &gt; audit.log 2&gt;&amp;1 || true
-          cat audit.log
-          suppressed=$(grep -oE &#39;GHSA-[a-z0-9-]+&#39; Directory.Build.props | sort -u | paste -sd&#39;|&#39; -)
-          vulns=$(grep -E &#39;^[[:space:]]*&gt;[[:space:]]&#39; audit.log || true)
-          # drop any vulnerable-package row whose advisory is in the suppressed list, then fail on the rest
-          if printf &#39;%s&#39; &quot;$vulns&quot; | grep -q .; then
-            echo &quot;::error::Non-suppressed vulnerable NuGet packages detected, see log above&quot;; exit 1
-          fi</code></pre>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet list MMCA.Common.slnx package --vulnerable --include-transitive &gt; audit.log 2&gt;&amp;1 || <span class="hljs-literal">true</span>
+          <span class="hljs-built_in">cat</span> audit.log
+          suppressed=$(grep -oE <span class="hljs-string">&#x27;GHSA-[a-z0-9-]+&#x27;</span> Directory.Build.props | <span class="hljs-built_in">sort</span> -u | <span class="hljs-built_in">paste</span> -sd<span class="hljs-string">&#x27;|&#x27;</span> -)
+          vulns=$(grep -E <span class="hljs-string">&#x27;^[[:space:]]*&gt;[[:space:]]&#x27;</span> audit.log || <span class="hljs-literal">true</span>)
+          <span class="hljs-comment"># drop any vulnerable-package row whose advisory is in the suppressed list, then fail on the rest</span>
+          <span class="hljs-keyword">if</span> <span class="hljs-built_in">printf</span> <span class="hljs-string">&#x27;%s&#x27;</span> <span class="hljs-string">&quot;<span class="hljs-variable">$vulns</span>&quot;</span> | grep -q .; <span class="hljs-keyword">then</span>
+            <span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;::error::Non-suppressed vulnerable NuGet packages detected, see log above&quot;</span>; <span class="hljs-built_in">exit</span> 1
+          <span class="hljs-keyword">fi</span></code></pre>
           <p><code>dotnet list package --vulnerable</code> queries NuGet&#39;s vulnerability database for every direct and transitive
           dependency and writes any hits to <code>audit.log</code>. The <code>|| true</code> prevents an API-call failure from masking the
           parse. The gate is not a simple sentinel grep: because <code>dotnet list --vulnerable</code> ignores
@@ -214,9 +216,9 @@
           (assesses whether secrets, auth, and dependency security are properly managed) is also touched: the
           vulnerability audit ensures the framework&#39;s own dependencies do not carry known CVEs.</p>
           <p><strong>Steps 6–7, Test with coverage and minimum-expected-tests guard</strong> (<code>ci.yml:48-57</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">dotnet tool install --global dotnet-coverage
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet tool install --global dotnet-coverage
           dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
-            &quot;dotnet test --solution MMCA.Common.slnx -c Release --no-build --minimum-expected-tests 1&quot;</code></pre>
+            <span class="hljs-string">&quot;dotnet test --solution MMCA.Common.slnx -c Release --no-build --minimum-expected-tests 1&quot;</span></code></pre>
           <p>The test run is wrapped in <code>dotnet-coverage collect</code> (installed in the step before), which emits a
           cobertura report and returns the inner test command&#39;s exit code, so a test failure still gates the build,
           coverage itself is report-only (the <code>coverage</code> job below consumes it). <code>--minimum-expected-tests 1</code> is a
@@ -251,14 +253,14 @@
           as <code>build-and-test</code>.</p>
           </li>
           <li><p><strong>Build the E2E project directly</strong> (<code>ci.yml:93-96</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">dotnet build Tests/Presentation/MMCA.Common.UI.E2E.Tests/MMCA.Common.UI.E2E.Tests.csproj -c Release</code></pre>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet build Tests/Presentation/MMCA.Common.UI.E2E.Tests/MMCA.Common.UI.E2E.Tests.csproj -c Release</code></pre>
           <p>Building by csproj path, not solution, ensures only the gallery and E2E graphs are compiled (restore
           included). The E2E project references MMCA.Common source projects directly (via project references, not
           NuGet packages), so no <code>GITHUB_TOKEN</code> is needed.</p>
           </li>
           <li><p><strong>Install Playwright for the matrix browser</strong> (<code>ci.yml:98-101</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">script=$(find Tests/Presentation/MMCA.Common.UI.E2E.Tests/bin/Release -name playwright.ps1 | head -1)
-          pwsh &quot;$script&quot; install --with-deps ${{ matrix.browser }}</code></pre>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">script=$(find Tests/Presentation/MMCA.Common.UI.E2E.Tests/bin/Release -name playwright.ps1 | <span class="hljs-built_in">head</span> -1)
+          pwsh <span class="hljs-string">&quot;<span class="hljs-variable">$script</span>&quot;</span> install --with-deps <span class="hljs-variable">${{ matrix.browser }</span>}</code></pre>
           <p>The <code>playwright.ps1</code> script is emitted into the build output by the Playwright MSBuild integration.
           <code>find</code> locates it dynamically so the step does not hard-code a .NET version suffix in the path.
           <code>--with-deps</code> installs the OS-level dependencies (font packages, shared libs) the engine needs and that
@@ -268,10 +270,10 @@
           <li><p><strong>Run the E2E suite</strong> (<code>ci.yml:103-119</code>): the chromium leg installs <code>dotnet-coverage</code> (<code>ci.yml:103-105</code>)
           and wraps the run in <code>dotnet-coverage collect</code>; the firefox/webkit legs run the same command plain
           (<code>eval &quot;$CMD&quot;</code>). The inner command is:</p>
-          <pre class="doc-pre"><code class="language-yaml">env:
-            E2E_HEADLESS: &quot;true&quot;
-            E2E_BROWSER: ${{ matrix.browser }}
-          run: dotnet test --project Tests/Presentation/MMCA.Common.UI.E2E.Tests/MMCA.Common.UI.E2E.Tests.csproj -c Release --no-build -- --minimum-expected-tests 1</code></pre>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">env:</span>
+            <span class="hljs-attr">E2E_HEADLESS:</span> <span class="hljs-string">&quot;true&quot;</span>
+            <span class="hljs-attr">E2E_BROWSER:</span> <span class="hljs-string">${{</span> <span class="hljs-string">matrix.browser</span> <span class="hljs-string">}}</span>
+          <span class="hljs-attr">run:</span> <span class="hljs-string">dotnet</span> <span class="hljs-string">test</span> <span class="hljs-string">--project</span> <span class="hljs-string">Tests/Presentation/MMCA.Common.UI.E2E.Tests/MMCA.Common.UI.E2E.Tests.csproj</span> <span class="hljs-string">-c</span> <span class="hljs-string">Release</span> <span class="hljs-string">--no-build</span> <span class="hljs-string">--</span> <span class="hljs-string">--minimum-expected-tests</span> <span class="hljs-number">1</span></code></pre>
           <p><code>E2E_HEADLESS: true</code> runs the browser without a display server (no Xvfb needed). <code>E2E_BROWSER</code> selects
           the engine; <code>MMCA.Common.Testing.E2E</code>&#39;s <code>PlaywrightFixture</code> reads this env var. The <code>-- --minimum- expected-tests 1</code> suffix is the MTP filter separator, the same guard as in <code>build-and-test</code>.</p>
           <p>The suite self-hosts the gallery (<code>MMCA.Common.UI.Gallery</code>) in-process, then scans the Login and
@@ -285,12 +287,12 @@
           <li><p><strong>Upload coverage and Playwright traces</strong>, the chromium leg uploads its E2E cobertura report as the
           <code>coverage-e2e</code> artifact (<code>ci.yml:121-127</code>), and on failure each leg uploads its traces
           (<code>ci.yml:129-135</code>):</p>
-          <pre class="doc-pre"><code class="language-yaml">if: failure()
-          uses: actions/upload-artifact@v4
-          with:
-            name: ui-e2e-traces-${{ matrix.browser }}
-            path: Tests/Presentation/MMCA.Common.UI.E2E.Tests/bin/Release/net10.0/playwright-traces/**
-            if-no-files-found: ignore</code></pre>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">if:</span> <span class="hljs-string">failure()</span>
+          <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/upload-artifact@v4</span>
+          <span class="hljs-attr">with:</span>
+            <span class="hljs-attr">name:</span> <span class="hljs-string">ui-e2e-traces-${{</span> <span class="hljs-string">matrix.browser</span> <span class="hljs-string">}}</span>
+            <span class="hljs-attr">path:</span> <span class="hljs-string">Tests/Presentation/MMCA.Common.UI.E2E.Tests/bin/Release/net10.0/playwright-traces/**</span>
+            <span class="hljs-attr">if-no-files-found:</span> <span class="hljs-string">ignore</span></code></pre>
           <p>Playwright traces (HAR + screenshots + video) are produced only on failure and uploaded as a
           per-browser GitHub artifact. <code>if-no-files-found: ignore</code> prevents the upload step from failing if no
           trace was recorded (e.g. the failure occurred before any browser interaction). This is a
@@ -337,18 +339,18 @@
           <p>[Rubric §17, DevOps &amp; Deployment] is embodied: releasing is a tag-driven, automated, reproducible action
           with no manual steps after the tag is pushed.</p>
           <h3 id="trigger">Trigger</h3>
-          <pre class="doc-pre"><code class="language-yaml"># release.yml:5
-          on:
-            push:
-              tags: [&#39;v*&#39;]</code></pre>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># release.yml:5</span>
+          <span class="hljs-attr">on:</span>
+            <span class="hljs-attr">push:</span>
+              <span class="hljs-attr">tags:</span> [<span class="hljs-string">&#x27;v*&#x27;</span>]</code></pre>
           <p>Any tag matching <code>v*</code> (e.g. <code>v1.52.0</code>) triggers the workflow. There is no branch condition, releases
           can be cut from any state of the repository that has a valid tag. In practice, releases are always cut
           from <code>main</code>.</p>
           <h3 id="job-publish">Job: <code>publish</code></h3>
           <p><strong>Permissions</strong> (<code>release.yml:13-15</code>):</p>
-          <pre class="doc-pre"><code class="language-yaml">permissions:
-            packages: write
-            contents: read</code></pre>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">permissions:</span>
+            <span class="hljs-attr">packages:</span> <span class="hljs-string">write</span>
+            <span class="hljs-attr">contents:</span> <span class="hljs-string">read</span></code></pre>
           <p><code>packages: write</code> is required to push to GitHub Packages using <code>GITHUB_TOKEN</code>. <code>contents: read</code> is the
           minimum for checkout. No other permissions are granted, least-privilege OAuth scope for the token.</p>
           <p>[Rubric §11, Security] (assesses secrets, OIDC, and minimal-permission token usage) is served: the job
@@ -358,39 +360,39 @@
           <p><strong>Step 3, Restore</strong> (<code>release.yml:24-25</code>): <code>dotnet restore MMCA.Common.slnx</code>, lock files apply; no
           <code>GITHUB_TOKEN</code> needed.</p>
           <p><strong>Step 4, Determine version from tag</strong> (<code>release.yml:28-30</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">echo &quot;VERSION=${GITHUB_REF_NAME#v}&quot; &gt;&gt; $GITHUB_OUTPUT</code></pre>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;VERSION=<span class="hljs-variable">${GITHUB_REF_NAME#v}</span>&quot;</span> &gt;&gt; <span class="hljs-variable">$GITHUB_OUTPUT</span></code></pre>
           <p><code>GITHUB_REF_NAME</code> is the full tag name (e.g. <code>v1.52.0</code>). The <code>#v</code> parameter expansion strips the leading
           <code>v</code>, yielding <code>1.52.0</code>. This string is then passed to the build and pack steps as an explicit version
           override.</p>
           <p><strong>Step 5, Build with explicit version</strong> (<code>release.yml:32-33</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">dotnet build MMCA.Common.slnx -c Release --no-restore -p:MinVerSkip=true -p:Version=${{ steps.version.outputs.VERSION }}</code></pre>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet build MMCA.Common.slnx -c Release --no-restore -p:MinVerSkip=<span class="hljs-literal">true</span> -p:Version=<span class="hljs-variable">${{ steps.version.outputs.VERSION }</span>}</code></pre>
           <p><code>-p:MinVerSkip=true</code> disables MinVer&#39;s git-tag-based version derivation and <code>-p:Version=...</code> injects the
           tag-derived version directly. This pattern avoids a subtle race: if MinVer ran here, it would derive the
           version from the tag, which should be the same value, but in edge cases (e.g. detached HEAD, retagged
           commit) the two sources could diverge. Making the version explicit from the start removes the ambiguity.</p>
           <p><strong>Step 6, Test</strong> (<code>release.yml:35-36</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">dotnet test --solution MMCA.Common.slnx -c Release --no-build</code></pre>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet <span class="hljs-built_in">test</span> --solution MMCA.Common.slnx -c Release --no-build</code></pre>
           <p>Tests run again (no <code>--minimum-expected-tests 1</code> here, the release workflow is not the primary test
           gate; CI already covered this). This is a belt-and-suspenders pass to ensure the tagged commit is green
           before packaging.</p>
           <p><strong>Step 7, Pack</strong> (<code>release.yml:38-39</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">dotnet pack MMCA.Common.slnx -c Release --no-build -o ./nupkgs -p:MinVerSkip=true -p:PackageVersion=${{ steps.version.outputs.VERSION }}</code></pre>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet pack MMCA.Common.slnx -c Release --no-build -o ./nupkgs -p:MinVerSkip=<span class="hljs-literal">true</span> -p:PackageVersion=<span class="hljs-variable">${{ steps.version.outputs.VERSION }</span>}</code></pre>
           <p><code>dotnet pack</code> over the entire solution packs all thirteen packable projects (<code>Source/**</code>) in one command.
           <code>-p:PackageVersion</code> sets the NuGet package version metadata. <code>-o ./nupkgs</code> collects all <code>.nupkg</code> files
           in one directory for the push step. The thirteen packages produced here all share the same version string.</p>
           <p><strong>Steps 8–9, SBOM generation and upload</strong> (<code>release.yml:45-57</code>):</p>
-          <pre class="doc-pre"><code class="language-yaml">- name: Generate SBOM (CycloneDX)
-            run: |
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Generate</span> <span class="hljs-string">SBOM</span> <span class="hljs-string">(CycloneDX)</span>
+            <span class="hljs-attr">run:</span> <span class="hljs-string">|
               dotnet tool install --global CycloneDX
               dotnet CycloneDX MMCA.Common.slnx --output ./sbom --json
               ls -la ./sbom
               test -n &quot;$(ls -A ./sbom 2&gt;/dev/null)&quot; || { echo &quot;::error::SBOM generation produced no output&quot;; exit 1; }
-          - name: Upload SBOM
-            uses: actions/upload-artifact@v4
-            with:
-              name: sbom
-              path: ./sbom
-              if-no-files-found: error</code></pre>
+          </span><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Upload</span> <span class="hljs-string">SBOM</span>
+            <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/upload-artifact@v4</span>
+            <span class="hljs-attr">with:</span>
+              <span class="hljs-attr">name:</span> <span class="hljs-string">sbom</span>
+              <span class="hljs-attr">path:</span> <span class="hljs-string">./sbom</span>
+              <span class="hljs-attr">if-no-files-found:</span> <span class="hljs-string">error</span></code></pre>
           <p>CycloneDX generates a Software Bill of Materials, a machine-readable inventory of every dependency&#39;s
           identity, version, and license. The SBOM is now a <strong>hard gate</strong> (the comment on <code>release.yml:42-44</code> records
           that it &quot;was continue-on-error while the tooling was being validated in CI, now promoted to a blocking
@@ -400,9 +402,9 @@
           &quot;know your dependencies&quot; requirement for regulated or commercially-distributed software, and gating on it
           guarantees no version ships without one.</p>
           <p><strong>Step 10, Push to GitHub Packages</strong> (<code>release.yml:59-60</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">dotnet nuget push ./nupkgs/*.nupkg \
-            --source &quot;https://nuget.pkg.github.com/ivanball/index.json&quot; \
-            --api-key ${{ secrets.GITHUB_TOKEN }} \
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet nuget push ./nupkgs/*.nupkg \
+            --<span class="hljs-built_in">source</span> <span class="hljs-string">&quot;https://nuget.pkg.github.com/ivanball/index.json&quot;</span> \
+            --api-key <span class="hljs-variable">${{ secrets.GITHUB_TOKEN }</span>} \
             --skip-duplicate</code></pre>
           <p><code>--skip-duplicate</code> means an accidental re-push of an already-published version does not fail the
           workflow, it silently skips duplicates. This is important because <code>dotnet nuget push ./nupkgs/*.nupkg</code>
@@ -418,17 +420,17 @@
           <code>main</code>, on every pull request targeting <code>main</code>, and on manual <code>workflow_dispatch</code>. On a push to <code>main</code> (or
           dispatch) it also deploys to Azure; on a pull request it only runs the build and test jobs as a merge gate.</p>
           <h3 id="triggers-and-concurrency">Triggers and concurrency</h3>
-          <pre class="doc-pre"><code class="language-yaml"># deploy.yml:3-8
-          on:
-            push:
-              branches: [main]
-            pull_request:
-              branches: [main]
-            workflow_dispatch:</code></pre>
-          <pre class="doc-pre"><code class="language-yaml"># deploy.yml:23-26
-          concurrency:
-            group: prod-azure
-            cancel-in-progress: false</code></pre>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:3-8</span>
+          <span class="hljs-attr">on:</span>
+            <span class="hljs-attr">push:</span>
+              <span class="hljs-attr">branches:</span> [<span class="hljs-string">main</span>]
+            <span class="hljs-attr">pull_request:</span>
+              <span class="hljs-attr">branches:</span> [<span class="hljs-string">main</span>]
+            <span class="hljs-attr">workflow_dispatch:</span></code></pre>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:23-26</span>
+          <span class="hljs-attr">concurrency:</span>
+            <span class="hljs-attr">group:</span> <span class="hljs-string">prod-azure</span>
+            <span class="hljs-attr">cancel-in-progress:</span> <span class="hljs-literal">false</span></code></pre>
           <p>The <code>prod-azure</code> concurrency group serializes all production Azure mutations. <code>cancel-in-progress: false</code>
           means a second push to <code>main</code> while a deploy is in flight does not cancel the running deploy, it waits.
           This is deliberately conservative: an in-flight deploy that gets cancelled mid-Bicep-apply or mid-
@@ -439,10 +441,10 @@
           patterns that protect against partial-update failures) is served by the non-cancellable concurrency
           group: it is a mechanical guarantee that two competing mutations cannot interleave.</p>
           <p><strong>Permissions</strong> (<code>deploy.yml:16-19</code>):</p>
-          <pre class="doc-pre"><code class="language-yaml">permissions:
-            id-token: write
-            contents: read
-            packages: read</code></pre>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">permissions:</span>
+            <span class="hljs-attr">id-token:</span> <span class="hljs-string">write</span>
+            <span class="hljs-attr">contents:</span> <span class="hljs-string">read</span>
+            <span class="hljs-attr">packages:</span> <span class="hljs-string">read</span></code></pre>
           <p><code>id-token: write</code> enables OIDC-based Azure login (no long-lived credential stored as a secret). The Azure
           login step (<code>azure/login@v3</code>) exchanges the OIDC token for a scoped Azure access token at runtime. No
           static client secret is ever stored in GitHub. <code>packages: read</code> is needed for <code>GITHUB_TOKEN</code>-authenticated
@@ -452,10 +454,10 @@
           <code>production</code> environment, so only runs that target that environment can obtain the Azure token.</p>
           <h3 id="job-build-and-test-1">Job: <code>build-and-test</code></h3>
           <p><strong>Step 1, Restore</strong> (<code>deploy.yml:40-42</code>):</p>
-          <pre class="doc-pre"><code class="language-yaml">- name: Restore dependencies
-            run: dotnet restore MMCA.ADC.CI.slnf
-            env:
-              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}</code></pre>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Restore</span> <span class="hljs-string">dependencies</span>
+            <span class="hljs-attr">run:</span> <span class="hljs-string">dotnet</span> <span class="hljs-string">restore</span> <span class="hljs-string">MMCA.ADC.CI.slnf</span>
+            <span class="hljs-attr">env:</span>
+              <span class="hljs-attr">GITHUB_TOKEN:</span> <span class="hljs-string">${{</span> <span class="hljs-string">secrets.GITHUB_TOKEN</span> <span class="hljs-string">}}</span></code></pre>
           <p><code>MMCA.ADC.CI.slnf</code> is the CI solution filter, it excludes the MAUI UI project (whose <code>maui-android</code>
           workload is not on Ubuntu runners), the AppHost (Aspire orchestration), and the integration and E2E test
           projects. The filter gives a fast, reliable build without requiring workloads beyond the standard .NET SDK.
@@ -464,9 +466,9 @@
           <p><strong>Step 2, Build</strong> (<code>deploy.yml:44-45</code>): <code>dotnet build MMCA.ADC.CI.slnf --no-restore -c Release</code>, same
           TreatWarningsAsErrors + five-analyzer enforcement as Common.</p>
           <p><strong>Step 3, Unit and architecture tests with coverage</strong> (<code>deploy.yml:47-65</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">dotnet tool install --global dotnet-coverage
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet tool install --global dotnet-coverage
           dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
-            &quot;dotnet test --solution MMCA.ADC.CI.slnf --no-build -c Release --minimum-expected-tests 1&quot;</code></pre>
+            <span class="hljs-string">&quot;dotnet test --solution MMCA.ADC.CI.slnf --no-build -c Release --minimum-expected-tests 1&quot;</span></code></pre>
           <p>As in Common&#39;s CI, the run is wrapped in <code>dotnet-coverage collect</code> (it returns the inner exit code so a
           failure still gates) and uploaded as the <code>coverage-unit</code> artifact (<code>deploy.yml:59-65</code>) for the report-only
           <code>coverage</code> job. Same <code>--minimum-expected-tests 1</code> guard. Covers unit tests for all module layers plus
@@ -475,12 +477,12 @@
           structure is not accidentally violated by a new project reference (e.g. <code>Domain</code> referencing
           <code>Infrastructure</code>).</p>
           <p><strong>Step 4, EF migrations model-drift gate</strong> (<code>deploy.yml:70-83</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">for module in Identity Conference Engagement Notification; do
-            project=&quot;Source/Hosting/MMCA.ADC.Migrations.SqlServer.$module&quot;
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-keyword">for</span> module <span class="hljs-keyword">in</span> Identity Conference Engagement Notification; <span class="hljs-keyword">do</span>
+            project=<span class="hljs-string">&quot;Source/Hosting/MMCA.ADC.Migrations.SqlServer.<span class="hljs-variable">$module</span>&quot;</span>
             dotnet ef migrations has-pending-model-changes \
-              --project &quot;$project&quot; --startup-project &quot;$project&quot; \
+              --project <span class="hljs-string">&quot;<span class="hljs-variable">$project</span>&quot;</span> --startup-project <span class="hljs-string">&quot;<span class="hljs-variable">$project</span>&quot;</span> \
               --context SQLServerDbContext --configuration Release --no-build
-          done</code></pre>
+          <span class="hljs-keyword">done</span></code></pre>
           <p><code>dotnet ef migrations has-pending-model-changes</code> compares the EF design-time model to the committed
           migration snapshot <strong>without connecting to a database</strong>. If a developer changes an entity configuration
           (adds a column, renames a property) but forgets to author a new migration, this step fails the build. The
@@ -516,20 +518,20 @@
           is the mechanism for discovering GPL or AGPL dependencies that would create licensing obligations.</p>
           <h3 id="job-integration-tests">Job: <code>integration-tests</code></h3>
           <p>This job is a required dependency of <code>deploy</code> (<code>deploy.yml:244</code>):</p>
-          <pre class="doc-pre"><code class="language-yaml">needs: [build-and-test, integration-tests]</code></pre>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">needs:</span> [<span class="hljs-string">build-and-test</span>, <span class="hljs-string">integration-tests</span>]</code></pre>
           <p>It runs the per-service <code>WebApplicationFactory</code> integration tests against a real SQL Server service
           container, covering approximately 290 tests across Identity, Conference, and Engagement. It gates every
           production deploy.</p>
           <p><strong>SQL Server service container</strong> (<code>deploy.yml:139-147</code>):</p>
-          <pre class="doc-pre"><code class="language-yaml">services:
-            sqlserver:
-              image: mcr.microsoft.com/mssql/server:2022-latest
-              env:
-                ACCEPT_EULA: &quot;Y&quot;
-                MSSQL_SA_PASSWORD: &quot;Adc_Integration!Test1&quot;
-                MSSQL_PID: Developer
-              ports:
-                - 1433:1433</code></pre>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">services:</span>
+            <span class="hljs-attr">sqlserver:</span>
+              <span class="hljs-attr">image:</span> <span class="hljs-string">mcr.microsoft.com/mssql/server:2022-latest</span>
+              <span class="hljs-attr">env:</span>
+                <span class="hljs-attr">ACCEPT_EULA:</span> <span class="hljs-string">&quot;Y&quot;</span>
+                <span class="hljs-attr">MSSQL_SA_PASSWORD:</span> <span class="hljs-string">&quot;Adc_Integration!Test1&quot;</span>
+                <span class="hljs-attr">MSSQL_PID:</span> <span class="hljs-string">Developer</span>
+              <span class="hljs-attr">ports:</span>
+                <span class="hljs-bullet">-</span> <span class="hljs-number">1433</span><span class="hljs-string">:1433</span></code></pre>
           <p>An ephemeral SQL Server Developer Edition container starts alongside the job. The password is hardcoded
           (<code>deploy.yml:138</code>, <code>deploy.yml:144</code>) because it is a throwaway SA credential for an ephemeral container,
           not a production secret, not stored in GitHub Secrets. The comment on <code>deploy.yml:136</code> states this
@@ -540,9 +542,9 @@
           early on success, not after the full 150-second maximum.</p>
           <p><strong>Integration test run</strong> (<code>deploy.yml:185-191</code>): like the unit tier, the test command is wrapped in
           <code>dotnet-coverage collect</code> (emitting the <code>coverage.integration.cobertura.xml</code> artifact):</p>
-          <pre class="doc-pre"><code class="language-yaml">env:
-            ADC_TEST_SQL_BASE: &quot;Server=localhost,1433;User Id=sa;Password=${{ env.MSSQL_SA_PASSWORD }};TrustServerCertificate=True;Encrypt=False;&quot;
-          run: dotnet test --solution MMCA.ADC.Integration.slnf --no-build -c Release --minimum-expected-tests 1</code></pre>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">env:</span>
+            <span class="hljs-attr">ADC_TEST_SQL_BASE:</span> <span class="hljs-string">&quot;Server=localhost,1433;User Id=sa;Password=$<span class="hljs-template-variable">{{ env.MSSQL_SA_PASSWORD }}</span>;TrustServerCertificate=True;Encrypt=False;&quot;</span>
+          <span class="hljs-attr">run:</span> <span class="hljs-string">dotnet</span> <span class="hljs-string">test</span> <span class="hljs-string">--solution</span> <span class="hljs-string">MMCA.ADC.Integration.slnf</span> <span class="hljs-string">--no-build</span> <span class="hljs-string">-c</span> <span class="hljs-string">Release</span> <span class="hljs-string">--minimum-expected-tests</span> <span class="hljs-number">1</span></code></pre>
           <p>The <code>ADC_TEST_SQL_BASE</code> connection string is consumed by <code>IntegrationTestBase</code> to provision per-test
           databases (each test gets a fresh database, reset between tests). <code>MMCA.ADC.Integration.slnf</code> is a
           separate solution filter that includes only the integration test projects; the build step immediately
@@ -553,22 +555,22 @@
           column type mismatch) is caught here before it reaches production.</p>
           <h3 id="job-deploy">Job: <code>deploy</code></h3>
           <p>Runs only on push to <code>main</code> or <code>workflow_dispatch</code> (never on pull requests):</p>
-          <pre class="doc-pre"><code class="language-yaml"># deploy.yml:247
-          if: github.event_name != &#39;pull_request&#39;</code></pre>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:247</span>
+          <span class="hljs-attr">if:</span> <span class="hljs-string">github.event_name</span> <span class="hljs-type">!=</span> <span class="hljs-string">&#x27;pull_request&#x27;</span></code></pre>
           <p><strong>Phase 1, Azure login and foundation infrastructure</strong> (<code>deploy.yml:257-271</code>):</p>
-          <pre class="doc-pre"><code class="language-yaml">- name: Log in to Azure
-            uses: azure/login@v3
-            with:
-              client-id: ${{ secrets.AZURE_CLIENT_ID }}
-              tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-              subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Log</span> <span class="hljs-string">in</span> <span class="hljs-string">to</span> <span class="hljs-string">Azure</span>
+            <span class="hljs-attr">uses:</span> <span class="hljs-string">azure/login@v3</span>
+            <span class="hljs-attr">with:</span>
+              <span class="hljs-attr">client-id:</span> <span class="hljs-string">${{</span> <span class="hljs-string">secrets.AZURE_CLIENT_ID</span> <span class="hljs-string">}}</span>
+              <span class="hljs-attr">tenant-id:</span> <span class="hljs-string">${{</span> <span class="hljs-string">secrets.AZURE_TENANT_ID</span> <span class="hljs-string">}}</span>
+              <span class="hljs-attr">subscription-id:</span> <span class="hljs-string">${{</span> <span class="hljs-string">secrets.AZURE_SUBSCRIPTION_ID</span> <span class="hljs-string">}}</span>
           
-          - name: Deploy foundation infrastructure
-            uses: azure/arm-deploy@v2
-            with:
-              resourceGroupName: ${{ env.AZURE_RESOURCE_GROUP }}
-              template: infra/foundation.bicep
-              parameters: environmentName=${{ env.ENVIRONMENT_NAME }}</code></pre>
+          <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Deploy</span> <span class="hljs-string">foundation</span> <span class="hljs-string">infrastructure</span>
+            <span class="hljs-attr">uses:</span> <span class="hljs-string">azure/arm-deploy@v2</span>
+            <span class="hljs-attr">with:</span>
+              <span class="hljs-attr">resourceGroupName:</span> <span class="hljs-string">${{</span> <span class="hljs-string">env.AZURE_RESOURCE_GROUP</span> <span class="hljs-string">}}</span>
+              <span class="hljs-attr">template:</span> <span class="hljs-string">infra/foundation.bicep</span>
+              <span class="hljs-attr">parameters:</span> <span class="hljs-string">environmentName=${{</span> <span class="hljs-string">env.ENVIRONMENT_NAME</span> <span class="hljs-string">}}</span></code></pre>
           <p><code>foundation.bicep</code> provisions the two durable resources needed before container images can be pushed:
           Azure Container Registry (ACR) and Log Analytics Workspace. These resources must exist before Docker
           pushes can succeed, so they are deployed first in their own Bicep step. The outputs of this step
@@ -579,12 +581,12 @@
           back-end services live under <code>Source/Services/</code>, while the Gateway and UI Dockerfiles live under
           <code>Source/Hosts/</code>, e.g. Gateway is <code>Source/Hosts/MMCA.ADC.Gateway/Dockerfile</code> at <code>deploy.yml:279</code> and UI is
           <code>Source/Hosts/UI/MMCA.ADC.UI.Web/Dockerfile</code> at <code>deploy.yml:288</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">docker build -f &lt;Dockerfile path&gt; \
-            --build-arg GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} \
-            -t ${{ steps.foundation.outputs.acrLoginServer }}/mmca-adc-{service}:${{ github.sha }} \
-            -t ${{ steps.foundation.outputs.acrLoginServer }}/mmca-adc-{service}:latest \
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">docker build -f &lt;Dockerfile path&gt; \
+            --build-arg GITHUB_TOKEN=<span class="hljs-variable">${{ secrets.GITHUB_TOKEN }</span>} \
+            -t <span class="hljs-variable">${{ steps.foundation.outputs.acrLoginServer }</span>}/mmca-adc-{service}:<span class="hljs-variable">${{ github.sha }</span>} \
+            -t <span class="hljs-variable">${{ steps.foundation.outputs.acrLoginServer }</span>}/mmca-adc-{service}:latest \
             .
-          docker push ${{ steps.foundation.outputs.acrLoginServer }}/mmca-adc-{service} --all-tags</code></pre>
+          docker push <span class="hljs-variable">${{ steps.foundation.outputs.acrLoginServer }</span>}/mmca-adc-{service} --all-tags</code></pre>
           <p><code>--build-arg GITHUB_TOKEN</code> passes the token into the Docker build context so the Dockerfile&#39;s
           <code>dotnet restore</code> step can pull MMCA.Common packages from GitHub Packages. Images are tagged with both
           <code>${{ github.sha }}</code> (the exact commit hash, immutable, traceable) and <code>latest</code> (for convenience in
@@ -597,9 +599,9 @@
           <code>infra/main.parameters.json</code> does not exist). The <code>jq --arg</code> flag properly JSON-escapes multiline values (critical for the RSA PEM keys,
           which contain newlines). Optional parameters (RSA keys, OAuth credentials, Anthropic API key, SMTP
           config, alert email) are conditionally appended only if their env vars are non-empty:</p>
-          <pre class="doc-pre"><code class="language-bash">if [ -n &quot;$RSA_PRIVATE_KEY&quot; ] &amp;&amp; [ -n &quot;$RSA_PUBLIC_KEY&quot; ]; then
-            jq --arg k &quot;$RSA_PRIVATE_KEY&quot; &#39;.parameters.rsaPrivateKeyPem = {&quot;value&quot;: $k}&#39; ...
-          fi</code></pre>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-keyword">if</span> [ -n <span class="hljs-string">&quot;<span class="hljs-variable">$RSA_PRIVATE_KEY</span>&quot;</span> ] &amp;&amp; [ -n <span class="hljs-string">&quot;<span class="hljs-variable">$RSA_PUBLIC_KEY</span>&quot;</span> ]; <span class="hljs-keyword">then</span>
+            jq --arg k <span class="hljs-string">&quot;<span class="hljs-variable">$RSA_PRIVATE_KEY</span>&quot;</span> <span class="hljs-string">&#x27;.parameters.rsaPrivateKeyPem = {&quot;value&quot;: $k}&#x27;</span> ...
+          <span class="hljs-keyword">fi</span></code></pre>
           <p>This pattern means the deployment is not blocked if an optional secret has not been configured, it
           simply omits that parameter, and the Bicep template&#39;s <code>@secure()</code> <code>param</code> falls back to its default
           (typically an empty string, which disables the feature). For example, if <code>JWT_RSA_PRIVATE_KEY_PEM</code> is
@@ -611,12 +613,12 @@
           but honors the <code>AZURE_SQL_LOCATION</code> repo variable (passed in as <code>SQL_LOCATION_OVERRIDE</code> at <code>deploy.yml:337</code>)
           so a different subscription or region can override it.</p>
           <p><strong>Phase 3 (continued), Application infrastructure</strong> (<code>deploy.yml:449-455</code>):</p>
-          <pre class="doc-pre"><code class="language-yaml">- name: Deploy application infrastructure
-            id: deploy
-            uses: azure/arm-deploy@v2
-            with:
-              template: infra/main.bicep
-              parameters: /tmp/deploy-params.json</code></pre>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Deploy</span> <span class="hljs-string">application</span> <span class="hljs-string">infrastructure</span>
+            <span class="hljs-attr">id:</span> <span class="hljs-string">deploy</span>
+            <span class="hljs-attr">uses:</span> <span class="hljs-string">azure/arm-deploy@v2</span>
+            <span class="hljs-attr">with:</span>
+              <span class="hljs-attr">template:</span> <span class="hljs-string">infra/main.bicep</span>
+              <span class="hljs-attr">parameters:</span> <span class="hljs-string">/tmp/deploy-params.json</span></code></pre>
           <p><code>main.bicep</code> provisions the Container Apps Environment, six Container Apps (one per service + Gateway +
           UI), Azure Service Bus (Standard tier, with Manage rights for MassTransit topology), Azure SQL Server
           and four per-service databases, App Insights, SLO alerts, and the monthly cost budget. (See the IaC
@@ -638,18 +640,18 @@
           without a racing dual-applier.</p>
           <p><strong>Phase 5, Post-deploy smoke gate with automatic rollback</strong> (<code>deploy.yml:469-531</code>):</p>
           <p>The smoke test probes three endpoints after the new revision is active:</p>
-          <pre class="doc-pre"><code class="language-bash">probe() {
-            for i in $(seq 1 12); do
-              code=$(curl -s -o /dev/null -w &quot;%{http_code}&quot; --max-time 15 &quot;$url&quot; || echo 000)
-              [ &quot;$code&quot; = &quot;200&quot; ] &amp;&amp; return 0
-              sleep 10
-            done
-            return 1
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-function"><span class="hljs-title">probe</span></span>() {
+            <span class="hljs-keyword">for</span> i <span class="hljs-keyword">in</span> $(<span class="hljs-built_in">seq</span> 1 12); <span class="hljs-keyword">do</span>
+              code=$(curl -s -o /dev/null -w <span class="hljs-string">&quot;%{http_code}&quot;</span> --max-time 15 <span class="hljs-string">&quot;<span class="hljs-variable">$url</span>&quot;</span> || <span class="hljs-built_in">echo</span> 000)
+              [ <span class="hljs-string">&quot;<span class="hljs-variable">$code</span>&quot;</span> = <span class="hljs-string">&quot;200&quot;</span> ] &amp;&amp; <span class="hljs-built_in">return</span> 0
+              <span class="hljs-built_in">sleep</span> 10
+            <span class="hljs-keyword">done</span>
+            <span class="hljs-built_in">return</span> 1
           }
           
-          probe &quot;https://${GATEWAY_FQDN}/health&quot;
-          probe &quot;https://${GATEWAY_FQDN}/.well-known/jwks.json&quot;
-          probe &quot;https://${UI_FQDN}/&quot;</code></pre>
+          probe <span class="hljs-string">&quot;https://<span class="hljs-variable">${GATEWAY_FQDN}</span>/health&quot;</span>
+          probe <span class="hljs-string">&quot;https://<span class="hljs-variable">${GATEWAY_FQDN}</span>/.well-known/jwks.json&quot;</span>
+          probe <span class="hljs-string">&quot;https://<span class="hljs-variable">${UI_FQDN}</span>/&quot;</span></code></pre>
           <p>Each probe polls up to 12 times (10-second intervals, 15-second curl timeout), two minutes total per
           endpoint. The three probes together exercise: Container Apps routing (Gateway health), cross-service
           dependency (JWKS endpoint exercises Identity, which must have reached its database and loaded its RSA
@@ -657,11 +659,11 @@
           <p>The comment on <code>deploy.yml:470-473</code> explains why JWKS is the key probe: &quot;a backend-through-gateway path
           (JWKS exercises Identity, this is what catches a service that deployed but can&#39;t reach its secrets/DB).&quot;</p>
           <p>If any probe fails, the rollback path (<code>deploy.yml:518-530</code>) activates:</p>
-          <pre class="doc-pre"><code class="language-bash">for app in $APPS; do
-            prev=$(az containerapp revision list ... --query &quot;reverse(sort_by(...))[1].name&quot; ...)
-            az containerapp revision copy -g &quot;$RG&quot; -n &quot;$app&quot; --from-revision &quot;$prev&quot;
-          done
-          exit 1</code></pre>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-keyword">for</span> app <span class="hljs-keyword">in</span> <span class="hljs-variable">$APPS</span>; <span class="hljs-keyword">do</span>
+            prev=$(az containerapp revision list ... --query <span class="hljs-string">&quot;reverse(sort_by(...))[1].name&quot;</span> ...)
+            az containerapp revision copy -g <span class="hljs-string">&quot;<span class="hljs-variable">$RG</span>&quot;</span> -n <span class="hljs-string">&quot;<span class="hljs-variable">$app</span>&quot;</span> --from-revision <span class="hljs-string">&quot;<span class="hljs-variable">$prev</span>&quot;</span>
+          <span class="hljs-keyword">done</span>
+          <span class="hljs-built_in">exit</span> 1</code></pre>
           <p>Every Container App is rolled back to its previous (provisioned) revision by copying it. The rollback is
           best-effort (individual rollback failures are logged but do not prevent other apps from rolling back), and
           the job exits with code 1 so the failure is visible in the GitHub workflow run.</p>
@@ -683,12 +685,12 @@
           <p>[Rubric §28, Front-End Testing &amp; Quality] (assesses whether browser-level tests cover real user
           journeys in a production-like environment) is the primary category this workflow serves.</p>
           <h3 id="trigger-workflow_dispatch--nightly-not-yet-a-merge-gate">Trigger, <code>workflow_dispatch</code> + nightly, not yet a merge gate</h3>
-          <pre class="doc-pre"><code class="language-yaml"># e2e.yml:26-30
-          on:
-            workflow_dispatch:
-            schedule:
-              # Nightly ~07:00 UTC so cold-start/cross-browser flakiness surfaces on a cadence, off the deploy path.
-              - cron: &quot;0 7 * * *&quot;</code></pre>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># e2e.yml:26-30</span>
+          <span class="hljs-attr">on:</span>
+            <span class="hljs-attr">workflow_dispatch:</span>
+            <span class="hljs-attr">schedule:</span>
+              <span class="hljs-comment"># Nightly ~07:00 UTC so cold-start/cross-browser flakiness surfaces on a cadence, off the deploy path.</span>
+              <span class="hljs-bullet">-</span> <span class="hljs-attr">cron:</span> <span class="hljs-string">&quot;0 7 * * *&quot;</span></code></pre>
           <p>It runs on manual dispatch <strong>and</strong> nightly (<code>cron: &quot;0 7 * * *&quot;</code>). The workflow header comment
           (<code>e2e.yml:3-24</code>) explains that it is &quot;Still NOT a push/PR gate: bringing up SQL + Redis + RabbitMQ + 4
           services + Gateway + UI in CI is being hardened via scheduled runs first. Once it&#39;s reliably green across
@@ -705,13 +707,13 @@
           test execution. The timeout must be generous enough that a slow runner does not fail a legitimate green
           run. The matrix is <code>fail-fast: false</code> so one engine&#39;s flake does not cancel the others.</p>
           <p><strong>Step 1, Trust the dev HTTPS certificate</strong> (<code>e2e.yml:68-69</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">dotnet dev-certs https --trust || dotnet dev-certs https</code></pre>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet dev-certs https --trust || dotnet dev-certs https</code></pre>
           <p>The <code>--trust</code> flag only succeeds on a runner that supports certificate trust stores (Linux runners may
           not). The <code>|| dotnet dev-certs https</code> fallback generates the certificate without trusting it. Playwright
           probes use <code>-k</code> (skip verification) for the HTTPS UI endpoint, so the certificate does not need to be
           trusted for the test suite, the certificate only needs to exist so the Aspire AppHost can bind to HTTPS.</p>
           <p><strong>Step 2, Build</strong> (<code>e2e.yml:71-79</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">dotnet build Source/Hosting/MMCA.ADC.AppHost -c Release
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet build Source/Hosting/MMCA.ADC.AppHost -c Release
           dotnet build Tests/E2E/MMCA.ADC.E2E.Tests -c Release</code></pre>
           <p>Both project graphs are built directly (not via the <code>.slnx</code>) to avoid pulling in the MAUI UI project,
           which requires a <code>maui-android</code> workload not available on standard Ubuntu runners (<code>e2e.yml:72-74</code>
@@ -720,14 +722,14 @@
           Same <code>find ... playwright.ps1</code> pattern as <code>MMCA.Common/ci.yml</code>&#39;s <code>ui-e2e</code> job, with the matrix browser
           engine.</p>
           <p><strong>Step 4, Start the Aspire stack</strong> (<code>e2e.yml:86-98</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out artifacts/jwt-priv.pem
-          openssl rsa -pubout -in artifacts/jwt-priv.pem -out artifacts/jwt-pub.pem
-          export E2E_JWT_PRIVATE_KEY_PEM=&quot;$(cat artifacts/jwt-priv.pem)&quot;
-          export E2E_JWT_PUBLIC_KEY_PEM=&quot;$(cat artifacts/jwt-pub.pem)&quot;
-          nohup dotnet run --project Source/Hosting/MMCA.ADC.AppHost -c Release --no-build \
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out artifacts/jwt-priv.pem
+          openssl rsa -pubout -<span class="hljs-keyword">in</span> artifacts/jwt-priv.pem -out artifacts/jwt-pub.pem
+          <span class="hljs-built_in">export</span> E2E_JWT_PRIVATE_KEY_PEM=<span class="hljs-string">&quot;<span class="hljs-subst">$(cat artifacts/jwt-priv.pem)</span>&quot;</span>
+          <span class="hljs-built_in">export</span> E2E_JWT_PUBLIC_KEY_PEM=<span class="hljs-string">&quot;<span class="hljs-subst">$(cat artifacts/jwt-pub.pem)</span>&quot;</span>
+          <span class="hljs-built_in">nohup</span> dotnet run --project Source/Hosting/MMCA.ADC.AppHost -c Release --no-build \
             &gt; artifacts/apphost.log 2&gt;&amp;1 &amp;
-          echo &quot;APPHOST_PID=$!&quot; &gt;&gt; &quot;$GITHUB_ENV&quot;
-          rm -f artifacts/jwt-priv.pem artifacts/jwt-pub.pem</code></pre>
+          <span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;APPHOST_PID=$!&quot;</span> &gt;&gt; <span class="hljs-string">&quot;<span class="hljs-variable">$GITHUB_ENV</span>&quot;</span>
+          <span class="hljs-built_in">rm</span> -f artifacts/jwt-priv.pem artifacts/jwt-pub.pem</code></pre>
           <p>An ephemeral RSA keypair is generated at CI startup and exported as env vars. The AppHost forwards these
           to the Identity service, which needs an RSA key to sign RS256 tokens. Without this, Identity would fall
           back to HS256 (or refuse to start if configured to require RS256). The private key file is deleted
@@ -738,16 +740,16 @@
           <p>[Rubric §11, Security] is served: the ephemeral keypair is generated fresh per run (no long-lived key
           material in secrets), and the private key file is deleted before any subsequent step runs.</p>
           <p><strong>Step 5, Wait for the stack (per-service readiness gate)</strong> (<code>e2e.yml:100-123</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">ready() {
-            ui=$(curl -k -s -o /dev/null -w &#39;%{http_code}&#39; --max-time 10 &quot;$UI_URL/health&quot;)
-            id=$(curl -k -s -o /dev/null -w &#39;%{http_code}&#39; --max-time 10 &quot;$GATEWAY_URL/.well-known/jwks.json&quot;)
-            conf=$(curl -k -s -o /dev/null -w &#39;%{http_code}&#39; --max-time 20 &quot;$GATEWAY_URL/Events&quot;)
-            [ &quot;$ui&quot; = &quot;200&quot; ] &amp;&amp; [ &quot;$id&quot; = &quot;200&quot; ] &amp;&amp; [ &quot;$conf&quot; = &quot;200&quot; ]
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-function"><span class="hljs-title">ready</span></span>() {
+            ui=$(curl -k -s -o /dev/null -w <span class="hljs-string">&#x27;%{http_code}&#x27;</span> --max-time 10 <span class="hljs-string">&quot;<span class="hljs-variable">$UI_URL</span>/health&quot;</span>)
+            <span class="hljs-built_in">id</span>=$(curl -k -s -o /dev/null -w <span class="hljs-string">&#x27;%{http_code}&#x27;</span> --max-time 10 <span class="hljs-string">&quot;<span class="hljs-variable">$GATEWAY_URL</span>/.well-known/jwks.json&quot;</span>)
+            conf=$(curl -k -s -o /dev/null -w <span class="hljs-string">&#x27;%{http_code}&#x27;</span> --max-time 20 <span class="hljs-string">&quot;<span class="hljs-variable">$GATEWAY_URL</span>/Events&quot;</span>)
+            [ <span class="hljs-string">&quot;<span class="hljs-variable">$ui</span>&quot;</span> = <span class="hljs-string">&quot;200&quot;</span> ] &amp;&amp; [ <span class="hljs-string">&quot;<span class="hljs-variable">$id</span>&quot;</span> = <span class="hljs-string">&quot;200&quot;</span> ] &amp;&amp; [ <span class="hljs-string">&quot;<span class="hljs-variable">$conf</span>&quot;</span> = <span class="hljs-string">&quot;200&quot;</span> ]
           }
-          for i in $(seq 1 90); do
-            if ready; then echo &quot;stack ready after ~${i}0s&quot;; exit 0; fi
-            sleep 10
-          done</code></pre>
+          <span class="hljs-keyword">for</span> i <span class="hljs-keyword">in</span> $(<span class="hljs-built_in">seq</span> 1 90); <span class="hljs-keyword">do</span>
+            <span class="hljs-keyword">if</span> ready; <span class="hljs-keyword">then</span> <span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;stack ready after ~<span class="hljs-variable">${i}</span>0s&quot;</span>; <span class="hljs-built_in">exit</span> 0; <span class="hljs-keyword">fi</span>
+            <span class="hljs-built_in">sleep</span> 10
+          <span class="hljs-keyword">done</span></code></pre>
           <p>This is <strong>not</strong> just a UI-health poll: it gates on <em>every</em> service the suite depends on, each probed
           through the Gateway on an anonymous endpoint so a 200 means the service is up <em>and</em> its EF model + SQL pool
           are built, UI <code>/health</code> (the Blazor host), <code>/.well-known/jwks.json</code> (Identity, the login path), and
@@ -760,16 +762,16 @@
           DB user-lookup + password-hash verify + RS256 signing (the dominant cold-start login-timeout culprit a
           UI-only warm-up never touched), and a prerender warm-up of the UI host&#39;s <code>/</code>, <code>/login</code>, <code>/register</code>.</p>
           <p><strong>Step 7, Run E2E tests</strong> (<code>e2e.yml:169-197</code>):</p>
-          <pre class="doc-pre"><code class="language-yaml">env:
-            E2E_BASE_URL: ${{ env.UI_URL }}
-            E2E_HEADLESS: &quot;true&quot;
-            E2E_BROWSER: ${{ matrix.browser }}
-            E2E_TIMEOUT: &quot;45000&quot;
-            E2E_AUTH_TIMEOUT: &quot;60000&quot;
-          run: &gt;-
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">env:</span>
+            <span class="hljs-attr">E2E_BASE_URL:</span> <span class="hljs-string">${{</span> <span class="hljs-string">env.UI_URL</span> <span class="hljs-string">}}</span>
+            <span class="hljs-attr">E2E_HEADLESS:</span> <span class="hljs-string">&quot;true&quot;</span>
+            <span class="hljs-attr">E2E_BROWSER:</span> <span class="hljs-string">${{</span> <span class="hljs-string">matrix.browser</span> <span class="hljs-string">}}</span>
+            <span class="hljs-attr">E2E_TIMEOUT:</span> <span class="hljs-string">&quot;45000&quot;</span>
+            <span class="hljs-attr">E2E_AUTH_TIMEOUT:</span> <span class="hljs-string">&quot;60000&quot;</span>
+          <span class="hljs-attr">run:</span> <span class="hljs-string">&gt;-
             dotnet test --project Tests/E2E/MMCA.ADC.E2E.Tests/MMCA.ADC.E2E.Tests.csproj
             -c Release --no-build
-            --retry-failed-tests 2 --retry-failed-tests-max-percentage 40</code></pre>
+            --retry-failed-tests 2 --retry-failed-tests-max-percentage 40</span></code></pre>
           <p><code>E2E_BASE_URL</code> points the Playwright tests at the live Aspire-hosted UI. <code>E2E_TIMEOUT: 45000</code> (raised from
           20000) absorbs residual first-navigation cold-start latency on a 2-core runner, and <code>E2E_AUTH_TIMEOUT: 60000</code> gives the auth round-trip its own headroom. <code>--retry-failed-tests 2 --retry-failed-tests-max-percentage 40</code> (MTP&#39;s retry extension) re-runs only the failed tests up to twice,
           but skips retry when &gt;40% of tests fail (a real breakage, not a contention spike). No coverage is collected
@@ -803,11 +805,11 @@
           over-provisioned relative to actual load. The cost-guard exists in part because the cost of a forgotten
           surge is non-trivial: SQL Server Standard S4 costs roughly 60× more per DTU than Basic tier.</p>
           <h3 id="triggers-1">Triggers</h3>
-          <pre class="doc-pre"><code class="language-yaml"># cost-guard.yml:10-13
-          on:
-            schedule:
-              - cron: &quot;0 7 * * 1&quot; # Mondays 07:00 UTC
-            workflow_dispatch:</code></pre>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># cost-guard.yml:10-13</span>
+          <span class="hljs-attr">on:</span>
+            <span class="hljs-attr">schedule:</span>
+              <span class="hljs-bullet">-</span> <span class="hljs-attr">cron:</span> <span class="hljs-string">&quot;0 7 * * 1&quot;</span> <span class="hljs-comment"># Mondays 07:00 UTC</span>
+            <span class="hljs-attr">workflow_dispatch:</span></code></pre>
           <p>Weekly on Monday mornings (UTC), early in the work week so a drift is noticed promptly, with time to
           investigate before the next week. <code>workflow_dispatch</code> allows a manual run at any time (e.g. to verify
           that a revert applied correctly).</p>
@@ -816,24 +818,24 @@
           credential as <code>deploy.yml</code>, giving the read-only Azure CLI calls access to the production resource group
           without a separate credential.</p>
           <p><strong>Step, Check replica caps and SQL tiers</strong> (<code>cost-guard.yml:36-82</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">BASELINE_MAX_REPLICAS: &quot;2&quot;   # cost-guard.yml:21
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">BASELINE_MAX_REPLICAS: <span class="hljs-string">&quot;2&quot;</span>   <span class="hljs-comment"># cost-guard.yml:21</span>
           
-          for app in $(az containerapp list -g &quot;$rg&quot; --query &quot;[?starts_with(name, &#39;adc-&#39;)].name&quot; -o tsv); do
-            max=$(az containerapp show ... --query &quot;properties.template.scale.maxReplicas&quot; -o tsv)
-            if [ &quot;${max:-0}&quot; -gt &quot;$BASELINE_MAX_REPLICAS&quot; ]; then status=&quot;⚠️ DRIFT&quot;; drift=1; fi
-          done
+          <span class="hljs-keyword">for</span> app <span class="hljs-keyword">in</span> $(az containerapp list -g <span class="hljs-string">&quot;<span class="hljs-variable">$rg</span>&quot;</span> --query <span class="hljs-string">&quot;[?starts_with(name, &#x27;adc-&#x27;)].name&quot;</span> -o tsv); <span class="hljs-keyword">do</span>
+            max=$(az containerapp show ... --query <span class="hljs-string">&quot;properties.template.scale.maxReplicas&quot;</span> -o tsv)
+            <span class="hljs-keyword">if</span> [ <span class="hljs-string">&quot;<span class="hljs-variable">${max:-0}</span>&quot;</span> -gt <span class="hljs-string">&quot;<span class="hljs-variable">$BASELINE_MAX_REPLICAS</span>&quot;</span> ]; <span class="hljs-keyword">then</span> status=<span class="hljs-string">&quot;⚠️ DRIFT&quot;</span>; drift=1; <span class="hljs-keyword">fi</span>
+          <span class="hljs-keyword">done</span>
           
-          for server in $(az sql server list ...); do
-            for db in $(az sql db list ...); do
-              tier=$(az sql db show ... --query &quot;sku.tier&quot; -o tsv)
-              if [ &quot;$tier&quot; != &quot;Basic&quot; ]; then status=&quot;⚠️ DRIFT&quot;; drift=1; fi
-            done
-          done
+          <span class="hljs-keyword">for</span> server <span class="hljs-keyword">in</span> $(az sql server list ...); <span class="hljs-keyword">do</span>
+            <span class="hljs-keyword">for</span> db <span class="hljs-keyword">in</span> $(az sql db list ...); <span class="hljs-keyword">do</span>
+              tier=$(az sql db show ... --query <span class="hljs-string">&quot;sku.tier&quot;</span> -o tsv)
+              <span class="hljs-keyword">if</span> [ <span class="hljs-string">&quot;<span class="hljs-variable">$tier</span>&quot;</span> != <span class="hljs-string">&quot;Basic&quot;</span> ]; <span class="hljs-keyword">then</span> status=<span class="hljs-string">&quot;⚠️ DRIFT&quot;</span>; drift=1; <span class="hljs-keyword">fi</span>
+            <span class="hljs-keyword">done</span>
+          <span class="hljs-keyword">done</span>
           
-          if [ &quot;$drift&quot; -ne 0 ]; then
-            echo &quot;❌ Surge drift detected, ... Reset to baseline ...&quot;
-            exit 1
-          fi</code></pre>
+          <span class="hljs-keyword">if</span> [ <span class="hljs-string">&quot;<span class="hljs-variable">$drift</span>&quot;</span> -ne 0 ]; <span class="hljs-keyword">then</span>
+            <span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;❌ Surge drift detected, ... Reset to baseline ...&quot;</span>
+            <span class="hljs-built_in">exit</span> 1
+          <span class="hljs-keyword">fi</span></code></pre>
           <p>The baseline is defined directly in the workflow file:</p>
           <ul>
           <li><code>BASELINE_MAX_REPLICAS: &quot;2&quot;</code>, maximum replicas per Container App at rest.</li>
@@ -866,18 +868,18 @@
           and Identity endpoints (auth) have different performance profiles and carry real-write risk, they are
           not targeted by this load test.</p>
           <h3 id="triggers-2">Triggers</h3>
-          <pre class="doc-pre"><code class="language-yaml"># load-test.yml:8-18
-          on:
-            workflow_dispatch:
-              inputs:
-                peak_vus:
-                  description: &quot;Peak concurrent virtual users&quot;
-                  default: &quot;67&quot; # observed 2026 conference-day peak
-                base_url:
-                  description: &quot;Target base URL (blank = discover the prod Gateway)&quot;
-                  default: &quot;&quot;
-            schedule:
-              - cron: &quot;0 6 1 * *&quot; # 06:00 UTC, 1st of each month (off-peak)</code></pre>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># load-test.yml:8-18</span>
+          <span class="hljs-attr">on:</span>
+            <span class="hljs-attr">workflow_dispatch:</span>
+              <span class="hljs-attr">inputs:</span>
+                <span class="hljs-attr">peak_vus:</span>
+                  <span class="hljs-attr">description:</span> <span class="hljs-string">&quot;Peak concurrent virtual users&quot;</span>
+                  <span class="hljs-attr">default:</span> <span class="hljs-string">&quot;67&quot;</span> <span class="hljs-comment"># observed 2026 conference-day peak</span>
+                <span class="hljs-attr">base_url:</span>
+                  <span class="hljs-attr">description:</span> <span class="hljs-string">&quot;Target base URL (blank = discover the prod Gateway)&quot;</span>
+                  <span class="hljs-attr">default:</span> <span class="hljs-string">&quot;&quot;</span>
+            <span class="hljs-attr">schedule:</span>
+              <span class="hljs-bullet">-</span> <span class="hljs-attr">cron:</span> <span class="hljs-string">&quot;0 6 1 * *&quot;</span> <span class="hljs-comment"># 06:00 UTC, 1st of each month (off-peak)</span></code></pre>
           <p>The default <code>peak_vus: &quot;67&quot;</code> is explicitly annotated as &quot;observed 2026 conference-day peak&quot;, the actual
           measured concurrent-user count from the 2026 conference (recorded in <code>project_adc_2026_actual_load.md</code>).
           This makes the load test meaningful rather than arbitrary: it verifies that the system can handle <em>what it
@@ -887,22 +889,22 @@
           <p><strong>Environment: <code>production</code></strong> (<code>load-test.yml:31</code>): OIDC-scoped to the production federated credential
           so the Azure CLI step can discover the Gateway FQDN from the resource group.</p>
           <p><strong>Step, Resolve target URL</strong> (<code>load-test.yml:42-55</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">url=&quot;${{ inputs.base_url }}&quot;
-          if [ -z &quot;$url&quot; ]; then
-            fqdn=$(az containerapp list -g &quot;$AZURE_RESOURCE_GROUP&quot; \
-              --query &quot;[?contains(name, &#39;gateway&#39;)].properties.configuration.ingress.fqdn | [0]&quot; -o tsv)
-            url=&quot;https://$fqdn&quot;
-          fi
-          echo &quot;url=$url&quot; &gt;&gt; &quot;$GITHUB_OUTPUT&quot;</code></pre>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">url=<span class="hljs-string">&quot;<span class="hljs-variable">${{ inputs.base_url }</span>}&quot;</span>
+          <span class="hljs-keyword">if</span> [ -z <span class="hljs-string">&quot;<span class="hljs-variable">$url</span>&quot;</span> ]; <span class="hljs-keyword">then</span>
+            fqdn=$(az containerapp list -g <span class="hljs-string">&quot;<span class="hljs-variable">$AZURE_RESOURCE_GROUP</span>&quot;</span> \
+              --query <span class="hljs-string">&quot;[?contains(name, &#x27;gateway&#x27;)].properties.configuration.ingress.fqdn | [0]&quot;</span> -o tsv)
+            url=<span class="hljs-string">&quot;https://<span class="hljs-variable">$fqdn</span>&quot;</span>
+          <span class="hljs-keyword">fi</span>
+          <span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;url=<span class="hljs-variable">$url</span>&quot;</span> &gt;&gt; <span class="hljs-string">&quot;<span class="hljs-variable">$GITHUB_OUTPUT</span>&quot;</span></code></pre>
           <p>If <code>base_url</code> is blank (the normal case), the step queries Azure for the Gateway&#39;s FQDN dynamically.
           This means the load test does not need to be updated when the resource group or environment name changes,
           it discovers the target at runtime. An explicit <code>base_url</code> input allows targeting a non-production
           environment (e.g. a staging slot) without modifying the workflow.</p>
           <p><strong>Step, Run k6</strong> (<code>load-test.yml:57-63</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">docker run --rm -i \
-            -e BASE_URL=&#39;${{ steps.target.outputs.url }}&#39; \
-            -e PEAK_VUS=&#39;${{ inputs.peak_vus || &#39;40&#39; }}&#39; \
-            -v &quot;$PWD/Tests/Load/k6:/scripts&quot; \
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">docker run --<span class="hljs-built_in">rm</span> -i \
+            -e BASE_URL=<span class="hljs-string">&#x27;${{ steps.target.outputs.url }}&#x27;</span> \
+            -e PEAK_VUS=<span class="hljs-string">&#x27;${{ inputs.peak_vus || &#x27;</span>40<span class="hljs-string">&#x27; }}&#x27;</span> \
+            -v <span class="hljs-string">&quot;<span class="hljs-variable">$PWD</span>/Tests/Load/k6:/scripts&quot;</span> \
             grafana/k6 run /scripts/conference-read-load.js</code></pre>
           <p>k6 runs in Docker (<code>grafana/k6</code> image), with the k6 script directory mounted as a volume. <code>PEAK_VUS</code> and
           <code>BASE_URL</code> are passed as environment variables into the k6 runtime. The k6 script is at
@@ -942,23 +944,23 @@
           <p>[Rubric §17, DevOps &amp; Deployment] is served: the cutover is an automated, auditable, idempotent workflow
           rather than a manual script run ad-hoc.</p>
           <h3 id="trigger-manual-with-required-confirmation">Trigger, manual with required confirmation</h3>
-          <pre class="doc-pre"><code class="language-yaml"># cutover-per-service-dbs.yml:17-25
-          on:
-            workflow_dispatch:
-              inputs:
-                confirm:
-                  description: &#39;Type &quot;cutover&quot; to confirm the one-time production data migration&#39;
-                  required: true
-                freeze_traffic:
-                  description: &#39;Disable gateway ingress during the copy (recommended)&#39;
-                  type: boolean
-                  default: false</code></pre>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># cutover-per-service-dbs.yml:17-25</span>
+          <span class="hljs-attr">on:</span>
+            <span class="hljs-attr">workflow_dispatch:</span>
+              <span class="hljs-attr">inputs:</span>
+                <span class="hljs-attr">confirm:</span>
+                  <span class="hljs-attr">description:</span> <span class="hljs-string">&#x27;Type &quot;cutover&quot; to confirm the one-time production data migration&#x27;</span>
+                  <span class="hljs-attr">required:</span> <span class="hljs-literal">true</span>
+                <span class="hljs-attr">freeze_traffic:</span>
+                  <span class="hljs-attr">description:</span> <span class="hljs-string">&#x27;Disable gateway ingress during the copy (recommended)&#x27;</span>
+                  <span class="hljs-attr">type:</span> <span class="hljs-string">boolean</span>
+                  <span class="hljs-attr">default:</span> <span class="hljs-literal">false</span></code></pre>
           <p>The <code>confirm</code> input requires the operator to type the exact word <code>&quot;cutover&quot;</code>, the first step validates
           this (<code>cutover-per-service-dbs.yml:48-53</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">if [ &quot;${{ inputs.confirm }}&quot; != &quot;cutover&quot; ]; then
-            echo &quot;::error::Confirmation input must be exactly &#39;cutover&#39;.&quot;
-            exit 1
-          fi</code></pre>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-keyword">if</span> [ <span class="hljs-string">&quot;<span class="hljs-variable">${{ inputs.confirm }</span>}&quot;</span> != <span class="hljs-string">&quot;cutover&quot;</span> ]; <span class="hljs-keyword">then</span>
+            <span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;::error::Confirmation input must be exactly &#x27;cutover&#x27;.&quot;</span>
+            <span class="hljs-built_in">exit</span> 1
+          <span class="hljs-keyword">fi</span></code></pre>
           <p>This guard prevents accidental triggering, a workflow_dispatch from a mobile device or a mis-click
           without typing the confirmation string will fail immediately before any Azure operation. This is a UX
           safety mechanism borrowed from runbook practice.</p>
@@ -969,22 +971,22 @@
           <code>always()</code> guard ensures that a step failure after the freeze but before the re-enable does not leave the
           Gateway permanently down.</p>
           <h3 id="concurrency-shares-prod-azure-group">Concurrency: shares <code>prod-azure</code> group</h3>
-          <pre class="doc-pre"><code class="language-yaml"># cutover-per-service-dbs.yml:37-39
-          concurrency:
-            group: prod-azure
-            cancel-in-progress: false</code></pre>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># cutover-per-service-dbs.yml:37-39</span>
+          <span class="hljs-attr">concurrency:</span>
+            <span class="hljs-attr">group:</span> <span class="hljs-string">prod-azure</span>
+            <span class="hljs-attr">cancel-in-progress:</span> <span class="hljs-literal">false</span></code></pre>
           <p>The cutover shares the same group as <code>deploy.yml</code> (<code>deploy.yml:24</code>). This ensures that if a push to
           <code>main</code> triggers a deploy while the cutover is running (or vice versa), they do not interleave. A standard
           deploy rolling new container-app revisions while the cutover is copying data would be catastrophic,
           services pointing at both the old and new databases simultaneously.</p>
           <h3 id="job-cutover-step-by-step">Job: <code>cutover</code>, step-by-step</h3>
           <p><strong>GATE 1, Assert the app is still on AtlDevCon</strong> (<code>cutover-per-service-dbs.yml:69-81</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">N=$(az containerapp show -n adc-prod-identity -g &quot;$AZURE_RESOURCE_GROUP&quot; \
-            --query &quot;length(properties.template.containers[0].env[?name==&#39;DataSources__Identity__SQLServerConnectionString&#39;])&quot; -o tsv)
-          if [ &quot;$N&quot; != &quot;0&quot; ]; then
-            echo &quot;::error::adc-prod-identity already carries per-service DB config, commit 2 deployed before the cutover ran.&quot;
-            exit 1
-          fi</code></pre>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">N=$(az containerapp show -n adc-prod-identity -g <span class="hljs-string">&quot;<span class="hljs-variable">$AZURE_RESOURCE_GROUP</span>&quot;</span> \
+            --query <span class="hljs-string">&quot;length(properties.template.containers[0].env[?name==&#x27;DataSources__Identity__SQLServerConnectionString&#x27;])&quot;</span> -o tsv)
+          <span class="hljs-keyword">if</span> [ <span class="hljs-string">&quot;<span class="hljs-variable">$N</span>&quot;</span> != <span class="hljs-string">&quot;0&quot;</span> ]; <span class="hljs-keyword">then</span>
+            <span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;::error::adc-prod-identity already carries per-service DB config, commit 2 deployed before the cutover ran.&quot;</span>
+            <span class="hljs-built_in">exit</span> 1
+          <span class="hljs-keyword">fi</span></code></pre>
           <p>This gate checks whether <code>adc-prod-identity</code> already has the per-service database connection string in
           its environment. If it does, &quot;commit 2&quot; (the container-app flip) has already been deployed, meaning the
           services have already auto-migrated and seeded the per-service databases, running the copy on top would
@@ -994,18 +996,18 @@
           server whose name starts with <code>adc-prod-sql-</code>, the naming convention established by <code>main.bicep</code>. The
           FQDN is stored as a step output and reused in all subsequent SQL-targeting steps.</p>
           <p><strong>Freeze gateway traffic (optional)</strong> (<code>cutover-per-service-dbs.yml:99-101</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">if: ${{ inputs.freeze_traffic }}
-          run: az containerapp ingress disable -n adc-prod-gateway -g &quot;$AZURE_RESOURCE_GROUP&quot;</code></pre>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-keyword">if</span>: <span class="hljs-variable">${{ inputs.freeze_traffic }</span>}
+          run: az containerapp ingress <span class="hljs-built_in">disable</span> -n adc-prod-gateway -g <span class="hljs-string">&quot;<span class="hljs-variable">$AZURE_RESOURCE_GROUP</span>&quot;</span></code></pre>
           <p>Disabling the Gateway ingress stops new user traffic from reaching the services during the copy window.
           New writes during the copy would be captured in <code>AtlDevCon</code>&#39;s outbox but not in the per-service
           databases (which are the copy targets). The freeze eliminates this window. The tradeoff is a brief user-
           visible outage; the operator chooses based on the data&#39;s staleness tolerance.</p>
           <p><strong>GATE 2, Outbox drain gate</strong> (<code>cutover-per-service-dbs.yml:102-117</code>):</p>
-          <pre class="doc-pre"><code class="language-bash">PENDING=$(sqlcmd -S ... -d AtlDevCon ... -Q &quot;SET NOCOUNT ON; SELECT COUNT(*) FROM dbo.OutboxMessages WHERE ProcessedOn IS NULL;&quot;)
-          if [ &quot;$PENDING&quot; != &quot;0&quot; ]; then
-            echo &quot;::error::AtlDevCon outbox not drained ($PENDING unprocessed rows).&quot;
-            exit 1
-          fi</code></pre>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">PENDING=$(sqlcmd -S ... -d AtlDevCon ... -Q <span class="hljs-string">&quot;SET NOCOUNT ON; SELECT COUNT(*) FROM dbo.OutboxMessages WHERE ProcessedOn IS NULL;&quot;</span>)
+          <span class="hljs-keyword">if</span> [ <span class="hljs-string">&quot;<span class="hljs-variable">$PENDING</span>&quot;</span> != <span class="hljs-string">&quot;0&quot;</span> ]; <span class="hljs-keyword">then</span>
+            <span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;::error::AtlDevCon outbox not drained (<span class="hljs-variable">$PENDING</span> unprocessed rows).&quot;</span>
+            <span class="hljs-built_in">exit</span> 1
+          <span class="hljs-keyword">fi</span></code></pre>
           <p>The outbox gate runs <em>after</em> the optional freeze, so no new rows can appear while the count is being
           read. An unprocessed outbox row represents a domain event that has not been delivered, if the data copy
           ran with pending outbox rows, the integration events for those rows would be delivered after the cutover
@@ -1022,18 +1024,18 @@
           <p><strong>Apply migrations to the four databases</strong> (<code>cutover-per-service-dbs.yml:137-146</code>): Each <code>ADC_${MODULE}</code>
           database receives its full schema via the idempotent migration script applied with <code>sqlcmd</code>.</p>
           <p><strong>Copy AtlDevCon data</strong> (<code>cutover-per-service-dbs.yml:148-162</code>):</p>
-          <pre class="doc-pre"><code class="language-powershell">./scripts/copy-atldevcon-to-per-service-dbs.azure.ps1 `
-            -ServerFqdn $env:SQL_SERVER `
-            -AdminUser adcadmin `
-            -AdminPassword $env:SQL_PASSWORD `
-            -VerifyCounts</code></pre>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">./scripts/<span class="hljs-built_in">copy-atldevcon</span><span class="hljs-literal">-to-per-service-dbs</span>.azure.ps1 `
+            <span class="hljs-literal">-ServerFqdn</span> <span class="hljs-variable">$env:SQL_SERVER</span> `
+            <span class="hljs-literal">-AdminUser</span> adcadmin `
+            <span class="hljs-literal">-AdminPassword</span> <span class="hljs-variable">$env:SQL_PASSWORD</span> `
+            <span class="hljs-literal">-VerifyCounts</span></code></pre>
           <p>The PowerShell script (not included in this workflow&#39;s file, it is in <code>scripts/</code>) uses <code>SqlBulkCopy</code>
           (via the <code>SqlServer</code> PowerShell module, installed in the preceding step) to transfer data table-by-table
           from <code>AtlDevCon</code> into the four per-service databases. <code>-VerifyCounts</code> asserts row counts match between
           source and target after the copy. <code>AtlDevCon</code> is never modified, it is read-only throughout.</p>
           <p><strong>Re-enable gateway ingress</strong> (<code>cutover-per-service-dbs.yml:164-172</code>):</p>
-          <pre class="doc-pre"><code class="language-yaml">if: ${{ always() &amp;&amp; inputs.freeze_traffic }}
-          run: az containerapp ingress enable -n adc-prod-gateway -g &quot;$AZURE_RESOURCE_GROUP&quot; --type external --target-port 8080 --transport http</code></pre>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">if:</span> <span class="hljs-string">${{</span> <span class="hljs-string">always()</span> <span class="hljs-string">&amp;&amp;</span> <span class="hljs-string">inputs.freeze_traffic</span> <span class="hljs-string">}}</span>
+          <span class="hljs-attr">run:</span> <span class="hljs-string">az</span> <span class="hljs-string">containerapp</span> <span class="hljs-string">ingress</span> <span class="hljs-string">enable</span> <span class="hljs-string">-n</span> <span class="hljs-string">adc-prod-gateway</span> <span class="hljs-string">-g</span> <span class="hljs-string">&quot;$AZURE_RESOURCE_GROUP&quot;</span> <span class="hljs-string">--type</span> <span class="hljs-string">external</span> <span class="hljs-string">--target-port</span> <span class="hljs-number">8080</span> <span class="hljs-string">--transport</span> <span class="hljs-string">http</span></code></pre>
           <p><code>always()</code> ensures the Gateway is re-enabled even if a later step failed, so the site is never left in
           a permanently-disabled state. The explicit <code>--type external --target-port 8080 --transport http</code> args
           are required because <code>az containerapp ingress enable</code> does not accept a bare <code>enable</code> without specifying
@@ -1180,6 +1182,22 @@
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#mmcacommon-ciyml">MMCA.Common, ci.yml</a></li>
+            <li><a href="#mmcacommon-releaseyml">MMCA.Common, release.yml</a></li>
+            <li><a href="#mmcaadc-deployyml">MMCA.ADC, deploy.yml</a></li>
+            <li><a href="#mmcaadc-e2eyml">MMCA.ADC, e2e.yml</a></li>
+            <li><a href="#mmcaadc-cost-guardyml">MMCA.ADC, cost-guard.yml</a></li>
+            <li><a href="#mmcaadc-load-testyml">MMCA.ADC, load-test.yml</a></li>
+            <li><a href="#mmcaadc-cutover-per-service-dbsyml">MMCA.ADC, cutover-per-service-dbs.yml</a></li>
+            <li><a href="#cross-workflow-summary">Cross-workflow summary</a></li>
+            <li><a href="#rubric-category-index-for-this-chapter">Rubric category index for this chapter</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

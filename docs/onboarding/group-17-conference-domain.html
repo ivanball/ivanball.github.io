@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"17. ADC Conference - Domain Model & Module Contracts","item":"https://ivanball.github.io/docs/onboarding/group-17-conference-domain.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">17. ADC Conference - Domain Model &amp; Module Contracts</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Guide contents</summary>
@@ -2352,6 +2354,23 @@
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#two-packages-one-bounded-context">Two packages, one bounded context</a></li>
+            <li><a href="#five-aggregates-a-sixth-scorecard-and-their-ownership-boundaries">Five aggregates, a sixth scorecard, and their ownership boundaries</a></li>
+            <li><a href="#the-aggregate-shape-taught-once">The aggregate shape, taught once</a></li>
+            <li><a href="#invariants-business-rules-as-testable-units">Invariants, business rules as testable units</a></li>
+            <li><a href="#domain-events-and-the-outbox-spine">Domain events and the outbox spine</a></li>
+            <li><a href="#the-cross-aggregate-cascade-a-pure-domain-service">The cross-aggregate cascade: a pure domain service</a></li>
+            <li><a href="#read-models-and-the-ai-decision-support-feature">Read models and the AI decision-support feature</a></li>
+            <li><a href="#authorization-vocabulary-and-current-event-selection">Authorization vocabulary and current-event selection</a></li>
+            <li><a href="#crossing-the-module-boundary-contracts-stubs-and-integration-events">Crossing the module boundary: contracts, stubs, and integration events</a></li>
+            <li><a href="#end-to-end-one-organizer-action">End-to-end: one organizer action</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

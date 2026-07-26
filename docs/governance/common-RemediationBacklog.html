@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Governance","item":"https://ivanball.github.io/docs/governance/index.html"},{"@type":"ListItem","position":4,"name":"Common · Architecture Remediation Backlog","item":"https://ivanball.github.io/docs/governance/common-RemediationBacklog.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">Common · Architecture Remediation Backlog</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Rubric, scorecards &amp; backlogs</summary>
@@ -1173,6 +1175,43 @@
           <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/governance/common-RemediationBacklog.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#progress--first-wave-2026-06-08">Progress — first wave (2026-06-08)</a></li>
+            <li><a href="#progress--second-wave-2026-06-09">Progress — second wave (2026-06-09)</a></li>
+            <li><a href="#progress--third-wave-front-end-2026-06-09">Progress — third wave (front-end, 2026-06-09)</a></li>
+            <li><a href="#progress--fourth-wave-breaking-changes--consumer-sweep-2026-06-09">Progress — fourth wave (breaking changes + consumer sweep, 2026-06-09)</a></li>
+            <li><a href="#progress--v1800-2026-06-26">Progress — v1.80.0 (2026-06-26)</a></li>
+            <li><a href="#progress--v1810v1820--governance-pass-2026-06-26">Progress — v1.81.0/v1.82.0 + governance pass (2026-06-26)</a></li>
+            <li><a href="#progress--v1830v1840-2026-06-27">Progress — v1.83.0/v1.84.0 (2026-06-27)</a></li>
+            <li><a href="#progress--v1850-eighth-wave-under-8-implementation-remediation-2026-06-27">Progress — v1.85.0 (eighth wave: under-8 Implementation remediation, 2026-06-27)</a></li>
+            <li><a href="#progress--v1860v1920-ninth-wave-i18n--re-score-2026-06-29">Progress — v1.86.0→v1.92.0 (ninth wave: i18n + re-score, 2026-06-29)</a></li>
+            <li><a href="#progress--tenth-wave-focused-in-repo-remediation-2026-06-30">Progress — tenth wave (focused in-repo remediation, 2026-06-30)</a></li>
+            <li><a href="#progress--eleventh-wave-adr-governance-2026-06-30">Progress — eleventh wave (ADR governance, 2026-06-30)</a></li>
+            <li><a href="#progress--twelfth-wave-under-8-implementation-lift-v1940-pending-2026-06-30">Progress — twelfth wave (under-8 Implementation lift, v1.94.0 pending, 2026-06-30)</a></li>
+            <li><a href="#progress---fourteenth-wave-clean-tree-evidence-re-score-at-v11010-2026-07-03">Progress - fourteenth wave (clean-tree evidence re-score at v1.101.0, 2026-07-03)</a></li>
+            <li><a href="#progress---defect-fix-wave-c-1c-7-2026-07-05">Progress - defect-fix wave C-1..C-7 (2026-07-05)</a></li>
+            <li><a href="#progress-sixteenth-wave-clean-tree-re-score-at-v11060-2026-07-06">Progress: sixteenth wave (clean-tree re-score at v1.106.0, 2026-07-06)</a></li>
+            <li><a href="#progress---seventeenth-wave-evidence-re-score-at-v11080-2026-07-09">Progress - seventeenth wave (evidence re-score at v1.108.0, 2026-07-09)</a></li>
+            <li><a href="#progress---eighteenth-wave-runtime-performance-wave-2026-07-10">Progress - eighteenth wave (runtime performance wave, 2026-07-10)</a></li>
+            <li><a href="#progress---remediation-wave-1-cross-repo-wave-plan-2026-07-11">Progress - remediation wave 1 (cross-repo wave plan, 2026-07-11)</a></li>
+            <li><a href="#progress---eighteenth-wave-evidence-re-score-at-v11150-2026-07-12">Progress - eighteenth wave (evidence re-score at v1.115.0, 2026-07-12)</a></li>
+            <li><a href="#progress---twentieth-wave-evidence-re-score-at-v11170-2026-07-17">Progress - twentieth wave (evidence re-score at v1.117.0, 2026-07-17)</a></li>
+            <li><a href="#progress---twenty-first-wave-evidence-re-score-at-v11210-2026-07-21">Progress - twenty-first wave (evidence re-score at v1.121.0, 2026-07-21)</a></li>
+            <li><a href="#progress---twenty-second-wave-evidence-re-score-at-v11230-2026-07-23">Progress - twenty-second wave (evidence re-score at v1.123.0, 2026-07-23)</a></li>
+            <li><a href="#progress---twenty-third-wave-evidence-re-score-at-v11280-2026-07-25">Progress - twenty-third wave (evidence re-score at v1.128.0, 2026-07-25)</a></li>
+            <li><a href="#deferred---2026-07-19-full-review-recorded-not-scheduled">Deferred - 2026-07-19 full review (recorded, not scheduled)</a></li>
+            <li><a href="#priority-6--highest-leverage">🔴 Priority 6 — highest leverage</a></li>
+            <li><a href="#priority-3--score-3-weight-3-one-rung-from-a-4">🟠 Priority 3 — score 3, weight 3 (one rung from a 4)</a></li>
+            <li><a href="#priority-2--score-3-weight-2-polish--hardening">🟡 Priority 2 — score 3, weight 2 (polish / hardening)</a></li>
+            <li><a href="#already-at-level-4--protect-dont-regress">✅ Already at level 4 — protect, don&#39;t regress</a></li>
+            <li><a href="#deliberate--accepted-documented-caps-not-scheduled-work">🔒 Deliberate / accepted (documented caps, not scheduled work)</a></li>
+            <li><a href="#mostly-consumer-assessed-the-shared-commonui-surface-is-scored-here">⚪ Mostly consumer-assessed (the shared Common.UI surface is scored here)</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

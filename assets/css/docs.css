@@ -27,6 +27,14 @@
   gap: 2.5rem;
   align-items: start;
 }
+/* Documents with enough sections get a third column: the collection nav on the
+   left, the document's own headings on the right. Below 1180px the rail is the
+   first thing to go, since the sidebar already answers "where am I". */
+.doc-layout--toc { grid-template-columns: 250px minmax(0, 1fr) 200px; gap: 2rem; }
+@media (max-width: 1180px) {
+  .doc-layout--toc { grid-template-columns: 270px minmax(0, 1fr); }
+  .doc-layout--toc .doc-aside { display: none; }
+}
 
 /* ----- Sidebar (collection nav) ----- */
 .doc-sidebar { position: sticky; top: 80px; }
@@ -83,6 +91,49 @@
   font-weight: 600;
 }
 
+/* ----- On-this-page rail ----- */
+.doc-aside { position: sticky; top: 96px; min-width: 0; }
+.doc-toc {
+  border-left: 2px solid var(--border);
+  padding: 0.1rem 0 0.1rem 0.9rem;
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+}
+.doc-toc-title {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin: 0 0 0.5rem;
+}
+.doc-toc ul { list-style: none; margin: 0; padding: 0; }
+.doc-toc li { margin: 0 0 0.15rem; }
+.doc-toc a {
+  position: relative;
+  display: block;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  padding: 0.22rem 0;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.doc-toc a:hover { color: var(--text); }
+/* main.js marks the heading currently in view. The marker sits on top of the rail's
+   own border, so the active item reads as a position and not only as a color. */
+.doc-toc a[aria-current] { color: var(--accent); font-weight: 600; }
+.doc-toc a[aria-current]::before {
+  content: "";
+  position: absolute;
+  left: -0.95rem;
+  top: 0.22rem;
+  bottom: 0.22rem;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
 /* ----- Rendered markdown content ----- */
 .doc-content { min-width: 0; max-width: 80ch; }
 .doc-kicker { margin-bottom: 0.4rem; }
@@ -118,8 +169,10 @@
   padding: 0.1em 0.36em;
   overflow-wrap: anywhere;
 }
-/* Code blocks */
+/* Code blocks. The language label comes from the fence via data-lang, set by the
+   generator; blocks with no language simply have no label. */
 .doc-content pre.doc-pre {
+  position: relative;
   background: var(--surface-alt);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -127,6 +180,24 @@
   overflow-x: auto;
   margin: 0 0 1.25rem;
   line-height: 1.55;
+}
+.doc-content pre.doc-pre[data-lang] { padding-top: 1.9rem; }
+.doc-content pre.doc-pre[data-lang]::before {
+  content: attr(data-lang);
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 0.2rem 0.7rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  border-radius: 0 var(--radius-sm) 0 var(--radius-sm);
 }
 .doc-content pre.doc-pre code {
   background: none;
@@ -137,6 +208,72 @@
   white-space: pre;
   overflow-wrap: normal;
 }
+
+/* ----- Syntax highlighting -----
+   Highlighting is applied at BUILD time (highlight.js in tools/build-docs.mjs), so
+   no highlighter ships to the reader: these rules colour the emitted .hljs-* spans.
+   The palette is derived from the site tokens rather than a stock hljs theme, and
+   the dark values are stated once under both dark selectors, like the token block
+   in styles.css. Hues are kept few on purpose: keyword, type, string, comment,
+   number, and everything else is body text. */
+.doc-content .hljs {
+  --hl-keyword: #9425a8;
+  --hl-type: #0b6f79;
+  --hl-string: #1a6b2f;
+  --hl-comment: #5c6b7f;
+  --hl-number: #a4531b;
+  --hl-meta: #51637a;
+}
+:root[data-theme="dark"] .doc-content .hljs {
+  --hl-keyword: #d69ce8;
+  --hl-type: #58cfd8;
+  --hl-string: #86d99b;
+  --hl-comment: #8d9db2;
+  --hl-number: #e8b184;
+  --hl-meta: #a3b3c7;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .doc-content .hljs {
+    --hl-keyword: #d69ce8;
+    --hl-type: #58cfd8;
+    --hl-string: #86d99b;
+    --hl-comment: #8d9db2;
+    --hl-number: #e8b184;
+    --hl-meta: #a3b3c7;
+  }
+}
+.doc-content .hljs-comment,
+.doc-content .hljs-quote { color: var(--hl-comment); font-style: italic; }
+.doc-content .hljs-keyword,
+.doc-content .hljs-selector-tag,
+.doc-content .hljs-literal,
+.doc-content .hljs-doctag,
+.doc-content .hljs-name,
+.doc-content .hljs-section { color: var(--hl-keyword); font-weight: 600; }
+.doc-content .hljs-string,
+.doc-content .hljs-regexp,
+.doc-content .hljs-addition,
+.doc-content .hljs-attribute { color: var(--hl-string); }
+.doc-content .hljs-type,
+.doc-content .hljs-class .hljs-title,
+.doc-content .hljs-title.class_,
+.doc-content .hljs-title.function_,
+.doc-content .hljs-built_in,
+.doc-content .hljs-selector-class { color: var(--hl-type); }
+.doc-content .hljs-number,
+.doc-content .hljs-symbol,
+.doc-content .hljs-bullet,
+.doc-content .hljs-link { color: var(--hl-number); }
+.doc-content .hljs-meta,
+.doc-content .hljs-meta .hljs-keyword,
+.doc-content .hljs-variable,
+.doc-content .hljs-template-variable,
+.doc-content .hljs-attr,
+.doc-content .hljs-property,
+.doc-content .hljs-params { color: var(--hl-meta); }
+.doc-content .hljs-deletion { color: var(--hl-number); }
+.doc-content .hljs-emphasis { font-style: italic; }
+.doc-content .hljs-strong { font-weight: 700; }
 
 /* Blockquotes / callouts */
 .doc-content blockquote {

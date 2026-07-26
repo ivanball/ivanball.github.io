@@ -64,6 +64,8 @@
   </script>
   <!-- BEGIN head-assets -->
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="assets/css/styles.css">
   <script defer src="assets/js/main.js"></script>
   <script defer src="assets/js/analytics.js"></script>
@@ -101,13 +103,11 @@
   <!-- END site-header -->
 
   <main id="main">
-    <section class="section">
+    <div class="page-head">
       <div class="container">
-        <div class="section-head">
-          <p class="eyebrow">Speaking &amp; community</p>
-          <h1 style="margin:0 0 0.6rem">Talks and giving back</h1>
-          <p style="max-width:72ch">For more than 20 years I have been an active contributor to the Microsoft developer communities in Atlanta and South Florida: teaching, mentoring, speaking, and helping run community-driven events. My goal is simple, to lower the barrier to building well-architected systems on the Microsoft platform.</p>
-        </div>
+        <p class="eyebrow">Speaking &amp; community</p>
+        <h1>Talks and giving back</h1>
+        <p class="lede">For more than 20 years I have been an active contributor to the Microsoft developer communities in Atlanta and South Florida: teaching, mentoring, speaking, and helping run community-driven events. My goal is simple, to lower the barrier to building well-architected systems on the Microsoft platform.</p>
         <div class="stats">
           <div class="stat"><div class="num">324</div><div class="label">Attendees, Atlanta Cloud + AI 2026</div></div>
           <div class="stat"><div class="num">53</div><div class="label">Speakers coordinated</div></div>
@@ -115,7 +115,7 @@
           <div class="stat"><div class="num">4</div><div class="label">Atlanta user groups active in</div></div>
         </div>
       </div>
-    </section>
+    </div>
 
     <!-- Talks -->
     <section class="section section--alt">
@@ -126,13 +126,13 @@
         </div>
         <div class="grid grid--2">
           <article class="card">
-            <span class="kicker" style="color:var(--accent)">Atlanta Cloud + AI Conference · 2026</span>
+            <span class="kicker kicker--accent">Atlanta Cloud + AI Conference · 2026</span>
             <h3>The App You're Using Right Now</h3>
             <p style="font-weight:600;color:var(--text);margin-bottom:0.6rem">Building Atlanta Cloud + AI's own platform with Claude in the loop</p>
             <p class="mb-0">A field report, not a slide deck about architecture. The conference's own app was the subject of the talk: a .NET 10 modular monolith on Azure Container Apps, modeled as one Aspire graph, built with Claude Code as a constant pair-programmer. It covered what shipped, what generalized to other projects, what it costs to run, and the places the model helped and the places it shipped subtle bugs, with a decision rule for when to let the model drive.</p>
           </article>
           <article class="card">
-            <span class="kicker" style="color:var(--accent)">Atlanta Developers Conference · October 2025</span>
+            <span class="kicker kicker--accent">Atlanta Developers Conference · October 2025</span>
             <h3>Building Enterprise .NET Applications with Clean Architecture &amp; Domain-Driven Design</h3>
             <p class="muted" style="margin-bottom:0.6rem">55 attendees</p>
             <p class="mb-0">A practical session on Clean Architecture and Domain-Driven Design on modern .NET: bounded contexts, CQRS, the Result pattern, and modular monolith design, drawn directly from the open-source framework work.</p>
@@ -151,13 +151,13 @@
         </div>
         <div class="grid grid--2">
           <article class="card">
-            <span class="kicker" style="color:var(--accent)">Lead organizer</span>
+            <span class="kicker kicker--accent">Lead organizer</span>
             <h3>Atlanta Cloud + AI Conference 2026</h3>
             <p class="muted" style="margin-bottom:0.6rem">May 30, 2026 · <a href="https://atlcloudconf.com/" target="_blank" rel="noopener">atlcloudconf.com</a></p>
             <p class="mb-0">Led the organizing committee for a community-driven, full-day, multi-track conference focused on Microsoft cloud and AI technologies. Coordinated 53 speakers across 50 sessions for 324 registered attendees, owning speakers, sponsors, volunteers, logistics, marketing, and the attendee experience. The event ran on the MMCA conference application.</p>
           </article>
           <article class="card">
-            <span class="kicker" style="color:var(--accent)">Lead organizer</span>
+            <span class="kicker kicker--accent">Lead organizer</span>
             <h3>Atlanta Developers Conference 2026</h3>
             <p class="muted" style="margin-bottom:0.6rem">In planning</p>
             <p class="mb-0">Lead organizer for the 2026 edition of the Atlanta Developers Conference, a community-driven event covering .NET, Azure, and modern application development, applying the same playbook and the same user-group network that feeds both Atlanta conferences.</p>

@@ -45,6 +45,8 @@
   </script>
   <!-- BEGIN head-assets -->
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="assets/css/styles.css">
   <script defer src="assets/js/main.js"></script>
   <script defer src="assets/js/analytics.js"></script>
@@ -82,21 +84,28 @@
   <!-- END site-header -->
 
   <main id="main">
-    <section class="section">
+    <div class="page-head">
       <div class="container">
-        <div class="section-head">
-          <p class="eyebrow">Résumé</p>
-          <h1 style="margin:0 0 0.5rem">Ivan Ball-llovera</h1>
-          <p class="role" style="font-size:1.15rem;color:var(--accent);font-weight:600;margin:0 0 1rem">Senior Software Architect</p>
-          <div class="btn-row">
-            <a class="btn btn--primary" href="assets/files/Ivan-Ball-llovera-Resume-2026.pdf" download="Ivan Ball-llovera Resume - 2026.pdf">Download PDF</a>
-            <a class="btn btn--ghost" href="contact.html">Contact</a>
+        <p class="eyebrow">Résumé</p>
+        <h1>Ivan Ball-llovera</h1>
+        <p class="role">Senior Software Architect</p>
+        <p class="lede">25+ years designing and delivering scalable, cloud-native systems on the Microsoft stack: Domain-Driven Design, Clean Architecture, CQRS, and microservices, paired with hands-on Azure architecture and DevOps.</p>
+        <div class="btn-row">
+          <a class="btn btn--primary" href="assets/files/Ivan-Ball-llovera-Resume-2026.pdf" download="Ivan Ball-llovera Resume - 2026.pdf">Download PDF</a>
+          <a class="btn btn--ghost" href="contact.html">Contact</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <section class="section">
+      <div class="container split">
+        <div class="split-head">
+          <div class="section-head">
+            <h2>Professional summary</h2>
           </div>
         </div>
-
-        <!-- Summary -->
         <div class="prose">
-          <h2>Professional summary</h2>
           <p>Senior Software Architect with 25+ years designing and delivering scalable, cloud-native systems on the Microsoft stack. Deep expertise in Domain-Driven Design, Clean Architecture, CQRS, and microservices, paired with hands-on Azure cloud architecture and DevOps (Bicep, Docker, Kubernetes, CI/CD). Proven record of leading architectural refactors, modernizing legacy platforms, and mentoring cross-functional teams to raise engineering standards. Currently architecting production-grade .NET 10 platforms spanning modular-monolith-to-microservices, event-driven messaging, and AI/RAG integration, while leveraging AI-assisted development workflows to ship faster without sacrificing quality.</p>
         </div>
       </div>

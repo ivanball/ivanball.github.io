@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"14. Module System, Composition & Configuration","item":"https://ivanball.github.io/docs/onboarding/group-14-module-system-composition.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">14. Module System, Composition &amp; Configuration</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Guide contents</summary>
@@ -554,7 +556,7 @@
           <li><p><strong>Depends on</strong>: <code>[Rubric §1, SOLID]</code> (DIP via DI): the core singletons <code>IDomainEventDispatcher</code>/<code>DomainEventDispatcher</code>, <code>INavigationMetadataProvider</code>/<code>NavigationMetadataProvider</code>, <code>IEntityQueryPipeline</code>/<code>EntityQueryPipeline</code>; the settings bridge <a href="#iapplicationsettings"><code>IApplicationSettings</code></a> ← <a href="#applicationsettings"><code>ApplicationSettings</code></a>; the marker <a href="#classreference"><code>ClassReference</code></a>; the open-generic handler contracts <a href="group-05-cqrs-pipeline.html#icommandhandlerin-tcommand-tresult"><code>ICommandHandler&lt;in TCommand, TResult&gt;</code></a> and <a href="group-05-cqrs-pipeline.html#iqueryhandlerin-tquery-tresult"><code>IQueryHandler&lt;in TQuery, TResult&gt;</code></a>; the five command decorators <a href="group-05-cqrs-pipeline.html#transactionalcommanddecoratortcommand-tresult"><code>TransactionalCommandDecorator&lt;TCommand, TResult&gt;</code></a>, <a href="group-05-cqrs-pipeline.html#validatingcommanddecoratortcommand-tresult"><code>ValidatingCommandDecorator&lt;TCommand, TResult&gt;</code></a>, <a href="group-05-cqrs-pipeline.html#cachingcommanddecoratortcommand-tresult"><code>CachingCommandDecorator&lt;TCommand, TResult&gt;</code></a>, <a href="group-05-cqrs-pipeline.html#loggingcommanddecoratortcommand-tresult"><code>LoggingCommandDecorator&lt;TCommand, TResult&gt;</code></a>, <a href="group-05-cqrs-pipeline.html#featuregatecommanddecoratortcommand-tresult"><code>FeatureGateCommandDecorator&lt;TCommand, TResult&gt;</code></a>; the three query decorators <a href="group-05-cqrs-pipeline.html#cachingquerydecoratortquery-tresult"><code>CachingQueryDecorator&lt;TQuery, TResult&gt;</code></a>, <a href="group-05-cqrs-pipeline.html#loggingquerydecoratortquery-tresult"><code>LoggingQueryDecorator&lt;TQuery, TResult&gt;</code></a>, <a href="group-05-cqrs-pipeline.html#featuregatequerydecoratortquery-tresult"><code>FeatureGateQueryDecorator&lt;TQuery, TResult&gt;</code></a>; the profiling decorators <a href="group-05-cqrs-pipeline.html#profilingcommanddecoratortcommand-tresult"><code>ProfilingCommandDecorator&lt;TCommand, TResult&gt;</code></a>/<a href="group-05-cqrs-pipeline.html#profilingquerydecoratortquery-tresult"><code>ProfilingQueryDecorator&lt;TQuery, TResult&gt;</code></a>; the scanned contract families <a href="group-04-events-outbox.html#idomaineventhandlerin-tdomainevent"><code>IDomainEventHandler&lt;in TDomainEvent&gt;</code></a>, <a href="group-04-events-outbox.html#iintegrationeventhandlerin-tintegrationevent"><code>IIntegrationEventHandler&lt;in TIntegrationEvent&gt;</code></a>, <a href="group-12-api-hosting-mapping.html#ientitydtomappertentity-tentitydto-tidentifiertype"><code>IEntityDTOMapper&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a>, <a href="group-12-api-hosting-mapping.html#ientityrequestmappertentity-tcreaterequest-tidentifiertype"><code>IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;</code></a>, and the request-validator bridge <a href="group-06-validation.html#commandrequestvalidatortcommand-trequest"><code>CommandRequestValidator&lt;TCommand, TRequest&gt;</code></a>. Externals: <code>FluentValidation</code> (<code>AddValidatorsFromAssemblyContaining</code>), <strong>Scrutor</strong> (<code>Scan</code>, <code>TryDecorate</code>, <code>TryAdd*</code>), <code>Microsoft.Extensions.Options</code>.</p>
           </li>
           <li><p><strong>Concept introduced, the CQRS decorator pipeline wiring order (Scrutor <code>TryDecorate</code>).</strong> <code>[Rubric §6, CQRS &amp; Event-Driven]</code> assesses whether cross-cutting handler concerns are applied uniformly; <code>[Rubric §2, Design Patterns]</code> the Decorator pattern itself (the individual decorators are taught in <a href="group-05-cqrs-pipeline.html"><code>group-05</code></a>). <strong>Scrutor&#39;s <code>TryDecorate</code> applies decorators in reverse registration order</strong>: the <em>last</em> registered call becomes the <em>outermost</em> wrapper. <code>AddApplicationDecorators</code> (line 89) registers the five command decorators in this source order: Transactional, Validating, Caching, Logging, FeatureGate (lines 94–98), which produces the execution nesting documented in the method&#39;s own XML doc (lines 53–61):</p>
-          <pre class="doc-pre"><code>FeatureGateCommandDecorator        (outermost, short-circuits if the feature flag is off)
+          <pre class="doc-pre"><code class="">FeatureGateCommandDecorator        (outermost, short-circuits if the feature flag is off)
             → LoggingCommandDecorator        (measures full pipeline duration of enabled features)
               → CachingCommandDecorator      (invalidates cache only AFTER the transaction commits)
                 → ValidatingCommandDecorator (short-circuits with Result.Failure before any transaction)
@@ -1256,6 +1258,20 @@
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#the-module-contract-and-the-boundary-it-creates">The module contract and the boundary it creates</a></li>
+            <li><a href="#discovery-and-kahn-ordered-registration">Discovery and Kahn-ordered registration</a></li>
+            <li><a href="#the-two-composition-roots-and-the-ordering-they-enforce">The two composition roots and the ordering they enforce</a></li>
+            <li><a href="#assembly-anchors">Assembly anchors</a></li>
+            <li><a href="#configuration-binding-the-settings-family">Configuration binding, the Settings family</a></li>
+            <li><a href="#the-two-routing-attributes">The two routing attributes</a></li>
+            <li><a href="#end-to-end-one-hosts-boot">End-to-end: one host&#39;s boot</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

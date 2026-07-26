@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"10. Notifications (Push + In-App Inbox + Email)","item":"https://ivanball.github.io/docs/onboarding/group-10-notifications.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">10. Notifications (Push + In-App Inbox + Email)</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Guide contents</summary>
@@ -1716,6 +1718,19 @@
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#the-layering-and-why-the-pieces-sit-where-they-do">The layering, and why the pieces sit where they do</a></li>
+            <li><a href="#the-broadcast-send-flow-end-to-end">The broadcast send flow, end to end</a></li>
+            <li><a href="#the-inbox-side">The inbox side</a></li>
+            <li><a href="#the-signalr-transport-and-how-it-survives-extraction">The SignalR transport, and how it survives extraction</a></li>
+            <li><a href="#the-module-host-native-device-registration-and-the-privacy-export">The module host, native-device registration, and the privacy export</a></li>
+            <li><a href="#where-this-group-sits">Where this group sits</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

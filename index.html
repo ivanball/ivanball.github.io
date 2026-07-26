@@ -30,6 +30,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <!-- BEGIN head-assets -->
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="assets/css/styles.css">
   <script defer src="assets/js/main.js"></script>
   <script defer src="assets/js/analytics.js"></script>
@@ -84,30 +86,27 @@
   <!-- END site-header -->
 
   <main id="main">
-    <!-- Hero -->
-    <section class="hero">
-      <div class="container hero-grid">
-        <div>
-          <p class="eyebrow">Senior Software Architect</p>
-          <h1>Ivan Ball-llovera</h1>
-          <p class="role">Cloud-native enterprise architecture on the Microsoft stack</p>
-          <p class="lede">I design and ship production-grade .NET platforms: modular monoliths that extract cleanly into microservices, event-driven messaging, and Azure-native delivery, with architecture discipline enforced at build time, not in a wiki.</p>
-          <div class="btn-row">
-            <a class="btn btn--primary" href="platform.html">Explore the platform</a>
-            <a class="btn btn--ghost" href="resume.html">View résumé</a>
-            <a class="btn btn--ghost" href="contact.html">Get in touch</a>
-          </div>
-        </div>
-        <!-- alt is empty on purpose: the h1 immediately beside it already gives the
-             name, so describing the portrait too would just repeat it to a screen
-             reader. Eager and fetchpriority high because it is above the fold. -->
-        <img class="avatar" src="assets/img/ivan-ball-llovera.webp" alt="" width="168" height="168" fetchpriority="high">
-      </div>
-    </section>
-
-    <!-- Stats -->
-    <section class="section" style="padding-top:0">
+    <!-- Hero. The ink band is the site's signature surface: it carries the portrait,
+         the positioning line, and the four headline figures as one object. -->
+    <section class="hero ink">
       <div class="container">
+        <div class="hero-grid">
+          <div>
+            <p class="eyebrow">Senior Software Architect</p>
+            <h1>Ivan Ball-llovera</h1>
+            <p class="role">Cloud-native enterprise architecture on the Microsoft stack</p>
+            <p class="lede">I design and ship production-grade .NET platforms: modular monoliths that extract cleanly into microservices, event-driven messaging, and Azure-native delivery, with architecture discipline enforced at build time, not in a wiki.</p>
+            <div class="btn-row">
+              <a class="btn btn--primary" href="platform.html">Explore the platform</a>
+              <a class="btn btn--ghost" href="resume.html">View résumé</a>
+              <a class="btn btn--ghost" href="contact.html">Get in touch</a>
+            </div>
+          </div>
+          <!-- alt is empty on purpose: the h1 immediately beside it already gives the
+               name, so describing the portrait too would just repeat it to a screen
+               reader. Eager and fetchpriority high because it is above the fold. -->
+          <img class="avatar" src="assets/img/ivan-ball-llovera.webp" alt="" width="200" height="200" fetchpriority="high">
+        </div>
         <div class="stats">
           <!-- BEGIN home-stats -->
           <div class="stat"><div class="num">25+</div><div class="label">Years on the Microsoft stack</div></div>
@@ -121,16 +120,18 @@
 
     <!-- About -->
     <section class="section section--alt">
-      <div class="container">
-        <div class="section-head">
-          <p class="eyebrow">About</p>
-          <h2>Architecture that earns its keep</h2>
+      <div class="container split">
+        <div class="split-head">
+          <div class="section-head">
+            <p class="eyebrow">About</p>
+            <h2>Architecture that earns its keep</h2>
+          </div>
         </div>
         <div class="prose">
           <p>I am a Senior Software Architect with more than 25 years designing and delivering scalable, cloud-native systems on the Microsoft stack. My focus is Domain-Driven Design, Clean Architecture, CQRS, and microservices, paired with hands-on Azure cloud architecture and DevOps (Bicep, Docker, Kubernetes, CI/CD).</p>
-          <p>I have a proven record of leading architectural refactors, modernizing legacy platforms, and mentoring cross-functional teams to raise engineering standards. Right now I am architecting production-grade .NET 10 platforms that span the modular-monolith-to-microservices path, event-driven messaging, and AI/RAG integration, while using AI-assisted development workflows to ship faster without trading away quality.</p>
+          <p class="mb-0">I have a proven record of leading architectural refactors, modernizing legacy platforms, and mentoring cross-functional teams to raise engineering standards. Right now I am architecting production-grade .NET 10 platforms that span the modular-monolith-to-microservices path, event-driven messaging, and AI/RAG integration, while using AI-assisted development workflows to ship faster without trading away quality.</p>
         </div>
-        <div class="grid grid--3" style="margin-top:2rem">
+        <div class="split-full grid grid--3" style="margin-top:1rem" data-reveal>
           <div class="card">
             <h3>Architecture &amp; design</h3>
             <p class="mb-0">DDD, Clean Architecture, CQRS, modular monolith to microservices, event-driven and the outbox pattern, gRPC, and API gateways (YARP).</p>
@@ -150,75 +151,99 @@
     <!-- Featured platform -->
     <section class="section">
       <div class="container">
-        <div class="section-head">
-          <p class="eyebrow">Featured work</p>
-          <h2>The MMCA platform</h2>
-          <p>An open-source .NET 10 reference platform: a 15-package framework plus real applications that prove the patterns in production.</p>
-        </div>
-        <div class="callout">
-          <p>MMCA is a production-grade .NET 10 framework and a set of reference apps that demonstrate modern enterprise architecture end-to-end. It is built as a modular monolith that extracts cleanly into independent microservices: modules load in topological order and run behind a YARP gateway with gRPC contracts and typed clients, keeping transport reversible at the edge. The conference application was deployed to Azure and powered the live 2026 Atlanta Cloud + AI Conference, and will also power the 2026 Atlanta Developers Conference.</p>
-          <div class="btn-row" style="margin-top:1rem">
-            <a class="btn btn--primary" href="platform.html">See the architecture</a>
-            <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">View on GitHub ↗</a>
+        <div class="feature ink" data-reveal>
+          <div class="feature-grid">
+            <div>
+              <p class="eyebrow">Featured work</p>
+              <h2>The MMCA platform</h2>
+              <p>A production-grade .NET 10 framework and a set of reference apps that demonstrate modern enterprise architecture end to end. It is built as a modular monolith that extracts cleanly into independent microservices: modules load in topological order and run behind a YARP gateway with gRPC contracts and typed clients, keeping transport reversible at the edge. The conference application was deployed to Azure and powered the live 2026 Atlanta Cloud + AI Conference, and will also power the 2026 Atlanta Developers Conference.</p>
+              <div class="btn-row">
+                <a class="btn btn--primary" href="platform.html">See the architecture</a>
+                <a class="btn btn--ghost" href="https://github.com/ivanball/MMCA.Common" target="_blank" rel="noopener">View on GitHub ↗</a>
+              </div>
+            </div>
+            <ul class="lead-list">
+              <li><span class="check" aria-hidden="true">▸</span><span><strong>Modular monolith, extractable.</strong> Modules are discovered and loaded in topological order, then run as their own service with no domain rewrite.</span></li>
+              <li><span class="check" aria-hidden="true">▸</span><span><strong>Database-per-service with an outbox.</strong> Events persist atomically with the data and deliver at least once, in process or over a broker.</span></li>
+              <li><span class="check" aria-hidden="true">▸</span><span><strong>Rules that fail the build.</strong> A compile-time layer guard plus a shared NetArchTest library run as fitness functions in every repo.</span></li>
+              <li><span class="check" aria-hidden="true">▸</span><span><strong>Graded in the open.</strong> Every repo is scored against a 34-category rubric, with the evidence and the gaps published.</span></li>
+            </ul>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Featured writing -->
+    <!-- Featured writing. The three cards are GENERATED from assets/data/articles.js:
+         the newest published pieces, with the same hero art as the Writing page. -->
     <section class="section section--alt">
       <div class="container">
         <div class="section-head">
           <p class="eyebrow">Writing</p>
           <h2>Deep dives on enterprise .NET</h2>
-          <p>A long-form series turning the framework's decisions into teachable patterns. A few starting points:</p>
+          <p>A long-form series turning the framework's decisions into teachable patterns, every claim grounded in real source. The three most recent:</p>
         </div>
-        <div class="grid grid--3">
-          <article class="card card--link">
-            <span class="kicker">Architecture</span>
-            <h3>Modular monolith to microservices</h3>
-            <p>Build the monolith now and extract a service later without a rewrite: module discovery, database-per-service, gRPC contracts, and a YARP gateway.</p>
-            <div class="card-foot"><a href="writing.html">Read the series →</a></div>
-          </article>
-          <article class="card card--link">
-            <span class="kicker">Reliability</span>
-            <h3>The transactional outbox</h3>
-            <p>Events that survive a crash: persist them atomically with your data, then dispatch in-process or over a broker with at-least-once delivery.</p>
-            <div class="card-foot"><a href="writing.html">Read the series →</a></div>
-          </article>
-          <article class="card card--link">
-            <span class="kicker">Governance</span>
-            <h3>Architecture fitness functions</h3>
-            <p>Rules that fail the build, not a wiki page: a compile-time layer guard plus a shared NetArchTest rule library run across every repo.</p>
-            <div class="card-foot"><a href="writing.html">Read the series →</a></div>
-          </article>
+        <div class="grid grid--3" data-reveal>
+          <!-- BEGIN featured-articles -->
+          <a class="card card--link article-card" href="https://medium.com/@ivanball76/google-and-github-login-without-leaking-tokens-external-oauth-behind-your-own-jwts-d68ba5e3aca4" target="_blank" rel="noopener">
+            <div class="thumb"><img src="assets/img/articles/article-26.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
+            <div class="body">
+              <span class="kicker">Auth &amp; the edge · No. 26</span>
+              <h3>External OAuth login behind your own JWTs</h3>
+              <p>Sign in with Google or GitHub without leaking provider tokens: external identity exchanged for your own JWTs at the boundary.</p>
+              <div class="card-foot"><span class="go">Read on Medium ↗</span></div>
+            </div>
+          </a>
+          <a class="card card--link article-card" href="https://medium.com/@ivanball76/browser-session-cookie-auth-for-blazor-ssr-surviving-the-f5-eb0ea317820e" target="_blank" rel="noopener">
+            <div class="thumb"><img src="assets/img/articles/article-25.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
+            <div class="body">
+              <span class="kicker">Auth &amp; the edge · No. 25</span>
+              <h3>Browser session-cookie auth for Blazor SSR</h3>
+              <p>HttpOnly session cookies and an SSR-time scheme so [Authorize] passes during prerender, with the API still the boundary.</p>
+              <div class="card-foot"><span class="go">Read on Medium ↗</span></div>
+            </div>
+          </a>
+          <a class="card card--link article-card" href="https://medium.com/@ivanball76/permission-based-authorization-capabilities-over-role-checks-ea6574cbee27" target="_blank" rel="noopener">
+            <div class="thumb"><img src="assets/img/articles/article-24.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
+            <div class="body">
+              <span class="kicker">Auth &amp; the edge · No. 24</span>
+              <h3>Permission-based authorization over roles</h3>
+              <p>A capability layer over RBAC: permission policies that resolve on demand from a central registry.</p>
+              <div class="card-foot"><span class="go">Read on Medium ↗</span></div>
+            </div>
+          </a>
+          <!-- END featured-articles -->
         </div>
-        <div class="btn-row" style="margin-top:1.75rem">
+        <div class="btn-row btn-row--spaced">
           <a class="btn btn--ghost" href="writing.html">Browse all articles</a>
+          <a class="btn btn--ghost" href="feed.xml">Subscribe by RSS</a>
         </div>
       </div>
     </section>
 
     <!-- Speaking / community -->
     <section class="section">
-      <div class="container">
-        <div class="section-head">
-          <p class="eyebrow">Community</p>
-          <h2>Speaking &amp; giving back</h2>
-          <p>I help run two community-driven Atlanta technology conferences and keep production-grade patterns free and in the open.</p>
+      <div class="container split">
+        <div class="split-head">
+          <div class="section-head">
+            <p class="eyebrow">Community</p>
+            <h2>Speaking &amp; giving back</h2>
+            <p>I help run two community-driven Atlanta technology conferences and keep production-grade patterns free and in the open.</p>
+          </div>
+          <div class="btn-row">
+            <a class="btn btn--ghost" href="speaking.html">See talks &amp; community work</a>
+          </div>
         </div>
-        <div class="grid grid--2">
+        <div class="grid" data-reveal>
           <div class="card">
-            <h3>Conference organizer &amp; speaker</h3>
+            <span class="kicker kicker--accent">Organizer &amp; speaker</span>
+            <h3>Two Atlanta conferences</h3>
             <p class="mb-0">Lead organizer of the Atlanta Cloud + AI Conference (324 attendees, 53 speakers, 50 sessions in 2026) and the Atlanta Developers Conference, where I also speak on Clean Architecture and DDD.</p>
           </div>
           <div class="card">
-            <h3>Open source &amp; mentorship</h3>
-            <p class="mb-0">My framework is Apache-2.0 licensed and documented so production-grade enterprise patterns are in anyone's hands for free. I mentor engineers at every level, in English and Spanish.</p>
+            <span class="kicker kicker--accent">Open source &amp; mentorship</span>
+            <h3>Patterns in anyone's hands</h3>
+            <p class="mb-0">My framework is Apache-2.0 licensed and documented so production-grade enterprise patterns are free to use. I mentor engineers at every level, in English and Spanish.</p>
           </div>
-        </div>
-        <div class="btn-row" style="margin-top:1.75rem">
-          <a class="btn btn--ghost" href="speaking.html">See talks &amp; community work</a>
         </div>
       </div>
     </section>

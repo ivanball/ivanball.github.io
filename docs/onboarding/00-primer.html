@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"Primer, the concepts, stack, and conventions you need first","item":"https://ivanball.github.io/docs/onboarding/00-primer.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">Primer, the concepts, stack, and conventions you need first</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Guide contents</summary>
@@ -146,7 +148,7 @@
           within every group, the per-type sections run in ascending dependency <strong>Level</strong>.</p>
           <h3 id="the-layered-dependency-flow-clean-architecture">The layered dependency flow (Clean Architecture)</h3>
           <p><code>MMCA.Common</code>&#39;s own layering, enforced top-to-bottom (<code>MMCA.Common/CLAUDE.md</code>, &quot;Architecture&quot;):</p>
-          <pre class="doc-pre"><code>API / Grpc        (presentation / transport)
+          <pre class="doc-pre"><code class="">API / Grpc        (presentation / transport)
                ↓
           Infrastructure    (EF Core, caching, JWT, JWKS, outbox, message bus, SignalR)
                ↓
@@ -650,11 +652,11 @@
           <p><a id="c-extensiont-types--read-this-once"></a></p>
           <p>C# 14 (preview) <strong>extension members</strong> let a static class add members to a type via an <code>extension</code>
           block:</p>
-          <pre class="doc-pre"><code class="language-csharp">public static class DomainHelper
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">class</span> <span class="hljs-title">DomainHelper</span>
           {
-              extension(string? id)                 // receiver: the &quot;this&quot; value
+              extension(<span class="hljs-built_in">string</span>? id)                 <span class="hljs-comment">// receiver: the &quot;this&quot; value</span>
               {
-                  public TIdentifier Parse&lt;TIdentifier&gt;() { ... }   // usable as someString.Parse&lt;int&gt;()
+                  <span class="hljs-function"><span class="hljs-keyword">public</span> TIdentifier <span class="hljs-title">Parse</span>&lt;<span class="hljs-title">TIdentifier</span>&gt;()</span> { ... }   <span class="hljs-comment">// usable as someString.Parse&lt;int&gt;()</span>
               }
           }</code></pre>
           <p>The codebase uses this heavily for <strong>DI registration</strong>, every <code>DependencyInjection.cs</code> adds methods
@@ -685,8 +687,8 @@
           <li><strong><code>*.slnx</code></strong>: the human solution (XML format). <code>*.slnf</code>, a <strong>solution filter</strong> used in CI to build
           a subset fast (<code>MMCA.Store.CI.slnf</code>, <code>MMCA.ADC.CI.slnf</code>).</li>
           <li><strong>Microsoft Testing Platform</strong>, not VSTest. To run one test class/method you target the test
-          project and pass an MTP filter after <code>--</code>:<pre class="doc-pre"><code class="language-bash">dotnet test --project Tests/&lt;path&gt;/&lt;Name&gt;.Tests.csproj -- -method &quot;*Pattern*&quot;
-          #                                                          -- -class  &quot;*FooTests*&quot;</code></pre>
+          project and pass an MTP filter after <code>--</code>:<pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet <span class="hljs-built_in">test</span> --project Tests/&lt;path&gt;/&lt;Name&gt;.Tests.csproj -- -method <span class="hljs-string">&quot;*Pattern*&quot;</span>
+          <span class="hljs-comment">#                                                          -- -class  &quot;*FooTests*&quot;</span></code></pre>
           Every test project must contain ≥1 test or MTP exits 8 (CI uses <code>--minimum-expected-tests 1</code>).</li>
           <li>Some UI test projects (<code>MMCA.Common.UI.Gallery</code>, <code>MMCA.Common.UI.E2E.Tests</code>) are <strong>deliberately
           excluded</strong> from the <code>.slnx</code> so the unit-test run stays fast; they run in a dedicated CI job and are
@@ -755,6 +757,19 @@
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#1-the-big-picture">1. The big picture</a></li>
+            <li><a href="#2-architectural-styles-this-codebase-commits-to">2. Architectural styles this codebase commits to</a></li>
+            <li><a href="#3-the-external-stack-bcl--nuget-external-level-0">3. The external stack (BCL / NuGet, &quot;external Level 0&quot;)</a></li>
+            <li><a href="#4-c-build-and-code-style-conventions">4. C#, build, and code-style conventions</a></li>
+            <li><a href="#5-the-solution--test-layout">5. The solution / test layout</a></li>
+            <li><a href="#6-the-34-category-architecture-evaluation-lens">6. The 34-category architecture-evaluation lens</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

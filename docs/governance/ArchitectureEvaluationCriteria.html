@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Governance","item":"https://ivanball.github.io/docs/governance/index.html"},{"@type":"ListItem","position":4,"name":"Architecture Evaluation Criteria","item":"https://ivanball.github.io/docs/governance/ArchitectureEvaluationCriteria.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">Architecture Evaluation Criteria</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Rubric, scorecards &amp; backlogs</summary>
@@ -198,7 +200,7 @@
           <li>Re-run quarterly or per-release to trend both indices over time.</li>
           </ul>
           <h3 id="scorecard-template">Scorecard template</h3>
-          <pre class="doc-pre"><code>| # | Category                      | Weight | Maturity (0-4) | Impl (0-10) | Weighted | Evidence / Notes |
+          <pre class="doc-pre"><code class="">| # | Category                      | Weight | Maturity (0-4) | Impl (0-10) | Weighted | Evidence / Notes |
           |---|-------------------------------|--------|----------------|-------------|----------|------------------|
           | 1 | SOLID Principles              |   3    |                |             |          |                  |
           | 2 | Design Patterns               |   2    |                |             |          |                  |
@@ -966,6 +968,49 @@
           <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/governance/ArchitectureEvaluationCriteria.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#how-to-use-this-rubric">How to Use This Rubric</a></li>
+            <li><a href="#1-solid-principles">1. SOLID Principles</a></li>
+            <li><a href="#2-design-patterns">2. Design Patterns</a></li>
+            <li><a href="#3-clean-architecture">3. Clean Architecture</a></li>
+            <li><a href="#4-domain-driven-design">4. Domain-Driven Design</a></li>
+            <li><a href="#5-vertical-slice-architecture">5. Vertical Slice Architecture</a></li>
+            <li><a href="#6-cqrs--event-driven-design">6. CQRS &amp; Event-Driven Design</a></li>
+            <li><a href="#7-microservices-readiness">7. Microservices Readiness</a></li>
+            <li><a href="#8-data-architecture">8. Data Architecture</a></li>
+            <li><a href="#9-api--contract-design">9. API &amp; Contract Design</a></li>
+            <li><a href="#10-cross-cutting-concerns">10. Cross-Cutting Concerns</a></li>
+            <li><a href="#11-security">11. Security</a></li>
+            <li><a href="#12-performance--scalability">12. Performance &amp; Scalability</a></li>
+            <li><a href="#13-observability--operability">13. Observability &amp; Operability</a></li>
+            <li><a href="#14-testability--test-strategy">14. Testability &amp; Test Strategy</a></li>
+            <li><a href="#15-best-practices--code-quality">15. Best Practices &amp; Code Quality</a></li>
+            <li><a href="#16-maintainability--evolvability">16. Maintainability &amp; Evolvability</a></li>
+            <li><a href="#17-devops--deployment">17. DevOps &amp; Deployment</a></li>
+            <li><a href="#18-ui-architecture--component-design">18. UI Architecture &amp; Component Design</a></li>
+            <li><a href="#19-state-management--data-flow">19. State Management &amp; Data Flow</a></li>
+            <li><a href="#20-design-system-theming--ui-consistency">20. Design System, Theming &amp; UI Consistency</a></li>
+            <li><a href="#21-accessibility-a11y">21. Accessibility (a11y)</a></li>
+            <li><a href="#22-responsive-design--cross-browserdevice">22. Responsive Design &amp; Cross-Browser/Device</a></li>
+            <li><a href="#23-front-end-performance--rendering">23. Front-End Performance &amp; Rendering</a></li>
+            <li><a href="#24-forms-validation--ux-safety">24. Forms, Validation &amp; UX Safety</a></li>
+            <li><a href="#25-navigation-routing--information-architecture">25. Navigation, Routing &amp; Information Architecture</a></li>
+            <li><a href="#26-front-end-security">26. Front-End Security</a></li>
+            <li><a href="#27-internationalization--localization">27. Internationalization &amp; Localization</a></li>
+            <li><a href="#28-front-end-testing--quality">28. Front-End Testing &amp; Quality</a></li>
+            <li><a href="#29-resilience-reliability--business-continuity">29. Resilience, Reliability &amp; Business Continuity</a></li>
+            <li><a href="#30-compliance-privacy--data-governance">30. Compliance, Privacy &amp; Data Governance</a></li>
+            <li><a href="#31-cost-efficiency--finops">31. Cost Efficiency / FinOps</a></li>
+            <li><a href="#32-dependency--supply-chain-management">32. Dependency &amp; Supply-Chain Management</a></li>
+            <li><a href="#33-developer-experience--inner-loop">33. Developer Experience &amp; Inner Loop</a></li>
+            <li><a href="#34-architecture-governance--documentation">34. Architecture Governance &amp; Documentation</a></li>
+            <li><a href="#appendix-quick-scan-checklist">Appendix: Quick-Scan Checklist</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

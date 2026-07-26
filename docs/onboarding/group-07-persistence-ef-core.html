@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"7. Persistence & EF Core","item":"https://ivanball.github.io/docs/onboarding/group-07-persistence-ef-core.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">7. Persistence &amp; EF Core</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Guide contents</summary>
@@ -2927,6 +2929,22 @@
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#one-base-context-one-class-per-engine-one-instance-per-database">One base context, one class per engine, one instance per database</a></li>
+            <li><a href="#savechanges-as-an-interceptor-pipeline">SaveChanges as an interceptor pipeline</a></li>
+            <li><a href="#repositories-and-the-unit-of-work">Repositories and the unit of work</a></li>
+            <li><a href="#routing-an-entity-to-its-database">Routing an entity to its database</a></li>
+            <li><a href="#two-model-finalizing-conventions">Two model-finalizing conventions</a></li>
+            <li><a href="#entity-configuration-and-engine-portability">Entity configuration and engine portability</a></li>
+            <li><a href="#encryption-seeding-design-time-and-the-shared-helpers">Encryption, seeding, design time, and the shared helpers</a></li>
+            <li><a href="#blobs-images-and-native-push">Blobs, images, and native push</a></li>
+            <li><a href="#where-this-group-sits">Where this group sits</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

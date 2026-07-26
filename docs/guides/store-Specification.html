@@ -24,6 +24,8 @@
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Store · Business Specification Document","item":"https://ivanball.github.io/docs/guides/store-Specification.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
   <link rel="stylesheet" href="../../assets/css/docs.css">
   <script defer src="../../assets/js/main.js"></script>
@@ -69,7 +71,7 @@
         <span aria-hidden="true">/</span>
         <span class="current">Store · Business Specification Document</span>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>All guides</summary>
@@ -636,7 +638,7 @@
           </ul>
           <hr>
           <h2 id="4-order-status-state-machine">4. Order Status State Machine</h2>
-          <pre class="doc-pre"><code>                    +------------------------------------------+
+          <pre class="doc-pre"><code class="">                    +------------------------------------------+
                               |                                          |
                               v                                          |
            +-----------------+----+    InitiatePayment    +--------------+------+
@@ -1569,6 +1571,28 @@
           <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/guides/store-Specification.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#1-system-overview">1. System Overview</a></li>
+            <li><a href="#2-core-business-entities">2. Core Business Entities</a></li>
+            <li><a href="#3-business-workflows">3. Business Workflows</a></li>
+            <li><a href="#4-order-status-state-machine">4. Order Status State Machine</a></li>
+            <li><a href="#5-business-rules">5. Business Rules</a></li>
+            <li><a href="#6-use-cases">6. Use Cases</a></li>
+            <li><a href="#7-domain-events-and-state-changes">7. Domain Events and State Changes</a></li>
+            <li><a href="#8-external-integrations">8. External Integrations</a></li>
+            <li><a href="#9-authorization-model">9. Authorization Model</a></li>
+            <li><a href="#10-cross-module-communication">10. Cross-Module Communication</a></li>
+            <li><a href="#11-user-interface">11. User Interface</a></li>
+            <li><a href="#12-cross-cutting-infrastructure">12. Cross-Cutting Infrastructure</a></li>
+            <li><a href="#13-testing">13. Testing</a></li>
+            <li><a href="#14-missing-or-unclear-business-logic">14. Missing or Unclear Business Logic</a></li>
+            <li><a href="#15-seed-data-initial-system-state">15. Seed Data (Initial System State)</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>
