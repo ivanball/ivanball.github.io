@@ -11,14 +11,29 @@ Personal website for Ivan Ball-llovera (published as `ivanball.github.io` via Gi
 ## Commands
 
 ```bash
-# Serve locally (no build step; any static server works)
+# Serve locally (no build step for the pages; any static server works)
 python -m http.server 8080
 
-# Regenerate the reference library after ANY edit under docs-src/
+# Regenerate the reference library after ANY edit under docs-src/ or assets/data/
 cd tools && npm install && npm run build
+
+# Re-encode article heroes to WebP after adding a new article-NN.png (incremental)
+cd tools && npm run images
+
+# Re-export the downloadable resume PDF after editing resume.html (needs a server)
+cd tools && PORT=8080 npm run resume-pdf
+
+# axe-core over every page type in both themes (needs a server)
+cd tools && PORT=8080 npm run a11y
 ```
 
-There are no tests and no linter. The generator prints a summary line (pages written per collection, mermaid page count); check it after a build.
+The generator prints a summary: pages written per collection, mermaid page count, article and ADR card counts, feed and sitemap sizes, pruned orphans, and dead cross-links. Check it after a build. A non-zero dead-link count usually means a wrong relative path in the markdown, not a deliberate reference to something unpublished.
+
+CI (`.github/workflows/ci.yml`) runs three jobs on push and PR:
+
+1. **Freshness** rebuilds and fails if `git diff` is non-empty. This is the important one: it converts "remember to run the build" into an enforced check. It needs a full clone, because sitemap `lastmod` comes from each file's last commit date.
+2. **Links** crawls the served site with linkinator. Internal links fail the build, external ones are advisory. Two traps: linkinator only recurses beneath its entry point's own path (so point it at the directory root, not `index.html`), and it crawls concurrently, so a single-threaded server reports healthy files as BROKEN.
+3. **Accessibility** runs `tools/a11y-check.mjs` (axe-core via puppeteer) over every page type in **both** themes, because the palette swaps entirely via `data-theme`. Not pa11y-ci: its bundled axe 4.2 cannot evaluate this stylesheet's custom properties or the `color-mix()` header background, and reported contrast failures on text measuring 16.4:1.
 
 ## The two content systems
 
@@ -30,12 +45,14 @@ Single edit points:
 - **Writing page cards**: `assets/data/articles.js` (`window.ARTICLES` + `ARTICLE_CATEGORIES`). An empty `url` renders a "Coming soon" card; paste the Medium URL **and** the publication instant into `date` to publish. **These cards are now static markup generated at build time**, so editing the data file is not enough: re-run `cd tools && npm run build` and commit the regenerated `writing.html`, `feed.xml`, and `sitemap.xml` with it. `assets/js/writing.js` only filters the generated nodes in place; it no longer renders them.
 - **Platform ADR card copy**: `assets/data/adr-cards.js`, keyed by ADR number. The list itself is enumerated from `docs-src/adr/`, so a new ADR appears on the page and in the counts with no edit here; an entry only replaces the generated fallback with better copy.
 - **Analytics and email capture**: `assets/js/analytics.js` (GA4 measurement ID + newsletter form action). Both are placeholders and both no-op until replaced: no request is made and the subscribe form stays hidden. Search-console verification is a meta tag and lives commented in `index.html`'s head, because a crawler will not accept a JS-injected tag.
-- **Published email**: `EMAIL_USER` / `EMAIL_DOMAIN` at the top of `assets/js/main.js` (assembled in JS to deter scraping).
-- **Resume**: replace the PDF in `assets/files/` and edit `resume.html`.
+- **Published email**: `EMAIL_USER` / `EMAIL_DOMAIN` at the top of `assets/js/main.js` (assembled in JS to deter scraping). Deliberately absent from the `ContactPage` JSON-LD for the same reason.
+- **Figures that come from MMCA.Common**: `assets/data/platform-facts.js` (packages, fitness tests, reference apps, rubric categories). CI checks out this repo alone and cannot read `MMCA.Common/FACTS.md`, so they are mirrored here and stamped into `index.html`, `platform.html`, and `resume.html`. Refresh them during the consumer sweep after a framework release. The ADR count is NOT here: it is counted from `docs-src/adr/`.
+- **Resume**: edit `resume.html`, then re-export the PDF with `npm run resume-pdf` (it renders the page through the `@media print` block). Do not hand-replace the PDF: exporting it separately is what let it drift a month behind the page it sits on.
+- **Article hero images**: drop the 1600x840 `article-NN.png` into `assets/img/articles/` and run `npm run images`. The PNGs are the source heroes uploaded to Medium and stay in the repo; pages reference only the derived 800px `.webp` (about 97% smaller across the 50).
 
 `assets/js/main.js` is loaded with `defer` on every page: theme toggle (localStorage key `mmca-theme`; each page also has an inline head script that applies the stored theme before paint), mobile nav, footer year, doc sidebar. `assets/css/styles.css` is the single stylesheet (light + dark via `data-theme` on `<html>`); `assets/css/docs.css` layers doc-page prose/layout on top of it.
 
-`sitemap.xml` and `feed.xml` are **generated** by `tools/build-docs.mjs`, not hand-maintained. The sitemap covers every root page plus every generated document (120+ URLs, up from a hand-listed 11 that omitted the whole library); `lastmod` comes from each source file's last git commit date, with anything uncommitted dated today. The feed lists the published articles from `articles.js`, pointing at Medium.
+`sitemap.xml` and `feed.xml` are **generated** by `tools/build-docs.mjs`, not hand-maintained. The sitemap covers every root page plus every generated document (120+ URLs, up from a hand-listed 11 that omitted the whole library); `lastmod` comes from each source file's last git commit date, with anything uncommitted dated today. The feed lists the published articles from `articles.js`, pointing at Medium; its `lastBuildDate` is the newest article's publication instant, **not** the wall clock, so consecutive builds are byte-identical and the CI freshness gate is meaningful.
 
 ### 2. Generated reference library (`docs/` from `docs-src/`)
 
@@ -52,12 +69,21 @@ The generator also writes into **marked regions of the hand-authored root pages*
 
 | Region | Page | Derived from |
 |---|---|---|
-| `articles`, `articles-jsonld` | `writing.html` | `assets/data/articles.js` |
-| `adr-list`, `adr-count`, `adr-stat` | `platform.html` | `docs-src/adr/*.md` + `assets/data/adr-cards.js` |
+| `head-assets`, `site-header`, `site-footer` | **all 7 root pages** | `NAV_ITEMS` / `FOOTER_LINKS` in the generator, which also stamp the 119 docs pages |
+| `subscribe` | `writing.html`, `platform.html` | one `subscribeHtml()`, differing only in the input id |
+| `articles`, `articles-jsonld`, `article-categories` | `writing.html` | `assets/data/articles.js` |
+| `adr-list`, `adr-count` | `platform.html` | `docs-src/adr/*.md` + `assets/data/adr-cards.js` |
+| `platform-stats` | `platform.html` | ADR count from `docs-src/adr/` + `assets/data/platform-facts.js` |
 | `scorecards` | `platform.html` | the `**Maturity index**` / `**Implementation index**` lines in `docs-src/governance/*-ArchitectureScorecard.md` |
 | `library-cards` | `platform.html` | the four `docs-src/` collection sizes |
+| `home-stats` | `index.html` | ADR count + `assets/data/platform-facts.js` |
+| `resume-platform-facts` | `resume.html` | ADR count + `assets/data/platform-facts.js` |
 
 Never hand-edit inside a region: the next build overwrites it.
+
+**A nav or footer change is one edit.** Change `NAV_ITEMS` or `FOOTER_LINKS` in `tools/build-docs.mjs` and rebuild; all 126 pages follow. Before the shell moved into the generator this took eight edits, and `404.html` had already drifted into listing "Reference" twice.
+
+The build also **prunes**: any `.html` under `docs/` with no surviving markdown source is deleted, so a renamed or removed doc cannot leave a stale page committed and reachable.
 
 Generator behaviors worth knowing before touching it or the markdown:
 
