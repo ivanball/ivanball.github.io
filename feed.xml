@@ -6,7 +6,7 @@
     <atom:link href="https://ivanball.github.io/feed.xml" rel="self" type="application/rss+xml"/>
     <description>A long-form series turning a production .NET framework's architecture decisions into teachable patterns: the Result railway, the transactional outbox, database-per-service, JWKS auth, fitness functions, and more.</description>
     <language>en-us</language>
-    <lastBuildDate>Sun, 26 Jul 2026 00:14:41 GMT</lastBuildDate>
+    <lastBuildDate>Sun, 26 Jul 2026 00:58:10 GMT</lastBuildDate>
     <managingEditor>noreply@ivanball.github.io (Ivan Ball-llovera)</managingEditor>
     <item>
       <title>Browser session-cookie auth for Blazor SSR</title>

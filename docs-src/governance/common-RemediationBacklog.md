@@ -1,6 +1,6 @@
 # MMCA.Common — Architecture Remediation Backlog
 
-Derived from `ArchitectureScorecard.md` (canonical two-axis scoring: **Maturity 96.9% / Implementation 84.6%**, framework v1.123.0; the 2026-07-23 twenty-second-wave two-pass re-score at HEAD `c911480`, working tree clean, moved **no scores**: all 34 categories re-confirmed at their twenty-first-wave values. Five first-pass proposals were refuted on adversarial re-verification and held at prior: three lifts (§9 Maturity 3→4, §10 Implementation 8→9, §30 Maturity 3→4) and two downgrades (§23 and §24, each Implementation 8→7). **Categories still below Maturity 4: #9, #17, #30 (M3) and #31 (M2)**, so 30 of 34 sit at Maturity 4. The prior twenty-first-wave entry, retained for provenance: the 2026-07-21 re-score at HEAD `4a4fc05` moved exactly one score, **§12 Performance & Scalability Maturity 3→4**, because the `Performance gate (BenchmarkDotNet Short + baseline verify)` context is present in live `required_status_checks` on `main` (8 required contexts), refuting the twentieth wave's sole basis for holding it at 3; seven first-pass lifts (§4, §9, §11, §19, §20, §26, §29) were refuted and the remaining 26 categories re-confirmed.)
+Derived from `ArchitectureScorecard.md` (canonical two-axis scoring: **Maturity 96.9% / Implementation 84.6%**, framework v1.128.0; the 2026-07-25 twenty-third-wave two-pass re-score at HEAD `3dff29b`, working tree clean, moved **no scores**: all 34 categories re-confirmed at their twenty-first-wave values, the third consecutive steady-state cycle. Five first-pass proposals were refuted on adversarial re-verification and held at prior: four lifts (§17 Maturity 3→4 and Implementation 8→9, §30 Maturity 3→4, §31 Maturity 2→3, §34 Implementation 8→9) and one downgrade (§23 Maturity 4→3 / Implementation 8→7). **Categories still below Maturity 4: #9, #17, #30 (M3) and #31 (M2)**, so 30 of 34 sit at Maturity 4, and the ranking is unchanged (#31 at priority 4; #9, #17 and #30 at priority 2 each). The cycle's only new work is doc hygiene under #34: this backlog and the scorecard had drifted five minor versions behind the CI-gated `FACTS.md`. The prior twenty-second-wave entry, retained for provenance: the 2026-07-23 re-score at HEAD `c911480` also moved no scores, refuting three lifts (§9, §10, §30) and two downgrades (§23, §24). The twenty-first-wave entry, likewise retained: the 2026-07-21 re-score at HEAD `4a4fc05` moved exactly one score, **§12 Performance & Scalability Maturity 3→4**, because the `Performance gate (BenchmarkDotNet Short + baseline verify)` context is present in live `required_status_checks` on `main` (8 required contexts), refuting the twentieth wave's sole basis for holding it at 3; seven first-pass lifts (§4, §9, §11, §19, §20, §26, §29) were refuted and the remaining 26 categories re-confirmed.)
 The wave-by-wave priority ranking below is the **historical single-axis review** (index 80%, 218/272, 2026-06-08/09); it is retained for provenance and is **superseded by the in-repo two-axis scorecard**, which is the live source of scores.
 Tasks are every applicable category scoring **< 4**, ranked by **priority = (4 − score) × weight**.
 Higher priority = bigger weighted gap = more index points per unit of effort.
@@ -218,13 +218,15 @@ Implemented in MMCA.Common — ✅ **verified 2026-06-09**: `dotnet build -c Rel
   TTL-backstopped best-effort prefix invalidation — formalizing pre-existing §10 code (no score move).
 
 **Open follow-up surfaced this cycle (governance hygiene, not a score-mover):**
-- [ ] **Commit the v1.85.0 docs governance pass + backfill the CHANGELOG.** ADRs 024/025/026 are
+- [x] **Commit the v1.85.0 docs governance pass + backfill the CHANGELOG.** ~~ADRs 024/025/026 are
   untracked, the `FACTS.md` ADR-count bump (23→26) + ADR-003/004/005/010/015 cross-links + the
   `ServiceContractAttribute` doc-fix are modified, and **this scorecard/backlog refresh** is uncommitted.
   The CHANGELOG now carries a `[1.85.0]` entry but still **lacks v1.83.0 and v1.84.0** sections (and
-  `[Unreleased]` is empty), so those two releases have no notes. Add the 1.83.0 + 1.84.0 CHANGELOG
-  sections and commit the docs pass so §34 traceability is consistent again. *(§34, transient hygiene
-  nit, effort S.)*
+  `[Unreleased]` is empty), so those two releases have no notes.~~ **DONE (verified 2026-07-25):** the
+  CHANGELOG carries the backfilled `## [1.83.0] - 2026-06-26` (`CHANGELOG.md:1211`) and
+  `## [1.84.0] - 2026-06-27` (`:1200`) sections, `[Unreleased]` is empty above `## [1.128.0] - 2026-07-25`
+  (`:7-9`), ADRs 024/025/026 are committed in `Website/docs-src/adr/`, and the MMCA.Common tree is clean
+  at tag v1.128.0. *(§34, transient hygiene nit, effort S.)*
 
 ---
 
@@ -595,9 +597,10 @@ package: `Microsoft.Extensions.TimeProvider.Testing` 10.7.0.
   recalibration named). §23 maturity 3→4 candidacy recorded for the next re-score
   (CONFIRMED and applied to the scorecard table on the nineteenth-wave re-score, 2026-07-15: §23 is M4/I8, on the protect list).
 - ✅ **§34 hygiene.** `GETTING-STARTED.md` no longer restates the current consumer version (links
-  `FACTS.md`; sample version marked illustrative). *Noted for a future docs pass:* `CHANGELOG.md`'s
+  `FACTS.md`; sample version marked illustrative). ~~*Noted for a future docs pass:* `CHANGELOG.md`'s
   `[Unreleased]` section still accumulates content shipped in v1.86.0 through v1.114.0 without
-  per-release headings.
+  per-release headings.~~ **RESOLVED (verified 2026-07-25):** `CHANGELOG.md` now carries per-release
+  headings through `## [1.128.0] - 2026-07-25` with an empty `[Unreleased]` (`CHANGELOG.md:7-9`).
 
 ## Progress - eighteenth wave (evidence re-score at v1.115.0, 2026-07-12)
 
@@ -774,6 +777,59 @@ package: `Microsoft.Extensions.TimeProvider.Testing` 10.7.0.
 
 ---
 
+## Progress - twenty-third wave (evidence re-score at v1.128.0, 2026-07-25)
+
+> A full 34-category, two-pass evidence re-score (per-category scorer plus adversarial verifier) at framework
+> **v1.128.0** (HEAD `3dff29b`, working tree **clean**). **No score moves**, the third consecutive
+> steady-state cycle. Canonical scoring holds at **Maturity 96.9% (314/324) / Implementation 84.6%
+> (685/810)** per [`ArchitectureScorecard.md`](common-ArchitectureScorecard.md). Five first-pass
+> proposals (four lifts, one downgrade) were refuted against source.
+
+- ✅ **#17 DevOps: proposed M3→4 and I8→9 both refuted, and the refutation sharpened the row.** The
+  maturity-3 hold-reason is unchanged in source: the `sample-deployment-validate` job is an
+  `az bicep build` compile check, and the workflow's own comment still records that a real what-if or
+  deploy stays a consumer-side concern (`.github/workflows/ci.yml:591-592`, steps at `:601-607`). The
+  verification also surfaced two drifted claims in the scorecard row itself, both corrected in this
+  refresh: `ci.yml` is `pull_request`-only (`:3-16`, the push trigger was removed), and the bicep job's
+  context is **absent from the 8 required status checks on `main`** (queried live), so it was never the
+  "blocking" gate the row advertised. Implementation holds at 8 because the IaC and rollback material is
+  an explicitly non-executed reference sample (`DEPLOYMENT.md:3,80`).
+- 📎 **New #17 evidence, no band move.** Releases now publish to nuget.org as well as GitHub Packages
+  using `NuGet/login` OIDC trusted publishing with no stored API key (`release.yml:79-88,155-165`,
+  ADR-053), under a least-privilege `permissions` block (`:13-16`) with a blocking CycloneDX SBOM gate
+  (`:53-58`). This strengthens the secretless-deploy-identity criterion without touching either
+  hold-reason, so it lands as evidence enrichment and a new *Deliberate / accepted* note.
+- ✅ **#31 FinOps: proposed M2→3 refuted.** A search for cost, FinOps and budget across `.github`, and for
+  cost across `Tests/Architecture`, returns zero matches, so no cost convention is enforced by review or
+  CI; every cited artifact is byte-identical to the v1.123.0 tree already scored at M2. The documented
+  acceptance stands.
+- ✅ **#30 and #34 lifts refuted.** #30 holds at M3 (the structural `[Pii]` convention scan is still
+  vacuous in-repo, `PiiConventionTests.cs:7-11`, and no Domain type declares `[Pii]`); #34 holds at I8
+  because `Docs/Architecture/ArchitecturalAnalysis.md` still lives at the uncommittable workspace root
+  with no committable replacement anywhere under `docs-src/` or MMCA.Common.
+- ✅ **#23 downgrade refuted.** The proposed M4→3 / I8→7 fails on a fresh read: `WebVitalsE2ETests`
+  asserts LCP/TTFB/CLS budgets on two gallery pages inside the unfiltered `ui-e2e` job, which carries no
+  `continue-on-error` anywhere.
+- 🆕 **One new item, under #34 (priority 2 band, effort S).** The governance prose had drifted five minor
+  versions behind the CI-gated `FACTS.md`: the scorecard's §14 fitness counts, its §16 and §34 ADR range,
+  and this backlog's header line. All corrected here; the item stays open for the residual generated
+  string in `FACTS.md:20`, which still says GitHub Packages only and must be fixed in the generator
+  (`build/facts/FactsGenerator.cs:208`) in the MMCA.Common repo.
+- ✅ **Closed: the v1.85.0 docs-governance follow-up.** The CHANGELOG carries the backfilled 1.83.0 and
+  1.84.0 sections (`CHANGELOG.md:1211,1200`), `[Unreleased]` is empty above `## [1.128.0]` (`:7-9`), and
+  ADRs 024/025/026 are committed.
+- ✅ **Open set and rankings unchanged.** #9, #17, #30 (M3, priority 2 each) and #31 (M2, computed
+  priority 4, documented accepted cap). `FACTS.md` reports **15 packages / 93 fitness methods across 30
+  bases (Common runs 56)**; the ADR corpus is **001-055**.
+- ✅ **FR-1 through FR-7 re-verified open.** Each of the seven deferred 2026-07-19 review findings was
+  re-checked against source this run and none has shipped: the single Infrastructure package
+  (`FACTS.md:24`), `Result<T>.Value` still returning null on failure
+  (`Shared/Abstractions/Result.cs:139-140`), the unconstrained `TResult` on `ICommandHandler`/
+  `IQueryHandler` (`:9` in each), and the preview extension-type DI surface
+  (`Application/DependencyInjection.cs:22`) all stand as recorded. They remain unscheduled.
+
+---
+
 ## Deferred - 2026-07-19 full review (recorded, not scheduled)
 
 > The 2026-07-19 full framework review shipped its accepted fixes on the review branch (rollback on
@@ -943,6 +999,7 @@ Soft-delete is the only deletion model — no lawful erasure path. *(All three f
 ### [ ] #34 · Architecture Governance & Documentation
 - **(low ×2)** `Docs/Architecture/ArchitecturalAnalysis.md` contradicts the code on DB-per-service ("deliberately not database-per-service," race "only mitigated"); the two biggest recent decisions (DB-per-service, gRPC extraction) lack ADRs.
 - [ ] Refresh the analysis doc; write the **two missing ADRs**; add an ADR index/template.
+- [ ] **(added 2026-07-25, twenty-third-wave re-score; priority 2 band, effort S)** **Re-sync the governance prose to the generated FACTS and the current ADR corpus.** The CI-gated `FACTS.md` is the source of truth for these numbers and the governance docs had drifted five minor versions behind it: this backlog's header line self-dated framework v1.123.0 while `FACTS.md:4,14,44` reports **v1.128.0 and 93 fitness methods across 30 bases (Common runs 56)** (the per-wave Progress sections below keep their period-accurate counts as provenance and are not restated); the scorecard's §14 row read "85 methods across 28 abstract bases, Common's own build executes 49" against the same `FACTS.md:44` figures; and the scorecard's §16 and §34 rows read "ADRs 001-051" against an actual corpus of **001-055** (`Website/docs-src/adr/052-background-job-execution.md` through `055-repository-and-specification-contract.md`). **All four corrected in the 2026-07-25 refresh of both files**; the item stays open to cover the one residual: `FACTS.md:20` (emitted by `build/facts/FactsGenerator.cs:208`) still describes the packages as "Released in lockstep to GitHub Packages", while `release.yml:86-88` and `:162-165` push every release to nuget.org as well (ADR-053). That string is generated, so the fix is a one-line change in the generator plus a FACTS regen, landed in the MMCA.Common repo rather than here. This is doc drift of the class #34 already tracks, not an enforcement gap, so §34 holds at M4/I8.
 - [x] **(added and CLOSED 2026-07-21, twenty-first-wave re-score; priority 2 band, effort S)** **Sync `CONTRIBUTING.md`'s required-merge-gate list and its branch-protection reproduce snippet with live protection.** **DONE (MMCA.Common PR #100, merged `658786b`, all 8 required gates green):** the prose list now names all eight gates with webkit marked as promoted 2026-07-16 and the perf gate described against `Tests/Performance/perf-baseline.json`; the reproduce snippet was extended to the same eight contexts and verified byte-identical against the live protection API; and a line now directs readers to `gh api repos/ivanball/MMCA.Common/branches/main/protection` as authoritative over the committed copy, which is the durable fix for this class of drift. Original finding: Live `required_status_checks` on `main` carries 8 contexts (`build-and-test`; `Build MMCA.Common.UI.Maui (windows, 4 TFMs)`; UI a11y + render smoke on chromium, firefox, and webkit; `coverage`; `Consumer source build (Helpdesk)`; `Performance gate (BenchmarkDotNet Short + baseline verify)`), but the doc lists five gates and still calls webkit advisory (`CONTRIBUTING.md:57-64`), and the reproduce snippet omits webkit, the Helpdesk canary, and the perf gate (`CONTRIBUTING.md:104-112,124`). `ci.yml:116-118` already asserts all three engines are required, so the workflow and the doc disagree. This is load-bearing beyond hygiene: scorecard adjudications cite this file, and its staleness is exactly why §12 was held at Maturity 3 for a cycle after its gate was in fact promoted. Prefer the branch-protection API over the committed snippet when adjudicating.
 
 ### [x] #5 · Vertical Slice Architecture — **DONE (eighth wave: impl 7→8 AND maturity 3→4)** → moved to the level-4 protect list
@@ -970,7 +1027,10 @@ Soft-delete is the only deletion model — no lawful erasure path. *(All three f
 
 ## 🔒 Deliberate / accepted (documented caps, not scheduled work)
 ### [accepted] #31 · Cost Efficiency / FinOps: held at Maturity 2 / Implementation 7 by documented acceptance
-Moved out of the active priority queue on 2026-07-02 (user-approved). Its computed priority = (4 − 2) × 2 = **4** is the highest weighted gap of any open category, but the unmet §31 criteria are consumer/IaC execution a NuGet library cannot perform: **right-sizing** and **reversible scale-events** are host-infrastructure actions the framework provisions nothing to take, and **per-service cost attribution** via Aspire resource annotations is inert for the hand-written `main.bicep` consumers (ADC/Store), so even the one library-addressable criterion does not move the score for the actual consumers. The in-repo levers are already shipped and documented: the `Telemetry:TracesSampleRatio` OTel sampler knob, the outbox per-message log trimmed Information→Debug, and the cost guide's cost-attribution-tag plus cost-guard samples. Further movement is a consumer-side lift, not an in-repo one, so §31 is recorded here as an accepted cap rather than scheduled work. *(Note on paths: `COST.md`, `RESILIENCE.md`, `RESPONSIVE.md`, `ACCESSIBILITY.md`, and the `ADRs/` folder cited throughout this file's historical entries no longer live in the MMCA.Common repo. The 2026-07-20 centralization moved the documentation library to `Website/docs-src/` (guides, ADRs, governance); only `CHANGELOG.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `FACTS.md`, `NavigationFlow.md`, `README.md`, and `SECURITY.md` remain in-repo. Historical in-repo paths are left as written for provenance.)* *(See [`common-COST.md`](../guides/common-COST.md), the §31 scorecard row, and the twelfth-wave `[accepted]` note above for provenance. Re-adjudicated on the twentieth-wave re-score, 2026-07-17: a first-pass M2→3/I7→8 lift proposal was adversarially refuted for re-citing the identical evidence already grounding M2/I7; the acceptance stands unchanged.)*
+Moved out of the active priority queue on 2026-07-02 (user-approved). Its computed priority = (4 − 2) × 2 = **4** is the highest weighted gap of any open category, but the unmet §31 criteria are consumer/IaC execution a NuGet library cannot perform: **right-sizing** and **reversible scale-events** are host-infrastructure actions the framework provisions nothing to take, and **per-service cost attribution** via Aspire resource annotations is inert for the hand-written `main.bicep` consumers (ADC/Store), so even the one library-addressable criterion does not move the score for the actual consumers. The in-repo levers are already shipped and documented: the `Telemetry:TracesSampleRatio` OTel sampler knob, the outbox per-message log trimmed Information→Debug, and the cost guide's cost-attribution-tag plus cost-guard samples. Further movement is a consumer-side lift, not an in-repo one, so §31 is recorded here as an accepted cap rather than scheduled work. *(Note on paths: `COST.md`, `RESILIENCE.md`, `RESPONSIVE.md`, `ACCESSIBILITY.md`, and the `ADRs/` folder cited throughout this file's historical entries no longer live in the MMCA.Common repo. The 2026-07-20 centralization moved the documentation library to `Website/docs-src/` (guides, ADRs, governance); only `CHANGELOG.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `FACTS.md`, `NavigationFlow.md`, `README.md`, and `SECURITY.md` remain in-repo. Historical in-repo paths are left as written for provenance.)* *(See [`common-COST.md`](../guides/common-COST.md), the §31 scorecard row, and the twelfth-wave `[accepted]` note above for provenance. Re-adjudicated on the twentieth-wave re-score, 2026-07-17: a first-pass M2→3/I7→8 lift proposal was adversarially refuted for re-citing the identical evidence already grounding M2/I7; the acceptance stands unchanged. Re-adjudicated again on the twenty-third-wave re-score, 2026-07-25: a first-pass M2→3 lift was refuted on three independent checks, the sharpest being that a search for cost, FinOps and budget across `.github` and for cost across `Tests/Architecture` returns zero matches, so no cost convention is enforced by review or CI anywhere in-repo; every cited artifact is byte-identical to the v1.123.0 tree already scored at M2.)*
+
+### [accepted] Dual-registry publishing, and the release-workflow filename is load-bearing
+Since v1.128.0 every release publishes to **both** nuget.org and GitHub Packages (ADR-053). The nuget.org leg uses keyless OIDC trusted publishing: `NuGet/login` exchanges the workflow's `id-token` for a short-lived, single-use API key, so there is **no stored `NUGET_API_KEY` secret** (`release.yml:13-16,79-88`, and `:155-165` for the MAUI job). The trusted-publishing policy on nuget.org is pinned to this workflow **file**, so renaming or relocating `release.yml` breaks the token exchange by design. That constraint is recorded in-file at `release.yml:76-78`, at its point of use, which is where it is most likely to be read before a rename: it is documented, not scheduled work, and needs no backlog item. Recorded here so a future cycle does not mistake the filename coupling for accidental fragility.
 
 ## ⚪ Mostly consumer-assessed (the shared Common.UI surface is scored here)
 #21 Accessibility · #26 Front-End Security
