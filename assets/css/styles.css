@@ -86,14 +86,24 @@
   --accent-2: #0b6f79;
   --accent-2-soft: #ddf0f2;
 
-  /* The ink band is dark in BOTH themes: it is the site's signature surface and
-     it matches the article hero images. Its tokens therefore never flip. */
-  --ink: #0b1420;
-  --ink-surface: #141f2d;
-  --ink-border: #27374b;
-  --ink-text: #eaf0f8;
-  --ink-muted: #a6b6c9;
-  --ink-accent: #86aaff;
+  /* The ink band (home hero, one feature panel per page) is the site's signature
+     surface. It follows the active theme like everything else: it was briefly dark in
+     both themes, which made the home page look like the theme toggle did nothing,
+     because the hero is the whole viewport on load. In light it is a soft tinted
+     band, in dark it is the deep panel that matches the article hero art. */
+  --ink-bg: linear-gradient(180deg, #e9f0fa 0%, #f4f7fc 60%, var(--bg) 100%);
+  --ink-surface: #ffffff;
+  --ink-surface-alt: #e4ebf5;
+  --ink-border: #cfdaea;
+  --ink-border-strong: #b6c6dc;
+  --ink-text: #101a25;
+  --ink-muted: #4c5e75;
+  --ink-accent: #1a4fd6;
+  --ink-accent-strong: #123ba8;
+  --ink-accent-contrast: #ffffff;
+  --ink-accent-soft: #dbe6fb;
+  --ink-glow-1: rgba(26, 79, 214, 0.10);
+  --ink-glow-2: rgba(11, 111, 121, 0.09);
 
   --shadow-sm: 0 1px 2px rgba(16, 32, 44, 0.07);
   --shadow: 0 1px 2px rgba(16, 32, 44, 0.06), 0 8px 24px rgba(16, 32, 44, 0.08);
@@ -124,6 +134,19 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 26px rgba(0, 0, 0, 0.45);
   --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.35), 0 20px 50px rgba(0, 0, 0, 0.55);
+  --ink-bg: #08101a;
+  --ink-surface: #141f2d;
+  --ink-surface-alt: #1b283a;
+  --ink-border: #27374b;
+  --ink-border-strong: #35485f;
+  --ink-text: #eaf0f8;
+  --ink-muted: #a6b6c9;
+  --ink-accent: #86aaff;
+  --ink-accent-strong: #a9c3ff;
+  --ink-accent-contrast: #08101a;
+  --ink-accent-soft: #1a2942;
+  --ink-glow-1: rgba(80, 128, 255, 0.16);
+  --ink-glow-2: rgba(88, 207, 216, 0.10);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -145,6 +168,19 @@
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 26px rgba(0, 0, 0, 0.45);
     --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.35), 0 20px 50px rgba(0, 0, 0, 0.55);
+    --ink-bg: #08101a;
+    --ink-surface: #141f2d;
+    --ink-surface-alt: #1b283a;
+    --ink-border: #27374b;
+    --ink-border-strong: #35485f;
+    --ink-text: #eaf0f8;
+    --ink-muted: #a6b6c9;
+    --ink-accent: #86aaff;
+    --ink-accent-strong: #a9c3ff;
+    --ink-accent-contrast: #08101a;
+    --ink-accent-soft: #1a2942;
+    --ink-glow-1: rgba(80, 128, 255, 0.16);
+    --ink-glow-2: rgba(88, 207, 216, 0.10);
   }
 }
 
@@ -232,30 +268,28 @@ code, kbd { font-family: var(--font-mono); font-size: 0.9em; }
 .skip-link:focus { left: 0; }
 
 /* ----- The ink surface -----
-   A full-bleed dark band used for the home hero and one feature panel per page.
-   It carries its own token set so anything nested inside it stays legible in both
-   themes without a second set of rules. */
+   The band used for the home hero and one feature panel per page. Every value it
+   sets comes from an --ink-* token, and those flip with the theme: a soft tinted
+   band in light, the deep panel in dark. Re-pointing the base tokens locally is what
+   lets anything nested inside it stay legible without a second set of rules. */
 .ink {
-  background: var(--ink);
+  background: var(--ink-bg);
   color: var(--ink-text);
   --text: var(--ink-text);
   --text-muted: var(--ink-muted);
   --surface: var(--ink-surface);
-  --surface-alt: #1b283a;
+  --surface-alt: var(--ink-surface-alt);
   --border: var(--ink-border);
-  --border-strong: #35485f;
+  --border-strong: var(--ink-border-strong);
   --accent: var(--ink-accent);
-  --accent-strong: #a9c3ff;
-  --accent-contrast: #08101a;
-  --accent-soft: #1a2942;
-  --accent-2: #58cfd8;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
-  --shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  --accent-strong: var(--ink-accent-strong);
+  --accent-contrast: var(--ink-accent-contrast);
+  --accent-soft: var(--ink-accent-soft);
   position: relative;
   isolation: isolate;
 }
-/* A soft off-center glow keeps the band from reading as a flat black rectangle,
-   and gives the dark theme a visible edge where --bg is nearly the same value. */
+/* A soft off-center glow keeps the band from reading as a flat rectangle, and gives
+   the dark theme a visible edge where --bg is nearly the same value. */
 .ink::before {
   content: "";
   position: absolute;
@@ -265,10 +299,14 @@ code, kbd { font-family: var(--font-mono); font-size: 0.9em; }
      the glow inside whichever shape the band happens to be. */
   border-radius: inherit;
   background:
-    radial-gradient(70ch 40ch at 78% 12%, rgba(80, 128, 255, 0.16), transparent 70%),
-    radial-gradient(50ch 30ch at 8% 92%, rgba(88, 207, 216, 0.10), transparent 70%);
+    radial-gradient(70ch 40ch at 78% 12%, var(--ink-glow-1), transparent 70%),
+    radial-gradient(50ch 30ch at 8% 92%, var(--ink-glow-2), transparent 70%);
 }
 .ink h1, .ink h2, .ink h3 { color: var(--ink-text); }
+/* In light the band sits on a near-white page, so it needs an edge of its own to
+   read as a band at all. In dark the gradient already separates it. */
+.hero.ink { border-bottom: 1px solid var(--ink-border); }
+.feature.ink { border: 1px solid var(--ink-border); }
 
 /* ----- Header / nav ----- */
 .site-header {
@@ -952,6 +990,12 @@ figcaption { font-size: var(--step--1); color: var(--text-muted); margin-top: 0.
 
   /* Hide site chrome and screen-only controls */
   .skip-link, .site-header, .site-footer, .nav-tools, .nav-toggle, .btn-row { display: none !important; }
+
+  /* The ink band draws from its own tokens, which the overrides above do not reach,
+     so it would print as a block of solid colour. */
+  .ink { background: #fff !important; color: var(--text) !important; border: none !important; }
+  .ink::before { display: none !important; }
+  .ink h1, .ink h2, .ink h3 { color: var(--text) !important; }
 
   /* Full-bleed content */
   .container { max-width: none; padding: 0; }
