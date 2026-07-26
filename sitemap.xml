@@ -2,17 +2,17 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://ivanball.github.io/</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-26</lastmod>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/resume.html</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-26</lastmod>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/platform.html</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-26</lastmod>
     <priority>0.9</priority>
   </url>
   <url>
@@ -22,12 +22,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/speaking.html</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-26</lastmod>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/contact.html</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-26</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -357,7 +357,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-04-events-outbox.html</loc>
-    <lastmod>2026-07-24</lastmod>
+    <lastmod>2026-07-26</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -372,12 +372,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-07-persistence-ef-core.html</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-26</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-08-auth.html</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-26</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -397,7 +397,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-12-api-hosting-mapping.html</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-26</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -407,12 +407,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-14-module-system-composition.html</loc>
-    <lastmod>2026-07-24</lastmod>
+    <lastmod>2026-07-26</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-15-common-ui-framework.html</loc>
-    <lastmod>2026-07-24</lastmod>
+    <lastmod>2026-07-26</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -422,12 +422,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-17-conference-domain.html</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-26</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-18-conference-application.html</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-26</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -437,7 +437,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-20-conference-api-grpc.html</loc>
-    <lastmod>2026-07-24</lastmod>
+    <lastmod>2026-07-26</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -447,17 +447,17 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-22-engagement-module.html</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-26</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-23-engagement-live-layer.html</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-26</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-24-identity-module.html</loc>
-    <lastmod>2026-07-24</lastmod>
+    <lastmod>2026-07-26</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -467,12 +467,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-26-device-capability-layer.html</loc>
-    <lastmod>2026-07-24</lastmod>
+    <lastmod>2026-07-26</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/onboarding/group-27-testing-infrastructure.html</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-26</lastmod>
     <priority>0.6</priority>
   </url>
   <url>

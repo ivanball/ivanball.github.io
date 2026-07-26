@@ -312,6 +312,13 @@ for (const col of collections) {
 /* ----- markdown rendering with link rewriting + mermaid + code ----- */
 let CTX = null; // { srcDir, outRel, hasMermaid }
 
+/* A relative .md link whose target is not in the published set degrades to a plain
+   span rather than a broken href. That is the right rendering, but it used to happen
+   silently: 44 links pointing at "../00-primer.md" (a sibling, so the "../" was simply
+   wrong) sat dead in the published guide unnoticed. Collect them so the summary can
+   report the count and the build can be audited. */
+const DEAD_LINKS = [];
+
 function rewriteHref(href) {
   if (!href) return href;
   if (/^(https?:|mailto:|tel:|#|\/)/i.test(href)) return href;      // external / anchor / absolute
@@ -347,7 +354,10 @@ function makeRenderer(slugCounts) {
     link({ href, title, tokens }) {
       const text = this.parser.parseInline(tokens);
       const nh = rewriteHref(href);
-      if (nh === null) return `<span class="doc-deadlink" title="Reference outside the published set">${text}</span>`;
+      if (nh === null) {
+        DEAD_LINKS.push({ page: CTX.outRel, href, text: text.replace(/<[^>]*>/g, "") });
+        return `<span class="doc-deadlink" title="Reference outside the published set">${text}</span>`;
+      }
       const ext = /^https?:/i.test(nh);
       const t = title ? ` title="${escapeAttr(title)}"` : "";
       const attrs = ext ? ' target="_blank" rel="noopener"' : "";
@@ -838,6 +848,16 @@ ${tags ? `              <ul class="tags" style="margin-bottom:0.85rem">${tags}</
    once instead of a link per article. Entries point at Medium (where the article lives), not at the
    site, so a subscriber lands on the real thing. */
 {
+  /* Derived from the newest published article, NOT from the wall clock. A build-time
+     timestamp here rewrote feed.xml on every run, which made the build non-idempotent
+     and would make a "rebuild and check git diff is clean" CI gate fail every time.
+     The feed's content genuinely last changed when the newest article was published. */
+  const newest = publishedArticles
+    .map((a) => (a.date ? Date.parse(a.date) : NaN))
+    .filter((t) => !Number.isNaN(t))
+    .reduce((max, t) => (t > max ? t : max), 0);
+  const feedLastBuild = new Date(newest).toUTCString();
+
   const items = publishedArticles.map((a) => {
     const pub = a.date ? `\n      <pubDate>${new Date(a.date).toUTCString()}</pubDate>` : "";
     const adrs = adrNumbers(a.adr).map((n) => `\n      <category>ADR ${n}</category>`).join("");
@@ -858,7 +878,7 @@ ${tags ? `              <ul class="tags" style="margin-bottom:0.85rem">${tags}</
     <atom:link href="${SITE}/feed.xml" rel="self" type="application/rss+xml"/>
     <description>A long-form series turning a production .NET framework's architecture decisions into teachable patterns: the Result railway, the transactional outbox, database-per-service, JWKS auth, fitness functions, and more.</description>
     <language>en-us</language>
-    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
+    <lastBuildDate>${feedLastBuild}</lastBuildDate>
     <managingEditor>noreply@ivanball.github.io (Ivan Ball-llovera)</managingEditor>
 ${items}
   </channel>
@@ -901,3 +921,18 @@ console.log(`Wrote ${written} pages (${collections.map((c) => `${c.docs.length} 
 console.log(`Mermaid bundle vendored: ${existsSync(mermaidDst)}`);
 console.log(`Rendered ${ARTICLES.length} article cards into writing.html (${publishedArticles.length} published) and ${adrFiles.length} ADR cards into platform.html.`);
 console.log(`Generated feed.xml (${publishedArticles.length} items) and sitemap.xml (${sitemapUrls} URLs).`);
+
+/* Dead cross-links: rendered as plain text, never as a broken href, so they cannot
+   break a page. Reported here because a link pointing outside the published set is
+   usually a typo in the source markdown (a wrong "../" prefix), not a deliberate
+   reference to something unpublished. Grouped by target so a systematic mistake
+   stands out from the genuine one-offs. */
+if (DEAD_LINKS.length === 0) {
+  console.log("Dead cross-links: none.");
+} else {
+  const byTarget = new Map();
+  for (const d of DEAD_LINKS) byTarget.set(d.href, (byTarget.get(d.href) || 0) + 1);
+  const ranked = [...byTarget.entries()].sort((a, b) => b[1] - a[1]);
+  console.log(`Dead cross-links: ${DEAD_LINKS.length} across ${new Set(DEAD_LINKS.map((d) => d.page)).size} page(s), rendered as plain text.`);
+  for (const [href, count] of ranked) console.log(`  ${String(count).padStart(3)}x  ${href}`);
+}

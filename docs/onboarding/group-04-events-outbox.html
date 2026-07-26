@@ -129,7 +129,7 @@
           the event contracts, the in-process dispatcher, the outbox tables and their background services, and
           the swappable in-process/broker buses.</p>
           <p>If you have not yet met the <strong>Result pattern</strong>, <strong>aggregate roots and domain events</strong>, or the
-          <strong>database-per-service</strong> rule, skim <span class="doc-deadlink" title="Reference outside the published set">primer §2</span>
+          <strong>database-per-service</strong> rule, skim <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a>
           first: this chapter builds directly on them.</p>
           <h2 id="the-two-kinds-of-event">The two kinds of event</h2>
           <p>Everything starts with two marker interfaces in the Domain layer. <a href="#idomainevent"><code>IDomainEvent</code></a> is
@@ -180,7 +180,7 @@
           disagree. <code>[Rubric §8, Data Architecture]</code> (transactional integrity) and <code>[Rubric §6]</code> both hinge on
           this atomicity. Crucially, the rows go to the same physical database as the aggregate: every
           relational source owns its own <code>OutboxMessages</code> table, never a shared one (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>; see the
-          <span class="doc-deadlink" title="Reference outside the published set">primer on database-per-service</span>).</p>
+          <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer on database-per-service</a>).</p>
           <h2 id="the-routing-split-local-events-dispatch-in-process-integration-events-wait-for-the-bus">The routing split: local events dispatch in-process, integration events wait for the bus</h2>
           <p>Here is the detail that most people get wrong, and it is the heart of the design. After the
           transaction commits (<code>SavedChanges</code>), the interceptor does <strong>not</strong> treat all captured events the

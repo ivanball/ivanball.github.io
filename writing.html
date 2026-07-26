@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Writing · Ivan Ball-llovera</title>
   <meta name="description" content="A long-form series turning a production .NET framework's architecture decisions into teachable patterns: the Result railway, the outbox, database-per-service, JWKS auth, fitness functions, and more.">
   <link rel="canonical" href="https://ivanball.github.io/writing.html">
@@ -14,6 +16,8 @@
   <meta property="og:description" content="Deep dives on enterprise .NET architecture: the Result railway, the transactional outbox, database-per-service, JWKS auth, fitness functions, and more.">
   <meta property="og:url" content="https://ivanball.github.io/writing.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Writing · Ivan Ball-llovera">
   <meta name="twitter:description" content="Deep dives on enterprise .NET architecture: the Result railway, the transactional outbox, database-per-service, JWKS auth, fitness functions, and more.">
@@ -73,6 +77,11 @@
           <a class="btn btn--ghost" href="feed.xml">Subscribe by RSS</a>
           <a class="btn btn--ghost" href="docs/index.html">Read the reference library</a>
         </div>
+
+        <!-- Visually hidden: the 50 cards below are h3s, so without an h2 the page skips a
+             heading level. A per-category h2 would fight the in-place filter, which hides
+             cards without regrouping them. -->
+        <h2 class="sr-only">All articles</h2>
 
         <div class="filters" id="article-filters" role="group" aria-label="Filter articles by topic"></div>
         <p class="count-note" id="article-count" aria-live="polite"></p>

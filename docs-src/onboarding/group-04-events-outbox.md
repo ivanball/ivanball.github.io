@@ -13,7 +13,7 @@ the event contracts, the in-process dispatcher, the outbox tables and their back
 the swappable in-process/broker buses.
 
 If you have not yet met the **Result pattern**, **aggregate roots and domain events**, or the
-**database-per-service** rule, skim [primer §2](../00-primer.md#2-architectural-styles-this-codebase-commits-to)
+**database-per-service** rule, skim [primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to)
 first: this chapter builds directly on them.
 
 ## The two kinds of event
@@ -69,7 +69,7 @@ is durably recorded; if the transaction rolled back, neither exists. There is no
 disagree. `[Rubric §8, Data Architecture]` (transactional integrity) and `[Rubric §6]` both hinge on
 this atomicity. Crucially, the rows go to the same physical database as the aggregate: every
 relational source owns its own `OutboxMessages` table, never a shared one ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html); see the
-[primer on database-per-service](../00-primer.md#2-architectural-styles-this-codebase-commits-to)).
+[primer on database-per-service](00-primer.md#2-architectural-styles-this-codebase-commits-to)).
 
 ## The routing split: local events dispatch in-process, integration events wait for the bus
 
