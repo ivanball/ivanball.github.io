@@ -55,26 +55,52 @@
       });
   }
 
+  /* ----- query parsing -----
+     Wrapping the query in double quotes requires EVERY word; bare words match
+     ANY of them. Broad by default is the right behavior for a reference library,
+     where a visitor rarely knows which words the author used, and quoting is the
+     familiar way to ask for the narrow reading. Smart quotes count too, because
+     they are what a paste from a document carries. */
+
+  function parseQuery(raw) {
+    var q = String(raw).trim();
+    var quoted = /^["“”](.+)["“”]$/.exec(q);
+    return quoted
+      ? { text: quoted[1].trim(), all: true }
+      : { text: q, all: false };
+  }
+
   /* ----- scoring -----
-     Deliberately simple: a hit in the section heading outranks a hit in the
-     identifier list, which outranks a hit in the excerpt. Every term must appear
-     somewhere, so a two-word query narrows instead of widening. */
+     A hit in the section heading outranks a hit in the identifier list, which
+     outranks a hit in the excerpt. On top of that, the number of query words a
+     record covers dominates everything else: in OR mode a record matching two
+     words must beat a record matching one, however strongly it matches it. */
 
   function terms(q) {
     return q.toLowerCase().split(/[^a-z0-9_.#+]+/i).filter(function (t) { return t.length > 1; });
   }
 
-  function score(rec, ts, phrase) {
+  function score(rec, ts, phrase, requireAll) {
     var total = 0;
+    var matched = 0;
     for (var i = 0; i < ts.length; i++) {
       var t = ts[i];
-      if (rec._h.indexOf(t) === -1) { return 0; }     // every term must be present
+      if (rec._h.indexOf(t) === -1) {
+        if (requireAll) { return 0; }
+        continue;
+      }
+      matched++;
       if (rec._t.indexOf(t) !== -1) { total += 40; }
       if (rec.i && rec.i.toLowerCase().indexOf(t) !== -1) { total += 25; }
       if (rec.x && rec.x.toLowerCase().indexOf(t) !== -1) { total += 8; }
       /* Whole-word beats a substring: "outbox" should not lose to "outboxes". */
       if (new RegExp("\\b" + t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\b").test(rec._h)) { total += 12; }
     }
+    if (!matched) { return 0; }
+    /* Coverage outweighs depth. Without this a single word hit in a title (77)
+       would outrank a record covering two words in its excerpt (16). */
+    total += matched * 60;
+
     if (phrase.length >= MIN_QUERY) {
       if (rec._t.indexOf(phrase) !== -1) {
         total += 120;
@@ -90,13 +116,13 @@
     return total;
   }
 
-  function search(q) {
-    var ts = terms(q);
+  function search(parsed) {
+    var ts = terms(parsed.text);
     if (!ts.length) { return []; }
-    var phrase = q.trim().toLowerCase();
+    var phrase = parsed.text.toLowerCase();
     var hits = [];
     for (var i = 0; i < records.length; i++) {
-      var s = score(records[i], ts, phrase);
+      var s = score(records[i], ts, phrase, parsed.all);
       if (s > 0) { hits.push({ rec: records[i], s: s }); }
     }
     hits.sort(function (a, b) { return b.s - a.s; });
@@ -144,18 +170,24 @@
   function run(q) {
     lastQuery = q;
     if (!records) { load(); return; }
-    var trimmed = q.trim();
-    if (trimmed.length < MIN_QUERY) {
+    var parsed = parseQuery(q);
+    if (parsed.text.length < MIN_QUERY) {
       list.innerHTML = "";
       active = -1;
-      setStatus(trimmed ? "Keep typing…" : "");
+      setStatus(parsed.text ? "Keep typing…" : "");
       return;
     }
-    var hits = search(trimmed);
-    render(hits, trimmed);
-    setStatus(hits.length
-      ? hits.length + (hits.length === MAX_RESULTS ? "+ results" : " result" + (hits.length === 1 ? "" : "s"))
-      : "No results for “" + trimmed + "”.");
+    var hits = search(parsed);
+    render(hits, parsed.text);
+    if (!hits.length) {
+      setStatus("No results for “" + parsed.text + "”" + (parsed.all ? " with every word." : "."));
+      return;
+    }
+    /* Say which reading was used, so a wide result set is understood rather than
+       mistaken for noise, and quoting is discoverable from the outcome. */
+    var many = terms(parsed.text).length > 1;
+    setStatus(hits.length + (hits.length === MAX_RESULTS ? "+ results" : " result" + (hits.length === 1 ? "" : "s")) +
+      (many ? (parsed.all ? " · every word" : " · any word") : ""));
   }
 
   /* ----- keyboard navigation ----- */

@@ -515,6 +515,7 @@ function searchDialogHtml() {
       <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
       <span><kbd>Enter</kbd> to open</span>
       <span><kbd>Esc</kbd> to close</span>
+      <span><kbd>"quotes"</kbd> for every word</span>
     </p>
   </dialog>`;
 }
@@ -839,8 +840,11 @@ function identifiersIn(md) {
 function addSearchRecord({ url, section, doc, kind, source }) {
   const excerpt = toExcerpt(source);
   const ids = identifiersIn(source);
-  /* A section with no prose and no identifiers is a divider, not a destination. */
-  if (!excerpt && !ids.length && !section) return;
+  /* A SECTION with no prose and no identifiers is a divider, not a destination.
+     A DOCUMENT record is always kept: its title is the main thing people search
+     for, and an ADR's lead is nothing but that title, so dropping empty ones
+     took all 56 ADRs out of the index by their own name. */
+  if (section && !excerpt && !ids.length) return;
   const rec = { u: url, d: doc, k: kind };
   if (section) rec.t = section;
   if (excerpt) rec.x = excerpt;
