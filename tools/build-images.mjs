@@ -74,3 +74,17 @@ console.log(
 console.log(
   `PNG sources ${mb(srcBytes)} MB -> WebP ${mb(outBytes)} MB at ${TARGET_WIDTH}px wide, quality ${QUALITY} (${pct}% smaller).`
 );
+
+/* ----- profile photo -----
+   The hero avatar renders at 168px (120px under 760px), so 400px covers a 2x
+   display with room to spare. The 800px JPEG stays as the source: it is the
+   right size to hand to LinkedIn, a conference bio, or a speaker page. */
+{
+  const src = path.join(WEBSITE_ROOT, "assets", "img", "ivan-ball-llovera.jpg");
+  const dst = src.replace(/\.jpg$/i, ".webp");
+  if (existsSync(src)) {
+    await sharp(src).resize({ width: 400, withoutEnlargement: true }).webp({ quality: 82 }).toFile(dst);
+    const before = statSync(src).size, after = statSync(dst).size;
+    console.log(`Profile photo: ${Math.round(before / 1024)} KB JPEG -> ${Math.round(after / 1024)} KB WebP at 400px.`);
+  }
+}
