@@ -29,7 +29,13 @@
   <link rel="stylesheet" href="assets/css/styles.css">
   <script defer src="assets/js/main.js"></script>
   <script defer src="assets/js/analytics.js"></script>
-  <script defer src="assets/data/articles.js"></script>
+  <!-- The cards below are static markup emitted by the build, so the browser no longer
+       needs window.ARTICLES (18 KB of summaries and URLs it never read). writing.js only
+       filters the rendered nodes, and the only data it needs is the category list, which
+       the build inlines here. Edit assets/data/articles.js and rebuild to change it. -->
+  <!-- BEGIN article-categories -->
+  <script>window.ARTICLE_CATEGORIES=[{"key":"all","label":"All"},{"key":"orient","label":"Orientation"},{"key":"core","label":"Core patterns"},{"key":"data","label":"Data & persistence"},{"key":"auth","label":"Auth & the edge"},{"key":"run","label":"Run & extract"},{"key":"proof","label":"Proof & getting started"}];</script>
+  <!-- END article-categories -->
   <script defer src="assets/js/writing.js"></script>
 </head>
 <body>
@@ -92,7 +98,7 @@
         <div class="grid grid--3" id="articles-grid">
           <!-- BEGIN articles -->
           <article class="card card--link article-card" data-cat="orient">
-            <div class="thumb"><img src="assets/img/articles/article-01.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-01.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Orientation · No. 1</span>
               <h3>Open-sourced and graded against 34 categories</h3>
@@ -101,7 +107,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="orient">
-            <div class="thumb"><img src="assets/img/articles/article-02.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-02.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Orientation · No. 2</span>
               <h3>Modular monolith to microservices</h3>
@@ -111,7 +117,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="orient">
-            <div class="thumb"><img src="assets/img/articles/article-03.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-03.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Orientation · No. 3</span>
               <h3>The 34-category architecture rubric</h3>
@@ -120,7 +126,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="core">
-            <div class="thumb"><img src="assets/img/articles/article-04.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-04.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Core patterns · No. 4</span>
               <h3>The Result railway in C#</h3>
@@ -130,7 +136,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="core">
-            <div class="thumb"><img src="assets/img/articles/article-05.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-05.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Core patterns · No. 5</span>
               <h3>Kill the anemic domain model</h3>
@@ -139,7 +145,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="core">
-            <div class="thumb"><img src="assets/img/articles/article-06.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-06.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Core patterns · No. 6</span>
               <h3>Specifications over LINQ spaghetti</h3>
@@ -149,7 +155,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="core">
-            <div class="thumb"><img src="assets/img/articles/article-07.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-07.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Core patterns · No. 7</span>
               <h3>The CQRS decorator pipeline</h3>
@@ -159,7 +165,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="core">
-            <div class="thumb"><img src="assets/img/articles/article-08.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-08.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Core patterns · No. 8</span>
               <h3>Compose validators, don&#39;t copy them</h3>
@@ -168,7 +174,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="core">
-            <div class="thumb"><img src="assets/img/articles/article-09.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-09.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Core patterns · No. 9</span>
               <h3>The transactional outbox</h3>
@@ -178,7 +184,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="data">
-            <div class="thumb"><img src="assets/img/articles/article-10.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-10.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Data &amp; persistence · No. 10</span>
               <h3>Database-per-service inside a monolith</h3>
@@ -188,7 +194,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="data">
-            <div class="thumb"><img src="assets/img/articles/article-11.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-11.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Data &amp; persistence · No. 11</span>
               <h3>Polyglot persistence: one model, three engines</h3>
@@ -198,7 +204,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="data">
-            <div class="thumb"><img src="assets/img/articles/article-12.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-12.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Data &amp; persistence · No. 12</span>
               <h3>Navigation populators</h3>
@@ -208,7 +214,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="data">
-            <div class="thumb"><img src="assets/img/articles/article-13.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-13.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Data &amp; persistence · No. 13</span>
               <h3>Optimistic concurrency: RowVersion round-trips</h3>
@@ -218,7 +224,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="data">
-            <div class="thumb"><img src="assets/img/articles/article-14.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-14.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Data &amp; persistence · No. 14</span>
               <h3>Self-ordering modules</h3>
@@ -227,7 +233,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="data">
-            <div class="thumb"><img src="assets/img/articles/article-15.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-15.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Data &amp; persistence · No. 15</span>
               <h3>Event-schema versioning</h3>
@@ -237,7 +243,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-16.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-16.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 16</span>
               <h3>JWKS cross-service auth</h3>
@@ -247,7 +253,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-17.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-17.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 17</span>
               <h3>Password hashing done right</h3>
@@ -257,7 +263,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-18.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-18.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 18</span>
               <h3>Idempotency in one attribute</h3>
@@ -267,7 +273,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-19.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-19.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 19</span>
               <h3>The self-invalidating cache</h3>
@@ -277,7 +283,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-20.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-20.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 20</span>
               <h3>Problem Details across HTTP and gRPC</h3>
@@ -286,7 +292,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-21.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-21.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 21</span>
               <h3>Notifications as a vertical slice</h3>
@@ -296,7 +302,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-22.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-22.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 22</span>
               <h3>Live channels over one SignalR hub</h3>
@@ -306,7 +312,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-23.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-23.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 23</span>
               <h3>Delete AutoMapper: manual DTO mapping</h3>
@@ -316,7 +322,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-24.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-24.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 24</span>
               <h3>Permission-based authorization over roles</h3>
@@ -326,7 +332,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-25.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-25.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 25</span>
               <h3>Browser session-cookie auth for Blazor SSR</h3>
@@ -336,7 +342,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-26.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-26.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 26</span>
               <h3>External OAuth login behind your own JWTs</h3>
@@ -346,7 +352,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-27.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-27.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 27</span>
               <h3>One rotating refresh token</h3>
@@ -356,7 +362,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-28.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-28.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 28</span>
               <h3>Generic entity controllers</h3>
@@ -366,7 +372,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-29.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-29.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 29</span>
               <h3>Resource-ownership authorization</h3>
@@ -376,7 +382,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-30.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-30.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 30</span>
               <h3>Rate limiting and brute-force protection</h3>
@@ -386,7 +392,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="run">
-            <div class="thumb"><img src="assets/img/articles/article-31.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-31.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Run &amp; extract · No. 31</span>
               <h3>Aspire: one command</h3>
@@ -396,7 +402,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="run">
-            <div class="thumb"><img src="assets/img/articles/article-32.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-32.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Run &amp; extract · No. 32</span>
               <h3>Extracting a module to a gRPC service</h3>
@@ -406,7 +412,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="run">
-            <div class="thumb"><img src="assets/img/articles/article-33.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-33.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Run &amp; extract · No. 33</span>
               <h3>Resilience and recovery objectives</h3>
@@ -416,7 +422,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="proof">
-            <div class="thumb"><img src="assets/img/articles/article-34.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-34.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Proof &amp; getting started · No. 34</span>
               <h3>Architecture fitness functions</h3>
@@ -426,7 +432,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="proof">
-            <div class="thumb"><img src="assets/img/articles/article-35.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-35.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Proof &amp; getting started · No. 35</span>
               <h3>The test pyramid</h3>
@@ -435,7 +441,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="proof">
-            <div class="thumb"><img src="assets/img/articles/article-36.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-36.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Proof &amp; getting started · No. 36</span>
               <h3>Soft-delete vs the right to erasure</h3>
@@ -445,7 +451,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="proof">
-            <div class="thumb"><img src="assets/img/articles/article-37.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-37.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Proof &amp; getting started · No. 37</span>
               <h3>A reusable Blazor UI framework</h3>
@@ -454,7 +460,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="proof">
-            <div class="thumb"><img src="assets/img/articles/article-38.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-38.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Proof &amp; getting started · No. 38</span>
               <h3>i18n and theming on one preference pipeline</h3>
@@ -464,7 +470,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="proof">
-            <div class="thumb"><img src="assets/img/articles/article-39.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-39.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Proof &amp; getting started · No. 39</span>
               <h3>Build your first module</h3>
@@ -473,7 +479,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="proof">
-            <div class="thumb"><img src="assets/img/articles/article-40.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-40.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Proof &amp; getting started · No. 40</span>
               <h3>Write your first fitness test</h3>
@@ -483,7 +489,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="proof">
-            <div class="thumb"><img src="assets/img/articles/article-41.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-41.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Proof &amp; getting started · No. 41</span>
               <h3>Two real apps on one framework</h3>
@@ -492,7 +498,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="proof">
-            <div class="thumb"><img src="assets/img/articles/article-42.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-42.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Proof &amp; getting started · No. 42</span>
               <h3>One Blazor UI, two hosts</h3>
@@ -502,7 +508,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="data">
-            <div class="thumb"><img src="assets/img/articles/article-43.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-43.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Data &amp; persistence · No. 43</span>
               <h3>Managed file storage: uploads you don&#39;t have to trust</h3>
@@ -512,7 +518,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-44.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-44.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 44</span>
               <h3>HTTP API versioning, proven not just claimed</h3>
@@ -522,7 +528,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="core">
-            <div class="thumb"><img src="assets/img/articles/article-45.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-45.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Core patterns · No. 45</span>
               <h3>Feature flags in the CQRS pipeline</h3>
@@ -532,7 +538,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="data">
-            <div class="thumb"><img src="assets/img/articles/article-46.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-46.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Data &amp; persistence · No. 46</span>
               <h3>Field-level encryption in EF Core</h3>
@@ -542,7 +548,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="auth">
-            <div class="thumb"><img src="assets/img/articles/article-47.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-47.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Auth &amp; the edge · No. 47</span>
               <h3>Security headers and CSP for Blazor</h3>
@@ -552,7 +558,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="run">
-            <div class="thumb"><img src="assets/img/articles/article-48.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-48.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Run &amp; extract · No. 48</span>
               <h3>Observability by default</h3>
@@ -562,7 +568,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="core">
-            <div class="thumb"><img src="assets/img/articles/article-49.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-49.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Core patterns · No. 49</span>
               <h3>Saga compensation and the reconciliation backstop</h3>
@@ -572,7 +578,7 @@
             </div>
           </article>
           <article class="card card--link article-card" data-cat="proof">
-            <div class="thumb"><img src="assets/img/articles/article-50.png" alt="" loading="lazy"></div>
+            <div class="thumb"><img src="assets/img/articles/article-50.webp" alt="" width="800" height="420" loading="lazy" decoding="async"></div>
             <div class="body">
               <span class="kicker">Proof &amp; getting started · No. 50</span>
               <h3>The series index</h3>

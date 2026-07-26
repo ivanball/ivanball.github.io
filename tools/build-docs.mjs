@@ -704,13 +704,26 @@ function adrHref(num, prefix = "") {
   return f ? `${prefix}docs/adr/${f.replace(/\.md$/i, ".html")}` : null;
 }
 
+/* articles.js points `hero` at the 1600x840 PNG, because that file is the source hero
+   uploaded to Medium when a piece publishes. The site serves the 800px WebP that
+   `npm run images` derives from it (about 97% smaller across the 50 heroes). Keeping the
+   swap here means the data file keeps naming the real source and no page references a
+   35 MB asset. If a WebP is missing, fall back to the PNG rather than emit a broken src. */
+const HERO_W = 800;
+const HERO_H = 420;
+
+function webHero(hero) {
+  const webp = hero.replace(/\.png$/i, ".webp");
+  return existsSync(path.join(WEBSITE_ROOT, webp)) ? webp : hero;
+}
+
 /* Same markup assets/js/writing.js used to build at runtime, with two additions: the ADR reference
    becomes a real link into the published record (internal link equity the client-rendered version
    could never contribute), and the category rides a data attribute so filtering can hide and show
    these nodes instead of replacing them. */
 function articleCardHtml(a) {
   const thumb = a.hero
-    ? `<img src="${escapeAttr(a.hero)}" alt="" loading="lazy">`
+    ? `<img src="${escapeAttr(webHero(a.hero))}" alt="" width="${HERO_W}" height="${HERO_H}" loading="lazy" decoding="async">`
     : `<span class="thumb-num" aria-hidden="true">${a.n}</span>`;
   const tags = adrNumbers(a.adr).map((n) => {
     const href = adrHref(n);
@@ -740,6 +753,13 @@ ${tags ? `              <ul class="tags" style="margin-bottom:0.85rem">${tags}</
   let html = readFileSync(abs, "utf8");
 
   html = replaceRegion(html, "articles", ARTICLES.map(articleCardHtml).join("\n"), file);
+
+  /* Only the category list, not the whole ARTICLES array. The cards are static markup
+     now, so shipping articles.js to the browser sent 18 KB of summaries and URLs that
+     nothing read. writing.js reads window.ARTICLE_CATEGORIES and filters in place. */
+  html = replaceRegion(html, "article-categories",
+    `  <script>window.ARTICLE_CATEGORIES=${JSON.stringify(ARTICLE_CATEGORIES)};</script>`,
+    file);
 
   const itemList = {
     "@context": "https://schema.org",
