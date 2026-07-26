@@ -1,7 +1,7 @@
 # 18. ADC Conference - Application & Use Cases
 
 **What this chapter covers.** This is the *application layer* of the Conference module, the largest
-single application assembly in the codebase (this group holds 211 types). It sits between the
+single application assembly in the codebase (this group holds 216 types). It sits between the
 REST/gRPC edge ([G20, Conference API & gRPC](group-20-conference-api-grpc.md)) and the domain
 aggregates ([G17, Conference Domain](group-17-conference-domain.md)), and it is where the conference's
 *use cases* actually live: create an event, publish it, add a room or a speaker, import the whole
@@ -21,207 +21,248 @@ command or query record, its handler, its FluentValidation validator, and (for c
 record plus a request mapper, all co-located. Adding a feature means adding a folder, not threading an
 edit through horizontal `Services/`, `Validators/`, and `Repositories/` directories. This is the
 [Vertical Slice](00-primer.md#2-architectural-styles-this-codebase-commits-to) discipline made
-physical. `[Rubric §5, Vertical Slice]` (assesses whether a feature is one navigable unit rather than
-scattered horizontally), and the folder layout is the evidence.
+physical. [Rubric §5, Vertical Slice] assesses whether a feature is one navigable unit rather than
+scattered horizontally, and the folder layout is the evidence.
 
-A **command** mutates and returns a [`Result`](group-01-result-error-handling.md#result); a **query**
-is side-effect-free and returns a `Result<TDTO>`. Both implement the Common contracts
-[`ICommandHandler<in TCommand, TResult>`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)
-and [`IQueryHandler<in TQuery, TResult>`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult),
-so every handler in this assembly flows through the same **decorator pipeline** (Logging, Caching,
+A **command** mutates and returns a [Result](group-01-result-error-handling.md#result); a **query** is
+side-effect-free and returns a `Result<TDTO>`. Both implement the Common contracts
+[ICommandHandler<in TCommand, TResult>](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)
+and [IQueryHandler<in TQuery, TResult>](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult), so
+every handler in this assembly flows through the same **decorator pipeline** (Logging, Caching,
 Transactional, then the handler) without knowing it exists. Commands that change cached read data
-implement [`ICacheInvalidating`](group-05-cqrs-pipeline.md#icacheinvalidating); commands that must be
-atomic implement [`ITransactional`](group-05-cqrs-pipeline.md#itransactional). The controller injects
-the handler interface and calls `HandleAsync`; the concrete type is invisible to it. `[Rubric §6,
-CQRS & Event-Driven]` (assesses a clean command/query split through well-defined handler boundaries):
-this module is the canonical demonstration, dozens of single-responsibility handlers, each one slice
-wide, all dispatched uniformly.
+implement [ICacheInvalidating](group-05-cqrs-pipeline.md#icacheinvalidating); commands that must be
+atomic implement [ITransactional](group-05-cqrs-pipeline.md#itransactional); the one read that opts
+into caching, [GetNowNextQuery](#getnownextquery), implements
+[IQueryCacheable](group-05-cqrs-pipeline.md#iquerycacheable) with a 30-second TTL and a cache key
+under the `Session` aggregate prefix, so session writes evict it
+(`MMCA.ADC.Conference.Application/Sessions/UseCases/NowNext/GetNowNextQuery.cs:23-38`). The controller
+injects the handler interface and calls `HandleAsync`; the concrete type is invisible to it.
+[Rubric §6, CQRS & Event-Driven] assesses a clean command/query split through well-defined handler
+boundaries: this module is the canonical demonstration, dozens of single-responsibility handlers, each
+one slice wide, all dispatched uniformly.
 
-The CRUD-shaped handlers ([`CreateEventHandler`](#createeventhandler),
-[`CreateSessionHandler`](#createsessionhandler), [`CreateSpeakerHandler`](#createspeakerhandler),
-[`CreateQuestionHandler`](#createquestionhandler),
-[`CreateConferenceCategoryHandler`](#createconferencecategoryhandler), and the matching
+The CRUD-shaped handlers ([CreateEventHandler](#createeventhandler),
+[CreateSessionHandler](#createsessionhandler), [CreateSpeakerHandler](#createspeakerhandler),
+[CreateQuestionHandler](#createquestionhandler),
+[CreateConferenceCategoryHandler](#createconferencecategoryhandler), and the matching
 `Update*`/`Delete*`/`Add*`/`Remove*` families) share one shape: they delegate object construction to an
-[`IEntityRequestMapper<TEntity, TCreateRequest, TIdentifierType>`](group-12-api-hosting-mapping.md#ientityrequestmappertentity-tcreaterequest-tidentifiertype)
+[IEntityRequestMapper<TEntity, TCreateRequest, TIdentifierType>](group-12-api-hosting-mapping.md#ientityrequestmappertentity-tcreaterequest-tidentifiertype)
 (which runs the validator and the domain `Create(...)` factory, returning `Result<TEntity>`), then
-persist through [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork) and map the saved entity
+persist through [IUnitOfWork](group-07-persistence-ef-core.md#iunitofwork) and map the saved entity
 back to a DTO with an
-[`IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>`](group-12-api-hosting-mapping.md#ientitydtomappertentity-tentitydto-tidentifiertype).
-The handler owns *orchestration only* (load, validate, persist, map, log) while the business rule
-("an event's end date cannot precede its start date") lives in the domain factory and the invariant
-classes. The richer handlers add what genuinely needs orchestration context:
-[`UpdateSessionHandler`](#updatesessionhandler) and [`UpdateEventHandler`](#updateeventhandler) stamp
-the client's concurrency token before mutating
-(`MMCA.ADC.Conference.Application/Sessions/UseCases/Update/UpdateSessionHandler.cs:34`,
-`MMCA.ADC.Conference.Application/Events/UseCases/Update/UpdateEventHandler.cs:33`) and reject
-immutable-field edits with [`Error`](group-01-result-error-handling.md#error)`.UnprocessableEntity`
-(`UpdateSessionHandler.cs:39`), and both the create and update session paths run a server-side
-double-booking check through [`SessionRoomScheduling`](#sessionroomscheduling)`.BuildOverlapPredicate`
-(`MMCA.ADC.Conference.Application/Sessions/Validation/SessionRoomScheduling.cs:26`,
-called at `CreateSessionHandler.cs:99` and `UpdateSessionHandler.cs:120`), which builds a
-SQL-translatable half-open interval overlap predicate so back-to-back sessions in one room do not
-collide (`SessionRoomScheduling.cs:36-39`).
+[IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>](group-12-api-hosting-mapping.md#ientitydtomappertentity-tentitydto-tidentifiertype).
+The handler owns *orchestration only* (load, validate, persist, map, log) while the business rule ("an
+event's end date cannot precede its start date") lives in the domain factory and the invariant classes.
+[DeleteEventHandler](#deleteeventhandler) is the one delete that is not the generic framework handler:
+it eagerly loads the event's owned children and the event's separate `Session` aggregates and hands
+both to the domain's
+[EventCascadeDeletionDomainService](group-17-conference-domain.md#eventcascadedeletiondomainservice)
+(BR-127, `MMCA.ADC.Conference.Application/Events/UseCases/Delete/DeleteEventHandler.cs:27-45`), because
+a cross-aggregate cascade is an application-layer decision.
+
+The richer handlers add what genuinely needs orchestration context.
+[UpdateSessionHandler](#updatesessionhandler) and [UpdateEventHandler](#updateeventhandler) stamp the
+client's concurrency token before mutating, so a concurrent edit surfaces as a 409 instead of silent
+last-write-wins (`MMCA.ADC.Conference.Application/Sessions/UseCases/Update/UpdateSessionHandler.cs:34`,
+`MMCA.ADC.Conference.Application/Events/UseCases/Update/UpdateEventHandler.cs:33`, [ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html)), and the
+session variant rejects immutable-field edits with
+[Error](group-01-result-error-handling.md#error)`.UnprocessableEntity`
+(`UpdateSessionHandler.cs:39-44`, BR-140). Both the create and update session paths run a server-side
+double-booking check through [SessionRoomScheduling](#sessionroomscheduling)`.BuildOverlapPredicate`
+(`MMCA.ADC.Conference.Application/Sessions/Validation/SessionRoomScheduling.cs:26`, called at
+`MMCA.ADC.Conference.Application/Sessions/UseCases/Create/CreateSessionHandler.cs:98-102` and
+`UpdateSessionHandler.cs:119-125`), which builds a SQL-translatable half-open interval overlap
+predicate so back-to-back sessions in one room do not collide (`SessionRoomScheduling.cs:36-39`), with
+`int.MinValue` as an "exclude nothing" sentinel that keeps the predicate a single shape
+(`SessionRoomScheduling.cs:34`). [CreateSessionHandler](#createsessionhandler) carries one more piece
+of orchestration: session ids are app-assigned (the integer primary key *is* the Sessionize id), so an
+organizer create computes the next id in a reserved manual range (`CreateSessionHandler.cs:77-93`), and
+because two concurrent creates can compute the same id, the handler retries a bounded three times
+(`CreateSessionHandler.cs:28`) on a unique-key violation, each retry in a **fresh DI scope** because the
+ambient `DbContext` still tracks the failed insert (`CreateSessionHandler.cs:40-60`). That is
+[Rubric §29, Resilience & Business Continuity] applied at the write path: a genuinely concurrent case
+is handled in code rather than left to the caller.
 
 ## Manual mapping, validation rule fragments, and authorization specifications
 
 Three sibling families recur across every aggregate. **DTO mappers**
-([`SessionDTOMapper`](#sessiondtomapper), [`EventDTOMapper`](#eventdtomapper),
-[`SpeakerDTOMapper`](#speakerdtomapper), [`RoomDTOMapper`](#roomdtomapper),
-[`CategoryItemDTOMapper`](#categoryitemdtomapper), and the question-answer / category-item link
-mappers) implement the Common mapper contract and assign each field *by hand*, the deliberate choice
-of [ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html) (manual/Mapperly mapping over reflection-based AutoMapper) so a renamed property is a
-compile error, not a silent null. `[Rubric §9, API & Contract Design]` (assesses explicit, traceable
-contracts): the mapping is code you can read and test, not convention magic.
+([SessionDTOMapper](#sessiondtomapper), [EventDTOMapper](#eventdtomapper),
+[SpeakerDTOMapper](#speakerdtomapper), [RoomDTOMapper](#roomdtomapper),
+[CategoryItemDTOMapper](#categoryitemdtomapper), and the question-answer / category-item link mappers)
+implement the Common mapper contract and assign each field *by hand*, the deliberate choice of [ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html)
+(manual/Mapperly mapping over reflection-based AutoMapper) so a renamed property is a compile error,
+not a silent null. [Rubric §9, API & Contract Design] assesses explicit, traceable contracts: the
+mapping is code you can read and test, not convention magic.
 
 **Validation** is composed, not inherited. Small generic rule fragments
-([`EventDateRangeRules<T>`](#eventdaterangerulest), [`EventNameRules<T>`](#eventnamerulest),
-[`RoomCapacityRules<T>`](#roomcapacityrulest), [`SessionTitleRules<T>`](#sessiontitlerulest),
-[`SpeakerFirstNameRules<T>`](#speakerfirstnamerulest),
-[`CategoryItemNameRules<T>`](#categoryitemnamerulest), and a dozen siblings) each encapsulate one
-validated concern behind a property selector: the plain string ones subclass the framework's
-[`RequiredStringRules<T>`](group-06-validation.md#requiredstringrulest) and pass the domain's
-max-length invariant through (`MMCA.ADC.Conference.Application/Events/Validation/EventValidationRules.cs:13-17`),
+([EventDateRangeRules<T>](#eventdaterangerulest), [EventNameRules<T>](#eventnamerulest),
+[RoomCapacityRules<T>](#roomcapacityrulest), [SessionTitleRules<T>](#sessiontitlerulest),
+[SpeakerFirstNameRules<T>](#speakerfirstnamerulest), [CategoryItemNameRules<T>](#categoryitemnamerulest),
+and a dozen siblings) each encapsulate one validated concern behind a property selector: the plain
+string ones subclass the framework's
+[RequiredStringRules<T>](group-06-validation.md#requiredstringrulest) and pass the domain's max-length
+invariant through (`MMCA.ADC.Conference.Application/Events/Validation/EventValidationRules.cs:13-17`),
 while the ones with real logic derive from `AbstractValidator<T>` directly, such as
-[`EventTimeZoneRules<T>`](#eventtimezonerulest), which additionally proves the value is a resolvable
-IANA identifier (`EventValidationRules.cs:34-48`, BR-87). The per-use-case validators
-([`EventUpdateRequestValidator`](#eventupdaterequestvalidator),
-[`SessionCreateRequestValidator`](#sessioncreaterequestvalidator), and the rest) pull the fragments
+[EventTimeZoneRules<T>](#eventtimezonerulest), which additionally proves the value is a resolvable IANA
+identifier (`EventValidationRules.cs:28-48`, BR-87). The per-use-case validators
+([EventUpdateRequestValidator](#eventupdaterequestvalidator),
+[SessionCreateRequestValidator](#sessioncreaterequestvalidator), and the rest) pull the fragments
 together with FluentValidation's `Include(...)` and add only what is local to the request
 (`MMCA.ADC.Conference.Application/Events/UseCases/Update/EventUpdateRequestValidator.cs:11-18`).
-[`EventDateRangeRules<T>`](#eventdaterangerulest) is the richest, compiling the `StartDate` selector
-into a delegate (`EventValidationRules.cs:68`) and reading it inside a cross-property `Must` on
-`EndDate` (`EventValidationRules.cs:69-71`). The pattern mirrors the framework's rule-fragment
-families in [G06, Validation](group-06-validation.md#addressline1rulest). `[Rubric §24, Forms,
-Validation & UX Safety]` and `[Rubric §1, SOLID]` (fragments compose without an inheritance chain; a
-new constraint is a new fragment, touching no existing validator).
+[EventDateRangeRules<T>](#eventdaterangerulest) is the richest, compiling the `StartDate` selector into
+a delegate (`EventValidationRules.cs:68`) and reading it inside a cross-property `Must` on `EndDate`
+(`EventValidationRules.cs:69-71`). Every rule carries a stable error code alongside its message
+(`EventValidationRules.cs:30-32`), so clients and tests key off the failure without string-matching
+prose. The pattern mirrors the framework's rule-fragment families in
+[G06, Validation](group-06-validation.md#addressline1rulest). [Rubric §24, Forms, Validation & UX
+Safety] and [Rubric §1, SOLID] both apply: fragments compose without an inheritance chain, and a new
+constraint is a new fragment that touches no existing validator.
 
-**Authorization specifications** ([`PublishedEventSpecification`](#publishedeventspecification),
-[`OwnEventQuestionAnswerSpecification`](#owneventquestionanswerspecification),
-[`OwnSessionQuestionAnswerSpecification`](#ownsessionquestionanswerspecification)) are
-[`ISpecification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#ispecificationtentity-tidentifiertype)
+**Authorization and scoping specifications** ([PublishedEventSpecification](#publishedeventspecification),
+[OwnEventQuestionAnswerSpecification](#owneventquestionanswerspecification),
+[OwnSessionQuestionAnswerSpecification](#ownsessionquestionanswerspecification)) are
+[Specification<TEntity, TIdentifierType>](group-03-querying-specifications.md#specificationtentity-tidentifiertype)
 implementations passed into the query services to *scope* what a caller may read (an anonymous visitor
 sees only published events; a speaker sees only their own answers). This keeps the authorization
-predicate a reusable, testable expression rather than an `if` buried in a controller. `[Rubric §11,
-Security]` (assesses authorization that is data-scoped, not just endpoint-gated). The public-session
-visibility rule is produced by the [`GetPublicSessionFilterHandler`](#getpublicsessionfilterhandler)
-use case via the framework's
-[`CrossSourceSpecification`](group-03-querying-specifications.md#crosssourcespecification) helper
-(`MMCA.ADC.Conference.Application/Sessions/UseCases/GetPublicSessionFilter/GetPublicSessionFilterHandler.cs:26-33`),
-because `Session` may live in a different data source from `Event` ([ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)): the helper resolves the
-published `Event` ids and returns a translatable `Session.EventId IN (...)` filter, ANDed with the
-local status check that excludes declined and cancelled sessions
-(`GetPublicSessionFilterHandler.cs:31`), so the published-event check is no longer a navigation join.
+predicate a reusable, testable expression rather than an `if` buried in a controller.
+[Rubric §11, Security] assesses authorization that is data-scoped, not just endpoint-gated. Three query
+handlers *build* a specification instead of returning data, and they exist because a navigating
+predicate (`s => s.Event.IsPublished`) is not translatable once the two entities can live in different
+data sources ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html), [ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)). [GetPublicSessionFilterHandler](#getpublicsessionfilterhandler) uses
+the framework's [CrossSourceSpecification](group-03-querying-specifications.md#crosssourcespecification)
+helper to resolve the published `Event` ids and return a translatable `Session.EventId IN (...)` filter,
+ANDed with a local status check that excludes declined and cancelled sessions
+(`MMCA.ADC.Conference.Application/Sessions/UseCases/GetPublicSessionFilter/GetPublicSessionFilterHandler.cs:26-33`).
+[GetSessionsBySpeakerFilterHandler](#getsessionsbyspeakerfilterhandler) and
+[GetSpeakersByEventFilterHandler](#getspeakersbyeventfilterhandler) hand-roll the same id-list shape
+against the link tables, projecting ids through `GetReadRepository(...).GetProjectedAsync` and
+materializing them once so the predicate embeds a stable collection EF can translate to `IN`
+(`MMCA.ADC.Conference.Application/Sessions/UseCases/GetSessionsBySpeakerFilter/GetSessionsBySpeakerFilterHandler.cs:30-40`,
+`MMCA.ADC.Conference.Application/Speakers/UseCases/GetSpeakersByEventFilter/GetSpeakersByEventFilterHandler.cs:28-40`).
+An empty id list correctly matches nothing, which is why the caller must still apply the specification
+rather than skip it.
 
 ## Query services, navigation populators, and the composition root
 
 Read paths do not get bespoke handlers for the common cases; they go through the framework's generic
-[`IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype),
-which supplies filtering, sorting, paging, and field projection. The one local specialization is
-[`SpeakerEntityQueryService`](#speakerentityqueryservice), a thin subclass that overrides only the
+[IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype),
+which supplies filtering, sorting, paging, and field projection ([ADR-034](https://ivanball.github.io/docs/adr/034-generic-entity-query-layer.html)). The one local specialization
+is [SpeakerEntityQueryService](#speakerentityqueryservice), a thin subclass that overrides only the
 DTO-to-entity property map so API consumers can sort and filter on the computed `FullName` while the
 pipeline translates it to `(FirstName + " " + LastName)`
-(`MMCA.ADC.Conference.Application/Speakers/SpeakerEntityQueryService.cs:28-34`). Eager-loading of
-child graphs is delegated to per-aggregate
-[`INavigationPopulator<in TEntity>`](group-11-navigation-populators.md#inavigationpopulatorin-tentity)
-implementations ([`EventNavigationPopulator`](#eventnavigationpopulator),
-[`SessionNavigationPopulator`](#sessionnavigationpopulator),
-[`SpeakerNavigationPopulator`](#speakernavigationpopulator),
-[`ConferenceCategoryNavigationPopulator`](#conferencecategorynavigationpopulator)), which encapsulate
-which navigations to include and how to batch-load cross-source relationships ([ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html)); child
-entities and the childless `Question` aggregate use the framework's
-[`NullNavigationPopulator<TEntity>`](group-11-navigation-populators.md#nullnavigationpopulatortentity)
+(`MMCA.ADC.Conference.Application/Speakers/SpeakerEntityQueryService.cs:28-34`). Eager-loading of child
+graphs is delegated to per-aggregate
+[INavigationPopulator<in TEntity>](group-11-navigation-populators.md#inavigationpopulatorin-tentity)
+implementations ([EventNavigationPopulator](#eventnavigationpopulator),
+[SessionNavigationPopulator](#sessionnavigationpopulator),
+[SpeakerNavigationPopulator](#speakernavigationpopulator),
+[ConferenceCategoryNavigationPopulator](#conferencecategorynavigationpopulator)), which encapsulate
+which navigations to include and how to batch-load cross-source relationships ([ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html)); child entities
+and the childless `Question` aggregate use the framework's
+[NullNavigationPopulator<TEntity>](group-11-navigation-populators.md#nullnavigationpopulatortentity)
 because they are never the root of a full graph load
-(`MMCA.ADC.Conference.Application/DependencyInjection.cs:61-88`).
+(`MMCA.ADC.Conference.Application/DependencyInjection.cs:69-96`).
 
-All of this is wired by [`DependencyInjection`](#dependencyinjection), the module's **composition
-root** (`MMCA.ADC.Conference.Application/DependencyInjection.cs:32`, with the registration surface
-exposed as a C# `extension(IServiceCollection)` member at `DependencyInjection.cs:34-36`). It
-explicitly binds the closed generics Scrutor cannot infer (the cascade-deletion domain service, then
+All of this is wired by [DependencyInjection](#dependencyinjection), the module's **composition root**
+(`MMCA.ADC.Conference.Application/DependencyInjection.cs:33`, with the registration surface exposed as a
+C# `extension(IServiceCollection)` member at `DependencyInjection.cs:35-37`). It explicitly binds the
+closed generics Scrutor cannot infer (the cascade-deletion domain service, the AI scoring queue, then
 each aggregate's navigation populator, query service, and delete handler, plus the two cross-module
-validation services, `DependencyInjection.cs:41-94`) and then calls
-`ScanModuleApplicationServices<ClassReference>()` (`DependencyInjection.cs:98`) to discover the "many
+validation services, `DependencyInjection.cs:42-102`) and then calls
+`ScanModuleApplicationServices<ClassReference>()` (`DependencyInjection.cs:106`) to discover the "many
 small things" (every handler, mapper, validator, and event handler) by convention.
-[`AssemblyReference`](#assemblyreference) and [`ClassReference`](#classreference) are the marker types
-that anchor that scan. `[Rubric §7, Microservices Readiness]` (assesses clean, explicit module
-boundaries): every internal concrete type is reachable only through an interface registered here,
-which is exactly what lets the Conference module boot as its own service host. `[Rubric §33, Developer
-Experience]`: one file is the single place a new aggregate gets registered.
+[AssemblyReference](#assemblyreference) and [ClassReference](#classreference) are the marker types that
+anchor that scan. [Rubric §7, Microservices Readiness] assesses clean, explicit module boundaries: every
+internal concrete type is reachable only through an interface registered here, which is exactly what
+lets the Conference module boot as its own service host. [Rubric §33, Developer Experience]: one file is
+the single place a new aggregate gets registered.
 
 ## Event-driven reactions: domain and integration handlers
 
 The application layer is also where the module *reacts* to events. **Domain event handlers** implement
-[`IDomainEventHandler<in TDomainEvent>`](group-04-events-outbox.md#idomaineventhandlerin-tdomainevent)
-and run in-process after the aggregate's `SaveChangesAsync`. Two of the three are deliberately
-observability-only: [`SessionCreatedHandler`](#sessioncreatedhandler) filters `SessionChanged` down to
-the `Added` state and writes one structured log line
+[IDomainEventHandler<in TDomainEvent>](group-04-events-outbox.md#idomaineventhandlerin-tdomainevent) and
+run in-process after the aggregate's `SaveChangesAsync`. Two of the three are deliberately
+observability-only: [SessionCreatedHandler](#sessioncreatedhandler) filters `SessionChanged` down to the
+`Added` state and writes one structured log line
 (`MMCA.ADC.Conference.Application/Sessions/DomainEventHandlers/SessionCreatedHandler.cs:17-21`), and
-[`RoomChangedHandler`](#roomchangedhandler) logs every room add/update/delete
+[RoomChangedHandler](#roomchangedhandler) logs every room add/update/delete
 (`MMCA.ADC.Conference.Application/Events/DomainEventHandlers/RoomChangedHandler.cs:17`), which is the
-`[Rubric §13, Observability & Operability]` story: the event stream is where lifecycle telemetry is
-emitted, not the entity. [`SpeakerDeletedHandler`](#speakerdeletedhandler) is the one with a real side
+[Rubric §13, Observability & Operability] story: the event stream is where lifecycle telemetry is
+emitted, not the entity. [SpeakerDeletedHandler](#speakerdeletedhandler) is the one with a real side
 effect: on a `Deleted` state with a previously linked user it opens its own DI scope (the handler is a
-singleton) and publishes `SpeakerUnlinkedFromUser` so Identity can clear `User.LinkedSpeakerId`
-(BR-70, `MMCA.ADC.Conference.Application/Speakers/DomainEventHandlers/SpeakerDeletedHandler.cs:38-45`).
+singleton), resolves [IEventBus](group-04-events-outbox.md#ieventbus), and publishes
+`SpeakerUnlinkedFromUser` so Identity can clear `User.LinkedSpeakerId`
+(`MMCA.ADC.Conference.Application/Speakers/DomainEventHandlers/SpeakerDeletedHandler.cs:38-45`, BR-70).
 
-The integration event handler [`UserRegisteredHandler`](#userregisteredhandler) implements
-[`IIntegrationEventHandler<in TIntegrationEvent>`](group-04-events-outbox.md#iintegrationeventhandlerin-tintegrationevent)
+The integration event handler [UserRegisteredHandler](#userregisteredhandler) implements
+[IIntegrationEventHandler<in TIntegrationEvent>](group-04-events-outbox.md#iintegrationeventhandlerin-tintegrationevent)
 and is the cross-module boundary in the other direction: when Identity publishes `UserRegistered` over
-the broker, Conference auto-links a speaker to that user (BR-207). It tries an email match first and
+the broker, Conference auto-links a speaker to that user (BR-207). It tries an email match first
+(ordering the candidates so an unlinked speaker wins and the choice stays deterministic when an email is
+shared,
+`MMCA.ADC.Conference.Application/Users/IntegrationEventHandlers/UserRegisteredHandler.cs:161-164`) and
 falls back to a unique-name match for Sessionize-imported speakers whose `Email` is `null` (the public
 Sessionize feed omits PII), linking only when exactly one unlinked candidate matches
-(`MMCA.ADC.Conference.Application/Users/IntegrationEventHandlers/UserRegisteredHandler.cs:58-64`,
-with the ambiguity guard at `:169-173`), and publishes `SpeakerLinkedToUser` back to Identity on a hit
-(`UserRegisteredHandler.cs:102-104`). The handler is deliberately best-effort: it runs in its own DI
-scope because the handler is a singleton (`UserRegisteredHandler.cs:52`), and any non-cancellation
-failure is swallowed so the already-committed registration never rolls back
-(`UserRegisteredHandler.cs:108-113`). Publishing flows through the
-[`IIntegrationEventPublisher`](group-04-events-outbox.md#iintegrationeventpublisher) abstraction and
-the outbox ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)), so the application code never references MassTransit. `[Rubric §6, CQRS &
-Event-Driven]` and `[Rubric §7, Microservices Readiness]`: the module collaborates through events and
-interfaces, never direct cross-module type references.
+(`UserRegisteredHandler.cs:183-202`, with the ambiguity guard at `:196-200`), then publishes
+`SpeakerLinkedToUser` back to Identity on a hit (`UserRegisteredHandler.cs:102-104`). Two details are
+worth reading closely. The handler runs in its own DI scope because it is a singleton
+(`UserRegisteredHandler.cs:52-54`), and it **rethrows** on failure: the `catch` filter `LogAndRethrow`
+logs and always returns `false`, so the exception keeps propagating
+(`UserRegisteredHandler.cs:108-135`). The remarks record the change of mind: swallowing meant one
+transient database fault lost the auto-link permanently, because the delivery was already acked, so
+letting the exception through hands the retry decision to the delivery mechanism, which is built for it
+(the outbox retries then dead-letters, MassTransit redelivers then moves the message to the error
+queue). Retrying is safe, because the "already linked to a different user" guard
+(`UserRegisteredHandler.cs:73-77`) makes the second attempt a no-op. Publishing flows through the
+`IEventBus` abstraction and the outbox ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)), so the application code never references MassTransit.
+[Rubric §6, CQRS & Event-Driven] and [Rubric §7, Microservices Readiness]: the module collaborates
+through events and interfaces, never direct cross-module type references.
 
 Two in-process services close the loop with the Engagement module.
-[`SessionBookmarkValidationService`](#sessionbookmarkvalidationservice)
+[SessionBookmarkValidationService](#sessionbookmarkvalidationservice)
 (`MMCA.ADC.Conference.Application/Sessions/SessionBookmarkValidationService.cs:12`) and
-[`EventLiveValidationService`](#eventlivevalidationservice)
+[EventLiveValidationService](#eventlivevalidationservice)
 (`MMCA.ADC.Conference.Application/Events/EventLiveValidationService.cs:18`) implement the
 Engagement-facing contracts
-[`ISessionBookmarkValidationService`](group-17-conference-domain.md#isessionbookmarkvalidationservice)
-and [`IEventLiveValidationService`](group-17-conference-domain.md#ieventlivevalidationservice), which
-Engagement calls via gRPC when the modules run as separate services ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)): the former gates
-session bookmarking (BR-49/BR-91), the latter computes an event or session live window in UTC from the
-event's dates and IANA time zone, and the session variant adds the assigned speakers (BR-236), the
-plenum flag, and the event's question-moderation default (BR-233)
-(`EventLiveValidationService.cs:21-59`). The traffic also runs the other way:
-[`GetSessionBookmarkCountsHandler`](#getsessionbookmarkcountshandler) re-verifies server-side that
-every requested session really belongs to the speaker before delegating the counting to Engagement's
-batched [`IBookmarkCountService`](group-22-engagement-module.md#ibookmarkcountservice), silently
-dropping ids that are not the speaker's rather than failing the whole batch
-(`MMCA.ADC.Conference.Application/Speakers/UseCases/GetSessionBookmarkCounts/GetSessionBookmarkCountsHandler.cs:33-45`),
-which is `[Rubric §11, Security]` (never trust the client's id list) and `[Rubric §12, Performance &
-Scalability]` (one cross-service round-trip instead of one per session) in a single handler.
+[ISessionBookmarkValidationService](group-17-conference-domain.md#isessionbookmarkvalidationservice) and
+[IEventLiveValidationService](group-17-conference-domain.md#ieventlivevalidationservice), which
+Engagement calls via gRPC when the modules run as separate services ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)): the former gates session
+bookmarking through the domain's [SessionInvariants](group-17-conference-domain.md#sessioninvariants)
+(BR-49/BR-91, `SessionBookmarkValidationService.cs:33-38`), the latter computes an event or session live
+window in UTC from the event's dates and IANA time zone (`EventLiveValidationService.cs:99-115`, with a
+`TimeZoneNotFoundException` fallback that treats stored local times as UTC rather than failing the call
+for a legacy row), and the session variant adds the assigned speakers (BR-236), the plenum flag, and the
+event's question-moderation default (BR-233, `EventLiveValidationService.cs:86-96`). The traffic also
+runs the other way: [GetSessionBookmarkCountsHandler](#getsessionbookmarkcountshandler) re-verifies
+server-side that every requested session really belongs to the speaker before delegating the counting to
+Engagement's batched [IBookmarkCountService](group-22-engagement-module.md#ibookmarkcountservice),
+silently dropping ids that are not the speaker's rather than failing the whole batch
+(`MMCA.ADC.Conference.Application/Speakers/UseCases/GetSessionBookmarkCounts/GetSessionBookmarkCountsHandler.cs:33-46`),
+which is [Rubric §11, Security] (never trust the client's id list) and [Rubric §12, Performance &
+Scalability] (one cross-service round-trip instead of one per session) in a single handler.
 
 ## Attendee-facing read models: calendar export and Now/Next
 
 A small cluster of queries serves the public schedule surfaces without going through the generic query
 service, because their output is not a DTO list.
-[`ExportEventCalendarHandler`](#exporteventcalendarhandler) and
-[`ExportSessionCalendarHandler`](#exportsessioncalendarhandler) return a `Result<string>` holding an
-`.ics` document: the event variant loads the event with its rooms, refuses unpublished or unknown
-events with `Error.NotFound`, and turns every exportable session (scheduled, non-service, not
+[ExportEventCalendarHandler](#exporteventcalendarhandler) and
+[ExportSessionCalendarHandler](#exportsessioncalendarhandler) return a `Result<string>` holding an
+`.ics` document: the event variant loads the event with its rooms, refuses unpublished or unknown events
+with `Error.NotFound`, and turns every exportable session (scheduled, non-service, not
 declined/cancelled) into one VEVENT with the room as its location
-(`MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/ExportEventCalendarHandler.cs:25-40`),
-with [`CalendarExportMapper`](#calendarexportmapper) doing the entity-to-entry shaping.
-[`GetNowNextHandler`](#getnownexthandler) builds the conference-day "happening now plus next up"
-snapshot for one published event or, when no id is given, the auto-selected current-or-next published
-event using the domain's [`CurrentEventSelector`](group-17-conference-domain.md#currenteventselector)
-rule, reusing the same eligibility rules and DST-aware wall-clock conversion as the calendar export
-(`MMCA.ADC.Conference.Application/Sessions/UseCases/NowNext/GetNowNextHandler.cs:20-41`).
+(`MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/ExportEventCalendarHandler.cs:25-48`),
+with [CalendarExportMapper](#calendarexportmapper) doing the entity-to-entry shaping.
+[GetNowNextHandler](#getnownexthandler) builds the conference-day "happening now plus next up" snapshot
+for one published event or, when no id is given, the auto-selected current-or-next published event using
+the domain's [CurrentEventSelector](group-17-conference-domain.md#currenteventselector) rule, reusing the
+same `CalendarExportMapper.IsExportable` eligibility rule and DST-aware wall-clock conversion as the
+calendar export (`MMCA.ADC.Conference.Application/Sessions/UseCases/NowNext/GetNowNextHandler.cs:29-56`).
 `GetNowNextHandler` injects `TimeProvider` rather than reading the clock directly
 (`GetNowNextHandler.cs:20-22`), which is what makes its "now" unit-testable at a fixed instant; the two
 export handlers instead stamp the `.ics` `DTSTAMP` from `DateTimeOffset.UtcNow` directly
-(`ExportEventCalendarHandler.cs:50`, `ExportSessionCalendarHandler.cs:51`), so their timestamp is not
-injectable. `[Rubric §14, Testability]`.
+(`ExportEventCalendarHandler.cs:50`,
+`MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/ExportSessionCalendarHandler.cs:51`),
+so their timestamp is not injectable. [Rubric §14, Testability].
 
 ## The Sessionize import: Strategy-pattern orchestration
 
@@ -229,89 +270,111 @@ The single most involved use case is **importing a conference agenda from Sessio
 returns one JSON payload covering five interdependent entity families (categories, rooms, questions,
 speakers, and sessions, where sessions reference rooms and speakers and speakers reference categories).
 The HTTP shape is captured by a set of deserialization records
-([`SessionizeResponse`](#sessionizeresponse), [`SessionizeSession`](#sessionizesession),
-[`SessionizeSpeaker`](#sessionizespeaker), [`SessionizeRoom`](#sessionizeroom),
-[`SessionizeCategory`](#sessionizecategory), [`SessionizeCategoryItem`](#sessionizecategoryitem),
-[`SessionizeQuestion`](#sessionizequestion),
-[`SessionizeQuestionAnswer`](#sessionizequestionanswer), [`SessionizeLink`](#sessionizelink))
-confined entirely to this layer, an **anti-corruption boundary** so a Sessionize API change never
-touches a domain entity.
+([SessionizeResponse](#sessionizeresponse), [SessionizeSession](#sessionizesession),
+[SessionizeSpeaker](#sessionizespeaker), [SessionizeRoom](#sessionizeroom),
+[SessionizeCategory](#sessionizecategory), [SessionizeCategoryItem](#sessionizecategoryitem),
+[SessionizeQuestion](#sessionizequestion), [SessionizeQuestionAnswer](#sessionizequestionanswer),
+[SessionizeLink](#sessionizelink)) confined entirely to this layer, an **anti-corruption boundary** so a
+Sessionize API change never touches a domain entity.
 
-The import is fetched through the [`ISessionizeService`](#isessionizeservice) port (implemented by the
-HTTP client in [G19, Conference Infrastructure](group-19-conference-infrastructure.md#sessionizeservice))
-and orchestrated by [`RefreshFromSessionizeHandler`](#refreshfromsessionizehandler)
+The import is fetched through the [ISessionizeService](#isessionizeservice) port (implemented by the HTTP
+client in [G19, Conference Infrastructure](group-19-conference-infrastructure.md#sessionizeservice)) and
+orchestrated by [RefreshFromSessionizeHandler](#refreshfromsessionizehandler)
 (`MMCA.ADC.Conference.Application/Events/UseCases/RefreshFromSessionize/RefreshFromSessionizeHandler.cs:16`).
-That handler does *orchestration only*: load the `Event` with its rooms and speakers eagerly
-(`:41-45`), enforce BR-6 (a Sessionize code must be configured, `:54`) and the BR-63 five-minute
-throttle (`:64-65`), call the external API inside a `try`/`catch (HttpRequestException)` that converts
-a network failure into an [`Error`](group-01-result-error-handling.md#error) (`:80-87`), then run five
-[`ISessionizeSyncStrategy`](#isessionizesyncstrategy) implementations in dependency order
-([`CategorySyncStrategy`](#categorysyncstrategy), [`RoomSyncStrategy`](#roomsyncstrategy),
-[`QuestionSyncStrategy`](#questionsyncstrategy), [`SpeakerSyncStrategy`](#speakersyncstrategy),
-[`SessionSyncStrategy`](#sessionsyncstrategy), `:25-32`), each carrying its work via a shared
-[`SessionizeSyncContext`](#sessionizesynccontext) and returning a
-[`SessionizeSyncResult`](#sessionizesyncresult) count. An empty response is treated as success rather
-than an error (`:90-105`). Each strategy bulk-loads its entity family in one call (no N+1), upserts via
-the domain's `Create`/`Update` methods, skips soft-deleted rows (BR-136, warned once at `:122-125`),
-and accumulates warnings instead of aborting on one bad record. A final `RequestIdentityInsert()`
-(`:132`) lets SQL Server accept Sessionize's own integer IDs before one batched `SaveChangesAsync`
-(`:133`). `[Rubric §2, Design Patterns]` (Strategy solving a real Open/Closed problem: a new entity
-family is a new strategy, not an edit to the orchestrator), `[Rubric §12, Performance & Scalability]`
-(bulk loads plus a single save round-trip), and `[Rubric §17, DevOps & Deployment]` (the throttle and
-graceful per-entity degradation make a re-import safe to run repeatedly).
+That handler does *orchestration only*: load the `Event` with its rooms and speakers eagerly (`:41-45`),
+enforce BR-6 (a Sessionize code must be configured, `:54-61`) and the BR-63 five-minute throttle
+(`:64-72`), call the external API inside a `try`/`catch (HttpRequestException)` that converts a network
+failure into an [Error](group-01-result-error-handling.md#error) (`:76-87`), then run five
+[ISessionizeSyncStrategy](#isessionizesyncstrategy) implementations in dependency order
+([CategorySyncStrategy](#categorysyncstrategy), [RoomSyncStrategy](#roomsyncstrategy),
+[QuestionSyncStrategy](#questionsyncstrategy), [SpeakerSyncStrategy](#speakersyncstrategy),
+[SessionSyncStrategy](#sessionsyncstrategy), `:25-32`, invoked at `:117-120`), each carrying its work via
+a shared [SessionizeSyncContext](#sessionizesynccontext) and returning a
+[SessionizeSyncResult](#sessionizesyncresult) count. An empty response is treated as success rather than
+an error (`:90-105`). Each strategy bulk-loads its entity family in one call (no N+1), upserts via the
+domain's `Create`/`Update` methods, skips soft-deleted rows (BR-136, warned once at `:122-125`), and
+accumulates warnings instead of aborting on one bad record. A final `RequestIdentityInsert()` (`:132`)
+lets SQL Server accept Sessionize's own integer IDs before one batched `SaveChangesAsync` (`:133`).
+[Rubric §2, Design Patterns] (Strategy solving a real Open/Closed problem: a new entity family is a new
+strategy, not an edit to the orchestrator), [Rubric §12, Performance & Scalability] (bulk loads plus a
+single save round-trip), and [Rubric §17, DevOps & Deployment] (the throttle and graceful per-entity
+degradation make a re-import safe to run repeatedly).
 
 ## Decision support: AI scoring and content analytics
 
 The last cluster is **session-selection decision support**, analytics that help organizers triage
-proposals. [`GetSessionSelectionDashboardHandler`](#getsessionselectiondashboardhandler) is a
-*composite* query: it validates the event, loads the event's non-service sessions with their speakers
-and category items, the categories, and the referenced speakers once
+proposals. [GetSessionSelectionDashboardHandler](#getsessionselectiondashboardhandler) is a *composite*
+query: it validates the event, loads the event's non-service sessions with their speakers and category
+items, the categories, and the referenced speakers once
 (`MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/GetSessionSelectionDashboard/GetSessionSelectionDashboardHandler.cs:29-57`),
 then computes summary counts, category distribution, speaker-session overlap, content similarity, and
 speaker locality into one dashboard DTO. The narrower queries
-([`GetCategoryDistributionQuery`](#getcategorydistributionquery),
-[`GetContentSimilarityQuery`](#getcontentsimilarityquery),
-[`GetSpeakerSessionOverlapQuery`](#getspeakersessionoverlapquery)) remain dispatchable individually.
-Content similarity is computed by the pure-static
-[`SessionSimilarityCalculator`](#sessionsimilaritycalculator), a weighted sum of two Jaccard indices,
+([GetCategoryDistributionQuery](#getcategorydistributionquery),
+[GetContentSimilarityQuery](#getcontentsimilarityquery),
+[GetSpeakerSessionOverlapQuery](#getspeakersessionoverlapquery)) remain dispatchable individually.
+Content similarity is computed by the internal, pure-static
+[SessionSimilarityCalculator](#sessionsimilaritycalculator), a weighted sum of two Jaccard indices,
 category-item overlap at 60%
 (`MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/GetContentSimilarity/SessionSimilarityCalculator.cs:11`)
 and span-tokenized keyword overlap at 40% (`:12`, with a `FrozenSet` stop-word filter at `:14-34` and a
-three-character minimum token length at `:62`), combined at `:97-105`, above a tunable threshold whose
+three-character minimum token length at `:62`), combined at `:103-105`, above a tunable threshold whose
 default is 0.3
 (`MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/GetContentSimilarity/GetContentSimilarityQuery.cs:6`),
 flagging proposals that would compete for the same audience.
-[`SpeakerLocalityHelper`](#speakerlocalityhelper) resolves a speaker's locality tier through the
-"where are you traveling from" category assignment rather than a `Speaker` field
-(`MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/SpeakerLocalityHelper.cs:19-33`),
-and the two private per-handler [`StatusBucket`](#statusbucket) enums map
-[`SessionStatuses`](group-17-conference-domain.md#sessionstatuses) values into display groupings.
+[SpeakerLocalityHelper](#speakerlocalityhelper) resolves a speaker's locality tier through the "where are
+you traveling from" category assignment rather than a `Speaker` field
+(`MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/SpeakerLocalityHelper.cs:19-33`), and
+the two private per-handler [StatusBucket](#statusbucket) enums map
+[SessionStatuses](group-17-conference-domain.md#sessionstatuses) values into display groupings.
 
-The flagship is **AI scoring**. [`ScoreEventSessionsCommand`](#scoreeventsessionscommand) (handled by
-[`ScoreEventSessionsHandler`](#scoreeventsessionshandler)) is a full re-score: it loads every
-non-service session for the event, deletes the existing scores in one set-based `ExecuteDeleteAsync`
-so the dashboard visibly resets
-(`MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsHandler.cs:39-41`),
-batch-loads the speakers (`:56-60`), then scores session by session through
-[`IAiScoringService`](#iaiscoringservice), a port implemented in infrastructure by
-[`AnthropicScoringService`](group-19-conference-infrastructure.md#anthropicscoringservice), which calls
-the Anthropic Messages API. Each successful score is saved immediately (`:102-103`) so the UI can show
+The flagship is **AI scoring**, and it is the one use case in this assembly that does not run on the
+request thread. Scoring an event takes minutes and issues one paid Anthropic call per session, so the
+API controller does not await it: it calls [ISessionScoringQueue](#isessionscoringqueue)`.TryEnqueue`
+and turns the returned [SessionScoringEnqueueResult](#sessionscoringenqueueresult) into 202 Accepted or
+a conflict
+(`MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ISessionScoringQueue.cs:4-14`,
+consumed by [SessionSelectionController](group-20-conference-api-grpc.md#sessionselectioncontroller)).
+[SessionScoringQueue](#sessionscoringqueue) is a bounded `Channel` of capacity 16 with `SingleReader`
+set, and it claims the event id in a `ConcurrentDictionary` *before* writing, so a concurrent duplicate
+loses the `TryAdd` and is refused rather than silently coalesced
+(`MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/SessionScoringQueue.cs:21-57`);
+the claim is released only by `MarkCompleted` after the run finishes (`SessionScoringQueue.cs:64`), so
+the dedup window covers execution too, not just the wait in the queue. The interface's own remarks record
+what this replaced: a fire-and-forget task started from the controller that nothing tracked, nothing
+deduplicated, and nothing could cancel at shutdown (`ISessionScoringQueue.cs:18-29`). The single drain
+worker lives in infrastructure
+([SessionScoringProcessor](group-19-conference-infrastructure.md#sessionscoringprocessor)), which is why
+[DependencyInjection](#dependencyinjection) registers the concrete queue *and* the interface as the same
+singleton instance (`DependencyInjection.cs:48-49`): two instances would mean producers writing to a
+queue nobody drains. [Rubric §12, Performance & Scalability] and [Rubric §29, Resilience & Business
+Continuity].
+
+The run itself is [ScoreEventSessionsCommand](#scoreeventsessionscommand), handled by
+[ScoreEventSessionsHandler](#scoreeventsessionshandler): a full re-score that loads every non-service
+session for the event, deletes the existing scores in one set-based `ExecuteDeleteAsync` so the dashboard
+resets to zero and progress is visible from scratch
+(`MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsHandler.cs:38-41`),
+batch-loads the speakers (`:49-60`), then scores session by session through
+[IAiScoringService](#iaiscoringservice), a port implemented in infrastructure by
+[AnthropicScoringService](group-19-conference-infrastructure.md#anthropicscoringservice), which calls the
+Anthropic Messages API. Each successful score is saved immediately (`:102-103`) so the UI can show
 real-time progress, a per-session save failure only increments a counter (`:108-112`), and the command
 fails as a whole only when every session failed (`:117-123`). The contract is deliberately
-**never-throw**: `ScoreSessionAsync` returns a [`SessionScoringResult`](#sessionscoringresult) with a
-`Success` flag and seven `1.0`-`10.0` sub-scores (overall, topic relevance, description quality,
-novelty, actionable takeaways, depth/insight quality, credibility/experience) in *all* cases
-(`MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/IAiScoringService.cs:9,40-71`),
-so one bad session never aborts the scoring loop. The input shapes are
-[`SessionScoringInput`](#sessionscoringinput) and [`SpeakerInfo`](#speakerinfo)
-(`IAiScoringService.cs:23-37`); the result is mapped onto the `SessionAiScore` aggregate for
-persistence (`ScoreEventSessionsHandler.cs:87-91`). Keeping the *port* here and the HTTP/LLM *adapter*
-in infrastructure is textbook `[Rubric §3, Clean Architecture]` (the application layer depends on an
-interface, never the SDK) and `[Rubric §7, Microservices Readiness]` (the AI provider is swappable
-behind one interface).
+**never-throw**: `ScoreSessionAsync` returns a [SessionScoringResult](#sessionscoringresult) with a
+`Success` flag and seven `1.0`-`10.0` sub-scores (overall, topic relevance, description quality, novelty,
+actionable takeaways, depth/insight quality, credibility/experience) in *all* cases
+(`MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/IAiScoringService.cs:9`,
+`IAiScoringService.cs:40-71`), so one bad session never aborts the scoring loop. The input shapes are
+[SessionScoringInput](#sessionscoringinput) and [SpeakerInfo](#speakerinfo)
+(`IAiScoringService.cs:23-37`); the result is mapped onto the
+[SessionAiScore](group-17-conference-domain.md#sessionaiscore) aggregate for persistence
+(`ScoreEventSessionsHandler.cs:87-91`). Keeping the *port* here and the HTTP/LLM *adapter* in
+infrastructure is textbook [Rubric §3, Clean Architecture] (the application layer depends on an
+interface, never the SDK) and [Rubric §7, Microservices Readiness] (the AI provider is swappable behind
+one interface).
 
-Taken together, this assembly is the codebase's most complete picture of how a use case is built here:
-a slice per feature, generic framework machinery for the repetitive 80% (query, validate, map, persist,
+Taken together, this assembly is the codebase's most complete picture of how a use case is built here: a
+slice per feature, generic framework machinery for the repetitive 80% (query, validate, map, persist,
 populate), and bespoke handlers reserved for the genuinely complex 20% (the Sessionize import, the
 attendee-facing read models, and the decision-support analytics), each isolated behind a port or a
 strategy so it can evolve, be tested, and ultimately be extracted without disturbing the rest.
@@ -783,44 +846,24 @@ strategy so it can evolve, be tested, and ultimately be extracted without distur
 - **Why it's built this way** - pre-computing each session's keyword and category sets once, before the pairwise loop, avoids re-tokenizing inside the O(n^2) comparison. The `MaxPairs` cap and the score threshold together bound both compute and payload size, so a large proposal set cannot produce an unbounded response.
 - **Where it's used** - dispatched via [GetContentSimilarityQuery](#getcontentsimilarityquery) from the Conference decision-support endpoints, and composed into the session-selection dashboard.
 
-### ExportEventCalendarQuery
-> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.ExportCalendar` · `MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/ExportEventCalendarQuery.cs:5` · Level 0 · record
-
-- **What it is**: the read request that asks for a published event's whole schedule rendered as an RFC 5545 (`.ics`) calendar document. A one-field `sealed record` carrying the `EventId` to export (`ExportEventCalendarQuery.cs:5`).
-- **Depends on**: the `EventIdentifierType` alias (see [identifier aliases](../00-primer.md#2-architectural-styles-this-codebase-commits-to)). No externals beyond the BCL.
-- **Concept introduced: the request record as a CQRS message.** This is the first type in this unit, so the shape is worth stating once: every decision-support and calendar use case in this unit is a positional `sealed record` that names exactly the inputs its handler needs and nothing else. It is dispatched through the [CQRS decorator pipeline](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult) (Logging then Caching then handler for queries) and matched to its handler by the generic argument. [Rubric §6, CQRS and Event-Driven] assesses whether reads and writes are modeled as explicit messages: here the intent (export one event's calendar) is a named type, not a method-parameter bag.
-- **Walkthrough**: a single `EventId` positional parameter (`:5`); the compiler-generated equality and `init` immutability come for free from `record`.
-- **Why it's built this way**: [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) Wave 5 (cited in the doc comment, `:3`) adds calendar export as a public-read affordance; keeping the query minimal lets the handler own all the publish/exportability rules.
-- **Where it's used**: handled by [ExportEventCalendarHandler](#exporteventcalendarhandler); reached from the Conference REST calendar endpoint (Group 19).
-
-### ExportSessionCalendarQuery
-> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.ExportCalendar` · `MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/ExportSessionCalendarQuery.cs:5` · Level 0 · record
-
-- **What it is**: the single-session variant of the calendar export: it asks for one public session rendered as an `.ics` document, for the "add to calendar" affordance. A one-field `sealed record` carrying the `SessionId` (`ExportSessionCalendarQuery.cs:5`).
-- **Depends on**: the `SessionIdentifierType` alias. No externals beyond the BCL.
-- **Concept introduced**: none new; this is the sibling of [ExportEventCalendarQuery](#exporteventcalendarquery), differing only in that it identifies a single session rather than a whole event. [Rubric §6, CQRS and Event-Driven].
-- **Walkthrough**: a single `SessionId` positional parameter (`:5`).
-- **Why it's built this way**: same [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) Wave 5 lineage (`:3`); a separate query keeps the one-session public rules distinct from the whole-event export.
-- **Where it's used**: handled by [ExportSessionCalendarHandler](#exportsessioncalendarhandler).
-
 ### GetSessionSelectionDashboardQuery
 > MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetSessionSelectionDashboard` · `MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/GetSessionSelectionDashboard/GetSessionSelectionDashboardQuery.cs:5` · Level 0 · record
 
-- **What it is**: the read request for the composite session-selection dashboard: given one `EventId`, produce category distribution, speaker overlap, speaker locality, and AI scores in a single result. A one-field `sealed record` (`GetSessionSelectionDashboardQuery.cs:5`).
-- **Depends on**: the `EventIdentifierType` alias. No externals.
-- **Concept introduced**: none new; same request-record shape as [ExportEventCalendarQuery](#exporteventcalendarquery). What makes it interesting is the handler, which fans one query out into four analytics computed off a single data load. [Rubric §6, CQRS and Event-Driven].
-- **Walkthrough**: a single `EventId` positional parameter (`:5`).
-- **Why it's built this way**: a composite query (one round trip, one message) is the decision-support answer to running four separate analytics queries: see [GetSessionSelectionDashboardHandler](#getsessionselectiondashboardhandler).
-- **Where it's used**: handled by [GetSessionSelectionDashboardHandler](#getsessionselectiondashboardhandler); returns a [SessionSelectionDashboardDTO](group-17-conference-domain.md#sessionselectiondashboarddto).
+- **What it is**: the read request for the composite session-selection dashboard: given one `EventId`, produce summary counts, category distribution, speaker overlap, speaker locality, and the AI-score table in a single result. A one-field `sealed record` (`GetSessionSelectionDashboardQuery.cs:5`).
+- **Depends on**: the `EventIdentifierType` alias (see [identifier aliases](../00-primer.md#2-architectural-styles-this-codebase-commits-to)). No externals beyond the BCL.
+- **Concept introduced: the request record as a CQRS message.** This is the first type in this unit, so the shape is worth stating once: every decision-support use case here is a positional `sealed record` that names exactly the inputs its handler needs and nothing else. It is matched to its handler by generic argument and dispatched through the [CQRS decorator pipeline](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult) (Logging then Caching then handler on the query side). [Rubric §6, CQRS and Event-Driven] assesses whether reads and writes are modeled as explicit messages: here the intent (render one event's selection dashboard) is a named type, not a method-parameter bag.
+- **Walkthrough**: a single `EventId` positional parameter (`:5`), documented as "the event to analyze" (`:4`); compiler-generated value equality and `init` immutability come free from `record`.
+- **Why it's built this way**: a composite query (one message, one round trip) is the decision-support answer to running four separate analytics queries: see [GetSessionSelectionDashboardHandler](#getsessionselectiondashboardhandler).
+- **Where it's used**: handled by [GetSessionSelectionDashboardHandler](#getsessionselectiondashboardhandler); returns a [SessionSelectionDashboardDTO](group-17-conference-domain.md#sessionselectiondashboarddto) to [SessionSelectionController](group-20-conference-api-grpc.md#sessionselectioncontroller).
 
 ### GetSpeakerSessionOverlapQuery
 > MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetSpeakerSessionOverlap` · `MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/GetSpeakerSessionOverlap/GetSpeakerSessionOverlapQuery.cs:5` · Level 0 · record
 
-- **What it is**: the read request that asks, for one event, which speakers submitted more than one session (and, in practice, every speaker with their submitted sessions so the UI can surface multi-session speakers first). A one-field `sealed record` carrying the `EventId` (`GetSpeakerSessionOverlapQuery.cs:5`).
+- **What it is**: the read request that asks, for one event, which speakers submitted sessions (the doc comment at `:3` frames it as "speakers with multiple submitted sessions"; the handler in fact returns every submitting speaker, sorted so multi-session ones surface first). A one-field `sealed record` carrying the `EventId` (`GetSpeakerSessionOverlapQuery.cs:5`).
 - **Depends on**: the `EventIdentifierType` alias. No externals.
-- **Concept introduced**: none new; same request-record shape as [ExportEventCalendarQuery](#exporteventcalendarquery). [Rubric §6, CQRS and Event-Driven].
+- **Concept introduced**: none new; the same request-record shape as [GetSessionSelectionDashboardQuery](#getsessionselectiondashboardquery). [Rubric §6, CQRS and Event-Driven].
 - **Walkthrough**: a single `EventId` positional parameter (`:5`).
-- **Why it's built this way**: the speaker-overlap analysis is one focused slice of the dashboard, exposed on its own query so the UI can request just that view.
+- **Why it's built this way**: speaker overlap is one focused slice of the dashboard, exposed on its own query so the UI can request just that view without paying for the composite load.
 - **Where it's used**: handled by [GetSpeakerSessionOverlapHandler](#getspeakersessionoverlaphandler); returns a [SpeakerSessionOverlapDTO](group-17-conference-domain.md#speakersessionoverlapdto).
 
 ### ScoreEventSessionsCommand
@@ -828,162 +871,169 @@ strategy so it can evolve, be tested, and ultimately be extracted without distur
 
 - **What it is**: the write request that triggers AI scoring for every session in an event. A one-field `sealed record` carrying the `EventId` whose sessions to score (`ScoreEventSessionsCommand.cs:5`).
 - **Depends on**: the `EventIdentifierType` alias. No externals.
-- **Concept introduced**: this is the one **command** among the sibling request records in this unit. It is structurally identical to the query records (a single-field `sealed record`), but it dispatches through the command side of the pipeline ([ICommandHandler<in TCommand, TResult>](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)), which adds the Validating and Transactional decorators the query side does not carry. [Rubric §6, CQRS and Event-Driven] is precisely the split modeled here: a read (dashboard/overlap) and a write (score) that happen to share a shape are still separate message types on separate pipelines.
+- **Concept introduced**: this is the one **command** among the sibling request records in this unit. It is structurally identical to the query records, but it dispatches through the command side of the pipeline ([ICommandHandler<in TCommand, TResult>](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)), which adds the Validating and Transactional decorators the query side does not carry. [Rubric §6, CQRS and Event-Driven] is precisely the split modeled here: a read (dashboard, overlap) and a write (score) that happen to share a shape are still separate message types on separate pipelines.
 - **Walkthrough**: a single `EventId` positional parameter (`:5`).
 - **Why it's built this way**: scoring mutates persistence (it deletes and rewrites [SessionAiScore](group-17-conference-domain.md#sessionaiscore) rows), so it is a command, not a query; keeping it a distinct message makes that read/write asymmetry explicit.
-- **Where it's used**: handled by [ScoreEventSessionsHandler](#scoreeventsessionshandler); returns a [ScoreEventSessionsResultDTO](group-17-conference-domain.md#scoreeventsessionsresultdto).
+- **Where it's used**: constructed by the hosted drain [SessionScoringProcessor](group-19-conference-infrastructure.md#sessionscoringprocessor) (`SessionScoringProcessor.cs:83`), not by the controller, and handled by [ScoreEventSessionsHandler](#scoreeventsessionshandler); returns a [ScoreEventSessionsResultDTO](group-17-conference-domain.md#scoreeventsessionsresultdto).
+
+### SessionScoringEnqueueResult
+> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions` · `MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ISessionScoringQueue.cs:4` · Level 0 · enum
+
+- **What it is**: the three-valued outcome of asking to score an event's sessions: `Queued`, `AlreadyPending`, `QueueFull` (`ISessionScoringQueue.cs:4-14`). It is the return type of [ISessionScoringQueue](#isessionscoringqueue)`.TryEnqueue`.
+- **Depends on**: nothing; a plain public enum co-located with the interface that returns it.
+- **Concept introduced: an explicit refusal vocabulary instead of a bool.** A `bool TryEnqueue` could only say yes or no; the caller could not tell "your run is already going" from "we are saturated, come back later", and those need different HTTP answers. Naming all three outcomes lets the edge translate each one without inspecting queue internals. [Rubric §9, API and Contract Design] assesses whether a contract carries enough information for its caller to act: here the enum is the reason why the endpoint can distinguish 202 from two different 409s.
+- **Walkthrough**: `Queued` (`:7`), accepted and awaiting the drain worker; `AlreadyPending` (`:10`), an existing run for the same event is queued or executing and continues untouched; `QueueFull` (`:13`), the bounded channel is at capacity and the caller should retry later.
+- **Why it's built this way**: [ADR-052](https://ivanball.github.io/docs/adr/052-background-job-execution.html) (background job execution) requires expensive work to **refuse** rather than silently coalesce or drop, and a refusal is only useful if the caller learns which refusal it was.
+- **Where it's used**: returned by [SessionScoringQueue](#sessionscoringqueue)`.TryEnqueue` and switched on by [SessionSelectionController](group-20-conference-api-grpc.md#sessionselectioncontroller)`.ScoreSessions` (`SessionSelectionController.cs:110-128`), which maps `Queued` to 202 Accepted and the other two to distinct 409 Conflict errors (`SessionScoring.AlreadyRunning`, `SessionScoring.QueueFull`).
 
 ### SessionScoringResult
 > MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions` · `MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/IAiScoringService.cs:40` · Level 0 · record
 
 - **What it is**: the internal result of scoring one session via [IAiScoringService](#iaiscoringservice). It carries seven numeric sub-scores (each documented `1.0-10.0` decimal), a free-text `Reasoning`, the `SessionId`, and a `Success` flag. It never throws: a failed AI call returns this record with `Success = false` (`IAiScoringService.cs:40-71`).
 - **Depends on**: the `SessionIdentifierType` alias (on `SessionId`, `:43`). No first-party types; every property is `required init`.
-- **Concept introduced: never-throw service results.** Rather than propagate exceptions from the AI call, `ScoreSessionAsync` returns this record in every case and the handler branches on `Success`. This is the Result philosophy (see [Result](group-01-result-error-handling.md#result)) applied to an unreliable network dependency: the scoring loop cannot be aborted by one bad session. [Rubric §29, Resilience and Business Continuity] assesses how failure of a dependency is contained; here it is demoted to a per-item flag rather than an exception that unwinds the whole batch.
+- **Concept introduced: never-throw service results.** Rather than propagate exceptions from the AI call, `ScoreSessionAsync` returns this record in every case and the handler branches on `Success`. This is the Result philosophy (see [Result](group-01-result-error-handling.md#result)) applied to an unreliable network dependency: the scoring loop cannot be aborted by one bad session. [Rubric §29, Resilience and Business Continuity] assesses how a dependency failure is contained; here it is demoted to a per-item flag rather than an exception that unwinds the whole batch.
 - **Walkthrough**: `required init` members (`:43-70`): `SessionId`, `OverallScore`, `TopicRelevanceScore`, `DescriptionQualityScore`, `NoveltyScore`, `ActionableTakeawaysScore`, `DepthOrInsightQualityScore`, `CredibilityExperienceScore`, `Reasoning`, `Success`. `required` on all of them means a scorer implementation cannot forget to populate one.
 - **Why it's built this way**: separating this Application-layer result from the external [SessionAiScoreDTO](group-17-conference-domain.md#sessionaiscoredto) lets the scoring contract evolve (add or drop a sub-score) without immediately breaking the API surface.
-- **Where it's used**: returned by `IAiScoringService.ScoreSessionAsync` and consumed by [ScoreEventSessionsHandler](#scoreeventsessionshandler), which maps a successful one into a [SessionAiScore](group-17-conference-domain.md#sessionaiscore) domain row.
+- **Where it's used**: returned by `IAiScoringService.ScoreSessionAsync` and consumed by [ScoreEventSessionsHandler](#scoreeventsessionshandler), which feeds a successful one into `SessionAiScore.Create` (`ScoreEventSessionsHandler.cs:87-91`) to make a [SessionAiScore](group-17-conference-domain.md#sessionaiscore) domain row.
 
 ### SpeakerInfo
 > MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions` · `MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/IAiScoringService.cs:23` · Level 0 · record
 
 - **What it is**: the minimal speaker payload the AI scorer needs: `FullName`, optional `TagLine`, optional `Bio`. A positional `sealed record` (`IAiScoringService.cs:23-26`).
 - **Depends on**: nothing first-party; three `string`/`string?` fields.
-- **Concept introduced: least-privilege data passing.** The record deliberately carries only what the model reads (name, tagline, bio) and no ids, contact fields, or other PII. [Rubric §11, Security] and [Rubric §30, Compliance/Privacy] both assess how much data crosses a boundary to a third party: shipping a purpose-built projection to the AI vendor rather than a whole [Speaker](group-17-conference-domain.md#speaker) limits what leaves the trust boundary.
-- **Walkthrough**: three positional parameters (`:23-26`); the doc comments note the source-side max lengths (`TagLine` 500, `Bio` 4000) that the domain enforces upstream.
-- **Why it's built this way**: a narrow record keeps the scoring prompt small and avoids leaking speaker identity to the external model.
-- **Where it's used**: nested inside [SessionScoringInput](#sessionscoringinput); populated by [ScoreEventSessionsHandler](#scoreeventsessionshandler) from each [Speaker](group-17-conference-domain.md#speaker)'s `FullName`/`TagLine`/`Bio`.
+- **Concept introduced: least-privilege data passing.** The record deliberately carries only what the model reads (name, tagline, bio) and no ids, contact fields, or other PII. [Rubric §11, Security] and [Rubric §30, Compliance, Privacy and Data Governance] both assess how much data crosses a boundary to a third party: shipping a purpose-built projection to the AI vendor rather than a whole [Speaker](group-17-conference-domain.md#speaker) limits what leaves the trust boundary.
+- **Walkthrough**: three positional parameters (`:23-26`); the doc comments (`:20-22`) note the source-side max lengths (`TagLine` 500, `Bio` 4000) that the domain enforces upstream.
+- **Why it's built this way**: a narrow record keeps the scoring prompt small and keeps speaker identity beyond the name out of the external model call.
+- **Where it's used**: nested inside [SessionScoringInput](#sessionscoringinput); populated by [ScoreEventSessionsHandler](#scoreeventsessionshandler) from each [Speaker](group-17-conference-domain.md#speaker)'s `FullName`/`TagLine`/`Bio` (`ScoreEventSessionsHandler.cs:72`).
+- **Caveats / not-in-source**: a differently-shaped `SpeakerInfo` also exists in the Conference UI layer ([SpeakerInfo](group-21-conference-ui.md#speakerinfo)); the two are unrelated types that share a name.
 
 ### StatusBucket
-> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetSessionSelectionDashboard` · `MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/GetSessionSelectionDashboard/GetSessionSelectionDashboardHandler.cs:308` · Level 0 · enum
+> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetSessionSelectionDashboard` · `MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/GetSessionSelectionDashboard/GetSessionSelectionDashboardHandler.cs:308` · Level 0 · enum (private)
 
 - **What it is**: a private three-member enum (`Accepted`, `AcceptQueue`, `Pending`) that classifies a session's status string into the buckets the category-distribution aggregation counts (`GetSessionSelectionDashboardHandler.cs:308-313`).
-- **Depends on**: conceptually on [SessionStatuses](group-17-conference-domain.md#sessionstatuses), the string constants the classifier compares against.
-- **Concept introduced: a handler-private classification vocabulary.** The enum is declared `private` inside the handler and never leaves it; callers receive aggregated counts on the DTO, never bucket values. Modeling the three-way status collapse as a named enum keeps the counting code readable versus repeating `string.Equals(..., Accepted)` comparisons inline. [Rubric §16, Maintainability].
-- **Walkthrough**: `ClassifyStatus(Session)` (`:315-326`) maps a null-or-`Accepted` status to `StatusBucket.Accepted`, `AcceptQueue` to `StatusBucket.AcceptQueue`, and everything else to `StatusBucket.Pending`; the enum is then consumed by `CountCategoryItems` (`:127-150`) to tally each category item.
-- **Why it's built this way**: keeping the bucket private to this handler means its bucketing can diverge from any other dashboard's without coupling the two use cases (a sibling copy historically lived in the retired `GetCategoryDistribution` handler).
+- **Depends on**: conceptually on [SessionStatuses](group-17-conference-domain.md#sessionstatuses), the string constants the classifier compares against (`:318`, `:323`).
+- **Concept introduced: a handler-private classification vocabulary.** The enum is declared `private` inside the handler and never leaves it; callers receive aggregated counts on the DTO, never bucket values. Modeling the three-way status collapse as a named enum keeps the counting code readable versus repeating `string.Equals(..., Accepted)` comparisons inline. Note there is no `Declined` member: declined sessions are filtered out by `IsDeclined` (`:328-329`) before bucketing, so the enum spans only the statuses that count toward a category's totals. [Rubric §16, Maintainability].
+- **Walkthrough**: `ClassifyStatus(Session)` (`:315-326`) maps a null-or-`Accepted` status to `StatusBucket.Accepted`, `AcceptQueue` to `StatusBucket.AcceptQueue`, and everything else to `StatusBucket.Pending`; `CountCategoryItems` (`:127-150`) then tallies each category item into a `(Total, Accepted, AcceptQueue, Pending)` tuple by bucket.
+- **Why it's built this way**: keeping the bucket private to this handler means its bucketing can diverge from another dashboard's without coupling the two use cases.
 - **Where it's used**: inside [GetSessionSelectionDashboardHandler](#getsessionselectiondashboardhandler) only.
+- **Caveats / not-in-source**: a same-named private sibling enum lives in [GetCategoryDistributionHandler](#getcategorydistributionhandler) (`GetCategoryDistribution/GetCategoryDistributionHandler.cs:94`); the duplication is deliberate, the two handlers share no type.
+
+### ISessionScoringQueue
+> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions` · `MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ISessionScoringQueue.cs:31` · Level 1 · interface
+
+- **What it is**: the producer-side port for requesting an AI scoring run. The API edge calls `TryEnqueue` and gets an immediate answer; the run itself happens later on a hosted worker (`ISessionScoringQueue.cs:31-41`).
+- **Depends on**: [SessionScoringEnqueueResult](#sessionscoringenqueueresult) (Level 0, same file `:4`) as its return type, and the `EventIdentifierType` alias as its key. No externals.
+- **Concept introduced: queue-plus-drain instead of fire-and-forget.** The interface doc (`:16-30`) records the history explicitly: scoring an event takes minutes and issues one paid Anthropic call per session, so it cannot run on the request thread, and it used to run as an untracked task started from the controller. That shape had three defects, all named in the doc comment: nothing tracked it, so a deploy or scale-in killed it mid-run with no record; nothing deduplicated it, so two clicks meant two concurrent passes doubling the spend and racing each other's writes; and it ignored the host lifetime, so shutdown could neither wait for it nor cancel it. Declaring the port in the Application layer keeps the API edge unaware of channels and hosted services entirely. [Rubric §3, Clean Architecture] assesses dependency inversion at layer boundaries, and [Rubric §29, Resilience and Business Continuity] assesses whether long-running work survives (or fails cleanly across) a restart.
+- **Walkthrough**: `TryEnqueue(EventIdentifierType)` (`:36`) requests a run and returns which of the three outcomes happened; `IsPending(EventIdentifierType)` (`:40`) reports whether a run for that event is queued or currently executing. The doc at `:27-29` states the dedup posture: a second request while one is in flight is **refused, not coalesced**, so the caller learns the run is already going.
+- **Why it's built this way**: [ADR-052](https://ivanball.github.io/docs/adr/052-background-job-execution.html) makes the bounded queue plus single-reader hosted drain the standard shape for in-process background work, and puts capacity, full-mode and dedup policy in the queue type so a caller cannot get them wrong.
+- **Where it's used**: injected into [SessionSelectionController](group-20-conference-api-grpc.md#sessionselectioncontroller) (`SessionSelectionController.cs:34`); implemented by [SessionScoringQueue](#sessionscoringqueue), registered as a singleton in the Conference application DI (`DependencyInjection.cs:48-49`).
+- **Caveats / not-in-source**: `IsPending` has no production caller today; the only exercises of it are the queue's unit tests (`Tests/Modules/Conference/MMCA.ADC.Conference.Application.Tests/Sessions/DecisionSupport/SessionScoringQueueTests.cs`).
 
 ### SessionScoringInput
 > MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions` · `MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/IAiScoringService.cs:33` · Level 1 · record
 
 - **What it is**: the full input for scoring one session: `SessionId`, `Title`, optional `Description`, and the list of [SpeakerInfo](#speakerinfo) records for the session's speakers. A positional `sealed record` (`IAiScoringService.cs:33-37`).
-- **Depends on**: [SpeakerInfo](#speakerinfo) (Level 0, same file `:23`), via `IReadOnlyList<SpeakerInfo>`; the `SessionIdentifierType` alias. Referencing a Level-0 first-party type is what puts this record at Level 1.
+- **Depends on**: [SpeakerInfo](#speakerinfo) (Level 0, same file `:23`) via `IReadOnlyList<SpeakerInfo>`; the `SessionIdentifierType` alias. Referencing a Level-0 first-party type is what puts this record at Level 1.
 - **Concept introduced**: none new; it is the request DTO for [IAiScoringService](#iaiscoringservice), assembling exactly what the model prompt needs (title, description, speaker bios) and nothing more, extending the least-privilege discipline [SpeakerInfo](#speakerinfo) sets. [Rubric §6, CQRS and Event-Driven].
 - **Walkthrough**: four positional parameters (`:33-37`); `Speakers` may be empty (documented at `:32`), so a speaker-less session still scores.
-- **Why it's built this way**: a purpose-built input record keeps the port contract stable and testable with a fake scorer.
-- **Where it's used**: constructed by [ScoreEventSessionsHandler](#scoreeventsessionshandler) per session and passed to `IAiScoringService.ScoreSessionAsync`.
+- **Why it's built this way**: a purpose-built input record keeps the port contract stable and lets the use case be tested against a fake scorer.
+- **Where it's used**: constructed per session by [ScoreEventSessionsHandler](#scoreeventsessionshandler) (`ScoreEventSessionsHandler.cs:77`) and passed to `IAiScoringService.ScoreSessionAsync`.
 
 ### IAiScoringService
 > MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions` · `MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/IAiScoringService.cs:6` · Level 2 · interface
 
 - **What it is**: the application-layer **port** for scoring a single conference session with an AI model. Its contract guarantees it never throws: failure is reported through the returned [SessionScoringResult](#sessionscoringresult)'s `Success` flag (`IAiScoringService.cs:6-17`).
 - **Depends on**: [SessionScoringInput](#sessionscoringinput) (Level 1, `:33`) as the argument and [SessionScoringResult](#sessionscoringresult) (Level 0, `:40`) as the return; BCL `Task`/`CancellationToken` otherwise.
-- **Concept introduced: a port/adapter boundary for an external AI capability.** The Application layer declares the interface; the Anthropic HTTP and JSON details live in an Infrastructure adapter (`AnthropicScoringService`), so the vendor SDK never reaches Application. [Rubric §3, Clean Architecture] assesses whether outward dependencies are inverted behind an abstraction, which this does exactly, and [Rubric §1, SOLID] (the Dependency Inversion Principle) is the same story: the handler depends on this port, not a concrete API client. The "never throws" clause (documented at `:9`) also ties to [Rubric §29, Resilience and Business Continuity].
+- **Concept introduced: a port and adapter boundary for an external AI capability.** The Application layer declares the interface; the Anthropic HTTP and JSON details live in an Infrastructure adapter, so the vendor protocol never reaches Application. [Rubric §3, Clean Architecture] assesses whether outward dependencies are inverted behind an abstraction, which this does exactly, and [Rubric §1, SOLID] (the Dependency Inversion Principle) is the same story: the handler depends on this port, not a concrete API client. The "never throws" clause (documented at `:9`) also ties to [Rubric §29, Resilience and Business Continuity].
 - **Walkthrough**: `ScoreSessionAsync(SessionScoringInput, CancellationToken)` (`:11-13`) returns the per-session result; `ModelId` (`:16`) exposes which model produced the score, so persisted rows can record the model used for auditability.
 - **Why it's built this way**: defining the port in Application lets the scoring use case be unit-tested with a fake scorer and lets the AI vendor be swapped without touching [ScoreEventSessionsHandler](#scoreeventsessionshandler).
-- **Where it's used**: injected into [ScoreEventSessionsHandler](#scoreeventsessionshandler); implemented by the Infrastructure `AnthropicScoringService` adapter (Group 20).
+- **Where it's used**: injected into [ScoreEventSessionsHandler](#scoreeventsessionshandler) (`ScoreEventSessionsHandler.cs:18`); implemented by the Infrastructure adapter [AnthropicScoringService](group-19-conference-infrastructure.md#anthropicscoringservice), whose `ModelId` is the literal `claude-haiku-4-5-20251001` (`AnthropicScoringService.cs:22`).
 
-### CalendarExportMapper
-> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.ExportCalendar` · `MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/CalendarExportMapper.cs:13` · Level 7 · class
+### SessionScoringQueue
+> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions` · `MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/SessionScoringQueue.cs:17` · Level 2 · class
 
-- **What it is**: an `internal static` helper that decides whether a session can appear in a public calendar and maps an exportable one to an [IcsEvent](group-08-auth.md#icsevent), converting the event-zone wall-clock times to UTC with explicit DST discipline (`CalendarExportMapper.cs:13`).
-- **Depends on**: [Session](group-17-conference-domain.md#session) and [Event](group-17-conference-domain.md#event) (Conference domain), [IcsEvent](group-08-auth.md#icsevent) (the calendar builder's entry type in `MMCA.Common.Shared.Calendars`), and BCL `TimeZoneInfo`/`DateTimeOffset`.
-- **Concept introduced: wall-clock to UTC conversion at the layer boundary.** The calendar builder is UTC-only by contract, but sessions store times as wall-clock local to the event's IANA time zone. `ToUtc` (`:41-50`) resolves that gap the same way the reminder planner does: it specifies the kind as `Unspecified`, and if `TimeZoneInfo.IsInvalidTime` reports the instant falls in a spring-forward gap (`:44`), it shifts ahead one hour before computing the offset. The deterministic DST handling is a correctness safeguard [Rubric §16, Maintainability].
+- **What it is**: the bounded in-process implementation of [ISessionScoringQueue](#isessionscoringqueue), built on a `System.Threading.Channels` channel of event ids plus a concurrent set of in-flight events. Registered as a singleton and drained by exactly one hosted worker (`SessionScoringQueue.cs:17`).
+- **Depends on**: [ISessionScoringQueue](#isessionscoringqueue) and [SessionScoringEnqueueResult](#sessionscoringenqueueresult); BCL `Channel<T>`/`BoundedChannelOptions` (`System.Threading.Channels`) and `ConcurrentDictionary<,>` (`System.Collections.Concurrent`).
+- **Concept introduced: backpressure mode as a statement of what the work is worth.** The channel is created with `FullMode = BoundedChannelFullMode.Wait`, `SingleReader = true`, `SingleWriter = false` (`:24-29`) and is written with a **non-blocking** `TryWrite` (`:51`). That combination means a full queue **refuses** the request instead of blocking the request thread or evicting an earlier item: the alternative, `DropOldest`, would silently discard a paid run, and its `TryWrite` always returns true so the caller could not even detect the loss. `SingleReader` matches the one drain worker, so runs execute one at a time and cannot contend for the same event's rows or the same external rate limit. [Rubric §12, Performance and Scalability] assesses how load is shed at the edge; [Rubric §31, Cost and FinOps] applies too, because each queued run is metered spend against the AI vendor.
+- **Concept introduced: claim-before-write deduplication.** `TryEnqueue` (`:44-57`) first does `_pending.TryAdd(eventId, 0)` and returns `AlreadyPending` when it loses (`:48-49`), so a concurrent duplicate is refused and exactly one run per event is ever in flight. Only then does it try the channel write; if that fails it releases the claim before returning `QueueFull` (`:54-56`) so a later attempt is not blocked by a request that never queued. The claim is cleared by `MarkCompleted`, called by the drain **after** the run finishes, so the dedup window covers execution, not just the wait in the queue (`:31-34`, `:59-64`).
 - **Walkthrough**:
-  - `ProductId` (`:16`): the RFC 5545 `PRODID` constant `-//MMCA//AtlDevCon//EN` stamped on every ADC calendar.
-  - `IsExportable(Session)` (`:19-22`): true only when the session has both `StartsAt` and `EndsAt`, is not a service session, and is not `Declined`/`Cancelled` (case-insensitive): the single source of truth for public exportability, reused by both handlers.
-  - `ToIcsEvent(Session, Event, TimeZoneInfo, string?)` (`:25-38`): builds a stable UID (`session-{Id}@atldevcon`), joins the room name and venue address into a location string, and converts start/end via `ToUtc`.
-  - `ToUtc(DateTime, TimeZoneInfo)` (`:41-50`): the DST-aware conversion described above.
-- **Why it's built this way**: centralizing the exportability rule and the time conversion in one internal helper keeps the two calendar handlers thin and guarantees they agree on what "public" and "UTC" mean ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) Wave 5).
-- **Where it's used**: by [ExportEventCalendarHandler](#exporteventcalendarhandler) and [ExportSessionCalendarHandler](#exportsessioncalendarhandler); the resulting `IcsEvent` list is handed to [IcsCalendarBuilder](group-08-auth.md#icscalendarbuilder).
-
-### ExportEventCalendarHandler
-> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.ExportCalendar` · `MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/ExportEventCalendarHandler.cs:15` · Level 8 · class
-
-- **What it is**: the query handler that produces a whole-schedule `.ics` string for a published event: every exportable session becomes one VEVENT with its room in the location. Unpublished or unknown events return NotFound (`ExportEventCalendarHandler.cs:15`).
-- **Depends on**: [IUnitOfWork](group-07-persistence-ef-core.md#iunitofwork) (for the [Event](group-17-conference-domain.md#event) and [Session](group-17-conference-domain.md#session) repositories), [CalendarExportMapper](#calendarexportmapper), [IcsCalendarBuilder](group-08-auth.md#icscalendarbuilder), and the [Result](group-01-result-error-handling.md#result)/[Error](group-01-result-error-handling.md#error) types. Implements [IQueryHandler<in TQuery, TResult>](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult) of [ExportEventCalendarQuery](#exporteventcalendarquery) to `Result<string>`.
-- **Concept introduced: public-read handlers leak nothing.** The handler treats "unpublished" and "not found" identically: if the event is missing or `!IsPublished` it returns `Error.NotFound` (`:28-32`), so a caller cannot distinguish an unpublished event from a nonexistent one. [Rubric §11, Security] assesses exactly this kind of existence-hiding on public endpoints.
-- **Walkthrough**:
-  1. Load the event with its `Rooms` child collection eagerly included (`:25-27`); rooms are children of the Event aggregate and have no repository of their own (note at `:24`).
-  2. Guard: null or unpublished then NotFound (`:28-32`).
-  3. Load all non-deleted sessions for the event via a filtered `GetAllAsync` (`:34-36`) and build a room-id to name dictionary (`:37`).
-  4. Resolve the event's IANA zone via `TimeZoneInfo.FindSystemTimeZoneById(@event.TimeZone)` (`:39`).
-  5. Filter to `CalendarExportMapper.IsExportable`, order by `StartsAt`, and map each to an `IcsEvent`, resolving each session's room name from the dictionary (`:40-48`).
-  6. Hand the entries to `IcsCalendarBuilder.Build` with the `ProductId` and current UTC timestamp, and return the string as `Result.Success` (`:50-51`).
-- **Why it's built this way**: [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) Wave 5: rendering the schedule server-side keeps the RFC 5545 formatting in one shared builder and lets the read endpoint be output-cached like the other Conference public reads.
-- **Where it's used**: invoked from the Conference calendar REST endpoint (Group 19); the `string` payload is served as an `.ics` download.
-
-### ExportSessionCalendarHandler
-> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.ExportCalendar` · `MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/ExportSessionCalendarHandler.cs:16` · Level 8 · class
-
-- **What it is**: the single-session sibling of [ExportEventCalendarHandler](#exporteventcalendarhandler): it produces a one-VEVENT `.ics` document for the public add-to-calendar affordance, enforcing the same public-read rules (`ExportSessionCalendarHandler.cs:16`).
-- **Depends on**: [IUnitOfWork](group-07-persistence-ef-core.md#iunitofwork), [CalendarExportMapper](#calendarexportmapper), [IcsCalendarBuilder](group-08-auth.md#icscalendarbuilder), [Result](group-01-result-error-handling.md#result)/[Error](group-01-result-error-handling.md#error). Implements [IQueryHandler<in TQuery, TResult>](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult) of [ExportSessionCalendarQuery](#exportsessioncalendarquery) to `Result<string>`.
-- **Concept introduced**: none new; it applies the same existence-hiding discipline [ExportEventCalendarHandler](#exporteventcalendarhandler) introduces, just with two guards instead of one. [Rubric §11, Security].
-- **Walkthrough**:
-  1. Load the session by id; if null or not `CalendarExportMapper.IsExportable`, return NotFound targeting `Session` (`:25-31`).
-  2. Load the owning event with `Rooms` included; if null or unpublished, return NotFound targeting `Event` (`:34-41`): a session on an unpublished event stays hidden.
-  3. Resolve the session's room name from the event's rooms (`:43-45`) and the IANA time zone (`:47`).
-  4. Build a one-entry calendar via `IcsCalendarBuilder.Build` and return `Result.Success` (`:48-53`).
-- **Why it's built this way**: a dedicated one-session path (rather than filtering the whole-event export) keeps the add-to-calendar button cheap and the leak-prevention guards explicit ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) Wave 5).
-- **Where it's used**: the Conference session detail page's add-to-calendar affordance (Group 19/21).
+  - `Capacity` (`:21`): the const `16`. The comment is explicit that the bound exists to refuse a runaway caller, not to absorb load: organizers score a handful of events.
+  - `_channel` (`:23-29`): the bounded channel described above.
+  - `_pending` (`:35`): a `ConcurrentDictionary<EventIdentifierType, byte>` used as a concurrent set of queued-or-running events.
+  - `Reader` (`:38`): the `ChannelReader<EventIdentifierType>` the hosted drain consumes. It is on the concrete class, not on the interface, which is why DI registers both the concrete type and the interface pointing at the same instance.
+  - `IsPending` (`:41`): a dictionary containment check.
+  - `TryEnqueue` (`:44-57`): the claim-then-write sequence above.
+  - `MarkCompleted` (`:64`): removes the claim; called from the drain's `finally`, so an interrupted or failed run still releases the event.
+- **Why it's built this way**: [ADR-052](https://ivanball.github.io/docs/adr/052-background-job-execution.html) (background job execution) is the governing decision. It requires a bounded `Channel<T>` per job kind registered so that the concrete type and its interface resolve to the **one** instance (`DependencyInjection.cs:48-49`; registering them separately would give producers a queue nobody drains), `Wait` plus non-blocking `TryWrite` for expensive work, and dedup by natural key with the claim released only at run end. Its stated trade-offs apply here: the queue is in-process, so it does not survive a restart and dedup is per replica; scoring is re-triggerable, so that is accepted.
+- **Where it's used**: produced into by [SessionSelectionController](group-20-conference-api-grpc.md#sessionselectioncontroller) through the interface; drained by [SessionScoringProcessor](group-19-conference-infrastructure.md#sessionscoringprocessor), which reads `Reader.ReadAllAsync(stoppingToken)` and calls `MarkCompleted` in a `finally` (`SessionScoringProcessor.cs:47`, `:66-69`).
 
 ### GetSessionSelectionDashboardHandler
 > MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetSessionSelectionDashboard` · `MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/GetSessionSelectionDashboard/GetSessionSelectionDashboardHandler.cs:16` · Level 8 · class
 
 - **What it is**: the composite decision-support handler: it loads an event's sessions, categories, speakers, and AI scores once, then computes summary counts, category distribution, speaker overlap, speaker locality, and the AI-score table into a single [SessionSelectionDashboardDTO](group-17-conference-domain.md#sessionselectiondashboarddto) (`GetSessionSelectionDashboardHandler.cs:16`).
-- **Depends on**: [IUnitOfWork](group-07-persistence-ef-core.md#iunitofwork) and the [Event](group-17-conference-domain.md#event)/[Session](group-17-conference-domain.md#session)/[Speaker](group-17-conference-domain.md#speaker)/[Category](group-17-conference-domain.md#category)/[SessionAiScore](group-17-conference-domain.md#sessionaiscore) repositories; `SpeakerLocalityHelper` and [SessionStatuses](group-17-conference-domain.md#sessionstatuses); the dashboard DTO family ([CategoryDistributionDTO](group-17-conference-domain.md#categorydistributiondto), [CategoryGroupDistribution](group-17-conference-domain.md#categorygroupdistribution), [CategoryItemDistribution](group-17-conference-domain.md#categoryitemdistribution), [SpeakerSessionOverlapDTO](group-17-conference-domain.md#speakersessionoverlapdto), [MultiSessionSpeaker](group-17-conference-domain.md#multisessionspeaker), [SpeakerSessionSummary](group-17-conference-domain.md#speakersessionsummary), [SpeakerLocalitySummary](group-17-conference-domain.md#speakerlocalitysummary), [SessionAiScoreDTO](group-17-conference-domain.md#sessionaiscoredto)). Implements [IQueryHandler<in TQuery, TResult>](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult) of [GetSessionSelectionDashboardQuery](#getsessionselectiondashboardquery) to `Result<SessionSelectionDashboardDTO>`.
-- **Concept introduced: load-once, compute-many for read performance.** The handler deliberately issues a small fixed set of reads (event validation, then sessions, categories, speakers by id, AI scores) and derives all four analytics in memory from those materialized collections, rather than running a separate query per panel. The comment at `:33` calls out that the loads are sequential for EF single-context safety (a `DbContext` is not concurrency-safe). [Rubric §12, Performance and Scalability] assesses read-path efficiency: one bounded batch of no-tracking reads (`asTracking: false`, e.g. `:37`, `:42`, `:55`) beats N per-panel round trips.
+- **Depends on**: [IUnitOfWork](group-07-persistence-ef-core.md#iunitofwork) and the [Event](group-17-conference-domain.md#event)/[Session](group-17-conference-domain.md#session)/[Speaker](group-17-conference-domain.md#speaker)/[Category](group-17-conference-domain.md#category)/[SessionAiScore](group-17-conference-domain.md#sessionaiscore) repositories; [SpeakerLocalityHelper](#speakerlocalityhelper) and [SessionStatuses](group-17-conference-domain.md#sessionstatuses); the dashboard DTO family ([CategoryDistributionDTO](group-17-conference-domain.md#categorydistributiondto), [CategoryGroupDistribution](group-17-conference-domain.md#categorygroupdistribution), [CategoryItemDistribution](group-17-conference-domain.md#categoryitemdistribution), [SpeakerSessionOverlapDTO](group-17-conference-domain.md#speakersessionoverlapdto), [MultiSessionSpeaker](group-17-conference-domain.md#multisessionspeaker), [SpeakerSessionSummary](group-17-conference-domain.md#speakersessionsummary), [SpeakerLocalitySummary](group-17-conference-domain.md#speakerlocalitysummary), [SessionAiScoreDTO](group-17-conference-domain.md#sessionaiscoredto)). Implements [IQueryHandler<in TQuery, TResult>](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult) of [GetSessionSelectionDashboardQuery](#getsessionselectiondashboardquery) to `Result<SessionSelectionDashboardDTO>`.
+- **Concept introduced: load-once, compute-many for read performance.** The handler deliberately issues a small fixed set of reads (event validation, then sessions, categories, speakers by id, AI scores) and derives every analytic in memory from those materialized collections, rather than running a separate query per panel. The comment at `:33` calls out that the loads are sequential for EF single-context safety (a `DbContext` is not concurrency-safe). [Rubric §12, Performance and Scalability] assesses read-path efficiency: one bounded batch of no-tracking reads (`asTracking: false`, e.g. `:37`, `:42`, `:55`, `:97`) beats N per-panel round trips.
 - **Walkthrough**:
-  1. Resolve the four repositories, then validate the event exists, else NotFound (`:23-31`).
+  1. Resolve the event, session, speaker, and category repositories, then validate the event exists, else `Error.NotFound` targeting `Event` (`:23-31`).
   2. Load non-service sessions with `SessionSpeakers`/`SessionCategoryItems` included, all categories with `CategoryItems`, and the distinct speakers via `GetByIdsAsync` with `SpeakerCategoryItems` (`:34-57`).
-  3. Build category-item name and locality lookups (`SpeakerLocalityHelper.FindLocalityCategory`/`BuildLocalityLookup`, `:60-70`).
-  4. Compute summary counts (total, accepted, accept-queue, declined, and pending as the remainder) using [SessionStatuses](group-17-conference-domain.md#sessionstatuses) comparisons (`:73-80`).
-  5. Compute `categoryDistribution` (`ComputeCategoryDistribution`, `:118-178`, which classifies each session via the private [StatusBucket](#statusbucket) enum), `speakerOverlap` (`ComputeSpeakerOverlap`, `:180-247`), and `speakerLocality` (`ComputeSpeakerLocality`, `:249-306`).
-  6. Load the `SessionAiScore` rows for these sessions and map them to `SessionAiScoreDTO`s, splitting out the "Level" category and each session's speaker localities (`BuildAiScoreDtos`, `:331-354`).
+  3. Build the category-item name lookup and the locality lookup (`SpeakerLocalityHelper.FindLocalityCategory`/`BuildLocalityLookup`, `:60-70`).
+  4. Compute summary counts (total, accepted, accept-queue, declined, and pending as the remainder) using [SessionStatuses](group-17-conference-domain.md#sessionstatuses) comparisons; note a null `Status` counts as accepted (`:73-80`).
+  5. Compute `categoryDistribution` (`ComputeCategoryDistribution`, `:118-178`, which classifies each session via the private [StatusBucket](#statusbucket) enum), `speakerOverlap` (`ComputeSpeakerOverlap`, `:180-247`), and `speakerLocality` (`ComputeSpeakerLocality`, `:249-306`, bucketing speakers by locality tier with `Unknown` as the fallback, `:277-281`).
+  6. Load the [SessionAiScore](group-17-conference-domain.md#sessionaiscore) rows for these sessions and map them to `SessionAiScoreDTO`s ordered by descending overall score, splitting out the "Level" category and each session's distinct speaker localities (`BuildAiScoreDtos`, `:331-354`, and its helpers `:356-426`).
   7. Assemble and return the composite DTO (`:102-115`).
-- **Why it's built this way**: a single composite endpoint backs an organizer dashboard that shows all four analytics at once; computing them from one shared load avoids re-reading the same sessions four times.
-- **Where it's used**: the Conference session-selection dashboard page (Group 21); the same overlap computation is also exposed standalone by [GetSpeakerSessionOverlapHandler](#getspeakersessionoverlaphandler).
-- **Caveats / not-in-source**: the private [StatusBucket](#statusbucket) enum and the private compute methods are implementation details of this handler and are not exposed to callers.
+- **Why it's built this way**: a single composite endpoint backs an organizer dashboard that shows every analytic at once; computing them from one shared load avoids re-reading the same sessions once per panel.
+- **Where it's used**: [SessionSelectionController](group-20-conference-api-grpc.md#sessionselectioncontroller) (the Conference session-selection dashboard endpoint); the same overlap computation is also exposed standalone by [GetSpeakerSessionOverlapHandler](#getspeakersessionoverlaphandler).
+- **Caveats / not-in-source**: the private [StatusBucket](#statusbucket) enum and the private compute methods are implementation details of this handler and are not exposed to callers. The doc comment at `:12-14` still lists "content similarity" among the computed analytics; the handler does not compute it (that lives in the separate [GetContentSimilarityHandler](#getcontentsimilarityhandler)).
 
 ### GetSpeakerSessionOverlapHandler
 > MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetSpeakerSessionOverlap` · `MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/GetSpeakerSessionOverlap/GetSpeakerSessionOverlapHandler.cs:18` · Level 8 · class
 
-- **What it is**: the standalone speaker-overlap handler: it returns every speaker who submitted at least one session for an event, with their sessions, sorted so multi-session speakers surface first (session count descending, then accepted-session presence, then name) (`GetSpeakerSessionOverlapHandler.cs:18`).
-- **Depends on**: [IUnitOfWork](group-07-persistence-ef-core.md#iunitofwork) and the [Session](group-17-conference-domain.md#session)/[Speaker](group-17-conference-domain.md#speaker)/[Category](group-17-conference-domain.md#category) repositories; `SpeakerLocalityHelper`, [SessionStatuses](group-17-conference-domain.md#sessionstatuses), [SpeakerSessionOverlapDTO](group-17-conference-domain.md#speakersessionoverlapdto)/[MultiSessionSpeaker](group-17-conference-domain.md#multisessionspeaker)/[SpeakerSessionSummary](group-17-conference-domain.md#speakersessionsummary). Implements [IQueryHandler<in TQuery, TResult>](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult) of [GetSpeakerSessionOverlapQuery](#getspeakersessionoverlapquery) to `Result<SpeakerSessionOverlapDTO>`.
+- **What it is**: the standalone speaker-overlap handler: it returns every speaker who submitted at least one session for an event, with their sessions, sorted so multi-session speakers surface first (session count descending, then accepted-session presence, then name) (`GetSpeakerSessionOverlapHandler.cs:18`, doc comment `:11-17`).
+- **Depends on**: [IUnitOfWork](group-07-persistence-ef-core.md#iunitofwork) and the [Session](group-17-conference-domain.md#session)/[Speaker](group-17-conference-domain.md#speaker)/[Category](group-17-conference-domain.md#category) repositories; [SpeakerLocalityHelper](#speakerlocalityhelper), [SessionStatuses](group-17-conference-domain.md#sessionstatuses), and [SpeakerSessionOverlapDTO](group-17-conference-domain.md#speakersessionoverlapdto)/[MultiSessionSpeaker](group-17-conference-domain.md#multisessionspeaker)/[SpeakerSessionSummary](group-17-conference-domain.md#speakersessionsummary). Implements [IQueryHandler<in TQuery, TResult>](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult) of [GetSpeakerSessionOverlapQuery](#getspeakersessionoverlapquery) to `Result<SpeakerSessionOverlapDTO>`.
 - **Concept introduced**: none new; it reuses the same load-once-compute pattern and the same [MultiSessionSpeaker](group-17-conference-domain.md#multisessionspeaker) projection that the dashboard's `ComputeSpeakerOverlap` builds, exposed as its own focused query. [Rubric §6, CQRS and Event-Driven] and [Rubric §12, Performance and Scalability].
 - **Walkthrough**:
-  1. Load non-service sessions with `SessionSpeakers`/`SessionCategoryItems` included (`:29-33`).
-  2. Group sessions by speaker id (`GroupSessionsBySpeaker`, `:61-82`), skipping soft-deleted join rows; short-circuit to an empty result when no speakers (`:38-39`).
-  3. Load those speakers by id (with `SpeakerCategoryItems`) and all categories, then build the locality lookup and category-item name lookup (`:41-54`).
-  4. Build the [MultiSessionSpeaker](group-17-conference-domain.md#multisessionspeaker) list (`BuildMultiSessionSpeakers`, `:99-140`), stamping each speaker's locality tier via `SpeakerLocalityHelper.GetLocalityTier` and whether any session is accepted, then sort by session count, accepted presence, and name (`:127-137`).
+  1. Load non-service sessions with `SessionSpeakers`/`SessionCategoryItems` included, no tracking (`:29-33`).
+  2. Group sessions by speaker id (`GroupSessionsBySpeaker`, `:61-82`), skipping soft-deleted join rows; short-circuit to an empty result when the event has no submitting speakers, before issuing any further query (`:38-39`).
+  3. Load those speakers by id (with `SpeakerCategoryItems`) and all categories, then build the locality lookup and the category-item name lookup (`:41-54`, `BuildCategoryItemNameLookup` at `:84-97`).
+  4. Build the [MultiSessionSpeaker](group-17-conference-domain.md#multisessionspeaker) list (`BuildMultiSessionSpeakers`, `:99-140`), stamping each speaker's locality tier via `SpeakerLocalityHelper.GetLocalityTier` and whether any session is accepted (a null `Status` counts as accepted, `:111-113`), projecting each session through `BuildSessionSummary` (`:142-153`), then sorting by session count, accepted presence, and name (`:127-137`).
 - **Why it's built this way**: organizers sometimes want just the overlap view without paying for the whole composite dashboard, so it is its own use case reusing the shared helper and DTOs.
-- **Where it's used**: the Conference speaker-overlap page (Group 21); returns the same DTO shape the dashboard embeds.
+- **Where it's used**: [SessionSelectionController](group-20-conference-api-grpc.md#sessionselectioncontroller)'s speaker-overlap endpoint; it returns the same DTO shape the dashboard embeds.
 
 ### ScoreEventSessionsHandler
-> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions` · `MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsHandler.cs:15` · Level 8 · class
+> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions` · `MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsHandler.cs:16` · Level 8 · class
 
-- **What it is**: the command handler that scores every session in an event via [IAiScoringService](#iaiscoringservice), persisting each score immediately so the UI can show real-time progress (`ScoreEventSessionsHandler.cs:15`). A `sealed partial class` (partial for the source-generated log methods).
-- **Depends on**: [IUnitOfWork](group-07-persistence-ef-core.md#iunitofwork) and the [Session](group-17-conference-domain.md#session)/[SessionAiScore](group-17-conference-domain.md#sessionaiscore)/[Speaker](group-17-conference-domain.md#speaker) repositories; [IAiScoringService](#iaiscoringservice); `ILogger<ScoreEventSessionsHandler>`; [SpeakerInfo](#speakerinfo)/[SessionScoringInput](#sessionscoringinput)/[SessionScoringResult](#sessionscoringresult); [ScoreEventSessionsResultDTO](group-17-conference-domain.md#scoreeventsessionsresultdto). Implements [ICommandHandler<in TCommand, TResult>](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult) of [ScoreEventSessionsCommand](#scoreeventsessionscommand) to `Result<ScoreEventSessionsResultDTO>`.
-- **Concept introduced: per-item save with contained failure, plus source-generated logging.** Two patterns meet here. First, resilience: the loop scores one session at a time and saves it individually (`:99-111`); a scorer failure, a domain-factory failure, or a save exception increments `failed` and `continue`s rather than aborting the batch (`:79-97`), and only an all-failed run returns `Error.Failure` (`:116-122`). This is the never-throw contract of [SessionScoringResult](#sessionscoringresult) carried up into batch orchestration. [Rubric §29, Resilience and Business Continuity]. Second, observability: every log call is a `[LoggerMessage]` `static partial` method (`:127-143`), the compiler-generated high-performance logging pattern that avoids boxing and template re-parsing. [Rubric §13, Observability and Operability].
+- **What it is**: the command handler that scores every session in an event via [IAiScoringService](#iaiscoringservice), persisting each score immediately so the dashboard can show real-time progress (`ScoreEventSessionsHandler.cs:16`). A `sealed partial class`, partial because its log methods are source-generated.
+- **Depends on**: [IUnitOfWork](group-07-persistence-ef-core.md#iunitofwork) and the [Session](group-17-conference-domain.md#session)/[SessionAiScore](group-17-conference-domain.md#sessionaiscore)/[Speaker](group-17-conference-domain.md#speaker) repositories; [IAiScoringService](#iaiscoringservice); `ILogger<ScoreEventSessionsHandler>`; [SpeakerInfo](#speakerinfo)/[SessionScoringInput](#sessionscoringinput)/[SessionScoringResult](#sessionscoringresult); [ScoreEventSessionsResultDTO](group-17-conference-domain.md#scoreeventsessionsresultdto). Implements [ICommandHandler<in TCommand, TResult>](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult) of [ScoreEventSessionsCommand](#scoreeventsessionscommand) to `Result<ScoreEventSessionsResultDTO>` (`:19`).
+- **Concept introduced: per-item save with contained failure, plus source-generated logging.** Two patterns meet here. First, resilience: the loop scores one session at a time and saves it individually (`:100-112`); a scorer failure, a domain-factory failure, or a save exception increments `failed` and `continue`s rather than aborting the batch (`:80-98`, `:108-112`), and only an all-failed run returns `Error.Failure` (`:117-123`). This is the never-throw contract of [SessionScoringResult](#sessionscoringresult) carried up into batch orchestration. Note the `catch` filter excludes `OperationCanceledException` (`:108`), so host shutdown propagates instead of being counted as a failure. [Rubric §29, Resilience and Business Continuity]. Second, observability: every log call is a `[LoggerMessage]` `static partial` method (`:128-144`), the compiler-generated high-performance logging pattern that avoids boxing and template re-parsing, and each per-session line carries a `{Progress}/{Total}` pair so an operator can follow a run in the log. [Rubric §13, Observability and Operability].
 - **Walkthrough**:
-  1. Load non-service sessions (with `SessionSpeakers`) for the event; short-circuit to a zero-count success when none (`:27-34`).
-  2. `ExecuteDeleteAsync` all existing scores for these sessions so the dashboard resets to zero and progress is visible from scratch (`:37-45`).
-  3. Batch-load the distinct speakers and build a lookup (`:48-59`).
-  4. For each session: project its non-deleted speakers into [SpeakerInfo](#speakerinfo), build a [SessionScoringInput](#sessionscoringinput), call `aiScoringService.ScoreSessionAsync` (`:66-77`); on a failed result or a failed `SessionAiScore.Create`, count it as failed and continue (`:79-97`); otherwise `AddAsync` and `SaveChangesAsync` per session, catching non-cancellation exceptions as a per-session failure (`:99-111`).
-  5. Log completion and return the count DTO, or `Error.Failure` (`AiScoring.AllFailed`) when nothing scored and something failed (`:114-124`).
-- **Why it's built this way**: saving per session gives the organizer live progress and means a mid-run failure keeps the scores already computed; the all-failed guard surfaces a misconfiguration (a missing Anthropic API key) as a single actionable error rather than a silent empty result.
-- **Where it's used**: invoked from the Conference AI-scoring endpoint (Group 19); the resulting scores feed [GetSessionSelectionDashboardHandler](#getsessionselectiondashboardhandler)'s AI-score panel.
-- **Caveats / not-in-source**: the actual AI call and model are supplied by the Infrastructure `AnthropicScoringService` adapter (Group 20); this handler only orchestrates the port.
+  1. Load non-service sessions (with `SessionSpeakers`, no tracking) for the event; short-circuit to a zero-count success when there are none (`:25-35`).
+  2. `ExecuteDeleteAsync` every existing score for those sessions, so the dashboard resets to zero and progress is visible from scratch, logging the delete count (`:37-46`).
+  3. Batch-load the distinct non-deleted speakers and build an id lookup (`:48-60`), then log the run start (`:62`).
+  4. For each session: project its non-deleted speakers into [SpeakerInfo](#speakerinfo), build a [SessionScoringInput](#sessionscoringinput), and call `aiScoringService.ScoreSessionAsync` (`:67-78`); on `!result.Success` or a failed `SessionAiScore.Create`, count a failure and continue (`:80-98`); otherwise `AddAsync` plus `SaveChangesAsync` for that one score, catching non-cancellation exceptions as a per-session failure (`:100-112`).
+  5. Log completion, and return `Error.Failure` with code `AiScoring.AllFailed` when nothing scored and something failed (`:117-123`), else the count DTO (`:125`).
+- **Why it's built this way**: saving per session gives the organizer live progress and means a mid-run failure keeps the scores already computed; the all-failed guard surfaces a misconfiguration (a missing Anthropic API key, named in the error message at `:121`) as one actionable error rather than a silent empty result.
+- **Where it's used**: resolved per run from a fresh DI scope by the hosted drain [SessionScoringProcessor](group-19-conference-infrastructure.md#sessionscoringprocessor) (`SessionScoringProcessor.cs:79-84`), never called from the controller: the endpoint only enqueues. The resulting scores feed [GetSessionSelectionDashboardHandler](#getsessionselectiondashboardhandler)'s AI-score panel, and the drain evicts the `conference:sessions` output-cache tag on both sides of the run (`SessionScoringProcessor.cs:77`, `:93`).
+- **Caveats / not-in-source**: the actual AI call, prompt, and model are supplied by the Infrastructure adapter [AnthropicScoringService](group-19-conference-infrastructure.md#anthropicscoringservice); this handler only orchestrates the port.
 
-### GetNowNextQuery
-> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.NowNext` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/NowNext/GetNowNextQuery.cs:11` · Level 0 · record
+### ExportEventCalendarQuery
+> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.ExportCalendar` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/ExportEventCalendarQuery.cs:5` · Level 0 · record
 
-- **What it is**: the read request for the conference "happening now / up next" snapshot. Its single optional field, `EventId`, names the target event; passing `null` tells the handler to auto-select the current-or-next published event (`GetNowNextQuery.cs:11`).
-- **Depends on**: the `EventIdentifierType` alias (Conference's event id type, declared in the module's Shared project). No other first-party types.
-- **Concept introduced, the CQRS query record.** `[Rubric §6, CQRS & Event-Driven]` assesses whether reads and writes are genuinely separated, with each read expressed as its own request object routed to its own handler. A **query** here is an immutable request-for-data with no behavior: it names the read and carries its parameters, nothing more. The whole type is one line, `public sealed record GetNowNextQuery(EventIdentifierType? EventId);`. It is dispatched through the shared decorator pipeline to its [`IQueryHandler<in TQuery, TResult>`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult) implementation, [`GetNowNextHandler`](#getnownexthandler), which answers with a [`Result`](group-01-result-error-handling.md#result). `[Rubric §5, Vertical Slice]` assesses whether a feature's pieces live together: query, handler, and result shape for this feature all sit under one `UseCases/NowNext` folder instead of layer-wide "Queries" and "Handlers" buckets.
-- **Walkthrough**: a positional `record` with one nullable member, `EventId` (`GetNowNextQuery.cs:11`). The `null` sentinel is load-bearing: the doc comment (`GetNowNextQuery.cs:3-10`) records that the home-screen widget has no event id of its own, so it passes `null` and the handler features the live-or-next published event, the same rule the other home surfaces use.
-- **Why it's built this way**: a `record` gives value equality and immutability for free, so the query is safe to use as a cache or log key in the pipeline; making the event id optional lets one query serve both the event-scoped page and the global home widget without a second type.
-- **Where it's used**: handled by [`GetNowNextHandler`](#getnownexthandler); constructed in two places by [`EventsController`](group-20-conference-api-grpc.md#eventscontroller), once with the route id (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventsController.cs:182`) and once with `EventId: null` for the id-less home form (`EventsController.cs:196`). Both actions are `[AllowAnonymous]` and short-TTL output-cached under the `NowNextCache` policy (`EventsController.cs:175-177, 190-192`).
+- **What it is**: the read request that asks for one published event's whole schedule rendered as an RFC 5545 (`.ics`) calendar document. A one-field `sealed record` carrying the `EventId` to export (`ExportEventCalendarQuery.cs:5`).
+- **Depends on**: the `EventIdentifierType` alias (see [identifier aliases](00-primer.md#2-architectural-styles-this-codebase-commits-to)). Nothing else first-party, nothing external beyond the BCL.
+- **Concept, the request record as a CQRS message.** `[Rubric §6, CQRS & Event-Driven]` assesses whether every read is an explicitly named message routed to its own handler. The whole type is one line: `public sealed record ExportEventCalendarQuery(EventIdentifierType EventId);`. It names exactly the input its handler needs and carries no behavior, and it is dispatched through the shared decorator pipeline to its [`IQueryHandler<in TQuery, TResult>`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult) implementation, [`ExportEventCalendarHandler`](#exporteventcalendarhandler). `[Rubric §5, Vertical Slice]`: query and handler sit together under one `UseCases/ExportCalendar` folder rather than in layer-wide "Queries" and "Handlers" buckets.
+- **Walkthrough**: a positional `record` with the single member `EventId` (`ExportEventCalendarQuery.cs:5`); the doc comment attributes the feature to [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) Wave 5 and documents the parameter (`ExportEventCalendarQuery.cs:3-4`). `record` supplies value equality and immutability, so the query is safe as a cache or log key in the pipeline.
+- **Why it's built this way**: keeping the query minimal (an id and nothing else) leaves every publish and exportability rule in one place, the handler, instead of splitting it between the request and the code that serves it.
+- **Where it's used**: handled by [`ExportEventCalendarHandler`](#exporteventcalendarhandler); constructed by [`EventsController`](group-20-conference-api-grpc.md#eventscontroller) on `GET {id}/ics` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventsController.cs:166`), an `[AllowAnonymous]` action output-cached under the `EventsCache` policy that returns the string as a `text/calendar` file named `event-{id}.ics` (`EventsController.cs:159-169`).
+
+### ExportSessionCalendarQuery
+> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.ExportCalendar` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/ExportSessionCalendarQuery.cs:5` · Level 0 · record
+
+- **What it is**: the single-session variant of the calendar export: it asks for one public session rendered as an `.ics` document, backing the "add to calendar" affordance. A one-field `sealed record` carrying the `SessionId` (`ExportSessionCalendarQuery.cs:5`).
+- **Depends on**: the `SessionIdentifierType` alias. Nothing else.
+- **Concept**: none new; it is the sibling of [`ExportEventCalendarQuery`](#exporteventcalendarquery) and differs only in identifying one session rather than a whole event. `[Rubric §6, CQRS & Event-Driven]`.
+- **Walkthrough**: a positional `record` with the single member `SessionId` (`ExportSessionCalendarQuery.cs:5`); same [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) Wave 5 attribution in the doc comment (`ExportSessionCalendarQuery.cs:3-4`).
+- **Why it's built this way**: a separate query keeps the one-session public rules distinct from the whole-event export, so neither path has to branch on "did the caller want one or all".
+- **Where it's used**: handled by [`ExportSessionCalendarHandler`](#exportsessioncalendarhandler); constructed by [`SessionsController`](group-20-conference-api-grpc.md#sessionscontroller) on `GET {id}/ics` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:235`), `[AllowAnonymous]` and output-cached under `SessionsCache`, returned as `session-{id}.ics` (`SessionsController.cs:228-238`).
 
 ### GetPublicSessionFilterQuery
 > MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.GetPublicSessionFilter` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/GetPublicSessionFilter/GetPublicSessionFilterQuery.cs:9` · Level 0 · record
@@ -993,8 +1043,97 @@ strategy so it can evolve, be tested, and ultimately be extracted without distur
 - **Concept, the marker query.** `[Rubric §6, CQRS & Event-Driven]`. Not every query carries parameters. This one is literally `public sealed record GetPublicSessionFilterQuery;` (`GetPublicSessionFilterQuery.cs:9`): it exists to select a handler through the pipeline. What comes back is not rows but a reusable [`Specification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#specificationtentity-tidentifiertype) that other read paths compose into their own queries, so "what counts as a public session" is defined in exactly one place.
 - **Concept, cross-store filtering.** `[Rubric §8, Data Architecture]` assesses how a rule spanning two physical stores is expressed without an illegal cross-database join. The doc comment (`GetPublicSessionFilterQuery.cs:3-8`) states the constraint plainly: [`Session`](group-17-conference-domain.md#session) lives in Cosmos DB while [`Event`](group-17-conference-domain.md#event) lives in SQL Server, so the "parent event is published" check cannot be a navigation join. [`GetPublicSessionFilterHandler`](#getpublicsessionfilterhandler) resolves it through the framework's cross-source helper instead.
 - **Walkthrough**: no members. The type is the request; every line of behavior is in [`GetPublicSessionFilterHandler`](#getpublicsessionfilterhandler).
-- **Why it's built this way**: a marker record keeps the read strongly named and pipeline-routable even with no arguments, and returning a specification rather than materialized rows lets the paged public list and any other public-facing read share one definition of visibility.
-- **Where it's used**: handled by [`GetPublicSessionFilterHandler`](#getpublicsessionfilterhandler); constructed by [`SessionsController`](group-20-conference-api-grpc.md#sessionscontroller) in its private `BuildPublicSessionSpecificationAsync` helper (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:69`), which returns `null` for organizers (they see everything) and the specification for everyone else (`SessionsController.cs:64-73`).
+- **Why it's built this way**: a marker record keeps the read strongly named and pipeline-routable even with no arguments, and returning a specification rather than materialized rows lets the list, paged, and by-id public reads share one definition of visibility.
+- **Where it's used**: handled by [`GetPublicSessionFilterHandler`](#getpublicsessionfilterhandler); constructed by [`SessionsController`](group-20-conference-api-grpc.md#sessionscontroller) in its private `BuildPublicSessionSpecificationAsync` helper (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:71`), which returns `null` for organizers (they see everything) and the specification for everyone else (`SessionsController.cs:66-75`). That helper feeds the unpaged list (`SessionsController.cs:137`), the paged list through [`GetSessionsBySpeakerFilterQuery`](#getsessionsbyspeakerfilterquery)'s combiner (`SessionsController.cs:99`), and the by-id read (`SessionsController.cs:216`).
+
+### GetSessionsBySpeakerFilterQuery
+> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.GetSessionsBySpeakerFilter` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/GetSessionsBySpeakerFilter/GetSessionsBySpeakerFilterQuery.cs:11` · Level 0 · record
+
+- **What it is**: the request for a specification selecting the sessions a given speaker presents. A one-field `sealed record` carrying the `SpeakerId` (`GetSessionsBySpeakerFilterQuery.cs:11`).
+- **Depends on**: the `SpeakerIdentifierType` alias (a `Guid` in Conference). Nothing else.
+- **Concept, the virtual filter key.** `[Rubric §9, API & Contract Design]` assesses whether a public contract can expose a query dimension the storage model does not literally have. [`Session`](group-17-conference-domain.md#session) has **no** `SpeakerId` column: the link lives in the [`SessionSpeaker`](group-17-conference-domain.md#sessionspeaker) join. The doc comment (`GetSessionsBySpeakerFilterQuery.cs:3-9`) records the design: rather than teach the generic filter pipeline about a join, the API intercepts `SpeakerId` and turns it into this query, whose handler resolves it as an id-list projection. Callers get `?filters=SpeakerId:...` on the paged sessions endpoint; the aggregate keeps its by-ID boundary to `Speaker`. `[Rubric §4, Domain-Driven Design]` is the other half of that: the two aggregates reference each other by identifier, never by navigation.
+- **Walkthrough**: a positional `record` with the single member `SpeakerId` (`GetSessionsBySpeakerFilterQuery.cs:11`), documented at `:10`; the doc comment names `GetSpeakersByEventFilterQuery` as the precedent it mirrors (`:8`).
+- **Why it's built this way**: returning a specification rather than rows lets the caller AND it with the public-session filter, which is exactly what the controller does. A specification composes; a materialized result set does not.
+- **Where it's used**: handled by [`GetSessionsBySpeakerFilterHandler`](#getsessionsbyspeakerfilterhandler); constructed by [`SessionsController`](group-20-conference-api-grpc.md#sessionscontroller) inside `BuildPagedSessionSpecificationAsync` (`SessionsController.cs:108-110`), only after the `SpeakerId` key is removed from the raw filter dictionary and parsed with `SpeakerIdentifierType.TryParse` under `CultureInfo.InvariantCulture`; an unparseable value silently drops the key instead of failing the request (`SessionsController.cs:101-106`). The result is ANDed with the public filter through an [`AndSpecification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#andspecificationtentity-tidentifiertype), never substituted for it (`SessionsController.cs:115-117`), because dropping the public filter for a speaker-scoped request would leak declined sessions to non-organizers (rationale at `SessionsController.cs:89-93`).
+
+### CalendarExportMapper
+> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.ExportCalendar` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/CalendarExportMapper.cs:14` · Level 7 · class (internal static)
+
+- **What it is**: the shared helper that decides whether a session may appear in a public calendar and maps an exportable one to an [`IcsEvent`](group-08-auth.md#icsevent), converting the event-zone wall-clock times to UTC with explicit DST discipline (`CalendarExportMapper.cs:14`).
+- **Depends on**: [`Session`](group-17-conference-domain.md#session) and [`Event`](group-17-conference-domain.md#event) (Conference domain), [`IcsEvent`](group-08-auth.md#icsevent) from `MMCA.Common.Shared.Calendars`, and the BCL `TimeZoneInfo` / `DateTimeOffset` / `CultureInfo` types.
+- **Concept, wall-clock to UTC conversion at the layer boundary.** `[Rubric §8, Data Architecture]` and `[Rubric §16, Maintainability]`. [`IcsCalendarBuilder`](group-08-auth.md#icscalendarbuilder) is UTC-only by contract: it emits `Z`-suffixed timestamps and skips RFC 5545's VTIMEZONE machinery entirely (`MMCA.Common/Source/Core/MMCA.Common.Shared/Calendars/IcsEvent.cs:3-8`). Sessions, however, store `StartsAt` / `EndsAt` as wall-clock local to the event's IANA zone (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:25,28`). Bridging those two representations is this mapper's whole reason to exist, and it does so with a named, testable rule rather than an inline `ToUniversalTime()` at each call site.
+- **Concept, DST edge cases made deterministic.** `ToUtc` (`CalendarExportMapper.cs:42-51`) re-kinds the value as `Unspecified` (`:44`), asks `TimeZoneInfo.IsInvalidTime` whether it falls in a spring-forward gap and shifts it ahead one hour if so (`:45-48`), then builds the `DateTimeOffset` from the zone's offset for that instant (`:50`). The class comment (`:8-13`) states the second half of the policy: ambiguous fall-back times resolve to the standard offset, which is what `GetUtcOffset` returns for an ambiguous local time. Both branches are decisions, not accidents, and they match the reminder planner's rules so the two features cannot disagree.
+- **Walkthrough**:
+  - `ProductId` (`:17`): the RFC 5545 `PRODID` constant `-//MMCA//AtlDevCon//EN` stamped on every ADC-produced calendar.
+  - `IsExportable(Session)` (`:20-23`): the single source of truth for public exportability. True only when the session has both `StartsAt` and `EndsAt`, is not a service session, and its `Status` is neither `"Declined"` nor `"Cancelled"` (`StringComparison.OrdinalIgnoreCase`). `Status` is nullable (`Session.cs:31`), and `string.Equals` handles a null left operand, so a status-less session stays exportable.
+  - `ToIcsEvent(Session, Event, TimeZoneInfo, string?)` (`:26-39`): builds a stable UID `session-{Id}@atldevcon` with `string.Create(CultureInfo.InvariantCulture, ...)` (`:33`), joins the room name and the event's `VenueAddress` into a comma-separated location skipping blank parts (`:28-30`), converts both endpoints through `ToUtc` (`:35-36`), and passes `null` rather than an empty string when there is no location (`:38`).
+  - `ToUtc(DateTime, TimeZoneInfo)` (`:42-51`): the DST-aware conversion described above.
+- **Why it's built this way**: centralizing exportability and the time conversion in one `internal static` helper keeps both calendar handlers thin and guarantees they agree on what "public" and "UTC" mean. `internal` is deliberate: the rule is an Application-layer implementation detail, not part of the module's public surface. The mapper is also reused outside calendar export, which is what makes the shared definition pay off.
+- **Where it's used**: by [`ExportEventCalendarHandler`](#exporteventcalendarhandler) and [`ExportSessionCalendarHandler`](#exportsessioncalendarhandler), and by [`GetNowNextHandler`](#getnownexthandler), which filters the happening-now surface with the same `IsExportable` predicate and reuses `ToUtc` for its row conversions. The resulting `IcsEvent` list is handed to [`IcsCalendarBuilder`](group-08-auth.md#icscalendarbuilder).
+- **Testing**: covered directly by `CalendarExportMapperTests` (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Application.Tests/Sessions/UseCases/ExportCalendar/CalendarExportMapperTests.cs:14`); `internal` members are reachable from the test project through the usual `InternalsVisibleTo` arrangement. `[Rubric §14, Testability]`: pulling the two rules out of the handlers is what makes them unit-testable without a repository.
+
+### ExportEventCalendarHandler
+> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.ExportCalendar` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/ExportEventCalendarHandler.cs:15` · Level 8 · class (sealed)
+
+- **What it is**: the query handler that produces a whole-schedule `.ics` string for a published event: every exportable session becomes one VEVENT with its room in the location. Unknown or unpublished events come back as NotFound (`ExportEventCalendarHandler.cs:15`).
+- **Depends on**: [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork) (for the [`Event`](group-17-conference-domain.md#event) and [`Session`](group-17-conference-domain.md#session) repositories), [`CalendarExportMapper`](#calendarexportmapper), [`IcsCalendarBuilder`](group-08-auth.md#icscalendarbuilder), and [`Result`](group-01-result-error-handling.md#result) / [`Error`](group-01-result-error-handling.md#error). Implements [`IQueryHandler<in TQuery, TResult>`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult) of [`ExportEventCalendarQuery`](#exporteventcalendarquery) to `Result<string>` (`:17`).
+- **Concept, public-read handlers leak nothing.** `[Rubric §11, Security]` assesses whether an anonymous endpoint can be used to probe for the existence of content the caller may not see. This handler collapses "missing" and "unpublished" into one answer: either condition returns `Error.NotFound` tagged with the handler name and `Event` (`:28-32`), so a caller cannot distinguish an unpublished event from one that does not exist. The endpoint is `[AllowAnonymous]`, which is exactly why the distinction has to disappear here rather than at the controller.
+- **Walkthrough**:
+  1. Load the event with its `Rooms` child collection eagerly included (`:25-27`). The inline comment (`:24`) explains why the include is necessary: rooms are children of the `Event` aggregate and have no repository of their own.
+  2. Guard: null or `!IsPublished` returns NotFound (`:28-32`).
+  3. Load the event's sessions with `GetAllAsync([], s => s.EventId == query.EventId, ...)` (`:34-36`), then build a room-id to room-name dictionary from the loaded aggregate (`:37`), which is what lets step 5 resolve room names without a second query.
+  4. Resolve the event's IANA zone with `TimeZoneInfo.FindSystemTimeZoneById(@event.TimeZone)` (`:39`).
+  5. Filter with `CalendarExportMapper.IsExportable`, order by `StartsAt`, and map each survivor to an `IcsEvent`, looking each session's `RoomId` up in the dictionary and passing `null` when it misses (`:40-48`).
+  6. Hand the entries to `IcsCalendarBuilder.Build` with the shared `ProductId` and `DateTimeOffset.UtcNow` as the DTSTAMP, and return the document as `Result.Success` (`:50-51`).
+- **Why it's built this way**: rendering the schedule server-side ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) Wave 5, cited at `:10-14`) keeps the RFC 5545 formatting in one shared builder in `MMCA.Common.Shared` instead of in a client, and lets the read be output-cached like every other anonymous Conference read. `[Rubric §12, Performance & Scalability]`: the handler issues two reads, one for the event with its rooms and one for the sessions, and does all filtering, ordering, and room resolution in memory over those materialized collections.
+- **Where it's used**: invoked by [`EventsController`](group-20-conference-api-grpc.md#eventscontroller)'s `ExportCalendarAsync` (`EventsController.cs:166`), which UTF-8 encodes the string and returns it as a `text/calendar` file.
+- **Caveats / not-in-source**: `FindSystemTimeZoneById` (`:39`) is not guarded here, unlike [`GetNowNextHandler`](#getnownexthandler), which wraps the same call in a `try/catch` falling back to `TimeZoneInfo.Utc`. An event stored with an unrecognized zone id would therefore surface as an exception from this handler, not as a `Result` failure. There is also no dedicated unit-test class for this handler: only [`EventsController`](group-20-conference-api-grpc.md#eventscontroller)'s tests exercise the endpoint, against a mocked `IQueryHandler` (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.API.Tests/Controllers/EventsControllerTests.cs:34`), while its single-session sibling does have one.
+
+### ExportSessionCalendarHandler
+> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.ExportCalendar` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/ExportSessionCalendarHandler.cs:16` · Level 8 · class (sealed)
+
+- **What it is**: the single-session sibling of [`ExportEventCalendarHandler`](#exporteventcalendarhandler). It produces a one-VEVENT `.ics` document for the public add-to-calendar affordance under the same public-read rules (`ExportSessionCalendarHandler.cs:16`).
+- **Depends on**: [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork), [`CalendarExportMapper`](#calendarexportmapper), [`IcsCalendarBuilder`](group-08-auth.md#icscalendarbuilder), [`Result`](group-01-result-error-handling.md#result) / [`Error`](group-01-result-error-handling.md#error). Implements [`IQueryHandler<in TQuery, TResult>`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult) of [`ExportSessionCalendarQuery`](#exportsessioncalendarquery) to `Result<string>` (`:18`).
+- **Concept**: none new; it applies the existence-hiding discipline [`ExportEventCalendarHandler`](#exporteventcalendarhandler) introduces, with two guards instead of one. `[Rubric §11, Security]`. Worth noticing the ordering: the session guard and the event guard return NotFound targeting different entities (`Session` at `:30`, `Event` at `:40`), which keeps server-side diagnostics precise while the HTTP response stays a plain 404 either way.
+- **Walkthrough**:
+  1. Load the session by id (no includes) and reject it if null or if `CalendarExportMapper.IsExportable` says no, returning NotFound targeting `Session` (`:25-31`). Declined, cancelled, unscheduled, and service sessions are therefore invisible here.
+  2. Load the owning event with `Rooms` included and reject null or unpublished with NotFound targeting `Event` (`:34-41`): a perfectly exportable session on an unpublished event stays hidden. The same "rooms are children of the aggregate" comment appears at `:33`.
+  3. Resolve the session's room name from the loaded event's `Rooms` with `FirstOrDefault`, or `null` when the session has no room (`:43-45`), then resolve the IANA zone (`:47`).
+  4. Build a one-entry calendar via `IcsCalendarBuilder.Build` with the shared `ProductId` and `DateTimeOffset.UtcNow`, and return it (`:48-53`).
+- **Why it's built this way**: a dedicated one-session path, rather than filtering the whole-event export down to one row, keeps the add-to-calendar button cheap (two by-id reads) and makes the two leak-prevention guards explicit and individually testable ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) Wave 5, cited at `:10-15`).
+- **Where it's used**: invoked by [`SessionsController`](group-20-conference-api-grpc.md#sessionscontroller)'s `ExportCalendarAsync` (`SessionsController.cs:235`). Note the class-level `[HasPermission(ConferencePermissions.SessionsManage)]` on the controller (`SessionsController.cs:41`) is overridden per action by `[AllowAnonymous]` (`SessionsController.cs:229`), which is why the handler carries the visibility rules itself.
+- **Testing**: `ExportSessionCalendarHandlerTests` (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Application.Tests/Sessions/UseCases/ExportCalendar/ExportSessionCalendarHandlerTests.cs:16`).
+
+### GetSessionsBySpeakerFilterHandler
+> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.GetSessionsBySpeakerFilter` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/GetSessionsBySpeakerFilter/GetSessionsBySpeakerFilterHandler.cs:21` · Level 8 · class (sealed)
+
+- **What it is**: the handler for [`GetSessionsBySpeakerFilterQuery`](#getsessionsbyspeakerfilterquery). It projects the session ids linked to one speaker through the [`SessionSpeaker`](group-17-conference-domain.md#sessionspeaker) join and returns a `Session.Id IN (...)` [`Specification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#specificationtentity-tidentifiertype) (`GetSessionsBySpeakerFilterHandler.cs:21`).
+- **Depends on**: [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork) and, through it, [`IReadRepository<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#ireadrepositorytentity-tidentifiertype) over [`SessionSpeaker`](group-17-conference-domain.md#sessionspeaker); [`InlineSpecification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#inlinespecificationtentity-tidentifiertype); [`Session`](group-17-conference-domain.md#session); [`Result`](group-01-result-error-handling.md#result). Implements [`IQueryHandler<in TQuery, TResult>`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult) to `Result<Specification<Session, SessionIdentifierType>>` (`:23`).
+- **Concept, the id-list projection instead of a join.** `[Rubric §8, Data Architecture]` and `[Rubric §7, Microservices Readiness]`. A predicate like `s => s.SessionSpeakers.Any(ss => ss.SpeakerId == id)` needs a navigation the engine can translate; an id list needs nothing but `IN`. Resolving the join to a scalar list first (`:30-37`) means the criteria is portable across relational and document engines alike, and it keeps the [`Session`](group-17-conference-domain.md#session) aggregate's reference to `Speaker` by identifier rather than by object graph. The doc comment names [`GetSpeakersByEventFilterHandler`](#getspeakersbyeventfilterhandler) as the pattern it mirrors (`:12-14`); that handler does the same thing in the other direction, unioning direct `EventSpeaker` links with transitive `SessionSpeaker` ones (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/UseCases/GetSpeakersByEventFilter/GetSpeakersByEventFilterHandler.cs:28-53`).
+- **Concept, the empty list is an answer.** The doc comment is explicit (`:15-19`): a speaker with no sessions yields an empty id list, and a `Contains` over an empty collection matches nothing. That is the correct result, and it is why the caller must apply the returned specification rather than treat "empty" as "no filter" and fall back to showing everything. `[Rubric §11, Security]` in a quiet form: the safe default is fewer rows, not more.
+- **Walkthrough**:
+  1. Take a **read** repository over [`SessionSpeaker`](group-17-conference-domain.md#sessionspeaker) via `GetReadRepository` (`:30-31`), not the read-write one: the handler only queries, and the narrower interface says so.
+  2. `GetProjectedAsync(ss => ss.SessionId, ss => ss.SpeakerId == query.SpeakerId, asTracking: false, ...)` (`:32-37`) pushes both the projection and the predicate into the database, so only a column of ids crosses the wire and nothing is change-tracked. The soft-delete global query filter applies to this read like any other, so join rows for a removed speaker assignment do not come back.
+  3. Materialize the distinct ids into an `IReadOnlyList<SessionIdentifierType>` (`:39-40`). The comment (`:39`) states the reason: the predicate has to close over a stable collection for EF to translate it to `IN`, so the deferred `Distinct()` sequence is collapsed first.
+  4. Wrap `s => ids.Contains(s.Id)` in an [`InlineSpecification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#inlinespecificationtentity-tidentifiertype) and return `Result.Success` (`:42-43`). There is no failure path: the handler cannot fail on its own terms.
+- **Why it's built this way**: returning a composable specification instead of a page of sessions is what lets the controller AND it with the BR-132 public filter (`SessionsController.cs:115-117`); had the handler returned rows, the two rules would have had to be merged by hand at the call site or, worse, applied in sequence in memory.
+- **Where it's used**: [`SessionsController`](group-20-conference-api-grpc.md#sessionscontroller)'s `BuildPagedSessionSpecificationAsync` (`SessionsController.cs:108-117`), which is the only consumer.
+- **Testing**: `GetSessionsBySpeakerFilterHandlerTests` (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Application.Tests/Sessions/UseCases/GetSessionsBySpeakerFilter/GetSessionsBySpeakerFilterHandlerTests.cs:16`), built on the shared `HandlerTestBase<T>`.
+- **Caveats / not-in-source**: the id set is fully materialized into the predicate, so the query's size grows with the speaker's session count. Nothing in this file bounds that list; for a conference speaker the count is small by construction, but the bound is a property of the data, not of the code.
+
+### GetPublicSessionFilterHandler
+> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.GetPublicSessionFilter` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/GetPublicSessionFilter/GetPublicSessionFilterHandler.cs:17` · Level 9 · class (sealed)
+
+- **What it is**: the handler for [`GetPublicSessionFilterQuery`](#getpublicsessionfilterquery). It returns a [`Specification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#specificationtentity-tidentifiertype) selecting public sessions: non-declined, non-cancelled sessions whose parent event is published (BR-132 / BR-49) (`GetPublicSessionFilterHandler.cs:17-19`).
+- **Depends on**: [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork), [`CrossSourceSpecification`](group-03-querying-specifications.md#crosssourcespecification), [`Event`](group-17-conference-domain.md#event), [`Session`](group-17-conference-domain.md#session), [`SessionStatuses`](group-17-conference-domain.md#sessionstatuses), [`Result`](group-01-result-error-handling.md#result). Implements [`IQueryHandler<in TQuery, TResult>`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult) to `Result<Specification<Session, SessionIdentifierType>>` (`:19`).
+- **Concept, the cross-source specification helper.** `[Rubric §8, Data Architecture]` and `[Rubric §7, Microservices Readiness]`. When the principal entity and the dependent entity live in different physical stores, "belongs to a published event" cannot be a join. The handler delegates that problem to the framework's [`CrossSourceSpecification`](group-03-querying-specifications.md#crosssourcespecification)`.BuildAsync` (`:26-33`), which resolves the matching principal keys from their own source with a scalar projection and then builds `localPredicate AND principalKeys.Contains(dependent.ForeignKey)` as a raw expression tree, rebinding the local predicate onto the FK selector's parameter instead of using `Expression.Invoke` so the combined predicate stays translatable on every provider (`MMCA.Common/Source/Core/MMCA.Common.Application/Specifications/CrossSourceSpecification.cs:66-91`). Note the relationship to the previous section: [`GetSessionsBySpeakerFilterHandler`](#getsessionsbyspeakerfilterhandler) hand-rolls the same id-list shape for a same-source join, while this handler gets it from the framework for a cross-source one. `[Rubric §12, Performance & Scalability]`: the published-event id set is resolved once per request and embedded in the filter, so the session read stays a single query. The helper's own doc warns that this fits bounded principal sets (`CrossSourceSpecification.cs:17-20`), which "published events for one conference" is.
+- **Walkthrough**:
+  - The `BuildAsync` call (`:26-33`): generic over `<Session, SessionIdentifierType, Event, EventIdentifierType>`, with `principalPredicate: e => e.IsPublished`, `dependentForeignKey: s => s.EventId`, and `localPredicate: s => s.Status != SessionStatuses.Declined && s.Status != "Cancelled"` (`:29-31`).
+  - Return (`:35`): wraps the built specification in `Result.Success`. The handler has no failure path of its own; anything it cannot do surfaces from the helper.
+- **Why it's built this way**: routing the two-store filter through one reusable framework helper solves the "no cross-database join" rule once for every module rather than per use case, and keeping the status test as a `localPredicate` leaves the visibility rule readable at the call site instead of buried in expression-tree construction. The doc comments on both the query and the handler (`GetPublicSessionFilterQuery.cs:3-8`, `GetPublicSessionFilterHandler.cs:11-16`) record that [`Session`](group-17-conference-domain.md#session) is Cosmos-stored and [`Event`](group-17-conference-domain.md#event) SQL-stored, which is the reason the helper exists at all.
+- **Where it's used**: [`SessionsController`](group-20-conference-api-grpc.md#sessionscontroller) calls it for every non-organizer session read and applies the returned specification to the list, paged, and by-id queries (`SessionsController.cs:66-75`, `137`, `99`, `216`); organizers skip it entirely and see declined sessions.
+- **Testing**: `GetPublicSessionFilterHandlerTests` (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Application.Tests/Sessions/UseCases/GetPublicSessionFilter/GetPublicSessionFilterHandlerTests.cs:12`).
+- **Caveats / not-in-source**: `"Cancelled"` is a bare string literal at `GetPublicSessionFilterHandler.cs:31` while `Declined` uses the [`SessionStatuses`](group-17-conference-domain.md#sessionstatuses) constant. Both are checked, but only one is symbolic, and `SessionStatuses` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionStatuses.cs:11-26`) defines no `Cancelled` member for it to use. [`CalendarExportMapper`](#calendarexportmapper)`.IsExportable` compares the same two statuses case-insensitively (`CalendarExportMapper.cs:22-23`) while this predicate uses `!=`, which is case-sensitive by default and, for the Cosmos-stored `Session`, resolves to whatever collation the provider applies. The two paths can therefore disagree on a differently-cased status string.
 
 ### GetSessionBookmarkCountQuery
 > MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Speakers.UseCases.GetSessionBookmarkCount` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/UseCases/GetSessionBookmarkCount/GetSessionBookmarkCountQuery.cs:6` · Level 0 · record
@@ -1015,136 +1154,6 @@ strategy so it can evolve, be tested, and ultimately be extracted without distur
 - **Walkthrough**: an expression-bodied constructor: `RuleFor(selector).NotEmpty()` with the message "You must specify an Event for the Session" and the explicit error code `"Session.EventId.Required"` (`SessionValidationRules.cs:27-29`). The `WithErrorCode` call is what keeps the failure machine-classifiable once it flows back as an [`Error`](group-01-result-error-handling.md#error) through the [`Result`](group-01-result-error-handling.md#result) pipeline.
 - **Why it's built this way**: a single-rule generic validator can be shared by every session request through FluentValidation's `Include`, so "an event is mandatory" is authored once instead of copy-pasted.
 - **Where it's used**: `Include`d by [`SessionCreateRequestValidator`](#sessioncreaterequestvalidator) (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/Create/SessionCreateRequestValidator.cs:12`). Note it is deliberately absent from [`SessionUpdateRequestValidator`](#sessionupdaterequestvalidator) (`.../Sessions/UseCases/Update/SessionUpdateRequestValidator.cs:11-17`): a session's owning event is set at creation and is not part of the update payload.
-
-### SessionAccessibilityInfoRules<T>
-> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.Validation` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/Validation/SessionValidationRules.cs:87` · Level 5 · class (sealed, generic)
-
-- **What it is**: the reusable rule for the optional accessibility-info text on a session, enforcing only the max length defined on the domain invariants (`SessionValidationRules.cs:87-92`).
-- **Depends on**: [`OptionalStringRules<T>`](group-06-validation.md#optionalstringrulest) (its base), [`SessionInvariants`](group-17-conference-domain.md#sessioninvariants) (for `AccessibilityInfoMaxLength`, which is 500 at `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionInvariants.cs:22`).
-- **Concept introduced, the optional-string rule family.** `[Rubric §24, Forms/Validation/UX Safety]` and `[Rubric §16, Maintainability]` (which assesses whether a constant governing a field lives in one place). Six of the session field rules share one shape: a one-line sealed generic class whose constructor forwards `(selector, label, SessionInvariants.<Field>MaxLength)` to [`OptionalStringRules<T>`](group-06-validation.md#optionalstringrulest). The base does all the work, a single `RuleFor(selector).MaximumLength(maxLength)` with an invariant-culture message (`MMCA.Common/Source/Core/MMCA.Common.Application/Validation/CommonValidationRules.cs:25-29`); it deliberately has no `NotEmpty`, which is what makes the field optional. Because the length comes from the domain [`SessionInvariants`](group-17-conference-domain.md#sessioninvariants) rather than a literal, the same constant governs the EF column, the domain guard, and this request-level check. The five siblings below repeat this shape with a different label and constant; only their arguments differ.
-- **Walkthrough**: constructor forwards `(selector, "Accessibility Info", SessionInvariants.AccessibilityInfoMaxLength)` to the base (`SessionValidationRules.cs:90-91`).
-- **Why it's built this way**: subclassing the shared optional-string rule means every optional text field in the codebase fails the same way with the same message shape, and pulling the bound from invariants stops the validator and the persistence layer from drifting apart.
-- **Where it's used**: `Include`d by both [`SessionCreateRequestValidator`](#sessioncreaterequestvalidator) (`SessionCreateRequestValidator.cs:17`) and [`SessionUpdateRequestValidator`](#sessionupdaterequestvalidator) (`SessionUpdateRequestValidator.cs:16`).
-
-### SessionDescriptionRules<T>
-> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.Validation` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/Validation/SessionValidationRules.cs:37` · Level 5 · class (sealed, generic)
-
-- **What it is**: the reusable rule for a session's optional description, enforcing the domain max length (`SessionValidationRules.cs:37-42`).
-- **Depends on**: [`OptionalStringRules<T>`](group-06-validation.md#optionalstringrulest), [`SessionInvariants`](group-17-conference-domain.md#sessioninvariants) (`DescriptionMaxLength` is 4000, `SessionInvariants.cs:16`).
-- **Concept**: identical shape to [`SessionAccessibilityInfoRules<T>`](#sessionaccessibilityinforulest); see that section for the family rationale and the `[Rubric §24]` / `[Rubric §16]` explanation.
-- **Walkthrough**: forwards `(selector, "Session Description", SessionInvariants.DescriptionMaxLength)` to the base (`SessionValidationRules.cs:40-41`).
-- **Why it's built this way**: the description is the largest free-text field on a session (4000 characters), so a bound is enforced at the edge as well as in the domain, and it comes from the same constant in both places.
-- **Where it's used**: `Include`d by [`SessionCreateRequestValidator`](#sessioncreaterequestvalidator) (`SessionCreateRequestValidator.cs:13`) and [`SessionUpdateRequestValidator`](#sessionupdaterequestvalidator) (`SessionUpdateRequestValidator.cs:12`).
-
-### SessionLiveUrlRules<T>
-> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.Validation` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/Validation/SessionValidationRules.cs:62` · Level 5 · class (sealed, generic)
-
-- **What it is**: the reusable rule for a session's optional live-stream URL. It is length-only: the value is never parsed or format-checked (`SessionValidationRules.cs:62-67`).
-- **Depends on**: [`OptionalStringRules<T>`](group-06-validation.md#optionalstringrulest), [`SessionInvariants`](group-17-conference-domain.md#sessioninvariants) (`LiveUrlMaxLength` is 2000, `SessionInvariants.cs:28`).
-- **Concept, the deliberate non-validation.** `[Rubric §9, API & Contract Design]` assesses whether a contract's tolerance is a decision rather than an oversight. The doc comment (`SessionValidationRules.cs:56-61`) says explicitly that the check is length-only because the value is stored as an opaque string for Sessionize compatibility: the upstream import is the authority on the URL's shape, so a stricter format rule here would reject data the conference actually publishes. Shape otherwise identical to [`SessionAccessibilityInfoRules<T>`](#sessionaccessibilityinforulest).
-- **Walkthrough**: forwards `(selector, "Live URL", SessionInvariants.LiveUrlMaxLength)` to the base (`SessionValidationRules.cs:65-66`).
-- **Why it's built this way**: accepting whatever Sessionize supplies keeps the import path lossless; the length cap still protects the column and the payload size.
-- **Where it's used**: `Include`d by [`SessionCreateRequestValidator`](#sessioncreaterequestvalidator) (`SessionCreateRequestValidator.cs:15`) and [`SessionUpdateRequestValidator`](#sessionupdaterequestvalidator) (`SessionUpdateRequestValidator.cs:14`).
-- **Caveats / not-in-source**: because no format rule runs here, a malformed live URL is only detectable downstream (in the UI or by the viewer). Nothing in this file validates the scheme or host.
-
-### SessionRecordingUrlRules<T>
-> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.Validation` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/Validation/SessionValidationRules.cs:75` · Level 5 · class (sealed, generic)
-
-- **What it is**: the reusable rule for a session's optional post-event recording URL, again length-only (`SessionValidationRules.cs:75-80`).
-- **Depends on**: [`OptionalStringRules<T>`](group-06-validation.md#optionalstringrulest), [`SessionInvariants`](group-17-conference-domain.md#sessioninvariants) (`RecordingUrlMaxLength` is 2000, `SessionInvariants.cs:31`).
-- **Concept**: the same opaque-string decision as [`SessionLiveUrlRules<T>`](#sessionliveurlrulest), stated in its own doc comment at `SessionValidationRules.cs:69-74`.
-- **Walkthrough**: forwards `(selector, "Recording URL", SessionInvariants.RecordingUrlMaxLength)` to the base (`SessionValidationRules.cs:78-79`).
-- **Why it's built this way**: recording links arrive from the same external pipeline as live links, so both are treated identically.
-- **Where it's used**: `Include`d by [`SessionCreateRequestValidator`](#sessioncreaterequestvalidator) (`SessionCreateRequestValidator.cs:16`) and [`SessionUpdateRequestValidator`](#sessionupdaterequestvalidator) (`SessionUpdateRequestValidator.cs:15`).
-
-### SessionResourceLinksRules<T>
-> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.Validation` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/Validation/SessionValidationRules.cs:99` · Level 5 · class (sealed, generic)
-
-- **What it is**: the reusable rule for a session's optional resource-links blob (slides, repos, handouts), enforcing the domain max length (`SessionValidationRules.cs:99-104`).
-- **Depends on**: [`OptionalStringRules<T>`](group-06-validation.md#optionalstringrulest), [`SessionInvariants`](group-17-conference-domain.md#sessioninvariants) (`ResourceLinksMaxLength` is 2000, `SessionInvariants.cs:25`).
-- **Concept**: family member of [`SessionAccessibilityInfoRules<T>`](#sessionaccessibilityinforulest); nothing structurally new.
-- **Walkthrough**: forwards `(selector, "Resource Links", SessionInvariants.ResourceLinksMaxLength)` to the base (`SessionValidationRules.cs:102-103`).
-- **Why it's built this way**: consistency with the other optional text fields; the single length constant is the only thing that varies.
-- **Where it's used**: `Include`d by [`SessionCreateRequestValidator`](#sessioncreaterequestvalidator) (`SessionCreateRequestValidator.cs:18`) and [`SessionUpdateRequestValidator`](#sessionupdaterequestvalidator) (`SessionUpdateRequestValidator.cs:17`).
-
-### SessionStatusRules<T>
-> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.Validation` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/Validation/SessionValidationRules.cs:49` · Level 5 · class (sealed, generic)
-
-- **What it is**: the reusable rule for a session's optional status string ("Accepted", "Declined", and so on), enforcing the domain max length (`SessionValidationRules.cs:49-54`).
-- **Depends on**: [`OptionalStringRules<T>`](group-06-validation.md#optionalstringrulest), [`SessionInvariants`](group-17-conference-domain.md#sessioninvariants) (`StatusMaxLength` is 100, `SessionInvariants.cs:19`).
-- **Concept**: same family as [`SessionAccessibilityInfoRules<T>`](#sessionaccessibilityinforulest). Worth noting what this rule does **not** do: it validates length only, never membership in [`SessionStatuses`](group-17-conference-domain.md#sessionstatuses). Status values originate in Sessionize, so the field stays an open string here and the meaningful statuses are compared by constant downstream (see [`GetPublicSessionFilterHandler`](#getpublicsessionfilterhandler)).
-- **Walkthrough**: forwards `(selector, "Session Status", SessionInvariants.StatusMaxLength)` to the base (`SessionValidationRules.cs:52-53`).
-- **Why it's built this way**: keeping status open-ended lets the import accept new upstream vocabulary without a code change; the read paths that care about a specific status compare it explicitly.
-- **Where it's used**: `Include`d by [`SessionCreateRequestValidator`](#sessioncreaterequestvalidator) (`SessionCreateRequestValidator.cs:14`) and [`SessionUpdateRequestValidator`](#sessionupdaterequestvalidator) (`SessionUpdateRequestValidator.cs:13`).
-
-### SessionTitleRules<T>
-> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.Validation` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/Validation/SessionValidationRules.cs:13` · Level 5 · class (sealed, generic)
-
-- **What it is**: the reusable rule for a session title, enforcing both non-empty and the domain max length (`SessionValidationRules.cs:13-18`).
-- **Depends on**: [`RequiredStringRules<T>`](group-06-validation.md#requiredstringrulest) (its base), [`SessionInvariants`](group-17-conference-domain.md#sessioninvariants) (`TitleMaxLength` is 500, `SessionInvariants.cs:13`).
-- **Concept, required versus optional string rules.** `[Rubric §24, Forms/Validation/UX Safety]`. This is the one mandatory text field among the session rules, so it inherits [`RequiredStringRules<T>`](group-06-validation.md#requiredstringrulest) rather than [`OptionalStringRules<T>`](group-06-validation.md#optionalstringrulest). The base pairs `NotEmpty()` with `MaximumLength(maxLength)` and formats both messages with `CultureInfo.InvariantCulture` (`MMCA.Common/Source/Core/MMCA.Common.Application/Validation/CommonValidationRules.cs:13-18`); the optional base drops the `NotEmpty` and keeps the rest. Choosing a base is therefore the entire "is this field required" decision, expressed once per field.
-- **Walkthrough**: a one-line class whose constructor forwards `(selector, "Session Title", SessionInvariants.TitleMaxLength)` to the base (`SessionValidationRules.cs:16-17`). All `NotEmpty` / `MaximumLength` mechanics live upstream in Common.
-- **Why it's built this way**: subclassing the shared required-string rule keeps every "required, length-bounded text field" in the workspace validated identically, and reading the length from invariants prevents the validator and the EF column from diverging.
-- **Where it's used**: `Include`d by [`SessionCreateRequestValidator`](#sessioncreaterequestvalidator) (`SessionCreateRequestValidator.cs:11`) and [`SessionUpdateRequestValidator`](#sessionupdaterequestvalidator) (`SessionUpdateRequestValidator.cs:11`), the only rule in the file included by both under the same field name.
-
-### SessionRoomScheduling
-> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.Validation` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/Validation/SessionRoomScheduling.cs:14` · Level 7 · class (static)
-
-- **What it is**: the shared room double-booking guard for the session create and update paths. It supplies the overlap predicate used for a server-side existence check and the conflict [`Error`](group-01-result-error-handling.md#error) returned when the check trips (`SessionRoomScheduling.cs:14`).
-- **Depends on**: [`Session`](group-17-conference-domain.md#session), the `RoomIdentifierType` / `SessionIdentifierType` aliases, [`Error`](group-01-result-error-handling.md#error) from `MMCA.Common.Shared.Abstractions`, and `System.Linq.Expressions.Expression<T>` (BCL).
-- **Concept introduced, validation that needs the database.** `[Rubric §24, Forms/Validation/UX Safety]` and `[Rubric §8, Data Architecture]`. FluentValidation rules like the ones above are pure functions over the request; a double-booking rule is not, because it depends on other rows. Rather than dragging a repository into a validator, the rule is expressed as a **SQL-translatable predicate factory** that a handler passes to `repository.ExistsAsync(...)`, so the check runs as one server-side existence query instead of loading sessions into memory. `[Rubric §1, SOLID]`: the predicate and the error message are the only two things the two call sites need to share, so those two things (and nothing else) are what the static class exposes.
-- **Concept, half-open intervals.** The overlap test uses `[StartsAt, EndsAt)` semantics: two sessions conflict only when `s.StartsAt < endsAt && s.EndsAt > startsAt` (`SessionRoomScheduling.cs:39`). Back-to-back sessions, where one ends exactly when the next begins, do not conflict. That is the standard way to avoid a spurious conflict on every adjacent slot.
-- **Walkthrough**
-  - `BuildOverlapPredicate` (`SessionRoomScheduling.cs:26-40`): takes the room, the requested `[startsAt, endsAt)` window, and an optional `excludeSessionId` used by the update path so a session does not conflict with itself.
-  - The exclusion sentinel (`SessionRoomScheduling.cs:32-34`): instead of branching into two predicate shapes, a `null` exclusion collapses to `int.MinValue`. The inline comment explains why that is safe: session ids are always positive (Sessionize-assigned or the reserved manual range), so the sentinel excludes nothing. One predicate shape also means one query plan.
-  - The predicate body (`SessionRoomScheduling.cs:36-39`): same room, not the excluded id, both endpoints non-null, and the half-open overlap test.
-  - `DoubleBookedError` (`SessionRoomScheduling.cs:49-54`): builds `Error.Conflict` with code `"Session.Room.DoubleBooked"` and a human message, parameterized by `source` (the calling handler name) and `target` (the property name), so the same error surfaces with correct tracing from either call site.
-- **Why it's built this way**: the doc comment (`SessionRoomScheduling.cs:7-13`) is candid that rejecting the overlap is a policy choice, it guards against accidental double-booking, and deliberate co-location such as lightning talks sharing a slot would need this relaxed to a warning. Keeping the policy in one static class means that change would be made in exactly one place rather than in two handlers.
-- **Where it's used**: [`CreateSessionHandler`](#createsessionhandler) calls it only when room and both times are supplied, passing no exclusion (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/Create/CreateSessionHandler.cs:95-103`); [`UpdateSessionHandler`](#updatesessionhandler) calls it with `excludeSessionId: command.Id` so a session may keep or shrink its own slot (`.../Sessions/UseCases/Update/UpdateSessionHandler.cs:120-128`).
-
-### GetNowNextHandler
-> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.NowNext` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/NowNext/GetNowNextHandler.cs:20` · Level 8 · class (sealed)
-
-- **What it is**: the query handler that builds the now-next snapshot: sessions running at the query instant plus the next starting batch, for one published [`Event`](group-17-conference-domain.md#event) (`GetNowNextHandler.cs:20`).
-- **Depends on**: [`GetNowNextQuery`](#getnownextquery), [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork), `TimeProvider` (BCL), [`CurrentEventSelector`](group-17-conference-domain.md#currenteventselector), [`CalendarExportMapper`](#calendarexportmapper), [`Event`](group-17-conference-domain.md#event) and [`Session`](group-17-conference-domain.md#session), and the [`NowNextDTO`](group-17-conference-domain.md#nownextdto) / [`NowNextSessionDTO`](group-17-conference-domain.md#nownextsessiondto) result shapes.
-- **Concept introduced, the injectable clock.** `[Rubric §14, Testability]` assesses whether time-dependent logic is driven by an abstraction instead of `DateTime.UtcNow`. The handler takes `TimeProvider` through its primary constructor (`GetNowNextHandler.cs:21`) and reads `timeProvider.GetUtcNow()` once at the top (`GetNowNextHandler.cs:29`), so "now" is a single deterministic value for the whole computation and can be pinned in a test. `[Rubric §12, Performance & Scalability]`: the now and next partitions are computed in memory over one session load rather than issuing several round-trips.
-- **Concept, read-side projection.** `[Rubric §6, CQRS & Event-Driven]`. This is decision-support output the domain never stores: it reshapes aggregate state into a live-schedule view that only exists on the read side.
-- **Walkthrough**
-  - Event selection (`GetNowNextHandler.cs:31`, `90-113`): `SelectEventAsync` either loads the explicit `EventId` with its `Rooms` (`GetNowNextHandler.cs:97-101`) or, when the id is `null`, loads all published events and delegates to [`CurrentEventSelector`](group-17-conference-domain.md#currenteventselector)`.SelectCurrentOrNext` (`GetNowNextHandler.cs:103-112`). A missing or unpublished event returns `Error.NotFound` tagged with the handler and `Event` (`GetNowNextHandler.cs:32-36`).
-  - Session load plus eligibility (`GetNowNextHandler.cs:38-56`): loads the event's sessions and its room-name lookup, then filters with [`CalendarExportMapper`](#calendarexportmapper)`.IsExportable`, which requires both timestamps present, a non-service session, and a status that is neither "Declined" nor "Cancelled" (`.../Sessions/UseCases/ExportCalendar/CalendarExportMapper.cs:20-23`). The now-next surface therefore cannot show a session the calendar export would hide.
-  - Time-zone conversion (`GetNowNextHandler.cs:43-51`, `80-88`): resolves the event's zone with a `try/catch` on `TimeZoneNotFoundException` falling back to `TimeZoneInfo.Utc`, so an unknown zone id degrades instead of throwing; each row carries both the stored wall-clock times and their UTC conversions via `CalendarExportMapper.ToUtc`.
-  - Now and next partitioning (`GetNowNextHandler.cs:58-72`): "now" is every row whose interval straddles `utcNow`, ordered by start then room name with `StringComparer.OrdinalIgnoreCase`; "next" is the batch sharing the earliest **future** start, so parallel tracks appear together rather than one arbitrary session (the intent is stated in the inline comment at `GetNowNextHandler.cs:64`).
-  - Live flag and result (`GetNowNextHandler.cs:74-77`): asks [`CurrentEventSelector`](group-17-conference-domain.md#currenteventselector)`.GetLiveWindowUtc` for the event's window and sets `isLive` by containment, then returns `Result.Success(new NowNextDTO(...))`.
-- **Why it's built this way**: delegating event selection and the live window to [`CurrentEventSelector`](group-17-conference-domain.md#currenteventselector), and eligibility plus UTC conversion to [`CalendarExportMapper`](#calendarexportmapper), keeps the now-next widget, the home surfaces, and the calendar export consistent by construction rather than by three copies of the same rules. The doc comment attributes the feature to [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) Wave 8 (`GetNowNextHandler.cs:12-19`).
-- **Where it's used**: invoked by both now-next actions on [`EventsController`](group-20-conference-api-grpc.md#eventscontroller) (`EventsController.cs:182, 196`).
-- **Caveats / not-in-source**: the "[ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) Wave 8" attribution comes from the source doc comment; this walkthrough describes only what the method bodies do.
-
-### GetSessionBookmarkCountHandler
-> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Speakers.UseCases.GetSessionBookmarkCount` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/UseCases/GetSessionBookmarkCount/GetSessionBookmarkCountHandler.cs:14` · Level 8 · class (sealed)
-
-- **What it is**: the handler for [`GetSessionBookmarkCountQuery`](#getsessionbookmarkcountquery). It verifies the calling speaker is assigned to the session, then reads the bookmark count from the Engagement bounded context (`GetSessionBookmarkCountHandler.cs:14`).
-- **Depends on**: [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork), [`IBookmarkCountService`](group-22-engagement-module.md#ibookmarkcountservice) (the cross-module port), [`Session`](group-17-conference-domain.md#session), [`Error`](group-01-result-error-handling.md#error) / [`Result`](group-01-result-error-handling.md#result).
-- **Concept introduced, the cross-module read over a port.** `[Rubric §7, Microservices Readiness]` assesses whether a module reaches another bounded context through an interface rather than a direct type or table reference. Bookmarks belong to Engagement, so this Conference handler depends on the [`IBookmarkCountService`](group-22-engagement-module.md#ibookmarkcountservice) abstraction injected through its primary constructor (`GetSessionBookmarkCountHandler.cs:14-16`) and calls `GetBookmarkCountForSessionAsync` (`GetSessionBookmarkCountHandler.cs:43`). In the extracted topology that port is satisfied by a gRPC client (or a disabled-module stub); the handler cannot tell which, and does not change either way.
-- **Concept, authorize before you answer.** `[Rubric §11, Security]`. The ownership gate runs before the cross-module call, so an unauthorized caller never causes a downstream read and never learns a number.
-- **Walkthrough**
-  - Load with membership (`GetSessionBookmarkCountHandler.cs:23-30`): resolves the [`Session`](group-17-conference-domain.md#session) repository and loads the session including `SessionSpeakers` with `asTracking: false` (this is a read, so no change tracking). A missing session returns `Error.NotFound` tagged with the handler and `Session`.
-  - Ownership check (`GetSessionBookmarkCountHandler.cs:32-40`): if no non-deleted `SessionSpeaker` matches the query's `SpeakerId`, it returns `Error.Forbidden` with code `"Speaker.NotAssigned"`, targeted at `SpeakerId`. The explicit `!ss.IsDeleted` term matters: a speaker removed from a session is soft-deleted, and a removed speaker must not keep reading the session's numbers.
-  - Cross-module read (`GetSessionBookmarkCountHandler.cs:42-45`): calls the port and wraps the `int` in `Result.Success`.
-- **Why it's built this way**: keeping bookmark counting behind an interface preserves the Engagement / Conference boundary ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)'s extraction path), so the same handler runs in-process in a monolith or over gRPC in the extracted topology with no code change; doing the ownership check locally, on data Conference already owns, means the authorization decision needs no remote call.
-- **Where it's used**: invoked by [`SpeakersController`](group-20-conference-api-grpc.md#speakerscontroller) on the per-session bookmark-count endpoint (`SpeakersController.cs:270-272`).
-
-### GetPublicSessionFilterHandler
-> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Sessions.UseCases.GetPublicSessionFilter` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/GetPublicSessionFilter/GetPublicSessionFilterHandler.cs:17` · Level 9 · class (sealed)
-
-- **What it is**: the handler for [`GetPublicSessionFilterQuery`](#getpublicsessionfilterquery). It returns a [`Specification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#specificationtentity-tidentifiertype) selecting public sessions: non-declined, non-cancelled sessions whose parent event is published (BR-132 / BR-49) (`GetPublicSessionFilterHandler.cs:17-19`).
-- **Depends on**: [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork), [`CrossSourceSpecification`](group-03-querying-specifications.md#crosssourcespecification), [`Event`](group-17-conference-domain.md#event), [`Session`](group-17-conference-domain.md#session), [`SessionStatuses`](group-17-conference-domain.md#sessionstatuses).
-- **Concept, the cross-source specification helper.** `[Rubric §8, Data Architecture]` and `[Rubric §7, Microservices Readiness]`. When the principal entity and the dependent entity live in different stores, the "belongs to a published event" filter cannot be a join. The handler hands that problem to the framework's [`CrossSourceSpecification`](group-03-querying-specifications.md#crosssourcespecification)`.BuildAsync` (`GetPublicSessionFilterHandler.cs:26-33`), which resolves the published [`Event`](group-17-conference-domain.md#event) ids from their own source and returns a `Session.EventId IN (...)` criteria ANDed with a local predicate, translatable wherever [`Session`](group-17-conference-domain.md#session) is stored. `[Rubric §12, Performance & Scalability]`: the id set is resolved once per request and embedded in the filter, so the session read stays a single query.
-- **Walkthrough**
-  - The `BuildAsync` call (`GetPublicSessionFilterHandler.cs:26-33`): generic over `<Session, SessionIdentifierType, Event, EventIdentifierType>`, with `principalPredicate: e => e.IsPublished`, `dependentForeignKey: s => s.EventId`, and `localPredicate: s => s.Status != SessionStatuses.Declined && s.Status != "Cancelled"`.
-  - Return (`GetPublicSessionFilterHandler.cs:35`): wraps the built specification in `Result.Success`. The handler has no failure path of its own; anything it cannot do surfaces from the helper.
-- **Why it's built this way**: routing the two-store filter through one reusable helper solves the "no cross-database join" rule in the framework once, and keeping the status test as a local predicate leaves the visibility rule readable at the call site. The doc comments on both the query and the handler (`GetPublicSessionFilterQuery.cs:3-8`, `GetPublicSessionFilterHandler.cs:11-16`) record that [`Session`](group-17-conference-domain.md#session) is Cosmos-stored and [`Event`](group-17-conference-domain.md#event) SQL-stored, which is the reason the helper exists.
-- **Where it's used**: [`SessionsController`](group-20-conference-api-grpc.md#sessionscontroller) calls it for every non-organizer session read and applies the returned specification to the listing query (`SessionsController.cs:64-73`); organizers skip it entirely and see declined sessions.
-- **Caveats / not-in-source**: `"Cancelled"` is a bare string literal at `GetPublicSessionFilterHandler.cs:31` while `Declined` uses the [`SessionStatuses`](group-17-conference-domain.md#sessionstatuses) constant. Both are checked, but only one is symbolic.
 
 ### GetSessionBookmarkCountsQuery
 
@@ -1281,6 +1290,20 @@ strategy so it can evolve, be tested, and ultimately be extracted without distur
 - **Caveats / not-in-source**: whether `Sort` or `Type` are constrained further downstream is not visible from this file; the domain `Category.Update` only re-checks the title (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/Category.cs:86-87`).
 
 ---
+
+### GetSessionBookmarkCountHandler
+> MMCA.ADC.Conference.Application · `MMCA.ADC.Conference.Application.Speakers.UseCases.GetSessionBookmarkCount` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Speakers/UseCases/GetSessionBookmarkCount/GetSessionBookmarkCountHandler.cs:14` · Level 8 · class (sealed)
+
+- **What it is**: the handler for [`GetSessionBookmarkCountQuery`](#getsessionbookmarkcountquery). It verifies the calling speaker is assigned to the session, then reads the bookmark count from the Engagement bounded context (`GetSessionBookmarkCountHandler.cs:14`).
+- **Depends on**: [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork), [`IBookmarkCountService`](group-22-engagement-module.md#ibookmarkcountservice) (the cross-module port), [`Session`](group-17-conference-domain.md#session), [`Error`](group-01-result-error-handling.md#error) / [`Result`](group-01-result-error-handling.md#result).
+- **Concept introduced, the cross-module read over a port.** `[Rubric §7, Microservices Readiness]` assesses whether a module reaches another bounded context through an interface rather than a direct type or table reference. Bookmarks belong to Engagement, so this Conference handler depends on the [`IBookmarkCountService`](group-22-engagement-module.md#ibookmarkcountservice) abstraction injected through its primary constructor (`GetSessionBookmarkCountHandler.cs:14-16`) and calls `GetBookmarkCountForSessionAsync` (`GetSessionBookmarkCountHandler.cs:43`). In the extracted topology that port is satisfied by a gRPC client (or a disabled-module stub); the handler cannot tell which, and does not change either way.
+- **Concept, authorize before you answer.** `[Rubric §11, Security]`. The ownership gate runs before the cross-module call, so an unauthorized caller never causes a downstream read and never learns a number.
+- **Walkthrough**
+  - Load with membership (`GetSessionBookmarkCountHandler.cs:23-30`): resolves the [`Session`](group-17-conference-domain.md#session) repository and loads the session including `SessionSpeakers` with `asTracking: false` (this is a read, so no change tracking). A missing session returns `Error.NotFound` tagged with the handler and `Session`.
+  - Ownership check (`GetSessionBookmarkCountHandler.cs:32-40`): if no non-deleted `SessionSpeaker` matches the query's `SpeakerId`, it returns `Error.Forbidden` with code `"Speaker.NotAssigned"`, targeted at `SpeakerId`. The explicit `!ss.IsDeleted` term matters: a speaker removed from a session is soft-deleted, and a removed speaker must not keep reading the session's numbers.
+  - Cross-module read (`GetSessionBookmarkCountHandler.cs:42-45`): calls the port and wraps the `int` in `Result.Success`.
+- **Why it's built this way**: keeping bookmark counting behind an interface preserves the Engagement / Conference boundary ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)'s extraction path), so the same handler runs in-process in a monolith or over gRPC in the extracted topology with no code change; doing the ownership check locally, on data Conference already owns, means the authorization decision needs no remote call.
+- **Where it's used**: invoked by [`SpeakersController`](group-20-conference-api-grpc.md#speakerscontroller) on the per-session bookmark-count endpoint (`SpeakersController.cs:270-272`).
 
 ### GetSessionBookmarkCountsHandler
 

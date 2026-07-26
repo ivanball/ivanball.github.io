@@ -120,9 +120,9 @@
           <p>Generated mechanically by a Roslyn syntactic parse of every in-scope <code>.cs</code> file under
           <code>MMCA.Common/Source</code>, <code>MMCA.Common/Tests</code>, <code>MMCA.ADC/Source</code>, <code>MMCA.ADC/Tests</code>.</p>
           <ul>
-          <li>Files scanned: <strong>2210</strong> (in-scope <strong>2132</strong>, generated/excluded <strong>78</strong>)</li>
-          <li>Type declaration rows (including partial-class fragments): <strong>2676</strong></li>
-          <li>Distinct type nodes (partials collapsed): <strong>2588</strong></li>
+          <li>Files scanned: <strong>2252</strong> (in-scope <strong>2164</strong>, generated/excluded <strong>88</strong>)</li>
+          <li>Type declaration rows (including partial-class fragments): <strong>2727</strong></li>
+          <li>Distinct type nodes (partials collapsed): <strong>2637</strong></li>
           <li><code>extension(T)</code> blocks: <strong>70</strong></li>
           </ul>
           <h2 id="counts-by-kind">Counts by kind</h2>
@@ -135,26 +135,30 @@
           </thead>
           <tbody><tr>
           <td>class</td>
-          <td>2090</td>
+          <td>2131</td>
           </tr>
           <tr>
           <td>record</td>
-          <td>389</td>
+          <td>394</td>
           </tr>
           <tr>
           <td>interface</td>
-          <td>167</td>
+          <td>169</td>
           </tr>
           <tr>
           <td>enum</td>
-          <td>17</td>
+          <td>18</td>
           </tr>
           <tr>
           <td>record struct</td>
-          <td>12</td>
+          <td>13</td>
           </tr>
           <tr>
           <td>delegate</td>
+          <td>1</td>
+          </tr>
+          <tr>
+          <td>struct</td>
           <td>1</td>
           </tr>
           </tbody></table></div>
@@ -180,11 +184,11 @@
           </tr>
           <tr>
           <td>MMCA.ADC.Conference.Application</td>
-          <td>211</td>
+          <td>216</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>134</td>
+          <td>136</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Conference.Contracts</td>
@@ -200,7 +204,7 @@
           </tr>
           <tr>
           <td>MMCA.ADC.Conference.Infrastructure</td>
-          <td>27</td>
+          <td>28</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Conference.Infrastructure.Tests</td>
@@ -216,7 +220,7 @@
           </tr>
           <tr>
           <td>MMCA.ADC.Conference.Shared</td>
-          <td>46</td>
+          <td>47</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Conference.Shared.Tests</td>
@@ -248,11 +252,11 @@
           </tr>
           <tr>
           <td>MMCA.ADC.Engagement.Application</td>
-          <td>49</td>
+          <td>51</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Engagement.Application.Tests</td>
-          <td>27</td>
+          <td>30</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Engagement.Contracts</td>
@@ -284,7 +288,7 @@
           </tr>
           <tr>
           <td>MMCA.ADC.Engagement.Shared</td>
-          <td>33</td>
+          <td>34</td>
           </tr>
           <tr>
           <td>MMCA.ADC.Engagement.Shared.Tests</td>
@@ -408,7 +412,7 @@
           </tr>
           <tr>
           <td>MMCA.Common.API</td>
-          <td>73</td>
+          <td>74</td>
           </tr>
           <tr>
           <td>MMCA.Common.API.Tests</td>
@@ -416,11 +420,11 @@
           </tr>
           <tr>
           <td>MMCA.Common.Application</td>
-          <td>140</td>
+          <td>143</td>
           </tr>
           <tr>
           <td>MMCA.Common.Application.Tests</td>
-          <td>161</td>
+          <td>164</td>
           </tr>
           <tr>
           <td>MMCA.Common.Architecture.Tests</td>
@@ -440,7 +444,7 @@
           </tr>
           <tr>
           <td>MMCA.Common.Benchmarks</td>
-          <td>4</td>
+          <td>6</td>
           </tr>
           <tr>
           <td>MMCA.Common.Domain</td>
@@ -460,19 +464,23 @@
           </tr>
           <tr>
           <td>MMCA.Common.Infrastructure</td>
-          <td>126</td>
+          <td>132</td>
+          </tr>
+          <tr>
+          <td>MMCA.Common.Infrastructure.Redis.Tests</td>
+          <td>1</td>
           </tr>
           <tr>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>171</td>
+          <td>185</td>
           </tr>
           <tr>
           <td>MMCA.Common.Shared</td>
-          <td>50</td>
+          <td>53</td>
           </tr>
           <tr>
           <td>MMCA.Common.Shared.Tests</td>
-          <td>22</td>
+          <td>23</td>
           </tr>
           <tr>
           <td>MMCA.Common.Testing</td>
@@ -784,7 +792,7 @@
           <td>record</td>
           <td>MMCA.ADC.Conference.API</td>
           <td><code>MMCA.ADC.Conference.API.Controllers</code></td>
-          <td><code>MMCA.ADC.Conference.API/Controllers/CategoryItemsController.cs:23</code></td>
+          <td><code>MMCA.ADC.Conference.API/Controllers/CategoryItemsController.cs:24</code></td>
           </tr>
           <tr>
           <td><code>AddEventQuestionAnswerRequest</code></td>
@@ -798,7 +806,7 @@
           <td>record</td>
           <td>MMCA.ADC.Conference.API</td>
           <td><code>MMCA.ADC.Conference.API.Controllers</code></td>
-          <td><code>MMCA.ADC.Conference.API/Controllers/EventSpeakersController.cs:22</code></td>
+          <td><code>MMCA.ADC.Conference.API/Controllers/EventSpeakersController.cs:23</code></td>
           </tr>
           <tr>
           <td><code>AddRoomRequest</code></td>
@@ -812,7 +820,7 @@
           <td>record</td>
           <td>MMCA.ADC.Conference.API</td>
           <td><code>MMCA.ADC.Conference.API.Controllers</code></td>
-          <td><code>MMCA.ADC.Conference.API/Controllers/SessionCategoryItemsController.cs:22</code></td>
+          <td><code>MMCA.ADC.Conference.API/Controllers/SessionCategoryItemsController.cs:23</code></td>
           </tr>
           <tr>
           <td><code>AddSessionQuestionAnswerRequest</code></td>
@@ -833,14 +841,14 @@
           <td>record</td>
           <td>MMCA.ADC.Conference.API</td>
           <td><code>MMCA.ADC.Conference.API.Controllers</code></td>
-          <td><code>MMCA.ADC.Conference.API/Controllers/SpeakerCategoryItemsController.cs:22</code></td>
+          <td><code>MMCA.ADC.Conference.API/Controllers/SpeakerCategoryItemsController.cs:23</code></td>
           </tr>
           <tr>
           <td><code>CategoryItemsController</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.API</td>
           <td><code>MMCA.ADC.Conference.API.Controllers</code></td>
-          <td><code>MMCA.ADC.Conference.API/Controllers/CategoryItemsController.cs:60</code></td>
+          <td><code>MMCA.ADC.Conference.API/Controllers/CategoryItemsController.cs:61</code></td>
           </tr>
           <tr>
           <td><code>ConferenceCategoriesController</code></td>
@@ -861,14 +869,14 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.API</td>
           <td><code>MMCA.ADC.Conference.API.Controllers</code></td>
-          <td><code>MMCA.ADC.Conference.API/Controllers/EventsController.cs:43</code></td>
+          <td><code>MMCA.ADC.Conference.API/Controllers/EventsController.cs:44</code></td>
           </tr>
           <tr>
           <td><code>EventSpeakersController</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.API</td>
           <td><code>MMCA.ADC.Conference.API.Controllers</code></td>
-          <td><code>MMCA.ADC.Conference.API/Controllers/EventSpeakersController.cs:39</code></td>
+          <td><code>MMCA.ADC.Conference.API/Controllers/EventSpeakersController.cs:40</code></td>
           </tr>
           <tr>
           <td><code>QuestionsController</code></td>
@@ -896,7 +904,7 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.API</td>
           <td><code>MMCA.ADC.Conference.API.Controllers</code></td>
-          <td><code>MMCA.ADC.Conference.API/Controllers/SessionCategoryItemsController.cs:39</code></td>
+          <td><code>MMCA.ADC.Conference.API/Controllers/SessionCategoryItemsController.cs:40</code></td>
           </tr>
           <tr>
           <td><code>SessionQuestionAnswersController</code></td>
@@ -910,7 +918,7 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.API</td>
           <td><code>MMCA.ADC.Conference.API.Controllers</code></td>
-          <td><code>MMCA.ADC.Conference.API/Controllers/SessionsController.cs:41</code></td>
+          <td><code>MMCA.ADC.Conference.API/Controllers/SessionsController.cs:42</code></td>
           </tr>
           <tr>
           <td><code>SessionSelectionController</code></td>
@@ -931,7 +939,7 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.API</td>
           <td><code>MMCA.ADC.Conference.API.Controllers</code></td>
-          <td><code>MMCA.ADC.Conference.API/Controllers/SpeakerCategoryItemsController.cs:39</code></td>
+          <td><code>MMCA.ADC.Conference.API/Controllers/SpeakerCategoryItemsController.cs:40</code></td>
           </tr>
           <tr>
           <td><code>SpeakersController</code></td>
@@ -945,7 +953,7 @@
           <td>record</td>
           <td>MMCA.ADC.Conference.API</td>
           <td><code>MMCA.ADC.Conference.API.Controllers</code></td>
-          <td><code>MMCA.ADC.Conference.API/Controllers/CategoryItemsController.cs:39</code></td>
+          <td><code>MMCA.ADC.Conference.API/Controllers/CategoryItemsController.cs:40</code></td>
           </tr>
           <tr>
           <td><code>UpdateEventQuestionAnswerRequest</code></td>
@@ -987,7 +995,7 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.API.Tests</td>
           <td><code>MMCA.ADC.Conference.API.Tests.Controllers</code></td>
-          <td><code>MMCA.ADC.Conference.API.Tests/Controllers/CategoryItemsControllerTests.cs:18</code></td>
+          <td><code>MMCA.ADC.Conference.API.Tests/Controllers/CategoryItemsControllerTests.cs:19</code></td>
           </tr>
           <tr>
           <td><code>ConferenceCategoriesControllerTests</code></td>
@@ -1015,7 +1023,7 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.API.Tests</td>
           <td><code>MMCA.ADC.Conference.API.Tests.Controllers</code></td>
-          <td><code>MMCA.ADC.Conference.API.Tests/Controllers/EventSpeakersControllerTests.cs:17</code></td>
+          <td><code>MMCA.ADC.Conference.API.Tests/Controllers/EventSpeakersControllerTests.cs:18</code></td>
           </tr>
           <tr>
           <td><code>QuestionsControllerTests</code></td>
@@ -1036,7 +1044,7 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.API.Tests</td>
           <td><code>MMCA.ADC.Conference.API.Tests.Controllers</code></td>
-          <td><code>MMCA.ADC.Conference.API.Tests/Controllers/SessionCategoryItemsControllerTests.cs:17</code></td>
+          <td><code>MMCA.ADC.Conference.API.Tests/Controllers/SessionCategoryItemsControllerTests.cs:18</code></td>
           </tr>
           <tr>
           <td><code>SessionQuestionAnswersControllerTests</code></td>
@@ -1050,14 +1058,14 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.API.Tests</td>
           <td><code>MMCA.ADC.Conference.API.Tests.Controllers</code></td>
-          <td><code>MMCA.ADC.Conference.API.Tests/Controllers/SessionsControllerTests.cs:24</code></td>
+          <td><code>MMCA.ADC.Conference.API.Tests/Controllers/SessionsControllerTests.cs:25</code></td>
           </tr>
           <tr>
           <td><code>SessionSelectionControllerTests</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.API.Tests</td>
           <td><code>MMCA.ADC.Conference.API.Tests.Controllers</code></td>
-          <td><code>MMCA.ADC.Conference.API.Tests/Controllers/SessionSelectionControllerTests.cs:20</code></td>
+          <td><code>MMCA.ADC.Conference.API.Tests/Controllers/SessionSelectionControllerTests.cs:19</code></td>
           </tr>
           <tr>
           <td><code>SessionSpeakersControllerTests</code></td>
@@ -1071,7 +1079,7 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.API.Tests</td>
           <td><code>MMCA.ADC.Conference.API.Tests.Controllers</code></td>
-          <td><code>MMCA.ADC.Conference.API.Tests/Controllers/SpeakerCategoryItemsControllerTests.cs:17</code></td>
+          <td><code>MMCA.ADC.Conference.API.Tests/Controllers/SpeakerCategoryItemsControllerTests.cs:18</code></td>
           </tr>
           <tr>
           <td><code>SpeakersControllerTests</code></td>
@@ -1106,7 +1114,7 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.Application</td>
           <td><code>MMCA.ADC.Conference.Application</code></td>
-          <td><code>MMCA.ADC.Conference.Application/DependencyInjection.cs:32</code></td>
+          <td><code>MMCA.ADC.Conference.Application/DependencyInjection.cs:33</code></td>
           </tr>
           <tr>
           <td><code>ConferenceCategoryNavigationPopulator</code></td>
@@ -1498,7 +1506,7 @@
           <td>record</td>
           <td>MMCA.ADC.Conference.Application</td>
           <td><code>MMCA.ADC.Conference.Application.Events.UseCases.Publish</code></td>
-          <td><code>MMCA.ADC.Conference.Application/Events/UseCases/Publish/PublishEventCommand.cs:8</code></td>
+          <td><code>MMCA.ADC.Conference.Application/Events/UseCases/Publish/PublishEventCommand.cs:12</code></td>
           </tr>
           <tr>
           <td><code>PublishEventHandler</code></td>
@@ -1624,7 +1632,7 @@
           <td>record</td>
           <td>MMCA.ADC.Conference.Application</td>
           <td><code>MMCA.ADC.Conference.Application.Events.UseCases.Unpublish</code></td>
-          <td><code>MMCA.ADC.Conference.Application/Events/UseCases/Unpublish/UnpublishEventCommand.cs:8</code></td>
+          <td><code>MMCA.ADC.Conference.Application/Events/UseCases/Unpublish/UnpublishEventCommand.cs:12</code></td>
           </tr>
           <tr>
           <td><code>UnpublishEventHandler</code></td>
@@ -2075,6 +2083,13 @@
           <td><code>MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/IAiScoringService.cs:6</code></td>
           </tr>
           <tr>
+          <td><code>ISessionScoringQueue</code></td>
+          <td>interface</td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td><code>MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions</code></td>
+          <td><code>MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ISessionScoringQueue.cs:31</code></td>
+          </tr>
+          <tr>
           <td><code>ScoreEventSessionsCommand</code></td>
           <td>record</td>
           <td>MMCA.ADC.Conference.Application</td>
@@ -2089,11 +2104,25 @@
           <td><code>MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ScoreEventSessionsHandler.cs:16</code></td>
           </tr>
           <tr>
+          <td><code>SessionScoringEnqueueResult</code></td>
+          <td>enum</td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td><code>MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions</code></td>
+          <td><code>MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/ISessionScoringQueue.cs:4</code></td>
+          </tr>
+          <tr>
           <td><code>SessionScoringInput</code></td>
           <td>record</td>
           <td>MMCA.ADC.Conference.Application</td>
           <td><code>MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions</code></td>
           <td><code>MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/IAiScoringService.cs:33</code></td>
+          </tr>
+          <tr>
+          <td><code>SessionScoringQueue</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td><code>MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions</code></td>
+          <td><code>MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/ScoreEventSessions/SessionScoringQueue.cs:17</code></td>
           </tr>
           <tr>
           <td><code>SessionScoringResult</code></td>
@@ -2157,6 +2186,20 @@
           <td>MMCA.ADC.Conference.Application</td>
           <td><code>MMCA.ADC.Conference.Application.Sessions.UseCases.GetPublicSessionFilter</code></td>
           <td><code>MMCA.ADC.Conference.Application/Sessions/UseCases/GetPublicSessionFilter/GetPublicSessionFilterQuery.cs:9</code></td>
+          </tr>
+          <tr>
+          <td><code>GetSessionsBySpeakerFilterHandler</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td><code>MMCA.ADC.Conference.Application.Sessions.UseCases.GetSessionsBySpeakerFilter</code></td>
+          <td><code>MMCA.ADC.Conference.Application/Sessions/UseCases/GetSessionsBySpeakerFilter/GetSessionsBySpeakerFilterHandler.cs:21</code></td>
+          </tr>
+          <tr>
+          <td><code>GetSessionsBySpeakerFilterQuery</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td><code>MMCA.ADC.Conference.Application.Sessions.UseCases.GetSessionsBySpeakerFilter</code></td>
+          <td><code>MMCA.ADC.Conference.Application/Sessions/UseCases/GetSessionsBySpeakerFilter/GetSessionsBySpeakerFilterQuery.cs:11</code></td>
           </tr>
           <tr>
           <td><code>GetNowNextHandler</code></td>
@@ -3013,6 +3056,13 @@
           <td><code>MMCA.ADC.Conference.Application.Tests/Sessions/SessionNavigationPopulatorTests.cs:9</code></td>
           </tr>
           <tr>
+          <td><code>SessionScoringQueueTests</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td><code>MMCA.ADC.Conference.Application.Tests.Sessions.DecisionSupport</code></td>
+          <td><code>MMCA.ADC.Conference.Application.Tests/Sessions/DecisionSupport/SessionScoringQueueTests.cs:11</code></td>
+          </tr>
+          <tr>
           <td><code>SessionCreatedHandlerTests</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
@@ -3186,6 +3236,13 @@
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td><code>MMCA.ADC.Conference.Application.Tests.Sessions.UseCases.GetPublicSessionFilter</code></td>
           <td><code>MMCA.ADC.Conference.Application.Tests/Sessions/UseCases/GetPublicSessionFilter/GetPublicSessionFilterHandlerTests.cs:12</code></td>
+          </tr>
+          <tr>
+          <td><code>GetSessionsBySpeakerFilterHandlerTests</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td><code>MMCA.ADC.Conference.Application.Tests.Sessions.UseCases.GetSessionsBySpeakerFilter</code></td>
+          <td><code>MMCA.ADC.Conference.Application.Tests/Sessions/UseCases/GetSessionsBySpeakerFilter/GetSessionsBySpeakerFilterHandlerTests.cs:16</code></td>
           </tr>
           <tr>
           <td><code>FixedTimeProvider</code></td>
@@ -3444,14 +3501,14 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td><code>MMCA.ADC.Conference.Application.Tests.Support</code></td>
-          <td><code>MMCA.ADC.Conference.Application.Tests/Support/TestSupport.cs:266</code></td>
+          <td><code>MMCA.ADC.Conference.Application.Tests/Support/TestSupport.cs:277</code></td>
           </tr>
           <tr>
           <td><code>RecordingUnitOfWork</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td><code>MMCA.ADC.Conference.Application.Tests.Support</code></td>
-          <td><code>MMCA.ADC.Conference.Application.Tests/Support/TestSupport.cs:184</code></td>
+          <td><code>MMCA.ADC.Conference.Application.Tests/Support/TestSupport.cs:195</code></td>
           </tr>
           <tr>
           <td><code>CategorySyncStrategyTests</code></td>
@@ -4147,6 +4204,13 @@
           <td><code>MMCA.ADC.Conference.Infrastructure/Services/SessionizeService.cs:10</code></td>
           </tr>
           <tr>
+          <td><code>SessionScoringProcessor</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Infrastructure</td>
+          <td><code>MMCA.ADC.Conference.Infrastructure.Services</code></td>
+          <td><code>MMCA.ADC.Conference.Infrastructure/Services/SessionScoringProcessor.cs:31</code></td>
+          </tr>
+          <tr>
           <td><code>ConferenceEntityConfigurationTests</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Infrastructure.Tests</td>
@@ -4551,6 +4615,13 @@
           <td>MMCA.ADC.Conference.Shared</td>
           <td><code>MMCA.ADC.Conference.Shared.Events</code></td>
           <td><code>MMCA.ADC.Conference.Shared/Events/EventSpeakerDTO.cs:8</code></td>
+          </tr>
+          <tr>
+          <td><code>EventTransitionRequest</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Conference.Shared</td>
+          <td><code>MMCA.ADC.Conference.Shared.Events</code></td>
+          <td><code>MMCA.ADC.Conference.Shared/Events/EventTransitionRequest.cs:14</code></td>
           </tr>
           <tr>
           <td><code>IEventLiveValidationService</code></td>
@@ -5299,7 +5370,7 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.UI</td>
           <td><code>MMCA.ADC.Conference.UI.Services</code></td>
-          <td><code>MMCA.ADC.Conference.UI/Services/EventService.cs:12</code></td>
+          <td><code>MMCA.ADC.Conference.UI/Services/EventService.cs:13</code></td>
           </tr>
           <tr>
           <td><code>EventSpeakerService</code></td>
@@ -5516,7 +5587,7 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.UI</td>
           <td><code>MMCA.ADC.Conference.UI.Services</code></td>
-          <td><code>MMCA.ADC.Conference.UI/Services/SpeakerDashboardService.cs:14</code></td>
+          <td><code>MMCA.ADC.Conference.UI/Services/SpeakerDashboardService.cs:15</code></td>
           </tr>
           <tr>
           <td><code>SpeakerInfo</code></td>
@@ -5614,14 +5685,14 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.UI.Tests</td>
           <td><code>MMCA.ADC.Conference.UI.Tests.Pages.Public</code></td>
-          <td><code>MMCA.ADC.Conference.UI.Tests/Pages/Public/PublicSessionDetailLiveButtonTests.cs:22</code></td>
+          <td><code>MMCA.ADC.Conference.UI.Tests/Pages/Public/PublicSessionDetailLiveButtonTests.cs:23</code></td>
           </tr>
           <tr>
           <td><code>PublicSessionDetailTests</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.UI.Tests</td>
           <td><code>MMCA.ADC.Conference.UI.Tests.Pages.Public</code></td>
-          <td><code>MMCA.ADC.Conference.UI.Tests/Pages/Public/PublicSessionDetailTests.cs:20</code></td>
+          <td><code>MMCA.ADC.Conference.UI.Tests/Pages/Public/PublicSessionDetailTests.cs:21</code></td>
           </tr>
           <tr>
           <td><code>PublicSessionListEventFilterTests</code></td>
@@ -5635,7 +5706,7 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.UI.Tests</td>
           <td><code>MMCA.ADC.Conference.UI.Tests.Pages.Public</code></td>
-          <td><code>MMCA.ADC.Conference.UI.Tests/Pages/Public/PublicSpeakerDetailTests.cs:12</code></td>
+          <td><code>MMCA.ADC.Conference.UI.Tests/Pages/Public/PublicSpeakerDetailTests.cs:13</code></td>
           </tr>
           <tr>
           <td><code>PublicSpeakerListEventFilterTests</code></td>
@@ -5726,7 +5797,7 @@
           <td>class</td>
           <td>MMCA.ADC.Conference.UI.Tests</td>
           <td><code>MMCA.ADC.Conference.UI.Tests.Services</code></td>
-          <td><code>MMCA.ADC.Conference.UI.Tests/Services/SpeakerDashboardServiceTests.cs:17</code></td>
+          <td><code>MMCA.ADC.Conference.UI.Tests/Services/SpeakerDashboardServiceTests.cs:20</code></td>
           </tr>
           <tr>
           <td><code>BookmarkCountGrpcTests</code></td>
@@ -6272,14 +6343,14 @@
           <td>class</td>
           <td>MMCA.ADC.Engagement.API</td>
           <td><code>MMCA.ADC.Engagement.API.Controllers</code></td>
-          <td><code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:41</code></td>
+          <td><code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:42</code></td>
           </tr>
           <tr>
           <td><code>SessionQuestionsController</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.API</td>
           <td><code>MMCA.ADC.Engagement.API.Controllers</code></td>
-          <td><code>MMCA.ADC.Engagement.API/Controllers/SessionQuestionsController.cs:36</code></td>
+          <td><code>MMCA.ADC.Engagement.API/Controllers/SessionQuestionsController.cs:37</code></td>
           </tr>
           <tr>
           <td><code>EngagementErrorResources</code></td>
@@ -6384,7 +6455,7 @@
           <td>class</td>
           <td>MMCA.ADC.Engagement.Application</td>
           <td><code>MMCA.ADC.Engagement.Application.Live</code></td>
-          <td><code>MMCA.ADC.Engagement.Application/Live/LiveChannelPublishQueue.cs:13</code></td>
+          <td><code>MMCA.ADC.Engagement.Application/Live/LiveChannelPublishQueue.cs:14</code></td>
           </tr>
           <tr>
           <td><code>LiveChannelPublishWorkItem</code></td>
@@ -6392,6 +6463,13 @@
           <td>MMCA.ADC.Engagement.Application</td>
           <td><code>MMCA.ADC.Engagement.Application.Live</code></td>
           <td><code>MMCA.ADC.Engagement.Application/Live/ILiveChannelPublishQueue.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>LivePollVoteChangedHandler</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Application</td>
+          <td><code>MMCA.ADC.Engagement.Application.LivePolls.DomainEventHandlers</code></td>
+          <td><code>MMCA.ADC.Engagement.Application/LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:31</code></td>
           </tr>
           <tr>
           <td><code>LivePollDTOMapper</code></td>
@@ -6440,14 +6518,14 @@
           <td>class</td>
           <td>MMCA.ADC.Engagement.Application</td>
           <td><code>MMCA.ADC.Engagement.Application.LivePolls.UseCases.CastVote</code></td>
-          <td><code>MMCA.ADC.Engagement.Application/LivePolls/UseCases/CastVote/CastVoteHandler.cs:20</code></td>
+          <td><code>MMCA.ADC.Engagement.Application/LivePolls/UseCases/CastVote/CastVoteHandler.cs:19</code></td>
           </tr>
           <tr>
           <td><code>CloseLivePollCommand</code></td>
           <td>record</td>
           <td>MMCA.ADC.Engagement.Application</td>
           <td><code>MMCA.ADC.Engagement.Application.LivePolls.UseCases.Close</code></td>
-          <td><code>MMCA.ADC.Engagement.Application/LivePolls/UseCases/Close/CloseLivePollCommand.cs:11</code></td>
+          <td><code>MMCA.ADC.Engagement.Application/LivePolls/UseCases/Close/CloseLivePollCommand.cs:12</code></td>
           </tr>
           <tr>
           <td><code>CloseLivePollHandler</code></td>
@@ -6531,7 +6609,7 @@
           <td>record</td>
           <td>MMCA.ADC.Engagement.Application</td>
           <td><code>MMCA.ADC.Engagement.Application.LivePolls.UseCases.Open</code></td>
-          <td><code>MMCA.ADC.Engagement.Application/LivePolls/UseCases/Open/OpenLivePollCommand.cs:11</code></td>
+          <td><code>MMCA.ADC.Engagement.Application/LivePolls/UseCases/Open/OpenLivePollCommand.cs:12</code></td>
           </tr>
           <tr>
           <td><code>OpenLivePollHandler</code></td>
@@ -6539,6 +6617,13 @@
           <td>MMCA.ADC.Engagement.Application</td>
           <td><code>MMCA.ADC.Engagement.Application.LivePolls.UseCases.Open</code></td>
           <td><code>MMCA.ADC.Engagement.Application/LivePolls/UseCases/Open/OpenLivePollHandler.cs:19</code></td>
+          </tr>
+          <tr>
+          <td><code>SessionQuestionUpvoteChangedHandler</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Application</td>
+          <td><code>MMCA.ADC.Engagement.Application.SessionQuestions.DomainEventHandlers</code></td>
+          <td><code>MMCA.ADC.Engagement.Application/SessionQuestions/DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs:32</code></td>
           </tr>
           <tr>
           <td><code>SessionQuestionViewBuilder</code></td>
@@ -6580,7 +6665,7 @@
           <td>record</td>
           <td>MMCA.ADC.Engagement.Application</td>
           <td><code>MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.Moderate</code></td>
-          <td><code>MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Moderate/ModerateQuestionCommand.cs:14</code></td>
+          <td><code>MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Moderate/ModerateQuestionCommand.cs:15</code></td>
           </tr>
           <tr>
           <td><code>ModerateQuestionHandler</code></td>
@@ -6629,7 +6714,7 @@
           <td>class</td>
           <td>MMCA.ADC.Engagement.Application</td>
           <td><code>MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.ToggleUpvote</code></td>
-          <td><code>MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/ToggleUpvote/ToggleUpvoteHandler.cs:19</code></td>
+          <td><code>MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/ToggleUpvote/ToggleUpvoteHandler.cs:17</code></td>
           </tr>
           <tr>
           <td><code>UserSessionBookmarkDTOMapper</code></td>
@@ -6692,7 +6777,21 @@
           <td>class</td>
           <td>MMCA.ADC.Engagement.Application.Tests</td>
           <td><code>MMCA.ADC.Engagement.Application.Tests.Live</code></td>
-          <td><code>MMCA.ADC.Engagement.Application.Tests/Live/LiveChannelPublishQueueTests.cs:7</code></td>
+          <td><code>MMCA.ADC.Engagement.Application.Tests/Live/LiveChannelPublishQueueTests.cs:8</code></td>
+          </tr>
+          <tr>
+          <td><code>LivePollVoteChangedHandlerTests</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Application.Tests</td>
+          <td><code>MMCA.ADC.Engagement.Application.Tests.LivePolls.DomainEventHandlers</code></td>
+          <td><code>MMCA.ADC.Engagement.Application.Tests/LivePolls/DomainEventHandlers/LivePollVoteChangedHandlerTests.cs:23</code></td>
+          </tr>
+          <tr>
+          <td><code>RecordingQueue</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Application.Tests</td>
+          <td><code>MMCA.ADC.Engagement.Application.Tests.LivePolls.DomainEventHandlers</code></td>
+          <td><code>MMCA.ADC.Engagement.Application.Tests/LivePolls/DomainEventHandlers/LivePollVoteChangedHandlerTests.cs:157</code></td>
           </tr>
           <tr>
           <td><code>LivePollDTOMapperTests</code></td>
@@ -6702,11 +6801,18 @@
           <td><code>MMCA.ADC.Engagement.Application.Tests/LivePolls/DTOs/LivePollDTOMapperTests.cs:9</code></td>
           </tr>
           <tr>
+          <td><code>LivePollResultsBuilderTests</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Application.Tests</td>
+          <td><code>MMCA.ADC.Engagement.Application.Tests.LivePolls.Services</code></td>
+          <td><code>MMCA.ADC.Engagement.Application.Tests/LivePolls/Services/LivePollResultsBuilderTests.cs:16</code></td>
+          </tr>
+          <tr>
           <td><code>CastVoteHandlerTests</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.Application.Tests</td>
           <td><code>MMCA.ADC.Engagement.Application.Tests.LivePolls.UseCases</code></td>
-          <td><code>MMCA.ADC.Engagement.Application.Tests/LivePolls/UseCases/CastVoteHandlerTests.cs:16</code></td>
+          <td><code>MMCA.ADC.Engagement.Application.Tests/LivePolls/UseCases/CastVoteHandlerTests.cs:13</code></td>
           </tr>
           <tr>
           <td><code>CloseLivePollHandlerTests</code></td>
@@ -6741,7 +6847,7 @@
           <td>record</td>
           <td>MMCA.ADC.Engagement.Application.Tests</td>
           <td><code>MMCA.ADC.Engagement.Application.Tests.LivePolls.UseCases</code></td>
-          <td><code>MMCA.ADC.Engagement.Application.Tests/LivePolls/UseCases/CastVoteHandlerTests.cs:189</code></td>
+          <td><code>MMCA.ADC.Engagement.Application.Tests/LivePolls/UseCases/CastVoteHandlerTests.cs:168</code></td>
           </tr>
           <tr>
           <td><code>HandlerMocks</code></td>
@@ -6762,7 +6868,7 @@
           <td>record</td>
           <td>MMCA.ADC.Engagement.Application.Tests</td>
           <td><code>MMCA.ADC.Engagement.Application.Tests.LivePolls.UseCases</code></td>
-          <td><code>MMCA.ADC.Engagement.Application.Tests/LivePolls/UseCases/OpenLivePollHandlerTests.cs:192</code></td>
+          <td><code>MMCA.ADC.Engagement.Application.Tests/LivePolls/UseCases/OpenLivePollHandlerTests.cs:208</code></td>
           </tr>
           <tr>
           <td><code>OpenLivePollHandlerTests</code></td>
@@ -6811,7 +6917,7 @@
           <td>record</td>
           <td>MMCA.ADC.Engagement.Application.Tests</td>
           <td><code>MMCA.ADC.Engagement.Application.Tests.SessionQuestions.UseCases</code></td>
-          <td><code>MMCA.ADC.Engagement.Application.Tests/SessionQuestions/UseCases/ModerateQuestionHandlerTests.cs:227</code></td>
+          <td><code>MMCA.ADC.Engagement.Application.Tests/SessionQuestions/UseCases/ModerateQuestionHandlerTests.cs:243</code></td>
           </tr>
           <tr>
           <td><code>HandlerMocks</code></td>
@@ -6825,7 +6931,7 @@
           <td>record</td>
           <td>MMCA.ADC.Engagement.Application.Tests</td>
           <td><code>MMCA.ADC.Engagement.Application.Tests.SessionQuestions.UseCases</code></td>
-          <td><code>MMCA.ADC.Engagement.Application.Tests/SessionQuestions/UseCases/ToggleUpvoteHandlerTests.cs:188</code></td>
+          <td><code>MMCA.ADC.Engagement.Application.Tests/SessionQuestions/UseCases/ToggleUpvoteHandlerTests.cs:175</code></td>
           </tr>
           <tr>
           <td><code>ModerateQuestionHandlerTests</code></td>
@@ -7353,6 +7459,13 @@
           <td><code>MMCA.ADC.Engagement.Shared/EngagementFeatures.cs:8</code></td>
           </tr>
           <tr>
+          <td><code>LifecycleTransitionRequest</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Engagement.Shared</td>
+          <td><code>MMCA.ADC.Engagement.Shared</code></td>
+          <td><code>MMCA.ADC.Engagement.Shared/LifecycleTransitionRequest.cs:15</code></td>
+          </tr>
+          <tr>
           <td><code>EngagementPermissions</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.Shared</td>
@@ -7658,7 +7771,7 @@
           <td>class</td>
           <td>MMCA.ADC.Engagement.UI</td>
           <td><code>MMCA.ADC.Engagement.UI.Pages.SessionLive</code></td>
-          <td><code>MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLiveModerationPanel.razor.cs:233</code></td>
+          <td><code>MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLiveModerationPanel.razor.cs:242</code></td>
           </tr>
           <tr>
           <td><code>PresenterView</code></td>
@@ -7784,7 +7897,7 @@
           <td>class</td>
           <td>MMCA.ADC.Engagement.UI</td>
           <td><code>MMCA.ADC.Engagement.UI.Services</code></td>
-          <td><code>MMCA.ADC.Engagement.UI/Services/LivePollUIService.cs:13</code></td>
+          <td><code>MMCA.ADC.Engagement.UI/Services/LivePollUIService.cs:14</code></td>
           </tr>
           <tr>
           <td><code>QuestionLookupService</code></td>
@@ -7833,7 +7946,7 @@
           <td>class</td>
           <td>MMCA.ADC.Engagement.UI</td>
           <td><code>MMCA.ADC.Engagement.UI.Services</code></td>
-          <td><code>MMCA.ADC.Engagement.UI/Services/SessionQuestionUIService.cs:13</code></td>
+          <td><code>MMCA.ADC.Engagement.UI/Services/SessionQuestionUIService.cs:14</code></td>
           </tr>
           <tr>
           <td><code>SessionReminder</code></td>
@@ -8379,7 +8492,7 @@
           <td>class</td>
           <td>MMCA.ADC.Identity.Application</td>
           <td><code>MMCA.ADC.Identity.Application.Users.Validation</code></td>
-          <td><code>MMCA.ADC.Identity.Application/Users/Validation/RegisterRequestValidator.cs:11</code></td>
+          <td><code>MMCA.ADC.Identity.Application/Users/Validation/RegisterRequestValidator.cs:12</code></td>
           </tr>
           <tr>
           <td><code>UserDTOMapperTests</code></td>
@@ -8428,7 +8541,7 @@
           <td>class</td>
           <td>MMCA.ADC.Identity.Application.Tests</td>
           <td><code>MMCA.ADC.Identity.Application.Tests.Support</code></td>
-          <td><code>MMCA.ADC.Identity.Application.Tests/Support/TestSupport.cs:183</code></td>
+          <td><code>MMCA.ADC.Identity.Application.Tests/Support/TestSupport.cs:194</code></td>
           </tr>
           <tr>
           <td><code>AttendeeQueryServiceTests</code></td>
@@ -8449,7 +8562,7 @@
           <td>record</td>
           <td>MMCA.ADC.Identity.Application.Tests</td>
           <td><code>MMCA.ADC.Identity.Application.Tests.Users</code></td>
-          <td><code>MMCA.ADC.Identity.Application.Tests/Users/AuthenticationServiceTests.cs:470</code></td>
+          <td><code>MMCA.ADC.Identity.Application.Tests/Users/AuthenticationServiceTests.cs:490</code></td>
           </tr>
           <tr>
           <td><code>SoftDeletedUserValidatorTests</code></td>
@@ -9551,6 +9664,13 @@
           <td><code>MMCA.Common.API/Authentication/ExternalAuthExtensions.cs:21</code></td>
           </tr>
           <tr>
+          <td><code>AllowMissingOwnerAttribute</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API</td>
+          <td><code>MMCA.Common.API.Authorization</code></td>
+          <td><code>MMCA.Common.API/Authorization/AllowMissingOwnerAttribute.cs:21</code></td>
+          </tr>
+          <tr>
           <td><code>AuthorizationExtensions</code></td>
           <td>class</td>
           <td>MMCA.Common.API</td>
@@ -9576,7 +9696,7 @@
           <td>class</td>
           <td>MMCA.Common.API</td>
           <td><code>MMCA.Common.API.Authorization</code></td>
-          <td><code>MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:20</code></td>
+          <td><code>MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:30</code></td>
           </tr>
           <tr>
           <td><code>OwnerOrAdminFilterOptions</code></td>
@@ -9737,7 +9857,7 @@
           <td>class</td>
           <td>MMCA.Common.API</td>
           <td><code>MMCA.Common.API.Idempotency</code></td>
-          <td><code>MMCA.Common.API/Idempotency/IdempotencyFilter.cs:34</code></td>
+          <td><code>MMCA.Common.API/Idempotency/IdempotencyFilter.cs:43</code></td>
           </tr>
           <tr>
           <td><code>IdempotencyRecord</code></td>
@@ -10255,7 +10375,7 @@
           <td>class</td>
           <td>MMCA.Common.API.Tests</td>
           <td><code>MMCA.Common.API.Tests.Idempotency</code></td>
-          <td><code>MMCA.Common.API.Tests/Idempotency/IdempotencyFilterTests.cs:14</code></td>
+          <td><code>MMCA.Common.API.Tests/Idempotency/IdempotencyFilterTests.cs:17</code></td>
           </tr>
           <tr>
           <td><code>IdempotencySettingsTests</code></td>
@@ -10808,7 +10928,7 @@
           <td>interface</td>
           <td>MMCA.Common.Application</td>
           <td><code>MMCA.Common.Application.Interfaces.Infrastructure</code></td>
-          <td><code>MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:214</code></td>
+          <td><code>MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:238</code></td>
           </tr>
           <tr>
           <td><code>ISoftDeletedUserValidator</code></td>
@@ -10830,6 +10950,13 @@
           <td>MMCA.Common.Application</td>
           <td><code>MMCA.Common.Application.Interfaces.Infrastructure</code></td>
           <td><code>MMCA.Common.Application/Interfaces/Infrastructure/IUnitOfWork.cs:10</code></td>
+          </tr>
+          <tr>
+          <td><code>IUpdatePropertySetter&lt;TEntity&gt;</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.Application</td>
+          <td><code>MMCA.Common.Application.Interfaces.Infrastructure</code></td>
+          <td><code>MMCA.Common.Application/Interfaces/Infrastructure/IUpdatePropertySetter.cs:13</code></td>
           </tr>
           <tr>
           <td><code>IWriteRepository&lt;TEntity, TIdentifierType&gt;</code></td>
@@ -10892,7 +11019,7 @@
           <td>class</td>
           <td>MMCA.Common.Application</td>
           <td><code>MMCA.Common.Application.Notifications.PushNotifications.UseCases.GetHistory</code></td>
-          <td><code>MMCA.Common.Application/Notifications/PushNotifications/UseCases/GetHistory/GetNotificationHistoryHandler.cs:14</code></td>
+          <td><code>MMCA.Common.Application/Notifications/PushNotifications/UseCases/GetHistory/GetNotificationHistoryHandler.cs:15</code></td>
           </tr>
           <tr>
           <td><code>GetNotificationHistoryQuery</code></td>
@@ -10920,14 +11047,14 @@
           <td>class</td>
           <td>MMCA.Common.Application</td>
           <td><code>MMCA.Common.Application.Notifications.PushNotifications.UseCases.Send</code></td>
-          <td><code>MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationRequestValidator.cs:10</code></td>
+          <td><code>MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationRequestValidator.cs:11</code></td>
           </tr>
           <tr>
           <td><code>GetMyNotificationsHandler</code></td>
           <td>class</td>
           <td>MMCA.Common.Application</td>
           <td><code>MMCA.Common.Application.Notifications.UserNotifications.UseCases.GetInbox</code></td>
-          <td><code>MMCA.Common.Application/Notifications/UserNotifications/UseCases/GetInbox/GetMyNotificationsHandler.cs:15</code></td>
+          <td><code>MMCA.Common.Application/Notifications/UserNotifications/UseCases/GetInbox/GetMyNotificationsHandler.cs:16</code></td>
           </tr>
           <tr>
           <td><code>GetMyNotificationsQuery</code></td>
@@ -11042,6 +11169,13 @@
           <td><code>MMCA.Common.Application/Services/Filtering/DecimalFilterStrategy.cs:14</code></td>
           </tr>
           <tr>
+          <td><code>DynamicQueryConfig</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Application</td>
+          <td><code>MMCA.Common.Application.Services.Filtering</code></td>
+          <td><code>MMCA.Common.Application/Services/Filtering/DynamicQueryConfig.cs:18</code></td>
+          </tr>
+          <tr>
           <td><code>FilterValueParser</code></td>
           <td>class</td>
           <td>MMCA.Common.Application</td>
@@ -11152,6 +11286,13 @@
           <td>MMCA.Common.Application</td>
           <td><code>MMCA.Common.Application.Services.Query</code></td>
           <td><code>MMCA.Common.Application/Services/Query/NavigationMetadataProvider.cs:20</code></td>
+          </tr>
+          <tr>
+          <td><code>PagingMath</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Application</td>
+          <td><code>MMCA.Common.Application.Services.Query</code></td>
+          <td><code>MMCA.Common.Application/Services/Query/PagingMath.cs:20</code></td>
           </tr>
           <tr>
           <td><code>ApplicationSettings</code></td>
@@ -11326,7 +11467,7 @@
           <td>class</td>
           <td>MMCA.Common.Application</td>
           <td><code>MMCA.Common.Application.UseCases.Decorators</code></td>
-          <td><code>MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:80</code></td>
+          <td><code>MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:77</code></td>
           </tr>
           <tr>
           <td><code>ResultFailureFactory</code></td>
@@ -12159,7 +12300,7 @@
           <td>class</td>
           <td>MMCA.Common.Application.Tests</td>
           <td><code>MMCA.Common.Application.Tests.Notifications</code></td>
-          <td><code>MMCA.Common.Application.Tests/Notifications/SendPushNotificationRequestValidatorTests.cs:8</code></td>
+          <td><code>MMCA.Common.Application.Tests/Notifications/SendPushNotificationRequestValidatorTests.cs:9</code></td>
           </tr>
           <tr>
           <td><code>ChildA</code></td>
@@ -12533,6 +12674,13 @@
           <td><code>MMCA.Common.Application.Tests/Services/Filtering/QueryFilterServiceValidateTests.cs:9</code></td>
           </tr>
           <tr>
+          <td><code>QueryFilterServicePropertyCacheTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Application.Tests</td>
+          <td><code>MMCA.Common.Application.Tests.Services.Filtering</code></td>
+          <td><code>MMCA.Common.Application.Tests/Services/Filtering/QueryFilterServicePropertyCacheTests.cs:14</code></td>
+          </tr>
+          <tr>
           <td><code>QueryFilterServiceTests</code></td>
           <td>class</td>
           <td>MMCA.Common.Application.Tests</td>
@@ -12558,7 +12706,21 @@
           <td>class</td>
           <td>MMCA.Common.Application.Tests</td>
           <td><code>MMCA.Common.Application.Tests.Services.Filtering</code></td>
-          <td><code>MMCA.Common.Application.Tests/Services/Filtering/QueryFilterServiceTests.cs:225</code></td>
+          <td><code>MMCA.Common.Application.Tests/Services/Filtering/QueryFilterServiceTests.cs:252</code></td>
+          </tr>
+          <tr>
+          <td><code>Widget</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Application.Tests</td>
+          <td><code>MMCA.Common.Application.Tests.Services.Filtering</code></td>
+          <td><code>MMCA.Common.Application.Tests/Services/Filtering/QueryFilterServicePropertyCacheTests.cs:18</code></td>
+          </tr>
+          <tr>
+          <td><code>PagingMathTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Application.Tests</td>
+          <td><code>MMCA.Common.Application.Tests.Services.Query</code></td>
+          <td><code>MMCA.Common.Application.Tests/Services/Query/PagingMathTests.cs:12</code></td>
           </tr>
           <tr>
           <td><code>ApplicationSettingsTests</code></td>
@@ -13065,6 +13227,20 @@
           <td><code>MMCA.Common.Benchmarks/SpecificationBenchmarks.cs:23</code></td>
           </tr>
           <tr>
+          <td><code>ProductRow</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Benchmarks</td>
+          <td><code>MMCA.Common.Benchmarks</code></td>
+          <td><code>MMCA.Common.Benchmarks/QueryPipelineBenchmarks.cs:19</code></td>
+          </tr>
+          <tr>
+          <td><code>QueryPipelineBenchmarks</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Benchmarks</td>
+          <td><code>MMCA.Common.Benchmarks</code></td>
+          <td><code>MMCA.Common.Benchmarks/QueryPipelineBenchmarks.cs:17</code></td>
+          </tr>
+          <tr>
           <td><code>SampleItem</code></td>
           <td>class</td>
           <td>MMCA.Common.Benchmarks</td>
@@ -13125,7 +13301,7 @@
           <td>record</td>
           <td>MMCA.Common.Domain</td>
           <td><code>MMCA.Common.Domain.DomainEvents</code></td>
-          <td><code>MMCA.Common.Domain/DomainEvents/BaseDomainEvent.cs:18</code></td>
+          <td><code>MMCA.Common.Domain/DomainEvents/BaseDomainEvent.cs:26</code></td>
           </tr>
           <tr>
           <td><code>BaseIntegrationEvent</code></td>
@@ -13265,7 +13441,7 @@
           <td>class</td>
           <td>MMCA.Common.Domain</td>
           <td><code>MMCA.Common.Domain.Notifications.PushNotifications.Invariants</code></td>
-          <td><code>MMCA.Common.Domain/Notifications/PushNotifications/Invariants/PushNotificationInvariants.cs:9</code></td>
+          <td><code>MMCA.Common.Domain/Notifications/PushNotifications/Invariants/PushNotificationInvariants.cs:10</code></td>
           </tr>
           <tr>
           <td><code>UserNotification</code></td>
@@ -13818,7 +13994,7 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure</td>
           <td><code>MMCA.Common.Infrastructure.Auth</code></td>
-          <td><code>MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:18</code></td>
+          <td><code>MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:19</code></td>
           </tr>
           <tr>
           <td><code>LoginProtectionSettings</code></td>
@@ -13833,6 +14009,20 @@
           <td>MMCA.Common.Infrastructure</td>
           <td><code>MMCA.Common.Infrastructure.Auth</code></td>
           <td><code>MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:15</code></td>
+          </tr>
+          <tr>
+          <td><code>CacheKeyNamespace</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td><code>MMCA.Common.Infrastructure.Caching</code></td>
+          <td><code>MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:41</code></td>
+          </tr>
+          <tr>
+          <td><code>CacheKeyPrefixOptions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td><code>MMCA.Common.Infrastructure.Caching</code></td>
+          <td><code>MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:28</code></td>
           </tr>
           <tr>
           <td><code>CacheOptions</code></td>
@@ -13979,7 +14169,7 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure</td>
           <td><code>MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration.Notifications</code></td>
-          <td><code>MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/Notifications/PushNotificationConfiguration.cs:15</code></td>
+          <td><code>MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/Notifications/PushNotificationConfiguration.cs:16</code></td>
           </tr>
           <tr>
           <td><code>UserNotificationConfiguration</code></td>
@@ -14049,7 +14239,7 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure</td>
           <td><code>MMCA.Common.Infrastructure.Persistence.DbContexts</code></td>
-          <td><code>MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:34</code></td>
+          <td><code>MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:35</code></td>
           </tr>
           <tr>
           <td><code>CosmosDbContext</code></td>
@@ -14064,6 +14254,13 @@
           <td>MMCA.Common.Infrastructure</td>
           <td><code>MMCA.Common.Infrastructure.Persistence.DbContexts</code></td>
           <td><code>MMCA.Common.Infrastructure/Persistence/DbContexts/DataSourceModelCacheKeyFactory.cs:16</code></td>
+          </tr>
+          <tr>
+          <td><code>DetectChangesScope</code></td>
+          <td>struct</td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td><code>MMCA.Common.Infrastructure.Persistence.DbContexts</code></td>
+          <td><code>MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:170</code></td>
           </tr>
           <tr>
           <td><code>ModelBuilderExtensions</code></td>
@@ -14091,7 +14288,7 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure</td>
           <td><code>MMCA.Common.Infrastructure.Persistence.DbContexts</code></td>
-          <td><code>MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:51</code></td>
+          <td><code>MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:52</code></td>
           </tr>
           <tr>
           <td><code>DesignTimeDbContextHelper</code></td>
@@ -14168,7 +14365,7 @@
           <td>record</td>
           <td>MMCA.Common.Infrastructure</td>
           <td><code>MMCA.Common.Infrastructure.Persistence.DbContexts.Factory</code></td>
-          <td><code>MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:240</code></td>
+          <td><code>MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/DbContextFactory.cs:258</code></td>
           </tr>
           <tr>
           <td><code>IPhysicalDbContextFactory</code></td>
@@ -14203,7 +14400,7 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure</td>
           <td><code>MMCA.Common.Infrastructure.Persistence.Encryption</code></td>
-          <td><code>MMCA.Common.Infrastructure/Persistence/Encryption/EncryptedStringConverter.cs:28</code></td>
+          <td><code>MMCA.Common.Infrastructure/Persistence/Encryption/EncryptedStringConverter.cs:42</code></td>
           </tr>
           <tr>
           <td><code>EfInboxStore</code></td>
@@ -14234,6 +14431,13 @@
           <td><code>MMCA.Common.Infrastructure/Persistence/Inbox/NoOpInboxStore.cs:7</code></td>
           </tr>
           <tr>
+          <td><code>AggregateCapture</code></td>
+          <td>record</td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td><code>MMCA.Common.Infrastructure.Persistence.Interceptors</code></td>
+          <td><code>MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:303</code></td>
+          </tr>
+          <tr>
           <td><code>AuditSaveChangesInterceptor</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure</td>
@@ -14245,14 +14449,14 @@
           <td>record</td>
           <td>MMCA.Common.Infrastructure</td>
           <td><code>MMCA.Common.Infrastructure.Persistence.Interceptors</code></td>
-          <td><code>MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:268</code></td>
+          <td><code>MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:312</code></td>
           </tr>
           <tr>
           <td><code>DeferredDispatch</code></td>
           <td>record</td>
           <td>MMCA.Common.Infrastructure</td>
           <td><code>MMCA.Common.Infrastructure.Persistence.Interceptors</code></td>
-          <td><code>MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:275</code></td>
+          <td><code>MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:319</code></td>
           </tr>
           <tr>
           <td><code>DomainEventSaveChangesInterceptor</code></td>
@@ -14308,7 +14512,7 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure</td>
           <td><code>MMCA.Common.Infrastructure.Persistence.Outbox</code></td>
-          <td><code>MMCA.Common.Infrastructure/Persistence/Outbox/OutboxSignal.cs:9</code></td>
+          <td><code>MMCA.Common.Infrastructure/Persistence/Outbox/OutboxSignal.cs:15</code></td>
           </tr>
           <tr>
           <td><code>EFReadRepository&lt;TEntity, TIdentifierType&gt;</code></td>
@@ -14329,7 +14533,7 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure</td>
           <td><code>MMCA.Common.Infrastructure.Persistence.Repositories</code></td>
-          <td><code>MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:15</code></td>
+          <td><code>MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:20</code></td>
           </tr>
           <tr>
           <td><code>EFRepositoryDecorator&lt;TEntity, TIdentifierType&gt;</code></td>
@@ -14337,6 +14541,13 @@
           <td>MMCA.Common.Infrastructure</td>
           <td><code>MMCA.Common.Infrastructure.Persistence.Repositories</code></td>
           <td><code>MMCA.Common.Infrastructure/Persistence/Repositories/EFRepositoryDecorator.cs:14</code></td>
+          </tr>
+          <tr>
+          <td><code>UpdatePropertySetterBuilder&lt;TEntity&gt;</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td><code>MMCA.Common.Infrastructure.Persistence.Repositories</code></td>
+          <td><code>MMCA.Common.Infrastructure/Persistence/Repositories/UpdatePropertySetterBuilder.cs:14</code></td>
           </tr>
           <tr>
           <td><code>IRepositoryFactory</code></td>
@@ -14350,7 +14561,7 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure</td>
           <td><code>MMCA.Common.Infrastructure.Persistence.Repositories.Factory</code></td>
-          <td><code>MMCA.Common.Infrastructure/Persistence/Repositories/Factory/RepositoryFactory.cs:13</code></td>
+          <td><code>MMCA.Common.Infrastructure/Persistence/Repositories/Factory/RepositoryFactory.cs:14</code></td>
           </tr>
           <tr>
           <td><code>CosmosIntIdValueGenerator</code></td>
@@ -14507,6 +14718,13 @@
           <td><code>MMCA.Common.Infrastructure/Services/PasswordHasher.cs:12</code></td>
           </tr>
           <tr>
+          <td><code>PeriodicBackgroundService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td><code>MMCA.Common.Infrastructure.Services</code></td>
+          <td><code>MMCA.Common.Infrastructure/Services/PeriodicBackgroundService.cs:20</code></td>
+          </tr>
+          <tr>
           <td><code>SignalRLiveChannelPublisher</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure</td>
@@ -14654,6 +14872,13 @@
           <td><code>MMCA.Common.Infrastructure/Settings/SmtpSettings.cs:9</code></td>
           </tr>
           <tr>
+          <td><code>DistributedCacheServiceRedisTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Redis.Tests</td>
+          <td><code>MMCA.Common.Infrastructure.Redis.Tests</code></td>
+          <td><code>MMCA.Common.Infrastructure.Redis.Tests/DistributedCacheServiceRedisTests.cs:27</code></td>
+          </tr>
+          <tr>
           <td><code>DependencyInjectionAdditionalTests</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
@@ -14693,7 +14918,7 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Auth</code></td>
-          <td><code>MMCA.Common.Infrastructure.Tests/Auth/LoginProtectionServiceTests.cs:230</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Auth/LoginProtectionServiceTests.cs:291</code></td>
           </tr>
           <tr>
           <td><code>LoginProtectionServiceTests</code></td>
@@ -14728,7 +14953,7 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Caching</code></td>
-          <td><code>MMCA.Common.Infrastructure.Tests/Caching/MemoryCacheServiceTests.cs:7</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Caching/MemoryCacheServiceTests.cs:8</code></td>
           </tr>
           <tr>
           <td><code>WarningCountingLogger</code></td>
@@ -14784,7 +15009,7 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
-          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DbContextFactoryAdditionalTests.cs:9</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DbContextFactoryAdditionalTests.cs:18</code></td>
           </tr>
           <tr>
           <td><code>DbContextFactoryTests</code></td>
@@ -14815,11 +15040,18 @@
           <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DefaultEntityConfigurationAssemblyProviderTests.cs:8</code></td>
           </tr>
           <tr>
+          <td><code>DetectionTestDbContext</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/SaveChangeDetectionTests.cs:105</code></td>
+          </tr>
+          <tr>
           <td><code>DomainEventSaveChangesInterceptorOutboxRoutingTests</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
-          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DomainEventSaveChangesInterceptorOutboxRoutingTests.cs:25</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DomainEventSaveChangesInterceptorOutboxRoutingTests.cs:26</code></td>
           </tr>
           <tr>
           <td><code>DomainEventSaveChangesInterceptorTests</code></td>
@@ -14875,7 +15107,7 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
-          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/EFRepositoryIntegrationTests.cs:9</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/EFRepositoryIntegrationTests.cs:12</code></td>
           </tr>
           <tr>
           <td><code>EncryptedStringConverterTests</code></td>
@@ -14904,6 +15136,13 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
           <td><code>MMCA.Common.Infrastructure.Tests/Persistence/EntityTypeConfigurationTests.cs:9</code></td>
+          </tr>
+          <tr>
+          <td><code>FailingSaveInterceptor</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DomainEventSaveChangesInterceptorOutboxRoutingTests.cs:252</code></td>
           </tr>
           <tr>
           <td><code>FakeAggregate</code></td>
@@ -14983,6 +15222,13 @@
           <td><code>MMCA.Common.Infrastructure.Tests/Persistence/AuditSaveChangesInterceptorTests.cs:127</code></td>
           </tr>
           <tr>
+          <td><code>MidSaveContextCreatingDbContext</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DbContextFactoryAdditionalTests.cs:200</code></td>
+          </tr>
+          <tr>
           <td><code>Mocks</code></td>
           <td>record</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
@@ -15022,14 +15268,14 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
-          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DbContextFactoryTransactionTests.cs:219</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DbContextFactoryTransactionTests.cs:282</code></td>
           </tr>
           <tr>
           <td><code>NullAssemblyProvider</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
-          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DomainEventSaveChangesInterceptorOutboxRoutingTests.cs:216</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DomainEventSaveChangesInterceptorOutboxRoutingTests.cs:326</code></td>
           </tr>
           <tr>
           <td><code>NullAssemblyProvider</code></td>
@@ -15044,6 +15290,20 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
           <td><code>MMCA.Common.Infrastructure.Tests/Persistence/OutboxCleanupServiceTests.cs:624</code></td>
+          </tr>
+          <tr>
+          <td><code>NullAssemblyProvider</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/QueryParameterizationTests.cs:149</code></td>
+          </tr>
+          <tr>
+          <td><code>NullAssemblyProvider</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/SaveChangeDetectionTests.cs:147</code></td>
           </tr>
           <tr>
           <td><code>NullAssemblyProvider</code></td>
@@ -15092,7 +15352,14 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
-          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DomainEventSaveChangesInterceptorOutboxRoutingTests.cs:167</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DomainEventSaveChangesInterceptorOutboxRoutingTests.cs:266</code></td>
+          </tr>
+          <tr>
+          <td><code>OutboxSignalTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/OutboxSignalTests.cs:13</code></td>
           </tr>
           <tr>
           <td><code>OutboxTestDbContext</code></td>
@@ -15102,6 +15369,13 @@
           <td><code>MMCA.Common.Infrastructure.Tests/Persistence/OutboxProcessorTests.cs:592</code></td>
           </tr>
           <tr>
+          <td><code>Product</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/QueryParameterizationTests.cs:99</code></td>
+          </tr>
+          <tr>
           <td><code>ProfilingHelperTests</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
@@ -15109,11 +15383,39 @@
           <td><code>MMCA.Common.Infrastructure.Tests/Persistence/ProfilingHelperTests.cs:10</code></td>
           </tr>
           <tr>
+          <td><code>QueryParameterizationTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/QueryParameterizationTests.cs:26</code></td>
+          </tr>
+          <tr>
+          <td><code>QueryShapeTestDbContext</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/QueryParameterizationTests.cs:106</code></td>
+          </tr>
+          <tr>
+          <td><code>ReentrantSaveInterceptor</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DbContextFactoryAdditionalTests.cs:249</code></td>
+          </tr>
+          <tr>
           <td><code>RepositoryFactoryTests</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
           <td><code>MMCA.Common.Infrastructure.Tests/Persistence/RepositoryFactoryTests.cs:14</code></td>
+          </tr>
+          <tr>
+          <td><code>SaveChangeDetectionTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/SaveChangeDetectionTests.cs:24</code></td>
           </tr>
           <tr>
           <td><code>SoftDeletableEntity</code></td>
@@ -15169,14 +15471,14 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
-          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DbContextFactoryTransactionTests.cs:165</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DbContextFactoryTransactionTests.cs:228</code></td>
           </tr>
           <tr>
           <td><code>TestAggregate</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
-          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DomainEventSaveChangesInterceptorOutboxRoutingTests.cs:162</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DomainEventSaveChangesInterceptorOutboxRoutingTests.cs:242</code></td>
           </tr>
           <tr>
           <td><code>TestAggregate</code></td>
@@ -15225,7 +15527,7 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
-          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/EFRepositoryIntegrationTests.cs:469</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/EFRepositoryIntegrationTests.cs:563</code></td>
           </tr>
           <tr>
           <td><code>TestConfigDbContext</code></td>
@@ -15253,7 +15555,7 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
-          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/EFRepositoryIntegrationTests.cs:474</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/EFRepositoryIntegrationTests.cs:568</code></td>
           </tr>
           <tr>
           <td><code>TestDbContext</code></td>
@@ -15316,7 +15618,7 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
-          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/EFRepositoryIntegrationTests.cs:460</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/EFRepositoryIntegrationTests.cs:552</code></td>
           </tr>
           <tr>
           <td><code>TestEntitySqliteConfiguration</code></td>
@@ -15330,7 +15632,7 @@
           <td>record</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
-          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DomainEventSaveChangesInterceptorOutboxRoutingTests.cs:160</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DomainEventSaveChangesInterceptorOutboxRoutingTests.cs:240</code></td>
           </tr>
           <tr>
           <td><code>TestIntegrationEvent</code></td>
@@ -15351,14 +15653,14 @@
           <td>record</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
-          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DbContextFactoryTransactionTests.cs:163</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DbContextFactoryTransactionTests.cs:226</code></td>
           </tr>
           <tr>
           <td><code>TestLocalEvent</code></td>
           <td>record</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
-          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DomainEventSaveChangesInterceptorOutboxRoutingTests.cs:158</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DomainEventSaveChangesInterceptorOutboxRoutingTests.cs:238</code></td>
           </tr>
           <tr>
           <td><code>TestMappedEntity</code></td>
@@ -15400,7 +15702,7 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
-          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DbContextFactoryTransactionTests.cs:170</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/DbContextFactoryTransactionTests.cs:233</code></td>
           </tr>
           <tr>
           <td><code>UnitOfWorkAdditionalTests</code></td>
@@ -15415,6 +15717,13 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
           <td><code>MMCA.Common.Infrastructure.Tests/Persistence/UnitOfWorkTests.cs:13</code></td>
+          </tr>
+          <tr>
+          <td><code>Widget</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td><code>MMCA.Common.Infrastructure.Tests.Persistence</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Persistence/SaveChangeDetectionTests.cs:100</code></td>
           </tr>
           <tr>
           <td><code>FilteredIndexEntity</code></td>
@@ -15774,6 +16083,13 @@
           <td><code>MMCA.Common.Infrastructure.Tests/Services/CorrelationContextTests.cs:6</code></td>
           </tr>
           <tr>
+          <td><code>CountingSweep</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td><code>MMCA.Common.Infrastructure.Tests.Services</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Services/PeriodicBackgroundServiceTests.cs:103</code></td>
+          </tr>
+          <tr>
           <td><code>CurrentUserServiceAdditionalTests</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
@@ -15785,7 +16101,7 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Services</code></td>
-          <td><code>MMCA.Common.Infrastructure.Tests/Services/CurrentUserServiceTests.cs:9</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Services/CurrentUserServiceTests.cs:10</code></td>
           </tr>
           <tr>
           <td><code>DataSourceServiceAdditionalTests</code></td>
@@ -15914,6 +16230,13 @@
           <td><code>MMCA.Common.Infrastructure.Tests/Services/NullPushNotificationSenderTests.cs:6</code></td>
           </tr>
           <tr>
+          <td><code>NullUserService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td><code>MMCA.Common.Infrastructure.Tests.Services</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Services/CurrentUserServiceTests.cs:235</code></td>
+          </tr>
+          <tr>
           <td><code>OtherIntegrationEvent</code></td>
           <td>record</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
@@ -15928,6 +16251,13 @@
           <td><code>MMCA.Common.Infrastructure.Tests/Services/PasswordHasherTests.cs:8</code></td>
           </tr>
           <tr>
+          <td><code>PeriodicBackgroundServiceTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td><code>MMCA.Common.Infrastructure.Tests.Services</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Services/PeriodicBackgroundServiceTests.cs:15</code></td>
+          </tr>
+          <tr>
           <td><code>RecordingDomainHandler</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Tests</td>
@@ -15940,6 +16270,13 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td><code>MMCA.Common.Infrastructure.Tests.Services</code></td>
           <td><code>MMCA.Common.Infrastructure.Tests/Services/InProcessMessageBusTests.cs:161</code></td>
+          </tr>
+          <tr>
+          <td><code>RoleOnlyService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td><code>MMCA.Common.Infrastructure.Tests.Services</code></td>
+          <td><code>MMCA.Common.Infrastructure.Tests/Services/CurrentUserServiceTests.cs:248</code></td>
           </tr>
           <tr>
           <td><code>SignalRLiveChannelPublisherTests</code></td>
@@ -16271,11 +16608,32 @@
           <td><code>MMCA.Common.Shared/Calendars/IcsEvent.cs:15</code></td>
           </tr>
           <tr>
+          <td><code>KeyedSemaphoreStripe</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Shared</td>
+          <td><code>MMCA.Common.Shared.Concurrency</code></td>
+          <td><code>MMCA.Common.Shared/Concurrency/KeyedSemaphoreStripe.cs:22</code></td>
+          </tr>
+          <tr>
+          <td><code>Releaser</code></td>
+          <td>record struct</td>
+          <td>MMCA.Common.Shared</td>
+          <td><code>MMCA.Common.Shared.Concurrency</code></td>
+          <td><code>MMCA.Common.Shared/Concurrency/KeyedSemaphoreStripe.cs:78</code></td>
+          </tr>
+          <tr>
           <td><code>BaseLookup&lt;TIdentifierType&gt;</code></td>
           <td>record</td>
           <td>MMCA.Common.Shared</td>
           <td><code>MMCA.Common.Shared.DTOs</code></td>
           <td><code>MMCA.Common.Shared/DTOs/BaseLookup.cs:8</code></td>
+          </tr>
+          <tr>
+          <td><code>ConcurrencyTokenRequest</code></td>
+          <td>record</td>
+          <td>MMCA.Common.Shared</td>
+          <td><code>MMCA.Common.Shared.DTOs</code></td>
+          <td><code>MMCA.Common.Shared/DTOs/ConcurrencyTokenRequest.cs:12</code></td>
           </tr>
           <tr>
           <td><code>IBaseDTO&lt;TIdentifierType&gt;</code></td>
@@ -16516,6 +16874,13 @@
           <td><code>MMCA.Common.Shared.Tests/Calendars/IcsCalendarBuilderTests.cs:12</code></td>
           </tr>
           <tr>
+          <td><code>KeyedSemaphoreStripeTests</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Shared.Tests</td>
+          <td><code>MMCA.Common.Shared.Tests.Concurrency</code></td>
+          <td><code>MMCA.Common.Shared.Tests/Concurrency/KeyedSemaphoreStripeTests.cs:12</code></td>
+          </tr>
+          <tr>
           <td><code>ConcreteDomainException</code></td>
           <td>class</td>
           <td>MMCA.Common.Shared.Tests</td>
@@ -16716,7 +17081,7 @@
           <td>class</td>
           <td>MMCA.Common.Testing.Architecture</td>
           <td><code>MMCA.Common.Testing.Architecture</code></td>
-          <td><code>MMCA.Common.Testing.Architecture/Bases/AggregateConventionTestsBase.cs:8</code></td>
+          <td><code>MMCA.Common.Testing.Architecture/Bases/AggregateConventionTestsBase.cs:10</code></td>
           </tr>
           <tr>
           <td><code>ArchitectureAssert</code></td>
@@ -16905,7 +17270,7 @@
           <td>class</td>
           <td>MMCA.Common.Testing.Architecture</td>
           <td><code>MMCA.Common.Testing.Architecture</code></td>
-          <td><code>MMCA.Common.Testing.Architecture/Bases/EntityConventionTestsBase.cs:8</code></td>
+          <td><code>MMCA.Common.Testing.Architecture/Bases/EntityConventionTestsBase.cs:9</code></td>
           </tr>
           <tr>
           <td><code>EventConventionTestsBase</code></td>
@@ -19284,7 +19649,7 @@
           <tr>
           <td><code>IServiceCollection services</code></td>
           <td>MMCA.ADC.Conference.Application</td>
-          <td><code>MMCA.ADC.Conference.Application/DependencyInjection.cs:34</code></td>
+          <td><code>MMCA.ADC.Conference.Application/DependencyInjection.cs:35</code></td>
           </tr>
           <tr>
           <td><code>IServiceCollection services</code></td>
@@ -19628,7 +19993,7 @@
           </tr>
           </tbody></table></div>
           <h2 id="generated--excluded-artifacts-no-type-sections-written">Generated / excluded artifacts (no type sections written)</h2>
-          <p>78 files excluded as generated (EF migrations, snapshots, *.g.cs, AssemblyInfo).</p>
+          <p>88 files excluded as generated (EF migrations, snapshots, *.g.cs, AssemblyInfo).</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -19661,6 +20026,12 @@
           </tr>
           <tr>
           <td><code>MMCA.ADC.Migrations.SqlServer.Conference/Migrations/20260720031645_CommonV1120OutboxLeaseAndSoftDeleteIndexFilters.Designer.cs</code></td>
+          </tr>
+          <tr>
+          <td><code>MMCA.ADC.Migrations.SqlServer.Conference/Migrations/20260725131458_AddOutboxInboxRetentionIndexes.cs</code></td>
+          </tr>
+          <tr>
+          <td><code>MMCA.ADC.Migrations.SqlServer.Conference/Migrations/20260725131458_AddOutboxInboxRetentionIndexes.Designer.cs</code></td>
           </tr>
           <tr>
           <td><code>MMCA.ADC.Migrations.SqlServer.Conference/Migrations/SQLServerDbContextModelSnapshot.cs</code></td>
@@ -19705,6 +20076,18 @@
           <td><code>MMCA.ADC.Migrations.SqlServer.Engagement/Migrations/20260720031650_CommonV1120OutboxLeaseAndSoftDeleteIndexFilters.Designer.cs</code></td>
           </tr>
           <tr>
+          <td><code>MMCA.ADC.Migrations.SqlServer.Engagement/Migrations/20260725050113_AddLivePollSessionIdStatusIndex.cs</code></td>
+          </tr>
+          <tr>
+          <td><code>MMCA.ADC.Migrations.SqlServer.Engagement/Migrations/20260725050113_AddLivePollSessionIdStatusIndex.Designer.cs</code></td>
+          </tr>
+          <tr>
+          <td><code>MMCA.ADC.Migrations.SqlServer.Engagement/Migrations/20260725131500_AddOutboxInboxRetentionIndexes.cs</code></td>
+          </tr>
+          <tr>
+          <td><code>MMCA.ADC.Migrations.SqlServer.Engagement/Migrations/20260725131500_AddOutboxInboxRetentionIndexes.Designer.cs</code></td>
+          </tr>
+          <tr>
           <td><code>MMCA.ADC.Migrations.SqlServer.Engagement/Migrations/SQLServerDbContextModelSnapshot.cs</code></td>
           </tr>
           <tr>
@@ -19741,6 +20124,12 @@
           <td><code>MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20260720031638_CommonV1120OutboxLeaseAndSoftDeleteIndexFilters.Designer.cs</code></td>
           </tr>
           <tr>
+          <td><code>MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20260725131455_AddOutboxInboxRetentionIndexes.cs</code></td>
+          </tr>
+          <tr>
+          <td><code>MMCA.ADC.Migrations.SqlServer.Identity/Migrations/20260725131455_AddOutboxInboxRetentionIndexes.Designer.cs</code></td>
+          </tr>
+          <tr>
           <td><code>MMCA.ADC.Migrations.SqlServer.Identity/Migrations/SQLServerDbContextModelSnapshot.cs</code></td>
           </tr>
           <tr>
@@ -19763,6 +20152,12 @@
           </tr>
           <tr>
           <td><code>MMCA.ADC.Migrations.SqlServer.Notification/Migrations/20260720031653_CommonV1120OutboxLeaseAndSoftDeleteIndexFilters.Designer.cs</code></td>
+          </tr>
+          <tr>
+          <td><code>MMCA.ADC.Migrations.SqlServer.Notification/Migrations/20260725131502_AddOutboxInboxRetentionIndexes.cs</code></td>
+          </tr>
+          <tr>
+          <td><code>MMCA.ADC.Migrations.SqlServer.Notification/Migrations/20260725131502_AddOutboxInboxRetentionIndexes.Designer.cs</code></td>
           </tr>
           <tr>
           <td><code>MMCA.ADC.Migrations.SqlServer.Notification/Migrations/SQLServerDbContextModelSnapshot.cs</code></td>

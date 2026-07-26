@@ -27,70 +27,120 @@ and misses an event, its next fetch still shows the truth. That single design ru
 Both aggregates are sealed [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype)
 subclasses that follow the framework's factory-plus-`Result` discipline (primer §2). [`LivePoll`](#livepoll)
 (`MMCA.ADC.Engagement.Domain/LivePolls/LivePoll.cs:18`) holds an
-`EventId`, an optional `SessionId` (null for an event-wide poll, BR-230), a question, its authored
-[`LivePollOption`](#livepolloption) children, and a strict lifecycle `Status`
+`EventId`, an optional `SessionId` (null for an event-wide poll, BR-230, `LivePoll.cs:24`), a
+question, its authored [`LivePollOption`](#livepolloption) children, and a strict lifecycle `Status`
 ([`LivePollStatus`](#livepollstatus)): `Draft` to `Open` to `Closed`, no reopen (BR-221). Its
-`Create` factory validates through [`LivePollInvariants`](#livepollinvariants) (2 to 10 unique
-options), and `Open`/`Close`/`Delete` each guard the transition (an open poll cannot be deleted,
-BR-228). [`SessionQuestion`](#sessionquestion)
+`Create` factory (`LivePoll.cs:64`) validates through [`LivePollInvariants`](#livepollinvariants)
+(2 to 10 unique options, question at most 200 characters,
+`MMCA.ADC.Engagement.Domain/LivePolls/LivePollInvariants.cs:12`, `:18`, `:21`), and
+`Open`/`Close`/`Delete` each guard the transition: an open poll cannot be deleted (BR-228,
+`LivePoll.cs:210-219`), and a successful delete cascades a soft-delete over the options
+(`LivePoll.cs:225-232`). [`SessionQuestion`](#sessionquestion)
 (`MMCA.ADC.Engagement.Domain/SessionQuestions/SessionQuestion.cs:19`) holds a `SessionId`, a
-denormalized `EventId`, the submitter's `UserId` (never exposed on a DTO, BR-238), the text, a
+denormalized `EventId` (deliberately not validated, since the disabled-stub fallback reports a
+default, `SessionQuestion.cs:24`), the submitter's `UserId` (never exposed on a DTO, BR-238), the
+text (at most 500 characters,
+`MMCA.ADC.Engagement.Domain/SessionQuestions/SessionQuestionInvariants.cs:12`), a
 [`QuestionStatus`](#questionstatus) (`Pending`/`Approved`/`Dismissed`), and an `IsAnswered` flag;
-`Approve`/`Dismiss`/`MarkAnswered` are the moderation transitions (BR-234).
+`Approve` (`SessionQuestion.cs:117`), `Dismiss` (`:141`), and `MarkAnswered` (`:164`) are the
+moderation transitions (BR-234), each rejecting the no-op repeat.
 
 The one design idea worth internalizing early is the **live-window snapshot**. When a poll is opened
-(`LivePoll.Open`, `LivePoll.cs:108`) or a question is submitted (`SessionQuestion.Create`,
-`SessionQuestion.cs:77`), the event's live-window end (`LiveWindowEndUtc`) is copied *onto* the
-aggregate. From then on the aggregate can answer "is this vote still allowed?"
+(`LivePoll.Open`, `LivePoll.cs:108`, stamping `LiveWindowEndUtc` at `:129`) or a question is
+submitted (`SessionQuestion.Create`, `SessionQuestion.cs:77`), the event's live-window end is copied
+*onto* the aggregate. From then on the aggregate can answer "is this vote still allowed?"
 (`CanAcceptVote`, `LivePoll.cs:167`) or "is this upvote still allowed?" (`CanAcceptUpvote`,
 `SessionQuestion.cs:197`) against its own snapshotted field, with **no cross-service call per vote**
 (BR-224/BR-237). That matters because votes and upvotes are the high-frequency operations; paying a
 gRPC hop on each one would not scale. And like the bookmark aggregate, both use a **single**
 domain event carrying a [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate)
 discriminator, [`LivePollChanged`](#livepollchanged) and [`SessionQuestionChanged`](#sessionquestionchanged)
-(BR-60), rather than separate per-transition events. Those domain events are the durable
-[`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent)s captured by the outbox ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)) for
-future integration; they are **not** the realtime push, which is a separate best-effort call
-described below.
+(BR-60, raised at `LivePoll.cs:94`, `:131`, `:154`, `:232`), rather than separate per-transition
+events. Those domain events are durable
+[`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent)s captured by the outbox ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)).
 
 A vote and an upvote are themselves small aggregates, [`LivePollVote`](#livepollvote) and
 [`SessionQuestionUpvote`](#sessionquestionupvote), each with a "one active row per (poll/question,
-user)" rule enforced by a filtered unique index and the same reactivate-instead-of-reinsert dance
-(BR-225/BR-135) the bookmark module uses: [`CastVoteHandler`](#castvotehandler) updates a live vote,
-revives a soft-deleted one, or inserts a new one (`CastVoteHandler.cs:62-81`), so a user who changes
-their mind never piles up tombstones.
+user)" rule enforced by a filtered unique index
+(`MMCA.ADC.Engagement.Infrastructure/Persistence/EntityConfiguration/LivePollVoteConfiguration.cs:35-37`)
+and the same reactivate-instead-of-reinsert dance (BR-225/BR-135) the bookmark module uses:
+[`CastVoteHandler`](#castvotehandler) updates a live vote, revives a soft-deleted one, or inserts a
+new one (`MMCA.ADC.Engagement.Application/LivePolls/UseCases/CastVote/CastVoteHandler.cs:61-80`), so
+a user who changes their mind never piles up tombstones.
+[`ToggleUpvoteHandler`](#toggleupvotehandler) does the mirror image and additionally refuses to let
+an author upvote their own question (BR-235,
+`MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/ToggleUpvote/ToggleUpvoteHandler.cs:41-48`).
 
-## The write path, and where the realtime push actually happens
+## The write path, and where the realtime broadcast actually happens
 
-Each operation is a vertical slice under `Application/{LivePolls|SessionQuestions}/UseCases/{Op}/`.
-The command handlers ([`CreateLivePollHandler`](#createlivepollhandler),
-[`OpenLivePollHandler`](#openlivepollhandler), [`CloseLivePollHandler`](#closelivepollhandler),
-[`CastVoteHandler`](#castvotehandler), [`SubmitQuestionHandler`](#submitquestionhandler),
-[`ModerateQuestionHandler`](#moderatequestionhandler), [`ToggleUpvoteHandler`](#toggleupvotehandler))
-all follow the same three beats: mutate the aggregate through its business method, `SaveChangesAsync`
-(which commits the data and the domain event to the outbox in one transaction), then **publish the
-ephemeral channel event best-effort**. That last step is the heart of the chapter. Each handler
-resolves a channel key from the aggregate's scope ([`LivePollChannel.ForEvent`](#livepollchannel) =
-`event:1`, or `ForSession` = `session:123`; questions reuse the session key so a session's polls and
-questions share one channel), serializes a small payload record to JSON, and calls
-`ILiveChannelPublisher.PublishAsync(channelKey, eventName, payloadJson)`. The publish is wrapped in a
-`try`/`catch` with a justified `CA1031` suppression and a warning log (for example
-`CastVoteHandler.cs:94-119`): a failed push **must never fail the command**, because the vote is
-already committed and the broadcast is only a hint.
+Each operation is a vertical slice under `Application/{LivePolls|SessionQuestions}/UseCases/{Op}/`,
+and every command handler shares the first two beats: mutate the aggregate through its business
+method, then `SaveChangesAsync` (which commits the data and the domain event to the outbox in one
+transaction). What differs, and what is worth studying, is the **third** beat: how the ephemeral
+broadcast leaves the process. There are three shapes in the code today, and the differences are
+deliberate.
 
-Two rules govern what rides the channel. First, **broadcasts never carry per-user data** (BR-229):
-[`CastVoteHandler`](#castvotehandler) strips the caller's own vote marker before publishing
-(`results with { MyVoteOptionId = null }`, `CastVoteHandler.cs:103-105`). Second, **pending question
-content is never broadcast** (BR-238): [`SubmitQuestionHandler`](#submitquestionhandler) and
-[`ModerateQuestionHandler`](#moderatequestionhandler) publish the full text only for an *approved*
-question, and when a pending question is submitted or leaves the queue the channel carries only a
-`question.pending-count-changed` count so moderators see the badge move without leaking unmoderated
-text (`SubmitQuestionHandler.cs:110-127`, `ModerateQuestionHandler.cs:118-135`). The event-name and
-payload-shape vocabulary for both features lives in the two channel-contract classes shared by
-publisher and subscriber, [`LivePollChannel`](#livepollchannel) and
-[`SessionQuestionChannel`](#sessionquestionchannel).
+The **hot paths raise a domain event and broadcast from the handler for it.** Casting a vote
+(`CastVoteHandler.cs:19`) and toggling an upvote (`ToggleUpvoteHandler.cs:17`) publish nothing
+themselves. The vote and upvote aggregates raise [`LivePollVoteChanged`](#livepollvotechanged) and
+[`SessionQuestionUpvoteChanged`](#sessionquestionupvotechanged), and the matching domain-event
+handlers, [`LivePollVoteChangedHandler`](#livepollvotechangedhandler)
+(`MMCA.ADC.Engagement.Application/LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:31`)
+and [`SessionQuestionUpvoteChangedHandler`](#sessionquestionupvotechangedhandler)
+(`MMCA.ADC.Engagement.Application/SessionQuestions/DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs:32`),
+rebuild the fresh tally and hand a [`LiveChannelPublishWorkItem`](group-22-engagement-module.md#livechannelpublishworkitem)
+to [`ILiveChannelPublishQueue`](group-22-engagement-module.md#ilivechannelpublishqueue)
+(`LivePollVoteChangedHandler.cs:69-72`, `SessionQuestionUpvoteChangedHandler.cs:70-73`). Both
+in-code rationales are worth reading (`LivePollVoteChangedHandler.cs:17-23`,
+`SessionQuestionUpvoteChangedHandler.cs:17-24`): domain-event dispatch inside a transactional
+command is deferred until after the commit and dropped on rollback, so clients can no longer be told
+about a vote that never persisted, and the request never awaits a gRPC publish, so a hung
+Notification peer cannot add its latency to every upvote. Both handlers are singletons that open
+their own DI scope (`:43-45` and `:44-45`) and swallow-and-log any failure behind a justified
+`CA1031` suppression.
 
-## One WebSocket, two publisher extension points, and a cross-service ingress
+[`CloseLivePollHandler`](#closelivepollhandler) shows the same queue used **directly** from a
+command handler (`.../UseCases/Close/CloseLivePollHandler.cs:85-100`): it serializes a
+[`LivePollClosedPayload`](#livepollclosedpayload), calls `TryEnqueue`, and logs a warning when the
+bounded queue rejects the item, so the close never fails on a broadcast. The three
+lower-frequency question and poll events still **await the publish inline** inside a `try`/`catch`:
+[`OpenLivePollHandler`](#openlivepollhandler) (`.../UseCases/Open/OpenLivePollHandler.cs:93-117`),
+[`SubmitQuestionHandler`](#submitquestionhandler)
+(`.../UseCases/Submit/SubmitQuestionHandler.cs:105-149`), and
+[`ModerateQuestionHandler`](#moderatequestionhandler)
+(`.../UseCases/Moderate/ModerateQuestionHandler.cs:84-148`) each resolve a channel key, serialize a
+small payload record to JSON, and call `ILiveChannelPublisher.PublishAsync`, with a `CA1031`
+suppression and a warning log so a failed push **never fails the command**
+(`OpenLivePollHandler.cs:111-116`). [`CreateLivePollHandler`](#createlivepollhandler) broadcasts
+nothing at all: a poll is created as `Draft` and there is nothing for an audience to see yet.
+Channel keys come from the two contract classes shared by publisher and subscriber,
+[`LivePollChannel`](#livepollchannel) (`ForEvent` gives `event:1`, `ForSession` gives `session:123`,
+`MMCA.ADC.Engagement.Shared/LivePolls/LivePollChannel.cs:24-30`) and
+[`SessionQuestionChannel`](#sessionquestionchannel); questions reuse the session key, so a session's
+polls and questions ride one channel.
+
+Two rules govern what is allowed on the channel. First, **broadcasts never carry per-user data**
+(BR-229): the results broadcast is built with `userId: null` so `MyVoteOptionId` stays null
+(`LivePollVoteChangedHandler.cs:61-63`), and the upvote broadcast carries only the fresh count
+(`SessionQuestionUpvoteChangedHandler.cs:65-73`). Second, **pending question content is never
+broadcast** (BR-238): full text rides the channel only on the approved payload, so when a pending
+question is submitted or leaves the queue the channel carries a `question.pending-count-changed`
+count instead, and moderators see the badge move without unmoderated text leaking
+(`SubmitQuestionHandler.cs:126-140`, `ModerateQuestionHandler.cs:123-140`).
+
+Three server-side guards round out the write path. Poll open/close and question moderation accept
+the client's last-seen rowversion and stamp it back as the original ([ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html)), so a transition
+decided against a stale view fails with 409 Conflict rather than silently applying
+(`OpenLivePollHandler.cs:46`, `CloseLivePollHandler.cs:45`, `ModerateQuestionHandler.cs:48`). The
+vote path adds an explicit TOCTOU re-check (`CastVoteHandler.cs:108-122`): a rowversion conflict
+cannot catch a concurrent close, because a vote only touches the `LivePollVote` row and never the
+poll row, so the handler re-reads the poll immediately before saving and documents the accepted
+millisecond residue (`CastVoteHandler.cs:98-107`). And question submission carries a spam cap: a
+user may hold at most ten open (non-dismissed) questions per session
+(`SessionQuestionInvariants.cs:19`, enforced at `SubmitQuestionHandler.cs:61-74`), so an
+auto-approving event default cannot be used to flood the channel.
+
+## One WebSocket, one publisher port, and a cross-service ingress
 
 The transport itself is framework-owned ([ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html), [Group 10](group-10-notifications.md)). The single
 [`NotificationHub`](group-10-notifications.md#notificationhub) carries both durable notifications and
@@ -102,95 +152,146 @@ does for the durable path. Which implementation resolves tells you the deploymen
 [`SignalRLiveChannelPublisher`](group-10-notifications.md#signalrlivechannelpublisher) group-sends
 over the hub in a host that maps it; [`NullLiveChannelPublisher`](group-10-notifications.md#nulllivechannelpublisher)
 is the no-op default. In ADC the twist is that the Engagement service does **not** map the hub (the
-Notification service does), so Engagement registers a **gRPC adapter** for `ILiveChannelPublisher`
-that forwards the pre-serialized JSON payload to the Notification service's live-channel ingress,
-which then does the real group send. This is exactly the "a host that does not map the hub can
-replace the registration with its own transport" boundary [ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html) anticipates, and it rides the [ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html)
-mixed-endpoint gRPC profile (the Notification service serves a dedicated `Http2`-only endpoint for
-this ingress alongside its WebSocket endpoint). Because the payload is an opaque string at every hop,
-no serializer dependency crosses the wire.
+Notification service does), so Engagement's composition root replaces the registration with a
+**gRPC adapter**, [`LiveChannelPublisherGrpcAdapter`](group-10-notifications.md#livechannelpublishergrpcadapter),
+that forwards the pre-serialized JSON payload to the Notification service's
+[`LiveChannelGrpcService`](group-10-notifications.md#livechannelgrpcservice) ingress, which then does
+the real group send (`MMCA.ADC.Engagement.Service/Program.cs:188-197`). This is exactly the "a host
+that does not map the hub can replace the registration with its own transport" extension point
+[ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html) anticipates, and it rides the [ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html) mixed-endpoint gRPC profile (the Notification service
+serves a dedicated `Http2`-only endpoint for this ingress alongside its WebSocket endpoint). Because
+the payload is an opaque string at every hop, no serializer dependency crosses the wire, and the
+queue drain, [`LiveChannelPublishProcessor`](group-22-engagement-module.md#livechannelpublishprocessor),
+resolves the scoped adapter per item and logs-and-swallows every failure.
 
 On the browser side, [`NotificationHubService`](group-15-common-ui-framework.md#notificationhubservice)
 (Common, [Group 15](group-15-common-ui-framework.md)) owns the one connection and exposes
 `JoinChannelAsync` / `LeaveChannelAsync` / a **multicast** `OnChannelEvent` subscription, and it
 re-joins every tracked channel on reconnect (SignalR group membership does not survive an automatic
-reconnect). A page subscribes with `OnChannelEvent` and joins its channel in `OnAfterRenderAsync`, and leaves
-the channel on teardown; [`SessionLive`](#sessionlive) does exactly this
-(`SessionLive.razor.cs:116-126`, teardown at `SessionLive.razor.cs:352`).
+reconnect). Each page subscribes and joins in `OnAfterRenderAsync`, and leaves on teardown;
+[`SessionLive`](#sessionlive) does exactly this
+(`MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLive.razor.cs:117-132`, teardown at `:349-361`).
+The join is deliberately **not** `firstRender`-gated: the first render fires at the first `await` in
+`OnInitializedAsync` while the session is still null, so a `firstRender`-only join never attached;
+the stored channel key doubles as the already-joined guard, and the `RendererInfo.IsInteractive`
+check keeps the prerender pass and the bUnit suite from dialing the hub
+(`SessionLive.razor.cs:119-123`, and the same comment on
+`Pages/HappeningNow/HappeningNow.razor.cs:111-118` and `Pages/SessionLive/PresenterView.razor.cs:90-97`).
 
 ## The read path and how the UI reacts
 
 Reads do not go through the generic entity-query machinery; the live views need shaped projections.
-[`LivePollResultsBuilder`](#livepollresultsbuilder) computes each option's tally and the caller's own
-`MyVoteOptionId`, and [`SessionQuestionViewBuilder`](#sessionquestionviewbuilder) builds the
-attendee/moderator question views with per-caller `IsMine`/`HasUpvoted` flags, feeding the query
-handlers behind `GET /livepolls/open`, `/livepolls/{id}/results`, `/sessionquestions`, and
-`/sessionquestions/moderation`. [`LivePollNavigationPopulator`](#livepollnavigationpopulator) loads a
-poll's `Options` on query-service paths EF cannot `.Include()` ([ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html)), and the EF configurations
-([`LivePollConfiguration`](#livepollconfiguration) and siblings) pin the entities to SQL Server in
-the `ADC_Engagement` database under database-per-service ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)). Entity-to-DTO mapping is a
-compile-time Mapperly mapper, [`LivePollDTOMapper`](#livepolldtomapper) ([ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html)).
+[`LivePollResultsBuilder`](#livepollresultsbuilder)
+(`MMCA.ADC.Engagement.Application/LivePolls/Services/LivePollResultsBuilder.cs:12`) computes each
+option's tally with a **grouped `COUNT` pushed into SQL** (one row per option instead of one row per
+vote, `:42-47`) and adds the caller's own `MyVoteOptionId` as a separate point read that broadcast
+payloads skip entirely (`:51-60`); votes cast on an option later removed are excluded so the
+per-option numbers still add up to the total (`:31-37`).
+[`SessionQuestionViewBuilder`](#sessionquestionviewbuilder)
+(`.../SessionQuestions/Services/SessionQuestionViewBuilder.cs:12`) is its mirror for questions
+(`:39-46`), adding per-caller `MyUpvote`/`IsMine` flags. Those two feed the query handlers behind
+`GET /livepolls/open`, `/livepolls/{id}/results`, `/sessionquestions`, and
+`/sessionquestions/moderation`. [`GetOpenPollsHandler`](#getopenpollshandler) requires an explicit
+event or session scope (`.../GetOpenPolls/GetOpenPollsHandler.cs:24-30`) and excludes session-scoped
+polls from the event-wide list (BR-230, `:41`); both question reads are bounded server-side at 200
+rows so a flooded session cannot produce an unbounded payload
+(`.../GetSessionQuestions/GetSessionQuestionsHandler.cs:22`,
+`.../GetModerationQueue/GetModerationQueueHandler.cs:26`), with the attendee view returning approved
+questions most-upvoted-first followed by the caller's own non-approved ones (`:39-49`) and the
+moderation view ordering Pending first. [`LivePollNavigationPopulator`](#livepollnavigationpopulator)
+loads a poll's `Options` on query-service paths EF cannot `.Include()` ([ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html),
+`.../LivePolls/Services/LivePollNavigationPopulator.cs:11`), the EF configurations
+([`LivePollConfiguration`](#livepollconfiguration) and siblings) keep the Conference references as
+scalar FK columns under database-per-service ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html),
+`.../EntityConfiguration/LivePollConfiguration.cs:10-14`) and index the conference-day hot filter
+`(SessionId, Status)` (`:40`), and entity-to-DTO mapping is a compile-time Mapperly mapper,
+[`LivePollDTOMapper`](#livepolldtomapper) ([ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html), `.../LivePolls/DTOs/LivePollDTOMapper.cs:13`).
 
 When a channel event arrives, the page decides between **patch-in-place** and **reload**, and this is
-the chapter's key performance lesson. High-frequency tally events (`poll.results-changed`,
-`question.upvote-changed`) already carry the fresh counts in their payload, so the page patches its
-in-memory model and calls `StateHasChanged` with **no HTTP refetch** (`SessionLive.razor.cs:182-231`).
-The comment there records why: reloading on every broadcast turned *V* voters times *C* viewers into
-*V*C* authenticated refetches per hot poll, which collided with the per-user rate limiter under burst
-voting. Structural events (opened, closed, approved, answered, dismissed, pending-count-changed) are
-rarer and *do* trigger a targeted reload of the affected list. Whether the layer is even active is
-decided by [`LiveEventService`](#liveeventservice): it fetches the current-or-next published event and
-computes its live window into a [`LiveEventContext`](#liveeventcontext) (mirroring the backend math),
-and degrades to `null` on any API failure so the live surfaces simply stay dormant rather than error.
-The cross-module [`ISessionLiveUIService`](#isessionliveuiservice) / [`SessionLiveUIService`](#sessionliveuiservice)
-boundary is what lets a Conference session page light up its "Live" button when Engagement is deployed.
+the chapter's key performance lesson. The two high-frequency tally events
+(`poll.results-changed`, `question.upvote-changed`) already carry the fresh counts in their payload,
+so the page patches its in-memory model and calls `StateHasChanged` with **no HTTP refetch**
+(`SessionLive.razor.cs:187-258`), falling back to a targeted reload when the payload cannot be
+applied. The comment there records why: reloading on every broadcast turned *V* voters times *C*
+viewers into *V\*C* authenticated refetches per hot poll, which collided with the per-user rate
+limiter under burst voting (`SessionLive.razor.cs:136-140`). Structural events (opened, closed,
+approved, answered, dismissed, pending-count-changed) are rarer and *do* trigger a targeted reload of
+the affected list (`:146-179`). `SessionLive` itself is the container that owns the lists, the
+channel subscription, and the shared saving flag, while the three sections render through the
+presentational [`SessionLivePollPanel`](#sessionlivepollpanel),
+[`SessionLiveQuestionPanel`](#sessionlivequestionpanel), and
+[`SessionLiveModerationPanel`](#sessionlivemoderationpanel) children (`SessionLive.razor.cs:14-24`).
+Whether the layer is even active is decided by [`LiveEventService`](#liveeventservice)
+(`MMCA.ADC.Engagement.UI/Services/LiveEventService.cs:14`): it fetches the current-or-next published
+event through [`CurrentEventSelector`](group-17-conference-domain.md#currenteventselector) and
+computes its live window into a [`LiveEventContext`](#liveeventcontext) with the same math the
+backend enforces (`:27-46`), degrading to `null` on an API failure (`:48-52`) so the live surfaces
+simply stay dormant rather than error; `HappeningNow` joins the event channel only while
+`IsLiveAt` is true (`LiveEventContext.cs:22`, `HappeningNow.razor.cs:120-128`). The cross-module
+[`ISessionLiveUIService`](#isessionliveuiservice) / [`SessionLiveUIService`](#sessionliveuiservice)
+contract is what lets a Conference session page light up its "Live" button when Engagement is
+deployed (`MMCA.ADC.Engagement.UI/Services/SessionLiveUIService.cs:13-14`).
 
 ## Authorization, feature gating, and the cross-service dependency on Conference
 
-Both controllers, [`LivePollsController`](#livepollscontroller) and
-[`SessionQuestionsController`](#sessionquestionscontroller), sit behind
+Both controllers, [`LivePollsController`](#livepollscontroller)
+(`MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:42`) and
+[`SessionQuestionsController`](#sessionquestionscontroller)
+(`.../Controllers/SessionQuestionsController.cs:37`), sit behind
 [`ApiControllerBase`](group-12-api-hosting-mapping.md#apicontrollerbase) and are gated two ways:
 `[Authorize(Policy = AuthorizationPolicies.RequireAuthenticated)]`
 ([`AuthorizationPolicies`](group-08-auth.md#authorizationpolicies), no anonymous participation) and a
 `[FeatureGate]` per feature ([`EngagementFeatures`](group-22-engagement-module.md#engagementfeatures)
-`LivePolls` / `SessionQA`) that makes the whole surface vanish (404) when toggled off. The finer
+`LivePolls` / `SessionQA`) that makes the whole surface vanish (404) when toggled off
+(`LivePollsController.cs:40-41`, `SessionQuestionsController.cs:35-36`). The finer
 authoring/moderation rights (BR-236) are enforced **in the handlers**, not by an attribute, through
-the shared [`LivePollAuthorization`](#livepollauthorization) check: organizers and admins manage
-everything, and a speaker manages only content scoped to a session they are assigned to (matched
-against the [`SessionLiveInfo.SpeakerIds`](group-17-conference-domain.md#sessionliveinfo) list from
+the shared [`LivePollAuthorization`](#livepollauthorization) check
+(`.../LivePolls/Services/LivePollAuthorization.cs:22-44`): organizers and admins manage everything,
+and a speaker manages only content scoped to a session they are assigned to (matched against the
+[`SessionLiveInfo`](group-17-conference-domain.md#sessionliveinfo)`.SpeakerIds` list from
 Conference). The organizer-only manage list and the delete endpoint additionally carry
-`[HasPermission(EngagementPermissions.LiveManage)]` ([ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html)). Crucially, the caller's identity (user
-id, `speaker_id` claim, roles) is always bound from the token via
-[`ICurrentUserService`](group-08-auth.md#icurrentuserservice), never from the request body
-(`LivePollsController.cs:213-222`).
+`[HasPermission(EngagementPermissions.LiveManage)]` ([ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html), `LivePollsController.cs:120`, `:139`).
+Crucially, the caller's identity (user id, `speaker_id` claim, roles) is always bound from the token
+via [`ICurrentUserService`](group-08-auth.md#icurrentuserservice), never from the request body
+(`LivePollsController.cs:228-236`). Lifecycle POSTs take an optional
+[`LifecycleTransitionRequest`](group-22-engagement-module.md#lifecycletransitionrequest) body purely
+to carry the rowversion (`LivePollsController.cs:83`).
 
-This makes the live layer **bidirectionally coupled to Conference**, the same modular-monolith boundary
-Group 22 demonstrated ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)/[ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)). Engagement calls Conference's
+This makes the live layer **dependent on Conference**, the same modular-monolith boundary Group 22
+demonstrated ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)/[ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)). Engagement calls Conference's
 [`IEventLiveValidationService`](group-17-conference-domain.md#ieventlivevalidationservice) to fetch
 the live window, the session's assigned speakers, and the event's moderation default (in-process when
-co-hosted, over gRPC when extracted), and Conference calls Engagement to light up its Live button. The
+co-hosted, over gRPC when extracted: `MMCA.ADC.Engagement.Service/Program.cs:183-186`), and on the
+client side the Conference session page reaches back through the Engagement UI's
+`ISessionLiveUIService` implementation for the Live route. The
 [`EngagementModule`](group-22-engagement-module.md#engagementmodule) declares the dependency, and the
-same disabled-stub registrations keep every interface resolvable in a single-module service host. The
-UI clients ([`LivePollUIService`](#livepolluiservice), [`SessionQuestionUIService`](#sessionquestionuiservice))
+same disabled-stub registrations keep every interface resolvable in a single-module service host,
+which is why `SessionQuestion.Create` tolerates a default `EventId` (`SessionQuestion.cs:24`, `:64-67`).
+The UI clients ([`LivePollUIService`](#livepolluiservice), [`SessionQuestionUIService`](#sessionquestionuiservice))
 extend Common's [`AuthenticatedServiceBase`](group-15-common-ui-framework.md#authenticatedservicebase)
-and go back through the Gateway's public REST routes, not a back channel.
+and go back through the Gateway's public REST routes, not a back channel
+(`MMCA.ADC.Engagement.UI/Services/LivePollUIService.cs:14-18`).
 
 **Rubric lenses this chapter exercises.** `[Rubric §4, DDD]` (two aggregates with lifecycle state
 machines, invariant guards, the live-window snapshot, and the single-event-with-state design);
-`[Rubric §6, CQRS & Event-Driven]` (command/query slices, durable domain events over the outbox
-*versus* the separate ephemeral channel push); `[Rubric §7, Microservices Readiness]` (the
-`ILiveChannelPublisher` port with a SignalR impl, a Null default, and a gRPC forwarding adapter, plus
-the Conference validation boundary); `[Rubric §12, Performance & Scalability]` (per-vote checks against a
-snapshotted window with no cross-service hop, and patch-in-place tally updates that avoid the *V*C*
-refetch storm against the rate limiter); `[Rubric §11, Security]` (RequireAuthenticated + feature
-gates + handler-enforced speaker-scoped rights + `HasPermission`, identity from token, anonymous
-question display, and pending text kept off the channel, BR-238); `[Rubric §9, API & Contract Design]`
-(feature-gated, versioned REST endpoints returning Problem Details); `[Rubric §18/§19, UI Architecture
-/ State Management]` (three live surfaces over one multicast hub subscription, patch-vs-reload event
-handling, re-join on reconnect); `[Rubric §29, Resilience]` (best-effort publish that never fails the
-command and a UI that treats channel events as hints over fetchable state, degrading to dormant on
-failure); and `[Rubric §13, Observability]` (every dropped publish is logged as a warning). Each is
-taught in full at the relevant per-type section below.
+`[Rubric §6, CQRS & Event-Driven]` (command/query slices, durable domain events over the outbox, and
+the *separate* ephemeral channel broadcast that two of those domain events now trigger);
+`[Rubric §7, Microservices Readiness]` (the `ILiveChannelPublisher` port with a SignalR
+implementation, a Null default, and a gRPC forwarding adapter, plus the Conference validation
+boundary); `[Rubric §12, Performance & Scalability]` (per-vote checks against a snapshotted window
+with no cross-service hop, grouped-`COUNT` tallies, bounded reads, an off-request-path publish queue,
+and patch-in-place tally updates that avoid the *V\*C* refetch storm against the rate limiter);
+`[Rubric §11, Security]` (RequireAuthenticated plus feature gates plus handler-enforced
+speaker-scoped rights plus `HasPermission`, identity from token, anonymous question display, the
+open-question spam cap, and pending text kept off the channel, BR-238); `[Rubric §9, API & Contract
+Design]` (feature-gated, versioned REST endpoints returning Problem Details, with 409 on a stale
+lifecycle transition); `[Rubric §18/§19, UI Architecture / State Management]` (three live surfaces
+over one multicast hub subscription, a container page with presentational panels, patch-vs-reload
+event handling, re-join on reconnect); `[Rubric §29, Resilience]` (post-commit best-effort
+broadcasts that never fail the command and a UI that treats channel events as hints over fetchable
+state, degrading to dormant on failure); and `[Rubric §13, Observability]` (every dropped publish and
+rejected enqueue is logged as a warning). Each is taught in full at the relevant per-type section
+below.
 
 ### CastVoteCommand
 > MMCA.ADC.Engagement.Application · `MMCA.ADC.Engagement.Application.LivePolls.UseCases.CastVote` · `MMCA.ADC.Engagement.Application/LivePolls/UseCases/CastVote/CastVoteCommand.cs:11` · Level 0 · record
@@ -1350,134 +1451,614 @@ taught in full at the relevant per-type section below.
 - **Where it's used**: resolved and run by the query-service pipeline before [`LivePollResultsBuilder`](#livepollresultsbuilder) reads `poll.Options`, and behind the poll read endpoints on [`LivePollsController`](#livepollscontroller).
 
 ### SessionQuestionInvariants
+> MMCA.ADC.Engagement.Domain · `MMCA.ADC.Engagement.Domain.SessionQuestions` · `MMCA.ADC.Engagement.Domain/SessionQuestions/SessionQuestionInvariants.cs:9` · Level 4 · class (static)
 
-> MMCA.ADC.Engagement.Domain · `MMCA.ADC.Engagement.Domain.SessionQuestions` · `MMCA.ADC.Engagement.Domain/SessionQuestions/SessionQuestionInvariants.cs:9` · Level 4 · class
-
-- **What it is** - a static rule holder for the [SessionQuestion](#sessionquestion) aggregate: the three validation checks its factory runs, plus the single source of truth for the question-text length limit (BR-231).
-- **Depends on** - [CommonInvariants](group-02-domain-building-blocks.md#commoninvariants) (the reusable lower-layer guard toolbox), [Result](group-01-result-error-handling.md#result) / [Error](group-01-result-error-handling.md#error) from `MMCA.Common.Shared.Abstractions`, and the module identifier aliases `SessionIdentifierType` / `UserIdentifierType`.
-- **Concept introduced** - the *invariants class* idiom is taught in [Group 02](group-02-domain-building-blocks.md#the-entity-chain-one-capability-per-rung): domain rules live in a dedicated static class returning [Result](group-01-result-error-handling.md#result), never as ad-hoc `if` blocks inside the entity, so the entity factory reads as a checklist and each rule is independently testable. What this class adds specifically is `TextMaxLength = 500` (`SessionQuestionInvariants.cs:12`) as a `public const`, the one place the 1-to-500 character limit is declared. [Rubric §4 - Domain-Driven Design] assesses whether invariants are enforced inside the model rather than at the edges: here the rule set is the model's own guard, called only through the aggregate's `Create`. [Rubric §1 - SOLID] assesses single-responsibility: validation is factored out of the entity into a unit that does nothing else.
+- **What it is**: the static rule holder for the [`SessionQuestion`](#sessionquestion) aggregate: three
+  validation checks its factory runs, plus the two numeric limits the Q&A layer treats as single sources
+  of truth (BR-231).
+- **Depends on**: [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants) (the reusable
+  lower-layer guard toolbox), [`Result`](group-01-result-error-handling.md#result) /
+  [`Error`](group-01-result-error-handling.md#error) from `MMCA.Common.Shared.Abstractions`, and the
+  module identifier aliases `SessionIdentifierType` / `UserIdentifierType`.
+- **Concept reinforced, the invariants class as the aggregate's rule sheet.** The idiom is taught in
+  [Group 02](group-02-domain-building-blocks.md#commoninvariants): domain rules live in a dedicated
+  static class returning [`Result`](group-01-result-error-handling.md#result), never as ad-hoc `if`
+  blocks inside the entity, so the factory reads as a checklist and each rule is independently testable.
+  What this class adds is two `public const` limits. `TextMaxLength = 500`
+  (`SessionQuestionInvariants.cs:12`) is the one place the 1-to-500 character rule is declared.
+  `MaxOpenQuestionsPerUserPerSession = 10` (`SessionQuestionInvariants.cs:19`) is an anti-spam cap on
+  how many Pending-or-Approved questions one user may hold per session; its comment (`:15-18`) explains
+  the motive, an event whose moderation default auto-approves would otherwise let one attendee flood the
+  session, and dismissed questions deliberately do not count against it. `[Rubric §4, DDD]` assesses
+  whether business rules are expressed in the domain's own vocabulary rather than scattered at the
+  edges; both constants and all three checks live beside the aggregate they guard. `[Rubric §16,
+  Maintainability]` assesses single-source-of-truth for repeated values: the literal `500` is never
+  retyped, and the cap is a named constant rather than a magic number in a handler.
 - **Walkthrough**
-  - `TextMaxLength` (`SessionQuestionInvariants.cs:12`): the shared max-length constant, reused by [SessionQuestion.Create](#sessionquestion) and by any FluentValidation validator or EF configuration that needs the same number.
-  - `EnsureSessionIdIsValid` (`SessionQuestionInvariants.cs:14`) and `EnsureUserIdIsValid` (`SessionQuestionInvariants.cs:17`): both delegate to `CommonInvariants.EnsureIdIsNotDefault`, failing with a stable error code (`SessionQuestion.SessionId.Invalid` / `SessionQuestion.UserId.Invalid`) when the id is the type default.
-  - `EnsureTextIsValid` (`SessionQuestionInvariants.cs:20`): inline check that rejects null/whitespace or over-length text with an `Error.Invariant` carrying the code `SessionQuestion.Text.Invalid` and a message templated from `TextMaxLength` (`SessionQuestionInvariants.cs:22-26`). Success returns `Result.Success()`.
-- **Why it's built this way** - stable machine-readable error `code`s and a shared length constant mean the API layer, validators, and persistence all agree on one rule without duplicating the literal `500`. The `source` parameter (the caller passes `nameof(Create)`) threads the origin into every error for diagnostics.
-- **Where it's used** - exclusively by [SessionQuestion.Create](#sessionquestion) (`SessionQuestion.cs:85-88`), combined via `Result.Combine`.
+  - `TextMaxLength` (`:12`) and `MaxOpenQuestionsPerUserPerSession` (`:19`): the two shared constants,
+    consumed by domain, persistence, validation, and the submit use case alike (see *Where it's used*).
+  - `EnsureSessionIdIsValid` (`:21`) and `EnsureUserIdIsValid` (`:24`): both delegate to
+    [`CommonInvariants.EnsureIdIsNotDefault`](group-02-domain-building-blocks.md#commoninvariants),
+    failing with a stable code (`SessionQuestion.SessionId.Invalid` /
+    `SessionQuestion.UserId.Invalid`) when the identifier is still its type default.
+  - `EnsureTextIsValid` (`:27`): the only inline check. It rejects null/whitespace or over-length text
+    with an `Error.Invariant` coded `SessionQuestion.Text.Invalid` whose message is templated from
+    `TextMaxLength` (`:28-33`), so tightening the constant rewords the error automatically; otherwise it
+    returns `Result.Success()` (`:34`).
+- **Why it's built this way**: stable machine-readable `code`s plus shared constants mean the API layer,
+  the FluentValidation validators, and the EF configuration all agree on one rule without duplicating a
+  literal. Every method takes a `source` argument (callers pass `nameof(Create)`), which threads the
+  origin of the failure into the [`Error`](group-01-result-error-handling.md#error) for diagnostics.
+- **Where it's used**: the three checks are combined inside [`SessionQuestion.Create`](#sessionquestion)
+  (`MMCA.ADC.Engagement.Domain/SessionQuestions/SessionQuestion.cs:85-88`). `TextMaxLength` is reused by
+  `SessionQuestionConfiguration` for the column length
+  (`MMCA.ADC.Engagement.Infrastructure/Persistence/EntityConfiguration/SessionQuestionConfiguration.cs:32`)
+  and by the submit validator's `MaximumLength` rule and message
+  (`MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionCommandValidator.cs:22-23`).
+  `MaxOpenQuestionsPerUserPerSession` is enforced by
+  [`SubmitQuestionHandler`](#submitquestionhandler)
+  (`MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:67,71`),
+  not by the entity: the cap is a cross-row rule that needs a query, so it cannot live in a factory that
+  only sees one instance.
 
 ### SessionQuestionUpvoteInvariants
+> MMCA.ADC.Engagement.Domain · `MMCA.ADC.Engagement.Domain.SessionQuestions` · `MMCA.ADC.Engagement.Domain/SessionQuestions/SessionQuestionUpvoteInvariants.cs:9` · Level 4 · class (static)
 
-> MMCA.ADC.Engagement.Domain · `MMCA.ADC.Engagement.Domain.SessionQuestions` · `MMCA.ADC.Engagement.Domain/SessionQuestions/SessionQuestionUpvoteInvariants.cs:9` · Level 4 · class
-
-- **What it is** - the sibling invariants class for [SessionQuestionUpvote](#sessionquestionupvote): the two id checks its factory needs.
-- **Depends on** - [CommonInvariants](group-02-domain-building-blocks.md#commoninvariants), [Result](group-01-result-error-handling.md#result), and the `SessionQuestionIdentifierType` / `UserIdentifierType` aliases.
-- **Concept introduced** - none new; it is the compact twin of [SessionQuestionInvariants](#sessionquestioninvariants) with no length constant because an upvote has no free-text field, only two foreign keys.
+- **What it is**: the sibling invariants class for [`SessionQuestionUpvote`](#sessionquestionupvote):
+  the two identifier checks its factory needs.
+- **Depends on**: [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants),
+  [`Result`](group-01-result-error-handling.md#result), and the `SessionQuestionIdentifierType` /
+  `UserIdentifierType` aliases.
+- **Concept reinforced**: nothing new. This is the compact twin of
+  [`SessionQuestionInvariants`](#sessionquestioninvariants), with no length constant because an upvote
+  has no free-text field, only two foreign keys. `[Rubric §1, SOLID]`: even a two-line rule set gets its
+  own type, so the aggregate factory stays a flat `Result.Combine` of named intents.
 - **Walkthrough**
-  - `EnsureQuestionIdIsValid` (`SessionQuestionUpvoteInvariants.cs:11`): `CommonInvariants.EnsureIdIsNotDefault` on the upvoted question id, code `SessionQuestionUpvote.QuestionId.Invalid`.
-  - `EnsureUserIdIsValid` (`SessionQuestionUpvoteInvariants.cs:14`): the same guard on the upvoting user, code `SessionQuestionUpvote.UserId.Invalid`.
-- **Why it's built this way** - see [SessionQuestionInvariants](#sessionquestioninvariants); one guard unit per aggregate keeps each aggregate's factory a flat checklist.
-- **Where it's used** - by [SessionQuestionUpvote.Create](#sessionquestionupvote) (`SessionQuestionUpvote.cs:48-50`).
+  - `EnsureQuestionIdIsValid` (`:11`): `EnsureIdIsNotDefault` on the upvoted question, code
+    `SessionQuestionUpvote.QuestionId.Invalid`.
+  - `EnsureUserIdIsValid` (`:14`): the same guard on the upvoting user, code
+    `SessionQuestionUpvote.UserId.Invalid`.
+- **Why it's built this way**: see [`SessionQuestionInvariants`](#sessionquestioninvariants); one guard
+  unit per aggregate keeps each factory readable and each rule unit-testable in isolation.
+- **Where it's used**: combined by [`SessionQuestionUpvote.Create`](#sessionquestionupvote)
+  (`MMCA.ADC.Engagement.Domain/SessionQuestions/SessionQuestionUpvote.cs:47-49`).
 
 ### SessionQuestion
+> MMCA.ADC.Engagement.Domain · `MMCA.ADC.Engagement.Domain.SessionQuestions` · `MMCA.ADC.Engagement.Domain/SessionQuestions/SessionQuestion.cs:19` · Level 5 · class (sealed aggregate root)
 
-> MMCA.ADC.Engagement.Domain · `MMCA.ADC.Engagement.Domain.SessionQuestions` · `MMCA.ADC.Engagement.Domain/SessionQuestions/SessionQuestion.cs:19` · Level 5 · class
-
-- **What it is** - the aggregate root for an attendee-submitted, moderated session question in the conference-day live layer. It carries the question text, a moderation status, an answered flag, and a snapshot of the event's live-window end so upvote timing can be checked without a cross-service call.
-- **Depends on** - base [AuditableAggregateRootEntity<TIdentifierType>](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype) (identity, soft-delete, audit fields, domain-event collection), [SessionQuestionInvariants](#sessionquestioninvariants), the [QuestionStatus](#questionstatus) enum, the [SessionQuestionChanged](#sessionquestionchanged) domain event, [DomainEntityState](group-02-domain-building-blocks.md#domainentitystate), [IdValueGeneratedAttribute](group-02-domain-building-blocks.md#idvaluegeneratedattribute), and [Result](group-01-result-error-handling.md#result) / [Error](group-01-result-error-handling.md#error). Externals: BCL `DateTime` / `TimeProvider` (the caller supplies `nowUtc`).
-- **Concept introduced** - the **snapshotted cross-service value** pattern. Because Engagement and Conference are separate services with separate databases ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)), the event's live-window end is fetched once from Conference at submission and stored on the row as `LiveWindowEndUtc` (`SessionQuestion.cs:43`), so every later upvote-timing decision is a local field read rather than a gRPC round trip (BR-237). This class also shows the **single-event-plus-state** convention (BR-60): instead of `QuestionApproved` / `QuestionDismissed` / `QuestionDeleted` event types, one [SessionQuestionChanged](#sessionquestionchanged) carries a [DomainEntityState](group-02-domain-building-blocks.md#domainentitystate) discriminator. [Rubric §4 - Domain-Driven Design] assesses invariant enforcement inside the boundary and explicit state transitions: every mutator here is a guarded method returning [Result](group-01-result-error-handling.md#result), and illegal transitions fail rather than throw. [Rubric §7 - Microservices Readiness] assesses whether a boundary avoids chatty cross-service dependence: the live-window snapshot is exactly that, denormalized-at-write so reads stay in-process. [Rubric §6 - CQRS & Event-Driven] applies because every state change is announced as a domain event that the outbox later publishes.
+- **What it is**: the aggregate root for an attendee-submitted, moderated session question in the
+  conference-day live layer. It carries the text, a moderation status, an answered flag, and a snapshot
+  of the event's live-window end so upvote timing can be checked without a cross-service call.
+- **Depends on**:
+  [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype)
+  (identity, soft-delete, audit fields, the domain-event list),
+  [`SessionQuestionInvariants`](#sessionquestioninvariants), [`QuestionStatus`](#questionstatus),
+  [`SessionQuestionChanged`](#sessionquestionchanged),
+  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate),
+  [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute), and
+  [`Result`](group-01-result-error-handling.md#result) / [`Error`](group-01-result-error-handling.md#error).
+  Externals: the BCL `DateTime` only (the caller supplies `nowUtc` from an injected `TimeProvider`).
+- **Concept introduced, the snapshotted cross-service fact.** `[Rubric §7, Microservices Readiness]`
+  assesses whether a boundary avoids chatty synchronous dependence on a peer. Engagement and Conference
+  are separate services with separate databases ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)), so the event's live-window end is fetched
+  once from Conference at submission time and stored on the row as `LiveWindowEndUtc` (`:39-43`); every
+  later upvote-timing decision is then a local field read instead of a gRPC round trip (BR-237, the same
+  trick [`LivePoll`](#livepoll) plays at `Open`). The class also shows the **single-event-plus-state**
+  convention (BR-60): instead of `QuestionApproved` / `QuestionDismissed` / `QuestionDeleted` event
+  types, one [`SessionQuestionChanged`](#sessionquestionchanged) carries a
+  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate) discriminator (`:15-16`).
+  `[Rubric §4, DDD]` assesses invariant enforcement and explicit transitions inside the model: every
+  mutator here is a guarded method returning [`Result`](group-01-result-error-handling.md#result), and
+  an illegal transition fails rather than throws. `[Rubric §6, CQRS & Event-Driven]` applies because
+  each state change announces itself as a domain event for downstream handlers.
 - **Walkthrough**
-  - Fields (`SessionQuestion.cs:22-43`): `SessionId` (the session asked in), `EventId` (denormalized from the session, metadata only and deliberately not validated because the disabled-stub gRPC boundary can report a default, per the remark at `SessionQuestion.cs:24`), `UserId` (never exposed on DTOs: questions display anonymously, BR-238), `Text`, `Status`, `IsAnswered`, and `LiveWindowEndUtc`. All have private setters, so state changes only through the methods below.
-  - Constructors (`SessionQuestion.cs:46-62`): a private parameterless ctor for EF materialization (initializing `Text` to empty), and a private all-args ctor the factory uses.
-  - `Create` (`SessionQuestion.cs:77-109`): combines the three [SessionQuestionInvariants](#sessionquestioninvariants) checks, then separately rejects any `initialStatus` that is not `Pending` or `Approved` (`SessionQuestion.cs:92-99`) since a question starts at the event's moderation default (BR-233). It constructs with `Id = default` (the [IdValueGeneratedAttribute](group-02-domain-building-blocks.md#idvaluegeneratedattribute) marks the key as database-generated) and raises [SessionQuestionChanged](#sessionquestionchanged) with `DomainEntityState.Added` (`SessionQuestion.cs:106`).
-  - `Approve` (`SessionQuestion.cs:117`), `Dismiss` (`SessionQuestion.cs:141`): moderation transitions (BR-234). Each rejects a no-op transition (approving an already-approved question, dismissing an already-dismissed one) with an `Error.Invariant` coded `SessionQuestion.InvalidTransition`, sets `Status`, and raises `Updated`.
-  - `MarkAnswered` (`SessionQuestion.cs:164`): only valid while `Approved` (code `SessionQuestion.NotApproved`) and only once (code `SessionQuestion.AlreadyAnswered`); sets `IsAnswered` and raises `Updated`.
-  - `CanAcceptUpvote` (`SessionQuestion.cs:197`): the guard the upvote use case calls. It fails if the question is not `Approved` (`SessionQuestion.NotApproved`) or if `nowUtc >= LiveWindowEndUtc` (`SessionQuestion.OutsideLiveWindow`, `SessionQuestion.cs:208`), enforcing the live-window snapshot without touching Conference.
-  - `Delete` (`SessionQuestion.cs:225`): overrides the base soft-delete, and on success raises [SessionQuestionChanged](#sessionquestionchanged) with `Deleted`.
-- **Why it's built this way** - snapshotting the live-window end (rather than calling Conference per upvote) trades a small staleness window for avoiding chatty synchronous coupling on the hot path, the microservice-readiness rationale in [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) / [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html). The single-event-plus-state shape (BR-60) keeps the event catalog small and lets one handler branch on `DomainEntityState`.
-- **Where it's used** - by the Engagement Application submit/moderate/upvote use cases and projected to DTOs by [SessionQuestionViewBuilder](#sessionquestionviewbuilder); persisted by its EF configuration; its events flow through the outbox to the live-channel publisher.
+  - Properties (`:22-43`), all with `private set` so state changes only through the methods below:
+    `SessionId` (`:22`), `EventId` (`:25`, denormalized from the session and deliberately not validated
+    because the disabled-stub gRPC boundary can report a default, per the remark at `:24`), `UserId`
+    (`:28`, never copied onto a DTO because questions display anonymously, BR-238), `Text` (`:31`),
+    `Status` (`:34`), `IsAnswered` (`:37`), and `LiveWindowEndUtc` (`:43`).
+  - Constructors (`:46-62`): a private parameterless one for EF materialization that initializes `Text`
+    to empty (`:46`), and a private all-args one the factory uses (`:48-62`).
+  - `Create` (`:77`): combines the three [`SessionQuestionInvariants`](#sessionquestioninvariants)
+    checks (`:85-88`), then separately rejects any `initialStatus` other than `Pending` or `Approved`
+    with code `SessionQuestion.InvalidInitialStatus` (`:92-99`), because a question must start at the
+    event's moderation default (BR-233). It constructs with `Id = default` (the
+    [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute) at `:18`
+    marks the key database-generated) and raises
+    [`SessionQuestionChanged`](#sessionquestionchanged) with `Added` (`:106`).
+  - `Approve` (`:117`) and `Dismiss` (`:141`): the moderation transitions (BR-234). Each rejects the
+    no-op case (approving an already-approved question, dismissing an already-dismissed one) with an
+    `Error.Invariant` coded `SessionQuestion.InvalidTransition`, sets `Status`, and raises `Updated`.
+    Note there is no one-way door: a dismissed question can be approved again.
+  - `MarkAnswered` (`:164`): valid only while `Approved` (code `SessionQuestion.NotApproved`, `:166-173`)
+    and only once (code `SessionQuestion.AlreadyAnswered`, `:175-182`); sets `IsAnswered` and raises
+    `Updated`.
+  - `CanAcceptUpvote` (`:197`): the guard the upvote use case calls before writing. It fails when the
+    question is not `Approved` (`:199-206`) or when `nowUtc >= LiveWindowEndUtc`
+    (`SessionQuestion.OutsideLiveWindow`, `:208-215`), enforcing the live window purely from the
+    snapshot, with no call into Conference.
+  - `Delete` (`:225`): overrides the base soft-delete and, on success, raises
+    [`SessionQuestionChanged`](#sessionquestionchanged) with `Deleted` (`:229-230`).
+- **Why it's built this way**: snapshotting the window end rather than calling Conference per upvote
+  trades a small staleness window for removing a synchronous peer dependency from the conference-day hot
+  path ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) for the database-per-service split, [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html) for the gRPC boundary this avoids). The
+  single-event-plus-state shape (BR-60) keeps the event catalog small and lets one handler branch on
+  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate).
+- **Where it's used**: created by [`SubmitQuestionHandler`](#submitquestionhandler), transitioned by
+  [`ModerateQuestionHandler`](#moderatequestionhandler), read by
+  [`GetSessionQuestionsHandler`](#getsessionquestionshandler) /
+  [`GetModerationQueueHandler`](#getmoderationqueuehandler) and projected by
+  [`SessionQuestionViewBuilder`](#sessionquestionviewbuilder); re-read for the fresh count by
+  [`SessionQuestionUpvoteChangedHandler`](#sessionquestionupvotechangedhandler); mapped to SQL Server by
+  `SessionQuestionConfiguration`
+  ([group 22](group-22-engagement-module.md#sessionquestionconfiguration)).
 
 ### SessionQuestionUpvote
+> MMCA.ADC.Engagement.Domain · `MMCA.ADC.Engagement.Domain.SessionQuestions` · `MMCA.ADC.Engagement.Domain/SessionQuestions/SessionQuestionUpvote.cs:19` · Level 5 · class (sealed aggregate root)
 
-> MMCA.ADC.Engagement.Domain · `MMCA.ADC.Engagement.Domain.SessionQuestions` · `MMCA.ADC.Engagement.Domain/SessionQuestions/SessionQuestionUpvote.cs:20` · Level 5 · class
-
-- **What it is** - a standalone aggregate root recording one user's upvote on one [SessionQuestion](#sessionquestion). Deliberately not modeled as a child of the question.
-- **Depends on** - [AuditableAggregateRootEntity<TIdentifierType>](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype), [SessionQuestionUpvoteInvariants](#sessionquestionupvoteinvariants), the [SessionQuestionUpvoteChanged](#sessionquestionupvotechanged) event, [DomainEntityState](group-02-domain-building-blocks.md#domainentitystate), [IdValueGeneratedAttribute](group-02-domain-building-blocks.md#idvaluegeneratedattribute), and `MMCA.Common.Domain.Extensions` (for the base `Undelete`).
-- **Concept introduced** - the **separate-aggregate-for-high-frequency-writes** decision. The class comment (`SessionQuestionUpvote.cs:10-18`) spells out the rationale: upvotes are frequent attendee writes, and loading every upvote into the question aggregate would bloat the change tracker and contend on the question row, so an upvote is its own root. Uniqueness (one active upvote per question+user, BR-235) is enforced at the database by a filtered unique index (see [LivePollVoteConfiguration](#livepollvoteconfiguration) for the identical pattern on votes), and toggling an upvote off/on is soft-delete-then-`Reactivate` rather than insert-churn (the BR-135 reactivation pattern). [Rubric §4 - Domain-Driven Design] assesses correct aggregate boundaries: splitting a high-write satellite from its parent root is a textbook boundary choice. [Rubric §8 - Data Architecture] assesses concurrency and uniqueness strategy: the filtered unique index plus soft-delete reactivation avoids row contention and orphan accumulation.
+- **What it is**: a standalone aggregate root recording one user's upvote on one
+  [`SessionQuestion`](#sessionquestion). Deliberately not modeled as a child of the question.
+- **Depends on**:
+  [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype),
+  [`SessionQuestionUpvoteInvariants`](#sessionquestionupvoteinvariants),
+  [`SessionQuestionUpvoteChanged`](#sessionquestionupvotechanged),
+  [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate),
+  [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute), and
+  [`Result`](group-01-result-error-handling.md#result).
+- **Concept reinforced, splitting a high-frequency satellite into its own aggregate.** The same decision
+  [`LivePollVote`](#livepollvote) makes, stated again in the class comment (`:9-17`): upvotes are
+  frequent attendee writes, and pulling every upvote into the question aggregate would bloat the change
+  tracker and make each upvote contend on the question row, so an upvote is its own root with no
+  navigation back. `[Rubric §4, DDD]` assesses aggregate boundaries chosen for consistency needs rather
+  than convenience. `[Rubric §8, Data Architecture]` assesses where uniqueness and concurrency are
+  enforced: "one active upvote per (question, user)" (BR-235) is a **filtered unique index** on
+  `[IsDeleted] = 0` in `SessionQuestionUpvoteConfiguration`
+  ([group 22](group-22-engagement-module.md#sessionquestionupvoteconfiguration)), not an in-memory
+  sibling scan, and toggling an upvote off then on is soft-delete followed by `Reactivate` so those rows
+  never accumulate duplicates (the BR-135 reactivation pattern).
 - **Walkthrough**
-  - Fields (`SessionQuestionUpvote.cs:23-26`): `SessionQuestionId` and `UserId`, both private-set scalar foreign keys (no navigation to the question, keeping the aggregates independent).
-  - Constructors (`SessionQuestionUpvote.cs:29-35`): private parameterless for EF, private two-arg for the factory.
-  - `Create` (`SessionQuestionUpvote.cs:44`): combines the two [SessionQuestionUpvoteInvariants](#sessionquestionupvoteinvariants) checks, constructs with `Id = default`, and raises [SessionQuestionUpvoteChanged](#sessionquestionupvotechanged) with `Added`.
-  - `Reactivate` (`SessionQuestionUpvote.cs:70`): calls the base `Undelete()` and, on success, raises `Added` again so a re-upvote looks like a fresh upvote to downstream consumers (BR-235 / BR-135).
-  - `Delete` (`SessionQuestionUpvote.cs:85`): overrides soft-delete (an un-upvote) and raises `Deleted`.
-- **Why it's built this way** - see the concept note: separating the upvote aggregate and driving on/off through soft-delete + reactivation is what makes the filtered unique index a durable one-active-per-user guarantee while keeping high-frequency writes off the question row.
-- **Where it's used** - written by the upvote/un-upvote use cases; counted and projected by [SessionQuestionViewBuilder](#sessionquestionviewbuilder) (`SessionQuestionViewBuilder.cs:34-46`).
+  - Properties (`:22`, `:25`): `SessionQuestionId` and `UserId`, both `private set` scalar foreign keys,
+    with no navigation to the question, which is what keeps the two aggregates independent.
+  - Constructors (`:28-34`): private parameterless for EF, private two-arg for the factory.
+  - `Create` (`:43`): combines the two
+    [`SessionQuestionUpvoteInvariants`](#sessionquestionupvoteinvariants) checks (`:47-49`), constructs
+    with `Id = default` (`:53-56`), and raises
+    [`SessionQuestionUpvoteChanged`](#sessionquestionupvotechanged) with `Added` (`:58`).
+  - `Reactivate` (`:69`): calls the inherited `Undelete()` and, on success, raises `Added` again
+    (`:73-74`), so a re-upvote looks exactly like a fresh upvote to every downstream consumer, including
+    the broadcast handler.
+  - `Delete` (`:84`): overrides the base soft-delete (an un-upvote) and raises `Deleted` (`:88-89`).
+- **Why it's built this way**: separating the upvote root and driving on/off through soft-delete plus
+  reactivation is what lets the filtered unique index be a durable one-active-per-user guarantee while
+  keeping the write traffic off the question row.
+- **Where it's used**: written by [`ToggleUpvoteHandler`](#toggleupvotehandler); counted with a grouped
+  SQL `COUNT` by [`SessionQuestionViewBuilder`](#sessionquestionviewbuilder) and by
+  [`SessionQuestionUpvoteChangedHandler`](#sessionquestionupvotechangedhandler).
 
 ### LivePollDTOMapper
+> MMCA.ADC.Engagement.Application · `MMCA.ADC.Engagement.Application.LivePolls.DTOs` · `MMCA.ADC.Engagement.Application/LivePolls/DTOs/LivePollDTOMapper.cs:13` · Level 7 · class (sealed partial)
 
-> MMCA.ADC.Engagement.Application · `MMCA.ADC.Engagement.Application.LivePolls.DTOs` · `MMCA.ADC.Engagement.Application/LivePolls/DTOs/LivePollDTOMapper.cs:13` · Level 7 · class
-
-- **What it is** - the Mapperly-generated mapper that turns a [LivePoll](group-23-engagement-live-layer.md#livepoll) entity (with its options) into a [LivePollDTO](group-23-engagement-live-layer.md#livepolldto) for read responses.
-- **Depends on** - [IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>](group-12-api-hosting-mapping.md#ientitydtomappertentity-tentitydto-tidentifiertype) (the common mapper contract), and the `Riok.Mapperly.Abstractions` source generator (`[Mapper]`).
-- **Concept introduced** - the compile-time DTO mapping approach ([ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html)) is taught with the other mappers; the [Mapper] attribute on a `partial` class (`LivePollDTOMapper.cs:12-14`) makes Mapperly generate the field-copy code at build time, so there is no reflection and no hand-written property assignments to drift. [Rubric §9 - API and Contract Design] assesses whether the wire contract is decoupled from the domain model: mapping the entity to a dedicated DTO is that decoupling. [Rubric §15 - Best Practices] applies because source-generated mapping is allocation-light and analyzer-clean.
+- **What it is**: the Mapperly-generated mapper that turns a [`LivePoll`](#livepoll) entity, including
+  its options, into a [`LivePollDTO`](#livepolldto) for read responses.
+- **Depends on**:
+  [`IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>`](group-12-api-hosting-mapping.md#ientitydtomappertentity-tentitydto-tidentifiertype)
+  (the framework mapper contract it satisfies, `:14`), [`LivePoll`](#livepoll),
+  [`LivePollDTO`](#livepolldto), and the `Riok.Mapperly.Abstractions` source generator (`[Mapper]`,
+  `:12`).
+- **Concept reinforced, compile-time DTO mapping ([ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html)).** Taught with the other `…DTOMapper` types:
+  the `[Mapper]` attribute on a `partial` class makes Mapperly emit the property-copy code at build
+  time, so there is no runtime reflection, no hand-written assignments to drift, and a missing member is
+  a build error rather than a silently null field. `[Rubric §9, API and Contract Design]` assesses
+  whether the wire contract is decoupled from the domain model; mapping the aggregate to a dedicated
+  record ([`LivePollDTO`](#livepolldto), which also carries the [ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html) `RowVersion` token) is that
+  decoupling. `[Rubric §15, Best Practices]` applies because generated mapping is allocation-light and
+  analyzer-clean under this repo's warnings-as-errors setting.
 - **Walkthrough**
-  - `MapToDTO` (`LivePollDTOMapper.cs:17`): a `partial` method whose body Mapperly generates from the [LivePoll](group-23-engagement-live-layer.md#livepoll) to [LivePollDTO](group-23-engagement-live-layer.md#livepolldto) shape, including nested options.
-  - `MapToDTOs` (`LivePollDTOMapper.cs:20-24`): hand-written collection overload, null-guarded with `ArgumentNullException.ThrowIfNull`, projecting each entity via `MapToDTO` into a collection-expression result.
-- **Why it's built this way** - Mapperly satisfies the [IEntityDTOMapper](group-12-api-hosting-mapping.md#ientitydtomappertentity-tentitydto-tidentifiertype) contract with generated code, keeping the poll read path fast and drift-free ([ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html)).
-- **Where it's used** - by the LivePolls read/query handlers when returning poll views. It is auto-registered by Scrutor assembly scanning.
+  - `MapToDTO(LivePoll entity)` (`:17`): declared `partial` with no body; Mapperly generates the
+    entity-to-DTO copy, including the nested [`LivePollOption`](#livepolloption) collection, from the
+    two shapes.
+  - `MapToDTOs(IReadOnlyCollection<LivePoll>)` (`:20-24`): the hand-written collection overload,
+    null-guarded with `ArgumentNullException.ThrowIfNull` (`:22`) and projecting each entity through
+    `MapToDTO` into a collection-expression result (`:23`).
+- **Why it's built this way**: implementing the framework's mapper interface with generated code keeps
+  the poll read path fast and drift-free, which is exactly the trade [ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html) records against
+  reflection-based mapping.
+- **Where it's used**: resolved by the generic `EntityQueryService<LivePoll, LivePollDTO, …>` wiring and
+  by the poll read handlers such as [`GetEventPollsHandler`](#geteventpollshandler). Registration is
+  convention-based: `ScanModuleApplicationServices<ClassReference>()` picks up every mapper in the
+  assembly (`MMCA.ADC.Engagement.Application/DependencyInjection.cs:71`).
 
 ### LivePollConfiguration
+> MMCA.ADC.Engagement.Infrastructure · `MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration` · `MMCA.ADC.Engagement.Infrastructure/Persistence/EntityConfiguration/LivePollConfiguration.cs:15` · Level 8 · class (internal sealed)
 
-> MMCA.ADC.Engagement.Infrastructure · `MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration` · `MMCA.ADC.Engagement.Infrastructure/Persistence/EntityConfiguration/LivePollConfiguration.cs:16` · Level 8 · class
-
-- **What it is** - the EF Core mapping for the [LivePoll](group-23-engagement-live-layer.md#livepoll) aggregate root: column requirements, the question length limit, and the query index.
-- **Depends on** - [EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype) (the common base that applies audit/soft-delete/RowVersion mapping), EF Core's `EntityTypeBuilder<T>`, and [LivePollInvariants](group-23-engagement-live-layer.md#livepollinvariants) for the shared `QuestionMaxLength`.
-- **Concept introduced** - the EF configuration base class and the boundary-crossing-FK-as-scalar rule are taught in [Group 07](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype). What this file demonstrates is the **no cross-database FK** rule made concrete (`LivePollConfiguration.cs:11-15`): `EventId` (and any session reference) points at Conference-owned rows in a different database, so it stays a plain indexed scalar column, and consistency is carried by the Conference gRPC validation boundary, never by a foreign-key constraint. [Rubric §8 - Data Architecture] assesses the persistence contract (nullability, lengths, indexes) and the database-per-service discipline: both are visible here. [Rubric §7 - Microservices Readiness] applies because the scalar-FK choice is what keeps the two services' schemas independent.
+- **What it is**: the EF Core mapping for the [`LivePoll`](#livepoll) aggregate root: column
+  requirements, the question length limit, and the two query indexes.
+- **Depends on**:
+  [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype)
+  (the shared base that maps audit fields, soft-delete, and `RowVersion`), EF Core's
+  `EntityTypeBuilder<T>`, and [`LivePollInvariants`](#livepollinvariants) for `QuestionMaxLength`.
+- **Concept introduced, the no-cross-database foreign key rule.** The base class itself is taught in
+  [Group 07](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype);
+  what this file makes concrete is the remark at `:10-14`: `EventId` and `SessionId` point at
+  Conference-owned rows in a *different* database, so they stay plain indexed scalar columns and
+  consistency flows through the Conference gRPC validation boundary, never through an FK constraint.
+  `[Rubric §7, Microservices Readiness]` assesses schema independence between services, which is exactly
+  what the scalar-reference choice buys. `[Rubric §8, Data Architecture]` assesses the persistence
+  contract (nullability, lengths, indexes) and the database-per-service discipline ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)); both are
+  visible in nine lines here.
 - **Walkthrough**
-  - `base.Configure` (`LivePollConfiguration.cs:22`): applies the common conventions first.
-  - `EventId` required (`LivePollConfiguration.cs:24-25`); `Question` required with `HasMaxLength(LivePollInvariants.QuestionMaxLength)` (`LivePollConfiguration.cs:27-29`), reusing the domain constant so DB and domain agree; `Status` required (`LivePollConfiguration.cs:31-32`).
-  - `HasIndex(p => p.EventId)` (`LivePollConfiguration.cs:35`): a non-unique index because the Happening Now page and the organizer manage view both query polls by event.
-- **Why it's built this way** - one length constant sourced from the domain ([ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html)-adjacent single-source-of-truth), scalar cross-service references ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)), and an index matching the real query shape.
-- **Where it's used** - discovered and applied at model-build time by the Engagement `SQLServerDbContext`; auto-registered via Scrutor.
+  - `Configure` (`:19`) calls `base.Configure(builder)` first (`:21`) so the common conventions land
+    before any override.
+  - `EventId` required (`:23-24`); `Question` required with
+    `HasMaxLength(LivePollInvariants.QuestionMaxLength)` (`:26-28`), sourcing the length from the domain
+    constant so schema and invariant can never disagree; `Status` required (`:30-31`).
+  - `HasIndex(p => p.EventId)` (`:34`): non-unique, because the Happening Now page and the organizer
+    manage view both query polls by event (`:33`).
+  - `HasIndex(p => new { p.SessionId, p.Status })` (`:40`): the composite added for
+    [`GetOpenPollsHandler`](#getopenpollshandler). Its comment (`:36-39`) is the performance record:
+    that query filters on `(SessionId, Status)`, runs once per attendee per session and again on every
+    structural poll event, and only `EventId` was indexed, so it scanned. `[Rubric §12, Performance and
+    Scalability]` assesses whether indexes match the real query shapes of the hot path.
+- **Why it's built this way**: one length constant sourced from the domain, scalar cross-service
+  references per [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html), and indexes derived from the two live-layer read shapes rather than guessed.
+- **Where it's used**: discovered and applied at model-build time by the Engagement `SQLServerDbContext`
+  through EF Core's configuration scanning; it is `internal`, so nothing else can reach it.
 
 ### LivePollOptionConfiguration
+> MMCA.ADC.Engagement.Infrastructure · `MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration` · `MMCA.ADC.Engagement.Infrastructure/Persistence/EntityConfiguration/LivePollOptionConfiguration.cs:10` · Level 8 · class (internal sealed)
 
-> MMCA.ADC.Engagement.Infrastructure · `MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration` · `MMCA.ADC.Engagement.Infrastructure/Persistence/EntityConfiguration/LivePollOptionConfiguration.cs:11` · Level 8 · class
-
-- **What it is** - the EF mapping for the `LivePollOption` child entity: its text limit and its owning relationship back to [LivePoll](group-23-engagement-live-layer.md#livepoll).
-- **Depends on** - [EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype), EF Core `EntityTypeBuilder<T>`, and [LivePollInvariants](group-23-engagement-live-layer.md#livepollinvariants) for `OptionTextMaxLength`.
-- **Concept introduced** - none new; this is the **in-aggregate child** counterpart to [LivePollConfiguration](#livepollconfiguration). Unlike the cross-service scalar FK there, the option lives in the same aggregate and same database as its poll, so it gets a real navigation and a real foreign key (`LivePollOptionConfiguration.cs:23-26`). [Rubric §8 - Data Architecture] applies: a genuine `HasForeignKey` is correct here precisely because both ends are Engagement-owned.
+- **What it is**: the EF mapping for the [`LivePollOption`](#livepolloption) child entity: its text
+  limit and its real relationship back to [`LivePoll`](#livepoll).
+- **Depends on**:
+  [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype),
+  EF Core `EntityTypeBuilder<T>`, and [`LivePollInvariants`](#livepollinvariants) for
+  `OptionTextMaxLength`.
+- **Concept reinforced, the in-aggregate child.** Read this directly against
+  [`LivePollConfiguration`](#livepollconfiguration): there, a cross-service reference stays a bare
+  scalar; here, both ends are Engagement-owned and in the same database, so the option gets a genuine
+  navigation and a genuine foreign key (`:22-25`). `[Rubric §8, Data Architecture]`: the contrast is the
+  lesson, an FK is correct precisely when the constraint can be enforced by one database.
 - **Walkthrough**
-  - `Text` required with `HasMaxLength(LivePollInvariants.OptionTextMaxLength)` (`LivePollOptionConfiguration.cs:19-21`).
-  - `HasOne(o => o.LivePoll).WithMany(p => p.Options).HasForeignKey(o => o.LivePollId).IsRequired()` (`LivePollOptionConfiguration.cs:23-26`): the required one-poll-to-many-options relationship inside the aggregate.
-- **Where it's used** - applied by the Engagement `SQLServerDbContext` at model build; auto-registered via Scrutor.
+  - `Configure` (`:14`) calls `base.Configure` (`:16`), then makes `Text` required with
+    `HasMaxLength(LivePollInvariants.OptionTextMaxLength)` (`:18-20`).
+  - `HasOne(o => o.LivePoll).WithMany(p => p.Options).HasForeignKey(o => o.LivePollId).IsRequired()`
+    (`:22-25`): the required one-poll-to-many-options relationship inside the aggregate boundary.
+- **Why it's built this way**: an option has no meaning without its poll, so the database is allowed to
+  say so; the length again comes from the domain constant rather than a repeated literal.
+- **Where it's used**: applied by the Engagement `SQLServerDbContext` at model build; the collection it
+  maps is rehydrated on query paths by
+  [`LivePollNavigationPopulator`](#livepollnavigationpopulator).
+
+### LivePollsController
+> MMCA.ADC.Engagement.API · `MMCA.ADC.Engagement.API.Controllers` · `MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:42` · Level 8 · class (sealed)
+
+- **What it is**: the REST controller for the live poll layer: create, open, close, and delete a poll,
+  list polls for the organizer view, read tallies, and cast a vote.
+- **Depends on**: eight handlers injected through
+  [`ICommandHandler<in TCommand, TResult>`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)
+  and [`IQueryHandler<in TQuery, TResult>`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult)
+  (including the generic
+  [`DeleteEntityCommand<TEntity, TIdentifierType>`](group-05-cqrs-pipeline.md#deleteentitycommandtentity-tidentifiertype)
+  for delete), [`ICurrentUserService`](group-08-auth.md#icurrentuserservice) for claims,
+  [`ApiControllerBase`](group-12-api-hosting-mapping.md#apicontrollerbase) for the `HandleFailure`
+  Result-to-HTTP bridge, [`RoleNames`](group-08-auth.md#rolenames),
+  [`AuthorizationPolicies`](group-08-auth.md#authorizationpolicies),
+  [`HasPermissionAttribute`](group-08-auth.md#haspermissionattribute),
+  [`EngagementPermissions`](group-22-engagement-module.md#engagementpermissions), and
+  [`EngagementFeatures`](group-22-engagement-module.md#engagementfeatures). Externals: ASP.NET Core MVC,
+  `Asp.Versioning`, and `Microsoft.FeatureManagement.Mvc` (`[FeatureGate]`).
+- **Concept introduced, three stacked authorization tiers on one controller.** `[Rubric §11, Security]`
+  assesses where the trust boundary sits and whether identity is derived from a trusted source.
+  `[Rubric §9, API and Contract Design]` assesses whether controllers stay thin transport adapters over
+  the handler pipeline. The class attributes (`:37-41`) set two of the tiers: `[FeatureGate(
+  EngagementFeatures.LivePolls)]` makes the entire surface dark when the flag is off, and
+  `[Authorize(Policy = AuthorizationPolicies.RequireAuthenticated)]` requires a token at all. The third
+  tier is per-endpoint: only the organizer-facing delete (`:120`) and event-wide manage list (`:139`)
+  carry `[HasPermission(EngagementPermissions.LiveManage)]`, while the finer "this speaker owns this
+  session" rule (BR-236) is evaluated *inside* the handlers via
+  [`LivePollAuthorization`](#livepollauthorization), because it needs data the transport layer does not
+  have. Complementing all three, caller identity is bound from the token and never from the request
+  (`:227-236`).
+- **Walkthrough**
+  - The primary constructor (`:42-51`) injects five command handlers, three query handlers, and
+    [`ICurrentUserService`](group-08-auth.md#icurrentuserservice). Every action follows the same three
+    steps: build a message, await the handler, map the
+    [`Result`](group-01-result-error-handling.md#result) to HTTP.
+  - `CreateAsync` (`:58`): builds [`CreateLivePollCommand`](#createlivepollcommand) from the body plus
+    `GetCallerSpeakerId()` / `IsCallerOrganizer()` (`:62`) and returns `201 Created` with a relative
+    location built under `CultureInfo.InvariantCulture` (`:67`).
+  - `OpenAsync` (`:81`) and `CloseAsync` (`:105`): the lifecycle verbs, returning `204 No Content`. Both
+    accept an **optional** body via `[FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)]
+    LifecycleTransitionRequest?` (`:83`, `:107`) and forward `request?.RowVersion` into the command
+    (`:86`, `:110`): the [ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html) optimistic-concurrency round trip, where omitting the body simply skips
+    the stale-view check and supplying a stale token yields `409 Conflict` (`:80`, `:104`).
+  - `DeleteAsync` (`:124`): `[HasPermission(LiveManage)]`-gated, dispatching the generic
+    [`DeleteEntityCommand<LivePoll, LivePollIdentifierType>`](group-05-cqrs-pipeline.md#deleteentitycommandtentity-tidentifiertype)
+    (`:129`); the BR-228 "close an open poll before deleting it" rule lives deeper, in
+    [`LivePoll.Delete`](#livepoll).
+  - `GetEventPollsAsync` (`:141`): the organizer manage list, also `[HasPermission(LiveManage)]`, with
+    `[FromQuery, Required] EventIdentifierType eventId` (`:142`).
+  - `GetOpenPollsAsync` (`:159`): the attendee and presenter view, taking optional `eventId` **or**
+    `sessionId` (`:160-161`). Like `GetResultsAsync` (`:183`) and `CastVoteAsync` (`:207`), it first
+    reads `currentUserService.UserId` and returns an `Error.Forbidden` when the token carries no
+    subject (`:164-168`), then stamps the id onto the query or command.
+  - `CastVoteAsync` (`:207`): builds [`CastVoteCommand`](#castvotecommand) from the route id, the body's
+    `OptionId`, and the token subject (`:219`), and returns the fresh
+    [`LivePollResultsDTO`](#livepollresultsdto) as `200 OK`.
+  - The two claim helpers are the load-bearing security detail: `GetCallerSpeakerId()` (`:228`) reads
+    the `speaker_id` claim and maps a default value to `null` (`:230-231`), and `IsCallerOrganizer()`
+    (`:235`) is `IsInRole(Organizer) || IsInRole(Admin)`.
+- **Why it's built this way**: a declarative capability gate keeps the organizer-only endpoints locked
+  without any code, while delegating the data-scoped speaker decision to a shared handler check avoids
+  duplicating BR-236 at the transport layer and keeps the same rule in force for any future transport.
+  The `[FeatureGate]` lets the whole live-poll surface ship dark and be enabled per environment.
+- **Where it's used**: mounted by the Engagement service host and reached by the Blazor and MAUI clients
+  through the YARP Gateway ([ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)).
 
 ### LivePollVoteConfiguration
+> MMCA.ADC.Engagement.Infrastructure · `MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration` · `MMCA.ADC.Engagement.Infrastructure/Persistence/EntityConfiguration/LivePollVoteConfiguration.cs:17` · Level 8 · class (internal sealed)
 
-> MMCA.ADC.Engagement.Infrastructure · `MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration` · `MMCA.ADC.Engagement.Infrastructure/Persistence/EntityConfiguration/LivePollVoteConfiguration.cs:17` · Level 8 · class
-
-- **What it is** - the EF mapping for the [LivePollVote](group-23-engagement-live-layer.md#livepollvote) aggregate root, whose centerpiece is the filtered unique index that guarantees one active vote per user per poll (BR-225).
-- **Depends on** - [EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype) and EF Core `EntityTypeBuilder<T>`.
-- **Concept introduced** - the **filtered unique index as the database-level backstop** for a soft-delete-reactivation aggregate. Because a vote (like [SessionQuestionUpvote](#sessionquestionupvote)) toggles via soft-delete rather than hard-delete, a naive unique index would block a user from ever re-voting; the filter `[IsDeleted] = 0` (`LivePollVoteConfiguration.cs:35-37`) scopes uniqueness to active rows only, so the index is the durable guarantee behind the handler's create-or-reactivate dance (the remark at `LivePollVoteConfiguration.cs:12-16`). [Rubric §8 - Data Architecture] assesses uniqueness/concurrency enforcement at the storage layer: this is the canonical example. [Rubric §2 - Design Patterns] applies in that the DB constraint and the domain reactivation method are two halves of one idempotent-write pattern.
+- **What it is**: the EF mapping for the [`LivePollVote`](#livepollvote) aggregate root, whose
+  centerpiece is the filtered unique index guaranteeing one active vote per user per poll (BR-225).
+- **Depends on**:
+  [`EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#entitytypeconfigurationsqlservertentity-tidentifiertype)
+  and EF Core `EntityTypeBuilder<T>` plus `HasFilter` (SQL Server filtered indexes).
+- **Concept introduced, the filtered unique index as the backstop for a soft-delete aggregate.**
+  `[Rubric §8, Data Architecture]` assesses whether uniqueness and concurrency are enforced at the
+  storage layer rather than hoped for in application code. Because a vote toggles via soft-delete rather
+  than hard-delete, a naive unique index would permanently block a user from re-voting; scoping the
+  index with `HasFilter("[IsDeleted] = 0")` (`:35-37`) restricts uniqueness to *active* rows, which is
+  what makes the handler's create-or-reactivate dance race-safe (the remark at `:12-16`).
+  `[Rubric §2, Design Patterns]` applies in that the database constraint and the domain `Reactivate`
+  method are two halves of one idempotent-write pattern; the identical shape guards
+  [`SessionQuestionUpvote`](#sessionquestionupvote).
 - **Walkthrough**
-  - `LivePollId`, `OptionId`, `UserId` all required (`LivePollVoteConfiguration.cs:25-32`): votes carry scalar FKs with no navigations, because a vote is a separate aggregate by design.
-  - Filtered unique index on `{ LivePollId, UserId }` with `HasFilter("[IsDeleted] = 0")` (`LivePollVoteConfiguration.cs:35-37`): BR-225, one active vote per poll+user.
-  - Non-unique index on `{ LivePollId, OptionId }` (`LivePollVoteConfiguration.cs:40`): supports grouping votes by option when tallying results.
-- **Why it's built this way** - the filtered index lets soft-delete and uniqueness coexist, and the tally index matches the result-aggregation query. See [SessionQuestionUpvote](#sessionquestionupvote) for the identical pattern on question upvotes.
-- **Where it's used** - applied by the Engagement `SQLServerDbContext`; the vote command handler relies on the index to make its reactivation race-safe.
+  - `Configure` (`:21`) calls `base.Configure` (`:23`), then requires `LivePollId` (`:25-26`),
+    `OptionId` (`:28-29`), and `UserId` (`:31-32`). Note there are no navigations: a vote is a separate
+    aggregate by design, so it carries scalar FKs only.
+  - Filtered unique index on `{ LivePollId, UserId }` (`:35-37`): BR-225, one active vote per poll and
+    user.
+  - Non-unique index on `{ LivePollId, OptionId }` (`:40`): supports the grouped `COUNT` per option that
+    [`LivePollResultsBuilder`](#livepollresultsbuilder) issues when tallying (`:39`).
+- **Why it's built this way**: the filter is what lets soft-delete and uniqueness coexist, and the
+  second index matches the tally query shape exactly, so results are computed from an index rather than
+  by scanning the vote table.
+- **Where it's used**: applied by the Engagement `SQLServerDbContext` at model build;
+  [`CastVoteHandler`](#castvotehandler) relies on the unique index as the final arbiter when two
+  concurrent votes race.
+
+### SessionQuestionsController
+> MMCA.ADC.Engagement.API · `MMCA.ADC.Engagement.API.Controllers` · `MMCA.ADC.Engagement.API/Controllers/SessionQuestionsController.cs:37` · Level 8 · class (sealed)
+
+- **What it is**: the REST controller for the conference-day session Q&A layer: submit a question, read
+  the attendee and moderation views, run the three moderation transitions, and toggle an upvote.
+- **Depends on**: five handlers via
+  [`ICommandHandler<in TCommand, TResult>`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult)
+  / [`IQueryHandler<in TQuery, TResult>`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult),
+  [`ICurrentUserService`](group-08-auth.md#icurrentuserservice),
+  [`ApiControllerBase`](group-12-api-hosting-mapping.md#apicontrollerbase),
+  [`ModerationAction`](#moderationaction),
+  [`SubmitQuestionRequest`](#submitquestionrequest),
+  [`LifecycleTransitionRequest`](group-22-engagement-module.md#lifecycletransitionrequest),
+  [`EngagementFeatures`](group-22-engagement-module.md#engagementfeatures),
+  [`AuthorizationPolicies`](group-08-auth.md#authorizationpolicies), and
+  [`RoleNames`](group-08-auth.md#rolenames).
+- **Concept reinforced, identity bound at the edge, rights enforced in the handler.** The same shape as
+  [`LivePollsController`](#livepollscontroller), with one instructive difference: this controller has
+  **no** `[HasPermission]` endpoint at all. Its class attributes (`:32-36`) apply
+  `[FeatureGate(EngagementFeatures.SessionQA)]` and `[Authorize(RequireAuthenticated)]`, and every
+  moderation decision (BR-236) is made inside the handler from the `speaker_id` claim and the organizer
+  role, because "may this speaker moderate this session" is a data question. `[Rubric §11, Security]`
+  and `[Rubric §9, API and Contract Design]` both apply for the reasons given under
+  [`LivePollsController`](#livepollscontroller).
+- **Walkthrough**
+  - The primary constructor (`:37-43`) injects three command handlers, two query handlers, and
+    [`ICurrentUserService`](group-08-auth.md#icurrentuserservice).
+  - `SubmitAsync` (`:50`): reads the token subject, refuses with `Error.Forbidden` when absent
+    (`:54-58`), builds [`SubmitQuestionCommand`](#submitquestioncommand) (`:60`), and returns
+    `201 Created` at `/sessionquestions/{id}` (`:65`).
+  - `GetSessionQuestionsAsync` (`:75`): the attendee view (approved questions plus the caller's own
+    pending or dismissed ones), keyed on `[FromQuery, Required] sessionId` and the caller id (`:86`).
+  - `GetModerationQueueAsync` (`:102`): the all-statuses moderator view; it passes
+    `GetCallerSpeakerId()` and `IsCallerOrganizer()` into
+    [`GetModerationQueueQuery`](#getmoderationqueuequery) (`:107`) so the rights check happens in the
+    handler, which is why the documented responses include both `403` and `404` (`:100-101`).
+  - `ApproveAsync` (`:126`), `DismissAsync` (`:143`), `MarkAnsweredAsync` (`:160`): three expression-bodied
+    verbs that differ only by their [`ModerationAction`](#moderationaction) and all funnel into the
+    private `ModerateAsync` (`:186`), which builds
+    [`ModerateQuestionCommand`](#moderatequestioncommand) (`:192`) and returns `204 No Content`. Each
+    takes the same optional
+    [`LifecycleTransitionRequest`](group-22-engagement-module.md#lifecycletransitionrequest) body and
+    forwards `request?.RowVersion` for the [ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html) stale-view check.
+  - `UpvoteAsync` (`:171`) and `RemoveUpvoteAsync` (`:181`): the POST/DELETE pair on `{id}/upvotes`,
+    both delegating to the private `ToggleUpvoteAsync` (`:200`) with `upvote: true|false`. That helper
+    binds the caller id from the token (`:205-209`), dispatches
+    [`ToggleUpvoteCommand`](#toggleupvotecommand) (`:212`), and returns the fresh count as `200 OK`
+    (`:217`), so the clicking client updates immediately without waiting for the broadcast.
+  - `GetCallerSpeakerId()` (`:221`) and `IsCallerOrganizer()` (`:228`): identical in shape to the poll
+    controller's helpers, reading the token only.
+- **Why it's built this way**: keeping the controller a pure transport adapter means the moderation rule
+  is written once, in the handler, and cannot be bypassed by a second caller path; returning the fresh
+  upvote count synchronously gives the acting user immediate feedback while the [ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html) broadcast fans
+  the same number out to everyone else.
+- **Where it's used**: mounted by the Engagement service host; reached through the Gateway ([ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)).
+
+### SessionQuestionUpvoteChangedHandler
+> MMCA.ADC.Engagement.Application · `MMCA.ADC.Engagement.Application.SessionQuestions.DomainEventHandlers` · `MMCA.ADC.Engagement.Application/SessionQuestions/DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs:32` · Level 8 · class (sealed partial)
+
+- **What it is**: the domain-event handler that broadcasts a question's fresh upvote count whenever an
+  upvote is cast or withdrawn (the `question.upvote-changed` channel event, BR-238).
+- **Depends on**:
+  [`IDomainEventHandler<in TDomainEvent>`](group-04-events-outbox.md#idomaineventhandlerin-tdomainevent)
+  (implemented for [`SessionQuestionUpvoteChanged`](#sessionquestionupvotechanged)),
+  [`ILiveChannelPublishQueue`](group-22-engagement-module.md#ilivechannelpublishqueue) and
+  [`LiveChannelPublishWorkItem`](group-22-engagement-module.md#livechannelpublishworkitem),
+  [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork) (resolved per event from a fresh scope),
+  [`SessionQuestion`](#sessionquestion) / [`SessionQuestionUpvote`](#sessionquestionupvote),
+  [`LivePollChannel`](#livepollchannel) and [`SessionQuestionChannel`](#sessionquestionchannel) for the
+  channel key and event name, and
+  [`SessionQuestionUpvoteChangedPayload`](#sessionquestionupvotechangedpayload). Externals:
+  `IServiceScopeFactory`, `ILogger`, `System.Text.Json`.
+- **Concept introduced, moving a broadcast from the command handler onto the domain event.** The class
+  comment (`:17-24`) states both defects this fixed, and they are worth internalizing because they
+  generalize to any side effect attached to a write. First, the publish used to be awaited inline on the
+  request path, so a slow or hung Notification peer added its latency to every single upvote. Second,
+  and worse, it ran *before* the command's transaction committed, so a later rollback left clients told
+  about an upvote that never persisted. Domain-event dispatch inside a transactional command is deferred
+  until after the commit succeeds and dropped on rollback, so relocating the publish here makes it
+  post-commit by construction. `[Rubric §29, Resilience and Business Continuity]` assesses whether a
+  dependency outage can corrupt or block the primary write; here it can do neither, since the enqueue is
+  off the request path and the whole body is wrapped in a swallow-and-log catch. `[Rubric §6, CQRS and
+  Event-Driven]` assesses using domain events as the extension point for downstream reactions.
+  `[Rubric §13, Observability and Operability]` applies through the source-generated `[LoggerMessage]`
+  that records every swallowed failure at Warning with the question id.
+- **Walkthrough**
+  - The primary constructor (`:32-35`) takes `IServiceScopeFactory`,
+    [`ILiveChannelPublishQueue`](group-22-engagement-module.md#ilivechannelpublishqueue), and an
+    `ILogger`. The handler is a singleton per the framework convention (`:25-27`), which is exactly why
+    it must open its own scope to reach scoped services.
+  - `HandleAsync` (`:38`): null-guards the event (`:40`), then opens an async scope and resolves
+    [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork) from it (`:44-45`).
+  - Question re-read (`:47-52`): a no-tracking `GetByIdAsync` with no includes. A `null` result means
+    the question was removed between the upvote committing and this dispatch, and the handler simply
+    returns (`:54-58`): nothing meaningful is left to broadcast.
+  - Count (`:60-63`): `CountAsync` over [`SessionQuestionUpvote`](#sessionquestionupvote) filtered to
+    this question. The count is computed in SQL, and the global soft-delete query filter means withdrawn
+    upvotes are excluded automatically rather than by an explicit `IsDeleted` predicate.
+  - Payload and enqueue (`:66-73`): serializes a
+    [`SessionQuestionUpvoteChangedPayload`](#sessionquestionupvotechangedpayload) of
+    `(questionId, sessionId, upvoteCount)` with `JsonSerializerOptions.Web`, then `TryEnqueue`s a
+    [`LiveChannelPublishWorkItem`](group-22-engagement-module.md#livechannelpublishworkitem) addressed
+    to `LivePollChannel.ForSession(question.SessionId)` with the event name
+    `SessionQuestionChannel.QuestionUpvoteChanged`. The comment at `:65` is the privacy rule: the
+    payload carries the count only, never who voted (BR-238).
+  - Failure path (`:75-80`): a `catch (Exception ex) when (ex is not OperationCanceledException)` with a
+    justified `#pragma warning disable CA1031`, calling `LogBroadcastFailed` (`:83-84`). Cancellation is
+    deliberately allowed to propagate; everything else is logged and swallowed so a broadcast problem
+    can never fail the upvote it follows.
+- **Why it's built this way**: this is the at-most-once ephemeral broadcast layered over a durably
+  committed write that [ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html) prescribes. The queue keeps the gRPC publish off the request path, the
+  domain-event timing keeps it post-commit, and the catch keeps it best-effort; the authoritative upvote
+  count is always re-readable from the API, so a dropped broadcast degrades freshness, never
+  correctness.
+- **Where it's used**: not called directly. It is discovered by convention-based scanning
+  (`ScanModuleApplicationServices<ClassReference>()`,
+  `MMCA.ADC.Engagement.Application/DependencyInjection.cs:71`) and invoked by the framework's
+  domain-event dispatcher whenever [`ToggleUpvoteHandler`](#toggleupvotehandler) commits a
+  [`SessionQuestionUpvote`](#sessionquestionupvote) change. The work item it enqueues is drained by the
+  hosted processor behind
+  [`ILiveChannelPublishQueue`](group-22-engagement-module.md#ilivechannelpublishqueue)
+  (`MMCA.ADC.Engagement.Application/DependencyInjection.cs:50-55`).
 
 ### SessionQuestionViewBuilder
+> MMCA.ADC.Engagement.Application · `MMCA.ADC.Engagement.Application.SessionQuestions.Services` · `MMCA.ADC.Engagement.Application/SessionQuestions/Services/SessionQuestionViewBuilder.cs:12` · Level 8 · class (sealed)
 
-> MMCA.ADC.Engagement.Application · `MMCA.ADC.Engagement.Application.SessionQuestions.Services` · `MMCA.ADC.Engagement.Application/SessionQuestions/Services/SessionQuestionViewBuilder.cs:12` · Level 8 · class
-
-- **What it is** - a shared application service that projects a set of [SessionQuestion](#sessionquestion) entities into [SessionQuestionDTO](group-23-engagement-live-layer.md#sessionquestiondto) views, computing each question's active upvote count and the calling user's own upvote/authorship flags in a single batched read.
-- **Depends on** - [IUnitOfWork](group-07-persistence-ef-core.md#iunitofwork) (for the read repository), [SessionQuestionUpvote](#sessionquestionupvote), [SessionQuestion](#sessionquestion), and [SessionQuestionDTO](group-23-engagement-live-layer.md#sessionquestiondto). Externals: LINQ and BCL collections.
-- **Concept introduced** - the **shared view-builder to defeat N+1** across use cases. The submit, list, and moderation use cases all need the same per-question counts and per-caller flags, so rather than each handler re-deriving them (and risking a per-question query), one builder fetches every relevant upvote in a single projected read and computes the aggregates in memory. It takes `IUnitOfWork` via a primary constructor (`SessionQuestionViewBuilder.cs:12`). [Rubric §12 - Performance and Scalability] assesses query efficiency: the one batched `GetProjectedAsync` over all question ids (`SessionQuestionViewBuilder.cs:35-38`) replaces a potential per-question round trip. [Rubric §1 - SOLID] applies: the projection logic lives in one reusable unit instead of being duplicated across three handlers.
+- **What it is**: the shared read-side service that projects a set of
+  [`SessionQuestion`](#sessionquestion) entities into [`SessionQuestionDTO`](#sessionquestiondto) views,
+  computing each question's active upvote count and the calling user's own upvote and authorship flags.
+- **Depends on**: [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork) (for the read
+  repository), [`IQueryableExecutor`](group-07-persistence-ef-core.md#iqueryableexecutor) (async
+  materialization of a raw `IQueryable` without an EF dependency in the Application layer),
+  [`SessionQuestionUpvote`](#sessionquestionupvote), and
+  [`SessionQuestionDTO`](#sessionquestiondto). Externals: LINQ and BCL collections.
+- **Concept introduced, computing tallies with a grouped SQL COUNT in a shared builder.**
+  `[Rubric §12, Performance and Scalability]` assesses whether hot read paths avoid materializing whole
+  tables. The comment at `:36-38` is the record of why this shape exists: counts come from a
+  `GroupBy(SessionQuestionId).Select(Count())` that returns **one row per question instead of one row
+  per upvote**, so a hot plenum session no longer re-materializes its entire upvote set on every read,
+  and the change mirrors [`LivePollResultsBuilder`](#livepollresultsbuilder) on the poll side.
+  `[Rubric §1, SOLID]` applies to the sharing: submit, list, and moderation all need the same
+  per-question counts and per-caller flags, so the projection lives in one reusable unit rather than
+  being re-derived (and re-optimized) in three handlers.
 - **Walkthrough**
-  - `BuildAsync` (`SessionQuestionViewBuilder.cs:21`): null-guards the input and short-circuits to an empty list when there are no questions (`SessionQuestionViewBuilder.cs:26-31`).
-  - Batched upvote read (`SessionQuestionViewBuilder.cs:33-38`): collects the question ids, takes a read repository for [SessionQuestionUpvote](#sessionquestionupvote), and calls `GetProjectedAsync` selecting only `{ SessionQuestionId, UserId }` for all those questions in one query (active rows only, since soft-deleted upvotes are filtered globally).
-  - Aggregation (`SessionQuestionViewBuilder.cs:40-46`): groups into a per-question count dictionary, and builds a `HashSet` of the caller's own upvoted question ids (empty when `callerUserId` is null, the moderation view where `MyUpvote`/`IsMine` are not meaningful).
-  - Projection (`SessionQuestionViewBuilder.cs:48-60`): maps each question to a [SessionQuestionDTO](group-23-engagement-live-layer.md#sessionquestiondto), setting `UpvoteCount` from the dictionary (`GetValueOrDefault`), `MyUpvote` from the set, and `IsMine` from the caller comparison. Note `UserId` is never copied onto the DTO (questions display anonymously, BR-238), and question order is preserved.
-- **Why it's built this way** - centralizing the projection guarantees every surface computes views identically and with one query, honoring the anonymity rule in one place.
-- **Where it's used** - by the Engagement SessionQuestions submit, list, and moderation use cases (the `callerUserId is null` branch is the moderation path).
-- **Caveats / not-in-source** - the exact set of calling handlers is asserted by the class summary comment; the individual use-case call sites are outside this unit's file list, so their precise wiring is Not determinable from source here.
+  - The primary constructor (`:12`) takes [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork)
+    and [`IQueryableExecutor`](group-07-persistence-ef-core.md#iqueryableexecutor).
+  - `BuildAsync(questions, callerUserId, ct)` (`:21`): null-guards the input (`:26`) and short-circuits
+    to an empty list when there is nothing to project (`:28-31`), which keeps the empty-session case
+    free of any query.
+  - Grouped count (`:33-44`): collects the question ids, takes a read repository for
+    [`SessionQuestionUpvote`](#sessionquestionupvote) (`:34`), and runs the grouped projection over
+    `TableNoTracking` through `queryableExecutor.ToListAsync` (`:39-44`). Soft-deleted (withdrawn)
+    upvotes are excluded by the global query filter, so "active" needs no explicit predicate. The result
+    folds into a `countsByQuestion` dictionary (`:46`).
+  - The caller's own upvotes (`:50-58`): a **separate, narrower** query issued only when `callerUserId`
+    is non-null, projecting just `SessionQuestionId` for rows owned by that user (`:53-56`) into a
+    `HashSet`. The moderation view passes `null` and skips the query entirely (`:48-49`), because
+    `MyUpvote` and `IsMine` are not meaningful there.
+  - Projection (`:60-73`): maps each question in its original order to a
+    [`SessionQuestionDTO`](#sessionquestiondto), taking `UpvoteCount` from the dictionary via
+    `GetValueOrDefault` (`:68`), `MyUpvote` from the set (`:69`), `IsMine` from the caller comparison
+    (`:70`), and carrying `RowVersion` through for the [ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html) round trip (`:72`). `UserId` is never
+    copied onto the DTO: questions display anonymously (BR-238), and this single projection is the one
+    place that rule has to hold.
+- **Why it's built this way**: centralizing the projection guarantees every surface computes views
+  identically, with the same number of queries, and honors the anonymity rule in exactly one place;
+  splitting the "my upvotes" read out of the grouped count keeps the fan-out and moderation paths from
+  paying for data they will not use.
+- **Where it's used**: registered scoped at
+  `MMCA.ADC.Engagement.Application/DependencyInjection.cs:67` and injected into
+  [`SubmitQuestionHandler`](#submitquestionhandler)
+  (`MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:26`),
+  [`GetSessionQuestionsHandler`](#getsessionquestionshandler)
+  (`MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/GetSessionQuestions/GetSessionQuestionsHandler.cs:19`),
+  and [`GetModerationQueueHandler`](#getmoderationqueuehandler)
+  (`MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/GetModerationQueue/GetModerationQueueHandler.cs:23`),
+  the last being the `callerUserId is null` path.
+
+### LivePollVoteChangedHandler
+> MMCA.ADC.Engagement.Application · `MMCA.ADC.Engagement.Application.LivePolls.DomainEventHandlers` · `MMCA.ADC.Engagement.Application/LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:31` · Level 9 · class (sealed partial)
+
+- **What it is**: the poll-side twin of
+  [`SessionQuestionUpvoteChangedHandler`](#sessionquestionupvotechangedhandler): it broadcasts fresh
+  poll tallies whenever a vote is cast, changed, or withdrawn (the `poll.results-changed` channel event,
+  BR-229 / [ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html)).
+- **Depends on**:
+  [`IDomainEventHandler<in TDomainEvent>`](group-04-events-outbox.md#idomaineventhandlerin-tdomainevent)
+  (implemented for [`LivePollVoteChanged`](#livepollvotechanged)),
+  [`ILiveChannelPublishQueue`](group-22-engagement-module.md#ilivechannelpublishqueue) /
+  [`LiveChannelPublishWorkItem`](group-22-engagement-module.md#livechannelpublishworkitem),
+  [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork),
+  [`LivePollResultsBuilder`](#livepollresultsbuilder), [`LivePoll`](#livepoll), and
+  [`LivePollChannel`](#livepollchannel). Externals: `IServiceScopeFactory`, `ILogger`,
+  `System.Text.Json`.
+- **Concept reinforced**: the post-commit, off-request-path, best-effort broadcast is taught under
+  [`SessionQuestionUpvoteChangedHandler`](#sessionquestionupvotechangedhandler); the comment here
+  (`:18-23`) records the same rollback defect on the vote path, where the command handler enqueued while
+  its transaction was still open. Two details are specific to polls. The tally is not a single `COUNT`
+  but a full [`LivePollResultsDTO`](#livepollresultsdto) built by
+  [`LivePollResultsBuilder`](#livepollresultsbuilder), and the channel key is *conditional*, because a
+  poll may be session-scoped or event-wide. `[Rubric §29, Resilience and Business Continuity]` and
+  `[Rubric §13, Observability and Operability]` apply for the same reasons as the sibling handler.
+- **Walkthrough**
+  - The primary constructor (`:31-34`) mirrors the sibling's, and the class is likewise a singleton that
+    opens its own scope (`:24-26`).
+  - `HandleAsync` (`:37`): null-guards the event (`:39`), opens an async scope, and resolves both
+    [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork) and
+    [`LivePollResultsBuilder`](#livepollresultsbuilder) from it (`:43-45`).
+  - Poll re-read (`:47-52`): a no-tracking `GetByIdAsync` that explicitly passes
+    `includes: [nameof(LivePoll.Options)]`, because the results builder reads `poll.Options` and does
+    not load them itself. A `null` poll means it was removed between the vote committing and this
+    dispatch, and the handler returns (`:54-59`).
+  - Tally (`:63`): `resultsBuilder.BuildAsync(poll, userId: null, ct)`. Passing `null` is deliberate and
+    documented at `:61-62`: a broadcast has no single caller, so `MyVoteOptionId` stays null and the
+    builder skips its per-user point read entirely. No per-user data ever rides the channel (BR-229 /
+    [ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html)).
+  - Channel key (`:65-67`): `poll.SessionId is { } sessionId ? LivePollChannel.ForSession(sessionId) :
+    LivePollChannel.ForEvent(poll.EventId)`, the one place the event-wide versus session-scoped
+    distinction (BR-230) turns into a transport address.
+  - Enqueue (`:69-72`): a
+    [`LiveChannelPublishWorkItem`](group-22-engagement-module.md#livechannelpublishworkitem) with that
+    key, the `LivePollChannel.PollResultsChanged` event name, and the serialized results.
+  - Failure path (`:74-79`, `:82-83`): the same `CA1031`-suppressed catch that re-raises nothing but
+    cancellation, logging through a source-generated `[LoggerMessage]` at Warning with the poll id.
+- **Why it's built this way**: recomputing the tally here rather than shipping a delta means every
+  subscriber receives the same authoritative snapshot regardless of how many votes raced, and enqueuing
+  after commit means no client ever sees a tally that a rollback erased ([ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html)).
+- **Where it's used**: discovered by convention-based scanning
+  (`MMCA.ADC.Engagement.Application/DependencyInjection.cs:71`) and invoked by the domain-event
+  dispatcher after [`CastVoteHandler`](#castvotehandler) commits; its comment at
+  `MMCA.ADC.Engagement.Application/LivePolls/UseCases/CastVote/CastVoteHandler.cs:91` points back here
+  to explain why the handler itself no longer publishes.
 
 
 ---

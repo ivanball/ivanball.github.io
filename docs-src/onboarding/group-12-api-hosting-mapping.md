@@ -1,224 +1,337 @@
 # 12. API Hosting, Middleware, Idempotency & DTO/Contract Mapping
 
-**What this group covers.** This is the ASP.NET Core edge of the framework: the layer that turns
-an HTTP request into a domain call and a [`Result`](group-01-result-error-handling.md#result) back
-into an HTTP response. Everything here lives in `MMCA.Common.API` (with two collaborators in
-`MMCA.Common.Application` and `MMCA.Common.Infrastructure` for the transport-agnostic contracts),
-the presentation layer that sits above Infrastructure in the dependency flow (see
-[primer §1](00-primer.md#1-the-big-picture)). The group has five interlocking concerns: the
-**composition root** that registers and orders the whole edge; the **middleware pipeline** every
-request flows through; the **exception-and-error translation** that keeps responses shaped like RFC
-9457 Problem Details; the **controller hierarchy** that gives modules ready-made CRUD, auth, and
-service-discovery endpoints; and the **contract surface** (DTO/request mapping, JSON conversion,
-model binding, idempotency, correlation, feature gating) that a module reuses instead of
-re-implementing. Read this group as the reusable ASP.NET host a downstream service (Store, ADC,
-Helpdesk, or an extracted microservice) drops into place so its own code is nothing but modules. Its
-central rubric column is [Rubric §9, API & Contract Design] (consistent, versioned, standardized
-contracts and error shapes), with heavy supporting roles for [Rubric §10, Cross-Cutting Concerns],
-[Rubric §11, Security], [Rubric §13, Observability & Operability], [Rubric §7, Microservices
-Readiness], and (since [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)) [Rubric §27, Internationalization].
+**What this group covers.** This is the ASP.NET Core edge of the framework: the layer that turns an
+HTTP request into a domain call and turns a [`Result`](group-01-result-error-handling.md#result) back
+into an HTTP response. Almost everything here lives in `MMCA.Common.API` (the presentation layer that
+sits above Infrastructure in the dependency flow, see [primer §1](00-primer.md#1-the-big-picture)),
+with a handful of transport-agnostic collaborators in `MMCA.Common.Application`
+([`ICorrelationContext`](#icorrelationcontext),
+[`IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>`](#ientitydtomappertentity-tentitydto-tidentifiertype)),
+`MMCA.Common.Infrastructure` ([`CorrelationContext`](#correlationcontext),
+[`JwtForwardingDelegatingHandler`](#jwtforwardingdelegatinghandler)), and `MMCA.Common.Shared` (the
+DTO vocabulary and [`SupportedCultures`](#supportedcultures)). The group has six interlocking
+concerns: the **composition root** that registers the whole edge; the **middleware pipeline** every
+request flows through in a fixed order; the **error translation** that keeps every failure shaped like
+RFC 9457 Problem Details; the **controller hierarchy** that hands a module ready-made CRUD, auth, and
+service-discovery endpoints; the **contract surface** (DTO/request mapping, JSON conversion, model
+binding, idempotency, correlation, feature gating); and the **well-known endpoints** that make an
+extracted service self-describing. Read the group as the reusable ASP.NET host a downstream service
+(Store, ADC, Helpdesk, or an extracted microservice) drops into place so its own code is nothing but
+modules. Its central rubric column is [Rubric §9, API & Contract Design] (consistent, versioned,
+standardized contracts and error shapes), with heavy supporting roles for [Rubric §10, Cross-Cutting
+Concerns], [Rubric §11, Security], [Rubric §13, Observability & Operability], [Rubric §7, Microservices
+Readiness], and (since [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html))
+[Rubric §27, Internationalization].
 
 **The composition root: `AddAPI` plus the builder extensions.** A host wires the edge through two
 static extension classes. [`DependencyInjection`](#dependencyinjection)'s `AddAPI`
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:42`) registers MVC
-controllers, adds the global [`UnhandledResultFailureFilter`](#unhandledresultfailurefilter) and the
-scoped [`IdempotencyFilter`](#idempotencyfilter), wires the
-[`CurrencyJsonConverter`](#currencyjsonconverter) into the JSON options, optionally installs the
-[`ModuleControllerFeatureProvider`](#modulecontrollerfeatureprovider) to hide disabled-module
-controllers, binds `IdempotencySettings`, turns on feature management with the
-[`DisabledFeatureHandler`](#disabledfeaturehandler), and registers the edge error-localization boundary
-([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html), `DependencyInjection.cs:77`). [`WebApplicationBuilderExtensions`](#webapplicationbuilderextensions)
+controllers with the global [`UnhandledResultFailureFilter`](#unhandledresultfailurefilter)
+(`DependencyInjection.cs:47`), wires the [`CurrencyJsonConverter`](#currencyjsonconverter) into the
+JSON options and adds the XML formatters (`DependencyInjection.cs:49-50`), optionally installs the
+[`ModuleControllerFeatureProvider`](#modulecontrollerfeatureprovider) when a
+[`ModulesSettings`](group-14-module-system-composition.md#modulessettings) instance is supplied
+(`DependencyInjection.cs:52-56`), binds [`IdempotencySettings`](#idempotencysettings) with
+`ValidateDataAnnotations().ValidateOnStart()` when configuration is supplied
+(`DependencyInjection.cs:58-64`), registers the scoped [`IdempotencyFilter`](#idempotencyfilter)
+(`DependencyInjection.cs:67`), turns on feature management with
+[`DisabledFeatureHandler`](#disabledfeaturehandler) (`DependencyInjection.cs:73-74`), and registers the
+edge error-localization boundary (`AddErrorLocalization`, `DependencyInjection.cs:77` and `:88`). Two
+sibling methods on the same class complete the picture: `AddCommonExceptionHandlers`
+(`DependencyInjection.cs:116`) registers the Problem Details service and the five exception handlers in
+most-specific-first order, and `AddModuleHealthChecks` (`DependencyInjection.cs:169`) turns
+[`ModuleLoader`](group-14-module-system-composition.md#moduleloader) discovery results into
+`module-{Name}` health checks (Healthy for enabled modules, Degraded for disabled ones).
+[`WebApplicationBuilderExtensions`](#webapplicationbuilderextensions)
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:23`)
-carries the identical builder-side setup every service shares: header-based API versioning
-(`AddCommonApiVersioning`, line 76), rate limiting (`AddCommonRateLimiting`, line 108), Brotli/Gzip
-compression (line 141), OpenAPI (line 166), CORS (line 300), and the two JWT bearer registrations
-(in-process `AddCommonAuthentication` at line 257 for the Identity host, and `AddForwardedJwtBearer`
-at line 187 for extracted services that validate against a remote JWKS). The one load-bearing
-ordering rule (`AddApplicationDecorators()` must run last so Scrutor can decorate already-registered
-handlers) lives one layer down in the CQRS pipeline group; the API registrations themselves are
+carries the identical builder-side setup every service shares: header-based API versioning through the
+`api-version` header (`AddCommonApiVersioning`, line 76,
+[ADR-046](https://ivanball.github.io/docs/adr/046-http-api-versioning.html)), rate limiting
+(`AddCommonRateLimiting`, line 108), Brotli and Gzip compression at `CompressionLevel.Fastest` (line
+141), OpenAPI (line 166), CORS (line 300), and the two JWT bearer registrations: in-process
+`AddCommonAuthentication` (line 257) for the Identity host and `AddForwardedJwtBearer` (line 187) for
+extracted services that validate against a remote JWKS. Only one DI ordering rule is load-bearing in
+the whole host, and it belongs to the CQRS pipeline group, not here: `AddApplicationDecorators`
+(`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:88`) must run last so Scrutor
+can decorate handlers that are already registered. The API registrations themselves are
 order-independent. This is the [Rubric §9, API & Contract Design] and [Rubric §10, Cross-Cutting]
 story: versioning, compression, rate limiting, and CORS are configured once and inherited by every
-service rather than copy-pasted per host.
+service instead of copy-pasted per host.
 
 **The request pipeline, in a fixed order.**
 [`WebApplicationExtensions`](#webapplicationextensions)'s `UseCommonMiddlewarePipeline`
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:45`) is the
-single place the middleware order is decided, and the order is deliberate: exception handling →
-[`CorrelationIdMiddleware`](#correlationidmiddleware) → request localization → forwarded headers →
-conditional HTTPS redirect → response compression → routing → CORS → authentication → rate limiter →
-[`SoftDeletedUserMiddleware`](#softdeletedusermiddleware) → authorization → output cache → JWKS/OIDC
-endpoints → controllers. Two of those positions are worth internalizing. The rate limiter runs
-**after** authentication on purpose ([ADR-019](https://ivanball.github.io/docs/adr/019-rate-limiting.html), `WebApplicationExtensions.cs:97`): the global limiter
-partitions by the authenticated principal and routes anonymous traffic down a no-limiter branch, so
-`HttpContext.User` must already be populated or every request would look anonymous and the per-user
-cap would never engage. And the HTTPS redirect is skipped for `application/grpc` traffic
-(`WebApplicationExtensions.cs:87`) because extracted gRPC services speak HTTP/2 cleartext (h2c) and a
-307 redirect would break the call. The forwarded-headers handling also captures the pre-forward
-scheme and host (lines 72-77) so the OIDC discovery document advertises a `jwks_uri` the original
-caller can actually reach. `UseCommonRequestLocalization` (line 126) sets the request culture from
-the query string, culture cookie, then `Accept-Language`, so the edge error localization runs under
-the caller's culture ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
+single place the middleware order is decided, and the order is deliberate: exception handling (line
+47), then [`CorrelationIdMiddleware`](#correlationidmiddleware) (48), request localization (53),
+forwarded headers (79), conditional HTTPS redirect (87-89), response compression (91), routing (92),
+CORS (93), authentication (96), the rate limiter (101),
+[`SoftDeletedUserMiddleware`](#softdeletedusermiddleware) (102), authorization (103), output cache
+(104), the JWKS and OIDC discovery endpoints (111-112), and finally `MapControllers` (114). Two of
+those positions are worth internalizing. The rate limiter runs **after** authentication on purpose
+([ADR-019](https://ivanball.github.io/docs/adr/019-rate-limiting.html), comment at
+`WebApplicationExtensions.cs:97-100`): `GlobalRateLimitPartition`
+(`WebApplicationBuilderExtensions.cs:45`) partitions by the authenticated principal and routes
+anonymous traffic down a no-limiter branch, so `HttpContext.User` must already be populated or every
+request would look anonymous and the per-user cap (300 requests per minute by default,
+`WebApplicationBuilderExtensions.cs:108`) would never engage; health, liveness, `/.well-known/*`, and
+`application/grpc` traffic bypass the limiter outright (`IsRateLimitBypassed`, lines 35-39). And the
+HTTPS redirect is skipped for any request whose content type starts with `application/grpc`
+(`WebApplicationExtensions.cs:87-89`) because extracted gRPC services speak HTTP/2 cleartext (h2c) and
+a 307 redirect would break the call. Forwarded-headers handling clears the known-proxy allowlists so
+cloud reverse proxies are trusted regardless of their internal IPs (lines 63-64) and stashes the
+pre-forward scheme and host in `HttpContext.Items` under `PreForwardedSchemeKey` and
+`PreForwardedHostKey` (lines 24, 35, 72-77). `UseCommonRequestLocalization` (line 126) builds the
+culture options from [`SupportedCultures`](#supportedcultures)
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Globalization/SupportedCultures.cs:9`: `en-US` plus `es`,
+with the `qps-Ploc` pseudo locale added in Development only, lines 12-28) so edge error localization
+runs under the caller's culture
+([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
 
-**Correlation and the soft-deleted-user gate.**
-[`CorrelationIdMiddleware`](#correlationidmiddleware)
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/CorrelationIdMiddleware.cs:15`) reads
-the `X-Correlation-ID` request header, falling back to the current W3C trace id or ASP.NET's
-`TraceIdentifier`, writes it onto the scoped [`ICorrelationContext`](#icorrelationcontext)
-(`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICorrelationContext.cs:8`, implemented
-by [`CorrelationContext`](#correlationcontext)), and echoes it back on the response
-(`CorrelationIdMiddleware.cs:37`). That single id is what the CQRS logging decorator stamps onto
-every log scope, so one request is traceable end to end. [`SoftDeletedUserMiddleware`](#softdeletedusermiddleware)
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:15`)
-enforces business rule BR-133: an authenticated user whose account was soft-deleted is rejected with
-401, checked against a 30-second cache to keep the per-request lookup cheap. It resolves its
-validator lazily (line 53) so a service that does not host Identity simply no-ops instead of 500-ing
-every request, an explicit nod to the [Rubric §7, Microservices Readiness] extraction path. Both are
-[Rubric §13, Observability & Operability] (correlation) and [Rubric §11, Security] (deleted-account
-lockout) concerns handled once at the edge.
+**Correlation and the soft-deleted-user gate.** [`CorrelationIdMiddleware`](#correlationidmiddleware)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/CorrelationIdMiddleware.cs:15`) reads the
+`X-Correlation-ID` request header, falling back to the current W3C trace id then ASP.NET's
+`TraceIdentifier` (lines 32-34), writes it onto the scoped
+[`ICorrelationContext`](#icorrelationcontext)
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/ICorrelationContext.cs:8`, implemented by
+[`CorrelationContext`](#correlationcontext), which self-seeds a GUID when no middleware ever sets one,
+`CorrelationContext.cs:12`), and echoes it back through `Response.OnStarting`
+(`CorrelationIdMiddleware.cs:37-41`). That single id is what the CQRS logging decorator stamps onto
+every log scope, so one request is traceable end to end.
+[`SoftDeletedUserMiddleware`](#softdeletedusermiddleware)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/SoftDeletedUserMiddleware.cs:15`) enforces
+business rule BR-133: an authenticated caller whose account was soft-deleted is rejected with a bare
+401 (lines 69 and 81), checked against a 30-second cache (line 17) to keep the per-request lookup cheap
+([ADR-047](https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html)). It
+resolves [`ISoftDeletedUserValidator`](group-08-auth.md#isoftdeleteduservalidator) lazily from
+`RequestServices` (line 53) instead of as an `InvokeAsync` parameter, so a service that does not host
+Identity passes the request through rather than 500-ing on every call: an explicit nod to the
+[Rubric §7, Microservices Readiness] extraction path. Both middlewares are [Rubric §13, Observability
+& Operability] (correlation) and [Rubric §11, Security] (deleted-account lockout) concerns handled once
+at the edge instead of in every controller.
 
-**Errors become Problem Details, two ways.** Failures reach the client through two channels that
-share one translation table. Thrown exceptions are caught by the handler chain registered in
-`AddCommonExceptionHandlers` (`DependencyInjection.cs:116`), evaluated most-specific-first:
-`OperationCanceledExceptionHandler`, [`DomainExceptionHandler`](#domainexceptionhandler)
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/DomainExceptionHandler.cs:16`),
-`DbUpdateExceptionHandler`, `ValidationExceptionHandler`, and finally
+**Errors become Problem Details, through two channels and one table.** Failures reach the client two
+ways. Thrown exceptions are caught by the handler chain registered in `AddCommonExceptionHandlers`
+(`DependencyInjection.cs:116-128`), evaluated most-specific-first:
+[`OperationCanceledExceptionHandler`](#operationcanceledexceptionhandler) (499 Client Closed Request,
+`OperationCanceledExceptionHandler.cs:32`), [`DomainExceptionHandler`](#domainexceptionhandler) (400,
+`DomainExceptionHandler.cs:32`), [`DbUpdateExceptionHandler`](#dbupdateexceptionhandler) (409 with a
+deliberately generic detail so database schema names never leak, `DbUpdateExceptionHandler.cs:33-37`),
+[`ValidationExceptionHandler`](#validationexceptionhandler) (400 with FluentValidation errors grouped
+by property name, `ValidationExceptionHandler.cs:48-54`), and finally
 [`GlobalExceptionHandler`](#globalexceptionhandler) as the 500 catch-all
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/GlobalExceptionHandler.cs:15`). Business
-failures that travel as `Result.Failure` (not exceptions) are mapped by
-[`ApiControllerBase`](#apicontrollerbase)'s `HandleFailure`
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:25`), and the
-safety net [`UnhandledResultFailureFilter`](#unhandledresultfailurefilter)
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/UnhandledResultFailureFilter.cs:21`)
-catches any action that accidentally returned a failed `Result` as a 200 body and rewrites it as the
-correct error. All three paths call [`ErrorHttpMapping`](#errorhttpmapping)
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:15`), whose
-`FrozenDictionary<ErrorType, int>` (line 21) is the single source of truth mapping each
-[`ErrorType`](group-01-result-error-handling.md#errortype) (Validation/Invariant → 400, NotFound →
-404, Conflict → 409, Unauthorized → 401, Forbidden → 403, and so on) to a status code, and whose
-`BuildErrorsExtension` (line 48) localizes each [`Error`](group-01-result-error-handling.md#error)'s
-human message at the edge by its stable `Code` while leaving Code/Type/Source verbatim for clients to
-branch on. This is [Rubric §9, API & Contract Design] (consistent RFC 9457 responses) meeting the
-[Rubric §1, SOLID] discipline of never duplicating the mapping.
+(`GlobalExceptionHandler.cs:28`). Business failures that travel as `Result.Failure` rather than as
+exceptions are mapped by [`ApiControllerBase`](#apicontrollerbase)'s `HandleFailure`
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ApiControllerBase.cs:25`), which derives
+the status code from the **first** error in the list (line 38), and the safety net
+[`UnhandledResultFailureFilter`](#unhandledresultfailurefilter)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/UnhandledResultFailureFilter.cs:21`, an
+`IAlwaysRunResultFilter`) catches any action that accidentally returned a failed `Result` as a 200
+body, logs a warning, and rewrites it as the correct error (lines 27-49). All of those paths converge
+on [`ErrorHttpMapping`](#errorhttpmapping)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:14`), whose
+`FrozenDictionary<ErrorType, int>` (line 20) is the single source of truth mapping each
+[`ErrorType`](group-01-result-error-handling.md#errortype) (Validation and Invariant to 400, NotFound
+to 404, Conflict to 409, Unauthorized to 401, Forbidden to 403, UnprocessableEntity to 422, Failure to
+400) to a status code, with 400 as the fallback for anything unmapped (line 36). Its
+`BuildErrorsExtension` (line 47) localizes each [`Error`](group-01-result-error-handling.md#error)'s
+human message at the edge through [`IErrorLocalizer`](#ierrorlocalizer), keyed by the stable `Code`,
+leaving `Code`, `Type`, `Source`, and `Target` verbatim so clients can still branch on them, and
+leaving the original English message untouched when no localizer is registered (line 51).
+[`ErrorLocalizer`](#errorlocalizer)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Localization/ErrorLocalizer.cs:11`) walks the
+registered [`ErrorResourceSource`](#errorresourcesource) list in registration order (the framework's
+own [`ErrorResources`](#errorresources) first, then each module's resources added through
+`AddErrorResources`, `DependencyInjection.cs:103`) and falls back to the caller's message when no
+source knows the code. This is [Rubric §9, API & Contract Design] (one consistent RFC 9457 shape)
+meeting the [Rubric §1, SOLID] discipline of never duplicating the mapping, and [Rubric §27,
+Internationalization] at the one boundary where a machine-readable code becomes human prose.
 
-**The controller hierarchy, generic CRUD earned by inheritance.** A module gets working endpoints by
-subclassing one generic base and supplying its type parameters. [`ApiControllerBase`](#apicontrollerbase)
-is the root: it owns `HandleFailure` and nothing else. [`EntityControllerBase<TEntity, TEntityDTO,
-TIdentifierType>`](#entitycontrollerbasetentity-tentitydto-tidentifiertype)
+**The controller hierarchy: generic CRUD earned by inheritance.** A module gets working endpoints by
+subclassing one generic base and supplying its type parameters.
+[`ApiControllerBase`](#apicontrollerbase) is the root: `[ApiController]`, `HandleFailure`, nothing
+else. [`EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>`](#entitycontrollerbasetentity-tentitydto-tidentifiertype)
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:28`) adds the
 read surface (`GetAll`, `paged`, `lookup`, `GetById`) over an
-[`IEntityQueryService`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype),
-with field projection, `X-Pagination` header metadata, and page-size clamping.
-[`AggregateRootEntityControllerBase<TEntity, TEntityDTO, TIdentifierType,
-TCreateRequest>`](#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest)
+[`IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype),
+with field projection through a `fields` query parameter, `X-Pagination` header metadata, and a page
+size clamped to `MaxPageSize` (resolved per request from
+[`IApplicationSettings`](group-14-module-system-composition.md#iapplicationsettings), defaulting to
+500, lines 50-57 and 127).
+[`AggregateRootEntityControllerBase<TEntity, TEntityDTO, TIdentifierType, TCreateRequest>`](#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest)
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:27`)
-extends it with an `[Idempotent]` POST create (201 with a `Location` header) and a DELETE, dispatched
-through CQRS command handlers. The interfaces [`IEntityControllerBase<TEntityDTO,
-TIdentifierType>`](#ientitycontrollerbasetentitydto-tidentifiertype) and
-[`IAggregateRootEntityControllerBase<TEntityDTO, TIdentifierType,
-TCreateRequest>`](#iaggregaterootentitycontrollerbasetentitydto-tidentifiertype-tcreaterequest)
+extends it with an `[Idempotent]` POST create that returns 201 through
+`CreatedAtRoute("Get{EntityName}ById", ...)` (lines 58-76) and a DELETE that dispatches
+[`DeleteEntityCommand<TEntity, TIdentifierType>`](group-05-cqrs-pipeline.md#deleteentitycommandtentity-tidentifiertype)
+and returns 204 (lines 84-98). The interfaces
+[`IEntityControllerBase<TEntityDTO, TIdentifierType>`](#ientitycontrollerbasetentitydto-tidentifiertype)
+and
+[`IAggregateRootEntityControllerBase<TEntityDTO, TIdentifierType, TCreateRequest>`](#iaggregaterootentitycontrollerbasetentitydto-tidentifiertype-tcreaterequest)
 describe those shapes for testing and documentation. The generic constraints tie the tower together:
-`TEntity` must derive from
+`TEntity` derives from
 [`AuditableBaseEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditablebaseentitytidentifiertype)
-(or, for writes,
-[`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype)),
-and `TEntityDTO` must implement
-[`IBaseDTO<TIdentifierType>`](#ibasedtotidentifiertype). Alongside the CRUD tower sit three
-special-purpose bases: [`AuthControllerBase`](#authcontrollerbase)
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:16`, login /
-register / refresh / revoke), [`OAuthControllerBase`](#oauthcontrollerbase)
+for reads and from
+[`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype)
+for writes, `TEntityDTO` implements [`IBaseDTO<TIdentifierType>`](#ibasedtotidentifiertype), and
+`TCreateRequest` implements [`ICreateRequest`](group-05-cqrs-pipeline.md#icreaterequest)
+(`EntityControllerBase.cs:35-37`, `AggregateRootEntityControllerBase.cs:40-43`). Alongside the CRUD
+tower sit three special-purpose bases: [`AuthControllerBase`](#authcontrollerbase)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:16`, anonymous
+login, register, and refresh over
+[`IAuthenticationService`](group-08-auth.md#iauthenticationservice), lines 29-80),
+[`OAuthControllerBase`](#oauthcontrollerbase)
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:32`, the Google
-/ GitHub external-provider flow whose single-use exchange code keeps tokens out of the redirect URL,
-[ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html)), and [`ServiceInfoControllerBase`](#serviceinfocontrollerbase)
+and GitHub external-provider flow whose single-use exchange code, cached for two minutes at
+`OAuthControllerBase.cs:42-43`, keeps tokens out of the redirect URL;
+[ADR-036](https://ivanball.github.io/docs/adr/036-external-oauth-login.html) and
+[ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html)),
+and [`ServiceInfoControllerBase`](#serviceinfocontrollerbase)
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/ServiceInfoControllerBase.cs:30`), whose
-dual-version `/ServiceInfo` (returning [`ServiceInfoResponse`](#serviceinforesponse) or
-[`ServiceInfoV2Response`](#serviceinfov2response)) proves the API-versioning machinery works across
-versions. This is the clearest [Rubric §5, Vertical Slice] and [Rubric §16, Maintainability] payoff
-in the presentation layer: a module writes a DTO, a mapper, and a five-line sealed subclass, and
-inherits a fully paged, filterable, error-mapped REST resource.
+dual-version `/ServiceInfo` returns [`ServiceInfoResponse`](#serviceinforesponse) for the deprecated
+v1.0 and [`ServiceInfoV2Response`](#serviceinfov2response) for v2.0, proving the versioning machinery
+works across versions (lines 39-48). All three carry the same note: class-level routing and versioning
+attributes are not reliably inherited, so the per-service sealed subclass supplies them. This is the
+clearest [Rubric §5, Vertical Slice] and [Rubric §16, Maintainability] payoff in the presentation
+layer: a module writes a DTO, a mapper, and a short sealed subclass, and inherits a fully paged,
+filterable, error-mapped REST resource.
 
-**Idempotency for safe retries.** Write endpoints are made replay-safe by the
+**Idempotency for safe retries.** Write endpoints are made replay-safe by
 [`IdempotentAttribute`](#idempotentattribute)
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotentAttribute.cs:16`), a
-`ServiceFilterAttribute` that resolves [`IdempotencyFilter`](#idempotencyfilter)
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:34`) from DI. When
-a client sends an `Idempotency-Key` header, the filter first checks the cache on a lock-free fast
-path, then serializes concurrent duplicates behind a per-key `SemaphoreSlim` with a double-check
-(lines 84-100), executes the action once, and caches the response as an
-[`IdempotencyRecord`](#idempotencyrecord) for 24 hours (configurable via
-[`IdempotencySettings`](#idempotencysettings)). Replays return the cached body with an
-`X-Idempotent-Replay: true` header. Absent the header, the action runs normally. This is a [Rubric
-§7, Microservices Readiness] and [Rubric §29, Resilience & Business Continuity] control: at-least-once
-retry from a gateway or a flaky client cannot create duplicate resources.
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotentAttribute.cs:16`), a one-line
+`ServiceFilterAttribute` that resolves the scoped [`IdempotencyFilter`](#idempotencyfilter)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:43`) from DI
+([ADR-017](https://ivanball.github.io/docs/adr/017-request-idempotency.html)). With no
+`Idempotency-Key` header the action simply runs (lines 73-78). With one, the filter derives its cache
+key from the caller's `user_id` claim (or `anon:` plus the remote IP), the HTTP method, the route
+template, and the client-supplied key, SHA-256 hashed so the key length stays bounded (`BuildCacheKey`,
+lines 165-179): scoping to the caller stops one user's cached response from being replayed to another,
+and scoping to method plus route stops one key from colliding across endpoints that share a cache
+instance. It then checks the cache on a lock-free fast path (line 84), serializes concurrent
+duplicates behind a striped [`KeyedSemaphoreStripe`](group-08-auth.md#keyedsemaphorestripe) (field at
+line 67, acquired at line 88) rather than a per-key semaphore table that would grow unbounded or race
+on removal, double-checks the cache (line 91), executes the action, and stores the response as an
+[`IdempotencyRecord`](#idempotencyrecord) (status code plus JSON body) through
+[`ICacheService`](group-09-caching.md#icacheservice) for
+[`IdempotencySettings`](#idempotencysettings)`.CacheExpirationHours` (default 24, constrained to the
+range 1 to 168, `IdempotencySettings.cs:15-16`). Only successful `ObjectResult`s are stored (lines
+136-141): replaying a transient 500 for a whole retention window would defeat the retry the header
+exists to enable. Replays return the cached body with an `X-Idempotent-Replay: true` header (line
+112). This is a [Rubric §7, Microservices Readiness] and [Rubric §29, Resilience & Business
+Continuity] control: at-least-once retry from a gateway or a flaky client cannot create duplicate
+resources.
 
 **The contract surface: mapping, JSON, and query filters.** The framework maps between the wire and
-the domain **by hand**, not with a runtime reflection mapper ([ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html)). Two interfaces in the
-Application layer define the shape: [`IEntityDTOMapper<TEntity, TEntityDTO,
-TIdentifierType>`](#ientitydtomappertentity-tentitydto-tidentifiertype) turns an entity into its DTO,
-and [`IEntityRequestMapper<TEntity, TCreateRequest,
-TIdentifierType>`](#ientityrequestmappertentity-tcreaterequest-tidentifiertype) turns an incoming
-request into a domain entity via its factory, returning a
-[`Result<T>`](group-01-result-error-handling.md#result) so mapping-time validation (uniqueness, for
-example) is a first-class failure rather than an exception (both in
-`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IEntityDTOMapper.cs:14` and `:42`). Both
-are auto-registered by module assembly scanning. Two more edge helpers finish the contract surface:
+the domain **by hand**, not through a runtime reflection mapper
+([ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html)). Two interfaces in the
+Application layer define the shape, both in
+`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IEntityDTOMapper.cs`:
+[`IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>`](#ientitydtomappertentity-tentitydto-tidentifiertype)
+(line 14) turns an entity into its DTO and supplies a default interface implementation for the
+collection overload (lines 27-32), and
+[`IEntityRequestMapper<TEntity, TCreateRequest, TIdentifierType>`](#ientityrequestmappertentity-tcreaterequest-tidentifiertype)
+(line 42) turns an incoming request into a domain entity through its factory, returning a
+[`Result<T>`](group-01-result-error-handling.md#result) so mapping-time validation (a uniqueness check,
+for example) is a first-class failure rather than an exception. Both are auto-registered by module
+assembly scanning. Two edge helpers finish the contract surface:
 [`CurrencyJsonConverter`](#currencyjsonconverter)
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/JsonConverters/CurrencyJsonConverter.cs:13`)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/JsonConverters/CurrencyJsonConverter.cs:12`)
 serializes the [`Currency`](group-02-domain-building-blocks.md#currency) value object as its bare ISO
-4217 code and rejects unknown codes with a 400 on read; and
-[`QueryFilterModelBinder`](#queryfiltermodelbinder)
+4217 code and throws `JsonException` on a non-string token or an unknown code (lines 17-23), which the
+framework surfaces as a 400; and [`QueryFilterModelBinder`](#queryfiltermodelbinder)
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/ModelBinders/QueryFilterModelBinder.cs:24`) parses
-the `filters[Prop].operator=` / `filters[Prop].value=` query-string convention into the
-`(operator, value)` dictionary the paged read endpoint hands to the specification layer. Manual
-mapping keeps the DTO contract explicit and reviewable, the [Rubric §9, API & Contract Design] and
-[Rubric §15, Best Practices] position the codebase takes deliberately. The
-[`IBaseDTO<TIdentifierType>`](#ibasedtotidentifiertype) marker
-(`MMCA.Common/Source/Core/MMCA.Common.Shared/DTOs/IBaseDTO.cs:9`) plus
-[`BaseLookup<TIdentifierType>`](#baselookuptidentifiertype) and the
-[`IConcurrencyAware`](#iconcurrencyaware) contract are the small shared DTO vocabulary the generic
-controllers rely on.
+the `filters[Prop].operator=` and `filters[Prop].value=` query-string convention into the
+`(operator, value)` dictionary the paged read endpoint hands to the specification layer, capping one
+request at `MaxFilters = 50` distinct properties (line 34) and silently discarding incomplete entries
+(lines 74-80). The small shared DTO vocabulary those generics rely on lives in `MMCA.Common.Shared`:
+[`IBaseDTO<TIdentifierType>`](#ibasedtotidentifiertype)
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/DTOs/IBaseDTO.cs:9`, an `Id` declared with an `init`
+accessor), [`BaseLookup<TIdentifierType>`](#baselookuptidentifiertype) (id plus display name, for
+dropdowns and autocomplete), and the optimistic-concurrency pair
+[`IConcurrencyAware`](#iconcurrencyaware) and [`ConcurrencyTokenRequest`](#concurrencytokenrequest)
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/DTOs/ConcurrencyTokenRequest.cs:12`), the reusable body
+for lifecycle transitions that echoes back the `RowVersion` the client last saw so a transition decided
+against a stale view surfaces as 409 instead of applying silently
+([ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html)). Manual mapping keeps
+the DTO contract explicit and reviewable: the [Rubric §9, API & Contract Design] and [Rubric §15, Best
+Practices] position this codebase takes deliberately.
 
 **Feature gating and per-module controller visibility.** Two mechanisms let an operator turn surface
-area on and off without a redeploy. [`DisabledFeatureHandler`](#disabledfeaturehandler)
+area on and off without a code change. [`DisabledFeatureHandler`](#disabledfeaturehandler)
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/FeatureManagement/DisabledFeatureHandler.cs:13`)
-renders a consistent 404 Problem Details when a `FeatureGate`-protected action is hit while its flag
-is off, so a disabled feature looks like a nonexistent endpoint rather than an error. At a coarser
-grain, [`ModuleControllerFeatureProvider`](#modulecontrollerfeatureprovider)
+renders a consistent Problem Details 404 when a `FeatureGate`-protected action is reached while its
+flag is off, so a disabled feature looks like a nonexistent endpoint rather than an error
+([ADR-031](https://ivanball.github.io/docs/adr/031-feature-flag-management.html)). At a coarser grain,
+[`ModuleControllerFeatureProvider`](#modulecontrollerfeatureprovider)
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/ModuleControllerFeatureProvider.cs:28`) removes a
-disabled module's controllers from MVC discovery entirely, so a module switched off in
-configuration cannot have its routes mapped (which would otherwise 500, since its DI services were
-never registered). Together these are the [Rubric §6, CQRS & Event-Driven] feature-flag story
-extended to the HTTP edge and part of the [Rubric §7, Microservices Readiness] "one codebase, many
-deployment shapes" design.
+disabled module's controllers from MVC discovery entirely, matching a `.{ModuleName}.` token against
+the controller's assembly name or namespace (lines 60-82), so a module switched off in configuration
+cannot have its routes mapped (they would otherwise 500, since the module's DI services were never
+registered). Together these are the feature-flag story extended to the HTTP edge and part of the
+[Rubric §7, Microservices Readiness] "one codebase, many deployment shapes" design.
 
-**The extraction edge: JWKS, forwarded tokens, and public caching.** Several types in this group
-exist only so a module can be lifted out of the monolith into its own service (ADRs 004, 007, 008).
+**Well-known endpoints and the extraction edge.** Several types here exist only so a module can be
+lifted out of the monolith into its own service (ADRs
+[004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html),
+[007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html),
+[008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)).
 [`JwksEndpointExtensions`](#jwksendpointextensions)
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/JwksEndpointExtensions.cs:16`) serves
-`/.well-known/jwks.json` from the Identity host so extracted services validate tokens against the
-issuer's public keys instead of a shared secret; `AddForwardedJwtBearer` on the consuming side points
-its bearer middleware at that endpoint. [`JwtForwardingDelegatingHandler`](#jwtforwardingdelegatinghandler)
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Http/JwtForwardingDelegatingHandler.cs:17`)
-copies the caller's inbound `Authorization` header onto outgoing HTTP calls so distributed
-authorization flows through a service-to-service hop without any handler threading the token by hand
-(the HTTP twin of the gRPC client interceptor). [`PublicEndpointOutputCachePolicy`](#publicendpointoutputcachepolicy)
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:35`)
-lets user-independent GET endpoints stay cacheable even when the framework UI attaches a bearer token
-to every request, with a `bypassRoles` escape hatch so a privileged caller who receives an elevated
-payload always reads fresh. And [`DatabaseInitializationExtensions`](#databaseinitializationextensions)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/JwksEndpointExtensions.cs:15`) serves
+`/.well-known/jwks.json` from [`IJwksProvider`](group-08-auth.md#ijwksprovider) so extracted services
+validate tokens against the issuer's public keys instead of a shared secret, and
+[`OidcDiscoveryEndpointExtensions`](#oidcdiscoveryendpointextensions)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/OidcDiscoveryEndpointExtensions.cs:22`)
+serves the minimal discovery document the JWT middleware fetches when `AddForwardedJwtBearer` sets an
+authority: it returns 404 when `Jwt:Issuer` is not configured (line 65), and derives `jwks_uri` from
+that configured issuer rather than from the inbound request (line 76) so issuer and JWKS URI stay
+origin-aligned. [`JwtForwardingDelegatingHandler`](#jwtforwardingdelegatinghandler)
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Http/JwtForwardingDelegatingHandler.cs:17`) copies
+the caller's inbound `Authorization` header onto outgoing HTTP calls, unless one was already set (lines
+27-30), so distributed authorization flows through a service-to-service hop without any handler
+threading the token by hand: the HTTP twin of
+[`JwtForwardingClientInterceptor`](group-13-grpc-contracts.md#jwtforwardingclientinterceptor).
+[`PublicEndpointOutputCachePolicy`](#publicendpointoutputcachepolicy)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:35`),
+registered by name through [`OutputCacheOptionsExtensions`](#outputcacheoptionsextensions), lets
+user-independent GET endpoints stay cacheable even when the UI attaches a bearer token to every
+request, varying by every query-string key (line 81) and offering a `bypassRoles` escape hatch so a
+privileged caller who receives an elevated payload always reads fresh (lines 71-75,
+[ADR-040](https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html)).
+[`DatabaseInitializationExtensions`](#databaseinitializationextensions)
 (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:17`)
-migrates and seeds each physical data source a host owns, per the database-per-service model ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)).
-These are the [Rubric §7, Microservices Readiness], [Rubric §11, Security] (JWKS-based validation),
-and [Rubric §12, Performance & Scalability] (edge caching) concerns that make the same controller
-code run identically in a monolith and in a fleet of extracted services behind a YARP gateway.
+initializes every physical data source the host owns: `EnsureCreated` for the migration-less Cosmos and
+SQLite engines (lines 54-64), then one of `Migrate`, `EnsureCreated`, or `None` per
+`ApplicationSettings.DatabaseInitStrategy`, where `None` is the production guard that throws with a
+per-source breakdown of pending migrations (lines 70-85 and 95-119;
+[ADR-030](https://ivanball.github.io/docs/adr/030-startup-sole-migrator.html),
+[ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)), finishing by running the
+enabled modules' seeders (line 87). Four smaller startup helpers round out the host:
+[`OpenApiEndpointExtensions`](#openapiendpointextensions) maps `/openapi/{document}.json` and the
+optional Scalar reference UI outside Production only, [`SignalRExtensions`](#signalrextensions) maps
+[`NotificationHub`](group-10-notifications.md#notificationhub) at its configured path when push
+notifications are enabled, [`MiniProfilerExtensions`](#miniprofilerextensions) registers MiniProfiler
+with Entity Framework profiling when `ApplicationSettings.UseMiniProfiler` is set, and
+[`AppAssociationEndpointExtensions`](#appassociationendpointextensions) with
+[`AppAssociationOptions`](#appassociationoptions) serve the Android Digital Asset Links and Apple App
+Site Association documents that let a mobile OS hand this host's https links to the installed native
+app ([ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html)).
+[`ExternalAuthExtensions`](#externalauthextensions)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Authentication/ExternalAuthExtensions.cs:21`)
+completes the OAuth half of authentication, each provider gated on its `OAuth:{Provider}:ClientId`
+being present and throwing at startup when the matching client secret is missing (lines 74-76 and
+88-90). Taken together these are the [Rubric §7, Microservices Readiness], [Rubric §11, Security], and
+[Rubric §12, Performance & Scalability] concerns that let the same controller code run identically in a
+monolith and in a fleet of extracted services behind a YARP gateway.
 
 **Where this group sits.** Everything above is the outermost ring. It depends downward on the CQRS
-pipeline and query services (Groups 03 and 05), the caching and auth infrastructure (Groups 08 and
-09), the module system that discovers controllers and drives health checks (Group 14 via
-[`ModuleLoader`](group-14-module-system-composition.md#moduleloader)), and the domain and Result
-primitives (Groups 01 and 02). It is depended on by nothing inside the framework: the app hosts and
-the gRPC transport group (Group 13) call into it. Read this group as the framework's HTTP grammar,
-the reusable edge every downstream service inherits so its own code stays modules and domain logic,
-never plumbing.
+pipeline and query services (Groups 03 and 05), the auth and caching infrastructure (Groups 08 and
+09), the persistence factories (Group 07), and the module system that discovers controllers and drives
+health checks (Group 14 via [`ModuleLoader`](group-14-module-system-composition.md#moduleloader)), and
+it rests on the Result and domain primitives (Groups 01 and 02). Nothing inside the framework depends
+on it: the app hosts and the gRPC transport group (Group 13) call into it.
+[`AssemblyReference`](#assemblyreference) and [`ClassReference`](#classreference)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/AssemblyReference.cs:8` and `:20`) are the scanning
+anchors that let those callers point at this assembly without naming an incidental type. Read the
+group as the framework's HTTP grammar: the reusable edge every downstream service inherits so its own
+code stays modules and domain logic, never plumbing.
 
 ### AssemblyReference
 > MMCA.Common.API · `MMCA.Common.API` · `MMCA.Common/Source/Presentation/MMCA.Common.API/AssemblyReference.cs:8` · Level 0 · class (static)
@@ -1136,59 +1249,81 @@ never plumbing.
 > MMCA.Common.Shared · `MMCA.Common.Shared.DTOs` · `MMCA.Common/Source/Core/MMCA.Common.Shared/DTOs/IBaseDTO.cs:9` · Level 0 · interface
 
 - **What it is**: a one-property marker interface. Every DTO that carries an entity identifier exposes `TIdentifierType Id { get; init; }` (`IBaseDTO.cs:13`).
-- **Depends on**: nothing first-party.
-- **Concept introduced (the DTO and the marker/role interface).** `[Rubric §9, API & Contract Design]` (assesses DTOs decoupled from domain entities and stable wire contracts): a **DTO** (Data Transfer Object) is the shape that crosses the wire, deliberately separate from the domain entity. `IBaseDTO` lets generic machinery (generic query services and controller base classes) treat *any* DTO uniformly through its `Id`. This is also `[Rubric §1, SOLID]` (SRP/OCP/LSP/**ISP**/DIP): a textbook **Interface Segregation** interface, with one member (the only thing a generic consumer needs), so clients never depend on more than they use.
+- **Depends on**: nothing first-party, and nothing external beyond the generic constraint. It lives in `MMCA.Common.Shared`, the bottom layer, so a Blazor WebAssembly client and an EF-backed service can both reference it.
+- **Concept introduced (the DTO and the marker/role interface).** `[Rubric §9, API & Contract Design]` (assesses DTOs decoupled from domain entities and stable wire contracts): a **DTO** (Data Transfer Object) is the shape that crosses the wire, deliberately separate from the domain entity. `IBaseDTO` lets generic machinery treat *any* DTO uniformly through its `Id`, which is what makes a single generic read service, a single generic controller base, and a single generic UI service possible instead of one hand-written trio per entity. This is also `[Rubric §1, SOLID]`: a textbook **Interface Segregation** interface, with one member (the only thing a generic consumer needs), so clients never depend on more than they use.
 - **Walkthrough**: generic over `TIdentifierType` with a `where TIdentifierType : notnull` constraint (`IBaseDTO.cs:10`); the single `Id` is `get; init;` (`IBaseDTO.cs:13`), settable at construction and immutable after. The `init`-not-`set` choice recurs across these contracts (see the primer on [immutability with `required`/`init`](00-primer.md#2-architectural-styles-this-codebase-commits-to)).
-- **Why it's built this way**: making the identifier type a generic parameter, rather than hard-coding `int`, lets a DTO match its entity's strongly-typed id alias (see [identifier aliases](00-primer.md#2-architectural-styles-this-codebase-commits-to)); the `notnull` constraint forbids `Id` being a nullable type.
-- **Where it's used**: the base contract for DTOs across every module, and the constraint on generic consumers: [`IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype) and the controller base classes. [`BaseLookup<TIdentifierType>`](#baselookuptidentifiertype) implements it.
+- **Why it's built this way**: making the identifier type a generic parameter, rather than hard-coding `int`, lets a DTO match its entity's strongly-typed id alias (see [identifier aliases](00-primer.md#2-architectural-styles-this-codebase-commits-to)), so a `Guid`-keyed aggregate and an `int`-keyed one share the same generic pipeline; the `notnull` constraint forbids `Id` being a nullable type, which keeps the generic code free of null checks on the one value it always needs.
+- **Where it's used**: the constraint on every generic read/write pipeline in the framework, all four of them declaring the same `where TEntityDTO : IBaseDTO<TIdentifierType>` line: [`IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype) (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/IEntityQueryService.cs:21`), [`IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>`](#ientitydtomappertentity-tentitydto-tidentifiertype) (`.../IEntityDTOMapper.cs:16`), [`EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>`](#entitycontrollerbasetentity-tentitydto-tidentifiertype) (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:36`), and [`IEntityService<TEntityDTO, TIdentifierType>`](group-15-common-ui-framework.md#ientityservicetentitydto-tidentifiertype) (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Common/Interfaces/IEntityService.cs:13`). Implemented directly by [`BaseLookup<TIdentifierType>`](#baselookuptidentifiertype) and by shipped DTOs such as [`PushNotificationDTO`](group-10-notifications.md#pushnotificationdto) (`MMCA.Common/Source/Core/MMCA.Common.Shared/Notifications/PushNotifications/PushNotificationDTO.cs:8`), plus every module DTO in ADC and Store.
 
 ### IConcurrencyAware
 > MMCA.Common.Shared · `MMCA.Common.Shared.DTOs` · `MMCA.Common/Source/Core/MMCA.Common.Shared/DTOs/IConcurrencyAware.cs:13` · Level 0 · interface
 
 - **What it is**: a contract for DTOs and update requests that round-trip an **optimistic-concurrency token** (`byte[]? RowVersion`).
-- **Depends on**: nothing first-party.
-- **Concept introduced (optimistic concurrency).** `[Rubric §8, Data Architecture]` (assesses deliberate persistence: transactions, migrations, soft-delete, audit, and **concurrency control**). SQL Server's `rowversion` is a token that changes on every update. A read DTO exposes the current `RowVersion` so the client can echo it back on the next update; an update request carries the client's last-seen value so the persistence layer can detect a conflicting concurrent edit and return a `409 Conflict` instead of silently overwriting (the last-write-wins data-loss bug). The doc comment (`IConcurrencyAware.cs:9-12`) spells out exactly this failure mode.
-- **Walkthrough**: one property, `byte[]? RowVersion { get; init; }` (`IConcurrencyAware.cs:20`). It is nullable so that creation and legacy clients (which send nothing) **skip** the conflict check. Note the `[SuppressMessage("Performance", "CA1819")]` on `IConcurrencyAware.cs:19`: exposing a `byte[]` property normally trips the "properties should not return arrays" analyzer rule, but it is required to round-trip the EF token, and the suppression is *justified inline* (`[Rubric §15, Best Practices]`: suppressions are tracked and explained, not blanket-disabled).
-- **Why it's built this way**: concurrency control is opt-in per DTO through this interface, so only contended resources pay for it; the token is plumbed from EF up through the DTO and back down on the next write.
-- **Where it's used**: implemented by update-request and read DTOs in modules where edits collide; paired with [`IWriteRepository<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#iwriterepositorytentity-tidentifiertype)`.SetOriginalRowVersion`, which pushes the client's last-seen value into EF's original-values tracker so `SaveChanges` raises the conflict.
+- **Depends on**: nothing first-party. It is the wire-side half of a pair whose persistence-side half is [`IWriteRepository<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#iwriterepositorytentity-tidentifiertype)`.SetOriginalRowVersion`.
+- **Concept introduced (optimistic concurrency).** `[Rubric §8, Data Architecture]` (assesses deliberate persistence: transactions, migrations, soft-delete, audit, and **concurrency control**). SQL Server's `rowversion` is a token the database changes on every update of a row. A read DTO exposes the current `RowVersion` so the client can echo it back on the next update; an update request carries the client's last-seen value so the persistence layer can detect a conflicting concurrent edit and return `409 Conflict` instead of silently overwriting. The doc comment (`IConcurrencyAware.cs:9-12`) spells out exactly the failure mode being prevented: without the round-trip an update loads the row fresh and saves it, so two concurrent editors overwrite each other (last-write-wins) and the mapped `409` never fires.
+- **Walkthrough**: one property, `byte[]? RowVersion { get; init; }` (`IConcurrencyAware.cs:20`). It is nullable so that creation and legacy clients (which send nothing) **skip** the conflict check; the enforcement end honors the same rule, since `EFRepository.SetOriginalRowVersion` returns early on `rowVersion is not { Length: > 0 }` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFRepository.cs:82-83`) and otherwise writes the client's bytes into EF's `OriginalValue` for the tracked entity's `RowVersion` property (`EFRepository.cs:85-87`). Note the `[SuppressMessage("Performance", "CA1819")]` on `IConcurrencyAware.cs:19`: exposing a `byte[]` property normally trips the "properties should not return arrays" analyzer rule, but it is required to round-trip the EF token, and the suppression is *justified inline* (`[Rubric §15, Best Practices]`: suppressions are tracked and explained, not blanket-disabled).
+- **Why it's built this way**: concurrency control is opt-in per DTO through this interface ([ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html)), so only contended resources pay the extra wire bytes and the client-side echo discipline. Keeping the contract in `Shared` means the same interface is visible to the Blazor client that must echo the token and to the Infrastructure repository that consumes it.
+- **Where it's used**: implemented by [`ConcurrencyTokenRequest`](#concurrencytokenrequest) in the framework, and by module-local equivalents in the apps: ADC's `LifecycleTransitionRequest` (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/LifecycleTransitionRequest.cs:15`) and `EventTransitionRequest` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/EventTransitionRequest.cs:14`). There is a second, child-level enforcement overload that takes any [`IRowVersioned`](group-02-domain-building-blocks.md#irowversioned) entity (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:185`), so a child edit under an aggregate root gets the same protection.
 
 ### SupportedCultures
 > MMCA.Common.Shared · `MMCA.Common.Shared.Globalization` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Globalization/SupportedCultures.cs:9` · Level 0 · class (static)
 
 - **What it is**: the framework-wide allowlist of supported UI cultures ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)). A static class holding the default culture, the full supported set, the Development-only pseudo-localization locale, and two membership tests.
 - **Depends on**: nothing first-party. Uses only BCL types (`IReadOnlyList<string>`, `StringComparison`).
-- **Concept introduced (internationalization allowlist as one source of truth).** `[Rubric §27, i18n]` (assesses whether locale support is centralized, discoverable, and drift-resistant rather than scattered string checks). Every consumer that decides "is this a language we support" reads this one list: the UI and service hosts' `UseRequestLocalization`, the culture switcher, and the Identity `User.PreferredCulture` guard. Adding a locale means adding a `.<culture>.resx` sibling set plus one entry here, with no other infrastructure change (`SupportedCultures.cs:3-8`).
-- **Walkthrough**: `Default = "en-US"` (`SupportedCultures.cs:12`) is the fallback used when no cookie, profile, or `Accept-Language` preference resolves. `All` (`SupportedCultures.cs:18`) is the supported set, default first (`[Default, "es"]`); both the request-localization options and the culture switcher iterate it. `PseudoLocale = "qps-Ploc"` (`SupportedCultures.cs:28`) is the Windows-standard pseudo-localization locale, deliberately **not** part of `All` so the translation-completeness fitness gate does not demand a `.qps-Ploc.resx` sibling; it is wired into request localization and the culture switcher in **Development only**, where it runtime-transforms every resolved resource string (accents, padding, bracket sentinel) to surface hard-coded strings, truncation, and string concatenation. `IsSupported(string?)` (`SupportedCultures.cs:35`) returns true for a non-empty culture matched case-insensitively against `All`; `IsPseudoLocale(string?)` (`SupportedCultures.cs:44`) tests case-insensitively against `PseudoLocale`.
-- **Why it's built this way**: a single `const`/`IReadOnlyList` allowlist keeps the localization middleware, the switcher UI, and the profile guard from drifting apart; separating `PseudoLocale` from `All` lets a diagnostic locale ship in Development without polluting the production culture set or the resx-completeness gate. See [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) for the culture-resolution and pseudo-localization decision.
-- **Where it's used**: the UI/service host request-localization setup, the culture switcher component, the translation-completeness fitness test, and the Identity `User.PreferredCulture` validation.
+- **Concept introduced (internationalization allowlist as one source of truth).** `[Rubric §27, i18n]` (assesses whether locale support is centralized, discoverable, and drift-resistant rather than scattered string checks). Every consumer that decides "is this a language we support" reads this one list: the host request-localization setup, the culture switcher, and the Identity `PreferredCulture` guard. Adding a locale means adding a `.<culture>.resx` sibling set plus one entry here, with no other infrastructure change (`SupportedCultures.cs:3-8`).
+- **Walkthrough**
+  - `Default = "en-US"` (`SupportedCultures.cs:12`) is the fallback used when no cookie, profile, or `Accept-Language` preference resolves.
+  - `All` (`SupportedCultures.cs:18`) is the supported set, default first, and today it is exactly `[Default, "es"]`: English and Spanish. Both the request-localization options and the culture switcher iterate it.
+  - `PseudoLocale = "qps-Ploc"` (`SupportedCultures.cs:28`) is the Windows-standard pseudo-localization locale, deliberately **not** part of `All` so the translation-completeness fitness gate does not demand a `.qps-Ploc.resx` sibling. It is wired into request localization and the culture switcher in **Development only**, where it runtime-transforms every resolved resource string (accents, padding, bracket sentinel) to surface hard-coded strings, truncation, and string concatenation without translating anything.
+  - `IsSupported(string?)` (`SupportedCultures.cs:35`) returns true for a non-empty culture matched case-insensitively against `All`; `IsPseudoLocale(string?)` (`SupportedCultures.cs:44`) tests case-insensitively against `PseudoLocale`. Both take a nullable string so callers can pass an unvalidated cookie, query value, or profile field straight in.
+- **Why it's built this way**: a single `const` plus `IReadOnlyList` allowlist keeps the localization middleware, the switcher UI, the fitness gate, and the profile guard from drifting apart; separating `PseudoLocale` from `All` lets a diagnostic locale ship in Development without polluting the production culture set or the resx-completeness gate. See [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) for the culture-resolution and pseudo-localization decision.
+- **Where it's used**: [`WebApplicationExtensions`](#webapplicationextensions)`.UseCommonRequestLocalization` builds the supported list from `All`, appends `PseudoLocale` only outside Production, and sets `Default` as the default culture (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:128-141`); the culture-switch endpoint validates the incoming value with `IsSupported`/`IsPseudoLocale` (`WebApplicationExtensions.cs:162`). On the client side, [`MmcaCultureBootstrap`](group-15-common-ui-framework.md#mmcaculturebootstrap) falls back to `Default` when the stored culture is not supported (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/MmcaCultureBootstrap.cs:30`) and [`PseudoStringLocalizer`](group-15-common-ui-framework.md#pseudostringlocalizer) activates only under `IsPseudoLocale` (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Globalization/PseudoStringLocalizer.cs:17`). The fitness gate [`LocalizationResourceTests`](group-27-testing-infrastructure.md#localizationresourcetests) derives its required-culture set from `All` minus `Default` (`MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/LocalizationResourceTests.cs:15-16`), so adding a culture here automatically extends the coverage requirement. Both apps' `UserInvariants` validate a user's preferred culture through `IsSupported` (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/UserInvariants.cs:78`, `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Users/UserInvariants.cs:64`).
 
 ### BaseLookup<TIdentifierType>
 > MMCA.Common.Shared · `MMCA.Common.Shared.DTOs` · `MMCA.Common/Source/Core/MMCA.Common.Shared/DTOs/BaseLookup.cs:8` · Level 1 · record class
 
 - **What it is**: a minimal DTO for dropdown and autocomplete lookups: just `Id` and `Name`.
 - **Depends on**: [`IBaseDTO<TIdentifierType>`](#ibasedtotidentifiertype) (Level 0), which it implements.
-- **Concept (right-sized response shapes).** `[Rubric §9, API & Contract Design]` (assesses whether responses are shaped to their consumer rather than dumping full entities). Instead of returning a full entity DTO to populate a `<select>` element, the system returns `BaseLookup<T>`, carrying only the id and the display name; this cuts wire size and avoids coupling the UI to full entity shapes it does not need. Both `Id` (`BaseLookup.cs:12`) and `Name` (`BaseLookup.cs:15`) are `required` so the type is always fully populated at construction, and record equality gives value semantics for free (see [record value objects](group-02-domain-building-blocks.md#currency)).
-- **Where it's used**: returned by lookup query handlers across both apps; consumed by `MudSelect`/autocomplete components that only need an id-and-display-name pair.
+- **Concept (right-sized response shapes).** `[Rubric §9, API & Contract Design]` (assesses whether responses are shaped to their consumer rather than dumping full entities). Instead of returning a full entity DTO to populate a `<select>` element, the system returns `BaseLookup<T>`, carrying only the id and the display name; this cuts wire size and avoids coupling the UI to full entity shapes it does not need. Both `Id` (`BaseLookup.cs:12`) and `Name` (`BaseLookup.cs:15`) are `required`, so hand-written construction is compile-checked, and record equality gives value semantics for free (see [record value objects](group-02-domain-building-blocks.md#currency)).
+- **Walkthrough**: the type itself is four lines, but its interesting half lives in the repository that projects into it. [`EFReadRepository<TEntity, TIdentifierType>`](group-07-persistence-ef-core.md#efreadrepositorytentity-tidentifiertype)`.GetAllForLookupAsync` takes the *name* of the display property, resolves a cached projection expression, and lets the database do the shaping: `.Select(selector).OrderBy(l => l.Name)` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:85-91`). The selector is built once per `(entity type, property name)` pair into a `ConcurrentDictionary` (`EFReadRepository.cs:99`, `:104-126`), binding `Id` and the named property into a `BaseLookup<TIdentifierType>` via `Expression.MemberInit` (`:120-123`) and coalescing a null string to empty (`:113-114`). Note the consequence for `required`: an expression-tree `MemberInit` constructs the record without the compiler's required-member check, which is legal because `required` is a compile-time contract, not a runtime one. Above the repository the shape travels as a [`CollectionResult<T>`](group-01-result-error-handling.md#collectionresultt) through [`EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>`](#entitycontrollerbasetentity-tentitydto-tidentifiertype)`.GetAllForLookupAsync` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:157-169`).
+- **Why it's built this way**: one shared lookup shape means the UI's generic select components bind to a single type regardless of which entity fills them, and projecting inside the SQL query (rather than materializing entities and mapping) keeps a lookup list cheap `[Rubric §12, Performance & Scalability]`.
+- **Where it's used**: returned by the lookup path at every layer: `IEntityQuerier<TEntity, TIdentifierType>.GetAllForLookupAsync` (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:87`, the focused collection-query interface declared at `IRepository.cs:64`), [`IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>`](group-03-querying-specifications.md#ientityqueryservicetentity-tentitydto-tidentifiertype)`.GetAllForLookupAsync` (`.../IEntityQueryService.cs:82`), the controller base (`EntityControllerBase.cs:157`), and the UI's [`IEntityService<TEntityDTO, TIdentifierType>`](group-15-common-ui-framework.md#ientityservicetentitydto-tidentifiertype) (`.../IEntityService.cs:33`), which deserializes it back out of the HTTP response (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/EntityServiceBase.cs:90-99`).
+
+### ConcurrencyTokenRequest
+> MMCA.Common.Shared · `MMCA.Common.Shared.DTOs` · `MMCA.Common/Source/Core/MMCA.Common.Shared/DTOs/ConcurrencyTokenRequest.cs:12` · Level 1 · record class (sealed)
+
+- **What it is**: the reusable request body for lifecycle and state-transition endpoints (publish, cancel, open, approve, and so on) whose *only* payload is the optimistic-concurrency token.
+- **Depends on**: [`IConcurrencyAware`](#iconcurrencyaware) (Level 0), which it implements and from which `RowVersion` is inherited via `<inheritdoc />` (`ConcurrencyTokenRequest.cs:14-15`).
+- **Concept (the token-only request body).** This is the same optimistic-concurrency idea introduced by [`IConcurrencyAware`](#iconcurrencyaware), narrowed to the case where a state transition carries no other data. `[Rubric §9, API & Contract Design]`: rather than each module inventing its own single-property transition record, one shipped shape covers every such endpoint. The doc comment (`ConcurrencyTokenRequest.cs:3-11`) also pins the binding contract: bind it as an **optional** body (`EmptyBodyBehavior.Allow`) so body-less legacy callers keep working and simply skip the stale-view check, and a null `RowVersion` skips it too.
+- **Walkthrough**: the entire type is `public sealed record class ConcurrencyTokenRequest : IConcurrencyAware` (`ConcurrencyTokenRequest.cs:12`) with one `byte[]? RowVersion { get; init; }` (`:15`). Sealed because there is nothing to specialize; a record because value equality and the `with` expression cost nothing here and match the rest of the DTO family.
+- **Why it's built this way**: [ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html) decided that a transition decided against a stale view of the aggregate must surface as `409 Conflict` rather than applying silently (two moderators racing approve-versus-dismiss, two speakers racing open-versus-close). Making the body optional rather than required is the compatibility hinge: the endpoint's protection is additive, so an old client that posts nothing still transitions, protected only by the domain state machine on the freshly loaded aggregate.
+- **Where it's used**: **no consumer binds it today.** ADC still declares its own structurally identical copies, `LifecycleTransitionRequest` (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/LifecycleTransitionRequest.cs:15`) and `EventTransitionRequest` (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/EventTransitionRequest.cs:14`), each carrying a comment that it is "superseded by MMCA.Common's `ConcurrencyTokenRequest` at the next framework sweep" (`LifecycleTransitionRequest.cs:13`, `EventTransitionRequest.cs:12`). This is the framework offering the shape ahead of the consumers adopting it.
+- **Caveats / not-in-source**: the `EmptyBodyBehavior.Allow` binding is a documented instruction to callers (`ConcurrencyTokenRequest.cs:8`), not something this type can enforce; whether a given endpoint actually binds it optionally is determined at that endpoint's action signature, in the consuming app.
 
 ### CorrelationContext
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Services` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CorrelationContext.cs:9` · Level 1 · class (sealed)
 
-- **What it is**: the scoped service that holds the correlation ID for the current request, defaulting to a fresh GUID when middleware does not set one.
-- **Depends on**: [`ICorrelationContext`](#icorrelationcontext) (Level 0, `MMCA.Common.Application.Interfaces`), the abstraction it implements. Uses BCL `Guid` only.
-- **Concept introduced (request correlation for observability).** `[Rubric §13, Observability & Operability]` (assesses whether requests can be traced end to end through logs and across service boundaries). A **correlation ID** is a single value stamped on every log line and propagated call for one logical request, so operators can reassemble a distributed trace from disjoint logs. The abstraction lives in Application (`ICorrelationContext.cs:8`) so handlers and decorators depend on the interface, not on Infrastructure; the implementation registers as a **scoped** service so one instance lives per request. Note also `[Rubric §3, Clean Architecture]` (dependency inversion: the concrete correlation holder sits in Infrastructure while consumers bind the Application interface).
-- **Walkthrough**: `CorrelationId` (`CorrelationContext.cs:12`) is `{ get; private set; }`, initialized eagerly to `Guid.NewGuid().ToString("N")` so a value always exists even if no middleware runs (for example a background or test path). `SetCorrelationId(string)` (`CorrelationContext.cs:15-19`) overwrites it, guarding the input with `ArgumentException.ThrowIfNullOrWhiteSpace` so a blank header can never wipe the ID. Middleware reads the `X-Correlation-ID` header, calls `SetCorrelationId`, and the value then flows through the handler pipeline via structured-logging scopes (`ICorrelationContext.cs:4-6`).
-- **Why it's built this way**: a scoped holder with an eager default keeps correlation always-on and cheap: every code path has an ID without a null check, and inbound requests still adopt the caller's ID for cross-service tracing. Keeping the interface in Application preserves the layering rule that Infrastructure implements Application abstractions, never the reverse.
-- **Where it's used**: set by the correlation middleware from the inbound header; read by the Logging decorator in the CQRS pipeline (which logs full pipeline duration against the correlation ID) and by structured-logging scopes throughout request handling.
+- **What it is**: the scoped service that holds the correlation ID for the current request, defaulting to a fresh GUID when no middleware sets one.
+- **Depends on**: [`ICorrelationContext`](#icorrelationcontext) (Level 0, `MMCA.Common.Application.Interfaces`), the abstraction it implements (`CorrelationContext.cs:1`, `:9`). Uses BCL `Guid` only.
+- **Concept introduced (request correlation for observability).** `[Rubric §13, Observability & Operability]` (assesses whether requests can be traced end to end through logs and across service boundaries). A **correlation ID** is a single value stamped on every log line and propagated call for one logical request, so operators can reassemble a distributed trace from disjoint logs. `[Rubric §3, Clean Architecture]` also applies: the abstraction lives in Application (`ICorrelationContext.cs:8`) so handlers and decorators depend on the interface, while the concrete holder sits in Infrastructure, keeping the dependency arrow pointing inward.
+- **Walkthrough**: `CorrelationId` (`CorrelationContext.cs:12`) is `{ get; private set; }`, initialized eagerly to `Guid.NewGuid().ToString("N")` so a value always exists even if no middleware runs (a background processor, a test path, a gRPC call). `SetCorrelationId(string)` (`CorrelationContext.cs:15-19`) overwrites it, guarding the input with `ArgumentException.ThrowIfNullOrWhiteSpace` (`:17`) so a blank header can never wipe the ID. The private setter means the only write path is that one guarded method. Registration is `services.TryAddScoped<ICorrelationContext, CorrelationContext>()` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:187`): scoped, so one instance lives per request, and `TryAdd`, so a host that wants its own implementation can register it first and win.
+- **Why it's built this way**: a scoped holder with an eager default keeps correlation always-on and cheap: every code path has an ID without a null check, and inbound requests still adopt the caller's ID for cross-service tracing. The `"N"` GUID format (32 hex digits, no hyphens) keeps the value compact in log lines and headers.
+- **Where it's used**: [`CorrelationIdMiddleware`](#correlationidmiddleware) resolves it per request and calls `SetCorrelationId` with the inbound `X-Correlation-ID` header, falling back to the current `Activity` trace ID and then to `HttpContext.TraceIdentifier` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/CorrelationIdMiddleware.cs:32-36`), then echoes the value back on the response (`:37-41`). Downstream, [`LoggingCommandDecorator<TCommand, TResult>`](group-05-cqrs-pipeline.md#loggingcommanddecoratortcommand-tresult) (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/LoggingCommandDecorator.cs:16`) and [`LoggingQueryDecorator<TQuery, TResult>`](group-05-cqrs-pipeline.md#loggingquerydecoratortquery-tresult) (`.../LoggingQueryDecorator.cs:15`) take it as a constructor dependency and wrap the ID into their log scope for the full pipeline duration.
 
 ### CurrencyJsonConverter
-> MMCA.Common.API · `MMCA.Common.API.JsonConverters` · `MMCA.Common/Source/Presentation/MMCA.Common.API/JsonConverters/CurrencyJsonConverter.cs:13` · Level 4 · class (sealed)
+> MMCA.Common.API · `MMCA.Common.API.JsonConverters` · `MMCA.Common/Source/Presentation/MMCA.Common.API/JsonConverters/CurrencyJsonConverter.cs:12` · Level 4 · class (sealed)
 
 - **What it is**: a `System.Text.Json.JsonConverter<Currency>` that serializes [`Currency`](group-02-domain-building-blocks.md#currency) as its ISO 4217 three-letter code string and deserializes by validating that code through `Currency.FromCode`.
-- **Depends on**: [`Currency`](group-02-domain-building-blocks.md#currency) (Level 3, `MMCA.Common.Shared.ValueObjects`). Extends BCL `JsonConverter<T>`.
-- **Concept (value objects serialize to their natural string form).** `[Rubric §9, API & Contract Design]` (assesses whether the wire contract exposes clean primitives rather than leaking internal object graphs). A domain value object should cross the wire as the compact primitive a client expects (`"USD"`), not as a nested object. This converter also enforces validity at the boundary: malformed input is rejected before it reaches a handler.
-- **Walkthrough**: `Read` (`CurrencyJsonConverter.cs:16`) first rejects any non-string token, throwing `JsonException("Currency must be a string.")` (`CurrencyJsonConverter.cs:18-19`); it then reads the string (`CurrencyJsonConverter.cs:21`), runs `Currency.FromCode(code)` (`CurrencyJsonConverter.cs:22`), and throws `JsonException($"Invalid currency code: {code}")` on failure (`CurrencyJsonConverter.cs:23-24`). Any thrown `JsonException` surfaces as a `400 Bad Request` from the framework's model binding, so an invalid currency never reaches a handler. `Write` (`CurrencyJsonConverter.cs:30-31`) is a one-liner: `writer.WriteStringValue(value.Code)`. The type is sealed, holds no state, and has exactly these two methods (`[Rubric §15, Best Practices]`: the framework-idiomatic converter pattern).
-- **Why it's built this way**: routing (de)serialization through `Currency.FromCode` keeps the single validation gate for currency codes in the value object itself, so the API layer neither duplicates the allowlist nor accepts a `Currency` the domain would reject.
-- **Where it's used**: registered as a global JSON converter in `WebApplicationBuilderExtensions`, so every API request and response serializes `Currency` as a string uniformly.
+- **Depends on**: [`Currency`](group-02-domain-building-blocks.md#currency) (`MMCA.Common.Shared.ValueObjects`). Extends BCL `JsonConverter<T>` (`CurrencyJsonConverter.cs:12`).
+- **Concept (value objects serialize to their natural string form).** `[Rubric §9, API & Contract Design]` (assesses whether the wire contract exposes clean primitives rather than leaking internal object graphs). A domain value object should cross the wire as the compact primitive a client expects (`"USD"`), not as a nested object with a `code` property. The converter is also a validation gate at the boundary: malformed input is rejected before model binding completes, so no handler ever sees an invalid currency.
+- **Walkthrough**
+  - `Read` (`CurrencyJsonConverter.cs:15`) first rejects any non-string token, throwing `JsonException("Currency must be a string.")` (`:17-18`), which is what stops a JSON number or object from being coerced.
+  - It then reads the string, coalescing null to empty (`:20`), runs `Currency.FromCode(code)` (`:21`), and throws `JsonException($"Invalid currency code: {code}")` when the result is a failure (`:22-23`) before returning `result.Value!` (`:25`). Because `FromCode` returns a [`Result`](group-01-result-error-handling.md#result), the converter is bridging the Result world into the exception-based contract `JsonConverter<T>` requires; the thrown `JsonException` surfaces as a `400 Bad Request` from the framework's model binding (doc comment, `:9-10`).
+  - `Write` (`CurrencyJsonConverter.cs:29-30`) is a one-liner: `writer.WriteStringValue(value.Code)`.
+  - The type is sealed, holds no state, and has exactly these two methods (`[Rubric §15, Best Practices]`: the framework-idiomatic converter pattern).
+- **Why it's built this way**: routing (de)serialization through `Currency.FromCode` keeps the single validation gate for currency codes in the value object itself (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Currency.cs:41-51`, which matches case-insensitively against the closed `All` set), so the API layer neither duplicates the allowlist nor accepts a `Currency` the domain would reject.
+- **Where it's used**: registered globally for MVC in [`DependencyInjection`](#dependencyinjection)`.AddAPI`, which chains `.AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new CurrencyJsonConverter()))` onto `AddControllers` (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:49`), so every controller request and response serializes `Currency` as a string uniformly.
+- **Caveats / not-in-source**: there is a **second, same-named converter** in the Shared layer, [`CurrencyJsonConverter`](group-02-domain-building-blocks.md#currencyjsonconverter) (`MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Currency.cs:65`), attached to the value object by `[JsonConverter(typeof(CurrencyJsonConverter))]` (`Currency.cs:13`) so that non-MVC serialization paths (the UI's `HttpClient` calls, WebAssembly) also get string form. The two differ in behavior: the Shared one returns `null` for a null token and does not reject non-string tokens (`Currency.cs:68-72`), while this API one rejects any non-string token outright (`CurrencyJsonConverter.cs:17-18`). Which of the two wins for a given payload is a `System.Text.Json` converter-precedence question (an options-registered converter versus a type-level attribute) and is not determinable from this source alone.
 
 
 ---

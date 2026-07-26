@@ -1,72 +1,94 @@
 # 8. Authentication & Authorization
 
-**What this group covers.** This is the security spine of the framework: how a user proves who they
+**What this group covers.** This is the security spine of the framework: how a caller proves who they
 are (authentication), how the system decides what they may do (authorization), and how both survive
-the jump from a single-process monolith to a fleet of extracted services. Almost every type here lives
-to serve one of six moving parts: **minting and validating JWTs**
-([`TokenService`](#tokenservice)/[`ITokenService`](#itokenservice),
-[`RsaJwksProvider`](#rsajwksprovider)/[`IJwksProvider`](#ijwksprovider)); **the shared login /
+the jump from a single-process monolith to a fleet of extracted services. Almost every type here
+serves one of seven moving parts: **minting and validating JWTs**
+([`TokenService`](#tokenservice) / [`ITokenService`](#itokenservice),
+[`RsaJwksProvider`](#rsajwksprovider) / [`IJwksProvider`](#ijwksprovider)); **the shared login /
 register / refresh workflow** ([`AuthenticationServiceBase<TUser>`](#authenticationservicebasetuser),
-[`IAuthenticationService`](#iauthenticationservice), [`AuthenticationValidators`](#authenticationvalidators));
-**password material** ([`PasswordHasher`](#passwordhasher)/[`IPasswordHasher`](#ipasswordhasher),
-[`IAuthUser`](#iauthuser)); **brute-force / rate-limit protection**
-([`LoginProtectionService`](#loginprotectionservice)/[`ILoginProtectionService`](#iloginprotectionservice));
-**reading the current user's identity from claims**
-([`CurrentUserService`](#currentuserservice)/[`ICurrentUserService`](#icurrentuserservice),
-[`ClaimBasedUserIdProvider`](#claimbaseduseridprovider), [`AuthClaimTypes`](#authclaimtypes)); and
-**the authorization model** (roles, permissions, and resource ownership under
+[`IAuthenticationService`](#iauthenticationservice),
+[`AuthenticationValidators`](#authenticationvalidators)); **password material**
+([`PasswordHasher`](#passwordhasher) / [`IPasswordHasher`](#ipasswordhasher),
+[`IAuthUser`](#iauthuser)); **brute-force and rate-limit protection**
+([`LoginProtectionService`](#loginprotectionservice) /
+[`ILoginProtectionService`](#iloginprotectionservice),
+[`LoginProtectionSettings`](#loginprotectionsettings)); **reading the current caller's identity from
+claims** ([`CurrentUserService`](#currentuserservice) / [`ICurrentUserService`](#icurrentuserservice),
+[`ClaimBasedUserIdProvider`](#claimbaseduseridprovider), [`AuthClaimTypes`](#authclaimtypes)); **the
+authorization model** (roles, permissions, and resource ownership under
 [`AuthorizationExtensions`](#authorizationextensions),
 [`PermissionAuthorizationHandler`](#permissionauthorizationhandler), and
-[`OwnerOrAdminFilter`](#owneroradminfilter)). A seventh cluster, the HttpOnly **session-cookie**
-machinery ([`SessionCookieEndpoints`](#sessioncookieendpoints),
+[`OwnerOrAdminFilter`](#owneroradminfilter)); and the HttpOnly **session-cookie** machinery
+([`SessionCookieEndpoints`](#sessioncookieendpoints),
 [`SessionCookieAuthenticationHandler`](#sessioncookieauthenticationhandler),
-[`CookieSessionRefresher`](#cookiesessionrefresher)), exists so that server-side-rendered Blazor pages
-stay authenticated across a cold navigation. The governing decisions are [ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html) (cross-service token
-validation via JWKS), [ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html) (brute-force protection), [ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html) (password hashing), and [ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html)
-(resource-ownership authorization); the rubric lenses are almost entirely [Rubric §11, Security] with
+[`CookieSessionRefresher`](#cookiesessionrefresher)) that keeps server-side-rendered Blazor pages
+authenticated across a cold navigation.
+
+The governing decisions are [ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)
+(dual-fetch login and cross-service token validation via JWKS),
+[ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html) (one rotating
+refresh token with reuse detection),
+[ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html)
+(brute-force protection),
+[ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html) (password hashing),
+[ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html)
+(resource-ownership authorization),
+[ADR-022](https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html) (the browser
+session-cookie scheme), and
+[ADR-051](https://ivanball.github.io/docs/adr/051-client-auth-token-lifecycle.html) (how each render
+head holds and reacquires a token). The rubric lenses are dominated by [Rubric §11, Security], with
 supporting [Rubric §7, Microservices Readiness] and [Rubric §10, Cross-Cutting]. Auth surfaces all of
 its expected failures (bad password, lockout, expired session) as
 [`Result`](group-01-result-error-handling.md#result) failures, never exceptions, so reading the
-[Result pattern](group-01-result-error-handling.md#result) section first pays off here.
+[Result pattern](group-01-result-error-handling.md#result) first pays off here.
 
 ## Tokens: one signing switch, two validation worlds
 
 The framework mints two credentials on every successful login: a short-lived **access token** (a JWT,
-default 15 minutes) and an opaque, random **refresh token** (64 bytes of `RandomNumberGenerator`
-output, Base64-encoded), both produced by [`TokenService`](#tokenservice)
+15 minutes by default,
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/JwtSettings.cs:42`) and an opaque,
+random **refresh token** (64 bytes of `RandomNumberGenerator` output, Base64-encoded, valid 7 days by
+default, `TokenService.cs:106-107`, `JwtSettings.cs:45`), both produced by
+[`TokenService`](#tokenservice)
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:23`). The access token
 carries a fixed claim spine: `sub`, `jti`, `iat`, a custom `user_id`, plus name, email, and role
-(`TokenService.cs:76`), and the app adds its own claims (for example `speaker_id` or `customer_id`) via
-the `additionalClaims` parameter.
+(`TokenService.cs:76-85`), and the app adds its own claims (for example `speaker_id` or `customer_id`)
+through the `additionalClaims` parameter (`TokenService.cs:87-90`).
 
 The load-bearing design choice is a single configuration switch,
 [`IJwtSettings`](group-14-module-system-composition.md#ijwtsettings)`.SigningAlgorithm`
-(`TokenService.cs:53`). In **monolith mode** it defaults to `HS256`: one symmetric Base64 secret both
-signs and validates, because issuer and validator are the same process. In **microservice mode** it is
-`RS256`: the Identity service signs with an RSA private key and every other service validates against
-the matching public key, which it fetches over JWKS. The keys are materialized once at construction and
-the owned `RSA` handles are disposed with the service (`TokenService.cs:33`, `TokenService.cs:154`), so
-token operations never re-parse key material. That asymmetric split is exactly what lets a module be
-extracted without every service holding a signing key ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)): a compromised non-Identity service can
-verify tokens but cannot forge them.
+(`TokenService.cs:53`). In **monolith mode** it defaults to
+[`JwtSigningAlgorithm`](group-14-module-system-composition.md#jwtsigningalgorithm)`.HS256`
+(`JwtSettings.cs:22`): one symmetric Base64 secret both signs and validates, because issuer and
+validator are the same process (`TokenService.cs:166-178`). In **microservice mode** it is `RS256`:
+the Identity service signs with an RSA private key and every other service validates against the
+matching public key, which it fetches over JWKS. An issuer with no explicit public key configured
+derives one from its own private-key parameters so it can still self-validate during refresh
+(`TokenService.cs:196-210`). Key material is materialized once in the constructor and the owned `RSA`
+handles are disposed with the service (`TokenService.cs:33-34`, `TokenService.cs:160-164`), so token
+operations never re-parse a PEM. That asymmetric split is exactly what lets a module be extracted
+without every service holding a signing key: a compromised non-Identity service can verify tokens but
+cannot forge them.
 
 The public half is served by [`RsaJwksProvider`](#rsajwksprovider)
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:15`), which lazily builds a
-`JsonWebKeySet` from a PEM key configured through
-[`JwksSettings`](group-14-module-system-composition.md#jwkssettings). Publishing is off by default, and
-when disabled or unconfigured the provider returns an *empty* key set (`RsaJwksProvider.cs:24`,
-`RsaJwksProvider.cs:32`) so the endpoint stays queryable but a non-issuer host advertises nothing. The
-endpoint itself, `/.well-known/jwks.json`, is mapped in the API layer by
-[`JwksEndpointExtensions`](group-12-api-hosting-mapping.md#jwksendpointextensions), paired with the OIDC
-discovery document from
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/RsaJwksProvider.cs:15`), which lazily builds
+a `JsonWebKeySet` from a PEM key (inline or read from a path) configured through
+[`JwksSettings`](group-14-module-system-composition.md#jwkssettings) (`RsaJwksProvider.cs:17`,
+`RsaJwksProvider.cs:52-67`). Publishing is off by default, and when disabled or unconfigured the
+provider returns an *empty* key set (`RsaJwksProvider.cs:24-27`, `RsaJwksProvider.cs:30-33`) so the
+endpoint stays queryable but a non-issuer host advertises nothing. The endpoint itself,
+`/.well-known/jwks.json`, is mapped in the API layer by
+[`JwksEndpointExtensions`](group-12-api-hosting-mapping.md#jwksendpointextensions), paired with the
+OIDC discovery document from
 [`OidcDiscoveryEndpointExtensions`](group-12-api-hosting-mapping.md#oidcdiscoveryendpointextensions);
 [`OpenIdConnectMetadataWarmupTask`](group-16-aspire-orchestration.md#openidconnectmetadatawarmuptask)
 pre-fetches that document at startup so the first authenticated request on a cold replica does not pay
-the discovery round trip. Both validators pin `ValidAlgorithms` so an attacker cannot force an
-algorithm swap; you can see the in-process version of that guard in
-`TokenService.GetPrincipalFromExpiredToken` (`TokenService.cs:130` pins `ValidAlgorithms`), where the
-algorithm is then re-checked against the token header even after `ValidateToken` returns
-(`TokenService.cs:139-140`).
+the discovery round trip. Validation pins the expected algorithm so an attacker cannot force an
+algorithm swap: `GetPrincipalFromExpiredToken` sets `ValidAlgorithms` to the single configured value
+(`TokenService.cs:136`) and then re-checks the token header after `ValidateToken` returns
+(`TokenService.cs:145-149`). Only the lifetime check is skipped there (`TokenService.cs:131`), because
+the method exists to read claims out of an already-expired token during refresh.
 
 ## The shared authentication workflow
 
@@ -74,160 +96,324 @@ Login, registration, refresh, and revocation are not re-implemented per app. The
 [`AuthenticationServiceBase<TUser>`](#authenticationservicebasetuser)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:34`), an abstract
 base each app's Identity module seals over its concrete `User` aggregate. The base owns the sequence;
-the sealed subclass supplies the genuinely app-specific pieces through hooks (`FindUntrackedByEmailAsync`,
-`EmailExistsAsync`, `CreateUser`, `CreateAccessToken`, and optional validation and post-commit hooks).
-The `User` aggregate reaches the workflow through the deliberately minimal
-[`IAuthUser`](#iauthuser) contract
-(`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:10`): password hash and salt, the current
-refresh token and its expiry, and two mutators (`UpdateRefreshToken`, `RevokeRefreshToken`).
+the sealed subclass supplies the genuinely app-specific pieces through abstract and virtual hooks:
+`FindUntrackedByEmailAsync` and `EmailExistsAsync` (written against the concrete `User` so EF
+translation is unchanged, `AuthenticationServiceBase.cs:285-291`), `CreateUser`
+(`AuthenticationServiceBase.cs:294`), `CreateAccessToken` (`AuthenticationServiceBase.cs:297`), the two
+optional candidate gates (`AuthenticationServiceBase.cs:300-305`), and the post-commit
+`OnUserRegisteredAsync` (`AuthenticationServiceBase.cs:311`). The `User` aggregate reaches the workflow
+through the deliberately minimal [`IAuthUser`](#iauthuser) contract
+(`MMCA.Common/Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:10`): password hash and salt, the
+current refresh token and its expiry, and two mutators (`UpdateRefreshToken`, `RevokeRefreshToken`).
 
-`LoginAsync` (`AuthenticationServiceBase.cs:63`) shows the shape. It validates the request first, then
-runs the [ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html) lockout check, then does the **dual-fetch**: an untracked, no-change-tracking query to
-verify the password cheaply (`AuthenticationServiceBase.cs:86`), and only on success a second *tracked*
-re-fetch so the rotated refresh token can be persisted through `SaveChangesAsync`
-(`AuthenticationServiceBase.cs:110`). Soft-deleted accounts fall out through EF query filters and return
-the same generic 401 as a wrong password, so the API never reveals whether an email exists. Every failure
-path returns a [`Result`](group-01-result-error-handling.md#result) rather than throwing, matching the
-framework-wide Result pattern (see [primer](../00-primer.md)). `RefreshTokenAsync`
-(`AuthenticationServiceBase.cs:180`) extracts claims from the *expired* access token (signature still
-verified, only lifetime skipped), then compares the presented refresh token against the stored one; a
-mismatch is treated as token reuse and *revokes* the stored token to force re-authentication
-(`AuthenticationServiceBase.cs:221`, BR-206). The request/response DTOs for these flows
-([`LoginRequest`](#loginrequest), [`RegisterRequest`](#registerrequest),
-[`RefreshTokenRequest`](#refreshtokenrequest), [`AuthenticationResponse`](#authenticationresponse),
-[`ChangePasswordRequest`](#changepasswordrequest), [`OAuthCodeExchangeRequest`](#oauthcodeexchangerequest),
-and the base [`AuthenticationRequest`](#authenticationrequest)) are compact record structs in
-`MMCA.Common.Shared`, and the FluentValidation rules that guard them are bundled in
-[`AuthenticationValidators`](#authenticationvalidators) alongside
+`LoginAsync` (`AuthenticationServiceBase.cs:73`) shows the shape. It validates the request first, then
+runs the [ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html) lockout check (`AuthenticationServiceBase.cs:84`), then does the **dual-fetch**: an
+untracked, no-change-tracking query to verify the password cheaply
+(`AuthenticationServiceBase.cs:96`, `AuthenticationServiceBase.cs:112`), and only on success a second
+*tracked* re-fetch so the rotated refresh token can be persisted through `SaveChangesAsync`
+(`AuthenticationServiceBase.cs:120`, `AuthenticationServiceBase.cs:264-278`). The email is normalized
+through the [`Email`](group-02-domain-building-blocks.md#email) value object before the query so the
+EF predicate compares same-typed converted values (`AuthenticationServiceBase.cs:92`). Soft-deleted
+accounts fall out through EF global query filters and return the same generic 401 as a wrong password
+(`AuthenticationServiceBase.cs:100-102`), so the API never reveals whether an email exists, and a
+successful login clears the attempt counters (`AuthenticationServiceBase.cs:128`).
+
+`RegisterAsync` (`AuthenticationServiceBase.cs:134`) rate-limits by source IP, rejects a duplicate
+email as a conflict, hashes the password, saves, and only then runs the app's post-commit hook and
+counts the registration (`AuthenticationServiceBase.cs:146-179`). `RefreshTokenAsync`
+(`AuthenticationServiceBase.cs:190`) extracts claims from the *expired* access token (signature still
+verified, only lifetime skipped, `AuthenticationServiceBase.cs:202`), then compares the presented
+refresh token against the stored one; a mismatch or an expired stored token is treated as reuse and
+*revokes* the stored token to force re-authentication (`AuthenticationServiceBase.cs:231-238`,
+[ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html) / BR-206). Every failure path returns a
+[`Result`](group-01-result-error-handling.md#result) rather than throwing, matching the framework-wide
+Result pattern (see [primer §2](00-primer.md#2-architectural-styles-this-codebase-commits-to)).
+
+The request and response DTOs for these flows ([`LoginRequest`](#loginrequest),
+[`RegisterRequest`](#registerrequest), [`RefreshTokenRequest`](#refreshtokenrequest),
+[`AuthenticationResponse`](#authenticationresponse), [`ChangePasswordRequest`](#changepasswordrequest),
+[`OAuthCodeExchangeRequest`](#oauthcodeexchangerequest), and the device-aware
+[`AuthenticationRequest`](#authenticationrequest) used by MAUI clients) are compact `readonly record
+struct`s in `MMCA.Common.Shared`. Two of them mark boundaries worth noting: password change is
+dispatched straight through its command handler at the controller layer rather than brokered by
+[`IAuthenticationService`](#iauthenticationservice)
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/IAuthenticationService.cs:8-9`), and
+`ExternalLoginAsync` has a default interface implementation that *rejects* the call
+(`IAuthenticationService.cs:66-74`) because OAuth account linking stays coupled to the app's own
+`User` factory. The FluentValidation rules that guard the requests are bundled into one parameter
+object, [`AuthenticationValidators`](#authenticationvalidators)
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationValidators.cs:16`), which keeps
+the app's `AuthenticationService` constructor below the arity ceiling; the framework ships
 [`LoginRequestValidator`](#loginrequestvalidator) and
-[`RefreshTokenRequestValidator`](#refreshtokenrequestvalidator).
+[`RefreshTokenRequestValidator`](#refreshtokenrequestvalidator), while the `IValidator<RegisterRequest>`
+the bundle requires is supplied by each app.
 
 ## Passwords and brute-force protection
 
 Password material is handled by [`PasswordHasher`](#passwordhasher)
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:12`), which hashes with
-PBKDF2-HMAC-SHA512 at 600,000 iterations (OWASP 2023 guidance, `PasswordHasher.cs:24`) and verifies in
-constant time via `CryptographicOperations.FixedTimeEquals` (`PasswordHasher.cs:58`) to close the timing
-side channel. It stays backward-compatible with an older HMAC-SHA512 scheme by branching on salt length
-(32 bytes = PBKDF2, 128 bytes = legacy, `PasswordHasher.cs:52`), so existing hashes still verify without
-a forced reset ([ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html)). This is a clean [Rubric §11, Security] story: modern KDF, constant-time
-compare, and a migration path all in one small type.
+PBKDF2-HMAC-SHA512 at 600,000 iterations (OWASP 2023 guidance, `PasswordHasher.cs:24`) over a 32-byte
+random salt (`PasswordHasher.cs:15`, `PasswordHasher.cs:34`) and verifies in constant time via
+`CryptographicOperations.FixedTimeEquals` (`PasswordHasher.cs:58`) to close the timing side channel. It
+stays backward-compatible with an older HMAC-SHA512 scheme by branching on salt length (128 bytes means
+legacy, anything else means PBKDF2, `PasswordHasher.cs:27`, `PasswordHasher.cs:52-54`), so existing
+hashes still verify without a forced reset ([ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html)). That is a compact [Rubric §11, Security] story:
+modern KDF, constant-time compare, and a migration path in one small type, all behind the
+[`IPasswordHasher`](#ipasswordhasher) port
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IPasswordHasher.cs:6`) so
+the algorithm can be strengthened without touching an Application handler.
 
 [`LoginProtectionService`](#loginprotectionservice)
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:18`) adds the
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:19`) adds the
 [ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html) gates on top, backed by [`ICacheService`](group-09-caching.md#icacheservice) rather than a
-database so the counters are cheap and self-expiring. After
-[`LoginProtectionSettings`](#loginprotectionsettings)`.MaxFailedAttempts` consecutive failures it applies
-an exponential-backoff lockout (`LoginProtectionService.cs:58`), with a deliberately clamped shift
-exponent so a persistent attacker cannot wrap the TTL back to something small, and it rate-limits
-registrations per source IP (`LoginProtectionService.cs:72`). The workflow calls these gates at exactly
-the right points (increment on failed login, reset on success) so the protection is centralized rather
-than sprinkled through each app's controller.
+database so the counters are cheap and self-expiring. Counter keys are built from an
+`Email`-normalized identity (`LoginProtectionService.cs:34-47`), so `User@x.com`, `user@x.com`, and a
+padded variant collapse onto one lockout instead of handing an attacker three independent budgets.
+After [`LoginProtectionSettings`](#loginprotectionsettings)`.MaxFailedAttempts` consecutive failures
+(default 5,
+`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionSettings.cs:18`) it applies an
+exponential-backoff lockout capped at `MaxLockoutSeconds` (default 300,
+`LoginProtectionSettings.cs:24`), with a deliberately clamped shift exponent so a persistent attacker
+cannot wrap the TTL back to something small (`LoginProtectionService.cs:88-89`), and it rate-limits
+registrations per source IP (default 10 per 60-minute window, `LoginProtectionSettings.cs:37-43`,
+`LoginProtectionService.cs:101-134`). The workflow calls these gates at exactly the right points
+(increment on failed login, reset on success), so the protection is centralized rather than sprinkled
+through each app's controller. One documented trade-off is stated in source: the attempt increment is a
+read-modify-write rather than an atomic counter, because the native Redis `INCR` path wrote a key shape
+`IDistributedCache` could not read back (`LoginProtectionService.cs:66-74`). Sequential guessing, which
+is what a credential-stuffing run looks like, still trips the lockout.
 
 ## Reading identity from claims
 
-Once a request is authenticated, downstream code needs the caller's identity without re-parsing the JWT.
-[`CurrentUserService`](#currentuserservice)
+Once a request is authenticated, downstream code needs the caller's identity without re-parsing the
+JWT. [`CurrentUserService`](#currentuserservice)
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/CurrentUserService.cs:12`) is the scoped
 adapter over `IHttpContextAccessor`: it exposes the `ClaimsPrincipal`, the parsed `user_id`, and the
-role, caching each behind a per-request `Lazy<T>` (`CurrentUserService.cs:17`) and reading the same
-custom `user_id` claim that [`TokenService`](#tokenservice) emits. Its generic `GetClaimValue<T>` is
-what the ownership filter uses to read app-specific owner claims. A sibling,
+first role claim, caching the parsed values behind a per-request `Lazy<T>` (`CurrentUserService.cs:17`,
+`CurrentUserService.cs:23`) and reading the same custom `user_id` claim that
+[`TokenService`](#tokenservice) emits. Its generic `GetClaimValue<T>` (`CurrentUserService.cs:36`) is
+what the ownership filter uses to read app-specific owner claims. The interface itself,
+[`ICurrentUserService`](#icurrentuserservice)
+(`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ICurrentUserService.cs:9`),
+carries the multi-role logic as *default interface members*: `Roles` reads every role claim across the
+three claim-type spellings the JWT middleware may produce and falls back to the single `Role` property
+when a hand-written double populates only that (`ICurrentUserService.cs:45-64`), and `IsInRole` does a
+case-insensitive membership check over that set (`ICurrentUserService.cs:88-89`). A sibling adapter,
 [`ClaimBasedUserIdProvider`](#claimbaseduseridprovider)
 (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/ClaimBasedUserIdProvider.cs:9`), plugs the
 same `user_id` claim into SignalR's `IUserIdProvider` so `Clients.User(userId)` routes hub messages to
-the right connections. [`AuthClaimTypes`](#authclaimtypes) names the one framework-custom claim beyond
-the BCL set, `"permission"`, used by the authorization model below.
+the right connections. [`AuthClaimTypes`](#authclaimtypes)
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:7`) names the one framework-custom
+claim beyond the BCL set, `"permission"` (`AuthClaimTypes.cs:15`), used by the authorization model
+below.
 
 ## Authorization: roles, permissions, ownership
 
 The framework supports three overlapping authorization styles, wired together by the single
 `AddAuthorizationPolicies()` extension in [`AuthorizationExtensions`](#authorizationextensions)
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:12`). The simplest is
-**named role policies**: [`AuthorizationPolicies`](#authorizationpolicies) defines the constant policy
-names (`RequireAdmin`, `RequireOrganizer`, and so on) that controllers reference through
-`[Authorize(Policy = ...)]`, registered against the role names in [`RoleNames`](#rolenames). Roles
-themselves get a value-object base, [`RoleValue`](#rolevalue), so each app can fix its own role set with
-case-insensitive equality and validation while staying dependency-free enough to use from Blazor WASM.
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:12`,
+`AuthorizationExtensions.cs:22`). The simplest is **named role policies**:
+[`AuthorizationPolicies`](#authorizationpolicies) defines the four constant policy names
+(`RequireOrganizer`, `RequireAttendee`, `RequireAdmin`, `RequireAuthenticated`,
+`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationPolicies.cs:14-23`) that
+controllers reference through `[Authorize(Policy = ...)]`, registered against the role names in
+[`RoleNames`](#rolenames) (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RoleNames.cs:12`) at
+`AuthorizationExtensions.cs:24-32`. `RoleNames` carries five constants across both apps (`Organizer`,
+`Attendee`, `ContentEditor`, `Admin`, `Customer`, `RoleNames.cs:15-31`); `ContentEditor` has no
+dedicated named policy and is expected to be reached through permissions instead. Roles themselves get
+a value-object base, [`RoleValue`](#rolevalue)
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RoleValue.cs:25`), so each app can fix its own role
+set with case-insensitive equality (`RoleValue.cs:78-84`), a frozen interned lookup
+(`RoleValue.cs:63-72`), and `Result`-returning validation (`RoleValue.cs:42`) while staying
+dependency-free enough to use from Blazor WASM.
 
 The richer style is **permission-based** authorization, so endpoints depend on capabilities rather than
-role names. [`HasPermissionAttribute`](#haspermissionattribute) marks a controller or action with a
-permission such as `"sessions:manage"`; under the hood it is an `AuthorizeAttribute` whose policy name is
-`perm:sessions:manage` ([`PermissionPolicy`](#permissionpolicy)). Rather than pre-registering a named
-policy per permission, [`PermissionPolicyProvider`](#permissionpolicyprovider)
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:13`) materializes
-those policies on demand for any `perm:` name and falls through to the default provider for everything
-else. The requirement it attaches, [`PermissionRequirement`](#permissionrequirement), is evaluated by
-[`PermissionAuthorizationHandler`](#permissionauthorizationhandler)
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:13`), which
-grants access when the principal holds the permission directly (a `permission` claim) *or* derives it
-from one of its roles via [`IPermissionRegistry`](#ipermissionregistry). The registry itself
-([`PermissionRegistry`](#permissionregistry)) is an immutable, frozen role-to-permission map built by
-[`PermissionRegistryBuilder`](#permissionregistrybuilder); each module contributes only its own grants
-through `AddPermissions(...)`, and the grants union into one shared registry built lazily after all
-modules have registered (`AuthorizationExtensions.cs:68`). That module-local contribution is the
-[Rubric §7, Microservices Readiness] touch: an extracted service carries only its own permission grants.
+role names. [`HasPermissionAttribute`](#haspermissionattribute)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/HasPermissionAttribute.cs:13`) marks a
+controller or action with a permission such as `"sessions:manage"`; under the hood it is an
+`AuthorizeAttribute` whose policy name is `perm:sessions:manage`
+([`PermissionPolicy`](#permissionpolicy)`.NameFor`,
+`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicy.cs:12-17`). Rather than
+pre-registering a named policy per permission,
+[`PermissionPolicyProvider`](#permissionpolicyprovider)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:13`)
+materializes those policies on demand for any `perm:` name and falls through to the default provider
+for everything else (`PermissionPolicyProvider.cs:31-46`). The requirement it attaches,
+[`PermissionRequirement`](#permissionrequirement)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionRequirement.cs:10`), is
+evaluated by [`PermissionAuthorizationHandler`](#permissionauthorizationhandler)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:13`),
+which grants access when the principal holds the permission directly (a `permission` claim) *or*
+derives it from one of its roles via [`IPermissionRegistry`](#ipermissionregistry)
+(`PermissionAuthorizationHandler.cs:29-30`), reading roles across the same three claim-type spellings
+(`PermissionAuthorizationHandler.cs:42-48`). The registry itself
+([`PermissionRegistry`](#permissionregistry),
+`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/PermissionRegistry.cs:10`) is an immutable, frozen
+role-to-permission map (`PermissionRegistry.cs:25-28`) built by
+[`PermissionRegistryBuilder`](#permissionregistrybuilder)
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/PermissionRegistryBuilder.cs:8`); each module
+contributes only its own grants through `AddPermissions(...)`
+(`AuthorizationExtensions.cs:54-62`), duplicate grants union rather than collide
+(`PermissionRegistryBuilder.cs:32-39`), and the shared registry is built lazily on first resolve, after
+every module has registered (`AuthorizationExtensions.cs:68-81`). That module-local contribution is the
+[Rubric §7, Microservices Readiness] touch: an extracted service carries only its own permission
+grants.
 
 The third style is **resource ownership**. [`OwnerOrAdminFilter`](#owneroradminfilter)
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:20`) is an action filter for
-endpoints that mix admin and owner access (carts, orders, bookmarks). It lets a bypass role through, then
-compares the caller's owner claim against the resource id taken from either the route or a bound argument,
-returning 403 otherwise (`OwnerOrAdminFilter.cs:46`). Its vocabulary (claim type, bypass role, route
-parameter) is configurable through [`OwnerOrAdminFilterOptions`](#owneroradminfilteroptions) with
-[`OwnershipHelper`](#ownershiphelper) supplying the admin check, and the defaults preserve the original
-`customer_id` / `Admin` / `id` behavior ([ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html)).
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:30`) is an action
+filter for endpoints that mix admin and owner access (carts, orders, bookmarks). It lets a bypass role
+through (`OwnerOrAdminFilter.cs:42`), then compares the caller's owner claim against the resource id
+taken from either the route or a bound argument (`OwnerOrAdminFilter.cs:48`,
+`OwnerOrAdminFilter.cs:88-106`), returning 403 otherwise. The important property is that it **denies by
+default**: when the owner parameter cannot be resolved at all, the request is rejected rather than
+waved through (`OwnerOrAdminFilter.cs:56-70`), because "nothing to compare" must not read as "nothing
+to enforce". An action that legitimately has no owner parameter opts out explicitly with
+[`AllowMissingOwnerAttribute`](#allowmissingownerattribute)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AllowMissingOwnerAttribute.cs:21`),
+honored from either the action or its declaring controller via endpoint metadata
+(`OwnerOrAdminFilter.cs:83-84`). The filter's vocabulary (claim type, bypass role, route parameter) is
+configurable through [`OwnerOrAdminFilterOptions`](#owneroradminfilteroptions)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilterOptions.cs:11`) whose
+defaults preserve the original `customer_id` / `Admin` / `id` behavior
+(`OwnerOrAdminFilterOptions.cs:14-24`, [ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html)), with
+[`OwnershipHelper`](#ownershiphelper)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:10`) supplying both
+the bypass-role check (`OwnershipHelper.cs:17`) and the query-scoping specification factory that
+controllers use to narrow *collection* endpoints to the caller's own rows
+(`OwnershipHelper.cs:34-67`).
 
 ## Session cookies: keeping SSR authenticated
 
 The final cluster solves a Blazor-specific problem: an interactive Blazor app keeps its access token in
 browser memory, but a *cold* server-side render (a new tab, an F5, an external deep link) has no memory
 to read, so an `[Authorize]` page would bounce to `/login` before the interactive phase starts. The fix
-is a pair of HttpOnly cookies (`mmca_auth_access`, `mmca_auth_refresh`) seeded and cleared from JS through
-[`SessionCookieEndpoints`](#sessioncookieendpoints)
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieEndpoints.cs:15`), written and
-attributed by [`SessionCookieJar`](#sessioncookiejar), and read during prerender by
-[`CookieTokenReader`](#cookietokenreader). [`SessionCookieAuthenticationHandler`](#sessioncookieauthenticationhandler)
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieAuthenticationHandler.cs:24`) is a
-custom authentication scheme that reads the cookie JWT, checks only its expiry (the API still does full
-validation on every API call, `SessionCookieAuthenticationHandler.cs:18`), and populates
-`HttpContext.User` so SSR authorization passes.
+is a pair of HttpOnly cookies (`mmca_auth_access`, `mmca_auth_refresh`,
+`MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieEndpoints.cs:17-18`)
+seeded and cleared from JS through [`SessionCookieEndpoints`](#sessioncookieendpoints)
+(`SessionCookieEndpoints.cs:15`, `SessionCookieEndpoints.cs:29-39`, request body
+[`SessionCookieRequest`](#sessioncookierequest) at `SessionCookieEndpoints.cs:72`), written with one
+shared set of attributes by [`SessionCookieJar`](#sessioncookiejar)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieJar.cs:11`: `HttpOnly`,
+`Secure` outside Development, `SameSite=Lax`, and a 7-day max age aligned to the refresh-token
+lifetime, `SessionCookieJar.cs:14`, `SessionCookieJar.cs:31-38`), and read during prerender by
+[`CookieTokenReader`](#cookietokenreader)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieTokenReader.cs:10`).
+[`SessionCookieAuthenticationHandler`](#sessioncookieauthenticationhandler)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieAuthenticationHandler.cs:24`)
+is a custom authentication scheme that reads the cookie JWT, checks only its expiry against the
+handler's injectable `TimeProvider` (`SessionCookieAuthenticationHandler.cs:55`) because the API still
+performs full validation on every API call (`SessionCookieAuthenticationHandler.cs:19-22`), and
+populates `HttpContext.User` so SSR authorization passes
+(`SessionCookieAuthenticationHandler.cs:60-63`); a challenge redirects to `/login` with a `returnUrl`
+(`SessionCookieAuthenticationHandler.cs:72-77`). It is registered through
+[`SessionCookieAuthenticationExtensions`](#sessioncookieauthenticationextensions)
+(`SessionCookieAuthenticationHandler.cs:90`).
 
 When the access cookie has expired but the refresh cookie is still valid,
-[`CookieSessionRefreshMiddleware`](#cookiesessionrefreshmiddleware) runs *before* `UseAuthentication` on
-qualifying navigations (GET + `Accept: text/html`) and delegates to
-[`CookieSessionRefresher`](#cookiesessionrefresher)
-(`MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:43`). The refresher
-exchanges the refresh cookie at the API's `auth/refresh` endpoint server-to-server, so the refresh token
-never reaches browser JS; it writes the rotated pair back as cookies and stashes the fresh access token on
-`HttpContext.Items` so the current request's authentication reads the *new* token
-(`CookieSessionRefresher.cs:82`). A process-wide lock plus a short rotation-grace cache collapse concurrent
-refreshes into a single flight, keyed by the old refresh token, so a thundering herd of queued requests
-cannot double-rotate (`CookieSessionRefresher.cs:88`). The same refresher backs the same-origin
-`POST /auth/session/token` endpoint the browser polls to hydrate its in-memory token, guarded by
-`SameSite=Lax` plus a `Sec-Fetch-Site` cross-site check (`SessionCookieEndpoints.cs:65`). The returned DTOs
-are [`SessionTokenResult`](#sessiontokenresult), [`SessionTokenResponse`](#sessiontokenresponse), and
-[`SessionCookieRequest`](#sessioncookierequest); registration runs through
-[`ICookieSessionRefresher`](#icookiesessionrefresher) and the two extension classes
-[`SessionCookieAuthenticationExtensions`](#sessioncookieauthenticationextensions) and
-[`CookieSessionRefreshMiddlewareExtensions`](#cookiesessionrefreshmiddlewareextensions).
+[`CookieSessionRefreshMiddleware`](#cookiesessionrefreshmiddleware)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefreshMiddleware.cs:13`,
+registered by [`CookieSessionRefreshMiddlewareExtensions`](#cookiesessionrefreshmiddlewareextensions)
+at `CookieSessionRefreshMiddleware.cs:35`) runs *before* `UseAuthentication` on qualifying navigations
+(GET plus an `Accept` header containing `text/html`, `CookieSessionRefreshMiddleware.cs:28-31`) and
+delegates to [`CookieSessionRefresher`](#cookiesessionrefresher)
+(`MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefresher.cs:43`) through
+the [`ICookieSessionRefresher`](#icookiesessionrefresher) port (`CookieSessionRefresher.cs:26`). The
+refresher first tries to read a still-valid expiry out of the access cookie with a 30-second skew
+allowance (`CookieSessionRefresher.cs:50`, `CookieSessionRefresher.cs:60`); failing that it exchanges
+the refresh cookie at the API's `auth/refresh` endpoint server-to-server
+(`CookieSessionRefresher.cs:116-119`), so the refresh token never reaches browser JS. It then writes
+the rotated pair back as cookies and stashes the fresh access token on `HttpContext.Items`
+(`CookieSessionRefresher.cs:78-83`) so the *current* request's authentication reads the new token:
+[`CookieTokenReader`](#cookietokenreader) checks that item before falling back to the request cookie
+(`CookieTokenReader.cs:17`, `CookieTokenReader.cs:27-33`). A process-wide `SemaphoreSlim` plus a
+10-second rotation-grace `IMemoryCache` entry keyed by the **old** refresh token collapse concurrent
+refreshes into a single flight (`CookieSessionRefresher.cs:51`, `CookieSessionRefresher.cs:88-108`,
+`CookieSessionRefresher.cs:133`), so a queued herd of requests cannot double-rotate. The same refresher
+backs the same-origin `POST /auth/session/token` endpoint the browser polls to hydrate its in-memory
+token (`SessionCookieEndpoints.cs:45-60`), guarded by `SameSite=Lax` plus a `Sec-Fetch-Site`
+cross-site rejection (`SessionCookieEndpoints.cs:48`, `SessionCookieEndpoints.cs:68-70`) and returning
+[`SessionTokenResponse`](#sessiontokenresponse) (`CookieSessionRefresher.cs:17`), the browser-safe
+projection of the internal [`SessionTokenResult`](#sessiontokenresult)
+(`CookieSessionRefresher.cs:11`) that deliberately omits the refresh token. This whole cluster is
+[ADR-022](https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html)'s server half; the
+client half across Blazor Server, WASM, and MAUI is
+[ADR-051](https://ivanball.github.io/docs/adr/051-client-auth-token-lifecycle.html).
 
 ## Adjacent members
 
-Two group members are not strictly auth types but ride along in this file:
-[`IcsEvent`](#icsevent) and [`IcsCalendarBuilder`](#icscalendarbuilder)
+Four group members are not auth types but ride along in this chapter because of how the dependency
+grouping fell. [`KeyedSemaphoreStripe`](#keyedsemaphorestripe)
+(`MMCA.Common/Source/Core/MMCA.Common.Shared/Concurrency/KeyedSemaphoreStripe.cs:22`) and its
+[`Releaser`](#releaser) handle (`KeyedSemaphoreStripe.cs:78`) serialize work per logical key across a
+fixed set of 256 semaphores (`KeyedSemaphoreStripe.cs:25`, `KeyedSemaphoreStripe.cs:60-75`), which is
+the bounded alternative to a semaphore-per-key dictionary that either leaks entries or races on
+removal; its consumers today are the
+[`IdempotencyFilter`](group-12-api-hosting-mapping.md#idempotencyfilter) and
+[`CachingQueryDecorator<TQuery, TResult>`](group-05-cqrs-pipeline.md#cachingquerydecoratortquery-tresult),
+not the auth pipeline. [`IcsEvent`](#icsevent) and [`IcsCalendarBuilder`](#icscalendarbuilder)
 (`MMCA.Common/Source/Core/MMCA.Common.Shared/Calendars/IcsEvent.cs:15`,
 `MMCA.Common/Source/Core/MMCA.Common.Shared/Calendars/IcsCalendarBuilder.cs:12`) build RFC 5545
-calendar (`.ics`) exports from UTC-normalized event times, and
+calendar (`.ics`) exports from UTC-normalized event times, with 75-octet line folding and CRLF endings
+(`IcsCalendarBuilder.cs:14` for the `MaxLineOctets` budget; the folding and the `\r\n` writes both live
+in `AppendLine`, `IcsCalendarBuilder.cs:83-104`).
+
+One genuine auth member sits at the edge of the group:
 [`ISoftDeletedUserValidator`](#isoftdeleteduservalidator)
 (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ISoftDeletedUserValidator.cs:7`)
 is the small contract the API's
-[`SoftDeletedUserMiddleware`](group-12-api-hosting-mapping.md#softdeletedusermiddleware) uses to reject an
-authenticated token whose backing account has since been soft-deleted. The controller surface that drives
-all of the above ([`AuthControllerBase`](group-12-api-hosting-mapping.md#authcontrollerbase),
+[`SoftDeletedUserMiddleware`](group-12-api-hosting-mapping.md#softdeletedusermiddleware) uses to reject
+an otherwise-valid token whose backing account has since been soft-deleted (BR-133), implemented by
+each Identity module so Common never takes a cross-module domain reference. The controller surface that
+drives everything above ([`AuthControllerBase`](group-12-api-hosting-mapping.md#authcontrollerbase),
 [`OAuthControllerBase`](group-12-api-hosting-mapping.md#oauthcontrollerbase),
 [`ExternalAuthExtensions`](group-12-api-hosting-mapping.md#externalauthextensions)) and the gRPC token
 forwarding ([`JwtForwardingClientInterceptor`](group-13-grpc-contracts.md#jwtforwardingclientinterceptor))
 live in later groups; this chapter is the engine those endpoints call into.
+
+### AllowMissingOwnerAttribute
+> MMCA.Common.API · `MMCA.Common.API.Authorization` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AllowMissingOwnerAttribute.cs:21` · Level 0 · class (sealed attribute, marker)
+
+- **What it is**: a marker attribute placed on an action or a whole controller to declare that the
+  action legitimately has no owner parameter, exempting it from
+  [`OwnerOrAdminFilter`](#owneroradminfilter)'s requirement that the request carry a resolvable owner
+  identifier.
+- **Depends on**: nothing first-party; `System.Attribute` and `AttributeUsageAttribute` (BCL). It is
+  read (never constructed) by [`OwnerOrAdminFilter`](#owneroradminfilter).
+- **Concept introduced, the explicit opt-out that makes deny-by-default safe.** `[Rubric §11,
+  Security]` (assesses whether a guard fails closed rather than open) and `[Rubric §34, Architecture
+  Governance & Documentation]` (the exemption is written down at the site it applies to, so it can be
+  audited later). The filter this attribute exempts from denies the request when it cannot resolve an
+  owner parameter, because "no owner to compare" must not read as "no restriction"
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AllowMissingOwnerAttribute.cs:6-12`).
+  Deny-by-default only works if the genuinely parameter-less actions have a way to say so, and that is
+  the entire job of this type. The doc comment names the two shapes that qualify: a collection endpoint
+  whose rows are already narrowed to the caller by an ownership specification, and an action restricted
+  to administrators by its own authorization policy
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AllowMissingOwnerAttribute.cs:9-12`).
+- **Walkthrough**: the whole type is its `[AttributeUsage]` declaration plus an empty body
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AllowMissingOwnerAttribute.cs:20-23`).
+  `AttributeTargets.Class | AttributeTargets.Method` allows both controller-wide and per-action
+  application; `AllowMultiple = false` because a second copy would mean nothing; `Inherited = true` so a
+  controller base class can carry it. It holds no data: presence in the endpoint metadata is the entire
+  signal, which is exactly what `OwnerOrAdminFilter.HasAllowMissingOwner` looks for
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:83-84`).
+- **Why it's built this way**: an empty marker keeps the opt-out cheap to apply and impossible to
+  mis-configure, but the `<remarks>` block
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AllowMissingOwnerAttribute.cs:15-19`)
+  is the load-bearing half of the design: applying it is an *assertion* that the action is guarded
+  elsewhere, so every application site is expected to name the replacement guard in a comment. That
+  turns a silent hole into a reviewable claim ([ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html) records the audit that produced the current
+  application sites).
+- **Where it's used**: honored by [`OwnerOrAdminFilter`](#owneroradminfilter) through endpoint
+  metadata. In MMCA.Store it marks three actions on
+  `MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/Controllers/ShoppingCartsController.cs:61,86,123`
+  and four on
+  `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/CustomersController.cs:47,59,76,93`,
+  the latter with the replacing guard named in an inline comment
+  (`CustomersController.cs:46`).
+- **Caveats / not-in-source**: nothing enforces the assertion. No analyzer or test checks that an action
+  carrying this attribute really is guarded another way; the guarantee is a review convention, not a
+  compile-time or runtime rule.
 
 ### AuthorizationPolicies
 > MMCA.Common.API · `MMCA.Common.API.Authorization` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationPolicies.cs:11` · Level 0 · class (static)
@@ -290,7 +476,10 @@ live in later groups; this chapter is the engine those endpoints call into.
   expects, so the values can arrive from `appsettings` or a `Configure` callback; defaults on every
   property preserve backward compatibility.
 - **Where it's used**: injected as `IOptions<OwnerOrAdminFilterOptions>` into
-  [`OwnerOrAdminFilter`](#owneroradminfilter).
+  [`OwnerOrAdminFilter`](#owneroradminfilter). MMCA.ADC's Engagement module is the first host to
+  configure it rather than take the defaults, pointing the shared filter at a `user_id` claim, the
+  `Organizer` bypass role, and a `userId` query argument
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/DependencyInjection.cs:44`).
 
 ### PermissionPolicy
 > MMCA.Common.API · `MMCA.Common.API.Authorization` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicy.cs:9` · Level 0 · class (static)
@@ -327,7 +516,7 @@ live in later groups; this chapter is the engine those endpoints call into.
 - **Depends on**: `Microsoft.AspNetCore.Authorization.IAuthorizationRequirement` (framework).
 - **Concept introduced, the requirement/handler pair.** `[Rubric §11, Security]` and `[Rubric §2,
   Design Patterns]` (the ASP.NET Core authorization model splits *what is required* from *how it is
-  checked*). A `requirement` is a passive data object; a matching `AuthorizationHandler<T>` decides
+  checked*). A requirement is a passive data object; a matching `AuthorizationHandler<T>` decides
   whether it is satisfied. This type is the passive half; [`PermissionAuthorizationHandler`](#permissionauthorizationhandler)
   is the active half.
 - **Walkthrough**: a `sealed` class implementing `IAuthorizationRequirement`
@@ -374,53 +563,8 @@ live in later groups; this chapter is the engine those endpoints call into.
   the inherited `Policy` string so no per-permission policy registration is needed.
 - **Where it's used**: on controllers/actions across the apps; its policy name is resolved by
   [`PermissionPolicyProvider`](#permissionpolicyprovider) and satisfied by
-  [`PermissionAuthorizationHandler`](#permissionauthorizationhandler).
-
-### OwnershipHelper
-> MMCA.Common.API · `MMCA.Common.API.Authorization` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:10` · Level 1 · class (static)
-
-- **What it is**: static helpers a controller calls to scope a query to the current user's own data,
-  returning a specification that filters by owner id, or `null` when the caller holds the privileged
-  bypass role and should see everything.
-- **Depends on**: `ICurrentUserService` (Application,
-  `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:1`, the
-  current-user/claims boundary described later in this group).
-- **Concept introduced, ownership scoping at the query level (as distinct from the filter's gate).**
-  `[Rubric §11, Security]` (row-level data isolation, a non-admin caller can only read their own rows)
-  and `[Rubric §1, SOLID]` (the helper produces a specification; the repository applies it). Where
-  [`OwnerOrAdminFilter`](#owneroradminfilter) *blocks* a request that names someone else's id, this
-  helper *narrows the result set* so a list endpoint returns only the caller's rows without them
-  passing any id at all.
-- **Walkthrough**
-  - `IsAdmin(ICurrentUserService, string bypassRole = "Admin")`
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:17`):
-    case-insensitive compare of the current user's `Role` against the bypass role
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:20`); this is the
-    same predicate [`OwnerOrAdminFilter`](#owneroradminfilter) reuses so the two stay consistent.
-  - `GetOwnershipSpecification<TSpec, TId>(...)`
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:34`): the general
-    form. It returns `null` for a bypass-role caller
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:45-48`, no scoping
-    needed); otherwise it reads the owner id from the named claim via
-    `currentUserService.GetClaimValue<TId>(claimType)` and, when present, calls the supplied
-    `specFactory(id.Value)` to build the scoping specification
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:50-51`). The
-    `where TId : struct, IParsable<TId>` constraint
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:40`) is what lets
-    the claim string be parsed into a strongly-typed id.
-  - `GetOwnershipSpecification<TSpec>(...)`
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:63`): the
-    convenience overload that fixes `TId` to `int` and the claim to `"customer_id"`
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:67`), matching the
-    legacy default vocabulary.
-- **Why it's built this way**: returning `null` for admins (rather than a "match everything"
-  specification) lets the caller skip the filter entirely on the privileged path; producing a
-  specification (not running the query) keeps the helper in the API layer while the actual filtering
-  runs in the repository.
-- **Where it's used**: called from controller query actions that must isolate a caller's data; the
-  specification it returns is applied by the repository layer.
-- **Caveats / not-in-source**: `TSpec` is an open generic with only a `class` constraint, the helper
-  does not itself require the returned type to be a specification, that contract is the caller's.
+  [`PermissionAuthorizationHandler`](#permissionauthorizationhandler), against the grants each module
+  declares through [`AuthorizationExtensions.AddPermissions`](#authorizationextensions).
 
 ### PermissionAuthorizationHandler
 > MMCA.Common.API · `MMCA.Common.API.Authorization` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:13` · Level 1 · class (sealed)
@@ -429,8 +573,9 @@ live in later groups; this chapter is the engine those endpoints call into.
   principal satisfies a [`PermissionRequirement`](#permissionrequirement), either because it carries
   the permission as an explicit claim or because one of its roles grants it.
 - **Depends on**: [`PermissionRequirement`](#permissionrequirement),
-  [`IPermissionRegistry`](#ipermissionregistry) (injected role-to-permission map,
-  `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:3,13`),
+  [`IPermissionRegistry`](#ipermissionregistry) (injected role-to-permission map, taken as a primary
+  constructor parameter at
+  `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:13`),
   [`AuthClaimTypes`](#authclaimtypes) (the permission claim type); `System.Security.Claims`.
 - **Concept introduced, resolving a permission through claim-or-role.** `[Rubric §11, Security]`
   (two independent grant paths: a direct permission claim, and role-derived permissions) and
@@ -438,7 +583,9 @@ live in later groups; this chapter is the engine those endpoints call into.
   the JWT middleware mapped the role claim type, so it survives inbound-claim-mapping being on or off).
 - **Walkthrough**: `HandleRequirementAsync`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:17`)
-  short-circuits to a completed task when the principal is not authenticated
+  null-guards both arguments
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:21-22`),
+  then short-circuits to a completed task when the principal is not authenticated
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:24-27`),
   so an anonymous request never succeeds. It then succeeds the requirement if *either*
   `context.User.HasClaim(AuthClaimTypes.Permission, requirement.Permission)` (a directly granted
@@ -446,12 +593,16 @@ live in later groups; this chapter is the engine those endpoints call into.
   (a role-derived grant) holds
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:29-33`).
   The private `GetRoles(ClaimsPrincipal)`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:40-46`)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:42-48`)
   gathers role values across three possible claim types: the standard `ClaimTypes.Role` URI plus the
   raw `"role"` and `"roles"` claims, so roles are found whether or not the JWT bearer middleware mapped
-  them (the inline comment at
-  `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:38-39`
-  states this rationale).
+  them. The inline comment at
+  `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:38-41`
+  states the rationale and flags the deliberate duplication: this is the same rule
+  [`ICurrentUserService.Roles`](#icurrentuserservice) applies
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ICurrentUserService.cs:49-55`),
+  restated here because the handler runs on the raw principal and has no `ICurrentUserService` to read
+  from.
 - **Why it's built this way**: never calling `context.Fail()` (only `context.Succeed`) is the
   ASP.NET Core convention that lets multiple handlers vote independently, this handler abstains rather
   than vetoes when it cannot grant. Reading three role claim types defensively decouples the check from
@@ -478,14 +629,15 @@ live in later groups; this chapter is the engine those endpoints call into.
   the default provider so the named role policies in [`AuthorizationPolicies`](#authorizationpolicies)
   keep working unchanged.
 - **Walkthrough**: the constructor
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:19`) wraps
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:19-20`) wraps
   a `DefaultAuthorizationPolicyProvider` built from the ambient `AuthorizationOptions`, kept as the
   fallback. `GetDefaultPolicyAsync` and `GetFallbackPolicyAsync`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:23-28`)
   delegate straight to that fallback. `GetPolicyAsync`
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:31`) is
-  the interesting one: if the name does not start with `PermissionPolicy.Prefix` it defers to the
-  fallback
+  the interesting one: it rejects a null/blank name outright
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:33`), and
+  if the name does not start with `PermissionPolicy.Prefix` it defers to the fallback
   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionPolicyProvider.cs:35-38`);
   otherwise it slices the prefix off with a range expression
   `policyName[PermissionPolicy.Prefix.Length..]`
@@ -498,55 +650,9 @@ live in later groups; this chapter is the engine those endpoints call into.
   without a registration step.
 - **Where it's used**: registered (via `Replace`) as the single `IAuthorizationPolicyProvider` by
   [`AuthorizationExtensions.AddAuthorizationPolicies`](#authorizationextensions).
-
-### OwnerOrAdminFilter
-> MMCA.Common.API · `MMCA.Common.API.Authorization` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:20` · Level 2 · class (sealed action filter)
-
-- **What it is**: an MVC async action filter that lets a request proceed only if the caller holds the
-  bypass role or owns the resource named by the request, returning 403 Forbidden otherwise.
-- **Depends on**: [`OwnershipHelper`](#ownershiphelper) (for the `IsAdmin` check),
-  [`OwnerOrAdminFilterOptions`](#owneroradminfilteroptions) (the vocabulary), `ICurrentUserService`
-  (claims); `Microsoft.AspNetCore.Mvc.Filters`, `Microsoft.Extensions.Options`.
-- **Concept introduced, per-request ownership enforcement as a filter.** `[Rubric §11, Security]`
-  (a resource-level access gate that runs before the action body) and `[Rubric §10, Cross-Cutting
-  Concerns]` (the ownership rule is expressed once as a filter and attached to any controller that
-  mixes admin and owner access, rather than re-coded in each action). This is the *gate* counterpart to
-  [`OwnershipHelper`](#ownershiphelper)'s *query scoping*: the helper narrows a list; this filter blocks
-  an attempt to read or mutate a specific id the caller does not own ([ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html), cited at
-  `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:14`).
-- **Walkthrough**: `OnActionExecutionAsync`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:25`) reads the
-  current `settings = options.Value`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:30`), then: if
-  `OwnershipHelper.IsAdmin(currentUserService, settings.BypassRole)` it calls `next()` and returns
-  (privileged bypass,
-  `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:32-36`);
-  otherwise it reads the caller's owner id from the configured claim
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:38`) and
-  short-circuits to `ForbidResult` if that claim is absent
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:40-44`). It then
-  compares the caller's id against the requested id via `TryGetOwnerParameter` and forbids on mismatch
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:46-51`); only a
-  match (or no such parameter on the request) falls through to `next()`. The private
-  `TryGetOwnerParameter`
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:58-76`) resolves
-  the id from the route values first
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:60-65`) and,
-  failing that, from the model-bound action arguments
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:67-72`), parsing
-  each as `int`.
-- **Why it's built this way**: forbidding when the parameter *is present but mismatched*, while
-  allowing when the parameter is *absent*, means the filter guards id-scoped endpoints without breaking
-  actions that carry no owner parameter. Reading the vocabulary from injected options keeps a single
-  filter reusable across hosts ([ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html)). The registration guidance in the remarks
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:16-19`) is
-  `[ServiceFilter(typeof(OwnerOrAdminFilter))]` as a scoped service.
-- **Where it's used**: applied via `[ServiceFilter(typeof(OwnerOrAdminFilter))]` on controllers that
-  mix admin and owner access (carts, orders, customers, bookmarks); it needs
-  [`OwnerOrAdminFilterOptions`](#owneroradminfilteroptions) registered.
-- **Caveats / not-in-source**: the owner id is parsed as `int` only
-  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:62,69`); a host
-  whose owner id is a `Guid` or string cannot use this filter as-is.
+- **Caveats / not-in-source**: a policy object is built on every `GetPolicyAsync` call for a `perm:`
+  name; no cache is present in this type, and whether ASP.NET Core caches the result upstream is not
+  determinable from this source file.
 
 ### AuthorizationExtensions
 > MMCA.Common.API · `MMCA.Common.API.Authorization` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:12` · Level 3 · class (static, extension block)
@@ -581,7 +687,11 @@ live in later groups; this chapter is the engine those endpoints call into.
     `IAuthorizationPolicyProvider`
     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:40-41`),
     then ensures the registry exists
-    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:42`).
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:42`). The
+    inline comment
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:34-37`)
+    records why the mechanism ships here: every host that wires authentication gets it for free, and
+    consumers only have to declare their grants.
   - `AddPermissions(Action<PermissionRegistryBuilder> configure)`
     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:54`): the
     per-module entry point for declaring role-to-permission grants. It guards the callback, fetches the
@@ -590,7 +700,9 @@ live in later groups; this chapter is the engine those endpoints call into.
     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:56-61`).
     The doc comment
     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:47-53`)
-    notes it is safe to call once per module: grants union into a single registry.
+    notes it is safe to call once per module: grants union into a single registry (the union happens in
+    [`PermissionRegistryBuilder.Grant`](#permissionregistrybuilder),
+    `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/PermissionRegistryBuilder.cs:32-39`).
   - `EnsurePermissionRegistry(IServiceCollection)`
     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:68`): the
     idempotent core. If a [`PermissionRegistryBuilder`](#permissionregistrybuilder) is already
@@ -605,8 +717,153 @@ live in later groups; this chapter is the engine those endpoints call into.
   authorization handlers; `Replace` guarantees exactly one policy provider (the permission-aware one);
   and the lazy `builder.Build()` factory is what makes module registration order irrelevant, all grants
   are collected before the first `Build()`.
-- **Where it's used**: `AddAuthorizationPolicies()` is called once by each service host during
-  authentication wiring; `AddPermissions(...)` is called by each module that owns permissions.
+- **Where it's used**: `AddAuthorizationPolicies()` is called at the end of both framework
+  authentication-wiring helpers, `AddForwardedJwtBearer`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:187`,
+  the call at `WebApplicationBuilderExtensions.cs:241`) and `AddCommonAuthentication`
+  (`WebApplicationBuilderExtensions.cs:257`, the call at `WebApplicationBuilderExtensions.cs:291`), so a
+  host that wires authentication through either gets the authorization model without an explicit call. `AddPermissions(...)` is called by each module that owns permissions: in
+  MMCA.ADC by Conference
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:41`), Engagement
+  (`MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/DependencyInjection.cs:51`), and Identity
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/DependencyInjection.cs:44`).
+
+### OwnershipHelper
+> MMCA.Common.API · `MMCA.Common.API.Authorization` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:10` · Level 8 · class (static)
+
+- **What it is**: static helpers a controller calls to scope a query to the current user's own data,
+  returning a specification that filters by owner id, or `null` when the caller holds the privileged
+  bypass role and should see everything.
+- **Depends on**: [`ICurrentUserService`](#icurrentuserservice) (Application,
+  `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:1`, the
+  current-user/claims boundary described later in this group). The specification it hands back is
+  typically a [`Specification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#specificationtentity-tidentifiertype),
+  though the helper itself never says so (see caveats).
+- **Concept introduced, ownership scoping at the query level (as distinct from the filter's gate).**
+  `[Rubric §11, Security]` (row-level data isolation, a non-admin caller can only read their own rows)
+  and `[Rubric §1, SOLID]` (the helper produces a specification; the repository applies it). Where
+  [`OwnerOrAdminFilter`](#owneroradminfilter) *blocks* a request that names someone else's id, this
+  helper *narrows the result set* so a list endpoint returns only the caller's rows without them
+  passing any id at all. [ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html) calls these the two enforcement points of one ownership axis:
+  reject-one versus filter-many.
+- **Walkthrough**
+  - `IsAdmin(ICurrentUserService, string bypassRole = "Admin")`
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:17`):
+    case-insensitive compare of the current user's `Role` against the bypass role
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:20`); this is the
+    same predicate [`OwnerOrAdminFilter`](#owneroradminfilter) reuses so the two stay consistent.
+  - `GetOwnershipSpecification<TSpec, TId>(...)`
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:34`): the general
+    form. It returns `null` for a bypass-role caller
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:45-48`, no scoping
+    needed); otherwise it reads the owner id from the named claim via
+    `currentUserService.GetClaimValue<TId>(claimType)` and, when present, calls the supplied
+    `specFactory(id.Value)` to build the scoping specification
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:50-51`). The
+    `where TId : struct, IParsable<TId>` constraint
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:40`) is what lets
+    the claim string be parsed into a strongly-typed id.
+  - `GetOwnershipSpecification<TSpec>(...)`
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:63`): the
+    convenience overload that fixes `TId` to `int` and the claim to `"customer_id"`
+    (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:67`), matching the
+    legacy default vocabulary.
+- **Why it's built this way**: returning `null` for admins (rather than a "match everything"
+  specification) lets the caller skip the filter entirely on the privileged path; producing a
+  specification (not running the query) keeps the helper in the API layer while the actual filtering
+  runs in the query pipeline.
+- **Where it's used**: called from controller query actions that must isolate a caller's data (in
+  MMCA.Store, the shopping-cart and order list endpoints per [ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html)); its `IsAdmin` overload is also
+  the bypass check inside [`OwnerOrAdminFilter`](#owneroradminfilter)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:42`).
+- **Caveats / not-in-source**: two gaps are worth knowing. `TSpec` is an open generic with only a
+  `class` constraint
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:39`), so the helper
+  does not itself require the returned type to be a specification: that contract is the caller's. And a
+  non-admin caller whose claim is missing or unparseable also gets `null`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnershipHelper.cs:51`), which means
+  no scoping, so callers must not read `null` as "admin" ([ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html) lists this among its trade-offs).
+
+### OwnerOrAdminFilter
+> MMCA.Common.API · `MMCA.Common.API.Authorization` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:30` · Level 9 · class (sealed action filter)
+
+- **What it is**: an MVC async action filter that lets a request proceed only if the caller holds the
+  bypass role or owns the resource named by the request, returning 403 Forbidden otherwise.
+- **Depends on**: [`OwnershipHelper`](#ownershiphelper) (for the `IsAdmin` check),
+  [`OwnerOrAdminFilterOptions`](#owneroradminfilteroptions) (the vocabulary),
+  [`AllowMissingOwnerAttribute`](#allowmissingownerattribute) (the opt-out it honors),
+  [`ICurrentUserService`](#icurrentuserservice) (claims); `Microsoft.AspNetCore.Mvc.Filters`,
+  `Microsoft.Extensions.Options`.
+- **Concept introduced, per-request ownership enforcement as a filter, and deny-by-default.**
+  `[Rubric §11, Security]` (a resource-level access gate that runs before the action body, and one that
+  fails closed) and `[Rubric §10, Cross-Cutting Concerns]` (the ownership rule is expressed once as a
+  filter and attached to any controller that mixes admin and owner access, rather than re-coded in each
+  action). This is the *gate* counterpart to [`OwnershipHelper`](#ownershiphelper)'s *query scoping*:
+  the helper narrows a list; this filter blocks an attempt to read or mutate a specific id the caller
+  does not own ([ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html), cited at
+  `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:14`). The
+  deny-by-default half is the newer and more important lesson, and the class doc comment spells it out
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:16-22`): a gate
+  that treats "nothing to compare" as "nothing to enforce" silently stops guarding every action whose
+  parameter is optional, non-integer, or carried inside a bound model.
+- **Walkthrough**: `OnActionExecutionAsync`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:35`) null-guards
+  its arguments and reads the current `settings = options.Value`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:37-40`), then
+  walks four decisions in order:
+  1. **Bypass role**: if `OwnershipHelper.IsAdmin(currentUserService, settings.BypassRole)` it calls
+     `next()` and returns
+     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:42-46`).
+  2. **Missing owner claim**: it reads the caller's owner id with
+     `currentUserService.GetClaimValue<int>(settings.OwnerClaimType)`
+     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:48`) and
+     short-circuits to `ForbidResult` when the claim is absent
+     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:50-54`).
+  3. **Unresolvable owner parameter**: if `TryGetOwnerParameter` cannot produce an int, the request is
+     denied unless the endpoint carries
+     [`AllowMissingOwnerAttribute`](#allowmissingownerattribute), in which case it falls through to
+     `next()`
+     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:56-70`). Note
+     the ordering: the opt-out excuses only a *missing* parameter, and it is checked after the claim
+     check, so an `[AllowMissingOwner]` action still requires a valid owner claim.
+  4. **Mismatch**: a resolved parameter that does not equal the claim value yields `ForbidResult`
+     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:72-76`); only
+     an exact match reaches `await next()`
+     (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:78`).
+
+  Two private helpers back that flow. `HasAllowMissingOwner`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:83-84`) reads
+  `context.ActionDescriptor.EndpointMetadata.OfType<AllowMissingOwnerAttribute>()`, which is how one
+  lookup covers the attribute whether it sits on the action or on its declaring controller: MVC has
+  already composed both into the metadata (comment at `OwnerOrAdminFilter.cs:81-82`).
+  `TryGetOwnerParameter`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:88-106`) resolves
+  the id from the route values first
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:90-94`) and,
+  failing that, from the model-bound action arguments
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:97-101`), parsing
+  each with `int.TryParse` and reporting failure by returning `false`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:104-105`).
+- **Why it's built this way**: denying on an unresolvable parameter, with an explicit attribute as the
+  only escape, converts a silent failure mode into a visible one: the action either compares an owner id
+  or documents the guard that replaces the comparison ([ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html)'s deny-by-default decision and the audit
+  table that came with it). Reading the vocabulary from injected options keeps a single filter reusable
+  across hosts, and checking the route before the bound arguments means a conventional `/{id}` route
+  costs one dictionary lookup.
+- **Where it's used**: registered scoped by `AddAPI`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:68`, alongside
+  `IdempotencyFilter`, because it depends on scoped services) and applied per controller as
+  `[ServiceFilter(typeof(OwnerOrAdminFilter))]`, per the remarks at
+  `MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:24-29`. Applying
+  it at controller level covers every action on that controller, so adoption is an audit of the whole
+  controller: MMCA.Store guards `ShoppingCartsController` and `CustomersController` this way, and the
+  actions with no owner parameter carry [`AllowMissingOwnerAttribute`](#allowmissingownerattribute).
+- **Caveats / not-in-source**: the owner id is parsed as `int` only
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/OwnerOrAdminFilter.cs:92,99`), and the
+  claim is read as `GetClaimValue<int>` (`OwnerOrAdminFilter.cs:48`); a host whose owner id is a `Guid`
+  or a string cannot use this filter as-is. It also assumes the owner parameter *is* the owning id, which
+  holds for a cart or a customer profile but not for a resource with its own id and a foreign-key owner
+  ([ADR-033](https://ivanball.github.io/docs/adr/033-resource-ownership-authorization.html) lists orders as that case, handled with a specification or an explicit per-id check instead).
 
 ### ICurrentUserService
 > MMCA.Common.Application · `MMCA.Common.Application.Interfaces.Infrastructure` · `MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ICurrentUserService.cs:9` · Level 0 · interface
@@ -1134,361 +1391,562 @@ live in later groups; this chapter is the engine those endpoints call into.
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:7` · Level 0 · class (static)
 
 - **What it is**: a one-constant holder for the framework's custom JWT claim type names, sitting
-  alongside the standard `System.Security.Claims.ClaimTypes` values (`AuthClaimTypes.cs:3-7`).
-- **Depends on**: nothing first-party at runtime; the doc comment references
-  [`IPermissionRegistry`](#ipermissionregistry).
-- **Concept introduced: custom claim types for capability-based authorization.** `[Rubric §11,
-  Security]` (assesses correct authN/authZ modeling and how principals carry authorization facts). The
-  standard `ClaimTypes` set covers identity (name, email, role); this framework layers *permissions*
-  (fine-grained capabilities) on top. `AuthClaimTypes.Permission` (`AuthClaimTypes.cs:15`, value
-  `"permission"`) is the claim type a token uses to carry a single granted capability. The important
-  design note is in the doc comment (`AuthClaimTypes.cs:9-14`): permission claims are honored **in
-  addition to** the permissions a role confers through [`IPermissionRegistry`](#ipermissionregistry),
-  and baking them into the token is *optional*: role-derived permissions work without them. So a token
-  can stay small (roles only) and still authorize against capabilities.
+  alongside the standard `System.Security.Claims.ClaimTypes` values
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthClaimTypes.cs:3-7`).
+- **Depends on**: nothing first-party at runtime; the doc comment points at
+  [`IPermissionRegistry`](#ipermissionregistry) for the role-derived half of the model.
+- **Concept introduced, custom claim types for capability-based authorization.** `[Rubric §11,
+  Security]` assesses how authentication and authorization are modeled and what facts a principal
+  carries. The standard `ClaimTypes` set covers identity (name, email, role); this framework layers
+  *permissions* (fine-grained capabilities) on top. `AuthClaimTypes.Permission`
+  (`AuthClaimTypes.cs:15`, value `"permission"`) is the claim type a token uses to carry a single
+  granted capability. The load-bearing design note is in the doc comment (`AuthClaimTypes.cs:9-14`):
+  permission claims are honored **in addition to** the permissions a role confers through
+  [`IPermissionRegistry`](#ipermissionregistry), and baking them into the token is *optional*, because
+  role-derived permissions work without them. So a token can stay small (roles only) and still
+  authorize against capabilities, which is what makes the model in [ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html) backward compatible with
+  the pre-existing role policies.
 - **Walkthrough**: a single `public const string Permission = "permission"` (`AuthClaimTypes.cs:15`).
-  `const` (not `static readonly`) so the value is usable in attribute arguments and pattern matches that
-  require compile-time constants, the same reason [`RoleNames`](#rolenames) uses `const`.
-- **Where it's used**: the permission-based authorization path: the API's permission authorization
-  handler reads permission claims of this type, and the token service writes them when a token opts to
-  embed capabilities.
-- **Caveats / not-in-source**: the runtime read/write of this claim lives in the Infrastructure and API
-  authorization types (covered elsewhere in this chapter); only the constant is defined here.
+  `const` (not `static readonly`) so the value is usable in attribute arguments and in patterns that
+  require compile-time constants, the same reason [`RoleNames`](#rolenames) and
+  [`AuthorizationPolicies`](#authorizationpolicies) use `const`.
+- **Why it's built this way**: [ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html) makes the permission layer opt-in. Keeping the claim type as
+  one shared constant means the writer (a token service that chooses to embed capabilities) and the
+  reader (the authorization handler) cannot drift apart on the string.
+- **Where it's used**: read by
+  [`PermissionAuthorizationHandler`](#permissionauthorizationhandler), which first checks
+  `context.User.HasClaim(AuthClaimTypes.Permission, requirement.Permission)` before falling back to
+  the registry
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:29`),
+  and described (without being named) in the [`HasPermissionAttribute`](#haspermissionattribute) doc
+  comment as the "explicit permission claim" alternative to the role-derived path
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/HasPermissionAttribute.cs:6-10`).
+- **Caveats / not-in-source**: no shipped token issuer in this repo writes a permission claim; the
+  only production reader is the handler above, and the only writer in the tree is a test that hands
+  the claim to a principal directly
+  (`MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Authorization/PermissionAuthorizationHandlerTests.cs:30`).
+  The claim path is real and covered, but every deployed grant today flows through roles.
 
 ### AuthenticationResponse
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthenticationResponse.cs:10` · Level 0 · record struct (readonly)
 
-- **What it is**: the success payload returned by authentication: `(string AccessToken, string
-  RefreshToken, DateTime AccessTokenExpiry)`, shared by the Identity API and the UI clients
-  (`AuthenticationResponse.cs:3-9`).
-- **Depends on**: nothing first-party.
-- **Concept introduced: the `readonly record struct` DTO.** `[Rubric §15, Best Practices & Code
-  Quality]` (assesses consistent conventions and immutability) and `[Rubric §9, API & Contract Design]`
-  (assesses well-shaped request/response contracts). A positional **`record struct`** is a value type
-  with a compiler-generated constructor, deconstruction, equality, and `ToString`; `readonly` makes it
-  immutable. For small, short-lived request/response carriers this avoids a heap allocation while staying
-  immutable: the codebase's default shape for auth DTOs, reused by every sibling below. The explicit
-  `AccessTokenExpiry` (`AuthenticationResponse.cs:13`) lets clients refresh proactively instead of
-  waiting for a 401.
-- **Walkthrough**: three positional parameters (`AuthenticationResponse.cs:10-13`); no body.
-- **Where it's used**: returned by the login and token-refresh endpoints; consumed by the UI's auth
-  state provider and token storage.
+- **What it is**: the success payload of authentication, carrying `AccessToken`, `RefreshToken`, and
+  `AccessTokenExpiry`, shared by the Identity API and the UI clients
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/AuthenticationResponse.cs:3-13`).
+- **Depends on**: nothing first-party; `System.DateTime` (BCL).
+- **Concept introduced, the `readonly record struct` DTO.** `[Rubric §15, Best Practices & Code
+  Quality]` assesses consistent conventions and immutability, and `[Rubric §9, API & Contract Design]`
+  assesses well-shaped request/response contracts. A positional **`record struct`** is a value type
+  with a compiler-generated constructor, deconstruction, value equality, and `ToString`; `readonly`
+  makes every field immutable. For small, short-lived request/response carriers this avoids a heap
+  allocation while staying immutable, and it is this codebase's default shape for auth DTOs, reused by
+  every sibling below. The explicit `AccessTokenExpiry` (`AuthenticationResponse.cs:13`) lets clients
+  refresh proactively instead of waiting for a 401, which is the client-side half of [ADR-051](https://ivanball.github.io/docs/adr/051-client-auth-token-lifecycle.html).
+- **Walkthrough**: three positional parameters and no body (`AuthenticationResponse.cs:10-13`).
+- **Why it's built this way**: value semantics keep the type cheap, but they have one consequence
+  worth internalizing before you reuse the shape. A struct has no null, so a cache miss returns
+  `default(AuthenticationResponse)` rather than `null`, and
+  [`OAuthControllerBase`](group-12-api-hosting-mapping.md#oauthcontrollerbase) therefore detects a
+  missing exchange entry by testing `string.IsNullOrEmpty(response.AccessToken)`, with the reason
+  written down at the call site
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:149-155`).
+- **Where it's used**: produced by
+  [`AuthenticationServiceBase<TUser>`](#authenticationservicebasetuser) on login, register, and
+  refresh (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:183`,
+  `:274`); declared as the 200/201 response type on the three
+  [`AuthControllerBase`](group-12-api-hosting-mapping.md#authcontrollerbase) endpoints
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:31,50,69`);
+  consumed by [`AuthUIService`](group-15-common-ui-framework.md#authuiservice),
+  [`DirectApiTokenRefresher`](group-15-common-ui-framework.md#directapitokenrefresher), and
+  [`CookieSessionRefresher`](#cookiesessionrefresher).
 
 ### ChangePasswordRequest
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ChangePasswordRequest.cs:8` · Level 0 · record struct (readonly)
 
-- **What it is**: `(string CurrentPassword, string NewPassword)` for an authenticated password change
-  (`ChangePasswordRequest.cs:3-7`).
+- **What it is**: `(string CurrentPassword, string NewPassword)`, the payload for an authenticated
+  password change (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/ChangePasswordRequest.cs:3-10`).
 - **Depends on**: nothing first-party.
 - **Concept**: the same `readonly record struct` DTO shape introduced by
-  [`AuthenticationResponse`](#authenticationresponse). `[Rubric §11, Security]`: passing the current
-  password re-proves the user's identity before a credential change, and the password fields are meant
-  to travel over TLS and never be logged (enforced operationally by PII masking, not by this type).
-- **Walkthrough**: two positional parameters (`ChangePasswordRequest.cs:8-10`).
-- **Where it's used**: the change-password endpoint and the profile UI.
+  [`AuthenticationResponse`](#authenticationresponse). `[Rubric §11, Security]`: requiring the current
+  password re-proves the caller's identity before a credential change, so a stolen session alone
+  cannot lock the owner out. The strength rules for `NewPassword` are deliberately *not* here; they
+  live in each app's validator (see
+  [`ChangePasswordRequestValidator`](group-24-identity-module.md#changepasswordrequestvalidator)),
+  which is what lets Store and ADC differ on policy while sharing the contract.
+- **Walkthrough**: two positional parameters (`ChangePasswordRequest.cs:8-10`); no body.
+- **Where it's used**: carried by each app's `ChangePasswordCommand`
+  ([`ChangePasswordCommand`](group-24-identity-module.md#changepasswordcommand),
+  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ChangePassword/ChangePasswordCommand.cs`
+  and its Store twin) and validated by
+  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/Validation/ChangePasswordRequestValidator.cs:11`.
+- **Caveats / not-in-source**: nothing in this type prevents the password strings from reaching a log.
+  That is an operational convention (PII masking plus the "never log the body" habit), not a
+  compile-time or runtime guarantee.
 
 ### IcsEvent
 > MMCA.Common.Shared · `MMCA.Common.Shared.Calendars` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Calendars/IcsEvent.cs:15` · Level 0 · record (sealed)
 
 - **What it is**: one calendar entry consumed by [`IcsCalendarBuilder`](#icscalendarbuilder): a
-  positional `sealed record` carrying a stable UID, title, start/end instants, and optional
-  description/location (`IcsEvent.cs:15-21`).
-- **Depends on**: nothing first-party; `DateTimeOffset` (BCL).
-- **Concept: UTC-by-contract calendar times.** `[Rubric §9, API & Contract Design]` (assesses clear,
-  unambiguous contracts). Unlike the auth siblings this is a `record` (reference type), not a `record
-  struct`, because it carries optional members and is passed as a collection to the builder. The
-  load-bearing contract is in the doc comment (`IcsEvent.cs:3-8`): `StartsAtUtc`/`EndsAtUtc` are UTC by
-  contract, so converting a wall-clock time in the event's IANA time zone to UTC is the *caller's* job.
-  That single rule lets the builder emit `Z`-suffixed timestamps and skip RFC 5545's error-prone
-  VTIMEZONE machinery entirely.
-- **Walkthrough**: six positional parameters (`IcsEvent.cs:15-21`): `Uid` (globally unique, stable,
-  used by calendar apps to de-duplicate reimports), `Summary`, `StartsAtUtc`, `EndsAtUtc`, and the two
-  nullable optionals `Description = null` and `Location = null`.
+  positional `sealed record` carrying a stable UID, a title, start and end instants, and optional
+  description and location (`MMCA.Common/Source/Core/MMCA.Common.Shared/Calendars/IcsEvent.cs:15-21`).
+- **Depends on**: nothing first-party; `System.DateTimeOffset` (BCL).
+- **Concept introduced, UTC by contract.** `[Rubric §9, API & Contract Design]` assesses whether a
+  contract is unambiguous about what the caller must supply. Unlike the auth siblings this is a
+  `record` (reference type), not a `record struct`, because it carries optional members and travels as
+  a collection. The load-bearing rule is in the doc comment (`IcsEvent.cs:3-8`): `StartsAtUtc` and
+  `EndsAtUtc` are UTC by contract, so converting a wall-clock time in the event's IANA time zone to
+  UTC is the *caller's* job. That single rule lets the builder emit `Z`-suffixed timestamps and skip
+  RFC 5545's error-prone VTIMEZONE machinery entirely, and it pushes the one genuinely hard problem
+  (daylight-saving transitions) to the one layer that knows the event's zone.
+- **Walkthrough**: six positional parameters (`IcsEvent.cs:15-21`): `Uid` (globally unique and stable,
+  which is how calendar apps de-duplicate a reimport instead of creating a second entry, documented at
+  `IcsEvent.cs:9`), `Summary`, `StartsAtUtc`, `EndsAtUtc`, and the two nullable optionals
+  `Description = null` and `Location = null` (`IcsEvent.cs:20-21`).
 - **Where it's used**: passed as an `IReadOnlyCollection<IcsEvent>` to
-  [`IcsCalendarBuilder`](#icscalendarbuilder)'s `Build`; an app maps its own domain rows (e.g. a
-  session's schedule) into these before export.
+  [`IcsCalendarBuilder`](#icscalendarbuilder)'s `Build`. In MMCA.ADC,
+  [`CalendarExportMapper`](group-18-conference-application.md#calendarexportmapper) converts a session
+  plus its event into one entry, performing exactly the wall-clock-to-UTC conversion the contract
+  demands
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/CalendarExportMapper.cs:26,32`).
 
 ### IPermissionRegistry
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/IPermissionRegistry.cs:13` · Level 0 · interface
 
 - **What it is**: the abstraction that maps roles to the fine-grained permissions they grant, and the
-  single place that knows which roles confer which capabilities (`IPermissionRegistry.cs:3-13`).
-- **Depends on**: nothing first-party; described alongside [`RoleNames`](#rolenames) and the
-  [`AuthClaimTypes`](#authclaimtypes) permission claim.
-- **Concept introduced: permission (capability) authorization over role checks.** `[Rubric §11,
-  Security]` (assesses the authorization model) and `[Rubric §1, SOLID]` (dependency inversion:
-  endpoints depend on an abstraction, not on role names). Instead of scattering `[Authorize(Roles =
+  single place that knows which roles confer which capabilities
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/IPermissionRegistry.cs:3-13`).
+- **Depends on**: nothing first-party; its remarks reference [`RoleNames`](#rolenames) for the
+  case-insensitivity rule.
+- **Concept introduced, permission (capability) authorization over role checks.** `[Rubric §11,
+  Security]` assesses the authorization model, and `[Rubric §1, SOLID]` assesses dependency inversion:
+  endpoints depend on an abstraction, not on a role name. Instead of scattering `[Authorize(Roles =
   "Organizer")]` across endpoints, code authorizes against a *permission* (a capability such as
-  "sessions.edit"), and this registry translates a principal's roles into the permissions they hold.
-  The payoff is decoupling: adding a role or re-shaping who-can-do-what is a registry change, not an
-  edit to every endpoint (`IPermissionRegistry.cs:5-7`). The contract also fixes the comparison rules
-  (`IPermissionRegistry.cs:9-12`): role lookups are case-insensitive, permission values are ordinal, and
-  implementations are expected to be immutable and thread-safe.
-- **Walkthrough**: two members. `GetPermissions(string role)` (`IPermissionRegistry.cs:20`) returns the
-  permission set for a role, or an empty set for an unknown role (no throw). `HasPermission(IEnumerable<
-  string> roles, string permission)` (`IPermissionRegistry.cs:28`) answers whether *any* of a
-  principal's roles grants the permission: the hot path the authorization handler calls per request.
-- **Why it's built this way**: an empty-set-on-miss contract keeps callers branchless, and pushing the
-  who-grants-what knowledge behind one interface is the capability-based-security expression of the
-  framework's "decision logic behind an abstraction" habit.
+  `conference:sessions:manage`) and this registry translates a principal's roles into the permissions
+  they hold. The payoff is decoupling: adding a role or reshaping who-can-do-what is a registry change,
+  not an edit to every endpoint (`IPermissionRegistry.cs:5-7`). The remarks also fix the comparison
+  rules (`IPermissionRegistry.cs:9-12`): role lookups are case-insensitive, permission values are
+  compared ordinally, and implementations are expected to be immutable and thread-safe. Those three
+  sentences are what let the implementation be a frozen, lock-free structure.
+- **Walkthrough**: two members. `GetPermissions(string role)` (`IPermissionRegistry.cs:20`) returns
+  the permission set for a role, or an empty set for an unknown role, never a throw
+  (`IPermissionRegistry.cs:16`). `HasPermission(IEnumerable<string> roles, string permission)`
+  (`IPermissionRegistry.cs:28`) answers whether *any* of a principal's roles grants the permission:
+  the hot path the authorization handler calls per request.
+- **Why it's built this way**: [ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html) records the decision. An empty-set-on-miss contract keeps
+  callers branchless, and pushing the who-grants-what knowledge behind one interface is the
+  capability-security expression of the framework's habit of hiding decision logic behind an
+  abstraction.
 - **Where it's used**: implemented by [`PermissionRegistry`](#permissionregistry) (built via
-  [`PermissionRegistryBuilder`](#permissionregistrybuilder)); consumed by the API authorization layer
-  (the permission authorization handler and permission attribute).
+  [`PermissionRegistryBuilder`](#permissionregistrybuilder)); registered as a singleton by
+  [`AuthorizationExtensions`](#authorizationextensions)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:78`) and
+  injected into [`PermissionAuthorizationHandler`](#permissionauthorizationhandler)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/PermissionAuthorizationHandler.cs:13`).
 
 ### LoginRequest
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/LoginRequest.cs:8` · Level 0 · record struct (readonly)
 
 - **What it is**: the email/password payload for authentication: `(string Email, string Password)`
-  (`LoginRequest.cs:3-8`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/LoginRequest.cs:3-10`).
 - **Depends on**: nothing first-party.
 - **Concept**: the `readonly record struct` DTO introduced by
   [`AuthenticationResponse`](#authenticationresponse). `[Rubric §11, Security]`: the doc comment
   (`LoginRequest.cs:7`) records the rule that the password travels over TLS and is never logged. That
-  convention is enforced operationally (PII masking), not by this type, but the intent is documented at
-  the source.
+  convention is enforced operationally, not by this type, but the intent is documented at the source
+  where a reader will meet it.
 - **Walkthrough**: two positional parameters (`LoginRequest.cs:8-10`); no body.
-- **Where it's used**: validated by [`LoginRequestValidator`](#loginrequestvalidator); consumed by the
-  Identity module's login endpoint and the UI login form.
+- **Where it's used**: shape-validated by [`LoginRequestValidator`](#loginrequestvalidator), then
+  handled by [`AuthenticationServiceBase<TUser>.LoginAsync`](#authenticationservicebasetuser)
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:73-74`), which
+  is reached through
+  [`AuthControllerBase.LoginAsync`](group-12-api-hosting-mapping.md#authcontrollerbase)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:33-34`).
 
 ### OAuthCodeExchangeRequest
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/OAuthCodeExchangeRequest.cs:11` · Level 0 · record struct (readonly)
 
-- **What it is**: a single-field request `(string Code)` that exchanges a short-lived, single-use OAuth
-  completion code for the token pair (`OAuthCodeExchangeRequest.cs:3-11`).
+- **What it is**: a single-field request `(string Code)` that exchanges a short-lived, single-use
+  OAuth completion code for the token pair
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/OAuthCodeExchangeRequest.cs:3-12`).
 - **Depends on**: nothing first-party.
-- **Concept reinforced: security by construction.** `[Rubric §11, Security]` and `[Rubric §26,
-  Front-End Security]` (assesses safe token handling: no secrets leaking into the browser). The doc
-  comment (`OAuthCodeExchangeRequest.cs:3-9`) explains *why* the indirection exists: the server mints an
-  opaque code after the external-provider callback succeeds and carries *that* in the redirect URL, so
-  the access/refresh tokens never appear in the address bar, browser history, the `Referer` header, or
-  server access logs. A concrete, well-reasoned security design captured at the contract level.
+- **Concept reinforced, security by construction.** `[Rubric §11, Security]` and `[Rubric §26,
+  Front-End Security]` both assess safe token handling, in particular whether credentials can leak
+  into places that are logged or replayed. The doc comment
+  (`OAuthCodeExchangeRequest.cs:3-9`) explains *why* the indirection exists: the server mints an opaque
+  code after the external-provider callback succeeds and carries *that* in the redirect URL, so the
+  access and refresh tokens never appear in the address bar, browser history, the `Referer` header, or
+  server access logs. [ADR-036](https://ivanball.github.io/docs/adr/036-external-oauth-login.html) records the same reasoning as a decision, and [ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html) extends the pattern
+  to the native mobile callback.
 - **Walkthrough**: one positional `string Code` (`OAuthCodeExchangeRequest.cs:11-12`).
-- **Where it's used**: the OAuth "complete" endpoint's exchange step, called from the UI after the
-  provider redirect lands.
+- **Why it's built this way**: the code is worthless once redeemed, which is the property that makes
+  putting it in a URL acceptable.
+  [`OAuthControllerBase.ExchangeAsync`](group-12-api-hosting-mapping.md#oauthcontrollerbase) rejects a
+  blank code (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:142-145`),
+  looks the code up in [`ICacheService`](group-09-caching.md#icacheservice)
+  (`OAuthControllerBase.cs:151`), and then removes it so a replayed code cannot mint a second token
+  pair (`OAuthControllerBase.cs:157-158`); an unknown, burned, or expired code all return the same
+  HTTP 400 with a deliberately non-specific message (`OAuthControllerBase.cs:163-169`).
+- **Where it's used**: the body of the OAuth `exchange` endpoint
+  (`OAuthControllerBase.cs:138-140`), called by the UI's `/auth/oauth-complete` page after the
+  provider redirect lands (`OAuthControllerBase.cs:128-131`).
 
 ### RefreshTokenRequest
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RefreshTokenRequest.cs:9` · Level 0 · record struct (readonly)
 
 - **What it is**: `(string AccessToken, string RefreshToken)`; it sends the *expired* access token
-  alongside the refresh token so the server can read its claims without forcing a full re-authentication
-  (`RefreshTokenRequest.cs:3-8`).
+  alongside the refresh token so the server can read its claims without forcing a full
+  re-authentication (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RefreshTokenRequest.cs:3-11`).
 - **Depends on**: nothing first-party.
-- **Concept**: `readonly record struct` DTO (see [`AuthenticationResponse`](#authenticationresponse)).
-  `[Rubric §11, Security]`: part of the JWT refresh flow; carrying the expired token lets the server
-  reconstruct the principal cheaply while still gating the refresh on the opaque refresh token.
-- **Walkthrough**: two positional parameters (`RefreshTokenRequest.cs:9-11`).
-- **Where it's used**: validated by
-  [`RefreshTokenRequestValidator`](#refreshtokenrequestvalidator); consumed by the token-refresh
-  endpoint.
+- **Concept**: the `readonly record struct` DTO shape from
+  [`AuthenticationResponse`](#authenticationresponse). `[Rubric §11, Security]`: this is the request
+  half of [ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html)'s rotation scheme. Carrying the expired token lets the server reconstruct the
+  principal cheaply, while the opaque refresh token is what actually gates the rotation, so possession
+  of an expired access token alone buys nothing.
+- **Walkthrough**: two positional parameters (`RefreshTokenRequest.cs:9-11`); no body.
+- **Where it's used**: shape-validated by
+  [`RefreshTokenRequestValidator`](#refreshtokenrequestvalidator), handled by
+  [`AuthenticationServiceBase<TUser>.RefreshTokenAsync`](#authenticationservicebasetuser)
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:190-191`), and
+  exposed by
+  [`AuthControllerBase.RefreshAsync`](group-12-api-hosting-mapping.md#authcontrollerbase)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:71-72`).
+
+### Releaser
+> MMCA.Common.Shared · `MMCA.Common.Shared.Concurrency` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Concurrency/KeyedSemaphoreStripe.cs:78` · Level 0 · record struct (readonly, nested, `IDisposable`)
+
+- **What it is**: the disposable handle [`KeyedSemaphoreStripe`](#keyedsemaphorestripe) hands back
+  from `AcquireAsync`; disposing it releases the acquired stripe
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Concurrency/KeyedSemaphoreStripe.cs:77-86`).
+- **Depends on**: nothing first-party; `System.Threading.SemaphoreSlim` and `System.IDisposable` (BCL).
+  It is nested inside [`KeyedSemaphoreStripe`](#keyedsemaphorestripe) and constructible only from it
+  (the constructor is `internal`, `KeyedSemaphoreStripe.cs:82`).
+- **Concept introduced, the scope-bound lock handle.** `[Rubric §15, Best Practices & Code Quality]`
+  assesses whether a resource protocol is hard to get wrong. A raw `SemaphoreSlim` requires a matched
+  `WaitAsync`/`Release` pair, and an early `return` or a thrown exception between them leaks the
+  permit permanently, which for a shared static semaphore means a wedged process. Returning an
+  `IDisposable` converts the release into a `using` block, so the compiler's `finally` guarantees it.
+  Because the handle is a `readonly record struct` it costs no allocation on the acquire path, which
+  matters for a lock taken per idempotent request and per cache-key miss.
+- **Walkthrough**: three lines of substance. A single nullable field `_stripe`
+  (`KeyedSemaphoreStripe.cs:80`); an `internal` constructor that captures the semaphore
+  (`KeyedSemaphoreStripe.cs:82`); and `Dispose()` calling `_stripe?.Release()`
+  (`KeyedSemaphoreStripe.cs:85`). The null-conditional is the subtle part: a struct always has a
+  parameterless default form that no code can prevent, so `default(Releaser).Dispose()` must be a
+  no-op rather than a `NullReferenceException`, and the doc comment states exactly that guarantee
+  (`KeyedSemaphoreStripe.cs:84`).
+- **Why it's built this way**: value type for zero allocation, nullable field for default-safety,
+  `internal` constructor so nobody can fabricate a handle to a semaphore they never acquired.
+- **Where it's used**: the return type of
+  [`KeyedSemaphoreStripe.AcquireAsync`](#keyedsemaphorestripe)
+  (`KeyedSemaphoreStripe.cs:60,64`), consumed inside `using` statements by
+  [`IdempotencyFilter`](group-12-api-hosting-mapping.md#idempotencyfilter)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:88`) and
+  [`CachingQueryDecorator<TQuery, TResult>`](group-05-cqrs-pipeline.md#cachingquerydecoratortquery-tresult)
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:35`).
+- **Caveats / not-in-source**: nothing stops a caller from disposing the same handle twice, which
+  would release the stripe twice and let two holders in. Both call sites use `using`, so it cannot
+  happen today, but the type does not defend against it.
 
 ### RoleNames
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RoleNames.cs:12` · Level 0 · class (static)
 
-- **What it is**: canonical role-name string constants shared across all layers and both apps
-  (`RoleNames.cs:3-12`).
+- **What it is**: the canonical role-name string constants shared across all layers and both
+  applications (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RoleNames.cs:3-12`).
 - **Depends on**: nothing first-party.
-- **Concept introduced: centralized constants over magic strings.** `[Rubric §11, Security]`
-  (authorization correctness) and `[Rubric §16, Maintainability]` (low duplication, one place to
-  change). Roles are stored as plain strings and emitted as JWT claims; using `RoleNames.Organizer`
-  instead of the literal `"Organizer"` everywhere prevents typo-driven authorization bugs. The doc
-  comment (`RoleNames.cs:8-10`) notes role comparisons should be **case-insensitive**
-  (`ICurrentUserService.IsInRole`), matching the equality contract in [`RoleValue`](#rolevalue).
-- **Walkthrough**: five `public const string` fields: `Organizer` (`RoleNames.cs:15`), `Attendee`
-  (`RoleNames.cs:18`), and `ContentEditor` (`RoleNames.cs:25`) are ADC roles, while `Admin`
-  (`RoleNames.cs:28`) and `Customer` (`RoleNames.cs:31`) are Store roles. `ContentEditor` is documented
-  as a strict subset of the Organizer's capabilities (`RoleNames.cs:20-24`): it curates the session
-  catalog without full event-structure or user-administration rights. The constants live in the shared
-  framework so both consumers draw from one list.
-- **Why it's built this way**: `const` (not `static readonly`) so the values can be used in attribute
-  arguments (`[Authorize(Roles = RoleNames.Organizer)]`), which require compile-time constants.
-- **Where it's used**: authorization policies, `[Authorize]` attributes, per-app
-  [`RoleValue`](#rolevalue) subclasses, and role checks across the Identity module and UI.
+- **Concept introduced, centralized constants over magic strings.** `[Rubric §11, Security]` assesses
+  authorization correctness and `[Rubric §16, Maintainability]` assesses duplication and single points
+  of change. Roles are stored as plain strings and emitted as JWT claims (`RoleNames.cs:8`), so a typo
+  in a literal does not fail to compile: it silently fails to authorize, or worse, silently authorizes
+  nobody while looking correct. Referencing `RoleNames.Organizer` instead of `"Organizer"` moves that
+  class of bug to compile time. The remarks also record that role comparisons should be
+  **case-insensitive** (`RoleNames.cs:10`, pointing at `ICurrentUserService.IsInRole`), which is the
+  same equality contract [`RoleValue`](#rolevalue) and [`PermissionRegistry`](#permissionregistry)
+  implement.
+- **Walkthrough**: five `public const string` fields. `Organizer` (`RoleNames.cs:15`), `Attendee`
+  (`RoleNames.cs:18`), and `ContentEditor` (`RoleNames.cs:25`) are ADC roles; `Admin`
+  (`RoleNames.cs:28`) and `Customer` (`RoleNames.cs:31`) are Store roles. `ContentEditor` is
+  documented as a strict subset of the Organizer's capabilities (`RoleNames.cs:20-24`): it curates the
+  session catalog without rights over event structure, rooms, questions, session selection, or user
+  administration. That subset is precisely the case [ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html) uses to justify the permission layer, and
+  you can see the payoff in ADC's grants, where the distinction is three lines in one registration
+  rather than an edit to every attribute
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:43-50`).
+- **Why it's built this way**: `const` rather than `static readonly` so the values can appear in
+  attribute arguments such as `[Authorize(Roles = RoleNames.Organizer)]`, which require compile-time
+  constants. Keeping both apps' roles in one shared file is a deliberate trade: a small amount of
+  irrelevance for each consumer in exchange for one authoritative list.
+- **Where it's used**: the named role policies in
+  [`AuthorizationExtensions.AddAuthorizationPolicies`](#authorizationextensions)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:25-30`),
+  the per-app [`RoleValue`](#rolevalue) subclasses
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/UserRole.cs:20-30`), and each
+  module's permission grants (`MMCA.ADC.Conference.API/DependencyInjection.cs:43-50`).
 
 ### IcsCalendarBuilder
 > MMCA.Common.Shared · `MMCA.Common.Shared.Calendars` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Calendars/IcsCalendarBuilder.cs:12` · Level 1 · class (static)
 
 - **What it is**: a dependency-free RFC 5545 iCalendar writer for "add to calendar" exports, turning a
   product id and a collection of [`IcsEvent`](#icsevent)s into a complete `VCALENDAR` string
-  (`IcsCalendarBuilder.cs:6-12`).
-- **Depends on**: [`IcsEvent`](#icsevent); `System.Text.StringBuilder`, `System.Globalization` (BCL).
-- **Concept introduced: a deliberately minimal, deterministic protocol writer.** `[Rubric §15, Best
-  Practices & Code Quality]` (assesses a focused, correct, standards-compliant implementation). Rather
-  than pull in a heavyweight iCalendar NuGet, the builder implements exactly the RFC 5545 subset every
-  calendar app imports reliably: UTC-only timestamps (no VTIMEZONE), TEXT escaping, CRLF line endings,
-  and 75-octet line folding (`IcsCalendarBuilder.cs:8-11`). It is **deterministic**: the caller supplies
-  `dtStamp`, so identical inputs produce byte-identical output, which makes the export cacheable and
-  testable.
-- **Walkthrough**: one public entry point and four private helpers.
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Calendars/IcsCalendarBuilder.cs:6-12`).
+- **Depends on**: [`IcsEvent`](#icsevent); `System.Text.StringBuilder` and
+  `System.Globalization.CultureInfo` (BCL).
+- **Concept introduced, the deliberately minimal, deterministic protocol writer.** `[Rubric §15, Best
+  Practices & Code Quality]` assesses focused, standards-correct implementations, and `[Rubric §32,
+  Dependency & Supply-Chain]` assesses whether a dependency is worth its cost. Rather than pull in a
+  full iCalendar package, the builder implements exactly the RFC 5545 subset every calendar app
+  imports reliably: UTC-only timestamps (no VTIMEZONE), TEXT escaping, CRLF line endings, and 75-octet
+  line folding (`IcsCalendarBuilder.cs:7-10`). It is also **deterministic**: the caller supplies
+  `dtStamp` (`IcsCalendarBuilder.cs:21-22`), so identical inputs produce byte-identical output, which
+  is what makes the export cacheable and lets a test assert on the exact document.
+- **Walkthrough**: one public entry point and four private helpers, plus the `MaxLineOctets = 75`
+  constant (`IcsCalendarBuilder.cs:14`).
   `Build(productId, events, dtStamp)` (`IcsCalendarBuilder.cs:22`) guards its inputs
-  (`IcsCalendarBuilder.cs:24-25`), writes the `VCALENDAR` header lines (`VERSION:2.0`,
-  `PRODID`, `CALSCALE`, `METHOD:PUBLISH`, `IcsCalendarBuilder.cs:28-32`), appends each event, and closes
-  the document (`IcsCalendarBuilder.cs:34-40`). `AppendEvent` (`IcsCalendarBuilder.cs:43`) writes a
-  `VEVENT` block with `UID`, `DTSTAMP`, `DTSTART`, `DTEND`, `SUMMARY`, and the optional
-  `DESCRIPTION`/`LOCATION` only when present (`IcsCalendarBuilder.cs:52-60`). `FormatUtc`
-  (`IcsCalendarBuilder.cs:65`) renders an instant as the `Z`-suffixed
-  `yyyyMMddTHHmmssZ` form using `CultureInfo.InvariantCulture`. `EscapeText`
-  (`IcsCalendarBuilder.cs:69`) applies RFC 5545 §3.3.11 TEXT escaping (backslash, semicolon, comma,
-  newlines). The subtlest helper is `AppendLine` (`IcsCalendarBuilder.cs:83`): it folds content lines at
-  75 octets (UTF-8), never splitting a multi-byte character because it counts octets per char and treats
-  a surrogate pair as one unit (`IcsCalendarBuilder.cs:89-98`), and the leading fold space counts
-  against the continuation line's budget (`IcsCalendarBuilder.cs:95`).
-- **Why it's built this way**: a static, allocation-light writer with no external dependency keeps the
-  Shared layer pure and Blazor-WASM-safe, and pushing the `dtStamp` to the caller is what makes the
-  output deterministic.
-- **Where it's used**: the calendar-export endpoints/services in the apps (e.g. an ADC session-schedule
-  `.ics` download).
+  (`IcsCalendarBuilder.cs:24-25`), writes the calendar header (`BEGIN:VCALENDAR`, `VERSION:2.0`,
+  `PRODID`, `CALSCALE:GREGORIAN`, `METHOD:PUBLISH`, `IcsCalendarBuilder.cs:28-32`), appends each entry
+  in the collection's own order, and closes the document (`IcsCalendarBuilder.cs:34-40`).
+  `AppendEvent` (`IcsCalendarBuilder.cs:43`) writes a `VEVENT` block with `UID`, `DTSTAMP`, `DTSTART`,
+  `DTEND`, and `SUMMARY`, then `DESCRIPTION` and `LOCATION` only when non-blank
+  (`IcsCalendarBuilder.cs:52-60`), so an absent optional produces no property line at all rather than
+  an empty one. `FormatUtc` (`IcsCalendarBuilder.cs:65-66`) renders an instant through
+  `instant.UtcDateTime` with the invariant culture, which is what turns the
+  [`IcsEvent`](#icsevent) UTC-by-contract rule into a literal `Z`-suffixed timestamp. `EscapeText`
+  (`IcsCalendarBuilder.cs:69-76`) applies RFC 5545 section 3.3.11 TEXT escaping, and the order
+  matters: backslash is escaped first (`IcsCalendarBuilder.cs:71`) so the escapes it later introduces
+  are not double-escaped. The subtlest helper is `AppendLine` (`IcsCalendarBuilder.cs:83`): it folds
+  content lines at 75 octets of UTF-8, counting octets per character and treating a surrogate pair as
+  one unit (`IcsCalendarBuilder.cs:89-90`) so a fold can never split a multi-byte character, and it
+  charges the leading fold space against the continuation line's budget
+  (`IcsCalendarBuilder.cs:94-95`).
+- **Why it's built this way**: a static, allocation-light writer with no external dependency keeps
+  `MMCA.Common.Shared` pure and therefore usable from Blazor WebAssembly, and pushing `dtStamp` to the
+  caller is the single choice that makes the output deterministic and testable.
+- **Where it's used**: MMCA.ADC's calendar exports:
+  [`ExportSessionCalendarHandler`](group-18-conference-application.md#exportsessioncalendarhandler)
+  for one session
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/ExportSessionCalendarHandler.cs:48-51`)
+  and [`ExportEventCalendarHandler`](group-18-conference-application.md#exporteventcalendarhandler)
+  for a whole event
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/ExportCalendar/ExportEventCalendarHandler.cs:50`).
+- **Caveats / not-in-source**: both ADC call sites pass `DateTimeOffset.UtcNow` as `dtStamp`
+  (`ExportSessionCalendarHandler.cs:51`, `ExportEventCalendarHandler.cs:50`), so the determinism the
+  builder offers is exercised by the tests rather than by production output.
 
-### LoginRequestValidator
-> MMCA.Common.Application · `MMCA.Common.Application.Auth.Validation` · `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/LoginRequestValidator.cs:11` · Level 1 · class
+### KeyedSemaphoreStripe
+> MMCA.Common.Shared · `MMCA.Common.Shared.Concurrency` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Concurrency/KeyedSemaphoreStripe.cs:22` · Level 1 · class (sealed)
 
-- **What it is**: a FluentValidation validator for [`LoginRequest`](#loginrequest) that checks only for
-  a non-empty, well-formed email and a non-empty password (`LoginRequestValidator.cs:6-11`).
-- **Depends on**: [`LoginRequest`](#loginrequest); `FluentValidation.AbstractValidator<T>` (NuGet).
-- **Concept introduced: FluentValidation `AbstractValidator<T>` for request shape.** `[Rubric §24,
-  Forms/Validation/UX Safety]` (assesses input validation) and `[Rubric §11, Security]`. A validator
-  subclasses `AbstractValidator<LoginRequest>` and declares rules in its constructor with
-  `RuleFor(...)` chains; the framework's convention scanning auto-registers every validator so the CQRS
-  validating decorator (see [Group 06](group-06-validation.md)) runs it before a command's transaction
-  opens. The security-relevant design note is in the doc comment (`LoginRequestValidator.cs:6-9`): the
-  validator is *intentionally minimal*. It confirms the fields are present and the email is shaped like
-  an email, but detailed credential verification happens inside the authentication service so the
-  response never leaks *which* field was wrong.
-- **Walkthrough**: the constructor (`LoginRequestValidator.cs:13`) declares two rules: `Email` must be
-  `NotEmpty` and pass `EmailAddress` (`LoginRequestValidator.cs:15-17`), and `Password` must be
-  `NotEmpty` (`LoginRequestValidator.cs:19-20`), each with an explicit message.
-- **Where it's used**: auto-discovered by module convention scanning and applied by the validating
-  decorator on the login command; the richer, cross-field auth validators live in
-  [`AuthenticationValidators`](group-08-auth.md#authenticationvalidators).
+- **What it is**: a fixed-size table of `SemaphoreSlim` stripes that serializes work per logical key,
+  mapping a key onto a stripe by its hash so the table never grows with the number of distinct keys
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Concurrency/KeyedSemaphoreStripe.cs:3-22`).
+- **Depends on**: [`Releaser`](#releaser) (its nested return type); `System.Threading.SemaphoreSlim`
+  (BCL).
+- **Concept introduced, lock striping.** `[Rubric §12, Performance & Scalability]` assesses hot-path
+  concurrency structures and `[Rubric §11, Security]` applies because one caller of this lock guards a
+  caller-supplied key. The obvious shape for "one lock per key" is a
+  `ConcurrentDictionary<string, SemaphoreSlim>`, and the doc comment
+  (`KeyedSemaphoreStripe.cs:7-16`) is worth reading in full because it explains why that shape is a
+  trap: removing an entry when the last holder releases opens a window where one caller is waiting on
+  a semaphore that is no longer in the table while a second caller creates a fresh one, and both then
+  run concurrently (the exact thing the lock existed to prevent); never removing it lets a
+  caller-supplied key, an idempotency key or a parameterized cache key, grow the table without bound,
+  which is an unauthenticated memory-growth vector. Striping has neither problem because the table is
+  allocated once and never mutated. The price is *false sharing*: two unrelated keys can hash to the
+  same stripe and briefly serialize against each other. The comment argues that is harmless for the
+  double-check-locking callers this exists for, because each re-checks its own key's state after
+  acquiring, so a spurious wait costs latency and never correctness.
+- **Walkthrough**: `DefaultWidth = 256` (`KeyedSemaphoreStripe.cs:25`) and a `SemaphoreSlim[]` field
+  (`KeyedSemaphoreStripe.cs:27`). The parameterless constructor chains to the width-taking one
+  (`KeyedSemaphoreStripe.cs:30-33`), which rejects a non-positive width and eagerly fills the array
+  with binary semaphores (`new SemaphoreSlim(1, 1)`, `KeyedSemaphoreStripe.cs:37-47`): allocating all
+  256 up front is what removes every later race. `Width` is exposed for callers and for the modulo
+  (`KeyedSemaphoreStripe.cs:50`). `AcquireAsync(key, cancellationToken)`
+  (`KeyedSemaphoreStripe.cs:60`) resolves the stripe, awaits it, and wraps it in a
+  [`Releaser`](#releaser) (`KeyedSemaphoreStripe.cs:62-64`); its doc comment is explicit that the
+  token cancels the *wait*, not the work that follows (`KeyedSemaphoreStripe.cs:58`). `GetStripe`
+  (`KeyedSemaphoreStripe.cs:67`) is the one piece of real arithmetic: it takes the **ordinal** string
+  hash (so the mapping does not vary with culture), casts to `uint` before the modulo, and the inline
+  comment explains why (`KeyedSemaphoreStripe.cs:71-73`): `int.MinValue` has no positive counterpart,
+  so `Math.Abs` would throw, and masking the sign through an unsigned cast cannot.
+- **Why it's built this way**: the remarks (`KeyedSemaphoreStripe.cs:18-21`) state the intended
+  lifetime: instances are thread-safe and meant to live in a `static` field for the life of the
+  process, and the stripes are deliberately never disposed because the instance outlives every caller.
+  That is why no `IDisposable` appears on the type.
+- **Where it's used**: two shared statics.
+  [`IdempotencyFilter`](group-12-api-hosting-mapping.md#idempotencyfilter) holds one to serialize
+  concurrent requests carrying the same `Idempotency-Key`, with the fast path (a cache hit) taking no
+  lock at all and the slow path double-checking after acquisition
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:60-67,84-96`;
+  [ADR-017](https://ivanball.github.io/docs/adr/017-request-idempotency.html)). `QueryCacheKeyLocks` holds the other for
+  [`CachingQueryDecorator<TQuery, TResult>`](group-05-cqrs-pipeline.md#cachingquerydecoratortquery-tresult),
+  deliberately in a non-generic holder so every closed generic decorator shares one table rather than
+  one per closed type
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/UseCases/Decorators/CachingQueryDecorator.cs:56-81`;
+  [ADR-026](https://ivanball.github.io/docs/adr/026-caching-strategy.html)).
+- **Caveats / not-in-source**: the lock is per-process. The `QueryCacheKeyLocks` remarks
+  (`CachingQueryDecorator.cs:69-75`) spell out the consequence: across several instances sharing a
+  distributed cache, stampede protection is at most one handler execution *per instance*, not one
+  cluster-wide, and a cluster-wide guarantee would need a distributed lock, which is deliberately not
+  attempted.
 
 ### PermissionRegistry
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/PermissionRegistry.cs:10` · Level 1 · class (sealed)
 
 - **What it is**: the immutable, thread-safe implementation of
   [`IPermissionRegistry`](#ipermissionregistry), backed by a frozen role-to-permissions map
-  (`PermissionRegistry.cs:5-10`).
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/PermissionRegistry.cs:5-10`).
 - **Depends on**: [`IPermissionRegistry`](#ipermissionregistry); `System.Collections.Frozen`
-  (`FrozenDictionary`/`FrozenSet`, BCL).
-- **Concept introduced: `Frozen*` collections for read-optimized immutable lookups.** `[Rubric §12,
-  Performance & Scalability]` (assesses hot-path data-structure choices) and `[Rubric §11, Security]`.
-  A `FrozenDictionary`/`FrozenSet` is built once and then optimized for repeated reads, which is exactly
-  the authorization access pattern: constructed at startup, queried on every request. The registry pins
-  the two comparison rules from the interface into the data structure itself: the outer dictionary uses
-  `StringComparer.OrdinalIgnoreCase` so role lookups are case-insensitive
-  (`PermissionRegistry.cs:25-28`), while each permission set uses `StringComparer.Ordinal` so permission
-  values compare exactly (`PermissionRegistry.cs:27`).
+  (`FrozenDictionary` and `FrozenSet`, BCL, `PermissionRegistry.cs:1`).
+- **Concept introduced, `Frozen*` collections for read-optimized immutable lookups.** `[Rubric §12,
+  Performance & Scalability]` assesses hot-path data-structure choices. A `FrozenDictionary` or
+  `FrozenSet` pays a higher one-time construction cost in exchange for faster repeated reads and no
+  mutation support, which is exactly the authorization access pattern: built once at startup, queried
+  on every authorized request, never written again. Immutability is also what makes the structure
+  lock-free under concurrency, satisfying the interface's thread-safety expectation without a lock.
+  The registry pins the interface's two comparison rules into the data structure itself: the outer
+  dictionary uses `StringComparer.OrdinalIgnoreCase` so role lookups are case-insensitive, while each
+  permission set uses `StringComparer.Ordinal` so permission values must match exactly
+  (`PermissionRegistry.cs:25-28`).
 - **Walkthrough**: a shared empty `FrozenSet` sentinel (`PermissionRegistry.cs:12`) and the frozen map
-  field (`PermissionRegistry.cs:14`). The constructor (`PermissionRegistry.cs:21`) freezes the supplied
-  role-to-permissions map with the two comparers (`PermissionRegistry.cs:25-28`). `GetPermissions`
-  (`PermissionRegistry.cs:32`) returns the matching set or the shared empty sentinel on a miss (so it
-  never allocates or throws). `HasPermission` (`PermissionRegistry.cs:38`) guards its inputs then
-  short-circuits on the first role whose set contains the permission (`PermissionRegistry.cs:43-53`).
-- **Why it's built this way**: freezing at construction trades a one-time build cost for fast, lock-free
-  concurrent reads, which suits a startup-built structure hit on every authorized request.
-- **Where it's used**: registered as the [`IPermissionRegistry`](#ipermissionregistry) singleton and
-  constructed via [`PermissionRegistryBuilder`](#permissionregistrybuilder); read by the API's
-  permission authorization handler.
-
-### RefreshTokenRequestValidator
-> MMCA.Common.Application · `MMCA.Common.Application.Auth.Validation` · `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/Validation/RefreshTokenRequestValidator.cs:10` · Level 1 · class
-
-- **What it is**: a FluentValidation validator for [`RefreshTokenRequest`](#refreshtokenrequest) that
-  requires both tokens to be present (`RefreshTokenRequestValidator.cs:6-10`).
-- **Depends on**: [`RefreshTokenRequest`](#refreshtokenrequest);
-  `FluentValidation.AbstractValidator<T>` (NuGet).
-- **Concept**: the same `AbstractValidator<T>` shape introduced by
-  [`LoginRequestValidator`](#loginrequestvalidator). `[Rubric §24, Forms/Validation/UX Safety]`. Both
-  token fields are load-bearing: the expired access token supplies the claims to reconstruct the
-  principal, and the refresh token drives rotation verification (`RefreshTokenRequestValidator.cs:6-8`),
-  so each gets a `NotEmpty` rule.
-- **Walkthrough**: the constructor (`RefreshTokenRequestValidator.cs:12`) declares `AccessToken`
-  `NotEmpty` (`RefreshTokenRequestValidator.cs:14-15`) and `RefreshToken` `NotEmpty`
-  (`RefreshTokenRequestValidator.cs:17-18`).
-- **Where it's used**: auto-registered by convention scanning; applied ahead of the token-refresh
-  command.
+  field (`PermissionRegistry.cs:14`). The constructor (`PermissionRegistry.cs:21`) guards its argument
+  and freezes the supplied map with the two comparers (`PermissionRegistry.cs:23-28`).
+  `GetPermissions` (`PermissionRegistry.cs:32-35`) returns the matching set, or the shared sentinel on
+  a null or unknown role, so it never allocates and never throws: the empty-set-on-miss contract from
+  the interface, made literal. `HasPermission` (`PermissionRegistry.cs:38`) guards its inputs
+  (`PermissionRegistry.cs:40-41`), then walks the principal's roles and returns on the first role whose
+  set contains the permission (`PermissionRegistry.cs:43-53`), so the common case of a matching first
+  role costs one dictionary probe and one set probe.
+- **Why it's built this way**: freezing at construction trades a one-time build cost for fast,
+  allocation-free, lock-free concurrent reads, which suits a startup-built structure hit on every
+  authorized request ([ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html)).
+- **Where it's used**: constructed by [`PermissionRegistryBuilder.Build`](#permissionregistrybuilder)
+  and registered as the [`IPermissionRegistry`](#ipermissionregistry) singleton in
+  [`AuthorizationExtensions`](#authorizationextensions)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:76-78`);
+  read by [`PermissionAuthorizationHandler`](#permissionauthorizationhandler).
 
 ### PermissionRegistryBuilder
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/PermissionRegistryBuilder.cs:8` · Level 2 · class (sealed)
 
 - **What it is**: a mutable accumulator that collects role-to-permission grants and freezes them into
-  an immutable [`PermissionRegistry`](#permissionregistry) (`PermissionRegistryBuilder.cs:3-8`).
-- **Depends on**: [`PermissionRegistry`](#permissionregistry) (its build target).
-- **Concept introduced: the builder pattern for multi-module contribution.** `[Rubric §2, Design
-  Patterns]` (assesses idiomatic pattern use) and `[Rubric §7, Microservices Readiness]` (each module
-  declares only what it owns). The builder separates the *accumulation* phase (mutable, order-free,
-  contributed to by many modules) from the *finished* phase (an immutable snapshot). The key property is
-  in the doc comment (`PermissionRegistryBuilder.cs:5-7`): multiple modules can grant permissions for
-  the same role and the grants are **unioned**, so each module declares only the permissions it owns
-  without knowing about the others.
+  an immutable [`PermissionRegistry`](#permissionregistry)
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/PermissionRegistryBuilder.cs:3-8`).
+- **Depends on**: [`PermissionRegistry`](#permissionregistry), its build target.
+- **Concept introduced, the builder pattern for multi-module contribution.** `[Rubric §2, Design
+  Patterns]` assesses idiomatic pattern use and `[Rubric §7, Microservices Readiness]` assesses whether
+  a module can declare only what it owns. The builder separates the *accumulation* phase (mutable,
+  order-independent, contributed to by many modules during startup) from the *finished* phase (an
+  immutable snapshot read by every request). The property that makes it work for a modular monolith is
+  in the doc comment (`PermissionRegistryBuilder.cs:5-6`): multiple modules may grant permissions for
+  the same role and the grants are **unioned**, so a module never needs to know what the others
+  granted, and load order does not change the result.
 - **Walkthrough**: a case-insensitive backing `Dictionary<string, HashSet<string>>`
-  (`PermissionRegistryBuilder.cs:14-15`); the inline comment (`PermissionRegistryBuilder.cs:10-13`)
-  explains why a concrete dictionary with an explicit `OrdinalIgnoreCase` comparer is kept over a
-  collection expression (the comparer must survive, and CA1859 favors the concrete type). `Grant(role,
-  params permissions)` (`PermissionRegistryBuilder.cs:25`) is additive and idempotent: it filters blank
-  permissions (`PermissionRegistryBuilder.cs:30`), then either unions into the existing set or seeds a
-  new ordinal `HashSet` (`PermissionRegistryBuilder.cs:32-39`), and returns `this` for chaining.
-  `Build()` (`PermissionRegistryBuilder.cs:46`) projects the grants into an
-  `IReadOnlyDictionary<string, IReadOnlySet<string>>` and hands it to the
-  [`PermissionRegistry`](#permissionregistry) constructor (`PermissionRegistryBuilder.cs:48-53`).
-- **Why it's built this way**: mutable-while-assembling, immutable-once-built is the safe way to let
-  independent modules compose a shared authorization table at startup without shared mutable state at
-  runtime.
-- **Where it's used**: module composition/DI wiring, where each module calls `Grant(...)` for its own
-  capabilities before the host builds the singleton [`PermissionRegistry`](#permissionregistry).
+  (`PermissionRegistryBuilder.cs:14-15`), preceded by a comment
+  (`PermissionRegistryBuilder.cs:10-12`) that explains the scoped `IDE0028` suppression: a collection
+  expression cannot carry the `OrdinalIgnoreCase` comparer that keeps role keys case-insensitive, and
+  the concrete `Dictionary` type is kept for `CA1859`. `Grant(role, params permissions)`
+  (`PermissionRegistryBuilder.cs:25`) guards its inputs (`:27-28`), filters blank permissions
+  (`:30`), then either unions into the existing set or seeds a new ordinal `HashSet`
+  (`:32-39`), and returns `this` for chaining (`:41`): additive and idempotent, so a duplicate grant
+  from a second module is a no-op. `Build()` (`PermissionRegistryBuilder.cs:46`) projects the grants
+  into an `IReadOnlyDictionary<string, IReadOnlySet<string>>` (keeping the case-insensitive comparer)
+  and hands it to the [`PermissionRegistry`](#permissionregistry) constructor
+  (`PermissionRegistryBuilder.cs:48-53`).
+- **Why it's built this way**: mutable while assembling, immutable once built is the safe way to let
+  independent modules compose one shared authorization table at startup without any shared mutable
+  state at runtime.
+- **Where it's used**: [`AuthorizationExtensions`](#authorizationextensions) registers exactly one
+  builder instance and a lazily-built singleton registry over it, so the registry is materialized on
+  first resolve, after every module has contributed
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Authorization/AuthorizationExtensions.cs:65-81`);
+  modules call it through `AddPermissions(...)`, as MMCA.ADC's Conference, Engagement, and Identity
+  modules do
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/DependencyInjection.cs:41-51`,
+  `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/DependencyInjection.cs:51`,
+  `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/DependencyInjection.cs:44`).
+- **Caveats / not-in-source**: the lazy build means a `Grant` call made after the first
+  `IPermissionRegistry` resolve would silently not take effect; the API doc says to call before the
+  host is built (`AuthorizationExtensions.cs:49-50`), but nothing enforces it at runtime.
 
 ### RoleValue
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RoleValue.cs:25` · Level 3 · class (abstract)
 
-- **What it is**: an abstract base for a role value object: it stores a canonical string, provides
-  case-insensitive value equality and hashing, and offers validation against a per-app set of known role
-  names (`RoleValue.cs:6-25`).
+- **What it is**: the abstract base for a role value object: it stores a canonical string, provides
+  case-insensitive value equality and hashing, and offers validation against a per-app set of known
+  role names (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RoleValue.cs:6-25`).
 - **Depends on**: [`Result`](group-01-result-error-handling.md#result) and
-  [`Error`](group-01-result-error-handling.md#error) (via `MMCA.Common.Shared.Abstractions`,
-  `RoleValue.cs:2`); references [`RoleNames`](#rolenames). Conceptually a value object (see
-  [`ValueObject`](group-02-domain-building-blocks.md#valueobject)) but does *not* inherit the record base.
-- **Concept introduced: a value object as an abstract class with type-guarded equality.** `[Rubric §4,
-  Domain-Driven Design]` (assesses modeling identity-less concepts as value objects) and `[Rubric §1,
-  SOLID]`. Roles are stored as plain strings and emitted as JWT claims; this type gives them value
-  semantics without a database identity. It deliberately does **not** implement `IEquatable<T>`
-  (`RoleValue.cs:18-23`): the doc comment cites Sonar S4035, an unsealed `IEquatable<T>` breaks the
-  equality contract for subclasses. Instead equality is the `object.Equals` override, type-guarded so two
-  roles are equal only when they are the *same concrete type* with the same case-insensitive value
-  (`RoleValue.cs:78-81`); a sealed derived type may safely add a strongly-typed `IEquatable<TSelf>` and
-  `==`/`!=` on top. It lives in `MMCA.Common.Shared` so it stays dependency-free and usable from Blazor
-  WASM as well as Domain, and each app derives a concrete role type fixing its own role set
+  [`Error`](group-01-result-error-handling.md#error) from `MMCA.Common.Shared.Abstractions`
+  (`RoleValue.cs:2`), plus `System.Collections.Frozen` (`RoleValue.cs:1`). It references
+  [`RoleNames`](#rolenames) in its documentation. Conceptually a value object (see
+  [`ValueObject`](group-02-domain-building-blocks.md#valueobject)) but deliberately not derived from
+  that base.
+- **Concept introduced, a value object as an abstract class with type-guarded equality.** `[Rubric §4,
+  Domain-Driven Design]` assesses whether identity-less concepts are modeled as value objects, and
+  `[Rubric §1, SOLID]` applies to how the hierarchy is left open. Roles are stored as plain strings and
+  emitted as JWT claims; this type gives them value semantics without a database identity. It
+  deliberately does **not** implement `IEquatable<T>` (`RoleValue.cs:17-23`): the remarks cite Sonar
+  S4035, an unsealed `IEquatable<T>` breaks the equality contract for subclasses. Instead equality is
+  the `object.Equals` override, type-guarded so two roles are equal only when they are the *same
+  concrete type* with the same case-insensitive value (`RoleValue.cs:78-81`), and a sealed derived type
+  may safely add a strongly-typed `IEquatable<TSelf>` plus `==`/`!=` on top, which ADC's `UserRole`
+  does (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/UserRole.cs:17,78-84`). It
+  lives in `MMCA.Common.Shared` so it stays dependency-free and usable from Blazor WebAssembly as well
+  as Domain, with each app deriving a concrete role type that fixes its own role set
   (`RoleValue.cs:11-16`).
-- **Walkthrough**: a read-only `Value` (`RoleValue.cs:28`) set by the protected constructor
+- **Walkthrough**: a get-only `Value` (`RoleValue.cs:28`) set by the protected constructor
   (`RoleValue.cs:32`). The static `Validate(role, knownRoles, source)` (`RoleValue.cs:42`) returns
-  `Result.Success()` when the role is in the app's known set, else a
+  `Result.Success()` when the role is in the app's known set, otherwise a
   [`Result`](group-01-result-error-handling.md#result) failure carrying an
-  [`Error`](group-01-result-error-handling.md#error) `Invariant` coded `User.Role.Invalid`
-  (`RoleValue.cs:46-52`): the value-object factory idiom, but exposed as a reusable check for derived
-  factories. The protected generic `BuildLookup<TRole>(params roles)` (`RoleValue.cs:63`) freezes the
-  supplied singletons into a case-insensitive `FrozenDictionary` keyed by `Value`
-  (`RoleValue.cs:68-71`), so a derived type can back its `FromString`/`IsValid` members with interned
-  instances. `ToString` returns the value (`RoleValue.cs:75`); `GetHashCode` uses the ordinal-ignore-case
-  hash (`RoleValue.cs:84`) to stay consistent with `Equals`.
-- **Why it's built this way**: the abstract-class-plus-type-guard approach is the correct way to share
-  equality behavior across an open hierarchy of value objects without violating the equality contract
-  (the S4035 rationale is documented inline).
-- **Where it's used**: each app derives a concrete `UserRole` (Store: Admin/Customer; ADC:
-  Organizer/Attendee) with its own factory members; those feed the Identity module and authorization
-  checks. Validation is keyed off the [`RoleNames`](#rolenames) constants.
+  [`Error`](group-01-result-error-handling.md#error) of kind `Invariant` coded `User.Role.Invalid`
+  (`RoleValue.cs:46-52`); note the `role ?? string.Empty` coalesce (`RoleValue.cs:46`), which turns a
+  null role into a clean failure rather than a `NullReferenceException`. The protected generic
+  `BuildLookup<TRole>(params roles)` (`RoleValue.cs:63`) freezes the supplied singletons into a
+  case-insensitive `FrozenDictionary` keyed by `Value` (`RoleValue.cs:68-71`), so a derived type can
+  back its `FromString`/`IsValid` members with interned instances instead of re-allocating. `ToString`
+  returns the value (`RoleValue.cs:75`), and `GetHashCode` uses the ordinal-ignore-case hash
+  (`RoleValue.cs:84`) so it stays consistent with `Equals`, which is the contract a dictionary key
+  depends on.
+- **Why it's built this way**: the abstract-class-plus-type-guard shape is how you share equality
+  behavior across an open hierarchy of value objects without violating the equality contract, and the
+  S4035 rationale is documented inline so a future reader does not "helpfully" add `IEquatable<T>` to
+  the base.
+- **Where it's used**: each app derives a concrete `UserRole`
+  ([`UserRole`](group-24-identity-module.md#userrole)). ADC's fixes three roles (Organizer, Attendee,
+  ContentEditor), interns them through `BuildLookup`
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/UserRole.cs:20-33`), and exposes
+  `FromString`/`IsValid` over that frozen lookup (`UserRole.cs:51-65`). Store's uses the shared
+  `Validate` helper directly for its `IsValid`
+  (`MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Users/UserRole.cs:37`). Both feed the
+  Identity module and the authorization checks; validation is keyed off the
+  [`RoleNames`](#rolenames) constants.
 
 ### RegisterRequest
 > MMCA.Common.Shared · `MMCA.Common.Shared.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RegisterRequest.cs:13` · Level 4 · record struct (readonly)
 
-- **What it is**: the registration payload for a new account: email, password, first/last name, and an
-  optional postal address (`RegisterRequest.cs:5-13`).
-- **Depends on**: [`Address`](group-02-domain-building-blocks.md#address) (Level 3,
-  `RegisterRequest.cs:1`).
+- **What it is**: the registration payload for a new account: email, password, first and last name,
+  and an optional postal address
+  (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RegisterRequest.cs:5-18`).
+- **Depends on**: [`Address`](group-02-domain-building-blocks.md#address) from
+  `MMCA.Common.Shared.ValueObjects` (`RegisterRequest.cs:1`), which is what puts this Level 0-shaped
+  DTO at Level 4.
 - **Concept**: the `readonly record struct` DTO shape from
   [`AuthenticationResponse`](#authenticationresponse). `[Rubric §9, API & Contract Design]`. The
   optional `Address? Address = null` parameter (`RegisterRequest.cs:18`) shows that positional record
-  structs support default values, so callers that omit the address get a null without a second overload.
+  structs support default values, so a caller that has no address omits it rather than needing a
+  second overload or a null literal.
 - **Walkthrough**: five positional parameters (`RegisterRequest.cs:13-18`): four strings plus the
-  nullable [`Address`](group-02-domain-building-blocks.md#address). The strings are handed to domain
-  factories for conversion rather than pre-validated here, per the "validate in the domain" convention.
-- **Where it's used**: the Identity module's register command and the UI register form.
+  nullable [`Address`](group-02-domain-building-blocks.md#address). The strings arrive raw: no
+  validation attributes, no normalization. Shape checking is the validator's job and semantic
+  conversion is the domain factory's, which is why
+  [`AuthenticationServiceBase<TUser>`](#authenticationservicebasetuser) hands the request to an
+  abstract `CreateUser(RegisterRequest request, byte[] passwordHash, byte[] passwordSalt)` that each
+  app implements against its own `User` aggregate
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:294`).
+- **Where it's used**:
+  [`AuthenticationServiceBase<TUser>.RegisterAsync`](#authenticationservicebasetuser)
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:134-135`) and
+  the `register` endpoint on
+  [`AuthControllerBase`](group-12-api-hosting-mapping.md#authcontrollerbase)
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:53-54`), plus
+  each app's register form.
 
 ### ILoginProtectionService
 > MMCA.Common.Application · `MMCA.Common.Application.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Application/Auth/ILoginProtectionService.cs:10` · Level 3 · interface

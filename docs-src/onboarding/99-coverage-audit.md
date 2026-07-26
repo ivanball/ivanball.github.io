@@ -11,20 +11,20 @@ explained, and lists what could not be determined from source. All counts are re
 
 | Quantity | Count | Source |
 |----------|------:|--------|
-| `.cs` files scanned | 2,210 | `00-inventory.md` |
-|, in-scope | 2,132 | |
-|, generated/excluded | 78 | logged exception §2.1 |
-| Type declaration rows (incl. partial-class fragments) | 2,676 | `00-inventory.md` |
-| **Distinct type nodes (partials collapsed)** | **2,588** | the master checklist |
-| → mapped to a functional group | 2,588 | `classify.ps1` (0 unmapped) |
-| → individually sectioned (named in a chapter) | 1,494 | `verify.ps1` |
-| → rolled up by project (G25 test classes) | 1,094 | logged exception §2.2 |
-| Distinct `###` sections written across 27 chapters | 1,436 | covering the 1,494 (sibling families share a section, §2.3) |
+| `.cs` files scanned | 2,252 | `00-inventory.md` |
+|, in-scope | 2,164 | |
+|, generated/excluded | 88 | logged exception §2.1 |
+| Type declaration rows (incl. partial-class fragments) | 2,727 | `00-inventory.md` |
+| **Distinct type nodes (partials collapsed)** | **2,637** | the master checklist |
+| → mapped to a functional group | 2,637 | `classify.ps1` (0 unmapped) |
+| → individually sectioned (named in a chapter) | 1,517 | `verify.ps1` |
+| → rolled up by project (G25 test classes) | 1,120 | logged exception §2.2 |
+| Distinct `###` sections written across 27 chapters | 1,456 | covering the 1,517 (sibling families share a section, §2.3) |
 | Chapter overviews written | 27 | one per group |
 
-**Cross-check result:** `verify.ps1` confirms **0** of the 1,494 individually-sectioned types are
+**Cross-check result:** `verify.ps1` confirms **0** of the 1,517 individually-sectioned types are
 missing from their group chapter, every one appears as a `###` heading or in a sibling-family
-`File:Line` table. 2,588 = 1,494 individually-sectioned + 1,094 rolled-up. Nothing dropped, nothing
+`File:Line` table. 2,637 = 1,517 individually-sectioned + 1,120 rolled-up. Nothing dropped, nothing
 double-counted (each type maps to exactly one group).
 
 > **Regeneration note (re-verified against current source, polyglot-persistence update).** This audit
@@ -461,11 +461,81 @@ double-counted (each type maps to exactly one group).
 >   operators are the family's largest set (the DateTime/Decimal/Int/Long strategies have ten each),
 >   plus three minor citation-precision slips in the testing overview.
 
+> **Regeneration note (re-verified against current source, v1.128.0 full drift sweep).** Regenerated
+> 2026-07-25 at **framework v1.128.0** (MMCA.Common `3dff29b`, clean, prior-documented `c911480`;
+> MMCA.ADC `ec7a0c4a`, clean, prior-documented `160f59f5`; `FACTS.md` remains the source of truth for
+> the version / package / ADR figures). Net change since the v1.123.0 pass: **+49** distinct nodes
+> (2,588 -> **2,637**; declaration rows 2,676 -> 2,727; files scanned 2,210 -> 2,252, generated
+> exclusions 78 -> 88), individually-sectioned 1,494 -> **1,517**, rolled-up 1,094 -> **1,120**,
+> `###` sections 1,436 -> **1,456** across the (unchanged) **27** chapters (`verify.ps1`: 0 missing;
+> rubric 34/34). The change is **+23 production types added, 0 removed, 0 regrouped, 0 moved**, plus a
+> **+26 test-only rollup**. No new functional group was needed (`classify.ps1`: **0 unmapped**).
+> - **G03 +2 (27 -> 29):** `DynamicQueryConfig`
+>   (`MMCA.Common.Application/Services/Filtering/DynamicQueryConfig.cs:18`) and `PagingMath`
+>   (`MMCA.Common.Application/Services/Query/PagingMath.cs:20`), the extracted page-size clamp shared
+>   by the query pipeline and the controller base.
+> - **G07 +5 (85 -> 90):** the `ExecuteUpdateAsync` set-builder pair `IUpdatePropertySetter<TEntity>`
+>   (`MMCA.Common.Application/Interfaces/Infrastructure/IUpdatePropertySetter.cs:13`) and
+>   `UpdatePropertySetterBuilder<TEntity>`
+>   (`MMCA.Common.Infrastructure/Persistence/Repositories/UpdatePropertySetterBuilder.cs:14`);
+>   `PeriodicBackgroundService` (`MMCA.Common.Infrastructure/Services/PeriodicBackgroundService.cs:20`);
+>   and two nested types now surfaced by the extractor, `DetectChangesScope`
+>   (`MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:170`) and
+>   `AggregateCapture`
+>   (`MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:303`).
+> - **G08 +3 (56 -> 59):** `AllowMissingOwnerAttribute`
+>   (`MMCA.Common.API/Authorization/AllowMissingOwnerAttribute.cs:21`) and the striped async lock
+>   `KeyedSemaphoreStripe` + its nested `Releaser`
+>   (`MMCA.Common.Shared/Concurrency/KeyedSemaphoreStripe.cs:22` and `:78`).
+> - **G09 +2 (4 -> 6):** `CacheKeyPrefixOptions` and `CacheKeyNamespace`
+>   (`MMCA.Common.Infrastructure/Caching/CacheKeyPrefix.cs:28` and `:41`), doubling the caching chapter.
+> - **G12 +1 (56 -> 57):** `ConcurrencyTokenRequest` (`MMCA.Common.Shared/DTOs/ConcurrencyTokenRequest.cs:12`),
+>   the shared row-version DTO the v1.125.0 sweep swapped every lifecycle-transition record onto
+>   ([ADR-035](https://ivanball.github.io/docs/adr/035-entity-lifecycle-toggles.html)).
+> - **G17 +1 (85 -> 86)** and **G22 +1 (72 -> 73):** the per-module transition requests built on that
+>   DTO, `EventTransitionRequest` (`MMCA.ADC.Conference.Shared/Events/EventTransitionRequest.cs:14`) and
+>   `LifecycleTransitionRequest` (`MMCA.ADC.Engagement.Shared/LifecycleTransitionRequest.cs:15`).
+> - **G18 +5 (211 -> 216):** the AI session-scoring queue `ISessionScoringQueue` /
+>   `SessionScoringEnqueueResult` (`.../DecisionSupport/ScoreEventSessions/ISessionScoringQueue.cs:31`
+>   and `:4`) + `SessionScoringQueue` (`.../ScoreEventSessions/SessionScoringQueue.cs:17`), and the
+>   server-side speaker filter `GetSessionsBySpeakerFilterQuery` / `GetSessionsBySpeakerFilterHandler`
+>   (`.../GetSessionsBySpeakerFilter/GetSessionsBySpeakerFilterQuery.cs:11`, `...Handler.cs:21`) that
+>   replaced the client-side virtual filter.
+> - **G19 +1 (27 -> 28):** `SessionScoringProcessor`
+>   (`MMCA.ADC.Conference.Infrastructure/Services/SessionScoringProcessor.cs:31`), the background
+>   drain for that queue.
+> - **Chapter 23 / G26 +2 (92 -> 94):** the atomic counter handlers `LivePollVoteChangedHandler`
+>   (`MMCA.ADC.Engagement.Application/LivePolls/DomainEventHandlers/LivePollVoteChangedHandler.cs:31`)
+>   and `SessionQuestionUpvoteChangedHandler`
+>   (`MMCA.ADC.Engagement.Application/SessionQuestions/DomainEventHandlers/SessionQuestionUpvoteChangedHandler.cs:32`).
+> - **G25/Testing +26 net (1,244 -> 1,270, all rolled up; individually-sectioned reusable infrastructure
+>   stays at 150):** new suites across `MMCA.Common.Application.Tests`, `MMCA.Common.Infrastructure.Tests`,
+>   `MMCA.Common.Shared.Tests`, `MMCA.Common.Benchmarks`, `MMCA.ADC.Conference.Application.Tests` and
+>   `MMCA.ADC.Engagement.Application.Tests`, plus a brand-new project
+>   **`MMCA.Common.Infrastructure.Redis.Tests`** (1 type, `DistributedCacheServiceRedisTests`) which
+>   gets its own row in the per-project rollup table.
+> - Cycles **16 -> 18**: two new test-only SCCs, `MidSaveContextCreatingDbContext` /
+>   `ReentrantSaveInterceptor` and `FailingSaveInterceptor` / `OutboxRoutingTestDbContext`, both wholly
+>   inside the testing group (all four assigned `G25`), and the
+>   `CosmosConfigurationPortabilityTests` SCC's level shifted 9 -> 10. Edge resolution: **9,038**
+>   namespace-visible (~96%), **335** globally-unique fallback, **28** dropped ambiguous.
+> - **Post-author verification record:** re-authoring under a repacked unit layout dropped three
+>   pre-existing sections whose types had shifted across unit boundaries into a part that was not in
+>   the re-author set (`GetSessionBookmarkCountQuery`, `GetSessionBookmarkCountHandler`,
+>   `SessionEventIdRules<T>`, all group-18). `verify.ps1` caught it (3 missing); the sections were
+>   restored into their new home unit and re-verified line by line against current source, which
+>   surfaced one genuine drift corrected in the restored text: the bookmark-count endpoint's output-cache
+>   policy is now `BookmarkCountsCache`, not `ConferencePublicCache`
+>   (`MMCA.ADC.Conference.API/Controllers/SpeakersController.cs:264`). A second spot-check corrected a
+>   loose anchor in the group-08 overview: 75-octet folding and the CRLF writes both live in
+>   `IcsCalendarBuilder.AppendLine` (`MMCA.Common.Shared/Calendars/IcsCalendarBuilder.cs:83-104`), not at
+>   `:22`. Final run: **0 missing, rubric 34/34**.
+
 ---
 
 ## 2. Exceptions log (every deliberate omission, with reason)
 
-### 2.1 Generated / scaffolded code, not sectioned (78 files)
+### 2.1 Generated / scaffolded code, not sectioned (88 files)
 EF Core migrations (`/Migrations/`, `.Migrations.SqlServer`), `ModelSnapshot`, `*.Designer.cs`,
 `*.g.cs`, `GlobalUsings.g.cs`, and `AssemblyInfo.cs` are excluded by rule (`Tools/invtool` `IsGenerated`).
 The **mechanisms** that produce them are taught instead: the `DbContext`, the migration workflow, and
@@ -473,20 +543,20 @@ the `.proto`/gRPC contracts (see [group-07](group-07-persistence-ef-core.md),
 [group-13](group-13-grpc-contracts.md), and [devops-testing](devops-testing.md)). The full file list is
 in [`00-inventory.md`](00-inventory.md#generated--excluded-artifacts-no-type-sections-written).
 
-### 2.2 Per-`[Fact]` test classes, rolled up by project (1,094 types)
+### 2.2 Per-`[Fact]` test classes, rolled up by project (1,120 types)
 Per the guide's TESTS note, individual test classes are **not** given per-type sections. The
 [Testing chapter (group-27)](group-27-testing-infrastructure.md) instead:
-- sections the **reusable** test infrastructure in full (the **138** types in `MMCA.Common.Testing`,
+- sections the **reusable** test infrastructure in full (the **150** types in `MMCA.Common.Testing`,
   `.Testing.E2E`, `.Testing.UI`, the shared **`.Testing.Architecture`** rule library + bases, now
   including the six convention/fitness bases added since v1.93.0, the web-vitals collector, the
   localization resx-parity base, the slice-cohesion base, the markup-snapshot helper, the new
   contract/route-authorization bases (`RouteAuthorizationTestsBase`, the OpenAPI/ProblemDetails/
   ServiceInfo-versioning contract bases) and the shared `HttpTestDoubles` UI harness added since
   v1.111.0, and the per-repo architecture-fitness test classes plus the `Gallery` harness), and
-- rolls the remaining **1,094** per-suite test classes (including the `MMCA.Common.Benchmarks`
+- rolls the remaining **1,120** per-suite test classes (including the `MMCA.Common.Benchmarks`
   perf-smoke project) into a **per-project table** (purpose + style:
   unit / integration / fitness / E2E / component / performance-smoke).
-Every one of the 1,094 remains individually listed with `file:line` in
+Every one of the 1,120 remains individually listed with `file:line` in
 [`00-inventory.md`](00-inventory.md). This is the only category of first-party type not given its own
 prose section.
 
@@ -494,24 +564,24 @@ prose section.
 Near-identical families (per-entity `Add*/Remove*/Update*` commands, `*DTOMapper`, `*CreateRequest`,
 `*Validator`, per-type filter strategies, etc.) are taught in one `### A, B, C` section that explains
 the shared shape once. **Every** grouped type is still named and cited individually via the section's
-`File:Line` table, so citation coverage is complete (this is what `verify.ps1` checks). The 1,494
-individually-sectioned types are covered by 1,436 `###` sections; the 58-type difference is family grouping.
+`File:Line` table, so citation coverage is complete (this is what `verify.ps1` checks). The 1,517
+individually-sectioned types are covered by 1,456 `###` sections; the 61-type difference is family grouping.
 
 ---
 
 ## 3. Grouping & ordering verification
 
-- **Every type in exactly one group.** `classify.ps1` assigns all 2,588 nodes via name-level overrides
+- **Every type in exactly one group.** `classify.ps1` assigns all 2,637 nodes via name-level overrides
   (for the grab-bag `MMCA.Common.*Interfaces*/Services` namespaces) + ordered namespace-prefix rules;
-  it reports **0 unmapped** and the per-group counts sum to 2,588. See
+  it reports **0 unmapped** and the per-group counts sum to 2,637. See
   [`00-group-taxonomy.md`](00-group-taxonomy.md).
 - **Within-group ascending Level.** Each chapter's sections were authored from a pre-sorted, Level-
   ascending unit table, so no section precedes a same-group type it depends on (ties broken by name).
-- **Cycles kept whole.** All **16** dependency cycles (SCCs) sit inside a single group, never split
-  (re-verified for the three cycles new in this pass: the `NotificationHubService`/`ChannelSubscription`
-  pair is wholly in [group-15](group-15-common-ui-framework.md), and the two new test SCCs around
-  `CosmosConfigurationPortabilityTests`/`DatabaseInitializationExtensionsTests`/`FixedAssemblyProvider`/
-  `MultiSourceSqliteIntegrationTests` are wholly in [group-26](group-27-testing-infrastructure.md)):
+- **Cycles kept whole.** All **18** dependency cycles (SCCs) sit inside a single group, never split
+  (re-verified for the two cycles new in the v1.128.0 pass, both test-only and both wholly in
+  [group-27](group-27-testing-infrastructure.md): `MidSaveContextCreatingDbContext` /
+  `ReentrantSaveInterceptor` and `FailingSaveInterceptor` / `OutboxRoutingTestDbContext`, all four
+  assigned `G25` in `out/00-assigned.csv`):
   the `ApplicationDbContext ↔ AuditSaveChangesInterceptor ↔ DomainEventSaveChangesInterceptor ↔
   DataSourceModelCacheKeyFactory ↔ OutboxFinalizer ↔ DeferredDispatch` cycle (now 6 members, the
   `DeferredDispatch` record added this pass so the domain-event interceptor can defer a dispatch across

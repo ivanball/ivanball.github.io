@@ -131,10 +131,10 @@
           is still linked (only one possible target). Names that are neither visible nor unique are
           dropped as unresolvable without full semantic binding.</p>
           <ul>
-          <li>Edges resolved by namespace visibility: <strong>8871</strong> (~96%)</li>
-          <li>Edges resolved by globally-unique name (fallback): <strong>331</strong></li>
-          <li>References dropped as ambiguous (matched &gt;1 type, none visible): <strong>27</strong></li>
-          <li>Sensitivity: <strong>362 / 2588</strong> type levels would change if the globally-unique fallback
+          <li>Edges resolved by namespace visibility: <strong>9038</strong> (~96%)</li>
+          <li>Edges resolved by globally-unique name (fallback): <strong>335</strong></li>
+          <li>References dropped as ambiguous (matched &gt;1 type, none visible): <strong>28</strong></li>
+          <li>Sensitivity: <strong>398 / 2637</strong> type levels would change if the globally-unique fallback
           were excluded; the fallback is retained because a globally-unique first-party name is
           unambiguous, so excluding it would under-count real dependencies.</li>
           </ul>
@@ -152,27 +152,27 @@
           </thead>
           <tbody><tr>
           <td>0</td>
-          <td>517</td>
+          <td>527</td>
           </tr>
           <tr>
           <td>1</td>
-          <td>313</td>
+          <td>318</td>
           </tr>
           <tr>
           <td>2</td>
-          <td>204</td>
+          <td>208</td>
           </tr>
           <tr>
           <td>3</td>
-          <td>207</td>
+          <td>211</td>
           </tr>
           <tr>
           <td>4</td>
-          <td>263</td>
+          <td>261</td>
           </tr>
           <tr>
           <td>5</td>
-          <td>172</td>
+          <td>166</td>
           </tr>
           <tr>
           <td>6</td>
@@ -184,19 +184,19 @@
           </tr>
           <tr>
           <td>8</td>
-          <td>249</td>
+          <td>255</td>
           </tr>
           <tr>
           <td>9</td>
-          <td>108</td>
+          <td>124</td>
           </tr>
           <tr>
           <td>10</td>
-          <td>132</td>
+          <td>141</td>
           </tr>
           <tr>
           <td>11</td>
-          <td>16</td>
+          <td>19</td>
           </tr>
           <tr>
           <td>12</td>
@@ -223,7 +223,7 @@
           <td>1</td>
           </tr>
           </tbody></table></div>
-          <h2 id="cycles-scc-size--1-16">Cycles (SCC size &gt; 1): 16</h2>
+          <h2 id="cycles-scc-size--1-18">Cycles (SCC size &gt; 1): 18</h2>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -303,14 +303,24 @@
           <td>Tests:SpecificationFitnessTests, Tests:SpecTestMap</td>
           </tr>
           <tr>
-          <td>9</td>
-          <td>3</td>
-          <td>Tests:CosmosConfigurationPortabilityTests, Tests:FixedAssemblyProvider, Tests:MultiSourceSqliteIntegrationTests</td>
+          <td>7</td>
+          <td>2</td>
+          <td>Tests:MidSaveContextCreatingDbContext, Tests:ReentrantSaveInterceptor</td>
+          </tr>
+          <tr>
+          <td>7</td>
+          <td>2</td>
+          <td>Tests:FailingSaveInterceptor, Tests:OutboxRoutingTestDbContext</td>
           </tr>
           <tr>
           <td>9</td>
           <td>2</td>
           <td>Tests:DatabaseInitializationExtensionsTests, Tests:FixedAssemblyProvider</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td>3</td>
+          <td>Tests:CosmosConfigurationPortabilityTests, Tests:FixedAssemblyProvider, Tests:MultiSourceSqliteIntegrationTests</td>
           </tr>
           </tbody></table></div>
           <h2 id="manifest-by-level-then-assembly">Manifest (by level, then assembly)</h2>
@@ -522,6 +532,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>GetSessionsBySpeakerFilterQuery</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>GetSessionSelectionDashboardQuery</code></td>
           <td>MMCA.ADC.Conference.Application</td>
           <td>0</td>
@@ -607,6 +624,13 @@
           <tr>
           <td>0</td>
           <td><code>SessionizeSyncResult</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>SessionScoringEnqueueResult</code></td>
           <td>MMCA.ADC.Conference.Application</td>
           <td>0</td>
           <td>(none)</td>
@@ -1852,6 +1876,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>AllowMissingOwnerAttribute</code></td>
+          <td>MMCA.Common.API</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>AppAssociationOptions</code></td>
           <td>MMCA.Common.API</td>
           <td>0</td>
@@ -2104,6 +2135,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>DynamicQueryConfig</code></td>
+          <td>MMCA.Common.Application</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>EmailRules&lt;T&gt;</code></td>
           <td>MMCA.Common.Application</td>
           <td>0</td>
@@ -2189,13 +2227,6 @@
           <tr>
           <td>0</td>
           <td><code>ICreateRequest</code></td>
-          <td>MMCA.Common.Application</td>
-          <td>0</td>
-          <td>(none)</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>ICurrentUserService</code></td>
           <td>MMCA.Common.Application</td>
           <td>0</td>
           <td>(none)</td>
@@ -2321,6 +2352,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>IUpdatePropertySetter&lt;TEntity&gt;</code></td>
+          <td>MMCA.Common.Application</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>MarkAllNotificationsReadCommand</code></td>
           <td>MMCA.Common.Application</td>
           <td>0</td>
@@ -2363,6 +2401,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>PagingMath</code></td>
+          <td>MMCA.Common.Application</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>ParameterReplacer</code></td>
           <td>MMCA.Common.Application</td>
           <td>0</td>
@@ -2392,13 +2437,6 @@
           <tr>
           <td>0</td>
           <td><code>PropertyAccessor</code></td>
-          <td>MMCA.Common.Application</td>
-          <td>0</td>
-          <td>(none)</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>QueryCacheKeyLocks</code></td>
           <td>MMCA.Common.Application</td>
           <td>0</td>
           <td>(none)</td>
@@ -2608,6 +2646,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>Widget</code></td>
+          <td>MMCA.Common.Application.Tests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>CspPolicy</code></td>
           <td>MMCA.Common.Aspire</td>
           <td>0</td>
@@ -2659,6 +2704,13 @@
           <td>0</td>
           <td><code>StubWebHostEnvironment</code></td>
           <td>MMCA.Common.Aspire.Tests</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>ProductRow</code></td>
+          <td>MMCA.Common.Benchmarks</td>
           <td>0</td>
           <td>(none)</td>
           </tr>
@@ -2839,6 +2891,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>CacheKeyPrefixOptions</code></td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>CacheOptions</code></td>
           <td>MMCA.Common.Infrastructure</td>
           <td>0</td>
@@ -2868,6 +2927,13 @@
           <tr>
           <td>0</td>
           <td><code>DataSourceEntrySettings</code></td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>DetectChangesScope</code></td>
           <td>MMCA.Common.Infrastructure</td>
           <td>0</td>
           <td>(none)</td>
@@ -3022,6 +3088,13 @@
           <tr>
           <td>0</td>
           <td><code>OutboxCycleResult</code></td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>PeriodicBackgroundService</code></td>
           <td>MMCA.Common.Infrastructure</td>
           <td>0</td>
           <td>(none)</td>
@@ -3225,6 +3298,13 @@
           <tr>
           <td>0</td>
           <td><code>RefreshTokenRequest</code></td>
+          <td>MMCA.Common.Shared</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>Releaser</code></td>
           <td>MMCA.Common.Shared</td>
           <td>0</td>
           <td>(none)</td>
@@ -3980,6 +4060,13 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>ISessionScoringQueue</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>1</td>
+          <td>SessionScoringEnqueueResult</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>QuestionUpdateRequest</code></td>
           <td>MMCA.ADC.Conference.Application</td>
           <td>1</td>
@@ -4096,6 +4183,13 @@
           <td>MMCA.ADC.Conference.Shared</td>
           <td>1</td>
           <td>IBaseDTO&lt;TIdentifierType&gt;</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>EventTransitionRequest</code></td>
+          <td>MMCA.ADC.Conference.Shared</td>
+          <td>1</td>
+          <td>IConcurrencyAware</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4316,10 +4410,17 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>LifecycleTransitionRequest</code></td>
+          <td>MMCA.ADC.Engagement.Shared</td>
+          <td>1</td>
+          <td>IConcurrencyAware</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>LivePollDTO</code></td>
           <td>MMCA.ADC.Engagement.Shared</td>
-          <td>3</td>
-          <td>IBaseDTO&lt;TIdentifierType&gt;, LivePollOptionDTO, LivePollStatus</td>
+          <td>4</td>
+          <td>IBaseDTO&lt;TIdentifierType&gt;, IConcurrencyAware, LivePollOptionDTO, LivePollStatus</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4332,8 +4433,8 @@
           <td>1</td>
           <td><code>SessionQuestionDTO</code></td>
           <td>MMCA.ADC.Engagement.Shared</td>
-          <td>2</td>
-          <td>IBaseDTO&lt;TIdentifierType&gt;, QuestionStatus</td>
+          <td>3</td>
+          <td>IBaseDTO&lt;TIdentifierType&gt;, IConcurrencyAware, QuestionStatus</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4568,13 +4669,6 @@
           </tr>
           <tr>
           <td>1</td>
-          <td><code>IdempotencyFilter</code></td>
-          <td>MMCA.Common.API</td>
-          <td>3</td>
-          <td>ICacheService, IdempotencyRecord, IdempotencySettings</td>
-          </tr>
-          <tr>
-          <td>1</td>
           <td><code>JwksEndpointExtensions</code></td>
           <td>MMCA.Common.API</td>
           <td>1</td>
@@ -4586,13 +4680,6 @@
           <td>MMCA.Common.API</td>
           <td>1</td>
           <td>PublicEndpointOutputCachePolicy</td>
-          </tr>
-          <tr>
-          <td>1</td>
-          <td><code>OwnershipHelper</code></td>
-          <td>MMCA.Common.API</td>
-          <td>1</td>
-          <td>ICurrentUserService</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4614,13 +4701,6 @@
           <td>MMCA.Common.API</td>
           <td>2</td>
           <td>ServiceInfoResponse, ServiceInfoV2Response</td>
-          </tr>
-          <tr>
-          <td>1</td>
-          <td><code>SoftDeletedUserMiddleware</code></td>
-          <td>MMCA.Common.API</td>
-          <td>3</td>
-          <td>ICacheService, ICurrentUserService, ISoftDeletedUserValidator</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4717,8 +4797,8 @@
           <td>1</td>
           <td><code>BoolFilterStrategy</code></td>
           <td>MMCA.Common.Application</td>
-          <td>1</td>
-          <td>IFilterStrategy</td>
+          <td>3</td>
+          <td>DynamicQueryConfig, FilterValueParser, IFilterStrategy</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4738,22 +4818,22 @@
           <td>1</td>
           <td><code>DateTimeFilterStrategy</code></td>
           <td>MMCA.Common.Application</td>
-          <td>2</td>
-          <td>FilterValueParser, IFilterStrategy</td>
+          <td>3</td>
+          <td>DynamicQueryConfig, FilterValueParser, IFilterStrategy</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>DecimalFilterStrategy</code></td>
           <td>MMCA.Common.Application</td>
-          <td>2</td>
-          <td>FilterValueParser, IFilterStrategy</td>
+          <td>3</td>
+          <td>DynamicQueryConfig, FilterValueParser, IFilterStrategy</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>GuidFilterStrategy</code></td>
           <td>MMCA.Common.Application</td>
-          <td>2</td>
-          <td>FilterValueParser, IFilterStrategy</td>
+          <td>3</td>
+          <td>DynamicQueryConfig, FilterValueParser, IFilterStrategy</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4773,8 +4853,8 @@
           <td>1</td>
           <td><code>IntFilterStrategy</code></td>
           <td>MMCA.Common.Application</td>
-          <td>2</td>
-          <td>FilterValueParser, IFilterStrategy</td>
+          <td>3</td>
+          <td>DynamicQueryConfig, FilterValueParser, IFilterStrategy</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4787,8 +4867,8 @@
           <td>1</td>
           <td><code>LongFilterStrategy</code></td>
           <td>MMCA.Common.Application</td>
-          <td>2</td>
-          <td>FilterValueParser, IFilterStrategy</td>
+          <td>3</td>
+          <td>DynamicQueryConfig, FilterValueParser, IFilterStrategy</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4843,8 +4923,8 @@
           <td>1</td>
           <td><code>StringFilterStrategy</code></td>
           <td>MMCA.Common.Application</td>
-          <td>2</td>
-          <td>FilterValueParser, IFilterStrategy</td>
+          <td>3</td>
+          <td>DynamicQueryConfig, FilterValueParser, IFilterStrategy</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4943,6 +5023,13 @@
           <td>MMCA.Common.Application.Tests</td>
           <td>1</td>
           <td>ImageContentSniffer</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>PagingMathTests</code></td>
+          <td>MMCA.Common.Application.Tests</td>
+          <td>1</td>
+          <td>PagingMath</td>
           </tr>
           <tr>
           <td>1</td>
@@ -5163,6 +5250,13 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>CacheKeyNamespace</code></td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td>1</td>
+          <td>CacheKeyPrefixOptions</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>ConnectionStringSettings</code></td>
           <td>MMCA.Common.Infrastructure</td>
           <td>1</td>
@@ -5195,13 +5289,6 @@
           <td>MMCA.Common.Infrastructure</td>
           <td>2</td>
           <td>EntityConfigurationOptions, IEntityConfigurationAssemblyProvider</td>
-          </tr>
-          <tr>
-          <td>1</td>
-          <td><code>DistributedCacheService</code></td>
-          <td>MMCA.Common.Infrastructure</td>
-          <td>2</td>
-          <td>CacheOptions, ICacheService</td>
           </tr>
           <tr>
           <td>1</td>
@@ -5324,6 +5411,13 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>UpdatePropertySetterBuilder&lt;TEntity&gt;</code></td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td>1</td>
+          <td>IUpdatePropertySetter&lt;TEntity&gt;</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>UseDataSourceAttribute</code></td>
           <td>MMCA.Common.Infrastructure</td>
           <td>1</td>
@@ -5342,6 +5436,13 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>1</td>
           <td>CosmosIntIdValueGenerator</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>CountingSweep</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>2</td>
+          <td>FakeTimeProvider, PeriodicBackgroundService</td>
           </tr>
           <tr>
           <td>1</td>
@@ -5429,6 +5530,13 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>ConcurrencyTokenRequest</code></td>
+          <td>MMCA.Common.Shared</td>
+          <td>1</td>
+          <td>IConcurrencyAware</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>DomainInvariantViolationException</code></td>
           <td>MMCA.Common.Shared</td>
           <td>1</td>
@@ -5447,6 +5555,13 @@
           <td>MMCA.Common.Shared</td>
           <td>1</td>
           <td>IcsEvent</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>KeyedSemaphoreStripe</code></td>
+          <td>MMCA.Common.Shared</td>
+          <td>1</td>
+          <td>Releaser</td>
           </tr>
           <tr>
           <td>1</td>
@@ -6164,6 +6279,13 @@
           </tr>
           <tr>
           <td>2</td>
+          <td><code>SessionScoringQueue</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>2</td>
+          <td>ISessionScoringQueue, SessionScoringEnqueueResult</td>
+          </tr>
+          <tr>
+          <td>2</td>
           <td><code>GrpcErrorTrailerParser</code></td>
           <td>MMCA.ADC.Conference.Contracts</td>
           <td>2</td>
@@ -6416,6 +6538,13 @@
           </tr>
           <tr>
           <td>2</td>
+          <td><code>RecordingQueue</code></td>
+          <td>MMCA.ADC.Engagement.Application.Tests</td>
+          <td>2</td>
+          <td>ILiveChannelPublishQueue, LiveChannelPublishWorkItem</td>
+          </tr>
+          <tr>
+          <td>2</td>
           <td><code>LivePollChanged</code></td>
           <td>MMCA.ADC.Engagement.Domain</td>
           <td>3</td>
@@ -6647,10 +6776,10 @@
           </tr>
           <tr>
           <td>2</td>
-          <td><code>IdempotentAttribute</code></td>
+          <td><code>IdempotencyFilter</code></td>
           <td>MMCA.Common.API</td>
-          <td>1</td>
-          <td>IdempotencyFilter</td>
+          <td>4</td>
+          <td>ICacheService, IdempotencyRecord, IdempotencySettings, KeyedSemaphoreStripe</td>
           </tr>
           <tr>
           <td>2</td>
@@ -6679,13 +6808,6 @@
           <td>MMCA.Common.API</td>
           <td>1</td>
           <td>JwksEndpointExtensions</td>
-          </tr>
-          <tr>
-          <td>2</td>
-          <td><code>OwnerOrAdminFilter</code></td>
-          <td>MMCA.Common.API</td>
-          <td>3</td>
-          <td>ICurrentUserService, OwnerOrAdminFilterOptions, OwnershipHelper</td>
           </tr>
           <tr>
           <td>2</td>
@@ -6738,13 +6860,6 @@
           </tr>
           <tr>
           <td>2</td>
-          <td><code>SoftDeletedUserMiddlewareTests</code></td>
-          <td>MMCA.Common.API.Tests</td>
-          <td>4</td>
-          <td>ICacheService, ICurrentUserService, ISoftDeletedUserValidator, SoftDeletedUserMiddleware</td>
-          </tr>
-          <tr>
-          <td>2</td>
           <td><code>StubRefresher</code></td>
           <td>MMCA.Common.API.Tests</td>
           <td>2</td>
@@ -6791,6 +6906,13 @@
           <td>MMCA.Common.Application</td>
           <td>1</td>
           <td>NavigationPropertyInfo</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>QueryCacheKeyLocks</code></td>
+          <td>MMCA.Common.Application</td>
+          <td>1</td>
+          <td>KeyedSemaphoreStripe</td>
           </tr>
           <tr>
           <td>2</td>
@@ -6997,10 +7119,10 @@
           </tr>
           <tr>
           <td>2</td>
-          <td><code>CapturedState</code></td>
+          <td><code>AggregateCapture</code></td>
           <td>MMCA.Common.Infrastructure</td>
-          <td>3</td>
-          <td>IAggregateRoot, IDomainEvent, OutboxMessage</td>
+          <td>2</td>
+          <td>IAggregateRoot, IDomainEvent</td>
           </tr>
           <tr>
           <td>2</td>
@@ -7008,6 +7130,13 @@
           <td>MMCA.Common.Infrastructure</td>
           <td>2</td>
           <td>ConnectionStringSettings, DataSourceEntrySettings</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>DistributedCacheService</code></td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td>3</td>
+          <td>CacheKeyNamespace, CacheOptions, ICacheService</td>
           </tr>
           <tr>
           <td>2</td>
@@ -7116,10 +7245,24 @@
           </tr>
           <tr>
           <td>2</td>
+          <td><code>OutboxSignalTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>OutboxSignal</td>
+          </tr>
+          <tr>
+          <td>2</td>
           <td><code>PasswordHasherTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>1</td>
           <td>PasswordHasher</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>PeriodicBackgroundServiceTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>2</td>
+          <td>CountingSweep, FakeTimeProvider</td>
           </tr>
           <tr>
           <td>2</td>
@@ -7193,13 +7336,6 @@
           </tr>
           <tr>
           <td>2</td>
-          <td><code>WarningCountingLogger</code></td>
-          <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>1</td>
-          <td>DistributedCacheService</td>
-          </tr>
-          <tr>
-          <td>2</td>
           <td><code>PermissionRegistryBuilder</code></td>
           <td>MMCA.Common.Shared</td>
           <td>1</td>
@@ -7253,6 +7389,13 @@
           <td>MMCA.Common.Shared.Tests</td>
           <td>2</td>
           <td>IcsCalendarBuilder, IcsEvent</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>KeyedSemaphoreStripeTests</code></td>
+          <td>MMCA.Common.Shared.Tests</td>
+          <td>1</td>
+          <td>KeyedSemaphoreStripe</td>
           </tr>
           <tr>
           <td>2</td>
@@ -7599,6 +7742,13 @@
           </tr>
           <tr>
           <td>3</td>
+          <td><code>SessionScoringQueueTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>2</td>
+          <td>SessionScoringEnqueueResult, SessionScoringQueue</td>
+          </tr>
+          <tr>
+          <td>3</td>
           <td><code>CategoryChanged</code></td>
           <td>MMCA.ADC.Conference.Domain</td>
           <td>2</td>
@@ -7638,6 +7788,13 @@
           <td>MMCA.ADC.Conference.Infrastructure</td>
           <td>8</td>
           <td>AiScoreResponse, AnthropicMessage, AnthropicRequest, AnthropicResponse, IAiScoringService, SessionScoringInput, SessionScoringResult, SpeakerInfo</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>SessionScoringProcessor</code></td>
+          <td>MMCA.ADC.Conference.Infrastructure</td>
+          <td>5</td>
+          <td>ICommandHandler&lt;in TCommand, TResult&gt;, Result, ScoreEventSessionsCommand, ScoreEventSessionsResultDTO, SessionScoringQueue</td>
           </tr>
           <tr>
           <td>3</td>
@@ -7881,8 +8038,8 @@
           <td>3</td>
           <td><code>LivePollUIService</code></td>
           <td>MMCA.ADC.Engagement.UI</td>
-          <td>8</td>
-          <td>AuthenticatedServiceBase, CastVoteRequest, CreateLivePollRequest, ILivePollUIService, ITokenStorageService, LivePollDTO, LivePollResultsDTO, ServiceExceptionHelper</td>
+          <td>9</td>
+          <td>AuthenticatedServiceBase, CastVoteRequest, CreateLivePollRequest, ILivePollUIService, ITokenStorageService, LifecycleTransitionRequest, LivePollDTO, LivePollResultsDTO, ServiceExceptionHelper</td>
           </tr>
           <tr>
           <td>3</td>
@@ -7923,8 +8080,8 @@
           <td>3</td>
           <td><code>SessionQuestionUIService</code></td>
           <td>MMCA.ADC.Engagement.UI</td>
-          <td>6</td>
-          <td>AuthenticatedServiceBase, ISessionQuestionUIService, ITokenStorageService, ServiceExceptionHelper, SessionQuestionDTO, SubmitQuestionRequest</td>
+          <td>7</td>
+          <td>AuthenticatedServiceBase, ISessionQuestionUIService, ITokenStorageService, LifecycleTransitionRequest, ServiceExceptionHelper, SessionQuestionDTO, SubmitQuestionRequest</td>
           </tr>
           <tr>
           <td>3</td>
@@ -8054,6 +8211,13 @@
           </tr>
           <tr>
           <td>3</td>
+          <td><code>IdempotentAttribute</code></td>
+          <td>MMCA.Common.API</td>
+          <td>1</td>
+          <td>IdempotencyFilter</td>
+          </tr>
+          <tr>
+          <td>3</td>
           <td><code>SignalRExtensions</code></td>
           <td>MMCA.Common.API</td>
           <td>2</td>
@@ -8086,13 +8250,6 @@
           <td>MMCA.Common.API.Tests</td>
           <td>2</td>
           <td>JwksEndpointExtensions, OidcDiscoveryEndpointExtensions</td>
-          </tr>
-          <tr>
-          <td>3</td>
-          <td><code>OwnerOrAdminFilterTests</code></td>
-          <td>MMCA.Common.API.Tests</td>
-          <td>3</td>
-          <td>ICurrentUserService, OwnerOrAdminFilter, OwnerOrAdminFilterOptions</td>
           </tr>
           <tr>
           <td>3</td>
@@ -8481,6 +8638,13 @@
           </tr>
           <tr>
           <td>3</td>
+          <td><code>CapturedState</code></td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td>3</td>
+          <td>AggregateCapture, IDomainEvent, OutboxMessage</td>
+          </tr>
+          <tr>
+          <td>3</td>
           <td><code>CrossDataSourceDegradeConvention</code></td>
           <td>MMCA.Common.Infrastructure</td>
           <td>3</td>
@@ -8530,17 +8694,17 @@
           </tr>
           <tr>
           <td>3</td>
+          <td><code>DistributedCacheServiceRedisTests</code></td>
+          <td>MMCA.Common.Infrastructure.Redis.Tests</td>
+          <td>1</td>
+          <td>DistributedCacheService</td>
+          </tr>
+          <tr>
+          <td>3</td>
           <td><code>DbSeederTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>1</td>
           <td>TestableDbSeeder</td>
-          </tr>
-          <tr>
-          <td>3</td>
-          <td><code>DistributedCacheServiceTests</code></td>
-          <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>2</td>
-          <td>DistributedCacheService, WarningCountingLogger</td>
           </tr>
           <tr>
           <td>3</td>
@@ -8618,6 +8782,13 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>3</td>
           <td>JwtSettings, JwtSigningAlgorithm, TokenService</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>WarningCountingLogger</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>DistributedCacheService</td>
           </tr>
           <tr>
           <td>3</td>
@@ -9016,7 +9187,7 @@
           <td><code>SessionSelectionController</code></td>
           <td>MMCA.ADC.Conference.API</td>
           <td>16</td>
-          <td>ApiControllerBase, CategoryDistributionDTO, ConferencePermissions, ContentSimilarityDTO, GetCategoryDistributionQuery, GetContentSimilarityQuery, GetSessionSelectionDashboardQuery, GetSpeakerSessionOverlapQuery, ICommandHandler&lt;in TCommand, TResult&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, Result, Route, ScoreEventSessionsCommand, ScoreEventSessionsResultDTO, SessionSelectionDashboardDTO, SpeakerSessionOverlapDTO</td>
+          <td>ApiControllerBase, CategoryDistributionDTO, ConferencePermissions, ContentSimilarityDTO, Error, GetCategoryDistributionQuery, GetContentSimilarityQuery, GetSessionSelectionDashboardQuery, GetSpeakerSessionOverlapQuery, IQueryHandler&lt;in TQuery, TResult&gt;, ISessionScoringQueue, Result, Route, SessionScoringEnqueueResult, SessionSelectionDashboardDTO, SpeakerSessionOverlapDTO</td>
           </tr>
           <tr>
           <td>4</td>
@@ -9141,8 +9312,8 @@
           <td>4</td>
           <td><code>EventService</code></td>
           <td>MMCA.ADC.Conference.UI</td>
-          <td>5</td>
-          <td>EntityServiceBase&lt;TEntityDTO, TIdentifierType&gt;, EventDTO, IEventUIService, ITokenStorageService, RefreshFromSessionizeResultDTO</td>
+          <td>6</td>
+          <td>EntityServiceBase&lt;TEntityDTO, TIdentifierType&gt;, EventDTO, EventTransitionRequest, IEventUIService, ITokenStorageService, RefreshFromSessionizeResultDTO</td>
           </tr>
           <tr>
           <td>4</td>
@@ -9218,8 +9389,8 @@
           <td>4</td>
           <td><code>SpeakerDashboardService</code></td>
           <td>MMCA.ADC.Conference.UI</td>
-          <td>6</td>
-          <td>AuthenticatedServiceBase, ISpeakerDashboardUIService, ITokenStorageService, PagedCollectionResult&lt;T&gt;, SessionDTO, SessionFeedbackDTO</td>
+          <td>7</td>
+          <td>AuthenticatedServiceBase, ISpeakerDashboardUIService, ITokenStorageService, PagedCollectionResult&lt;T&gt;, ServiceExceptionHelper, SessionDTO, SessionFeedbackDTO</td>
           </tr>
           <tr>
           <td>4</td>
@@ -9426,13 +9597,6 @@
           </tr>
           <tr>
           <td>4</td>
-          <td><code>SessionQuestionsController</code></td>
-          <td>MMCA.ADC.Engagement.API</td>
-          <td>18</td>
-          <td>ApiControllerBase, AuthorizationPolicies, EngagementFeatures, Error, GetModerationQueueQuery, GetSessionQuestionsQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IQueryHandler&lt;in TQuery, TResult&gt;, ModerateQuestionCommand, ModerationAction, Result, RoleNames, Route, SessionQuestionDTO, SubmitQuestionCommand, SubmitQuestionRequest, ToggleUpvoteCommand</td>
-          </tr>
-          <tr>
-          <td>4</td>
           <td><code>LivePollInvariants</code></td>
           <td>MMCA.ADC.Engagement.Domain</td>
           <td>3</td>
@@ -9622,38 +9786,10 @@
           </tr>
           <tr>
           <td>4</td>
-          <td><code>DevicesController</code></td>
-          <td>MMCA.Common.API</td>
-          <td>8</td>
-          <td>ApiControllerBase, DeviceInstallationRequest, Error, ICurrentUserService, IPushDeviceRegistrar, NotificationFeatures, Result, Route</td>
-          </tr>
-          <tr>
-          <td>4</td>
-          <td><code>InboxController</code></td>
-          <td>MMCA.Common.API</td>
-          <td>15</td>
-          <td>ApiControllerBase, AuthorizationPolicies, Error, GetMyNotificationsQuery, GetUnreadNotificationCountQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IQueryHandler&lt;in TQuery, TResult&gt;, MarkAllNotificationsReadCommand, MarkNotificationReadCommand, NotificationFeatures, PagedCollectionResult&lt;T&gt;, Result, Route, UserNotificationDTO</td>
-          </tr>
-          <tr>
-          <td>4</td>
-          <td><code>NotificationsController</code></td>
-          <td>MMCA.Common.API</td>
-          <td>14</td>
-          <td>ApiControllerBase, AuthorizationPolicies, Error, GetNotificationHistoryQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IQueryHandler&lt;in TQuery, TResult&gt;, NotificationFeatures, PagedCollectionResult&lt;T&gt;, PushNotificationDTO, Result, Route, SendPushNotificationCommand, SendPushNotificationRequest</td>
-          </tr>
-          <tr>
-          <td>4</td>
           <td><code>SessionCookieAuthenticationHandler</code></td>
           <td>MMCA.Common.API</td>
           <td>1</td>
           <td>CookieTokenReader</td>
-          </tr>
-          <tr>
-          <td>4</td>
-          <td><code>WebApplicationExtensions</code></td>
-          <td>MMCA.Common.API</td>
-          <td>4</td>
-          <td>CorrelationIdMiddleware, SoftDeletedUserMiddleware, SupportedCultures, WebApplicationBuilderExtensions</td>
           </tr>
           <tr>
           <td>4</td>
@@ -9675,13 +9811,6 @@
           <td>MMCA.Common.API.Tests</td>
           <td>1</td>
           <td>Currency</td>
-          </tr>
-          <tr>
-          <td>4</td>
-          <td><code>DependencyInjectionTests</code></td>
-          <td>MMCA.Common.API.Tests</td>
-          <td>11</td>
-          <td>DbUpdateExceptionHandler, DisabledFeatureHandler, DomainExceptionHandler, GlobalExceptionHandler, IdempotencyFilter, IdempotencySettings, IModule, ModuleLoader, OperationCanceledExceptionHandler, OwnerOrAdminFilter, ValidationExceptionHandler</td>
           </tr>
           <tr>
           <td>4</td>
@@ -9827,8 +9956,8 @@
           <td>4</td>
           <td><code>IWriteRepository&lt;TEntity, TIdentifierType&gt;</code></td>
           <td>MMCA.Common.Application</td>
-          <td>2</td>
-          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, IRowVersioned</td>
+          <td>3</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, IRowVersioned, IUpdatePropertySetter&lt;TEntity&gt;</td>
           </tr>
           <tr>
           <td>4</td>
@@ -10021,6 +10150,13 @@
           </tr>
           <tr>
           <td>4</td>
+          <td><code>QueryFilterServicePropertyCacheTests</code></td>
+          <td>MMCA.Common.Application.Tests</td>
+          <td>2</td>
+          <td>QueryFilterService, Widget</td>
+          </tr>
+          <tr>
+          <td>4</td>
           <td><code>QueryFilterServiceTests</code></td>
           <td>MMCA.Common.Application.Tests</td>
           <td>3</td>
@@ -10144,6 +10280,13 @@
           <td>MMCA.Common.Architecture.Tests</td>
           <td>1</td>
           <td>AuditableBaseEntity&lt;TIdentifierType&gt;</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>QueryPipelineBenchmarks</code></td>
+          <td>MMCA.Common.Benchmarks</td>
+          <td>3</td>
+          <td>ProductRow, QueryFieldService, QueryFilterService</td>
           </tr>
           <tr>
           <td>4</td>
@@ -10287,13 +10430,6 @@
           </tr>
           <tr>
           <td>4</td>
-          <td><code>LoginProtectionService</code></td>
-          <td>MMCA.Common.Infrastructure</td>
-          <td>5</td>
-          <td>Error, ICacheService, ILoginProtectionService, LoginProtectionSettings, Result</td>
-          </tr>
-          <tr>
-          <td>4</td>
           <td><code>NullFileStorageService</code></td>
           <td>MMCA.Common.Infrastructure</td>
           <td>3</td>
@@ -10329,6 +10465,13 @@
           </tr>
           <tr>
           <td>4</td>
+          <td><code>DistributedCacheServiceTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>3</td>
+          <td>CacheKeyNamespace, DistributedCacheService, WarningCountingLogger</td>
+          </tr>
+          <tr>
+          <td>4</td>
           <td><code>FakeEntity</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>1</td>
@@ -10347,6 +10490,13 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>4</td>
           <td>IInboxStore, IIntegrationEventHandler&lt;in TIntegrationEvent&gt;, IntegrationEventConsumer&lt;TEvent&gt;, TestIntegrationEvent</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>Product</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;</td>
           </tr>
           <tr>
           <td>4</td>
@@ -10428,6 +10578,13 @@
           <tr>
           <td>4</td>
           <td><code>UniqueNamedEntity</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;</td>
+          </tr>
+          <tr>
+          <td>4</td>
+          <td><code>Widget</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>1</td>
           <td>AuditableBaseEntity&lt;TIdentifierType&gt;</td>
@@ -10870,8 +11027,8 @@
           <td>5</td>
           <td><code>SessionSelectionControllerTests</code></td>
           <td>MMCA.ADC.Conference.API.Tests</td>
-          <td>20</td>
-          <td>CategoryDistributionDTO, CategoryGroupDistribution, CategoryItemDistribution, ContentSimilarityDTO, Error, GetCategoryDistributionQuery, GetContentSimilarityQuery, GetSessionSelectionDashboardQuery, GetSpeakerSessionOverlapQuery, ICommandHandler&lt;in TCommand, TResult&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, MultiSessionSpeaker, Result, ScoreEventSessionsCommand, ScoreEventSessionsResultDTO, SessionSelectionController, SessionSelectionDashboardDTO, SimilarSessionPair, SpeakerSessionOverlapDTO, SpeakerSessionSummary</td>
+          <td>22</td>
+          <td>CategoryDistributionDTO, CategoryGroupDistribution, CategoryItemDistribution, ContentSimilarityDTO, Error, GetCategoryDistributionQuery, GetContentSimilarityQuery, GetSessionSelectionDashboardQuery, GetSpeakerSessionOverlapQuery, ICommandHandler&lt;in TCommand, TResult&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, ISessionScoringQueue, MultiSessionSpeaker, Result, ScoreEventSessionsCommand, ScoreEventSessionsResultDTO, SessionScoringEnqueueResult, SessionSelectionController, SessionSelectionDashboardDTO, SimilarSessionPair …(+2)</td>
           </tr>
           <tr>
           <td>5</td>
@@ -11122,8 +11279,8 @@
           <td>5</td>
           <td><code>DependencyInjection</code></td>
           <td>MMCA.ADC.Conference.Infrastructure</td>
-          <td>4</td>
-          <td>AnthropicScoringService, IAiScoringService, ISessionizeService, SessionizeService</td>
+          <td>5</td>
+          <td>AnthropicScoringService, IAiScoringService, ISessionizeService, SessionizeService, SessionScoringProcessor</td>
           </tr>
           <tr>
           <td>5</td>
@@ -11372,20 +11529,6 @@
           </tr>
           <tr>
           <td>5</td>
-          <td><code>DependencyInjection</code></td>
-          <td>MMCA.Common.API</td>
-          <td>21</td>
-          <td>CookieSessionRefresher, CookieTokenReader, CurrencyJsonConverter, DbUpdateExceptionHandler, DisabledFeatureHandler, DomainExceptionHandler, ErrorLocalizer, ErrorResources, ErrorResourceSource, GlobalExceptionHandler, ICookieSessionRefresher, IdempotencyFilter, IdempotencySettings, IErrorLocalizer, ModuleControllerFeatureProvider, ModuleLoader, ModulesSettings, OperationCanceledExceptionHandler, OwnerOrAdminFilter, UnhandledResultFailureFilter …(+1)</td>
-          </tr>
-          <tr>
-          <td>5</td>
-          <td><code>DependencyInjection</code></td>
-          <td>MMCA.Common.API</td>
-          <td>1</td>
-          <td>NotificationsController</td>
-          </tr>
-          <tr>
-          <td>5</td>
           <td><code>SessionCookieAuthenticationExtensions</code></td>
           <td>MMCA.Common.API</td>
           <td>1</td>
@@ -11400,13 +11543,6 @@
           </tr>
           <tr>
           <td>5</td>
-          <td><code>DevicesControllerTests</code></td>
-          <td>MMCA.Common.API.Tests</td>
-          <td>6</td>
-          <td>DeviceInstallationRequest, DevicesController, Error, ICurrentUserService, IPushDeviceRegistrar, Result</td>
-          </tr>
-          <tr>
-          <td>5</td>
           <td><code>EdgeErrorLocalizationTests</code></td>
           <td>MMCA.Common.API.Tests</td>
           <td>4</td>
@@ -11418,27 +11554,6 @@
           <td>MMCA.Common.API.Tests</td>
           <td>1</td>
           <td>AuditableAggregateRootEntity&lt;TIdentifierType&gt;</td>
-          </tr>
-          <tr>
-          <td>5</td>
-          <td><code>NotificationInboxControllerTests</code></td>
-          <td>MMCA.Common.API.Tests</td>
-          <td>13</td>
-          <td>Error, GetMyNotificationsQuery, GetUnreadNotificationCountQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, InboxController, IQueryHandler&lt;in TQuery, TResult&gt;, MarkAllNotificationsReadCommand, MarkNotificationReadCommand, PagedCollectionResult&lt;T&gt;, PaginationMetadata, Result, UserNotificationDTO</td>
-          </tr>
-          <tr>
-          <td>5</td>
-          <td><code>NotificationsControllerTests</code></td>
-          <td>MMCA.Common.API.Tests</td>
-          <td>12</td>
-          <td>Error, GetNotificationHistoryQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IQueryHandler&lt;in TQuery, TResult&gt;, NotificationsController, PagedCollectionResult&lt;T&gt;, PaginationMetadata, PushNotificationDTO, Result, SendPushNotificationCommand, SendPushNotificationRequest</td>
-          </tr>
-          <tr>
-          <td>5</td>
-          <td><code>OwnershipHelperTests</code></td>
-          <td>MMCA.Common.API.Tests</td>
-          <td>3</td>
-          <td>ICurrentUserService, OwnershipHelper, TestOwnerSpecification</td>
           </tr>
           <tr>
           <td>5</td>
@@ -11479,8 +11594,8 @@
           <td>5</td>
           <td><code>EntityQueryPipeline</code></td>
           <td>MMCA.Common.Application</td>
-          <td>8</td>
-          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, EntityQueryParameters&lt;TEntity&gt;, IEntityQueryPipeline, IQueryableExecutor, NavigationMetadata, NavigationType, QueryFieldService, QueryFilterService</td>
+          <td>9</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, EntityQueryParameters&lt;TEntity&gt;, IEntityQueryPipeline, IQueryableExecutor, NavigationMetadata, NavigationType, PagingMath, QueryFieldService, QueryFilterService</td>
           </tr>
           <tr>
           <td>5</td>
@@ -11799,6 +11914,13 @@
           </tr>
           <tr>
           <td>5</td>
+          <td><code>LoginProtectionService</code></td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td>6</td>
+          <td>Email, Error, ICacheService, ILoginProtectionService, LoginProtectionSettings, Result</td>
+          </tr>
+          <tr>
+          <td>5</td>
           <td><code>DataSourceResolverTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>6</td>
@@ -11852,13 +11974,6 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>1</td>
           <td>ImageSharpImageProcessor</td>
-          </tr>
-          <tr>
-          <td>5</td>
-          <td><code>LoginProtectionServiceTests</code></td>
-          <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>5</td>
-          <td>ErrorType, FakeCacheService, LoginProtectionService, LoginProtectionSettings, Result</td>
           </tr>
           <tr>
           <td>5</td>
@@ -12625,13 +12740,6 @@
           </tr>
           <tr>
           <td>6</td>
-          <td><code>BookmarksController</code></td>
-          <td>MMCA.ADC.Engagement.API</td>
-          <td>19</td>
-          <td>ApiControllerBase, AuthorizationPolicies, CreateBookmarkRequest, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, EngagementFeatures, Error, GetBookmarkedSessionIdsQuery, GetUserBookmarksQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, OwnerOrAdminFilter, PagedCollectionResult&lt;T&gt;, Result, RoleNames, Route, UserSessionBookmark, UserSessionBookmarkDTO</td>
-          </tr>
-          <tr>
-          <td>6</td>
           <td><code>CreateLivePollCommandValidator</code></td>
           <td>MMCA.ADC.Engagement.Application</td>
           <td>2</td>
@@ -12760,8 +12868,8 @@
           <td>6</td>
           <td><code>RegisterRequestValidator</code></td>
           <td>MMCA.ADC.Identity.Application</td>
-          <td>5</td>
-          <td>AddressValidator, EmailRules&lt;T&gt;, RegisterRequest, RequiredStringRules&lt;T&gt;, StrongPasswordRules&lt;T&gt;</td>
+          <td>6</td>
+          <td>AddressValidator, EmailRules&lt;T&gt;, RegisterRequest, RequiredStringRules&lt;T&gt;, StrongPasswordRules&lt;T&gt;, UserInvariants</td>
           </tr>
           <tr>
           <td>6</td>
@@ -12977,8 +13085,8 @@
           <td>6</td>
           <td><code>ApplicationDbContext</code></td>
           <td>MMCA.Common.Infrastructure</td>
-          <td>18</td>
-          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, AuditSaveChangesInterceptor, CrossDataSourceDegradeConvention, DataSource, DataSourceKey, DataSourceModelCacheKeyFactory, DomainEventSaveChangesInterceptor, IAuditableEntity, IEntityConfigurationAssemblyProvider, IEntityDataSourceRegistry, IEntityTypeConfigurationCosmos&lt;TEntity, TIdentifierType&gt;, IEntityTypeConfigurationSqlite&lt;TEntity, TIdentifierType&gt;, IEntityTypeConfigurationSQLServer&lt;TEntity, TIdentifierType&gt;, InboxMessage, OutboxMessage, PhysicalDataSource, SoftDeleteUniqueIndexConvention, ValReturn&lt;T&gt;</td>
+          <td>19</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, AuditSaveChangesInterceptor, CrossDataSourceDegradeConvention, DataSource, DataSourceKey, DataSourceModelCacheKeyFactory, DetectChangesScope, DomainEventSaveChangesInterceptor, IAuditableEntity, IEntityConfigurationAssemblyProvider, IEntityDataSourceRegistry, IEntityTypeConfigurationCosmos&lt;TEntity, TIdentifierType&gt;, IEntityTypeConfigurationSqlite&lt;TEntity, TIdentifierType&gt;, IEntityTypeConfigurationSQLServer&lt;TEntity, TIdentifierType&gt;, InboxMessage, OutboxMessage, PhysicalDataSource, SoftDeleteUniqueIndexConvention, ValReturn&lt;T&gt;</td>
           </tr>
           <tr>
           <td>6</td>
@@ -13005,8 +13113,8 @@
           <td>6</td>
           <td><code>DomainEventSaveChangesInterceptor</code></td>
           <td>MMCA.Common.Infrastructure</td>
-          <td>10</td>
-          <td>ApplicationDbContext, CapturedState, DeferredDispatch, IAggregateRoot, IDomainEvent, IDomainEventDispatcher, IIntegrationEvent, IOutboxSignal, OutboxFinalizer, OutboxMessage</td>
+          <td>11</td>
+          <td>AggregateCapture, ApplicationDbContext, CapturedState, DeferredDispatch, IAggregateRoot, IDomainEvent, IDomainEventDispatcher, IIntegrationEvent, IOutboxSignal, OutboxFinalizer, OutboxMessage</td>
           </tr>
           <tr>
           <td>6</td>
@@ -13035,6 +13143,13 @@
           <td>MMCA.Common.Infrastructure</td>
           <td>2</td>
           <td>ApplicationDbContext, OutboxMessage</td>
+          </tr>
+          <tr>
+          <td>6</td>
+          <td><code>LoginProtectionServiceTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>5</td>
+          <td>ErrorType, FakeCacheService, LoginProtectionService, LoginProtectionSettings, Result</td>
           </tr>
           <tr>
           <td>6</td>
@@ -13133,13 +13248,6 @@
           <td>MMCA.ADC.Conference.API</td>
           <td>17</td>
           <td>AddCategoryItemCommand, AddCategoryItemRequest, BaseLookup&lt;TIdentifierType&gt;, CategoryItem, CategoryItemDTO, CollectionResult&lt;T&gt;, ConferencePermissions, EntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType&gt;, ICommandHandler&lt;in TCommand, TResult&gt;, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, PagedCollectionResult&lt;T&gt;, QueryFilterModelBinder, RemoveCategoryItemCommand, Result, Route, UpdateCategoryItemCommand, UpdateCategoryItemRequest</td>
-          </tr>
-          <tr>
-          <td>7</td>
-          <td><code>EventQuestionAnswersController</code></td>
-          <td>MMCA.ADC.Conference.API</td>
-          <td>20</td>
-          <td>AddEventQuestionAnswerCommand, AddEventQuestionAnswerRequest, AuthorizationPolicies, BaseLookup&lt;TIdentifierType&gt;, CollectionResult&lt;T&gt;, EntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType&gt;, EventQuestionAnswer, EventQuestionAnswerDTO, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, OwnEventQuestionAnswerSpecification, PagedCollectionResult&lt;T&gt;, QueryFilterModelBinder, RemoveEventQuestionAnswerCommand, Result, RoleNames, Route, UpdateEventQuestionAnswerCommand, UpdateEventQuestionAnswerRequest</td>
           </tr>
           <tr>
           <td>7</td>
@@ -13374,13 +13482,6 @@
           </tr>
           <tr>
           <td>7</td>
-          <td><code>SpeakerDTOMapper</code></td>
-          <td>MMCA.ADC.Conference.Application</td>
-          <td>8</td>
-          <td>Email, ICurrentUserService, IEntityDTOMapper&lt;TEntity, TEntityDTO, TIdentifierType&gt;, RoleNames, Speaker, SpeakerCategoryItemDTOMapper, SpeakerDTO, SpeakerQuestionAnswerDTOMapper</td>
-          </tr>
-          <tr>
-          <td>7</td>
           <td><code>UpdateCategoryItemCommandValidator</code></td>
           <td>MMCA.ADC.Conference.Application</td>
           <td>3</td>
@@ -13446,8 +13547,8 @@
           <td>7</td>
           <td><code>InMemoryRepository&lt;TEntity, TIdentifierType&gt;</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>4</td>
-          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, BaseLookup&lt;TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IRowVersioned</td>
+          <td>5</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, BaseLookup&lt;TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IRowVersioned, IUpdatePropertySetter&lt;TEntity&gt;</td>
           </tr>
           <tr>
           <td>7</td>
@@ -13698,22 +13799,8 @@
           <td>7</td>
           <td><code>SpeakerDashboardServiceTests</code></td>
           <td>MMCA.ADC.Conference.UI.Tests</td>
-          <td>10</td>
-          <td>CapturingHttpMessageHandler, HttpTestDoubles, PagedCollectionResult&lt;T&gt;, PaginationMetadata, RatingQuestionSummary, Session, SessionDTO, SessionFeedbackDTO, SessionSpeakerDTO, SpeakerDashboardService</td>
-          </tr>
-          <tr>
-          <td>7</td>
-          <td><code>LivePollsController</code></td>
-          <td>MMCA.ADC.Engagement.API</td>
-          <td>24</td>
-          <td>ApiControllerBase, AuthorizationPolicies, CastVoteCommand, CastVoteRequest, CloseLivePollCommand, CreateLivePollCommand, CreateLivePollRequest, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, EngagementFeatures, EngagementPermissions, Error, GetEventPollsQuery, GetOpenPollsQuery, GetPollResultsQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IQueryHandler&lt;in TQuery, TResult&gt;, LivePoll, LivePollDTO, LivePollResultsDTO …(+4)</td>
-          </tr>
-          <tr>
-          <td>7</td>
-          <td><code>ControllerMocks</code></td>
-          <td>MMCA.ADC.Engagement.API.Tests</td>
-          <td>28</td>
-          <td>CastVoteCommand, CloseLivePollCommand, CreateBookmarkRequest, CreateLivePollCommand, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, GetBookmarkedSessionIdsQuery, GetEventPollsQuery, GetModerationQueueQuery, GetOpenPollsQuery, GetPollResultsQuery, GetSessionQuestionsQuery, GetUserBookmarksQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, LivePoll, LivePollDTO, LivePollResultsDTO, ModerateQuestionCommand …(+8)</td>
+          <td>11</td>
+          <td>CapturingHttpMessageHandler, DomainInvariantViolationException, HttpTestDoubles, PagedCollectionResult&lt;T&gt;, PaginationMetadata, RatingQuestionSummary, Session, SessionDTO, SessionFeedbackDTO, SessionSpeakerDTO, SpeakerDashboardService</td>
           </tr>
           <tr>
           <td>7</td>
@@ -13831,8 +13918,8 @@
           <td>7</td>
           <td><code>InMemoryRepository&lt;TEntity, TIdentifierType&gt;</code></td>
           <td>MMCA.ADC.Identity.Application.Tests</td>
-          <td>4</td>
-          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, BaseLookup&lt;TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IRowVersioned</td>
+          <td>5</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, BaseLookup&lt;TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IRowVersioned, IUpdatePropertySetter&lt;TEntity&gt;</td>
           </tr>
           <tr>
           <td>7</td>
@@ -13913,6 +14000,13 @@
           </tr>
           <tr>
           <td>7</td>
+          <td><code>ICurrentUserService</code></td>
+          <td>MMCA.Common.Application</td>
+          <td>1</td>
+          <td>User</td>
+          </tr>
+          <tr>
+          <td>7</td>
           <td><code>IUnitOfWork</code></td>
           <td>MMCA.Common.Application</td>
           <td>4</td>
@@ -13969,24 +14063,10 @@
           </tr>
           <tr>
           <td>7</td>
-          <td><code>CurrentUserService</code></td>
-          <td>MMCA.Common.Infrastructure</td>
-          <td>2</td>
-          <td>ICurrentUserService, User</td>
-          </tr>
-          <tr>
-          <td>7</td>
-          <td><code>EFRepository&lt;TEntity, TIdentifierType&gt;</code></td>
-          <td>MMCA.Common.Infrastructure</td>
-          <td>4</td>
-          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, EFReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IRowVersioned</td>
-          </tr>
-          <tr>
-          <td>7</td>
           <td><code>EFRepositoryDecorator&lt;TEntity, TIdentifierType&gt;</code></td>
           <td>MMCA.Common.Infrastructure</td>
-          <td>5</td>
-          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, EFReadRepositoryDecorator&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IRowVersioned, ProfilingHelper</td>
+          <td>6</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, EFReadRepositoryDecorator&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IRowVersioned, IUpdatePropertySetter&lt;TEntity&gt;, ProfilingHelper</td>
           </tr>
           <tr>
           <td>7</td>
@@ -14060,6 +14140,13 @@
           </tr>
           <tr>
           <td>7</td>
+          <td><code>DetectionTestDbContext</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>10</td>
+          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, TestPhysicalDataSources, Widget</td>
+          </tr>
+          <tr>
+          <td>7</td>
           <td><code>EFReadRepositoryDecoratorAdditionalTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>3</td>
@@ -14074,6 +14161,13 @@
           </tr>
           <tr>
           <td>7</td>
+          <td><code>FailingSaveInterceptor</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>OutboxRoutingTestDbContext</td>
+          </tr>
+          <tr>
+          <td>7</td>
           <td><code>InboxTestDbContext</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>4</td>
@@ -14081,10 +14175,17 @@
           </tr>
           <tr>
           <td>7</td>
+          <td><code>MidSaveContextCreatingDbContext</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>10</td>
+          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityConfigurationAssemblyProvider, IEntityDataSourceRegistry, IOutboxSignal, ReentrantSaveInterceptor, TestPhysicalDataSources</td>
+          </tr>
+          <tr>
+          <td>7</td>
           <td><code>OutboxRoutingTestDbContext</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>9</td>
-          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IEntityDataSourceRegistry, NullAssemblyProvider, OutboxMessage, TestAggregate, TestPhysicalDataSources</td>
+          <td>10</td>
+          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, FailingSaveInterceptor, IEntityDataSourceRegistry, NullAssemblyProvider, OutboxMessage, TestAggregate, TestPhysicalDataSources</td>
           </tr>
           <tr>
           <td>7</td>
@@ -14099,6 +14200,20 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>3</td>
           <td>DataSource, EntityTypeConfiguration&lt;TEntity, TIdentifierType&gt;, PortableThing</td>
+          </tr>
+          <tr>
+          <td>7</td>
+          <td><code>QueryShapeTestDbContext</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>10</td>
+          <td>ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, Product, TestPhysicalDataSources</td>
+          </tr>
+          <tr>
+          <td>7</td>
+          <td><code>ReentrantSaveInterceptor</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>MidSaveContextCreatingDbContext</td>
           </tr>
           <tr>
           <td>7</td>
@@ -14207,10 +14322,17 @@
           </tr>
           <tr>
           <td>8</td>
+          <td><code>EventQuestionAnswersController</code></td>
+          <td>MMCA.ADC.Conference.API</td>
+          <td>20</td>
+          <td>AddEventQuestionAnswerCommand, AddEventQuestionAnswerRequest, AuthorizationPolicies, BaseLookup&lt;TIdentifierType&gt;, CollectionResult&lt;T&gt;, EntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType&gt;, EventQuestionAnswer, EventQuestionAnswerDTO, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, OwnEventQuestionAnswerSpecification, PagedCollectionResult&lt;T&gt;, QueryFilterModelBinder, RemoveEventQuestionAnswerCommand, Result, RoleNames, Route, UpdateEventQuestionAnswerCommand, UpdateEventQuestionAnswerRequest</td>
+          </tr>
+          <tr>
+          <td>8</td>
           <td><code>EventsController</code></td>
           <td>MMCA.ADC.Conference.API</td>
-          <td>28</td>
-          <td>AggregateRootEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest&gt;, BaseLookup&lt;TIdentifierType&gt;, CollectionResult&lt;T&gt;, ConferencePermissions, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Event, EventCreateRequest, EventDTO, EventUpdateRequest, ExportEventCalendarQuery, GetNowNextQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, NowNextDTO, PagedCollectionResult&lt;T&gt;, PublishedEventSpecification, PublishEventCommand, QueryFilterModelBinder …(+8)</td>
+          <td>29</td>
+          <td>AggregateRootEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest&gt;, BaseLookup&lt;TIdentifierType&gt;, CollectionResult&lt;T&gt;, ConferencePermissions, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Event, EventCreateRequest, EventDTO, EventTransitionRequest, EventUpdateRequest, ExportEventCalendarQuery, GetNowNextQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, NowNextDTO, PagedCollectionResult&lt;T&gt;, PublishedEventSpecification, PublishEventCommand …(+9)</td>
           </tr>
           <tr>
           <td>8</td>
@@ -14237,8 +14359,8 @@
           <td>8</td>
           <td><code>SessionsController</code></td>
           <td>MMCA.ADC.Conference.API</td>
-          <td>25</td>
-          <td>AggregateRootEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest&gt;, BaseLookup&lt;TIdentifierType&gt;, CollectionResult&lt;T&gt;, ConferencePermissions, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Event, EventDTO, ExportSessionCalendarQuery, GetPublicSessionFilterQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, PagedCollectionResult&lt;T&gt;, QueryFilterModelBinder, Result, RoleNames, Route, Session, SessionCreateRequest …(+5)</td>
+          <td>27</td>
+          <td>AggregateRootEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest&gt;, AndSpecification&lt;TEntity, TIdentifierType&gt;, BaseLookup&lt;TIdentifierType&gt;, CollectionResult&lt;T&gt;, ConferencePermissions, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Event, EventDTO, ExportSessionCalendarQuery, GetPublicSessionFilterQuery, GetSessionsBySpeakerFilterQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, PagedCollectionResult&lt;T&gt;, QueryFilterModelBinder, Result, RoleNames, Route …(+7)</td>
           </tr>
           <tr>
           <td>8</td>
@@ -14260,13 +14382,6 @@
           <td>MMCA.ADC.Conference.API.Tests</td>
           <td>12</td>
           <td>AddCategoryItemCommand, AddCategoryItemRequest, CategoryItem, CategoryItemDTO, CategoryItemsController, Error, ICommandHandler&lt;in TCommand, TResult&gt;, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, RemoveCategoryItemCommand, Result, UpdateCategoryItemCommand, UpdateCategoryItemRequest</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>EventQuestionAnswersControllerTests</code></td>
-          <td>MMCA.ADC.Conference.API.Tests</td>
-          <td>17</td>
-          <td>AddEventQuestionAnswerCommand, AddEventQuestionAnswerRequest, CollectionResult&lt;T&gt;, Error, EventQuestionAnswer, EventQuestionAnswerDTO, EventQuestionAnswersController, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, PagedCollectionResult&lt;T&gt;, PaginationMetadata, RemoveEventQuestionAnswerCommand, Result, Specification&lt;TEntity, TIdentifierType&gt;, UpdateEventQuestionAnswerCommand, UpdateEventQuestionAnswerRequest</td>
           </tr>
           <tr>
           <td>8</td>
@@ -14389,13 +14504,6 @@
           </tr>
           <tr>
           <td>8</td>
-          <td><code>CreateSpeakerHandler</code></td>
-          <td>MMCA.ADC.Conference.Application</td>
-          <td>8</td>
-          <td>ICommandHandler&lt;in TCommand, TResult&gt;, IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, IUnitOfWork, Result, Speaker, SpeakerCreateRequest, SpeakerDTO, SpeakerDTOMapper</td>
-          </tr>
-          <tr>
-          <td>8</td>
           <td><code>DeleteEventHandler</code></td>
           <td>MMCA.ADC.Conference.Application</td>
           <td>8</td>
@@ -14463,6 +14571,13 @@
           <td>MMCA.ADC.Conference.Application</td>
           <td>10</td>
           <td>Error, GetSessionFeedbackQuery, IQueryHandler&lt;in TQuery, TResult&gt;, IUnitOfWork, Question, RatingQuestionSummary, Result, Session, SessionFeedbackDTO, TextQuestionResponses</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>GetSessionsBySpeakerFilterHandler</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>8</td>
+          <td>GetSessionsBySpeakerFilterQuery, InlineSpecification&lt;TEntity, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, IUnitOfWork, Result, Session, SessionSpeaker, Specification&lt;TEntity, TIdentifierType&gt;</td>
           </tr>
           <tr>
           <td>8</td>
@@ -14599,6 +14714,13 @@
           </tr>
           <tr>
           <td>8</td>
+          <td><code>SpeakerDTOMapper</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>8</td>
+          <td>Email, ICurrentUserService, IEntityDTOMapper&lt;TEntity, TEntityDTO, TIdentifierType&gt;, RoleNames, Speaker, SpeakerCategoryItemDTOMapper, SpeakerDTO, SpeakerQuestionAnswerDTOMapper</td>
+          </tr>
+          <tr>
+          <td>8</td>
           <td><code>UnlinkUserFromSpeakerHandler</code></td>
           <td>MMCA.ADC.Conference.Application</td>
           <td>7</td>
@@ -14659,13 +14781,6 @@
           <td>MMCA.ADC.Conference.Application</td>
           <td>9</td>
           <td>Error, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IUnitOfWork, Result, RoleNames, Session, SessionQuestionAnswer, UpdateSessionQuestionAnswerCommand</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>UpdateSpeakerHandler</code></td>
-          <td>MMCA.ADC.Conference.Application</td>
-          <td>8</td>
-          <td>Error, ICommandHandler&lt;in TCommand, TResult&gt;, IUnitOfWork, Result, Speaker, SpeakerDTO, SpeakerDTOMapper, UpdateSpeakerCommand</td>
           </tr>
           <tr>
           <td>8</td>
@@ -14820,13 +14935,6 @@
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>3</td>
           <td>Email, SpeakerCreateRequest, SpeakerCreateRequestValidator</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>SpeakerDTOMapperTests</code></td>
-          <td>MMCA.ADC.Conference.Application.Tests</td>
-          <td>5</td>
-          <td>ICurrentUserService, Speaker, SpeakerCategoryItemDTOMapper, SpeakerDTOMapper, SpeakerQuestionAnswerDTOMapper</td>
           </tr>
           <tr>
           <td>8</td>
@@ -15047,24 +15155,24 @@
           </tr>
           <tr>
           <td>8</td>
-          <td><code>BookmarksControllerTests</code></td>
-          <td>MMCA.ADC.Engagement.API.Tests</td>
-          <td>17</td>
-          <td>BookmarksController, ControllerMocks, CreateBookmarkRequest, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Error, GetBookmarkedSessionIdsQuery, GetUserBookmarksQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, OwnerOrAdminFilter, PagedCollectionResult&lt;T&gt;, PaginationMetadata, Result, UserSessionBookmark, UserSessionBookmarkDTO</td>
+          <td><code>LivePollsController</code></td>
+          <td>MMCA.ADC.Engagement.API</td>
+          <td>25</td>
+          <td>ApiControllerBase, AuthorizationPolicies, CastVoteCommand, CastVoteRequest, CloseLivePollCommand, CreateLivePollCommand, CreateLivePollRequest, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, EngagementFeatures, EngagementPermissions, Error, GetEventPollsQuery, GetOpenPollsQuery, GetPollResultsQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IQueryHandler&lt;in TQuery, TResult&gt;, LifecycleTransitionRequest, LivePoll, LivePollDTO …(+5)</td>
           </tr>
           <tr>
           <td>8</td>
-          <td><code>LivePollsControllerTests</code></td>
-          <td>MMCA.ADC.Engagement.API.Tests</td>
-          <td>22</td>
-          <td>CastVoteCommand, CastVoteRequest, CloseLivePollCommand, ControllerMocks, CreateLivePollCommand, CreateLivePollRequest, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Error, GetEventPollsQuery, GetOpenPollsQuery, GetPollResultsQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IQueryHandler&lt;in TQuery, TResult&gt;, LivePoll, LivePollDTO, LivePollResultsDTO, LivePollsController, LivePollStatus, OpenLivePollCommand …(+2)</td>
+          <td><code>SessionQuestionsController</code></td>
+          <td>MMCA.ADC.Engagement.API</td>
+          <td>19</td>
+          <td>ApiControllerBase, AuthorizationPolicies, EngagementFeatures, Error, GetModerationQueueQuery, GetSessionQuestionsQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IQueryHandler&lt;in TQuery, TResult&gt;, LifecycleTransitionRequest, ModerateQuestionCommand, ModerationAction, Result, RoleNames, Route, SessionQuestionDTO, SubmitQuestionCommand, SubmitQuestionRequest, ToggleUpvoteCommand</td>
           </tr>
           <tr>
           <td>8</td>
-          <td><code>SessionQuestionsControllerTests</code></td>
+          <td><code>ControllerMocks</code></td>
           <td>MMCA.ADC.Engagement.API.Tests</td>
-          <td>16</td>
-          <td>ControllerMocks, Error, GetModerationQueueQuery, GetSessionQuestionsQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IQueryHandler&lt;in TQuery, TResult&gt;, ModerateQuestionCommand, ModerationAction, QuestionStatus, Result, SessionQuestionDTO, SessionQuestionsController, SubmitQuestionCommand, SubmitQuestionRequest, ToggleUpvoteCommand</td>
+          <td>28</td>
+          <td>CastVoteCommand, CloseLivePollCommand, CreateBookmarkRequest, CreateLivePollCommand, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, GetBookmarkedSessionIdsQuery, GetEventPollsQuery, GetModerationQueueQuery, GetOpenPollsQuery, GetPollResultsQuery, GetSessionQuestionsQuery, GetUserBookmarksQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, LivePoll, LivePollDTO, LivePollResultsDTO, ModerateQuestionCommand …(+8)</td>
           </tr>
           <tr>
           <td>8</td>
@@ -15138,6 +15246,13 @@
           </tr>
           <tr>
           <td>8</td>
+          <td><code>SessionQuestionUpvoteChangedHandler</code></td>
+          <td>MMCA.ADC.Engagement.Application</td>
+          <td>10</td>
+          <td>IDomainEventHandler&lt;in TDomainEvent&gt;, ILiveChannelPublishQueue, IUnitOfWork, LiveChannelPublishWorkItem, LivePollChannel, SessionQuestion, SessionQuestionChannel, SessionQuestionUpvote, SessionQuestionUpvoteChanged, SessionQuestionUpvoteChangedPayload</td>
+          </tr>
+          <tr>
+          <td>8</td>
           <td><code>SessionQuestionViewBuilder</code></td>
           <td>MMCA.ADC.Engagement.Application</td>
           <td>5</td>
@@ -15147,8 +15262,8 @@
           <td>8</td>
           <td><code>ToggleUpvoteHandler</code></td>
           <td>MMCA.ADC.Engagement.Application</td>
-          <td>12</td>
-          <td>Error, ICommandHandler&lt;in TCommand, TResult&gt;, ILiveChannelPublisher, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, LivePollChannel, Result, SessionQuestion, SessionQuestionChannel, SessionQuestionUpvote, SessionQuestionUpvoteChangedPayload, ToggleUpvoteCommand</td>
+          <td>8</td>
+          <td>Error, ICommandHandler&lt;in TCommand, TResult&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Result, SessionQuestion, SessionQuestionUpvote, ToggleUpvoteCommand</td>
           </tr>
           <tr>
           <td>8</td>
@@ -15411,6 +15526,41 @@
           </tr>
           <tr>
           <td>8</td>
+          <td><code>DevicesController</code></td>
+          <td>MMCA.Common.API</td>
+          <td>8</td>
+          <td>ApiControllerBase, DeviceInstallationRequest, Error, ICurrentUserService, IPushDeviceRegistrar, NotificationFeatures, Result, Route</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>InboxController</code></td>
+          <td>MMCA.Common.API</td>
+          <td>15</td>
+          <td>ApiControllerBase, AuthorizationPolicies, Error, GetMyNotificationsQuery, GetUnreadNotificationCountQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IQueryHandler&lt;in TQuery, TResult&gt;, MarkAllNotificationsReadCommand, MarkNotificationReadCommand, NotificationFeatures, PagedCollectionResult&lt;T&gt;, Result, Route, UserNotificationDTO</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>NotificationsController</code></td>
+          <td>MMCA.Common.API</td>
+          <td>14</td>
+          <td>ApiControllerBase, AuthorizationPolicies, Error, GetNotificationHistoryQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IQueryHandler&lt;in TQuery, TResult&gt;, NotificationFeatures, PagedCollectionResult&lt;T&gt;, PushNotificationDTO, Result, Route, SendPushNotificationCommand, SendPushNotificationRequest</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>OwnershipHelper</code></td>
+          <td>MMCA.Common.API</td>
+          <td>1</td>
+          <td>ICurrentUserService</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>SoftDeletedUserMiddleware</code></td>
+          <td>MMCA.Common.API</td>
+          <td>3</td>
+          <td>ICacheService, ICurrentUserService, ISoftDeletedUserValidator</td>
+          </tr>
+          <tr>
+          <td>8</td>
           <td><code>EntityControllerBaseTests</code></td>
           <td>MMCA.Common.API.Tests</td>
           <td>13</td>
@@ -15469,15 +15619,15 @@
           <td>8</td>
           <td><code>GetMyNotificationsHandler</code></td>
           <td>MMCA.Common.Application</td>
-          <td>10</td>
-          <td>GetMyNotificationsQuery, IQueryableExecutor, IQueryHandler&lt;in TQuery, TResult&gt;, IUnitOfWork, PagedCollectionResult&lt;T&gt;, PaginationMetadata, PushNotification, Result, UserNotification, UserNotificationDTO</td>
+          <td>11</td>
+          <td>GetMyNotificationsQuery, IQueryableExecutor, IQueryHandler&lt;in TQuery, TResult&gt;, IUnitOfWork, PagedCollectionResult&lt;T&gt;, PaginationMetadata, PagingMath, PushNotification, Result, UserNotification, UserNotificationDTO</td>
           </tr>
           <tr>
           <td>8</td>
           <td><code>GetNotificationHistoryHandler</code></td>
           <td>MMCA.Common.Application</td>
-          <td>10</td>
-          <td>GetNotificationHistoryQuery, IQueryableExecutor, IQueryHandler&lt;in TQuery, TResult&gt;, IUnitOfWork, PagedCollectionResult&lt;T&gt;, PaginationMetadata, PushNotification, PushNotificationDTO, PushNotificationDTOMapper, Result</td>
+          <td>11</td>
+          <td>GetNotificationHistoryQuery, IQueryableExecutor, IQueryHandler&lt;in TQuery, TResult&gt;, IUnitOfWork, PagedCollectionResult&lt;T&gt;, PaginationMetadata, PagingMath, PushNotification, PushNotificationDTO, PushNotificationDTOMapper, Result</td>
           </tr>
           <tr>
           <td>8</td>
@@ -15635,6 +15785,13 @@
           </tr>
           <tr>
           <td>8</td>
+          <td><code>CurrentUserService</code></td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td>2</td>
+          <td>ICurrentUserService, User</td>
+          </tr>
+          <tr>
+          <td>8</td>
           <td><code>DbContextFactory</code></td>
           <td>MMCA.Common.Infrastructure</td>
           <td>13</td>
@@ -15677,6 +15834,13 @@
           </tr>
           <tr>
           <td>8</td>
+          <td><code>EFRepository&lt;TEntity, TIdentifierType&gt;</code></td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td>8</td>
+          <td>AuditableBaseEntity&lt;TIdentifierType&gt;, EFReadRepository&lt;TEntity, TIdentifierType&gt;, IAuditableEntity, ICurrentUserService, IRepository&lt;TEntity, TIdentifierType&gt;, IRowVersioned, IUpdatePropertySetter&lt;TEntity&gt;, UpdatePropertySetterBuilder&lt;TEntity&gt;</td>
+          </tr>
+          <tr>
+          <td>8</td>
           <td><code>InProcessEventBus</code></td>
           <td>MMCA.Common.Infrastructure</td>
           <td>8</td>
@@ -15707,15 +15871,8 @@
           <td>8</td>
           <td><code>PushNotificationConfiguration</code></td>
           <td>MMCA.Common.Infrastructure</td>
-          <td>2</td>
-          <td>EntityTypeConfigurationSQLServer&lt;TEntity, TIdentifierType&gt;, PushNotification</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>RepositoryFactory</code></td>
-          <td>MMCA.Common.Infrastructure</td>
-          <td>10</td>
-          <td>AuditableAggregateRootEntity&lt;TIdentifierType&gt;, AuditableBaseEntity&lt;TIdentifierType&gt;, EFReadRepository&lt;TEntity, TIdentifierType&gt;, EFReadRepositoryDecorator&lt;TEntity, TIdentifierType&gt;, EFRepository&lt;TEntity, TIdentifierType&gt;, EFRepositoryDecorator&lt;TEntity, TIdentifierType&gt;, IApplicationSettings, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IRepositoryFactory</td>
+          <td>3</td>
+          <td>EntityTypeConfigurationSQLServer&lt;TEntity, TIdentifierType&gt;, PushNotification, PushNotificationInvariants</td>
           </tr>
           <tr>
           <td>8</td>
@@ -15761,20 +15918,6 @@
           </tr>
           <tr>
           <td>8</td>
-          <td><code>CurrentUserServiceAdditionalTests</code></td>
-          <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>2</td>
-          <td>CurrentUserService, User</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>CurrentUserServiceTests</code></td>
-          <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>2</td>
-          <td>CurrentUserService, User</td>
-          </tr>
-          <tr>
-          <td>8</td>
           <td><code>DependencyInjectionAdditionalTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>6</td>
@@ -15810,13 +15953,6 @@
           </tr>
           <tr>
           <td>8</td>
-          <td><code>EFRepositoryAdditionalTests</code></td>
-          <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>3</td>
-          <td>EFRepository&lt;TEntity, TIdentifierType&gt;, TestDbContext, TestEntity</td>
-          </tr>
-          <tr>
-          <td>8</td>
           <td><code>EFRepositoryDecoratorAdditionalTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>3</td>
@@ -15828,13 +15964,6 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>3</td>
           <td>EFRepositoryDecorator&lt;TEntity, TIdentifierType&gt;, FakeAggregateEntity, IRepository&lt;TEntity, TIdentifierType&gt;</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>EFRepositoryIntegrationTests</code></td>
-          <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>5</td>
-          <td>EFReadRepository&lt;TEntity, TIdentifierType&gt;, EFRepository&lt;TEntity, TIdentifierType&gt;, TestChildEntity, TestDbContext, TestEntity</td>
           </tr>
           <tr>
           <td>8</td>
@@ -15866,10 +15995,24 @@
           </tr>
           <tr>
           <td>8</td>
+          <td><code>NullUserService</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>ICurrentUserService</td>
+          </tr>
+          <tr>
+          <td>8</td>
           <td><code>PortablePrincipalConfiguration</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>2</td>
           <td>EntityTypeConfigurationSQLServer&lt;TEntity, TIdentifierType&gt;, PortablePrincipal</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>QueryParameterizationTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>3</td>
+          <td>QueryFieldService, QueryFilterService, QueryShapeTestDbContext</td>
           </tr>
           <tr>
           <td>8</td>
@@ -15905,6 +16048,20 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>2</td>
           <td>EntityTypeConfigurationSQLServer&lt;TEntity, TIdentifierType&gt;, RegistrySqlServerEntity</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>RoleOnlyService</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>1</td>
+          <td>ICurrentUserService</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>SaveChangeDetectionTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>2</td>
+          <td>DetectionTestDbContext, Widget</td>
           </tr>
           <tr>
           <td>8</td>
@@ -15957,6 +16114,13 @@
           </tr>
           <tr>
           <td>9</td>
+          <td><code>EventQuestionAnswersControllerTests</code></td>
+          <td>MMCA.ADC.Conference.API.Tests</td>
+          <td>17</td>
+          <td>AddEventQuestionAnswerCommand, AddEventQuestionAnswerRequest, CollectionResult&lt;T&gt;, Error, EventQuestionAnswer, EventQuestionAnswerDTO, EventQuestionAnswersController, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, PagedCollectionResult&lt;T&gt;, PaginationMetadata, RemoveEventQuestionAnswerCommand, Result, Specification&lt;TEntity, TIdentifierType&gt;, UpdateEventQuestionAnswerCommand, UpdateEventQuestionAnswerRequest</td>
+          </tr>
+          <tr>
+          <td>9</td>
           <td><code>EventsControllerTests</code></td>
           <td>MMCA.ADC.Conference.API.Tests</td>
           <td>26</td>
@@ -15987,8 +16151,8 @@
           <td>9</td>
           <td><code>SessionsControllerTests</code></td>
           <td>MMCA.ADC.Conference.API.Tests</td>
-          <td>22</td>
-          <td>CollectionResult&lt;T&gt;, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Error, Event, EventDTO, ExportSessionCalendarQuery, GetPublicSessionFilterQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, PagedCollectionResult&lt;T&gt;, PaginationMetadata, Result, Session, SessionCreateRequest, SessionDTO, SessionsController, SessionUpdateRequest, Specification&lt;TEntity, TIdentifierType&gt; …(+2)</td>
+          <td>23</td>
+          <td>CollectionResult&lt;T&gt;, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Error, Event, EventDTO, ExportSessionCalendarQuery, GetPublicSessionFilterQuery, GetSessionsBySpeakerFilterQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, PagedCollectionResult&lt;T&gt;, PaginationMetadata, Result, Session, SessionCreateRequest, SessionDTO, SessionsController, SessionUpdateRequest …(+3)</td>
           </tr>
           <tr>
           <td>9</td>
@@ -16010,6 +16174,13 @@
           <td>MMCA.ADC.Conference.Application</td>
           <td>11</td>
           <td>Error, ICommandHandler&lt;in TCommand, TResult&gt;, IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, IUnitOfWork, Result, Session, SessionCreateRequest, SessionDTO, SessionDTOMapper, SessionInvariants, SessionRoomScheduling</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>CreateSpeakerHandler</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>8</td>
+          <td>ICommandHandler&lt;in TCommand, TResult&gt;, IEntityRequestMapper&lt;TEntity, TCreateRequest, TIdentifierType&gt;, IUnitOfWork, Result, Speaker, SpeakerCreateRequest, SpeakerDTO, SpeakerDTOMapper</td>
           </tr>
           <tr>
           <td>9</td>
@@ -16038,6 +16209,13 @@
           <td>MMCA.ADC.Conference.Application</td>
           <td>11</td>
           <td>Error, Event, ICommandHandler&lt;in TCommand, TResult&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, Result, Session, SessionDTOMapper, SessionRoomScheduling, UpdateSessionCommand, UpdateSessionResult</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>UpdateSpeakerHandler</code></td>
+          <td>MMCA.ADC.Conference.Application</td>
+          <td>8</td>
+          <td>Error, ICommandHandler&lt;in TCommand, TResult&gt;, IUnitOfWork, Result, Speaker, SpeakerDTO, SpeakerDTOMapper, UpdateSpeakerCommand</td>
           </tr>
           <tr>
           <td>9</td>
@@ -16118,6 +16296,13 @@
           </tr>
           <tr>
           <td>9</td>
+          <td><code>SpeakerDTOMapperTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>5</td>
+          <td>ICurrentUserService, Speaker, SpeakerCategoryItemDTOMapper, SpeakerDTOMapper, SpeakerQuestionAnswerDTOMapper</td>
+          </tr>
+          <tr>
+          <td>9</td>
           <td><code>EventLiveValidationServiceGrpcAdapter</code></td>
           <td>MMCA.ADC.Conference.Contracts</td>
           <td>8</td>
@@ -16181,10 +16366,24 @@
           </tr>
           <tr>
           <td>9</td>
+          <td><code>LivePollsControllerTests</code></td>
+          <td>MMCA.ADC.Engagement.API.Tests</td>
+          <td>22</td>
+          <td>CastVoteCommand, CastVoteRequest, CloseLivePollCommand, ControllerMocks, CreateLivePollCommand, CreateLivePollRequest, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Error, GetEventPollsQuery, GetOpenPollsQuery, GetPollResultsQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IQueryHandler&lt;in TQuery, TResult&gt;, LivePoll, LivePollDTO, LivePollResultsDTO, LivePollsController, LivePollStatus, OpenLivePollCommand …(+2)</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>SessionQuestionsControllerTests</code></td>
+          <td>MMCA.ADC.Engagement.API.Tests</td>
+          <td>16</td>
+          <td>ControllerMocks, Error, GetModerationQueueQuery, GetSessionQuestionsQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IQueryHandler&lt;in TQuery, TResult&gt;, ModerateQuestionCommand, ModerationAction, QuestionStatus, Result, SessionQuestionDTO, SessionQuestionsController, SubmitQuestionCommand, SubmitQuestionRequest, ToggleUpvoteCommand</td>
+          </tr>
+          <tr>
+          <td>9</td>
           <td><code>CastVoteHandler</code></td>
           <td>MMCA.ADC.Engagement.Application</td>
-          <td>13</td>
-          <td>CastVoteCommand, Error, ICommandHandler&lt;in TCommand, TResult&gt;, ILiveChannelPublishQueue, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, LiveChannelPublishWorkItem, LivePoll, LivePollChannel, LivePollResultsBuilder, LivePollResultsDTO, LivePollVote, Result</td>
+          <td>10</td>
+          <td>CastVoteCommand, Error, ICommandHandler&lt;in TCommand, TResult&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, LivePoll, LivePollResultsBuilder, LivePollResultsDTO, LivePollVote, Result</td>
           </tr>
           <tr>
           <td>9</td>
@@ -16216,10 +16415,24 @@
           </tr>
           <tr>
           <td>9</td>
+          <td><code>LivePollVoteChangedHandler</code></td>
+          <td>MMCA.ADC.Engagement.Application</td>
+          <td>8</td>
+          <td>IDomainEventHandler&lt;in TDomainEvent&gt;, ILiveChannelPublishQueue, IUnitOfWork, LiveChannelPublishWorkItem, LivePoll, LivePollChannel, LivePollResultsBuilder, LivePollVoteChanged</td>
+          </tr>
+          <tr>
+          <td>9</td>
           <td><code>SubmitQuestionHandler</code></td>
           <td>MMCA.ADC.Engagement.Application</td>
           <td>17</td>
           <td>Error, ICommandHandler&lt;in TCommand, TResult&gt;, IEventLiveValidationService, ILiveChannelPublisher, IUnitOfWork, LivePollChannel, QuestionModerationDefault, QuestionStatus, Result, SessionQuestion, SessionQuestionApprovedPayload, SessionQuestionChannel, SessionQuestionDTO, SessionQuestionInvariants, SessionQuestionPendingCountChangedPayload, SessionQuestionViewBuilder, SubmitQuestionCommand</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>LivePollResultsBuilderTests</code></td>
+          <td>MMCA.ADC.Engagement.Application.Tests</td>
+          <td>6</td>
+          <td>InMemoryQueryableExecutor, IReadRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, LivePoll, LivePollResultsBuilder, LivePollVote</td>
           </tr>
           <tr>
           <td>9</td>
@@ -16370,6 +16583,27 @@
           </tr>
           <tr>
           <td>9</td>
+          <td><code>DependencyInjection</code></td>
+          <td>MMCA.Common.API</td>
+          <td>1</td>
+          <td>NotificationsController</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>OwnerOrAdminFilter</code></td>
+          <td>MMCA.Common.API</td>
+          <td>4</td>
+          <td>AllowMissingOwnerAttribute, ICurrentUserService, OwnerOrAdminFilterOptions, OwnershipHelper</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>WebApplicationExtensions</code></td>
+          <td>MMCA.Common.API</td>
+          <td>4</td>
+          <td>CorrelationIdMiddleware, SoftDeletedUserMiddleware, SupportedCultures, WebApplicationBuilderExtensions</td>
+          </tr>
+          <tr>
+          <td>9</td>
           <td><code>AggregateRootEntityControllerBaseTests</code></td>
           <td>MMCA.Common.API.Tests</td>
           <td>11</td>
@@ -16384,10 +16618,45 @@
           </tr>
           <tr>
           <td>9</td>
+          <td><code>DevicesControllerTests</code></td>
+          <td>MMCA.Common.API.Tests</td>
+          <td>6</td>
+          <td>DeviceInstallationRequest, DevicesController, Error, ICurrentUserService, IPushDeviceRegistrar, Result</td>
+          </tr>
+          <tr>
+          <td>9</td>
           <td><code>FixedAssemblyProvider</code></td>
           <td>MMCA.Common.API.Tests</td>
           <td>2</td>
           <td>DatabaseInitializationExtensionsTests, IEntityConfigurationAssemblyProvider</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>NotificationInboxControllerTests</code></td>
+          <td>MMCA.Common.API.Tests</td>
+          <td>13</td>
+          <td>Error, GetMyNotificationsQuery, GetUnreadNotificationCountQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, InboxController, IQueryHandler&lt;in TQuery, TResult&gt;, MarkAllNotificationsReadCommand, MarkNotificationReadCommand, PagedCollectionResult&lt;T&gt;, PaginationMetadata, Result, UserNotificationDTO</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>NotificationsControllerTests</code></td>
+          <td>MMCA.Common.API.Tests</td>
+          <td>12</td>
+          <td>Error, GetNotificationHistoryQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IQueryHandler&lt;in TQuery, TResult&gt;, NotificationsController, PagedCollectionResult&lt;T&gt;, PaginationMetadata, PushNotificationDTO, Result, SendPushNotificationCommand, SendPushNotificationRequest</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>OwnershipHelperTests</code></td>
+          <td>MMCA.Common.API.Tests</td>
+          <td>3</td>
+          <td>ICurrentUserService, OwnershipHelper, TestOwnerSpecification</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>SoftDeletedUserMiddlewareTests</code></td>
+          <td>MMCA.Common.API.Tests</td>
+          <td>4</td>
+          <td>ICacheService, ICurrentUserService, ISoftDeletedUserValidator, SoftDeletedUserMiddleware</td>
           </tr>
           <tr>
           <td>9</td>
@@ -16517,10 +16786,10 @@
           </tr>
           <tr>
           <td>9</td>
-          <td><code>DependencyInjection</code></td>
+          <td><code>RepositoryFactory</code></td>
           <td>MMCA.Common.Infrastructure</td>
-          <td>101</td>
-          <td>ApplicationDbContext, ApplicationDbContextEFFactory, AuditSaveChangesInterceptor, AzureBlobFileStorageService, AzureNotificationHubDeviceRegistrar, AzureNotificationHubNativePushSender, BrokerEventBus, BrokerMessageBus, ClaimBasedUserIdProvider, ClassReference, ConnectionStringSettings, CorrelationContext, CosmosDbContext, CurrentUserService, DataSourceEntrySettings, DataSourceResolver, DataSourceService, DataSourcesSettings, DbContextFactory, DefaultCosmosDbContextFactory …(+81)</td>
+          <td>10</td>
+          <td>AuditableAggregateRootEntity&lt;TIdentifierType&gt;, AuditableBaseEntity&lt;TIdentifierType&gt;, EFReadRepository&lt;TEntity, TIdentifierType&gt;, EFReadRepositoryDecorator&lt;TEntity, TIdentifierType&gt;, EFRepository&lt;TEntity, TIdentifierType&gt;, EFRepositoryDecorator&lt;TEntity, TIdentifierType&gt;, IApplicationSettings, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, IRepositoryFactory</td>
           </tr>
           <tr>
           <td>9</td>
@@ -16545,17 +16814,24 @@
           </tr>
           <tr>
           <td>9</td>
-          <td><code>CosmosConfigurationPortabilityTests</code></td>
+          <td><code>CurrentUserServiceAdditionalTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>17</td>
-          <td>AuditSaveChangesInterceptor, ConnectionStringSettings, DataSource, DataSourceEntrySettings, DataSourceResolver, DataSourcesSettings, DomainEventSaveChangesInterceptor, EntityDataSourceRegistry, FixedAssemblyProvider, IDataSourceResolver, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, OutboxSignal, PhysicalDbContextFactory, PortablePrincipal, PortableThing</td>
+          <td>2</td>
+          <td>CurrentUserService, User</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>CurrentUserServiceTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>5</td>
+          <td>CurrentUserService, ICurrentUserService, NullUserService, RoleOnlyService, User</td>
           </tr>
           <tr>
           <td>9</td>
           <td><code>DbContextFactoryAdditionalTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>6</td>
-          <td>DataSource, DbContextFactory, ICurrentUserService, IDataSourceResolver, IEntityDataSourceRegistry, IPhysicalDbContextFactory</td>
+          <td>8</td>
+          <td>DataSource, DataSourceKey, DbContextFactory, ICurrentUserService, IDataSourceResolver, IEntityDataSourceRegistry, IPhysicalDbContextFactory, MidSaveContextCreatingDbContext</td>
           </tr>
           <tr>
           <td>9</td>
@@ -16601,10 +16877,17 @@
           </tr>
           <tr>
           <td>9</td>
-          <td><code>FixedAssemblyProvider</code></td>
+          <td><code>EFRepositoryAdditionalTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>3</td>
-          <td>CosmosConfigurationPortabilityTests, IEntityConfigurationAssemblyProvider, MultiSourceSqliteIntegrationTests</td>
+          <td>EFRepository&lt;TEntity, TIdentifierType&gt;, TestDbContext, TestEntity</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>EFRepositoryIntegrationTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>7</td>
+          <td>EFReadRepository&lt;TEntity, TIdentifierType&gt;, EFRepository&lt;TEntity, TIdentifierType&gt;, FakeTimeProvider, ICurrentUserService, TestChildEntity, TestDbContext, TestEntity</td>
           </tr>
           <tr>
           <td>9</td>
@@ -16636,13 +16919,6 @@
           </tr>
           <tr>
           <td>9</td>
-          <td><code>MultiSourceSqliteIntegrationTests</code></td>
-          <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>26</td>
-          <td>AuditSaveChangesInterceptor, ConnectionStringSettings, DataSource, DataSourceEntrySettings, DataSourceResolver, DataSourceService, DataSourcesSettings, DbContextFactory, DomainEventSaveChangesInterceptor, EntityDataSourceRegistry, FixedAssemblyProvider, IApplicationSettings, ICurrentUserService, IDataSourceResolver, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, MultiSourceCustomer, MultiSourceOrder, MultiSourceTestEvent …(+6)</td>
-          </tr>
-          <tr>
-          <td>9</td>
           <td><code>OutboxProcessorTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>22</td>
@@ -16654,13 +16930,6 @@
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>1</td>
           <td>OutboxProcessor</td>
-          </tr>
-          <tr>
-          <td>9</td>
-          <td><code>RepositoryFactoryTests</code></td>
-          <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>11</td>
-          <td>EFReadRepository&lt;TEntity, TIdentifierType&gt;, EFReadRepositoryDecorator&lt;TEntity, TIdentifierType&gt;, EFRepository&lt;TEntity, TIdentifierType&gt;, EFRepositoryDecorator&lt;TEntity, TIdentifierType&gt;, FakeAggregate, FakeEntity, IApplicationSettings, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, RepositoryFactory, TestDbContext</td>
           </tr>
           <tr>
           <td>9</td>
@@ -17056,6 +17325,13 @@
           </tr>
           <tr>
           <td>10</td>
+          <td><code>GetSessionsBySpeakerFilterHandlerTests</code></td>
+          <td>MMCA.ADC.Conference.Application.Tests</td>
+          <td>7</td>
+          <td>GetSessionsBySpeakerFilterHandler, GetSessionsBySpeakerFilterQuery, HandlerTestBase&lt;THandler&gt;, IReadRepository&lt;TEntity, TIdentifierType&gt;, Session, SessionSpeaker, UnitOfWork</td>
+          </tr>
+          <tr>
+          <td>10</td>
           <td><code>GetSessionSelectionDashboardHandlerTests</code></td>
           <td>MMCA.ADC.Conference.Application.Tests</td>
           <td>12</td>
@@ -17266,6 +17542,13 @@
           </tr>
           <tr>
           <td>10</td>
+          <td><code>BookmarksController</code></td>
+          <td>MMCA.ADC.Engagement.API</td>
+          <td>19</td>
+          <td>ApiControllerBase, AuthorizationPolicies, CreateBookmarkRequest, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, EngagementFeatures, Error, GetBookmarkedSessionIdsQuery, GetUserBookmarksQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, OwnerOrAdminFilter, PagedCollectionResult&lt;T&gt;, Result, RoleNames, Route, UserSessionBookmark, UserSessionBookmarkDTO</td>
+          </tr>
+          <tr>
+          <td>10</td>
           <td><code>LivePollNavigationPopulator</code></td>
           <td>MMCA.ADC.Engagement.Application</td>
           <td>5</td>
@@ -17282,8 +17565,8 @@
           <td>10</td>
           <td><code>CastVoteHandlerTests</code></td>
           <td>MMCA.ADC.Engagement.Application.Tests</td>
-          <td>16</td>
-          <td>CastVoteCommand, CastVoteHandler, ErrorType, FixedTimeProvider, HandlerMocks, HandlerTestBase&lt;THandler&gt;, ILiveChannelPublishQueue, InMemoryQueryableExecutor, IReadRepository&lt;TEntity, TIdentifierType&gt;, LiveChannelPublishWorkItem, LivePoll, LivePollChannel, LivePollResultsBuilder, LivePollResultsDTO, LivePollVote, UnitOfWork</td>
+          <td>12</td>
+          <td>CastVoteCommand, CastVoteHandler, ErrorType, FixedTimeProvider, HandlerMocks, HandlerTestBase&lt;THandler&gt;, InMemoryQueryableExecutor, IReadRepository&lt;TEntity, TIdentifierType&gt;, LivePoll, LivePollResultsBuilder, LivePollVote, UnitOfWork</td>
           </tr>
           <tr>
           <td>10</td>
@@ -17350,6 +17633,13 @@
           </tr>
           <tr>
           <td>10</td>
+          <td><code>LivePollVoteChangedHandlerTests</code></td>
+          <td>MMCA.ADC.Engagement.Application.Tests</td>
+          <td>12</td>
+          <td>DomainEntityState, InMemoryQueryableExecutor, IReadRepository&lt;TEntity, TIdentifierType&gt;, IUnitOfWork, LivePoll, LivePollChannel, LivePollResultsBuilder, LivePollResultsDTO, LivePollVote, LivePollVoteChanged, LivePollVoteChangedHandler, RecordingQueue</td>
+          </tr>
+          <tr>
+          <td>10</td>
           <td><code>ModerateQuestionHandlerTests</code></td>
           <td>MMCA.ADC.Engagement.Application.Tests</td>
           <td>16</td>
@@ -17373,8 +17663,8 @@
           <td>10</td>
           <td><code>ToggleUpvoteHandlerTests</code></td>
           <td>MMCA.ADC.Engagement.Application.Tests</td>
-          <td>12</td>
-          <td>ErrorType, FixedTimeProvider, HandlerMocks, HandlerTestBase&lt;THandler&gt;, ILiveChannelPublisher, QuestionStatus, SessionQuestion, SessionQuestionChannel, SessionQuestionUpvote, ToggleUpvoteCommand, ToggleUpvoteHandler, UnitOfWork</td>
+          <td>10</td>
+          <td>ErrorType, FixedTimeProvider, HandlerMocks, HandlerTestBase&lt;THandler&gt;, QuestionStatus, SessionQuestion, SessionQuestionUpvote, ToggleUpvoteCommand, ToggleUpvoteHandler, UnitOfWork</td>
           </tr>
           <tr>
           <td>10</td>
@@ -17525,6 +17815,27 @@
           </tr>
           <tr>
           <td>10</td>
+          <td><code>DependencyInjection</code></td>
+          <td>MMCA.Common.API</td>
+          <td>21</td>
+          <td>CookieSessionRefresher, CookieTokenReader, CurrencyJsonConverter, DbUpdateExceptionHandler, DisabledFeatureHandler, DomainExceptionHandler, ErrorLocalizer, ErrorResources, ErrorResourceSource, GlobalExceptionHandler, ICookieSessionRefresher, IdempotencyFilter, IdempotencySettings, IErrorLocalizer, ModuleControllerFeatureProvider, ModuleLoader, ModulesSettings, OperationCanceledExceptionHandler, OwnerOrAdminFilter, UnhandledResultFailureFilter …(+1)</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>DependencyInjectionTests</code></td>
+          <td>MMCA.Common.API.Tests</td>
+          <td>11</td>
+          <td>DbUpdateExceptionHandler, DisabledFeatureHandler, DomainExceptionHandler, GlobalExceptionHandler, IdempotencyFilter, IdempotencySettings, IModule, ModuleLoader, OperationCanceledExceptionHandler, OwnerOrAdminFilter, ValidationExceptionHandler</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>OwnerOrAdminFilterTests</code></td>
+          <td>MMCA.Common.API.Tests</td>
+          <td>4</td>
+          <td>AllowMissingOwnerAttribute, ICurrentUserService, OwnerOrAdminFilter, OwnerOrAdminFilterOptions</td>
+          </tr>
+          <tr>
+          <td>10</td>
           <td><code>AuthenticationServiceBaseTests</code></td>
           <td>MMCA.Common.Application.Tests</td>
           <td>17</td>
@@ -17560,10 +17871,17 @@
           </tr>
           <tr>
           <td>10</td>
-          <td><code>EntityDataSourceRegistryTests</code></td>
+          <td><code>DependencyInjection</code></td>
+          <td>MMCA.Common.Infrastructure</td>
+          <td>103</td>
+          <td>ApplicationDbContext, ApplicationDbContextEFFactory, AuditSaveChangesInterceptor, AzureBlobFileStorageService, AzureNotificationHubDeviceRegistrar, AzureNotificationHubNativePushSender, BrokerEventBus, BrokerMessageBus, CacheKeyNamespace, CacheKeyPrefixOptions, ClaimBasedUserIdProvider, ClassReference, ConnectionStringSettings, CorrelationContext, CosmosDbContext, CurrentUserService, DataSourceEntrySettings, DataSourceResolver, DataSourceService, DataSourcesSettings …(+83)</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>CosmosConfigurationPortabilityTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>15</td>
-          <td>ConnectionStringSettings, DataSource, DataSourceEntrySettings, DataSourceKey, DataSourceResolver, DataSourcesSettings, EntityDataSourceRegistry, FixedAssemblyProvider, NamespaceConventions, PushNotification, RegistryDuplicate, RegistryInvoice, RegistryOrder, RegistrySqlServerEntity, RegistryUnattributed</td>
+          <td>17</td>
+          <td>AuditSaveChangesInterceptor, ConnectionStringSettings, DataSource, DataSourceEntrySettings, DataSourceResolver, DataSourcesSettings, DomainEventSaveChangesInterceptor, EntityDataSourceRegistry, FixedAssemblyProvider, IDataSourceResolver, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, OutboxSignal, PhysicalDbContextFactory, PortablePrincipal, PortableThing</td>
           </tr>
           <tr>
           <td>10</td>
@@ -17574,6 +17892,20 @@
           </tr>
           <tr>
           <td>10</td>
+          <td><code>FixedAssemblyProvider</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>3</td>
+          <td>CosmosConfigurationPortabilityTests, IEntityConfigurationAssemblyProvider, MultiSourceSqliteIntegrationTests</td>
+          </tr>
+          <tr>
+          <td>10</td>
+          <td><code>MultiSourceSqliteIntegrationTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>26</td>
+          <td>AuditSaveChangesInterceptor, ConnectionStringSettings, DataSource, DataSourceEntrySettings, DataSourceResolver, DataSourceService, DataSourcesSettings, DbContextFactory, DomainEventSaveChangesInterceptor, EntityDataSourceRegistry, FixedAssemblyProvider, IApplicationSettings, ICurrentUserService, IDataSourceResolver, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, MultiSourceCustomer, MultiSourceOrder, MultiSourceTestEvent …(+6)</td>
+          </tr>
+          <tr>
+          <td>10</td>
           <td><code>OutboxCleanupServiceTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
           <td>14</td>
@@ -17581,10 +17913,10 @@
           </tr>
           <tr>
           <td>10</td>
-          <td><code>OutboxProcessorExecuteAsyncTests</code></td>
+          <td><code>RepositoryFactoryTests</code></td>
           <td>MMCA.Common.Infrastructure.Tests</td>
-          <td>9</td>
-          <td>DataSource, DataSourceKey, DependencyInjection, FakeTimeProvider, IDataSourceResolver, IEntityDataSourceRegistry, IOutboxSignal, OutboxProcessor, OutboxSettings</td>
+          <td>11</td>
+          <td>EFReadRepository&lt;TEntity, TIdentifierType&gt;, EFReadRepositoryDecorator&lt;TEntity, TIdentifierType&gt;, EFRepository&lt;TEntity, TIdentifierType&gt;, EFRepositoryDecorator&lt;TEntity, TIdentifierType&gt;, FakeAggregate, FakeEntity, IApplicationSettings, IReadRepository&lt;TEntity, TIdentifierType&gt;, IRepository&lt;TEntity, TIdentifierType&gt;, RepositoryFactory, TestDbContext</td>
           </tr>
           <tr>
           <td>10</td>
@@ -17618,8 +17950,8 @@
           <td>11</td>
           <td><code>DependencyInjection</code></td>
           <td>MMCA.ADC.Conference.Application</td>
-          <td>49</td>
-          <td>ApplicationSettings, Category, CategoryItem, CategoryItemDTO, ClassReference, ClassReference, ConferenceCategoryDTO, ConferenceCategoryNavigationPopulator, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, DeleteEntityHandler&lt;TEntity, TIdentifierType&gt;, DeleteEventHandler, EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, Event, EventCascadeDeletionDomainService, EventDTO, EventLiveValidationService, EventNavigationPopulator, EventQuestionAnswer, EventQuestionAnswerDTO, EventSpeaker …(+29)</td>
+          <td>51</td>
+          <td>ApplicationSettings, Category, CategoryItem, CategoryItemDTO, ClassReference, ClassReference, ConferenceCategoryDTO, ConferenceCategoryNavigationPopulator, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, DeleteEntityHandler&lt;TEntity, TIdentifierType&gt;, DeleteEventHandler, EntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, Event, EventCascadeDeletionDomainService, EventDTO, EventLiveValidationService, EventNavigationPopulator, EventQuestionAnswer, EventQuestionAnswerDTO, EventSpeaker …(+31)</td>
           </tr>
           <tr>
           <td>11</td>
@@ -17693,6 +18025,13 @@
           </tr>
           <tr>
           <td>11</td>
+          <td><code>BookmarksControllerTests</code></td>
+          <td>MMCA.ADC.Engagement.API.Tests</td>
+          <td>17</td>
+          <td>BookmarksController, ControllerMocks, CreateBookmarkRequest, DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;, Error, GetBookmarkedSessionIdsQuery, GetUserBookmarksQuery, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;, IQueryHandler&lt;in TQuery, TResult&gt;, OwnerOrAdminFilter, PagedCollectionResult&lt;T&gt;, PaginationMetadata, Result, UserSessionBookmark, UserSessionBookmarkDTO</td>
+          </tr>
+          <tr>
+          <td>11</td>
           <td><code>DependencyInjection</code></td>
           <td>MMCA.ADC.Engagement.Application</td>
           <td>29</td>
@@ -17718,6 +18057,20 @@
           <td>MMCA.Common.API.Tests</td>
           <td>3</td>
           <td>AuthControllerBase, IAuthenticationService, ICurrentUserService</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><code>EntityDataSourceRegistryTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>15</td>
+          <td>ConnectionStringSettings, DataSource, DataSourceEntrySettings, DataSourceKey, DataSourceResolver, DataSourcesSettings, EntityDataSourceRegistry, FixedAssemblyProvider, NamespaceConventions, PushNotification, RegistryDuplicate, RegistryInvoice, RegistryOrder, RegistrySqlServerEntity, RegistryUnattributed</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><code>OutboxProcessorExecuteAsyncTests</code></td>
+          <td>MMCA.Common.Infrastructure.Tests</td>
+          <td>9</td>
+          <td>DataSource, DataSourceKey, DependencyInjection, FakeTimeProvider, IDataSourceResolver, IEntityDataSourceRegistry, IOutboxSignal, OutboxProcessor, OutboxSettings</td>
           </tr>
           <tr>
           <td>11</td>
