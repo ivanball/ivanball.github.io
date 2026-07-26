@@ -119,279 +119,371 @@
           <h1 id="19-adc-conference---infrastructure--persistence">19. ADC Conference - Infrastructure &amp; Persistence</h1>
           <p><strong>What this chapter covers.</strong> This is the <strong>adapter</strong> layer of the Conference module, the place where
           the engine-agnostic domain meets concrete technology. Three concerns live here: (1) <strong>persistence
-          mapping</strong>, the EF Core entity configurations that turn plain domain classes into SQL Server tables,
+          mapping</strong>, the 15 EF Core entity configurations that turn plain domain classes into SQL Server tables,
           the abstract <code>DbContext</code> that declares the module&#39;s <code>DbSet</code>s, and the seeder that puts the real
-          conference event and feedback questions into a fresh database; (2) <strong>outbound integration services</strong>,
-          the HTTP clients that talk to <strong>Sessionize</strong> (the conference&#39;s session-submission platform) and to the
-          <strong>Anthropic Claude API</strong> (the AI session scorer); and (3) the <strong>DI wiring</strong> that registers those
-          services with the right resilience policy. It is the per-module realization of Clean Architecture&#39;s
-          &quot;ports and adapters&quot; idea: the <a href="group-18-conference-application.html">Application</a> layer declares the
-          ports (<a href="group-18-conference-application.html#isessionizeservice"><code>ISessionizeService</code></a>,
-          <a href="group-18-conference-application.html#iaiscoringservice"><code>IAiScoringService</code></a>), and this Infrastructure
-          layer supplies the adapters. <code>[Rubric §3, Clean Architecture]</code> assesses whether dependencies point
-          inward and the domain stays framework-free; here every EF/HTTP/Anthropic concern is quarantined in
-          Infrastructure, so the domain entities in <a href="group-17-conference-domain.html">Group 17</a> carry no
-          persistence or transport attribute at all.</p>
+          conference events and feedback questions into a fresh database; (2) <strong>outbound integration and
+          background work</strong>, the HTTP clients that talk to <strong>Sessionize</strong> (the conference&#39;s session-submission
+          platform) and to the <strong>Anthropic Claude API</strong> (the AI session scorer), plus the hosted worker that
+          drains the scoring queue off the request path; and (3) the <strong>DI wiring</strong> that registers those services
+          with the right resilience policy. It is the per-module realization of Clean Architecture&#39;s ports and
+          adapters idea: the <a href="group-18-conference-application.html">Application</a> layer declares the ports
+          (<a href="group-18-conference-application.html#isessionizeservice"><code>ISessionizeService</code></a>,
+          <a href="group-18-conference-application.html#iaiscoringservice"><code>IAiScoringService</code></a>,
+          <a href="group-18-conference-application.html#sessionscoringqueue"><code>SessionScoringQueue</code></a>), and this
+          Infrastructure layer supplies the adapters and the runner. <code>[Rubric §3, Clean Architecture]</code> assesses
+          whether dependencies point inward and the domain stays framework-free; here every EF, HTTP, and
+          Anthropic concern is quarantined in Infrastructure, so the domain entities in
+          <a href="group-17-conference-domain.html">Group 17</a> carry no persistence or transport attribute at all.</p>
           <h2 id="engine-agnostic-entities-engine-chosen-by-the-config-base-class">Engine-agnostic entities, engine chosen by the config base class</h2>
           <p>The most important idea in this chapter is one the entities themselves never express: <strong>what storage
-          engine each entity uses is decided here, not in the domain.</strong> A Conference domain entity, <code>Session</code>,
-          <code>Speaker</code>, <code>Event</code>, <code>Room</code>, the join entities, is a plain class. The <em>only</em> thing that binds it to SQL
-          Server is which base class its configuration inherits from. Every config in this group
-          (<a href="group-19-conference-infrastructure.html#sessionconfiguration"><code>SessionConfiguration</code></a>,
-          <a href="group-19-conference-infrastructure.html#speakerconfiguration"><code>SpeakerConfiguration</code></a>,
-          <a href="group-19-conference-infrastructure.html#eventconfiguration"><code>EventConfiguration</code></a>, and the rest)
-          derives from
-          <a href="group-07-persistence-ef-core.html#entitytypeconfigurationsqlservertentity-tidentifiertype"><code>EntityTypeConfigurationSQLServer&lt;TEntity, TIdentifierType&gt;</code></a>,
-          which itself sits on the engine-neutral
-          <a href="group-07-persistence-ef-core.html#entitytypeconfigurationbasetentity-tidentifiertype"><code>EntityTypeConfigurationBase&lt;TEntity, TIdentifierType&gt;</code></a>
-          in the Common framework. That base carries the <code>[UseDataSource(SQLServer)]</code> marker the
-          <code>EntityDataSourceRegistry</code> reads to decide which physical <code>DbContext</code> an entity is built into. Swapping
-          just that one base class would re-point the same <code>Session</code> to Cosmos or SQLite with zero change to the
-          domain, the application handlers, or the entity, this is the per-entity half of the
-          <strong>database-per-service</strong> strategy (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>). In practice all 15 Conference configs use the <code>…SQLServer</code>
-          base (the primer&#39;s adoption note explains why Cosmos/SQLite are supported-but-dormant extension points).
-          <code>[Rubric §8, Data Architecture]</code> (deliberate persistence: transactions, migrations, soft-delete,
-          audit, concurrency) is the dominant lens for the whole persistence half of this chapter.</p>
+          engine each entity uses is decided here, not in the domain.</strong> A Conference domain entity,
+          <a href="group-17-conference-domain.html#session"><code>Session</code></a>, <a href="group-17-conference-domain.html#speaker"><code>Speaker</code></a>,
+          <a href="group-17-conference-domain.html#event"><code>Event</code></a>, the join entities, is a plain class. The <em>only</em> thing
+          that binds it to SQL Server is which base class its configuration inherits from. All 15 configs in this
+          group (<a href="#sessionconfiguration"><code>SessionConfiguration</code></a>, <a href="#speakerconfiguration"><code>SpeakerConfiguration</code></a>,
+          <a href="#eventconfiguration"><code>EventConfiguration</code></a>, and the rest) derive from
+          <a href="group-07-persistence-ef-core.html#entitytypeconfigurationsqlservertentity-tidentifiertype"><code>EntityTypeConfigurationSQLServer&lt;TEntity, TIdentifierType&gt;</code></a>
+          (for example <code>MMCA.ADC.Conference.Infrastructure/Persistence/EntityConfiguration/SessionConfiguration.cs:12</code>),
+          which is a thin shim carrying <code>[UseDataSource(DataSource.SQLServer)]</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Configuration/EntityTypeConfiguration/EntityTypeConfigurationSQLServer.cs:16</code>)
+          over the engine-neutral
+          <a href="group-07-persistence-ef-core.html#entitytypeconfigurationtentity-tidentifiertype"><code>EntityTypeConfiguration&lt;TEntity, TIdentifierType&gt;</code></a>.
+          That attribute is what <a href="group-07-persistence-ef-core.html#entitydatasourceregistry"><code>EntityDataSourceRegistry</code></a>
+          reads to decide which physical database an entity belongs to. Swapping just that one base class would
+          re-point the same <code>Session</code> to Cosmos or SQLite with zero change to the domain, the application
+          handlers, or the entity: this is the per-entity half of the <strong>database-per-service</strong> strategy
+          (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>, <a href="https://ivanball.github.io/docs/adr/018-polyglot-persistence.html" target="_blank" rel="noopener">ADR-018</a>). <code>[Rubric §8, Data Architecture]</code> (deliberate persistence: transactions, migrations,
+          soft-delete, audit, concurrency) is the dominant lens for the whole persistence half of this chapter.</p>
           <h2 id="each-config-inherits-the-cross-cutting-behavior-then-adds-entity-specifics">Each config inherits the cross-cutting behavior, then adds entity specifics</h2>
-          <p>Every configuration&#39;s <code>Configure</code> method begins with <code>base.Configure(builder)</code> (e.g.
-          <code>SessionConfiguration.cs:18</code>) and <em>then</em> adds its own mappings. That one <code>base</code> call is where the
-          framework injects the conventions you&#39;ll see applied uniformly: the strongly-typed key, the
-          soft-delete <code>IsDeleted</code> shadow handling, the audit columns, and a <code>rowversion</code> concurrency token,
-          none of which any individual config re-states. The per-entity bodies then declare what is unique:
-          column lengths sourced from the domain&#39;s invariant constants (<code>SessionInvariants.TitleMaxLength</code>,
-          <code>EventInvariants.NameMaxLength</code>), required/optional flags, computed properties excluded with
-          <code>builder.Ignore(...)</code> (e.g. <code>Session.Duration</code>, <code>SessionConfiguration.cs:67</code>), and <strong>filtered unique
-          indexes</strong> that scope uniqueness to non-deleted rows, <code>HasFilter(&quot;[IsDeleted] = 0&quot;)</code> appears on the
-          <code>SessionSpeaker</code> (Session, Speaker) pair, the one-score-per-<code>Session</code> index on <code>SessionAiScore</code>, and
-          others, so soft-deleted rows don&#39;t block a re-insert. A couple of configs carry a deliberate quirk
-          worth knowing: <a href="group-19-conference-infrastructure.html#conferencecategoryconfiguration"><code>ConferenceCategoryConfiguration</code></a>
-          calls <code>ToTable(&quot;Category&quot;, &quot;Conference&quot;)</code> explicitly (<code>ConferenceCategoryConfiguration.cs:24</code>) so the
-          Conference <code>Category</code> table doesn&#39;t collide with another module&#39;s <code>Category</code>, and
-          <a href="group-19-conference-infrastructure.html#sessionconfiguration"><code>SessionConfiguration</code></a> maps the
-          <code>Session→Room</code> relationship with <code>OnDelete(DeleteBehavior.Restrict)</code> so deleting a room can&#39;t cascade
+          <p>Every configuration&#39;s <code>Configure</code> method begins with <code>base.Configure(builder)</code> (for example
+          <code>SessionConfiguration.cs:17</code>) and <em>then</em> adds its own mappings. That one <code>base</code> call is where the
+          framework injects the conventions applied uniformly: the strongly-typed key, the table name and module
+          schema, and the concurrency token, none of which any individual config re-states. The per-entity bodies
+          then declare what is unique: column lengths sourced from the domain&#39;s invariant constants
+          (<code>SessionInvariants.TitleMaxLength</code> at <code>SessionConfiguration.cs:20</code>, <code>EventInvariants.NameMaxLength</code> at
+          <code>EventConfiguration.cs:20</code>), required and optional flags, computed properties excluded with
+          <code>builder.Ignore(...)</code> (<code>Session.Duration</code> at <code>SessionConfiguration.cs:66</code>, <code>Speaker.FullName</code> at
+          <code>SpeakerConfiguration.cs:70</code>), value-object conversions (<code>Speaker.Email</code> round-trips through
+          <code>Email.Create</code> at <code>SpeakerConfiguration.cs:42-47</code>), decimal precision (<code>HasPrecision(3, 1)</code> on all seven
+          AI sub-scores, <code>SessionAiScoreConfiguration.cs:22-48</code>), and <strong>filtered indexes</strong>. The filters come in
+          two flavors and both matter. Soft-delete filters scope uniqueness to live rows, so a soft-deleted link
+          does not block a re-insert: <code>HasFilter(&quot;[IsDeleted] = 0&quot;)</code> appears on the unique (SessionId, SpeakerId)
+          pair (<code>SessionSpeakerConfiguration.cs:30-32</code>), on the one-score-per-session index
+          (<code>SessionAiScoreConfiguration.cs:59-61</code>), on the EventSpeaker, SessionCategoryItem, and
+          SpeakerCategoryItem pairs, and on the non-unique lookup indexes for <code>Session.EventId</code>
+          (<code>SessionConfiguration.cs:76-77</code>) and <code>EventQuestionAnswer.EventId</code>. Sparse filters skip nulls:
+          <code>Speaker.LinkedUserId</code> is unique only where it is set (<code>SpeakerConfiguration.cs:65-67</code>, the
+          User-to-Speaker link), and <code>Event.SessionizeCode</code> is indexed only where present
+          (<code>EventConfiguration.cs:41-42</code>). Two further quirks are worth knowing:
+          <a href="#conferencecategoryconfiguration"><code>ConferenceCategoryConfiguration</code></a> calls
+          <code>ToTable(&quot;Category&quot;, &quot;Conference&quot;)</code> explicitly (<code>ConferenceCategoryConfiguration.cs:24</code>) so the
+          Conference <code>Category</code> table cannot collide with another module&#39;s <code>Category</code>, and
+          <a href="#sessionconfiguration"><code>SessionConfiguration</code></a> maps the Session-to-Room relationship with
+          <code>OnDelete(DeleteBehavior.Restrict)</code> (<code>SessionConfiguration.cs:86</code>) so deleting a room can never cascade
           sessions away.</p>
-          <h2 id="dbsets-and-the-dbcontext-shape">DbSets and the DbContext shape</h2>
-          <p><a href="group-19-conference-infrastructure.html#moduleapplicationdbcontext"><code>ModuleApplicationDbContext</code></a> is the
-          Conference module&#39;s abstract <code>DbContext</code>. It does one job: declare the <code>DbSet&lt;T&gt;</code> for every Conference
-          entity, <code>Events</code>, <code>Rooms</code>, <code>Sessions</code>, <code>Speakers</code>, the four join entities, <code>Categories</code>,
-          <code>CategoryItems</code>, <code>Questions</code>, and the answer tables. It is <strong>abstract</strong> and inherits from the Common
-          <a href="group-07-persistence-ef-core.html#applicationdbcontext"><code>ApplicationDbContext</code></a>, from which it gets the
-          real machinery: the <code>SaveChangesAsync</code> override that stamps audit fields, applies soft-delete, captures
-          domain events into the outbox, and the global query filters that hide deleted rows. The concrete class
-          that EF actually instantiates is the single
-          <a href="group-07-persistence-ef-core.html#sqlserverdbcontext"><code>SQLServerDbContext</code></a> in the Common framework,
-          <strong>one concrete context class, one instance per database</strong> (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>). The codebase deliberately does
-          <strong>not</strong> split into per-module context classes; <code>ModuleApplicationDbContext</code> exists only to declare the
-          module&#39;s <code>DbSet</code>s and discover its configurations, not to be a second concrete context. This is the
-          per-database half of database-per-service: the Conference service owns the <code>ADC_Conference</code> database
-          and its own <code>dbo.OutboxMessages</code>, so it never races another service for outbox rows.
-          <code>[Rubric §7, Microservices Readiness]</code> (can a module become its own service without a rewrite?) is
-          embodied here, the Conference module already runs as <code>MMCA.ADC.Conference.Service</code> over its own DB,
-          and cross-module references (a speaker&#39;s linked user, a bookmark&#39;s session) are scalar columns resolved
-          via gRPC + integration events, never cross-database foreign keys.</p>
-          <h2 id="seeding-real-data-always-sample-data-only-in-devci">Seeding: real data always, sample data only in dev/CI</h2>
-          <p><a href="group-19-conference-infrastructure.html#conferencemoduledbseeder"><code>ConferenceModuleDbSeeder</code></a> is run
-          after schema initialization (invoked from the module&#39;s <code>SeedAsync</code>, wired in the API layer&#39;s
-          <code>ConferenceModuleSeeder</code>). It is idempotent, every seed step first does an <code>ExistsAsync</code> check and
-          returns early if the row is already present, so it is safe to run on every startup, which is exactly
-          how production&#39;s <code>&quot;Migrate&quot;</code> database-init strategy uses it. It always seeds two things: the real
-          <strong>Atlanta Cloud + AI Conference</strong> <code>Event</code> (date, venue, time zone, and the <code>SessionizeCode</code> that links
-          the event to its Sessionize submission, <code>ConferenceModuleDbSeeder.cs:52-62</code>) and the fixed set of
-          <strong>feedback <code>Question</code>s</strong> (session ratings + conference ratings, using a reserved manual-ID range so
-          they never collide with imported data). It conditionally seeds two sample <strong><code>Speaker</code>s</strong> and two sample
-          <strong><code>Session</code>s</strong> <em>only</em> when <code>Seeding:IncludeSampleConferenceData=true</code>, a flag set by the local Aspire
-          AppHost and the E2E CI workflow but left unset in production. The reason is concrete and documented in
-          the seeder&#39;s own remarks (<code>ConferenceModuleDbSeeder.cs:14-21</code>): the public-browse E2E tests need at
-          least one session and one speaker row to exist deterministically, while production&#39;s real sessions and
-          speakers arrive through the Sessionize import, not the seeder. This is the extension point that the
-          <code>ConferenceModuleDbSeederTests</code> in <a href="group-27-testing-infrastructure.html">Group 25</a> exercise.</p>
+          <h2 id="dbsets-the-context-shape-and-how-the-configurations-are-actually-found">DbSets, the context shape, and how the configurations are actually found</h2>
+          <p><a href="#moduleapplicationdbcontext"><code>ModuleApplicationDbContext</code></a>
+          (<code>MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:18</code>) is the
+          Conference module&#39;s abstract <code>DbContext</code>. It does one job: declare 13 <code>internal DbSet&lt;T&gt;</code> properties
+          (<code>Events</code>, <code>Rooms</code>, <code>EventSpeakers</code>, <code>EventQuestionAnswers</code>, <code>Sessions</code>, <code>SessionSpeakers</code>,
+          <code>SessionQuestionAnswers</code>, <code>SessionCategoryItems</code>, <code>Speakers</code>, <code>SpeakerCategoryItems</code>, <code>Categories</code>,
+          <code>CategoryItems</code>, <code>Questions</code>, at <code>ModuleApplicationDbContext.cs:26-62</code>). It is <strong>abstract</strong> and inherits
+          from the Common <a href="group-07-persistence-ef-core.html#applicationdbcontext"><code>ApplicationDbContext</code></a>, from
+          which it gets the real machinery: the <code>SaveChangesAsync</code> override that stamps audit fields, captures
+          domain events into the outbox, and the global soft-delete query filters applied to every
+          <code>IAuditableEntity</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/ApplicationDbContext.cs:243-257</code>).
+          The concrete class EF actually instantiates is the single
+          <a href="group-07-persistence-ef-core.html#sqlserverdbcontext"><code>SQLServerDbContext</code></a> in the Common framework:
+          <strong>one concrete context class per engine, one instance per database</strong> (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>). The codebase
+          deliberately does not split into per-module context classes.</p>
+          <p>A detail that surprises most readers: a <code>DbSet</code> is <em>not</em> what puts an entity in the model. The base
+          context walks the registered configuration assemblies and applies every
+          <code>IEntityTypeConfigurationSQLServer&lt;,&gt;</code> implementation whose entity resolves to this context&#39;s data
+          source key (<code>ApplicationDbContext.cs:351-377</code>). That is why two entities with a configuration here,
+          <code>SessionAiScore</code> and <code>SpeakerQuestionAnswer</code>, are mapped and queryable through the repository layer even
+          though <code>ModuleApplicationDbContext</code> declares no <code>DbSet</code> for either: 15 configurations, 13 <code>DbSet</code>s, and
+          the configurations win. <code>[Rubric §7, Microservices Readiness]</code> (can a module become its own service
+          without a rewrite?) is embodied here: the Conference module already runs as <code>MMCA.ADC.Conference.Service</code>
+          over its own <code>ADC_Conference</code> database with its own <code>dbo.OutboxMessages</code>, and cross-module references
+          (a speaker&#39;s linked user, a bookmark&#39;s session) are scalar columns resolved via gRPC and integration
+          events, never cross-database foreign keys.</p>
+          <h2 id="seeding-two-real-events-always-sample-data-only-in-dev-and-ci">Seeding: two real events always, sample data only in dev and CI</h2>
+          <p><a href="#conferencemoduledbseeder"><code>ConferenceModuleDbSeeder</code></a>
+          (<code>MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:22</code>)
+          derives from the framework&#39;s <a href="group-07-persistence-ef-core.html#dbseeder"><code>DbSeeder</code></a> and runs after
+          schema initialization, constructed by <code>ConferenceModuleSeeder</code> in the API layer
+          (<code>MMCA.ADC.Conference.API/ConferenceModuleSeeder.cs:28</code>). It is idempotent: every step first issues an
+          <code>ExistsAsync</code> check through the repository and returns early if the row is present, which is what makes
+          it safe to run on every startup under the production <code>Migrate</code> init strategy (<a href="https://ivanball.github.io/docs/adr/030-startup-sole-migrator.html" target="_blank" rel="noopener">ADR-030</a>). It <strong>always</strong>
+          seeds three things (<code>ConferenceModuleDbSeeder.cs:35-37</code>): the <strong>2026 Atlanta Cloud + AI Conference</strong>
+          (2026-05-30, <code>America/New_York</code>, Sessionize code <code>z1ecmzux</code>, <code>ConferenceModuleDbSeeder.cs:59-69</code>), the
+          <strong>2026 Atlanta Developers Conference</strong> (2026-10-17, no Sessionize code,
+          <code>ConferenceModuleDbSeeder.cs:91-101</code>), both published immediately after creation, and the fixed set of
+          <strong>10 feedback questions</strong> (5 session ratings plus a session comment, 3 conference ratings plus a
+          conference comment, <code>ConferenceModuleDbSeeder.cs:123-135</code>) whose ids start at
+          <a href="group-17-conference-domain.html#questioninvariants"><code>QuestionInvariants</code></a><code>.ManualIdRangeStart</code>
+          (<code>ConferenceModuleDbSeeder.cs:137</code>) so they never collide with imported data. It <strong>conditionally</strong> seeds
+          two sample speakers (Ada Lovelace and Alan Turing, <code>ConferenceModuleDbSeeder.cs:165-166</code>), two sample
+          sessions, one per seeded event (<code>ConferenceModuleDbSeeder.cs:220-224</code>), and the EventSpeaker plus
+          SessionSpeaker links between them (<code>ConferenceModuleDbSeeder.cs:270-294</code>), only when <code>includeSampleData</code>
+          is set. The flag comes from <code>Seeding:IncludeSampleConferenceData</code> (<code>ConferenceModuleSeeder.cs:26</code>), which
+          the local Aspire AppHost sets (<code>MMCA.ADC.AppHost/Program.cs:164</code>) and production leaves unset. The reason
+          is documented in the seeder&#39;s own remarks (<code>ConferenceModuleDbSeeder.cs:14-21</code>): the public-browse E2E
+          tests need at least one session and one speaker row to exist deterministically, while production&#39;s real
+          sessions and speakers arrive through the Sessionize import. The sample links are created on <em>both</em> paths
+          deliberately, so the direct and the transitive branches of the speakers-by-event filter are exercised in
+          dev and CI (<code>ConferenceModuleDbSeeder.cs:286-290</code>).</p>
           <h2 id="the-sessionize-adapter">The Sessionize adapter</h2>
-          <p><a href="group-19-conference-infrastructure.html#sessionizeservice"><code>SessionizeService</code></a> is a deliberately thin
-          HTTP client (the whole class is ~25 lines): given a Sessionize event code, it <code>GET</code>s the platform&#39;s
-          &quot;View All&quot; endpoint and deserializes the JSON into the <code>SessionizeResponse</code> model owned by the
-          Application layer. It implements <a href="group-18-conference-application.html#isessionizeservice"><code>ISessionizeService</code></a>
-          and is registered as a <strong>typed <code>HttpClient</code></strong> in
-          <a href="group-19-conference-infrastructure.html#dependencyinjection"><code>DependencyInjection</code></a>
-          (<code>DependencyInjection.cs:23-24</code>) with the Sessionize base address baked in. Because it is registered
-          via <code>AddHttpClient&lt;,&gt;</code>, it automatically inherits the standard Aspire resilience handler (Polly
-          retry/timeout/circuit-breaker) configured in <code>ServiceDefaults</code>, <code>[Rubric §29, Resilience]</code>, the
+          <p><a href="#sessionizeservice"><code>SessionizeService</code></a>
+          (<code>MMCA.ADC.Conference.Infrastructure/Services/SessionizeService.cs:10</code>) is a deliberately thin HTTP
+          client: the whole class is one method. Given a Sessionize event code it builds the relative URI
+          <code>{code}/view/All</code> (<code>SessionizeService.cs:15</code>), calls <code>GetAsync</code>, asserts success with
+          <code>EnsureSuccessStatusCode</code> (<code>SessionizeService.cs:20</code>), and deserializes into the
+          <a href="group-18-conference-application.html#sessionizeresponse"><code>SessionizeResponse</code></a> model owned by the
+          Application layer. Unlike the AI adapter it <strong>does</strong> throw on a bad status, because the import use-case
+          that calls it is a foreground operation with a caller waiting on the result. It is registered as a typed
+          <code>HttpClient</code> in <a href="#dependencyinjection"><code>DependencyInjection</code></a> with the base address
+          <code>https://sessionize.com/api/v2/</code> baked in
+          (<code>MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:21-23</code>), so it inherits the standard Aspire
+          resilience handler (Polly retry, timeout, circuit breaker) unchanged: <code>[Rubric §29, Resilience]</code>, the
           <a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a> policy that every outbound client gets resilience by default. The thinness is intentional:
-          parsing, mapping, and the actual import workflow live in Application use-cases; this adapter only owns
-          the wire call.</p>
+          parsing, mapping, and the import workflow live in Application use-cases, and this adapter owns only the
+          wire call.</p>
           <h2 id="the-anthropic-ai-scoring-adapter">The Anthropic AI scoring adapter</h2>
-          <p><a href="group-19-conference-infrastructure.html#anthropicscoringservice"><code>AnthropicScoringService</code></a> is the
-          richer of the two adapters, it scores a single session proposal against a Program-Committee rubric
-          using the <strong>Anthropic Claude Messages API</strong>. It implements
-          <a href="group-18-conference-application.html#iaiscoringservice"><code>IAiScoringService</code></a>, exposes the model id it
-          uses (<code>claude-haiku-4-5-20251001</code>, <code>AnthropicScoringService.cs:21</code>), reads the API key from
-          configuration (<code>Anthropic:ApiKey</code>, expected in user secrets), and, importantly, <strong>never throws</strong>:
-          every failure path (missing key, non-2xx response, empty body, deserialization failure, any exception)
-          funnels into a <code>FailedResult</code> carrying zero scores and <code>Success = false</code>. That non-throwing contract
-          matters because scoring runs in batches and a single bad proposal must not abort the batch. The wire
-          shapes are the small private records grouped in this chapter,
-          <a href="group-19-conference-infrastructure.html#anthropicrequest"><code>AnthropicRequest</code></a>,
-          <a href="group-19-conference-infrastructure.html#anthropicmessage"><code>AnthropicMessage</code></a>,
-          <a href="group-19-conference-infrastructure.html#anthropicresponse"><code>AnthropicResponse</code></a>,
-          <a href="group-19-conference-infrastructure.html#anthropiccontentblock"><code>AnthropicContentBlock</code></a>, and
-          <a href="group-19-conference-infrastructure.html#aiscoreresponse"><code>AiScoreResponse</code></a> (the JSON the model is
-          prompted to return, parsed by locating the <code>{...}</code> span in the response text). The prompt is built
-          inline (<code>BuildPrompt</code>), the speaker block is formatted with <code>CultureInfo.InvariantCulture</code> to stay
-          culture-deterministic (<code>AnthropicScoringService.cs:145</code>, the §27 invariant-formatting point the primer
-          flags), and each returned score is clamped to <code>[1.0, 10.0]</code> with banker&#39;s rounding before it becomes a
-          <code>SessionScoringResult</code>. <code>[Rubric §11, Security]</code> shows up in the obvious place, the API key is a
-          configuration secret, never hard-coded, and <code>[Rubric §13, Observability]</code> in the <code>[LoggerMessage]</code>
-          source-generated warning that records every scoring failure with the session id and reason.</p>
+          <p><a href="#anthropicscoringservice"><code>AnthropicScoringService</code></a>
+          (<code>MMCA.ADC.Conference.Infrastructure/Services/AnthropicScoringService.cs:16</code>) is the richer of the two
+          adapters: it scores one session proposal against a Program Committee rubric using the <strong>Anthropic Claude
+          Messages API</strong>. It implements <a href="group-18-conference-application.html#iaiscoringservice"><code>IAiScoringService</code></a>,
+          exposes the model id it uses (<code>claude-haiku-4-5-20251001</code>, <code>AnthropicScoringService.cs:22</code>), reads the
+          API key from configuration (<code>Anthropic:ApiKey</code>, expected in user secrets,
+          <code>AnthropicScoringService.cs:29</code>), POSTs to the relative <code>v1/messages</code> endpoint with an <code>x-api-key</code> header
+          (<code>AnthropicScoringService.cs:47-48</code>), and caps the response at 256 tokens
+          (<code>AnthropicScoringService.cs:44</code>). Its contract is precise about failure: it <strong>never throws for a scoring
+          failure</strong>, but <strong>cancellation propagates</strong>. Every failure path (missing key, non-2xx status, no text block
+          in the response, unparseable JSON, any other exception) funnels into <code>FailedResult</code>, which returns zero
+          scores with <code>Success = false</code> (<code>AnthropicScoringService.cs:179-192</code>), while the catch filter
+          <code>when (ex is not OperationCanceledException)</code> (<code>AnthropicScoringService.cs:71</code>) lets host shutdown unwind.
+          That split matters because scoring runs in batches: one bad proposal must not abort the batch, but a
+          deploy must still be able to stop the run.</p>
+          <p>The wire shapes are five private sealed records nested inside the service: the request envelope
+          <a href="#anthropicrequest"><code>AnthropicRequest</code></a> (<code>AnthropicScoringService.cs:200</code>) with its
+          <a href="#anthropicmessage"><code>AnthropicMessage</code></a> list (<code>AnthropicScoringService.cs:212</code>), the response envelope
+          <a href="#anthropicresponse"><code>AnthropicResponse</code></a> (<code>AnthropicScoringService.cs:221</code>) with its
+          <a href="#anthropiccontentblock"><code>AnthropicContentBlock</code></a> array (<code>AnthropicScoringService.cs:227</code>), and
+          <a href="#aiscoreresponse"><code>AiScoreResponse</code></a> (<code>AnthropicScoringService.cs:238</code>), the score JSON the model is
+          prompted to emit. Their snake_case <code>[JsonPropertyName]</code> names are the only place the vendor&#39;s contract
+          appears, so the Application layer sees only
+          <a href="group-18-conference-application.html#sessionscoringresult"><code>SessionScoringResult</code></a>: that is
+          <code>[Rubric §32, Dependency &amp; Supply-Chain]</code> in miniature. Parsing is defensive at three levels: the
+          response&#39;s <code>content</code> list is searched for the first <code>&quot;text&quot;</code> block (<code>AnthropicScoringService.cs:60-61</code>),
+          the JSON object is located by index between the first <code>{</code> and the last <code>}</code> so a chatty model preamble is
+          tolerated (<code>AnthropicScoringService.cs:81-86</code>), and all seven sub-scores are <strong>nullable</strong> so a partial
+          object is rejected as a failed parse by a property pattern rather than silently defaulting to zero
+          (<code>AnthropicScoringService.cs:96-108</code>, with the reason spelled out at <code>AnthropicScoringService.cs:236-237</code>).
+          Accepted scores are clamped to <code>[1.0, 10.0]</code> and rounded to one decimal with banker&#39;s rounding
+          (<code>AnthropicScoringService.cs:177</code>), and the speaker block of the prompt is formatted with
+          <code>CultureInfo.InvariantCulture</code> (<code>AnthropicScoringService.cs:166-171</code>) to stay culture-deterministic.
+          <code>[Rubric §11, Security]</code> shows up in the obvious place (the API key is a configuration secret, never
+          hard-coded) and <code>[Rubric §13, Observability]</code> in the <code>[LoggerMessage]</code> source-generated warning that
+          records every scoring failure with the session id and reason (<code>AnthropicScoringService.cs:196-197</code>).</p>
+          <h2 id="scoring-runs-on-a-hosted-drain-not-on-the-request-thread">Scoring runs on a hosted drain, not on the request thread</h2>
+          <p><a href="#sessionscoringprocessor"><code>SessionScoringProcessor</code></a>
+          (<code>MMCA.ADC.Conference.Infrastructure/Services/SessionScoringProcessor.cs:31</code>) is the piece that makes a
+          multi-minute paid AI pass safe to trigger from an HTTP POST. It is a <code>BackgroundService</code> that consumes
+          <a href="group-18-conference-application.html#sessionscoringqueue"><code>SessionScoringQueue</code></a> with
+          <code>ReadAllAsync(stoppingToken)</code> (<code>SessionScoringProcessor.cs:47</code>), so the host owns the work: shutdown
+          cancels it and waits for it to unwind instead of a deploy or a scale-in tearing down a half-finished run.
+          This is the concrete adoption of <a href="https://ivanball.github.io/docs/adr/052-background-job-execution.html" target="_blank" rel="noopener">ADR-052</a> (bounded queue plus single-reader hosted drain), and it replaced
+          an untracked fire-and-forget task the controller used to start. Per item it creates its own DI scope
+          (<code>CreateAsyncScope</code>, <code>SessionScoringProcessor.cs:79</code>) because the drain itself is a singleton while the
+          <a href="group-18-conference-application.html#scoreeventsessionscommand"><code>ScoreEventSessionsCommand</code></a> handler is
+          scoped, resolves that handler through
+          <a href="group-05-cqrs-pipeline.html#icommandhandlerin-tcommand-tresult"><code>ICommandHandler&lt;in TCommand, TResult&gt;</code></a>
+          (<code>SessionScoringProcessor.cs:80-81</code>), and releases the queue&#39;s dedup claim in a <code>finally</code>
+          (<code>queue.MarkCompleted(eventId)</code>, <code>SessionScoringProcessor.cs:68</code>) so a failed or interrupted run does not
+          permanently block the same event. Failure handling is decided once instead of per call site: a
+          cancellation during shutdown logs and returns (<code>SessionScoringProcessor.cs:53-59</code>), and any other
+          exception is caught under an explicit <code>CA1031</code> suppression whose comment states the rule, one failed run
+          must not kill the drain (<code>SessionScoringProcessor.cs:60-65</code>). The output cache is evicted <strong>twice</strong> per
+          run, once up front so polling clients stop seeing stale scores and once after a successful pass
+          (<code>SessionScoringProcessor.cs:77</code> and <code>SessionScoringProcessor.cs:93</code>), and it evicts the narrow
+          <code>conference:sessions</code> tag rather than the root <code>conference</code> tag. The comment above that constant records
+          why in production terms (<code>SessionScoringProcessor.cs:37-42</code>): evicting the root flushed events, speakers,
+          rooms, categories, and questions too, so an organizer triggering a scoring run during the event emptied
+          the whole public read surface onto the Basic-tier database while attendees were browsing.
+          <code>[Rubric §12, Performance &amp; Scalability]</code> and <code>[Rubric §31, Cost/FinOps]</code> both live in that one constant
+          (<a href="https://ivanball.github.io/docs/adr/026-caching-strategy.html" target="_blank" rel="noopener">ADR-026</a>, <a href="https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html" target="_blank" rel="noopener">ADR-040</a>).</p>
           <h2 id="di-wiring-and-a-deliberate-resilience-override">DI wiring and a deliberate resilience override</h2>
-          <p><a href="group-19-conference-infrastructure.html#dependencyinjection"><code>DependencyInjection</code></a> is a single
+          <p><a href="#dependencyinjection"><code>DependencyInjection</code></a>
+          (<code>MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:11</code>) is a single
           <code>extension(IServiceCollection)</code> block (the codebase&#39;s standard DI-registration idiom, taught in the
-          primer) exposing <code>AddModuleConferenceInfrastructure()</code>. It registers both adapters as typed HTTP
-          clients, but the Anthropic client gets a <strong>custom resilience policy</strong>: it calls
-          <code>RemoveAllResilienceHandlers()</code> and re-adds a <code>StandardResilienceHandler</code> with much longer timeouts,
-          a 3-minute attempt timeout, a 5-minute total request timeout, a 7-minute circuit-breaker sampling
-          window, and only <strong>one</strong> retry (<code>DependencyInjection.cs:35-42</code>). The inline comment explains why: AI
-          scoring of a large batch can take several minutes, which would blow through Aspire&#39;s default 30s/90s
-          limits, and retrying an expensive LLM call aggressively is wasteful. This is a precise illustration of
-          the resilience story from <a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a>, every outbound client is resilient by default, but a client with
-          genuinely different latency characteristics tunes the policy rather than disabling it. The Sessionize
-          client, by contrast, takes the defaults unchanged.</p>
+          primer) exposing <code>AddModuleConferenceInfrastructure()</code>. It registers both adapters as typed HTTP clients
+          and the drain as a hosted service (<code>DependencyInjection.cs:45</code>). The Anthropic client gets a <strong>custom
+          resilience policy</strong>: a 5-minute <code>HttpClient.Timeout</code> and the <code>anthropic-version: 2023-06-01</code> header
+          (<code>DependencyInjection.cs:31-32</code>), then <code>RemoveAllResilienceHandlers()</code> followed by a re-added
+          <code>StandardResilienceHandler</code> with a 3-minute attempt timeout, a 7-minute circuit-breaker sampling window,
+          a 5-minute total request timeout, and only <strong>one</strong> retry (<code>DependencyInjection.cs:34-41</code>). The inline
+          comment explains why (<code>DependencyInjection.cs:25-26</code>): AI scoring of a large batch can take minutes,
+          which would blow through Aspire&#39;s default 30s attempt and 90s total limits, and retrying an expensive LLM
+          call aggressively is wasteful. This is a precise illustration of <a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a>: every outbound client is
+          resilient by default, but a client with genuinely different latency characteristics tunes the policy
+          rather than disabling it. The Sessionize client takes the defaults unchanged.</p>
           <h2 id="how-it-fits-together-at-runtime">How it fits together at runtime</h2>
-          <p>Two flows tie the chapter together. <strong>Persistence flow:</strong> a Conference command handler mutates an
-          aggregate and calls <code>SaveChangesAsync</code> on the unit of work; that resolves the concrete
-          <code>SQLServerDbContext</code> over the <code>ADC_Conference</code> database, which applies the configurations registered
-          here (lengths, indexes, relationships), stamps audit fields, soft-deletes via global filters, and
-          captures any domain events into the per-database outbox, all in one transaction. <strong>Integration flow:</strong>
-          an organizer triggers a Sessionize refresh or an AI-scoring run; the Application use-case calls the
-          port, the typed <code>HttpClient</code> adapter here makes the outbound call wrapped in its (default or tuned)
-          Polly pipeline, and the result flows back as either a parsed <code>SessionizeResponse</code> or a
-          <code>SessionScoringResult</code>, never an unhandled exception in the AI case. The two
-          <a href="group-19-conference-infrastructure.html#assemblyreference"><code>AssemblyReference</code></a> /
-          <a href="group-19-conference-infrastructure.html#classreference"><code>ClassReference</code></a> marker types in this assembly
-          exist purely so the module loader and Scrutor can scan this assembly to discover the configurations,
-          seeder, and services without a hard-coded type list, the same scanning extension point every module assembly
-          provides.</p>
-          <h3 id="aiscoreresponse-anthropiccontentblock-anthropicmessage">AiScoreResponse, AnthropicContentBlock, AnthropicMessage</h3>
+          <p>Three flows tie the chapter together. <strong>Persistence flow:</strong> a Conference command handler mutates an
+          aggregate and the unit of work saves; that resolves the concrete <code>SQLServerDbContext</code> over the
+          <code>ADC_Conference</code> database, whose model was built from the configurations registered here (lengths,
+          indexes, relationships, precision), stamps audit fields, hides deleted rows behind the global filters,
+          and captures domain events into the per-database outbox, all in one transaction. <strong>Import flow:</strong> an
+          organizer triggers a Sessionize refresh; the Application use-case calls
+          <a href="group-18-conference-application.html#isessionizeservice"><code>ISessionizeService</code></a>, the typed <code>HttpClient</code>
+          adapter makes the outbound call inside the default Polly pipeline, and the parsed <code>SessionizeResponse</code>
+          flows back for mapping. <strong>Scoring flow:</strong> the organizer POSTs to the scoring endpoint, the controller
+          only calls <code>TryEnqueue</code> and returns <code>202 Accepted</code> or <code>409 Conflict</code>
+          (<code>MMCA.ADC.Conference.API/Controllers/SessionSelectionController.cs:108-116</code>),
+          <a href="#sessionscoringprocessor"><code>SessionScoringProcessor</code></a> picks the event up, evicts the sessions cache tag,
+          runs the scoped command handler which calls <a href="#anthropicscoringservice"><code>AnthropicScoringService</code></a> once per
+          session under the tuned resilience policy, persists one <code>SessionAiScore</code> row per session behind the unique
+          filtered index, and evicts the tag again. The two marker types in this assembly,
+          <a href="#assemblyreference"><code>AssemblyReference</code></a> and <a href="#classreference"><code>ClassReference</code></a>
+          (<code>MMCA.ADC.Conference.Infrastructure/AssemblyReference.cs:5</code> and
+          <code>MMCA.ADC.Conference.Infrastructure/AssemblyReference.cs:11</code>), exist purely so the module loader and the
+          configuration-assembly scan can reach this assembly by a stable <code>typeof()</code> handle instead of a hard-coded
+          type list, the same extension point every module assembly provides.</p>
+          <h3 id="aiscoreresponse">AiScoreResponse</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure.Services</code> · Level 0 · record (sealed, private)</p>
+          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure.Services</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/AnthropicScoringService.cs:238</code> · Level 0 · record (private sealed)</p>
           </blockquote>
-          <p>Three <code>private sealed record</code> types nested inside <a href="#anthropicscoringservice"><code>AnthropicScoringService</code></a> that model the Anthropic Messages API wire shapes. They are invisible outside that class, the encapsulation point that keeps the AI vendor&#39;s JSON contract from leaking past the Infrastructure layer.</p>
-          <div class="table-wrap"><table>
-          <thead>
-          <tr>
-          <th>Type</th>
-          <th>File:Line</th>
-          <th>Purpose</th>
-          </tr>
-          </thead>
-          <tbody><tr>
-          <td><code>AiScoreResponse</code></td>
-          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/AnthropicScoringService.cs:215</code></td>
-          <td>The score JSON the model is prompted to return: <code>overall</code>, <code>topic_relevance</code>, <code>description_quality</code>, <code>novelty</code>, <code>actionable_takeaways</code>, <code>depth_or_insight_quality</code>, <code>credibility_experience</code> (all <code>decimal</code>), plus <code>reasoning</code> (<code>string?</code>)</td>
-          </tr>
-          <tr>
-          <td><code>AnthropicContentBlock</code></td>
-          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/AnthropicScoringService.cs:206</code></td>
-          <td>One block from the response <code>content</code> array: <code>type</code> (<code>&quot;text&quot;</code>) + <code>text</code>, both nullable</td>
-          </tr>
-          <tr>
-          <td><code>AnthropicMessage</code></td>
-          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/AnthropicScoringService.cs:191</code></td>
-          <td>One conversation message: <code>required</code> <code>role</code> (<code>&quot;user&quot;</code>) + <code>required</code> <code>content</code> (the prompt)</td>
-          </tr>
-          </tbody></table></div>
           <ul>
-          <li><strong>What they are</strong>: passive serialization records. <code>AnthropicMessage</code> is the request-side payload (one user-role message carrying the prompt); <code>AnthropicContentBlock</code> is one element of the response&#39;s <code>content</code> array; <code>AiScoreResponse</code> is the structured score the JSON body inside the chosen text block deserializes to.</li>
-          <li><strong>Depends on</strong>: no first-party types. External: <code>System.Text.Json.Serialization.JsonPropertyName</code> only.</li>
-          <li><strong>Concept introduced, anti-corruption serialization records at the edge.</strong> <code>[Rubric §3, Clean Architecture]</code> (assesses whether external contracts stay out of inner layers): the vendor&#39;s snake_case envelope (<code>max_tokens</code>, <code>topic_relevance</code>, …) is named on these records via <code>[JsonPropertyName]</code> and <strong>nowhere else</strong>: the Application layer sees only <a href="group-18-conference-application.html#sessionscoringresult"><code>SessionScoringResult</code></a>, never an Anthropic type. <code>[Rubric §32, Dependency &amp; Supply-Chain]</code> (assesses how a third-party API dependency is isolated): if Anthropic reshapes its envelope, as it has before, only this one file changes.</li>
-          <li><strong>Walkthrough</strong>: <code>AnthropicMessage</code> uses <code>required string Role</code>/<code>required string Content</code> (<code>:193-197</code>) so a message can&#39;t be half-built. <code>AnthropicContentBlock</code> keeps <code>Type</code>/<code>Text</code> nullable (<code>:209-212</code>) because a response block may carry a non-text type. <code>AiScoreResponse</code>&#39;s eight properties (<code>:217-239</code>) map the snake_case keys the prompt instructs Claude to emit; <code>Reasoning</code> is the only nullable one. The deserialization is case-insensitive (<code>JsonOptions</code>, <code>AnthropicScoringService.cs:173</code>), so casing drift in the model output is tolerated.</li>
-          <li><strong>Why it&#39;s built this way</strong>: nesting all three as private inner records of the adapter (rather than public DTOs) makes them an implementation detail of the one class that talks HTTP. Records give value semantics and concise <code>init</code> properties for what are pure data carriers.</li>
-          <li><strong>Where it&#39;s used</strong>: <a href="#anthropicscoringservice"><code>AnthropicScoringService</code></a> only: <code>AnthropicMessage</code> inside the request, <code>AnthropicContentBlock</code> when scanning the response <code>content</code> list for the <code>&quot;text&quot;</code> block, <code>AiScoreResponse</code> when parsing that block&#39;s JSON body into per-criterion scores.</li>
+          <li><strong>What it is</strong>: the score object the language model is prompted to emit, deserialized from the JSON span found inside the response text. Seven numeric sub-scores plus a free-text <code>reasoning</code> line.</li>
+          <li><strong>Depends on</strong>: no first-party types. External: <code>System.Text.Json.Serialization.JsonPropertyName</code>.</li>
+          <li><strong>Concept introduced, anti-corruption serialization records at the edge.</strong> This is a <code>private sealed record</code> nested inside <a href="#anthropicscoringservice"><code>AnthropicScoringService</code></a> (<code>AnthropicScoringService.cs:238</code>), so the vendor&#39;s snake_case vocabulary (<code>topic_relevance</code>, <code>actionable_takeaways</code>, <code>depth_or_insight_quality</code>) is named here and nowhere else. <code>[Rubric §3, Clean Architecture]</code> assesses whether external contracts stay out of inner layers: the Application layer only ever sees <a href="group-18-conference-application.html#sessionscoringresult"><code>SessionScoringResult</code></a>, never an Anthropic shape. <code>[Rubric §32, Dependency &amp; Supply-Chain]</code> assesses how a third-party API dependency is isolated: if Anthropic reshapes its envelope, only this one file changes.</li>
+          <li><strong>Walkthrough</strong>: eight <code>init</code> properties (<code>:240-262</code>), each carrying an explicit <code>[JsonPropertyName]</code>. The seven score properties (<code>Overall</code>, <code>TopicRelevance</code>, <code>DescriptionQuality</code>, <code>Novelty</code>, <code>ActionableTakeaways</code>, <code>DepthOrInsightQuality</code>, <code>CredibilityExperience</code>) are <strong><code>decimal?</code></strong>, not <code>decimal</code>, and the comment above the record (<code>:236-237</code>) explains the reason: nullability is what makes a <em>partial</em> model response detectable. <code>BuildResult</code> (<code>:92-108</code>) pattern-matches all seven against <code>{ } value</code> patterns and returns a failed result if any one is missing, instead of silently defaulting a missing score to <code>0m</code> and then clamping it up to <code>1.0</code>. <code>Reasoning</code> (<code>:261-262</code>) stays <code>string?</code> and is the only genuinely optional field, defaulted to <code>string.Empty</code> at <code>:120</code>.</li>
+          <li><strong>Why it&#39;s built this way</strong>: nesting it as a private record of the one class that speaks HTTP keeps it an implementation detail; making the score fields nullable turns &quot;the model returned three of seven scores&quot; into a detectable parse failure rather than a plausible-looking but wrong row in <code>SessionAiScore</code>.</li>
+          <li><strong>Where it&#39;s used</strong>: <a href="#anthropicscoringservice"><code>AnthropicScoringService.ParseSingleScore</code></a> (<code>:87</code>) deserializes into it, and <code>BuildResult</code> (<code>:92</code>) converts it into a <a href="group-18-conference-application.html#sessionscoringresult"><code>SessionScoringResult</code></a>.</li>
           </ul>
           <hr>
-          <h3 id="assemblyreference-classreference">AssemblyReference, ClassReference</h3>
+          <h3 id="anthropiccontentblock">AnthropicContentBlock</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/AssemblyReference.cs:5</code> · Level 0 · class (static) + class</p>
+          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure.Services</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/AnthropicScoringService.cs:227</code> · Level 0 · record (private sealed)</p>
           </blockquote>
-          <p>The assembly-marker pair for the Conference Infrastructure assembly. No behavior, a stable <code>typeof()</code> handle for reflection-based scanning.</p>
-          <div class="table-wrap"><table>
-          <thead>
-          <tr>
-          <th>Type</th>
-          <th>File:Line</th>
-          <th>Notes</th>
-          </tr>
-          </thead>
-          <tbody><tr>
-          <td><code>AssemblyReference</code></td>
-          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/AssemblyReference.cs:5</code></td>
-          <td><code>static class</code> exposing <code>Assembly</code> and <code>AssemblyName</code></td>
-          </tr>
-          <tr>
-          <td><code>ClassReference</code></td>
-          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/AssemblyReference.cs:11</code></td>
-          <td>Empty non-static class; a <code>typeof(ClassReference)</code> token for <code>Add…(typeof(...))</code> registration calls</td>
-          </tr>
-          </tbody></table></div>
           <ul>
-          <li><strong>What it is</strong>: the same two-type marker pattern every layer of every module repeats. <code>AssemblyReference.Assembly</code> returns <code>typeof(AssemblyReference).Assembly</code> and <code>AssemblyName</code> its simple name (<code>:7-8</code>); <code>ClassReference</code> is an empty class used purely as a generic/<code>typeof</code> anchor.</li>
+          <li><strong>What it is</strong>: one element of the Messages API response <code>content</code> array: a <code>type</code> discriminator plus its <code>text</code>.</li>
+          <li><strong>Depends on</strong>: no first-party types. External: <code>System.Text.Json.Serialization</code>.</li>
+          <li><strong>Concept</strong>: same private wire-record pattern taught under <a href="#aiscoreresponse"><code>AiScoreResponse</code></a>; nothing new.</li>
+          <li><strong>Walkthrough</strong>: two properties, <code>Type</code> and <code>Text</code> (<code>:229-233</code>), both <code>string?</code>. They are nullable because the adapter must be able to deserialize a block it does not understand without throwing: <a href="#anthropicscoringservice"><code>AnthropicScoringService</code></a> scans the list with <code>Find(c =&gt; string.Equals(c.Type, &quot;text&quot;, StringComparison.OrdinalIgnoreCase))</code> (<code>:60-61</code>) and treats a null <code>Text</code> as a failure (<code>:63-67</code>) rather than as an exception.</li>
+          <li><strong>Why it&#39;s built this way</strong>: the Messages API returns an array of typed blocks, so the adapter selects the text block by discriminator instead of assuming index 0.</li>
+          <li><strong>Where it&#39;s used</strong>: composed into <a href="#anthropicresponse"><code>AnthropicResponse.Content</code></a> (<code>:223-224</code>).</li>
+          </ul>
+          <hr>
+          <h3 id="anthropicmessage">AnthropicMessage</h3>
+          <blockquote>
+          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure.Services</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/AnthropicScoringService.cs:212</code> · Level 0 · record (private sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: one conversation turn in the request: a <code>role</code> and its <code>content</code>.</li>
+          <li><strong>Depends on</strong>: no first-party types. External: <code>System.Text.Json.Serialization</code>.</li>
+          <li><strong>Concept</strong>: cross-reference the private wire-record concept under <a href="#aiscoreresponse"><code>AiScoreResponse</code></a>.</li>
+          <li><strong>Walkthrough</strong>: <code>required string Role</code> and <code>required string Content</code> (<code>:213-218</code>). Both are <code>required</code>, the mirror image of the response records&#39; nullability: the adapter controls what it sends, so a half-built message is a compile error, while what comes back must be parsed defensively. Exactly one instance is ever constructed, with <code>Role = &quot;user&quot;</code> and the rubric prompt as <code>Content</code> (<code>:44</code>).</li>
+          <li><strong>Why it&#39;s built this way</strong>: <code>required</code> + <code>init</code> gives an immutable payload validated at construction (see the primer on <code>required</code>/<code>init</code> immutability).</li>
+          <li><strong>Where it&#39;s used</strong>: the <code>Messages</code> list of <a href="#anthropicrequest"><code>AnthropicRequest</code></a> (<code>:208-209</code>).</li>
+          </ul>
+          <hr>
+          <h3 id="assemblyreference">AssemblyReference</h3>
+          <blockquote>
+          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/AssemblyReference.cs:5</code> · Level 0 · class (static)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the assembly-marker type for the Conference Infrastructure assembly: a stable handle that reflection-based scanning can hold instead of a hard-coded assembly name string.</li>
           <li><strong>Depends on</strong>: <code>System.Reflection</code> only. No first-party types.</li>
-          <li><strong>Concept introduced</strong>: cross-reference the framework explanation under <a href="group-17-conference-domain.html#assemblyreference--classreference-conferencedomain">AssemblyReference / ClassReference (Conference.Domain)</a>; identical structure, different assembly.</li>
-          <li><strong>Walkthrough</strong>: omitted; structurally identical to every other layer&#39;s marker pair.</li>
-          <li><strong>Why it&#39;s built this way</strong>: uniformity: Scrutor assembly scanning (EF entity configurations, DTO/request mappers, handlers) and <code>ModuleLoader</code> DI wiring all take a stable per-assembly handle, so each assembly ships one.</li>
-          <li><strong>Where it&#39;s used</strong>: Conference module DI registration and EF <code>IEntityTypeConfiguration</code> discovery scan this assembly via these markers.</li>
+          <li><strong>Concept</strong>: cross-reference the framework explanation under <a href="group-17-conference-domain.html#assemblyreference">AssemblyReference</a> in the Conference Domain chapter; every layer of every module ships an identical pair, and the <a href="group-14-module-system-composition.html#assemblyreference">Common module system</a> chapter teaches why.</li>
+          <li><strong>Walkthrough</strong>: two <code>public static readonly</code> fields (<code>AssemblyReference.cs:7-8</code>): <code>Assembly = typeof(AssemblyReference).Assembly</code>, and <code>AssemblyName</code> = its simple name with a <code>?? string.Empty</code> fallback so the field is never null.</li>
+          <li><strong>Why it&#39;s built this way</strong>: assembly scanning (EF <code>IEntityTypeConfiguration</code> discovery, handler and mapper registration) and the module loader all need a per-assembly token; taking <code>typeof(AssemblyReference).Assembly</code> survives renames and trimming better than a literal name.</li>
+          <li><strong>Where it&#39;s used</strong>: Conference module DI/registration and EF configuration discovery scan this assembly through this marker.</li>
           </ul>
           <hr>
-          <h3 id="anthropicrequest-anthropicresponse">AnthropicRequest, AnthropicResponse</h3>
+          <h3 id="classreference">ClassReference</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure.Services</code> · Level 1 · record (sealed, private)</p>
+          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/AssemblyReference.cs:11</code> · Level 0 · class</p>
           </blockquote>
-          <p>The two top-level request/response envelopes for the Anthropic Messages call, one rung above the leaf records because they compose them.</p>
-          <div class="table-wrap"><table>
-          <thead>
-          <tr>
-          <th>Type</th>
-          <th>File:Line</th>
-          <th>Notes</th>
-          </tr>
-          </thead>
-          <tbody><tr>
-          <td><code>AnthropicRequest</code></td>
-          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/AnthropicScoringService.cs:179</code></td>
-          <td>Request body: <code>required</code> <code>Model</code> (<code>model</code>), <code>required</code> <code>MaxTokens</code> (<code>max_tokens</code>), <code>required List&lt;AnthropicMessage&gt; Messages</code> (<code>messages</code>)</td>
-          </tr>
-          <tr>
-          <td><code>AnthropicResponse</code></td>
-          <td><code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/AnthropicScoringService.cs:200</code></td>
-          <td>Response body: a nullable <code>List&lt;AnthropicContentBlock&gt;? Content</code> (<code>content</code>)</td>
-          </tr>
-          </tbody></table></div>
           <ul>
-          <li><strong>What they are</strong>: the outer wire shapes. <code>AnthropicRequest</code> is what gets POSTed (model id + token cap + the message list); <code>AnthropicResponse</code> is the deserialized reply, whose <code>Content</code> is the list of <a href="#aiscoreresponse-anthropiccontentblock-anthropicmessage"><code>AnthropicContentBlock</code></a> the adapter scans for the <code>&quot;text&quot;</code> block.</li>
-          <li><strong>Depends on</strong>: first-party: <a href="#aiscoreresponse-anthropiccontentblock-anthropicmessage"><code>AnthropicMessage</code></a> (composed in <code>Messages</code>), <a href="#aiscoreresponse-anthropiccontentblock-anthropicmessage"><code>AnthropicContentBlock</code></a> (composed in <code>Content</code>). External: <code>System.Text.Json.Serialization</code>.</li>
-          <li><strong>Concept introduced</strong>: cross-reference the anti-corruption record concept taught under <a href="#aiscoreresponse-anthropiccontentblock-anthropicmessage">AiScoreResponse, AnthropicContentBlock, AnthropicMessage</a>; these are the composite layer of the same private envelope set.</li>
-          <li><strong>Walkthrough</strong>: <code>AnthropicRequest</code>&#39;s three properties are all <code>required</code> (<code>:181-188</code>) so the request can&#39;t be partially constructed; <code>MaxTokens</code> is set to <code>256</code> at the call site (<code>AnthropicScoringService.cs:42</code>) to bound cost and latency. <code>AnthropicResponse.Content</code> is nullable (<code>:202-203</code>) because a malformed/empty reply must deserialize without throwing, the adapter then falls through to a failed result.</li>
-          <li><strong>Why it&#39;s built this way</strong>: same encapsulation rationale as the leaf records: keep the Anthropic JSON shape private to the adapter. <code>required</code> on the request and nullable on the response mirror the asymmetry between &quot;we control what we send&quot; and &quot;we must defensively parse what we get back&quot;.</li>
-          <li><strong>Where it&#39;s used</strong>: <a href="#anthropicscoringservice"><code>AnthropicScoringService.ScoreSessionAsync</code></a>: builds an <code>AnthropicRequest</code>, deserializes the body to <code>AnthropicResponse</code>.</li>
+          <li><strong>What it is</strong>: an empty, non-static class whose only purpose is to be a <code>typeof(...)</code> / generic anchor for registration APIs that take a type rather than an <code>Assembly</code>.</li>
+          <li><strong>Depends on</strong>: nothing.</li>
+          <li><strong>Concept</strong>: cross-reference <a href="group-14-module-system-composition.html#classreference">ClassReference</a> where the pattern is introduced.</li>
+          <li><strong>Walkthrough</strong>: the whole declaration is one line, <code>public class ClassReference { }</code> (<code>AssemblyReference.cs:11</code>). It is deliberately non-static (unlike its sibling above) because a static class cannot be used as a generic type argument.</li>
+          <li><strong>Why it&#39;s built this way</strong>: some registration helpers are shaped as <code>Add...(typeof(T))</code> or <code>Add...&lt;T&gt;()</code>; an empty public class gives those calls a target without exposing a real implementation type.</li>
+          <li><strong>Where it&#39;s used</strong>: assembly-scanning registration call sites in the Conference module composition path (see <a href="group-20-conference-api-grpc.html">Group 20</a>).</li>
+          </ul>
+          <hr>
+          <h3 id="anthropicrequest">AnthropicRequest</h3>
+          <blockquote>
+          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure.Services</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/AnthropicScoringService.cs:200</code> · Level 1 · record (private sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the POST body for the Anthropic Messages endpoint: which model, how many output tokens are allowed, and the message list.</li>
+          <li><strong>Depends on</strong>: first-party: <a href="#anthropicmessage"><code>AnthropicMessage</code></a> (composed). External: <code>System.Text.Json.Serialization</code>.</li>
+          <li><strong>Concept</strong>: the composite half of the private envelope set introduced under <a href="#aiscoreresponse"><code>AiScoreResponse</code></a>.</li>
+          <li><strong>Walkthrough</strong>: three <code>required</code> properties (<code>:202-209</code>), <code>Model</code> (<code>model</code>), <code>MaxTokens</code> (<code>max_tokens</code>) and <code>List&lt;AnthropicMessage&gt; Messages</code> (<code>messages</code>). At the one call site (<code>:40-45</code>) <code>Model</code> is bound to <code>ModelId</code> (<code>:22</code>) and <code>MaxTokens</code> to <strong>256</strong>: the scorer asks for a one-line JSON object, so a small output cap bounds both latency and per-call cost. <code>[Rubric §12, Performance &amp; Scalability]</code> assesses whether expensive calls carry explicit bounds; this is one of two such bounds in the flow, the other being the tuned timeouts in <a href="#dependencyinjection"><code>DependencyInjection</code></a>.</li>
+          <li><strong>Why it&#39;s built this way</strong>: <code>required</code> on all three makes an incomplete request unrepresentable, and serializing through a typed record (rather than an anonymous object) keeps the property names under <code>[JsonPropertyName]</code> control.</li>
+          <li><strong>Where it&#39;s used</strong>: <a href="#anthropicscoringservice"><code>AnthropicScoringService.ScoreSessionAsync</code></a> (<code>:40-49</code>), handed to <code>JsonContent.Create</code>.</li>
+          </ul>
+          <hr>
+          <h3 id="anthropicresponse">AnthropicResponse</h3>
+          <blockquote>
+          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure.Services</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/AnthropicScoringService.cs:221</code> · Level 1 · record (private sealed)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the deserialized reply envelope: a nullable list of content blocks.</li>
+          <li><strong>Depends on</strong>: first-party: <a href="#anthropiccontentblock"><code>AnthropicContentBlock</code></a> (composed). External: <code>System.Text.Json.Serialization</code>.</li>
+          <li><strong>Concept</strong>: cross-reference <a href="#aiscoreresponse"><code>AiScoreResponse</code></a>.</li>
+          <li><strong>Walkthrough</strong>: one property, <code>List&lt;AnthropicContentBlock&gt;? Content</code> (<code>:223-224</code>). Nullable end to end (<code>apiResponse?.Content?.Find(...)</code>, <code>:60</code>) so an empty or malformed body deserializes to something the adapter can test instead of throwing; the null path falls through to <code>FailedResult</code> (<code>:63-67</code>).</li>
+          <li><strong>Why it&#39;s built this way</strong>: the &quot;we control the request, we distrust the response&quot; asymmetry, expressed in the type system: <code>required</code> on the way out, nullable on the way back.</li>
+          <li><strong>Where it&#39;s used</strong>: <a href="#anthropicscoringservice"><code>AnthropicScoringService.ScoreSessionAsync</code></a> (<code>:59</code>).</li>
           </ul>
           <hr>
           <h3 id="anthropicscoringservice">AnthropicScoringService</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure.Services</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/AnthropicScoringService.cs:15</code> · Level 3 · class (sealed partial)</p>
+          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure.Services</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/AnthropicScoringService.cs:16</code> · Level 3 · class (sealed partial)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: the concrete adapter implementing <a href="group-18-conference-application.html#iaiscoringservice"><code>IAiScoringService</code></a> by calling the <strong>Anthropic Claude Messages API</strong> (model <code>claude-haiku-4-5-20251001</code>, <code>:21</code>) to score one session proposal against a Program-Committee rubric. Like its port, <strong>it never throws</strong>, every failure becomes a failed <code>SessionScoringResult</code>.</li>
-          <li><strong>Depends on</strong>: first-party: <a href="group-18-conference-application.html#iaiscoringservice"><code>IAiScoringService</code></a> (implements), <a href="group-18-conference-application.html#sessionscoringinput"><code>SessionScoringInput</code></a>, <a href="group-18-conference-application.html#sessionscoringresult"><code>SessionScoringResult</code></a>, <a href="group-18-conference-application.html#speakerinfo"><code>SpeakerInfo</code></a> (the Application decision-support types), and its own private records <a href="#anthropicrequest-anthropicresponse"><code>AnthropicRequest</code></a>/<a href="#aiscoreresponse-anthropiccontentblock-anthropicmessage"><code>AnthropicMessage</code></a>/<a href="#anthropicrequest-anthropicresponse"><code>AnthropicResponse</code></a>/<a href="#aiscoreresponse-anthropiccontentblock-anthropicmessage"><code>AnthropicContentBlock</code></a>/<a href="#aiscoreresponse-anthropiccontentblock-anthropicmessage"><code>AiScoreResponse</code></a>. External: <code>HttpClient</code>, <code>IConfiguration</code>, <code>ILogger&lt;T&gt;</code>, <code>System.Text.Json</code>, <code>System.Globalization</code>.</li>
-          <li><strong>Concept introduced, the adapter that keeps an SDK/HTTP dependency at the edge.</strong> <code>[Rubric §3, Clean Architecture]</code> / <code>[Rubric §1, SOLID, DIP]</code> (assess whether the inner layers depend on abstractions, not vendors): all Anthropic HTTP and JSON detail lives here in Infrastructure, behind the Application&#39;s port. <code>[Rubric §11, Security]</code> (assesses secrets handling): the API key is read from configuration (<code>Anthropic:ApiKey</code>, sourced from user secrets, <code>:28</code>) and sent as the <code>x-api-key</code> header, never hard-coded or logged. <code>[Rubric §13, Observability]</code> (assesses structured, low-cost logging): failures go through a source-generated <code>[LoggerMessage]</code> warning (<code>:175-176</code>). <code>[Rubric §29, Resilience]</code> (assesses graceful degradation): every failure path, missing key, non-2xx, empty body, any exception, funnels into <code>FailedResult</code> (<code>:31-33</code>, <code>:51-56</code>, <code>:62-66</code>, <code>:70-74</code>) so one session&#39;s API failure can&#39;t abort a batch. <code>[Rubric §12, Performance]</code> (assesses cost/latency bounds): <code>MaxTokens = 256</code> (<code>:42</code>) caps the response. <code>[Rubric §27, i18n]</code> (assesses culture-correctness): speaker formatting uses <code>CultureInfo.InvariantCulture</code> (<code>:145-150</code>) so prompt text never varies by server locale.</li>
+          <li><strong>What it is</strong>: the adapter that implements <a href="group-18-conference-application.html#iaiscoringservice"><code>IAiScoringService</code></a> by calling the Anthropic Claude Messages API (model <code>claude-haiku-4-5-20251001</code>, <code>:22</code>) to score one session proposal against a Program Committee rubric. Its XML doc states the contract plainly (<code>:11-15</code>): it never throws for scoring failures, but <code>OperationCanceledException</code> propagates.</li>
+          <li><strong>Depends on</strong>: first-party: <a href="group-18-conference-application.html#iaiscoringservice"><code>IAiScoringService</code></a> (implements), <a href="group-18-conference-application.html#sessionscoringinput"><code>SessionScoringInput</code></a>, <a href="group-18-conference-application.html#sessionscoringresult"><code>SessionScoringResult</code></a>, <a href="group-18-conference-application.html#speakerinfo"><code>SpeakerInfo</code></a>, and its own private records <a href="#anthropicrequest"><code>AnthropicRequest</code></a>, <a href="#anthropicmessage"><code>AnthropicMessage</code></a>, <a href="#anthropicresponse"><code>AnthropicResponse</code></a>, <a href="#anthropiccontentblock"><code>AnthropicContentBlock</code></a>, <a href="#aiscoreresponse"><code>AiScoreResponse</code></a>. External: <code>HttpClient</code>, <code>IConfiguration</code>, <code>ILogger&lt;T&gt;</code>, <code>System.Text.Json</code>, <code>System.Globalization</code>.</li>
+          <li><strong>Concept introduced, the adapter that keeps an HTTP/LLM vendor at the edge.</strong> <code>[Rubric §3, Clean Architecture]</code> and <code>[Rubric §1, SOLID]</code> (dependency inversion) assess whether inner layers depend on abstractions rather than vendors: every byte of Anthropic-specific HTTP and JSON lives in this one Infrastructure file, behind an Application-owned port. <code>[Rubric §11, Security]</code> assesses secret handling: the key is read from configuration (<code>Anthropic:ApiKey</code>, <code>:29</code>) and passed as the <code>x-api-key</code> header (<code>:48</code>), never hard-coded, and the failure log for a missing key names the configuration path, not a value (<code>:32</code>). <code>[Rubric §13, Observability &amp; Operability]</code> assesses structured, allocation-cheap logging: failures go through a source-generated <code>[LoggerMessage]</code> warning carrying session id and reason (<code>:196-197</code>), which is also why the class is <code>partial</code>. <code>[Rubric §29, Resilience &amp; Business Continuity]</code> assesses graceful degradation: five distinct failure paths (missing key <code>:30-34</code>, non-2xx <code>:52-57</code>, empty/absent text block <code>:63-67</code>, unparseable or partial JSON <code>:83-84</code> and <code>:96-108</code>, any other exception <code>:71-75</code>) all converge on <code>FailedResult</code>, so one bad proposal cannot abort a batch. <code>[Rubric §27, i18n]</code> assesses culture-correctness: <code>CultureInfo.InvariantCulture</code> is used for every interpolated string that reaches the prompt or the log (<code>:55</code>, <code>:166-171</code>), so output never varies with server locale.</li>
           <li><strong>Walkthrough</strong><ul>
-          <li>A <strong>primary constructor</strong> injects <code>HttpClient</code>, <code>IConfiguration</code>, <code>ILogger&lt;AnthropicScoringService&gt;</code> (<code>:15-18</code>); the class is <code>sealed partial</code> because <code>[LoggerMessage]</code> generates the partial method body.</li>
-          <li><code>ModelId</code> (<code>:21</code>) is a fixed string the port exposes so callers can record which model produced a score.</li>
-          <li><code>ScoreSessionAsync</code> (<code>:24</code>) guards on a missing key first (<code>:28-33</code>), builds the reviewer prompt via <code>BuildPrompt</code> (<code>:37</code>, <code>:106</code>, a weighted six-criterion ADC rubric with explicit scoring rules and penalties), assembles an <a href="#anthropicrequest-anthropicresponse"><code>AnthropicRequest</code></a> carrying one <a href="#aiscoreresponse-anthropiccontentblock-anthropicmessage"><code>AnthropicMessage</code></a> (<code>:39-44</code>), POSTs to the relative <code>v1/messages</code> with the <code>x-api-key</code> header (<code>:46-48</code>), and on a non-success status logs the body and returns <code>FailedResult</code> (<code>:51-56</code>).</li>
-          <li>On success it deserializes the body to <a href="#anthropicrequest-anthropicresponse"><code>AnthropicResponse</code></a>, <code>Find</code>s the first <code>&quot;text&quot;</code> block (<code>:58-60</code>), and hands the text to <code>ParseSingleScore</code> (<code>:68</code>, <code>:77</code>), which extracts the <code>{…}</code> substring (<code>:80-85</code>), deserializes it to <a href="#aiscoreresponse-anthropiccontentblock-anthropicmessage"><code>AiScoreResponse</code></a>, and <code>Clamp</code>s every score to <code>1.0–10.0</code> with banker&#39;s rounding to one decimal (<code>:94-100</code>, <code>:156</code>) before producing a successful <code>SessionScoringResult</code>.</li>
-          <li><code>FormatSpeakers</code> (<code>:135</code>) builds the speaker block from <a href="group-18-conference-application.html#speakerinfo"><code>SpeakerInfo</code></a> using <code>InvariantCulture</code>; <code>JsonOptions</code> (<code>:173</code>) enables case-insensitive matching.</li>
+          <li>A <strong>primary constructor</strong> injects <code>HttpClient</code>, <code>IConfiguration</code> and <code>ILogger&lt;AnthropicScoringService&gt;</code> (<code>:16-19</code>). The base address, the <code>anthropic-version</code> header and the resilience pipeline are not set here: they are configured once on the typed client in <a href="#dependencyinjection"><code>DependencyInjection</code></a>, which is why the request below uses a <em>relative</em> URI.</li>
+          <li><code>ModelId</code> (<code>:22</code>) is a fixed string exposed through the port so callers can record which model produced a score alongside the score itself.</li>
+          <li><code>ScoreSessionAsync</code> (<code>:25</code>) guards on the missing key first (<code>:29-34</code>), builds the reviewer prompt with <code>BuildPrompt</code> (<code>:38</code>), assembles an <a href="#anthropicrequest"><code>AnthropicRequest</code></a> with a single user <a href="#anthropicmessage"><code>AnthropicMessage</code></a> and <code>MaxTokens = 256</code> (<code>:40-45</code>), then constructs an <code>HttpRequestMessage</code> to the relative <code>v1/messages</code> with the <code>x-api-key</code> header attached per request rather than as a client default (<code>:47-49</code>).</li>
+          <li>On a non-success status it reads the error body and logs <code>HTTP {code}: {body}</code> before returning <code>FailedResult</code> (<code>:52-57</code>). On success it deserializes to <a href="#anthropicresponse"><code>AnthropicResponse</code></a>, finds the <code>&quot;text&quot;</code> block case-insensitively (<code>:59-61</code>), and passes its text to <code>ParseSingleScore</code>.</li>
+          <li><code>ParseSingleScore</code> (<code>:78</code>) does not assume a bare JSON body: it slices from the first <code>{</code> to the last <code>}</code> (<code>:81-86</code>) so a model that wraps its answer in prose still parses, then deserializes with case-insensitive options (<code>JsonOptions</code>, <code>:194</code>).</li>
+          <li><code>BuildResult</code> (<code>:92</code>) is the correctness gate. Its single <code>is not { ... }</code> pattern (<code>:96-108</code>) requires all seven sub-scores to be present; a partial object is a failed parse, not a success full of defaults. Only then does it build a <a href="group-18-conference-application.html#sessionscoringresult"><code>SessionScoringResult</code></a> with every score passed through <code>Clamp</code> (<code>:177</code>), which does <code>Math.Clamp(value, 1.0m, 10.0m)</code> and rounds to one decimal with <code>MidpointRounding.ToEven</code>.</li>
+          <li><code>BuildPrompt</code> (<code>:125-154</code>) is the domain knowledge of this file: the ADC track list, six weighted criteria (topic relevance 30%, description quality 10%, novelty 20%, actionable takeaways 20%, depth or insight quality 10%, credibility and experience 10%), calibration rules (&quot;most talks should fall between 5.5 and 7.5&quot;, <code>:147</code>), explicit penalties (<code>:149-151</code>), and a closing instruction to respond with only a JSON object (<code>:152-153</code>). <code>FormatSpeakers</code> (<code>:156-175</code>) renders the <a href="group-18-conference-application.html#speakerinfo"><code>SpeakerInfo</code></a> list, or the literal &quot;(no speaker information available)&quot; when there are none (<code>:158-159</code>), which is what makes the credibility criterion degrade gracefully.</li>
+          <li><code>FailedResult</code> (<code>:179-192</code>) is the single shape of failure: all seven scores <code>0m</code>, <code>Reasoning = &quot;Scoring failed&quot;</code>, <code>Success = false</code>. Note that a zero is out of the <code>1.0-10.0</code> band by construction, so a failed row is distinguishable from any real score.</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: concentrating the vendor specifics here makes swapping AI providers (or mocking in tests) a one-class change behind the port; the never-throw + clamp discipline makes raw model output safe to persist. The prompt is deliberately prescriptive (&quot;respond with ONLY a JSON object&quot;) so the response reliably parses.</li>
-          <li><strong>Where it&#39;s used</strong>: registered as the <code>IAiScoringService</code> implementation by <a href="#dependencyinjection"><code>DependencyInjection</code></a> (with custom resilience timeouts for the long batch call); driven by the ScoreEventSessions command handler in <a href="group-18-conference-application.html">Conference Application</a>.</li>
-          <li><strong>Caveats / not-in-source</strong>: behavior depends on Anthropic returning parseable JSON; malformed output falls through to <code>FailedResult</code>. There is <strong>no retry inside this class</strong>, the retry/timeout policy is configured externally on the <code>HttpClient</code> in <a href="#dependencyinjection"><code>DependencyInjection</code></a>, and the in-class resilience contract is &quot;never throw + let the batch continue&quot;, not internal retries.</li>
+          <li><strong>Why it&#39;s built this way</strong>: concentrating vendor specifics behind the port makes swapping providers or faking the service in tests a one-class change, and the never-throw plus clamp plus all-or-nothing-parse discipline makes raw model output safe to persist into <a href="group-17-conference-domain.html#sessionaiscore"><code>SessionAiScore</code></a>. The prompt is prescriptive because the parse depends on it.</li>
+          <li><strong>Where it&#39;s used</strong>: registered as the <code>IAiScoringService</code> implementation by <a href="#dependencyinjection"><code>DependencyInjection</code></a> (<code>DependencyInjection.cs:28-41</code>); driven per session by <a href="group-18-conference-application.html#scoreeventsessionshandler"><code>ScoreEventSessionsHandler</code></a>, which is itself driven off the request path by <a href="#sessionscoringprocessor"><code>SessionScoringProcessor</code></a>.</li>
+          <li><strong>Caveats / not-in-source</strong>: there is <strong>no retry inside this class</strong>. Retry, attempt timeout and circuit breaking are configured externally on the typed client (see <a href="#dependencyinjection"><code>DependencyInjection</code></a>); the in-class contract is &quot;never throw, let the batch continue&quot;. Whether scoring is enabled in production at all is a configuration matter (the key must be present) and is not determinable from this file.</li>
+          </ul>
+          <hr>
+          <h3 id="sessionscoringprocessor">SessionScoringProcessor</h3>
+          <blockquote>
+          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure.Services</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/SessionScoringProcessor.cs:31</code> · Level 3 · class (sealed partial)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the hosted background worker that drains <a href="group-18-conference-application.html#sessionscoringqueue"><code>SessionScoringQueue</code></a> and runs each queued AI scoring pass off the request path, under the host&#39;s stopping token.</li>
+          <li><strong>Depends on</strong>: first-party: <a href="group-18-conference-application.html#sessionscoringqueue"><code>SessionScoringQueue</code></a>, <a href="group-18-conference-application.html#scoreeventsessionscommand"><code>ScoreEventSessionsCommand</code></a>, <a href="group-17-conference-domain.html#scoreeventsessionsresultdto"><code>ScoreEventSessionsResultDTO</code></a>, <a href="group-05-cqrs-pipeline.html#icommandhandlerin-tcommand-tresult"><code>ICommandHandler&lt;in TCommand, TResult&gt;</code></a>, <a href="group-01-result-error-handling.html#result"><code>Result</code></a>. External: <code>BackgroundService</code>, <code>IServiceScopeFactory</code>, <code>IOutputCacheStore</code>, <code>ILogger&lt;T&gt;</code>.</li>
+          <li><strong>Concept introduced, replacing fire-and-forget with a host-owned single reader.</strong> A <code>BackgroundService</code> differs from a detached <code>Task.Run</code> in one decisive way: the host knows about it. Shutdown cancels the token and waits for the loop to unwind, so a deploy or a scale-in no longer tears down a half-finished pass with nothing recorded (<code>:12-21</code>). Because exactly one reader exists (matching the queue&#39;s <code>SingleReader = true</code> configuration, <code>SessionScoringQueue.cs:27</code>), runs are serialized and two events cannot compete for the Anthropic rate limit simultaneously. <code>[Rubric §12, Performance &amp; Scalability]</code> assesses keeping slow work off the request path: the controller enqueues and returns instead of awaiting a multi-minute LLM batch. <code>[Rubric §13, Observability &amp; Operability]</code> assesses whether long-running work reports outcomes: four <code>[LoggerMessage]</code> methods cover completed, rejected, failed and interrupted (<code>:96-106</code>), including the shutdown case, which is the one an operator most needs to see in a deploy window. <code>[Rubric §29, Resilience]</code> assesses failure containment: a failed run is logged and the drain keeps going.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li>The <strong>primary constructor</strong> (<code>:31-35</code>) injects the queue, an <code>IServiceScopeFactory</code>, an <code>IOutputCacheStore</code> and a logger; the XML docs on the parameters (<code>:27-30</code>) state each role.</li>
+          <li><code>SessionsCacheTag</code> (<code>:42</code>) is <code>&quot;conference:sessions&quot;</code>. The comment above it (<code>:37-41</code>) records a real incident-shaped rationale: evicting the root <code>conference</code> tag flushed events, speakers, rooms, categories and questions too, so an organizer starting a scoring run during the event emptied the entire public read surface onto the Basic-tier database while attendees were browsing. Scoring writes session scores, so it evicts only the sessions tag.</li>
+          <li><code>ExecuteAsync</code> (<code>:45</code>) is a single <code>await foreach</code> over <code>queue.Reader.ReadAllAsync(stoppingToken)</code> (<code>:47</code>). Three handlers wrap each iteration: a cancellation catch that logs interruption and <strong>returns</strong> (<code>:53-59</code>), a deliberately broad <code>catch (Exception)</code> with a scoped <code>CA1031</code> suppression justified inline (&quot;one failed run must not kill the drain&quot;, <code>:60-65</code>), and a <code>finally</code> that calls <code>queue.MarkCompleted(eventId)</code> (<code>:66-69</code>) so the claim is released on every path and a restarted host can accept the same event again.</li>
+          <li><code>ScoreAsync</code> (<code>:73</code>) evicts the sessions cache tag <strong>before</strong> the run (<code>:77</code>) so a polling dashboard stops serving stale scores while work is in flight, creates an async DI scope (<code>:79</code>, needed because the command handler and its <code>DbContext</code> are scoped while this service is a singleton), resolves <code>ICommandHandler&lt;ScoreEventSessionsCommand, Result&lt;ScoreEventSessionsResultDTO&gt;&gt;</code> (<code>:80-81</code>) and invokes it (<code>:83-84</code>).</li>
+          <li>The result is handled as data, not as an exception: <code>IsFailure</code> logs the first error message via a list pattern (<code>:86-90</code>) and returns without a second eviction; success logs scored and failed counts (<code>:92</code>) and evicts again (<code>:93</code>) so clients see the new scores.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: resolving the handler through a scope keeps the CQRS decorator pipeline (logging, caching, transactional) intact for background work, so a queued run behaves exactly like a request-driven command. Evicting the narrow tag twice, before and after, is the cheapest way to keep a polled read surface honest without a push channel.</li>
+          <li><strong>Where it&#39;s used</strong>: registered by <a href="#dependencyinjection"><code>DependencyInjection</code></a> with <code>services.AddHostedService&lt;SessionScoringProcessor&gt;()</code> (<code>DependencyInjection.cs:45</code>); the producing side is the Conference API endpoint that calls <code>TryEnqueue</code> on <a href="group-18-conference-application.html#isessionscoringqueue"><code>ISessionScoringQueue</code></a>.</li>
+          <li><strong>Caveats / not-in-source</strong>: the queue is in-memory (a <code>Channel</code>), so an interrupted run is <em>not</em> re-queued automatically by this class; it only releases the claim so the event can be submitted again. Whether the host is restarted fast enough for that to matter is an operational concern outside this file.</li>
           </ul>
           <hr>
           <h3 id="sessionizeservice">SessionizeService</h3>
@@ -399,24 +491,32 @@
           <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure.Services</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Services/SessionizeService.cs:10</code> · Level 4 · class (sealed)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: the HTTP-client implementation of <a href="group-18-conference-application.html#isessionizeservice"><code>ISessionizeService</code></a>: it calls the Sessionize &quot;View All&quot; API to retrieve every session/speaker/room/category for a conference in one document.</li>
+          <li><strong>What it is</strong>: the HTTP implementation of <a href="group-18-conference-application.html#isessionizeservice"><code>ISessionizeService</code></a>. It calls the Sessionize &quot;View All&quot; endpoint, which returns every session, speaker, room and category for a conference in one document.</li>
           <li><strong>Depends on</strong>: first-party: <a href="group-18-conference-application.html#isessionizeservice"><code>ISessionizeService</code></a> (implements), <a href="group-18-conference-application.html#sessionizeresponse"><code>SessionizeResponse</code></a> (return shape). External: <code>HttpClient</code>, <code>System.Net.Http.Json</code>.</li>
-          <li><strong>Concept</strong>: <code>[Rubric §2, Design Patterns]</code> / <code>[Rubric §1, SOLID, DIP]</code> (assess inversion of control): the Application defines <code>ISessionizeService</code>; Infrastructure provides the HTTP adapter, so the Application layer never references <code>HttpClient</code>. The implementation is intentionally minimal, a primary-constructor <code>HttpClient</code> (registered as a <strong>typed client</strong> in <a href="#dependencyinjection"><code>DependencyInjection</code></a>, so the base URL and Polly pipeline are configured once), a <code>GetAsync</code> to <code>{sessionizeCode}/view/All</code> relative to the base URL (<code>:15-18</code>), and <code>ReadFromJsonAsync&lt;SessionizeResponse&gt;</code> (<code>:22-24</code>). All awaits use <code>.ConfigureAwait(false)</code>.</li>
-          <li><strong>Caveat, error handling differs from the AI adapter.</strong> <code>response.EnsureSuccessStatusCode()</code> (<code>:20</code>) converts an HTTP error into an <code>HttpRequestException</code> that <strong>propagates</strong> uncaught, unlike <a href="#anthropicscoringservice"><code>AnthropicScoringService</code></a>&#39;s never-throw contract. The calling handler treats a thrown Sessionize failure as a non-domain error (mapped to a 5xx/Problem Details upstream), which is acceptable because a sync is an explicit organizer action, not a per-item batch.</li>
-          <li><strong>Where it&#39;s used</strong>: called by the Sessionize-sync command handler in <a href="group-18-conference-application.html">Conference Application</a> when an organizer triggers a data refresh (gated behind the <code>Conference.SessionizeIntegration</code> feature flag).</li>
+          <li><strong>Concept</strong>: <code>[Rubric §2, Design Patterns]</code> and <code>[Rubric §1, SOLID]</code> (dependency inversion) assess whether the application depends on an abstraction it owns: the Application layer declares the port, Infrastructure supplies the adapter, and no Application file references <code>HttpClient</code>. The whole class is 26 lines because everything configurable (base address, resilience) lives on the typed-client registration in <a href="#dependencyinjection"><code>DependencyInjection</code></a>.</li>
+          <li><strong>Walkthrough</strong>: a primary constructor takes <code>HttpClient</code> (<code>:10</code>). <code>GetAllAsync</code> builds the relative URI <code>{sessionizeCode}/view/All</code> (<code>:15</code>), <code>GET</code>s it (<code>:16-18</code>), calls <code>EnsureSuccessStatusCode()</code> (<code>:20</code>), and deserializes to <code>SessionizeResponse?</code> (<code>:22-24</code>). Both awaits use <code>.ConfigureAwait(false)</code> (the repo-wide rule from <a href="https://ivanball.github.io/docs/adr/049-library-configureawait-policy.html" target="_blank" rel="noopener">ADR-049</a>).</li>
+          <li><strong>Why it&#39;s built this way</strong>: keeping parsing, mapping and the import workflow in Application use-cases leaves this adapter owning only the wire call, which is what makes it trivially fakeable in tests.</li>
+          <li><strong>Caveat, error handling differs from the AI adapter.</strong> <code>EnsureSuccessStatusCode()</code> throws <code>HttpRequestException</code> on any non-2xx, and that exception <strong>propagates</strong> out of the class, the opposite of <a href="#anthropicscoringservice"><code>AnthropicScoringService</code></a>&#39;s never-throw contract. The difference is deliberate and follows the shape of the work: a Sessionize sync is one explicit organizer action where a failure should surface as an error, while AI scoring is a per-item batch where one item&#39;s failure must not stop the rest. The return type is also nullable, so a 2xx with an empty body yields <code>null</code> rather than an exception.</li>
+          <li><strong>Where it&#39;s used</strong>: the Sessionize import handlers in <a href="group-18-conference-application.html">Conference Application</a>, triggered when an organizer refreshes an event&#39;s data.</li>
           </ul>
           <hr>
           <h3 id="dependencyinjection">DependencyInjection</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:12</code> · Level 5 · class (static)</p>
+          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/DependencyInjection.cs:11</code> · Level 5 · class (static)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: the DI wiring for Conference Infrastructure: it registers the two outbound HTTP integrations, the Sessionize client and the Anthropic AI-scoring client, as typed <code>HttpClient</code>s.</li>
-          <li><strong>Depends on</strong>: first-party: <a href="group-18-conference-application.html#isessionizeservice"><code>ISessionizeService</code></a>/<a href="#sessionizeservice"><code>SessionizeService</code></a>, <a href="group-18-conference-application.html#iaiscoringservice"><code>IAiScoringService</code></a>/<a href="#anthropicscoringservice"><code>AnthropicScoringService</code></a>. External: <code>Microsoft.Extensions.DependencyInjection</code>, <code>Microsoft.Extensions.Http.Resilience</code> (Polly).</li>
-          <li><strong>Concept introduced, custom resilience configuration for slow external APIs.</strong> <code>[Rubric §29, Resilience]</code> (assesses <a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a>: a resilience handler on every outbound client). The Sessionize client (<code>:23-24</code>) is a plain <code>AddHttpClient&lt;IService, Impl&gt;</code> with a base address, inheriting the Aspire standard resilience handler. The Anthropic client (<code>:29-42</code>) is the interesting case: AI batch scoring can take <strong>minutes</strong>, so the code calls <code>RemoveAllResilienceHandlers()</code> and then <code>AddStandardResilienceHandler</code> with hand-tuned timeouts, this is the correct pattern when the Aspire default (30s attempt / 90s total) is too short. The inline comment (<code>:26-27</code>) documents <em>why</em> the defaults are removed.</li>
-          <li><strong>Walkthrough</strong>: a single <code>extension(IServiceCollection services)</code> block (<code>:14</code>) exposes <code>AddModuleConferenceInfrastructure()</code> (<code>:20</code>). Sessionize (<code>:22-24</code>): typed client with <code>https://sessionize.com/api/v2/</code> base. Anthropic (<code>:28-42</code>): base <code>https://api.anthropic.com/</code>, an <code>anthropic-version: 2023-06-01</code> header (<code>:32</code>), a 5-minute <code>HttpClient.Timeout</code> (<code>:33</code>), then <code>.RemoveAllResilienceHandlers().AddStandardResilienceHandler(...)</code> configuring a 3-minute attempt timeout (<code>:38</code>), a 7-minute circuit-breaker sampling window (<code>:39</code>), a 5-minute total-request timeout (<code>:40</code>), and <code>MaxRetryAttempts = 1</code> (<code>:41</code>), a deliberate &quot;one retry only&quot; for an expensive non-idempotent batch. Returns <code>services</code> for chaining (<code>:44</code>).</li>
-          <li><strong>Why it&#39;s built this way</strong>: registering both integrations as typed clients centralizes base URL, default headers, and the resilience pipeline so the service classes stay thin (see <a href="#sessionizeservice"><code>SessionizeService</code></a>, <a href="#anthropicscoringservice"><code>AnthropicScoringService</code></a>). The C# <code>extension(IServiceCollection)</code> member (see the primer&#39;s <a href="00-primer.html#c-extensiont-types--read-this-once"><code>extension(T)</code> note</a>) keeps the registration call site readable: <code>services.AddModuleConferenceInfrastructure()</code>.</li>
-          <li><strong>Where it&#39;s used</strong>: invoked from the Conference module&#39;s top-level registration (the module <code>IModule.Register</code>/<code>AddModuleConference…</code> chain in <a href="group-20-conference-api-grpc.html">Conference API &amp; module composition</a>).</li>
+          <li><strong>What it is</strong>: the DI wiring for Conference Infrastructure. It registers the two outbound HTTP integrations as typed clients and the AI scoring drain as a hosted service.</li>
+          <li><strong>Depends on</strong>: first-party: <a href="group-18-conference-application.html#isessionizeservice"><code>ISessionizeService</code></a> / <a href="#sessionizeservice"><code>SessionizeService</code></a>, <a href="group-18-conference-application.html#iaiscoringservice"><code>IAiScoringService</code></a> / <a href="#anthropicscoringservice"><code>AnthropicScoringService</code></a>, <a href="#sessionscoringprocessor"><code>SessionScoringProcessor</code></a>. External: <code>Microsoft.Extensions.DependencyInjection</code>, <code>Microsoft.Extensions.Http.Resilience</code> (Polly).</li>
+          <li><strong>Concept introduced, tuning a resilience pipeline instead of disabling it.</strong> <code>[Rubric §29, Resilience &amp; Business Continuity]</code> assesses <a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a>&#39;s rule that every outbound client carries a resilience handler. The Sessionize client (<code>:22-23</code>) is a plain <code>AddHttpClient&lt;TInterface, TImplementation&gt;</code> with only a base address, so it inherits the standard handler configured by the Aspire service defaults. The Anthropic client is the interesting case: an AI batch can run for minutes, far past the Aspire default of a 30 second attempt and 90 second total, so the code calls <code>RemoveAllResilienceHandlers()</code> and immediately re-adds <code>AddStandardResilienceHandler</code> with hand-tuned values (<code>:34-41</code>). Removing and re-adding, rather than leaving the client bare, is the pattern worth copying: the client is still retried, still circuit-broken, just on a timescale that matches the work. The inline comment (<code>:25-26</code>) records the reasoning at the call site.</li>
+          <li><strong>Walkthrough</strong>: a single <code>extension(IServiceCollection services)</code> block (<code>:13</code>, the codebase&#39;s standard DI idiom, see the primer&#39;s <a href="00-primer.html#c-extensiont-types-read-this-once"><code>extension(T)</code> note</a>) exposes <code>AddModuleConferenceInfrastructure()</code> (<code>:19</code>).<ul>
+          <li><strong>Sessionize</strong> (<code>:21-23</code>): typed client with base address <code>https://sessionize.com/api/v2/</code>.</li>
+          <li><strong>Anthropic</strong> (<code>:27-41</code>): base address <code>https://api.anthropic.com/</code> (<code>:30</code>), the API-version header <code>anthropic-version: 2023-06-01</code> (<code>:31</code>), and <code>HttpClient.Timeout = 5 minutes</code> (<code>:32</code>); then the tuned pipeline: attempt timeout 3 minutes (<code>:37</code>), circuit-breaker sampling duration 7 minutes (<code>:38</code>), total request timeout 5 minutes (<code>:39</code>), and <code>MaxRetryAttempts = 1</code> (<code>:40</code>), a deliberate single retry for an expensive call.</li>
+          <li><strong>Hosted service</strong> (<code>:45</code>): <code>AddHostedService&lt;SessionScoringProcessor&gt;()</code>, with a comment (<code>:43-44</code>) noting the queue itself is registered by <code>AddModuleConferenceApplication</code>, so the producer lives in Application and only the consumer is wired here.</li>
+          <li>Returns <code>services</code> for chaining (<code>:47</code>).</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: typed clients centralize base URL, default headers and the Polly pipeline so the adapter classes stay thin (compare the 26-line <a href="#sessionizeservice"><code>SessionizeService</code></a>). Pinning <code>anthropic-version</code> at registration is a supply-chain choice, <code>[Rubric §32, Dependency &amp; Supply-Chain]</code>: the API contract this code parses is version-pinned, so a vendor-side default change cannot silently reshape the response.</li>
+          <li><strong>Where it&#39;s used</strong>: called from the Conference module&#39;s registration chain in the API layer (see <a href="group-20-conference-api-grpc.html">Conference API, gRPC contracts and service host</a>), which is itself invoked by the module loader.</li>
           </ul>
           <hr>
           <h3 id="moduleapplicationdbcontext">ModuleApplicationDbContext</h3>
@@ -424,12 +524,38 @@
           <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure.Persistence.DbContexts</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:18</code> · Level 7 · class (abstract)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: an <strong>abstract</strong> EF Core context for the Conference module that declares typed <code>DbSet</code>s for all thirteen Conference entities and inherits auditing, soft-delete, and domain-event dispatch from the common <a href="group-07-persistence-ef-core.html#applicationdbcontext"><code>ApplicationDbContext</code></a> base.</li>
-          <li><strong>Depends on</strong>: first-party: <a href="group-07-persistence-ef-core.html#applicationdbcontext"><code>ApplicationDbContext</code></a> (base), <a href="group-07-persistence-ef-core.html#ientityconfigurationassemblyprovider"><code>IEntityConfigurationAssemblyProvider</code></a>, <a href="group-07-persistence-ef-core.html#physicaldatasource"><code>PhysicalDataSource</code></a>, and every Conference aggregate/child entity it sets (<code>Event</code>, <code>Room</code>, <code>EventSpeaker</code>, <code>EventQuestionAnswer</code>, <code>Session</code>, <code>SessionSpeaker</code>, <code>SessionQuestionAnswer</code>, <code>SessionCategoryItem</code>, <code>Speaker</code>, <code>SpeakerCategoryItem</code>, <code>Category</code>, <code>CategoryItem</code>, <code>Question</code>, see <a href="group-17-conference-domain.html">Conference Domain</a>). External: <code>Microsoft.EntityFrameworkCore</code>.</li>
-          <li><strong>Concept introduced, the module-scoped DbSet manifest that documents the bounded context&#39;s tables.</strong> <code>[Rubric §8, Data Architecture]</code> (assesses how persistence is organized per bounded context) and <code>[Rubric §4, DDD]</code> (assesses aggregate boundaries): this one file is the readable inventory of which entities the Conference database owns. Its primary constructor forwards all four parameters straight to the base (<code>:18-23</code>), so it picks up the audit-stamping <code>SaveChangesAsync</code>, the soft-delete global query filters, and the outbox/domain-event interceptors with no extra code, see <a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a> (soft-delete) and <a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a> (outbox).</li>
-          <li><strong>Walkthrough</strong>: the primary constructor <code>(DbContextOptions options, IServiceProvider serviceProvider, IEntityConfigurationAssemblyProvider assemblyProvider, PhysicalDataSource physicalDataSource)</code> chains to <code>ApplicationDbContext(...)</code> (<code>:18-23</code>). The body is purely thirteen <code>internal DbSet&lt;T&gt; { get; set; }</code> declarations (<code>:26-62</code>), one per Conference entity, each XML-documented. There is <strong>no</strong> <code>OnModelCreating</code>/<code>OnConfiguring</code> override here, entity mapping comes from per-entity <code>EntityTypeConfigurationSQLServer&lt;TEntity, TId&gt;</code> classes discovered by assembly scanning, not from this context.</li>
-          <li><strong>Why it&#39;s built this way</strong>: it mirrors the database-per-service strategy (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>): each module declares its own table surface in its own Infrastructure project, so a module can be extracted into a standalone service without untangling a shared monolithic context. The <code>DbSet</code>s are <code>internal</code> because only Infrastructure-layer code (repositories, populators) addresses them directly.</li>
-          <li><strong>Caveats / not-in-source</strong>: <strong>this abstract class is never inherited or instantiated anywhere in the ADC source or tests</strong> (verified: the only reference to the symbol is its own declaration). At runtime the <em>concrete</em> context is the sealed <a href="group-07-persistence-ef-core.html#applicationdbcontext"><code>SQLServerDbContext</code></a> from MMCA.Common, which also derives from <code>ApplicationDbContext</code> and resolves entities by scanning <code>IEntityTypeConfiguration</code> types, not via these <code>DbSet</code>s (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a> mandates one concrete context class, per database). So <code>ModuleApplicationDbContext</code> functions as a <strong>declarative manifest / documentation of the Conference bounded context&#39;s table surface</strong> rather than a live runtime context; its sibling files in Identity and Engagement Infrastructure play the identical role. Do not assume these <code>DbSet</code>s drive the actual EF model, the configuration classes and <code>SQLServerDbContext</code> do.</li>
+          <li><strong>What it is</strong>: an <strong>abstract</strong> EF Core context for the Conference module that declares typed <code>DbSet</code>s for thirteen Conference entities and inherits auditing, soft-delete and domain-event dispatch from the framework&#39;s <a href="group-07-persistence-ef-core.html#applicationdbcontext"><code>ApplicationDbContext</code></a>.</li>
+          <li><strong>Depends on</strong>: first-party: <a href="group-07-persistence-ef-core.html#applicationdbcontext"><code>ApplicationDbContext</code></a> (base), <a href="group-07-persistence-ef-core.html#ientityconfigurationassemblyprovider"><code>IEntityConfigurationAssemblyProvider</code></a>, <a href="group-07-persistence-ef-core.html#physicaldatasource"><code>PhysicalDataSource</code></a>, and the Conference entities it sets: <a href="group-17-conference-domain.html#event"><code>Event</code></a>, <a href="group-17-conference-domain.html#room"><code>Room</code></a>, <a href="group-17-conference-domain.html#eventspeaker"><code>EventSpeaker</code></a>, <a href="group-17-conference-domain.html#eventquestionanswer"><code>EventQuestionAnswer</code></a>, <a href="group-17-conference-domain.html#session"><code>Session</code></a>, <a href="group-17-conference-domain.html#sessionspeaker"><code>SessionSpeaker</code></a>, <a href="group-17-conference-domain.html#sessionquestionanswer"><code>SessionQuestionAnswer</code></a>, <a href="group-17-conference-domain.html#sessioncategoryitem"><code>SessionCategoryItem</code></a>, <a href="group-17-conference-domain.html#speaker"><code>Speaker</code></a>, <a href="group-17-conference-domain.html#speakercategoryitem"><code>SpeakerCategoryItem</code></a>, <a href="group-17-conference-domain.html#category"><code>Category</code></a>, <a href="group-17-conference-domain.html#categoryitem"><code>CategoryItem</code></a>, <a href="group-17-conference-domain.html#question"><code>Question</code></a>. External: <code>Microsoft.EntityFrameworkCore</code>.</li>
+          <li><strong>Concept introduced, the module-scoped DbSet manifest.</strong> <code>[Rubric §8, Data Architecture]</code> assesses how persistence is organized per bounded context and <code>[Rubric §4, DDD]</code> assesses aggregate boundaries: this one file is the readable inventory of what the Conference database owns. The primary constructor forwards all four parameters straight to the base (<code>:18-23</code>), so it inherits audit stamping in <code>SaveChangesAsync</code>, the soft-delete global query filters, and the outbox capture of domain events with no code of its own (<a href="https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html" target="_blank" rel="noopener">ADR-005</a> soft-delete, <a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a> outbox).</li>
+          <li><strong>Walkthrough</strong>: the primary constructor <code>(DbContextOptions options, IServiceProvider serviceProvider, IEntityConfigurationAssemblyProvider assemblyProvider, PhysicalDataSource physicalDataSource)</code> chains to <code>ApplicationDbContext(...)</code> (<code>:18-23</code>). The body is nothing but thirteen <code>internal DbSet&lt;T&gt; { get; set; }</code> declarations (<code>:26-62</code>), each XML-documented. There is <strong>no</strong> <code>OnModelCreating</code> or <code>OnConfiguring</code> override: mapping comes entirely from the per-entity <code>EntityTypeConfigurationSQLServer&lt;TEntity, TIdentifierType&gt;</code> classes discovered by assembly scanning (see the configurations later in this chapter).</li>
+          <li><strong>Why it&#39;s built this way</strong>: it mirrors database-per-service (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>). Each module declares its own table surface inside its own Infrastructure project, so extracting the module into a standalone service (which ADC has already done, <code>MMCA.ADC.Conference.Service</code> over <code>ADC_Conference</code>) does not require untangling a shared context. The <code>DbSet</code>s are <code>internal</code> because only Infrastructure code addresses them directly.</li>
+          <li><strong>Caveats / not-in-source</strong>: <strong>this abstract class is never inherited or instantiated anywhere in the ADC source or tests.</strong> A repo-wide search for the symbol returns exactly three hits, the three declarations themselves (Conference <code>:18</code>, plus the identical files in Identity and Engagement Infrastructure). At runtime the concrete context is the sealed <a href="group-07-persistence-ef-core.html#sqlserverdbcontext"><code>SQLServerDbContext</code></a> from MMCA.Common, which also derives from <code>ApplicationDbContext</code> and builds its model by scanning <code>IEntityTypeConfiguration</code> types, not from these <code>DbSet</code>s (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a> mandates one concrete context class per engine). So treat this file as a <strong>declarative manifest of the Conference bounded context&#39;s table surface</strong>, not a live runtime context. A concrete symptom of that status: <a href="group-17-conference-domain.html#sessionaiscore"><code>SessionAiScore</code></a> is a real, configured, migrated Conference entity but has <strong>no</strong> <code>DbSet</code> here, and nothing breaks, because the manifest does not drive the model.</li>
+          </ul>
+          <hr>
+          <h3 id="conferencemoduledbseeder">ConferenceModuleDbSeeder</h3>
+          <blockquote>
+          <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure.Persistence.DbContexts.Seeding</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:22</code> · Level 8 · class</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: the Conference module&#39;s idempotent database seeder. It always seeds <strong>two</strong> real conference events and the standard feedback questions, and optionally seeds sample browse data (speakers, sessions, and the speaker-to-event links) when <code>includeSampleData</code> is set. It derives from the framework&#39;s <a href="group-07-persistence-ef-core.html#dbseeder"><code>DbSeeder</code></a> base.</li>
+          <li><strong>Depends on</strong>: first-party: <a href="group-07-persistence-ef-core.html#iunitofwork"><code>IUnitOfWork</code></a> (constructor), <a href="group-07-persistence-ef-core.html#irepositorytentity-tidentifiertype"><code>IRepository&lt;TEntity, TIdentifierType&gt;</code></a> (obtained per aggregate), the domain factories on <a href="group-17-conference-domain.html#event"><code>Event</code></a>, <a href="group-17-conference-domain.html#question"><code>Question</code></a>, <a href="group-17-conference-domain.html#speaker"><code>Speaker</code></a> and <a href="group-17-conference-domain.html#session"><code>Session</code></a>, and the invariant constants <a href="group-17-conference-domain.html#questioninvariants"><code>QuestionInvariants</code></a><code>.ManualIdRangeStart</code> / <a href="group-17-conference-domain.html#sessioninvariants"><code>SessionInvariants</code></a><code>.ManualIdRangeStart</code>. External: <code>DateOnly</code>, <code>TimeOnly</code>, <code>DateTime</code>.</li>
+          <li><strong>Concept reinforced, idempotent and environment-gated seeding through the domain factories.</strong> <code>[Rubric §17, DevOps]</code> assesses repeatable, safe-to-re-run database initialization and <code>[Rubric §14, Testability]</code> assesses deterministic fixtures. Every seed step performs an <code>ExistsAsync</code> check before inserting (<code>:52-57</code> and <code>:84-89</code> for the two events, <code>:116-121</code> for the questions, <code>:173-178</code> per speaker, <code>:233-238</code> per session), so re-running against an already-seeded database is a no-op, which is exactly what production&#39;s <code>DatabaseInitStrategy=Migrate</code> startup path relies on. Just as important, every seeded row goes through the same <code>Event.Create</code> / <code>Question.Create</code> / <code>Speaker.Create</code> / <code>Session.Create</code> factories the command handlers use, each returning a <code>Result&lt;T&gt;</code> that is checked for <code>IsFailure</code> before <code>AddAsync</code> (<code>:71-72</code>, <code>:150-151</code>, <code>:190-191</code>, <code>:259-260</code>). There is no raw-insert back door, so seed data satisfies the identical invariants as user-created data. <code>[Rubric §4, DDD]</code> assesses whether invariants are enforced in one place; this is that guarantee holding even for infrastructure code.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><strong>Constructor</strong> (<code>:22</code>): primary constructor <code>(IUnitOfWork unitOfWork, bool includeSampleData = false)</code>. <code>unitOfWork</code> is null-guarded into a field (<code>:29</code>), and <code>includeSampleData</code> defaults to <code>false</code>, which is the production-safe default.</li>
+          <li><strong>Constants</strong> (<code>:24-27</code>): the shared venue address, and the venue map URL carrying a narrowly scoped <code>S1075</code> suppression with a justification (<code>:26</code>). <code>[Rubric §15, Best Practices &amp; Code Quality]</code> assesses whether analyzer suppressions are scoped and explained rather than blanket-disabled; this is the pattern.</li>
+          <li><strong><code>SeedAsync</code></strong> (<code>:33-45</code>): runs the two event seeders and the question seeder unconditionally, then, only when <code>_includeSampleData</code> is true, the speaker, session and event-link seeders (<code>:39-44</code>). That <code>if</code> is the environment gate.</li>
+          <li><strong><code>SeedCloudAiConferenceEventAsync</code></strong> (<code>:47-78</code>): seeds the &quot;2026 Atlanta Cloud + AI Conference&quot; (single day 2026-05-30, <code>America/New_York</code>, Sessionize code <code>z1ecmzux</code>, FCS Innovation Academy venue) and calls <code>.Publish()</code> on the created aggregate (<code>:74</code>) so it is immediately public. Its existence check matches <strong>either</strong> the current name or the pre-rename &quot;Atlanta Cloud + AI Conference&quot; (<code>:52-54</code>, comment at <code>:51</code>), so a database seeded before the rename does not get a duplicate.</li>
+          <li><strong><code>SeedDevelopersConferenceEventAsync</code></strong> (<code>:80-110</code>): the same shape for the &quot;2026 Atlanta Developers Conference&quot; on 2026-10-17, with <code>sessionizeCode: null</code> (<code>:98</code>), the observable difference between an event whose sessions come from a Sessionize import and one that does not have a Sessionize submission yet.</li>
+          <li><strong><code>SeedQuestionsAsync</code></strong> (<code>:112-157</code>): seeds ten standard feedback questions from a tuple array (<code>:123-135</code>), six Session-scoped (five <code>Rating</code> plus one <code>Text</code> &quot;Comments&quot;) and four Event-scoped (three <code>Rating</code> plus one <code>Text</code>), all with <code>questionSource: &quot;User&quot;</code>. Ids are assigned explicitly starting at <code>QuestionInvariants.ManualIdRangeStart</code> (<code>:137</code>, <code>:142</code>), reserving a manual id band so seeded questions never collide with imported or organizer-created ones. One <code>SaveChangesAsync</code> covers all ten (<code>:156</code>).</li>
+          <li><strong><code>SeedSpeakersAsync</code></strong> (<code>:159-199</code>, sample only): two sample speakers (Ada Lovelace, Alan Turing), each existence-checked individually so a partially seeded database completes, with a single <code>SaveChangesAsync</code> guarded by an <code>added</code> flag (<code>:197-198</code>).</li>
+          <li><strong><code>SeedSessionsAsync</code></strong> (<code>:201-268</code>, sample only): resolves both seeded events (<code>:211-212</code>) and attaches one sample session to each (&quot;Welcome &amp; Keynote (Sample)&quot; to Cloud + AI, &quot;Building on Azure (Sample)&quot; to Developers), so both the auto-filtered public pages and the organizer list&#39;s event filter have data in dev and CI (<code>:205-210</code>). Ids come from <code>SessionInvariants.ManualIdRangeStart</code> and <code>+ 1</code> (<code>:222-223</code>) because the <code>Session</code> int primary key <strong>is</strong> the Sessionize id (<code>:216-219</code>); the reserved range sits above any real Sessionize id. Start times are computed off the owning event&#39;s day at 13:00 UTC, which is 09:00 Eastern for both dates (<code>:240-241</code>).</li>
+          <li><strong><code>SeedSampleEventLinksAsync</code></strong> (<code>:270-294</code>, sample only): loads the two sample speakers (<code>:274-284</code>) and links each to both its event (<a href="group-17-conference-domain.html#eventspeaker"><code>EventSpeaker</code></a>, <code>:296-315</code>) and its session (<a href="group-17-conference-domain.html#sessionspeaker"><code>SessionSpeaker</code></a>, <code>:336-356</code>). Idempotency here is delegated to the aggregate: <code>AddEventSpeaker</code> / <code>AddSessionSpeaker</code> fail on an existing non-deleted link, and the seeder simply treats a failed add as &quot;already there&quot; (<code>:286-291</code>). The comment states why both link paths are seeded: it exercises the direct and the transitive branch of the speakers-by-event filter in dev and CI.</li>
+          <li><strong><code>GetSampleEventsAsync</code></strong> (<code>:317-334</code>): the shared lookup, tracking enabled, that resolves both events by name (again tolerating the pre-rename Cloud + AI name) and returns them as a tuple.</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: seeding through domain factories keeps seed data valid by construction; the <code>includeSampleData</code> flag keeps browse fixtures out of production while guaranteeing the public-browse E2E tests (<code>PublicBrowseTests.PublicSessionList_*</code> / <code>PublicSpeakerList_*</code>, named in the class remarks at <code>:18-20</code>) always find at least one session and one speaker row in dev and CI.</li>
+          <li><strong>Where it&#39;s used</strong>: constructed and run by <a href="group-20-conference-api-grpc.html#conferencemoduleseeder"><code>ConferenceModuleSeeder</code></a> in the API layer (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/ConferenceModuleSeeder.cs:21-29</code>), which resolves an <code>IUnitOfWork</code>, reads <code>Seeding:IncludeSampleConferenceData</code> from configuration (<code>:26</code>), and calls <code>SeedAsync</code>. That <code>IModuleSeeder</code> is invoked by the framework&#39;s database-initialization path after migrations. The flag is set to <code>true</code> only by the local Aspire AppHost (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:163-164</code>) and the E2E CI workflow; production leaves it unset.</li>
+          <li><strong>Caveats / not-in-source</strong>: the seeder never reads configuration itself; the boolean is decided entirely by its caller. The sample-session seeder also carries a documented limitation (<code>:208-210</code>): a database seeded before the per-event split keeps its old both-sessions-on-one-event shape, because the skip-by-title idempotency check never moves an existing row. Resetting the local SQL volume is the stated remedy.</li>
           </ul>
           <h3 id="conference-ef-entity-configurations">Conference EF entity configurations</h3>
           <blockquote>
@@ -639,7 +765,7 @@
           production at all is a runtime/config concern not visible in these configs (see the Anthropic scoring
           service and feature gating elsewhere). The configs only define the table that <em>would</em> hold scores.</li>
           </ul>
-          <h3 id="conferencemoduledbseeder">ConferenceModuleDbSeeder</h3>
+          <h3 id="conferencemoduledbseeder-1">ConferenceModuleDbSeeder</h3>
           <blockquote>
           <p>MMCA.ADC.Conference.Infrastructure · <code>MMCA.ADC.Conference.Infrastructure.Persistence.DbContexts.Seeding</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:22</code> · Level 8 · class</p>
           </blockquote>

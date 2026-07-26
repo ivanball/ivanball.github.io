@@ -16,10 +16,10 @@ candidate exists but the bare name is **globally unique** among first-party type
 is still linked (only one possible target). Names that are neither visible nor unique are
 dropped as unresolvable without full semantic binding.
 
-- Edges resolved by namespace visibility: **8871** (~96%)
-- Edges resolved by globally-unique name (fallback): **331**
-- References dropped as ambiguous (matched >1 type, none visible): **27**
-- Sensitivity: **362 / 2588** type levels would change if the globally-unique fallback
+- Edges resolved by namespace visibility: **9038** (~96%)
+- Edges resolved by globally-unique name (fallback): **335**
+- References dropped as ambiguous (matched >1 type, none visible): **28**
+- Sensitivity: **398 / 2637** type levels would change if the globally-unique fallback
   were excluded; the fallback is retained because a globally-unique first-party name is
   unambiguous, so excluding it would under-count real dependencies.
 
@@ -32,18 +32,18 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 
 | Level | Distinct types |
 |-------|------|
-| 0 | 517 |
-| 1 | 313 |
-| 2 | 204 |
-| 3 | 207 |
-| 4 | 263 |
-| 5 | 172 |
+| 0 | 527 |
+| 1 | 318 |
+| 2 | 208 |
+| 3 | 211 |
+| 4 | 261 |
+| 5 | 166 |
 | 6 | 153 |
 | 7 | 152 |
-| 8 | 249 |
-| 9 | 108 |
-| 10 | 132 |
-| 11 | 16 |
+| 8 | 255 |
+| 9 | 124 |
+| 10 | 141 |
+| 11 | 19 |
 | 12 | 20 |
 | 13 | 8 |
 | 14 | 6 |
@@ -51,7 +51,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 16 | 53 |
 | 17 | 1 |
 
-## Cycles (SCC size > 1): 16
+## Cycles (SCC size > 1): 18
 
 | Level | Size | Members |
 |-------|------|---------|
@@ -69,8 +69,10 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 6 | 2 | Tests:ModelBuilderExtensionsTests, Tests:TestModelBuilderDbContext |
 | 6 | 2 | Domain:LivePoll, Domain:LivePollOption |
 | 7 | 2 | Tests:SpecificationFitnessTests, Tests:SpecTestMap |
-| 9 | 3 | Tests:CosmosConfigurationPortabilityTests, Tests:FixedAssemblyProvider, Tests:MultiSourceSqliteIntegrationTests |
+| 7 | 2 | Tests:MidSaveContextCreatingDbContext, Tests:ReentrantSaveInterceptor |
+| 7 | 2 | Tests:FailingSaveInterceptor, Tests:OutboxRoutingTestDbContext |
 | 9 | 2 | Tests:DatabaseInitializationExtensionsTests, Tests:FixedAssemblyProvider |
+| 10 | 3 | Tests:CosmosConfigurationPortabilityTests, Tests:FixedAssemblyProvider, Tests:MultiSourceSqliteIntegrationTests |
 
 ## Manifest (by level, then assembly)
 
@@ -104,6 +106,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 0 | `GetSessionBookmarkCountQuery` | MMCA.ADC.Conference.Application | 0 | (none) |
 | 0 | `GetSessionBookmarkCountsQuery` | MMCA.ADC.Conference.Application | 0 | (none) |
 | 0 | `GetSessionFeedbackQuery` | MMCA.ADC.Conference.Application | 0 | (none) |
+| 0 | `GetSessionsBySpeakerFilterQuery` | MMCA.ADC.Conference.Application | 0 | (none) |
 | 0 | `GetSessionSelectionDashboardQuery` | MMCA.ADC.Conference.Application | 0 | (none) |
 | 0 | `GetSpeakersByEventFilterQuery` | MMCA.ADC.Conference.Application | 0 | (none) |
 | 0 | `GetSpeakerSessionOverlapQuery` | MMCA.ADC.Conference.Application | 0 | (none) |
@@ -117,6 +120,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 0 | `SessionizeQuestionAnswer` | MMCA.ADC.Conference.Application | 0 | (none) |
 | 0 | `SessionizeRoom` | MMCA.ADC.Conference.Application | 0 | (none) |
 | 0 | `SessionizeSyncResult` | MMCA.ADC.Conference.Application | 0 | (none) |
+| 0 | `SessionScoringEnqueueResult` | MMCA.ADC.Conference.Application | 0 | (none) |
 | 0 | `SessionScoringResult` | MMCA.ADC.Conference.Application | 0 | (none) |
 | 0 | `SessionSimilarityCalculator` | MMCA.ADC.Conference.Application | 0 | (none) |
 | 0 | `SpeakerInfo` | MMCA.ADC.Conference.Application | 0 | (none) |
@@ -294,6 +298,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 0 | `ServiceBusEmulatorFixture` | MMCA.ADC.ServiceBusEmulator.IntegrationTests | 0 | (none) |
 | 0 | `NowNextSession` | MMCA.ADC.UI | 0 | (none) |
 | 0 | `WebAuthenticatorCallbackActivity` | MMCA.ADC.UI | 0 | (none) |
+| 0 | `AllowMissingOwnerAttribute` | MMCA.Common.API | 0 | (none) |
 | 0 | `AppAssociationOptions` | MMCA.Common.API | 0 | (none) |
 | 0 | `AssemblyReference` | MMCA.Common.API | 0 | (none) |
 | 0 | `AuthorizationPolicies` | MMCA.Common.API | 0 | (none) |
@@ -330,6 +335,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 0 | `CqrsMetrics` | MMCA.Common.Application | 0 | (none) |
 | 0 | `DataSource` | MMCA.Common.Application | 0 | (none) |
 | 0 | `DeleteEntityCommand<TEntity, TIdentifierType>` | MMCA.Common.Application | 0 | (none) |
+| 0 | `DynamicQueryConfig` | MMCA.Common.Application | 0 | (none) |
 | 0 | `EmailRules<T>` | MMCA.Common.Application | 0 | (none) |
 | 0 | `EntityQueryParameters<TEntity>` | MMCA.Common.Application | 0 | (none) |
 | 0 | `FilterValueParser` | MMCA.Common.Application | 0 | (none) |
@@ -343,7 +349,6 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 0 | `ICommandWithRequest<out TRequest>` | MMCA.Common.Application | 0 | (none) |
 | 0 | `ICorrelationContext` | MMCA.Common.Application | 0 | (none) |
 | 0 | `ICreateRequest` | MMCA.Common.Application | 0 | (none) |
-| 0 | `ICurrentUserService` | MMCA.Common.Application | 0 | (none) |
 | 0 | `IEmailSender` | MMCA.Common.Application | 0 | (none) |
 | 0 | `IEntityConfigurationAssemblyProvider` | MMCA.Common.Application | 0 | (none) |
 | 0 | `IFeatureGated` | MMCA.Common.Application | 0 | (none) |
@@ -361,18 +366,19 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 0 | `ISoftDeletedUserValidator` | MMCA.Common.Application | 0 | (none) |
 | 0 | `ITokenService` | MMCA.Common.Application | 0 | (none) |
 | 0 | `ITransactional` | MMCA.Common.Application | 0 | (none) |
+| 0 | `IUpdatePropertySetter<TEntity>` | MMCA.Common.Application | 0 | (none) |
 | 0 | `MarkAllNotificationsReadCommand` | MMCA.Common.Application | 0 | (none) |
 | 0 | `MarkNotificationReadCommand` | MMCA.Common.Application | 0 | (none) |
 | 0 | `ModuleSettings` | MMCA.Common.Application | 0 | (none) |
 | 0 | `NavigationType` | MMCA.Common.Application | 0 | (none) |
 | 0 | `NonNegativeIntRules<T>` | MMCA.Common.Application | 0 | (none) |
 | 0 | `OptionalStringRules<T>` | MMCA.Common.Application | 0 | (none) |
+| 0 | `PagingMath` | MMCA.Common.Application | 0 | (none) |
 | 0 | `ParameterReplacer` | MMCA.Common.Application | 0 | (none) |
 | 0 | `PasswordRules<T>` | MMCA.Common.Application | 0 | (none) |
 | 0 | `PositiveDecimalRules<T>` | MMCA.Common.Application | 0 | (none) |
 | 0 | `PositiveIntRules<T>` | MMCA.Common.Application | 0 | (none) |
 | 0 | `PropertyAccessor` | MMCA.Common.Application | 0 | (none) |
-| 0 | `QueryCacheKeyLocks` | MMCA.Common.Application | 0 | (none) |
 | 0 | `RequiredStringRules<T>` | MMCA.Common.Application | 0 | (none) |
 | 0 | `StrongPasswordRules<T>` | MMCA.Common.Application | 0 | (none) |
 | 0 | `CapturedMeasurement` | MMCA.Common.Application.Tests | 0 | (none) |
@@ -402,6 +408,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 0 | `TestRequest` | MMCA.Common.Application.Tests | 0 | (none) |
 | 0 | `TestStringModel` | MMCA.Common.Application.Tests | 0 | (none) |
 | 0 | `TestValidatingCommand` | MMCA.Common.Application.Tests | 0 | (none) |
+| 0 | `Widget` | MMCA.Common.Application.Tests | 0 | (none) |
 | 0 | `CspPolicy` | MMCA.Common.Aspire | 0 | (none) |
 | 0 | `GatewayCorsExtensions` | MMCA.Common.Aspire | 0 | (none) |
 | 0 | `IWarmupTask` | MMCA.Common.Aspire | 0 | (none) |
@@ -410,6 +417,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 0 | `WarmupReadinessGate` | MMCA.Common.Aspire | 0 | (none) |
 | 0 | `Extensions` | MMCA.Common.Aspire.Hosting | 0 | (none) |
 | 0 | `StubWebHostEnvironment` | MMCA.Common.Aspire.Tests | 0 | (none) |
+| 0 | `ProductRow` | MMCA.Common.Benchmarks | 0 | (none) |
 | 0 | `AssemblyReference` | MMCA.Common.Domain | 0 | (none) |
 | 0 | `ClassReference` | MMCA.Common.Domain | 0 | (none) |
 | 0 | `DomainEntityState` | MMCA.Common.Domain | 0 | (none) |
@@ -435,11 +443,13 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 0 | `FakeRequest` | MMCA.Common.Grpc.Tests | 0 | (none) |
 | 0 | `FakeResponse` | MMCA.Common.Grpc.Tests | 0 | (none) |
 | 0 | `AssemblyReference` | MMCA.Common.Infrastructure | 0 | (none) |
+| 0 | `CacheKeyPrefixOptions` | MMCA.Common.Infrastructure | 0 | (none) |
 | 0 | `CacheOptions` | MMCA.Common.Infrastructure | 0 | (none) |
 | 0 | `ClaimBasedUserIdProvider` | MMCA.Common.Infrastructure | 0 | (none) |
 | 0 | `ClassReference` | MMCA.Common.Infrastructure | 0 | (none) |
 | 0 | `CosmosIntIdValueGenerator` | MMCA.Common.Infrastructure | 0 | (none) |
 | 0 | `DataSourceEntrySettings` | MMCA.Common.Infrastructure | 0 | (none) |
+| 0 | `DetectChangesScope` | MMCA.Common.Infrastructure | 0 | (none) |
 | 0 | `EncryptedStringConverter` | MMCA.Common.Infrastructure | 0 | (none) |
 | 0 | `EntityConfigurationOptions` | MMCA.Common.Infrastructure | 0 | (none) |
 | 0 | `FileStorageSettings` | MMCA.Common.Infrastructure | 0 | (none) |
@@ -462,6 +472,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 0 | `NativePushPayloads` | MMCA.Common.Infrastructure | 0 | (none) |
 | 0 | `NativePushSettings` | MMCA.Common.Infrastructure | 0 | (none) |
 | 0 | `OutboxCycleResult` | MMCA.Common.Infrastructure | 0 | (none) |
+| 0 | `PeriodicBackgroundService` | MMCA.Common.Infrastructure | 0 | (none) |
 | 0 | `ProfilingHelper` | MMCA.Common.Infrastructure | 0 | (none) |
 | 0 | `UseDatabaseAttribute` | MMCA.Common.Infrastructure | 0 | (none) |
 | 0 | `ValReturn<T>` | MMCA.Common.Infrastructure | 0 | (none) |
@@ -491,6 +502,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 0 | `PaginationMetadata` | MMCA.Common.Shared | 0 | (none) |
 | 0 | `PropertyReader` | MMCA.Common.Shared | 0 | (none) |
 | 0 | `RefreshTokenRequest` | MMCA.Common.Shared | 0 | (none) |
+| 0 | `Releaser` | MMCA.Common.Shared | 0 | (none) |
 | 0 | `RoleNames` | MMCA.Common.Shared | 0 | (none) |
 | 0 | `SendPushNotificationRequest` | MMCA.Common.Shared | 0 | (none) |
 | 0 | `ServiceContractAttribute` | MMCA.Common.Shared | 0 | (none) |
@@ -598,6 +610,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 1 | `ConferencePermissionGrantsTests` | MMCA.ADC.Conference.API.Tests | 3 | ConferencePermissions, IPermissionRegistry, RoleNames |
 | 1 | `ConferenceCategoryUpdateRequest` | MMCA.ADC.Conference.Application | 1 | IConcurrencyAware |
 | 1 | `EventUpdateRequest` | MMCA.ADC.Conference.Application | 2 | IConcurrencyAware, QuestionModerationDefault |
+| 1 | `ISessionScoringQueue` | MMCA.ADC.Conference.Application | 1 | SessionScoringEnqueueResult |
 | 1 | `QuestionUpdateRequest` | MMCA.ADC.Conference.Application | 1 | IConcurrencyAware |
 | 1 | `SessionizeCategory` | MMCA.ADC.Conference.Application | 1 | SessionizeCategoryItem |
 | 1 | `SessionizeSession` | MMCA.ADC.Conference.Application | 1 | SessionizeQuestionAnswer |
@@ -615,6 +628,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 1 | `ContentSimilarityDTO` | MMCA.ADC.Conference.Shared | 1 | SimilarSessionPair |
 | 1 | `EventQuestionAnswerDTO` | MMCA.ADC.Conference.Shared | 1 | IBaseDTO<TIdentifierType> |
 | 1 | `EventSpeakerDTO` | MMCA.ADC.Conference.Shared | 1 | IBaseDTO<TIdentifierType> |
+| 1 | `EventTransitionRequest` | MMCA.ADC.Conference.Shared | 1 | IConcurrencyAware |
 | 1 | `MultiSessionSpeaker` | MMCA.ADC.Conference.Shared | 1 | SpeakerSessionSummary |
 | 1 | `NowNextDTO` | MMCA.ADC.Conference.Shared | 1 | NowNextSessionDTO |
 | 1 | `QuestionDTO` | MMCA.ADC.Conference.Shared | 2 | IBaseDTO<TIdentifierType>, IConcurrencyAware |
@@ -646,9 +660,10 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 1 | `InMemoryQueryableExecutor` | MMCA.ADC.Engagement.Application.Tests | 1 | IQueryableExecutor |
 | 1 | `RecordingPublisher` | MMCA.ADC.Engagement.Infrastructure.Tests | 2 | ILiveChannelPublisher, LiveChannelPublishWorkItem |
 | 1 | `DisabledBookmarkCountService` | MMCA.ADC.Engagement.Shared | 1 | IBookmarkCountService |
-| 1 | `LivePollDTO` | MMCA.ADC.Engagement.Shared | 3 | IBaseDTO<TIdentifierType>, LivePollOptionDTO, LivePollStatus |
+| 1 | `LifecycleTransitionRequest` | MMCA.ADC.Engagement.Shared | 1 | IConcurrencyAware |
+| 1 | `LivePollDTO` | MMCA.ADC.Engagement.Shared | 4 | IBaseDTO<TIdentifierType>, IConcurrencyAware, LivePollOptionDTO, LivePollStatus |
 | 1 | `LivePollResultsDTO` | MMCA.ADC.Engagement.Shared | 2 | LivePollOptionResultDTO, LivePollStatus |
-| 1 | `SessionQuestionDTO` | MMCA.ADC.Engagement.Shared | 2 | IBaseDTO<TIdentifierType>, QuestionStatus |
+| 1 | `SessionQuestionDTO` | MMCA.ADC.Engagement.Shared | 3 | IBaseDTO<TIdentifierType>, IConcurrencyAware, QuestionStatus |
 | 1 | `UserEngagementExportDTO` | MMCA.ADC.Engagement.Shared | 2 | UserEngagementBookmarkExportDTO, UserEngagementSubmittedQuestionExportDTO |
 | 1 | `UserSessionBookmarkDTO` | MMCA.ADC.Engagement.Shared | 1 | IBaseDTO<TIdentifierType> |
 | 1 | `ILiveEventUIService` | MMCA.ADC.Engagement.UI | 1 | LiveEventContext |
@@ -682,14 +697,11 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 1 | `ErrorLocalizer` | MMCA.Common.API | 2 | ErrorResourceSource, IErrorLocalizer |
 | 1 | `HasPermissionAttribute` | MMCA.Common.API | 1 | PermissionPolicy |
 | 1 | `ICookieSessionRefresher` | MMCA.Common.API | 1 | SessionTokenResult |
-| 1 | `IdempotencyFilter` | MMCA.Common.API | 3 | ICacheService, IdempotencyRecord, IdempotencySettings |
 | 1 | `JwksEndpointExtensions` | MMCA.Common.API | 1 | IJwksProvider |
 | 1 | `OutputCacheOptionsExtensions` | MMCA.Common.API | 1 | PublicEndpointOutputCachePolicy |
-| 1 | `OwnershipHelper` | MMCA.Common.API | 1 | ICurrentUserService |
 | 1 | `PermissionAuthorizationHandler` | MMCA.Common.API | 3 | AuthClaimTypes, IPermissionRegistry, PermissionRequirement |
 | 1 | `PermissionPolicyProvider` | MMCA.Common.API | 2 | PermissionPolicy, PermissionRequirement |
 | 1 | `ServiceInfoControllerBase` | MMCA.Common.API | 2 | ServiceInfoResponse, ServiceInfoV2Response |
-| 1 | `SoftDeletedUserMiddleware` | MMCA.Common.API | 3 | ICacheService, ICurrentUserService, ISoftDeletedUserValidator |
 | 1 | `AuthorizationExtensionsTests` | MMCA.Common.API.Tests | 2 | AuthorizationPolicies, RoleNames |
 | 1 | `DisabledFeatureHandlerTests` | MMCA.Common.API.Tests | 1 | DisabledFeatureHandler |
 | 1 | `ErrorLocalizerTests` | MMCA.Common.API.Tests | 1 | IErrorLocalizer |
@@ -703,17 +715,17 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 1 | `TestDomainException` | MMCA.Common.API.Tests | 1 | DomainException |
 | 1 | `TestDTO` | MMCA.Common.API.Tests | 1 | IBaseDTO<TIdentifierType> |
 | 1 | `ApplicationSettings` | MMCA.Common.Application | 1 | IApplicationSettings |
-| 1 | `BoolFilterStrategy` | MMCA.Common.Application | 1 | IFilterStrategy |
+| 1 | `BoolFilterStrategy` | MMCA.Common.Application | 3 | DynamicQueryConfig, FilterValueParser, IFilterStrategy |
 | 1 | `CommandRequestValidator<TCommand, TRequest>` | MMCA.Common.Application | 1 | ICommandWithRequest<out TRequest> |
 | 1 | `DataSourceKey` | MMCA.Common.Application | 1 | DataSource |
-| 1 | `DateTimeFilterStrategy` | MMCA.Common.Application | 2 | FilterValueParser, IFilterStrategy |
-| 1 | `DecimalFilterStrategy` | MMCA.Common.Application | 2 | FilterValueParser, IFilterStrategy |
-| 1 | `GuidFilterStrategy` | MMCA.Common.Application | 2 | FilterValueParser, IFilterStrategy |
+| 1 | `DateTimeFilterStrategy` | MMCA.Common.Application | 3 | DynamicQueryConfig, FilterValueParser, IFilterStrategy |
+| 1 | `DecimalFilterStrategy` | MMCA.Common.Application | 3 | DynamicQueryConfig, FilterValueParser, IFilterStrategy |
+| 1 | `GuidFilterStrategy` | MMCA.Common.Application | 3 | DynamicQueryConfig, FilterValueParser, IFilterStrategy |
 | 1 | `IDomainEventDispatcher` | MMCA.Common.Application | 1 | IDomainEvent |
 | 1 | `IDomainEventHandler<in TDomainEvent>` | MMCA.Common.Application | 1 | IDomainEvent |
-| 1 | `IntFilterStrategy` | MMCA.Common.Application | 2 | FilterValueParser, IFilterStrategy |
+| 1 | `IntFilterStrategy` | MMCA.Common.Application | 3 | DynamicQueryConfig, FilterValueParser, IFilterStrategy |
 | 1 | `LoginRequestValidator` | MMCA.Common.Application | 1 | LoginRequest |
-| 1 | `LongFilterStrategy` | MMCA.Common.Application | 2 | FilterValueParser, IFilterStrategy |
+| 1 | `LongFilterStrategy` | MMCA.Common.Application | 3 | DynamicQueryConfig, FilterValueParser, IFilterStrategy |
 | 1 | `ModulesSettings` | MMCA.Common.Application | 1 | ModuleSettings |
 | 1 | `NavigationPropertyInfo` | MMCA.Common.Application | 1 | NavigationType |
 | 1 | `NullNotificationRecipientProvider` | MMCA.Common.Application | 1 | INotificationRecipientProvider |
@@ -721,7 +733,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 1 | `ProfilingQueryDecorator<TQuery, TResult>` | MMCA.Common.Application | 1 | IQueryHandler<in TQuery, TResult> |
 | 1 | `RefreshTokenRequestValidator` | MMCA.Common.Application | 1 | RefreshTokenRequest |
 | 1 | `SendPushNotificationCommand` | MMCA.Common.Application | 2 | ICommandWithRequest<out TRequest>, SendPushNotificationRequest |
-| 1 | `StringFilterStrategy` | MMCA.Common.Application | 2 | FilterValueParser, IFilterStrategy |
+| 1 | `StringFilterStrategy` | MMCA.Common.Application | 3 | DynamicQueryConfig, FilterValueParser, IFilterStrategy |
 | 1 | `CacheableTestQuery` | MMCA.Common.Application.Tests | 1 | IQueryCacheable |
 | 1 | `CacheInvalidatingTestCommand` | MMCA.Common.Application.Tests | 1 | ICacheInvalidating |
 | 1 | `CachePipelineTestCommand` | MMCA.Common.Application.Tests | 1 | ICacheInvalidating |
@@ -736,6 +748,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 1 | `FeatureGatedQueryNonGeneric` | MMCA.Common.Application.Tests | 1 | IFeatureGated |
 | 1 | `FullPipelineTestCommand` | MMCA.Common.Application.Tests | 2 | ICacheInvalidating, ITransactional |
 | 1 | `ImageContentSnifferTests` | MMCA.Common.Application.Tests | 1 | ImageContentSniffer |
+| 1 | `PagingMathTests` | MMCA.Common.Application.Tests | 1 | PagingMath |
 | 1 | `PermissiveTestRequestValidator` | MMCA.Common.Application.Tests | 1 | TestRequest |
 | 1 | `StampedeTestQuery` | MMCA.Common.Application.Tests | 1 | IQueryCacheable |
 | 1 | `TestCommandWithRequest` | MMCA.Common.Application.Tests | 2 | ICommandWithRequest<out TRequest>, TestRequest |
@@ -767,12 +780,12 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 1 | `ResilienceCircuitBreakerFaultInjectionTests` | MMCA.Common.Grpc.Tests | 1 | CountingFailureHandler |
 | 1 | `ResilienceHandlerTests` | MMCA.Common.Grpc.Tests | 1 | FakeGrpcClient |
 | 1 | `AzureNotificationHubNativePushSender` | MMCA.Common.Infrastructure | 2 | INativePushSender, NativePushPayloads |
+| 1 | `CacheKeyNamespace` | MMCA.Common.Infrastructure | 1 | CacheKeyPrefixOptions |
 | 1 | `ConnectionStringSettings` | MMCA.Common.Infrastructure | 1 | IConnectionStringSettings |
 | 1 | `CorrelationContext` | MMCA.Common.Infrastructure | 1 | ICorrelationContext |
 | 1 | `DataSourcesSettings` | MMCA.Common.Infrastructure | 1 | DataSourceEntrySettings |
 | 1 | `DbSeeder` | MMCA.Common.Infrastructure | 1 | IDbSeeder |
 | 1 | `DefaultEntityConfigurationAssemblyProvider` | MMCA.Common.Infrastructure | 2 | EntityConfigurationOptions, IEntityConfigurationAssemblyProvider |
-| 1 | `DistributedCacheService` | MMCA.Common.Infrastructure | 2 | CacheOptions, ICacheService |
 | 1 | `EFQueryableExecutor` | MMCA.Common.Infrastructure | 1 | IQueryableExecutor |
 | 1 | `ExplicitAssemblyProvider` | MMCA.Common.Infrastructure | 1 | IEntityConfigurationAssemblyProvider |
 | 1 | `IJwtSettings` | MMCA.Common.Infrastructure | 1 | JwtSigningAlgorithm |
@@ -790,9 +803,11 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 1 | `SmtpEmailSender` | MMCA.Common.Infrastructure | 2 | IEmailSender, ISmtpSettings |
 | 1 | `SmtpSettings` | MMCA.Common.Infrastructure | 1 | ISmtpSettings |
 | 1 | `SoftDeleteUniqueIndexConvention` | MMCA.Common.Infrastructure | 2 | DataSource, IAuditableEntity |
+| 1 | `UpdatePropertySetterBuilder<TEntity>` | MMCA.Common.Infrastructure | 1 | IUpdatePropertySetter<TEntity> |
 | 1 | `UseDataSourceAttribute` | MMCA.Common.Infrastructure | 1 | DataSource |
 | 1 | `CacheOptionsTests` | MMCA.Common.Infrastructure.Tests | 1 | CacheOptions |
 | 1 | `CosmosIntIdValueGeneratorTests` | MMCA.Common.Infrastructure.Tests | 1 | CosmosIntIdValueGenerator |
+| 1 | `CountingSweep` | MMCA.Common.Infrastructure.Tests | 2 | FakeTimeProvider, PeriodicBackgroundService |
 | 1 | `DatabaseRestoreDrillTests` | MMCA.Common.Infrastructure.Tests | 1 | DrillResult |
 | 1 | `EmptyAssemblyProvider` | MMCA.Common.Infrastructure.Tests | 1 | IEntityConfigurationAssemblyProvider |
 | 1 | `EncryptedStringConverterTests` | MMCA.Common.Infrastructure.Tests | 1 | EncryptedStringConverter |
@@ -805,9 +820,11 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 1 | `NullAssemblyProvider` | MMCA.Common.Infrastructure.Tests | 1 | IEntityConfigurationAssemblyProvider |
 | 1 | `ProfilingHelperTests` | MMCA.Common.Infrastructure.Tests | 1 | ProfilingHelper |
 | 1 | `BaseLookup<TIdentifierType>` | MMCA.Common.Shared | 1 | IBaseDTO<TIdentifierType> |
+| 1 | `ConcurrencyTokenRequest` | MMCA.Common.Shared | 1 | IConcurrencyAware |
 | 1 | `DomainInvariantViolationException` | MMCA.Common.Shared | 1 | DomainException |
 | 1 | `Error` | MMCA.Common.Shared | 1 | ErrorType |
 | 1 | `IcsCalendarBuilder` | MMCA.Common.Shared | 1 | IcsEvent |
+| 1 | `KeyedSemaphoreStripe` | MMCA.Common.Shared | 1 | Releaser |
 | 1 | `PagedCollectionResult<T>` | MMCA.Common.Shared | 2 | CollectionResult<T>, PaginationMetadata |
 | 1 | `PermissionRegistry` | MMCA.Common.Shared | 1 | IPermissionRegistry |
 | 1 | `PushNotificationDTO` | MMCA.Common.Shared | 1 | IBaseDTO<TIdentifierType> |
@@ -910,6 +927,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 2 | `ServiceInfoController` | MMCA.ADC.Conference.API | 2 | Route, ServiceInfoControllerBase |
 | 2 | `IAiScoringService` | MMCA.ADC.Conference.Application | 2 | SessionScoringInput, SessionScoringResult |
 | 2 | `SessionizeResponse` | MMCA.ADC.Conference.Application | 5 | SessionizeCategory, SessionizeQuestion, SessionizeRoom, SessionizeSession, SessionizeSpeaker |
+| 2 | `SessionScoringQueue` | MMCA.ADC.Conference.Application | 2 | ISessionScoringQueue, SessionScoringEnqueueResult |
 | 2 | `GrpcErrorTrailerParser` | MMCA.ADC.Conference.Contracts | 2 | Error, ErrorType |
 | 2 | `CategoryItemChanged` | MMCA.ADC.Conference.Domain | 2 | BaseDomainEvent, DomainEntityState |
 | 2 | `EventQuestionAnswerChanged` | MMCA.ADC.Conference.Domain | 2 | BaseDomainEvent, DomainEntityState |
@@ -946,6 +964,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 2 | `LiveChannelPublishQueue` | MMCA.ADC.Engagement.Application | 2 | ILiveChannelPublishQueue, LiveChannelPublishWorkItem |
 | 2 | `CastVoteCommandValidatorTests` | MMCA.ADC.Engagement.Application.Tests | 2 | CastVoteCommand, CastVoteCommandValidator |
 | 2 | `CreateBookmarkRequestValidatorTests` | MMCA.ADC.Engagement.Application.Tests | 2 | CreateBookmarkRequest, CreateBookmarkRequestValidator |
+| 2 | `RecordingQueue` | MMCA.ADC.Engagement.Application.Tests | 2 | ILiveChannelPublishQueue, LiveChannelPublishWorkItem |
 | 2 | `LivePollChanged` | MMCA.ADC.Engagement.Domain | 3 | BaseDomainEvent, DomainEntityState, LivePollStatus |
 | 2 | `LivePollVoteChanged` | MMCA.ADC.Engagement.Domain | 2 | BaseDomainEvent, DomainEntityState |
 | 2 | `SessionQuestionChanged` | MMCA.ADC.Engagement.Domain | 3 | BaseDomainEvent, DomainEntityState, QuestionStatus |
@@ -979,12 +998,11 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 2 | `MainPage` | MMCA.ADC.UI | 1 | MauiBackNavigationBridge |
 | 2 | `CookieSessionRefreshMiddleware` | MMCA.Common.API | 1 | ICookieSessionRefresher |
 | 2 | `ErrorHttpMapping` | MMCA.Common.API | 3 | Error, ErrorType, IErrorLocalizer |
-| 2 | `IdempotentAttribute` | MMCA.Common.API | 1 | IdempotencyFilter |
+| 2 | `IdempotencyFilter` | MMCA.Common.API | 4 | ICacheService, IdempotencyRecord, IdempotencySettings, KeyedSemaphoreStripe |
 | 2 | `IEntityControllerBase<TEntityDTO, TIdentifierType>` | MMCA.Common.API | 5 | BaseLookup<TIdentifierType>, CollectionResult<T>, IBaseDTO<TIdentifierType>, PagedCollectionResult<T>, QueryFilterModelBinder |
 | 2 | `MiniProfilerExtensions` | MMCA.Common.API | 1 | ApplicationSettings |
 | 2 | `ModuleControllerFeatureProvider` | MMCA.Common.API | 1 | ModulesSettings |
 | 2 | `OidcDiscoveryEndpointExtensions` | MMCA.Common.API | 1 | JwksEndpointExtensions |
-| 2 | `OwnerOrAdminFilter` | MMCA.Common.API | 3 | ICurrentUserService, OwnerOrAdminFilterOptions, OwnershipHelper |
 | 2 | `SessionCookieEndpoints` | MMCA.Common.API | 4 | ICookieSessionRefresher, SessionCookieJar, SessionCookieRequest, SessionTokenResponse |
 | 2 | `SessionCookieJar` | MMCA.Common.API | 1 | SessionCookieEndpoints |
 | 2 | `AppAssociationEndpointTests` | MMCA.Common.API.Tests | 2 | AppAssociationEndpointExtensions, AppAssociationOptions |
@@ -992,7 +1010,6 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 2 | `ExceptionHandlerTests` | MMCA.Common.API.Tests | 7 | DbUpdateExceptionHandler, DomainExceptionHandler, DomainInvariantViolationException, GlobalExceptionHandler, OperationCanceledExceptionHandler, TestDomainException, ValidationExceptionHandler |
 | 2 | `JwksEndpointTests` | MMCA.Common.API.Tests | 4 | IJwksProvider, JwksEndpointExtensions, JwksSettings, RsaJwksProvider |
 | 2 | `PermissionPolicyProviderTests` | MMCA.Common.API.Tests | 2 | PermissionPolicyProvider, PermissionRequirement |
-| 2 | `SoftDeletedUserMiddlewareTests` | MMCA.Common.API.Tests | 4 | ICacheService, ICurrentUserService, ISoftDeletedUserValidator, SoftDeletedUserMiddleware |
 | 2 | `StubRefresher` | MMCA.Common.API.Tests | 2 | ICookieSessionRefresher, SessionTokenResult |
 | 2 | `IDataSourceService` | MMCA.Common.Application | 2 | DataSource, DataSourceKey |
 | 2 | `IEventBus` | MMCA.Common.Application | 1 | IIntegrationEvent |
@@ -1000,6 +1017,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 2 | `IMessageBus` | MMCA.Common.Application | 1 | IIntegrationEvent |
 | 2 | `IModule` | MMCA.Common.Application | 1 | ApplicationSettings |
 | 2 | `INavigationMetadata` | MMCA.Common.Application | 1 | NavigationPropertyInfo |
+| 2 | `QueryCacheKeyLocks` | MMCA.Common.Application | 1 | KeyedSemaphoreStripe |
 | 2 | `SafeDomainEventHandler<TDomainEvent>` | MMCA.Common.Application | 2 | BaseDomainEvent, IDomainEventHandler<in TDomainEvent> |
 | 2 | `ValidationFailureExtensions` | MMCA.Common.Application | 1 | Error |
 | 2 | `ApplicationSettingsTests` | MMCA.Common.Application.Tests | 2 | ApplicationSettings, IApplicationSettings |
@@ -1029,8 +1047,9 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 2 | `TestDomainEvent` | MMCA.Common.Domain.Tests | 1 | BaseDomainEvent |
 | 2 | `ResultFailureException` | MMCA.Common.Grpc | 1 | Error |
 | 2 | `JwtForwardingClientInterceptorTests` | MMCA.Common.Grpc.Tests | 5 | FakeRequest, FakeResponse, FakeStreamReader, FakeStreamWriter, JwtForwardingClientInterceptor |
-| 2 | `CapturedState` | MMCA.Common.Infrastructure | 3 | IAggregateRoot, IDomainEvent, OutboxMessage |
+| 2 | `AggregateCapture` | MMCA.Common.Infrastructure | 2 | IAggregateRoot, IDomainEvent |
 | 2 | `DesignTimeDbContextOptions` | MMCA.Common.Infrastructure | 2 | ConnectionStringSettings, DataSourceEntrySettings |
+| 2 | `DistributedCacheService` | MMCA.Common.Infrastructure | 3 | CacheKeyNamespace, CacheOptions, ICacheService |
 | 2 | `IEntityDataSourceRegistry` | MMCA.Common.Infrastructure | 1 | DataSourceKey |
 | 2 | `JwtSettings` | MMCA.Common.Infrastructure | 2 | IJwtSettings, JwtSigningAlgorithm |
 | 2 | `NotificationHub` | MMCA.Common.Infrastructure | 1 | PushNotificationSettings |
@@ -1046,7 +1065,9 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 2 | `MemoryCacheServiceTests` | MMCA.Common.Infrastructure.Tests | 1 | MemoryCacheService |
 | 2 | `NullLiveChannelPublisherTests` | MMCA.Common.Infrastructure.Tests | 1 | NullLiveChannelPublisher |
 | 2 | `NullPushNotificationSenderTests` | MMCA.Common.Infrastructure.Tests | 1 | NullPushNotificationSender |
+| 2 | `OutboxSignalTests` | MMCA.Common.Infrastructure.Tests | 1 | OutboxSignal |
 | 2 | `PasswordHasherTests` | MMCA.Common.Infrastructure.Tests | 1 | PasswordHasher |
+| 2 | `PeriodicBackgroundServiceTests` | MMCA.Common.Infrastructure.Tests | 2 | CountingSweep, FakeTimeProvider |
 | 2 | `PushNotificationSettingsTests` | MMCA.Common.Infrastructure.Tests | 2 | IPushNotificationSettings, PushNotificationSettings |
 | 2 | `RsaJwksProviderTests` | MMCA.Common.Infrastructure.Tests | 2 | JwksSettings, RsaJwksProvider |
 | 2 | `SmtpEmailSenderTests` | MMCA.Common.Infrastructure.Tests | 2 | SmtpEmailSender, SmtpSettings |
@@ -1057,7 +1078,6 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 2 | `TestIntegrationEvent` | MMCA.Common.Infrastructure.Tests | 2 | BaseDomainEvent, IIntegrationEvent |
 | 2 | `TestLocalEvent` | MMCA.Common.Infrastructure.Tests | 1 | BaseDomainEvent |
 | 2 | `UseDataSourceAttributeTests` | MMCA.Common.Infrastructure.Tests | 2 | DataSource, UseDataSourceAttribute |
-| 2 | `WarningCountingLogger` | MMCA.Common.Infrastructure.Tests | 1 | DistributedCacheService |
 | 2 | `PermissionRegistryBuilder` | MMCA.Common.Shared | 1 | PermissionRegistry |
 | 2 | `Result` | MMCA.Common.Shared | 2 | Error, ResultJsonConverterFactory |
 | 2 | `ResultConverter` | MMCA.Common.Shared | 2 | Error, Result |
@@ -1066,6 +1086,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 2 | `DomainExceptionTests` | MMCA.Common.Shared.Tests | 3 | ConcreteDomainException, DomainException, DomainInvariantViolationException |
 | 2 | `ErrorTests` | MMCA.Common.Shared.Tests | 2 | Error, ErrorType |
 | 2 | `IcsCalendarBuilderTests` | MMCA.Common.Shared.Tests | 2 | IcsCalendarBuilder, IcsEvent |
+| 2 | `KeyedSemaphoreStripeTests` | MMCA.Common.Shared.Tests | 1 | KeyedSemaphoreStripe |
 | 2 | `OpenApiContractTestsBase<TFixture>` | MMCA.Common.Testing | 2 | IIntegrationTestFixture, IntegrationTestBase<TFixture> |
 | 2 | `ProblemDetailsContractTestsBase<TFixture>` | MMCA.Common.Testing | 2 | IIntegrationTestFixture, IntegrationTestBase<TFixture> |
 | 2 | `ServiceInfoVersioningContractTestsBase<TFixture>` | MMCA.Common.Testing | 2 | IIntegrationTestFixture, IntegrationTestBase<TFixture> |
@@ -1115,12 +1136,14 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 3 | `UpdateEventResult` | MMCA.ADC.Conference.Application | 1 | EventDTO |
 | 3 | `UpdateSessionResult` | MMCA.ADC.Conference.Application | 1 | SessionDTO |
 | 3 | `RecordingEventBus` | MMCA.ADC.Conference.Application.Tests | 2 | IEventBus, IIntegrationEvent |
+| 3 | `SessionScoringQueueTests` | MMCA.ADC.Conference.Application.Tests | 2 | SessionScoringEnqueueResult, SessionScoringQueue |
 | 3 | `CategoryChanged` | MMCA.ADC.Conference.Domain | 2 | DomainEntityState, EntityChangedEvent<TIdentifierType> |
 | 3 | `EventChanged` | MMCA.ADC.Conference.Domain | 2 | DomainEntityState, EntityChangedEvent<TIdentifierType> |
 | 3 | `QuestionChanged` | MMCA.ADC.Conference.Domain | 2 | DomainEntityState, EntityChangedEvent<TIdentifierType> |
 | 3 | `SessionChanged` | MMCA.ADC.Conference.Domain | 2 | DomainEntityState, EntityChangedEvent<TIdentifierType> |
 | 3 | `SpeakerChanged` | MMCA.ADC.Conference.Domain | 2 | DomainEntityState, EntityChangedEvent<TIdentifierType> |
 | 3 | `AnthropicScoringService` | MMCA.ADC.Conference.Infrastructure | 8 | AiScoreResponse, AnthropicMessage, AnthropicRequest, AnthropicResponse, IAiScoringService, SessionScoringInput, SessionScoringResult, SpeakerInfo |
+| 3 | `SessionScoringProcessor` | MMCA.ADC.Conference.Infrastructure | 5 | ICommandHandler<in TCommand, TResult>, Result, ScoreEventSessionsCommand, ScoreEventSessionsResultDTO, SessionScoringQueue |
 | 3 | `FakeAiScoringService` | MMCA.ADC.Conference.IntegrationTests | 3 | IAiScoringService, SessionScoringInput, SessionScoringResult |
 | 3 | `IEventLiveValidationService` | MMCA.ADC.Conference.Shared | 3 | EventLiveInfo, Result, SessionLiveInfo |
 | 3 | `ISessionBookmarkValidationService` | MMCA.ADC.Conference.Shared | 1 | Result |
@@ -1155,13 +1178,13 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 3 | `BookmarkService` | MMCA.ADC.Engagement.UI | 8 | AuthenticatedServiceBase, CreateBookmarkRequest, IBookmarkUIService, ITokenStorageService, PagedCollectionResult<T>, PaginationMetadata, ServiceExceptionHelper, UserSessionBookmarkDTO |
 | 3 | `EngagementUIModule` | MMCA.ADC.Engagement.UI | 3 | EngagementRoutePaths, IUIModule, NavItem |
 | 3 | `EventFeedbackService` | MMCA.ADC.Engagement.UI | 6 | AuthenticatedServiceBase, EventQuestionAnswerDTO, IEventFeedbackUIService, ITokenStorageService, PagedCollectionResult<T>, ServiceExceptionHelper |
-| 3 | `LivePollUIService` | MMCA.ADC.Engagement.UI | 8 | AuthenticatedServiceBase, CastVoteRequest, CreateLivePollRequest, ILivePollUIService, ITokenStorageService, LivePollDTO, LivePollResultsDTO, ServiceExceptionHelper |
+| 3 | `LivePollUIService` | MMCA.ADC.Engagement.UI | 9 | AuthenticatedServiceBase, CastVoteRequest, CreateLivePollRequest, ILivePollUIService, ITokenStorageService, LifecycleTransitionRequest, LivePollDTO, LivePollResultsDTO, ServiceExceptionHelper |
 | 3 | `QuestionLookupService` | MMCA.ADC.Engagement.UI | 5 | AuthenticatedServiceBase, IQuestionLookupService, ITokenStorageService, PagedCollectionResult<T>, QuestionDTO |
 | 3 | `SessionBookmarkUIService` | MMCA.ADC.Engagement.UI | 7 | AuthenticatedServiceBase, CreateBookmarkRequest, ISessionBookmarkUIService, ITokenStorageService, ServiceExceptionHelper, SessionReminderCoordinator, UserSessionBookmarkDTO |
 | 3 | `SessionFeedbackService` | MMCA.ADC.Engagement.UI | 6 | AuthenticatedServiceBase, ISessionFeedbackUIService, ITokenStorageService, PagedCollectionResult<T>, ServiceExceptionHelper, SessionQuestionAnswerDTO |
 | 3 | `SessionLivePollPanel` | MMCA.ADC.Engagement.UI | 4 | ErrorMessages, IHapticFeedbackService, ILivePollUIService, LivePollResultsDTO |
 | 3 | `SessionLookupService` | MMCA.ADC.Engagement.UI | 4 | ISessionLookupService, PagedCollectionResult<T>, SessionDTO, SessionInfo |
-| 3 | `SessionQuestionUIService` | MMCA.ADC.Engagement.UI | 6 | AuthenticatedServiceBase, ISessionQuestionUIService, ITokenStorageService, ServiceExceptionHelper, SessionQuestionDTO, SubmitQuestionRequest |
+| 3 | `SessionQuestionUIService` | MMCA.ADC.Engagement.UI | 7 | AuthenticatedServiceBase, ISessionQuestionUIService, ITokenStorageService, LifecycleTransitionRequest, ServiceExceptionHelper, SessionQuestionDTO, SubmitQuestionRequest |
 | 3 | `HappeningNowTests` | MMCA.ADC.Engagement.UI.Tests | 14 | ApiSettings, BunitComponentTestBase, HappeningNowPage, IHapticFeedbackService, ILiveEventUIService, ILivePollUIService, ISessionLookupService, ITokenStorageService, LiveEventContext, NotificationHubService, NotificationState, NullHapticFeedbackService, SessionInfo, TestPrincipal |
 | 3 | `LiveChannelJoinTests` | MMCA.ADC.Engagement.UI.Tests | 17 | ApiSettings, BunitComponentTestBase, HappeningNowPage, IHapticFeedbackService, ILiveEventUIService, ILivePollUIService, ISessionLookupService, ISessionQuestionUIService, ISpeechToTextService, ITokenStorageService, LiveEventContext, NotificationHubService, NotificationState, NullHapticFeedbackService, NullSpeechToTextService, SessionInfo, TestPrincipal |
 | 3 | `SessionReminderCoordinatorTests` | MMCA.ADC.Engagement.UI.Tests | 9 | ILiveEventUIService, ILocalNotificationService, InMemoryDevicePreferences, ISessionLookupService, LiveEventContext, LocalNotificationRequest, SessionInfo, SessionReminderCoordinator, SessionReminderPlanner |
@@ -1180,12 +1203,12 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 3 | `CookieSessionRefreshMiddlewareExtensions` | MMCA.Common.API | 1 | CookieSessionRefreshMiddleware |
 | 3 | `CookieTokenReader` | MMCA.Common.API | 1 | SessionCookieEndpoints |
 | 3 | `IAggregateRootEntityControllerBase<TEntityDTO, TIdentifierType, TCreateRequest>` | MMCA.Common.API | 3 | IBaseDTO<TIdentifierType>, ICreateRequest, IEntityControllerBase<TEntityDTO, TIdentifierType> |
+| 3 | `IdempotentAttribute` | MMCA.Common.API | 1 | IdempotencyFilter |
 | 3 | `SignalRExtensions` | MMCA.Common.API | 2 | NotificationHub, PushNotificationSettings |
 | 3 | `UnhandledResultFailureFilter` | MMCA.Common.API | 4 | Error, ErrorHttpMapping, IErrorLocalizer, Result |
 | 3 | `WebApplicationBuilderExtensions` | MMCA.Common.API | 2 | JwtSettings, JwtSigningAlgorithm |
 | 3 | `IdempotencyFilterTests` | MMCA.Common.API.Tests | 4 | ICacheService, IdempotencyFilter, IdempotencyRecord, Result |
 | 3 | `OidcDiscoveryEndpointTests` | MMCA.Common.API.Tests | 2 | JwksEndpointExtensions, OidcDiscoveryEndpointExtensions |
-| 3 | `OwnerOrAdminFilterTests` | MMCA.Common.API.Tests | 3 | ICurrentUserService, OwnerOrAdminFilter, OwnerOrAdminFilterOptions |
 | 3 | `PermissionAuthorizationHandlerTests` | MMCA.Common.API.Tests | 5 | AuthClaimTypes, PermissionAuthorizationHandler, PermissionRegistryBuilder, PermissionRequirement, RoleNames |
 | 3 | `SessionCookieEndpointsTests` | MMCA.Common.API.Tests | 6 | ICookieSessionRefresher, SessionCookieEndpoints, SessionCookieRequest, SessionTokenResponse, SessionTokenResult, StubRefresher |
 | 3 | `SessionCookieJarTests` | MMCA.Common.API.Tests | 2 | SessionCookieEndpoints, SessionCookieJar |
@@ -1241,6 +1264,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 3 | `ResultFailureExceptionTests` | MMCA.Common.Grpc.Tests | 2 | Error, ResultFailureException |
 | 3 | `ResultGrpcExtensionsTests` | MMCA.Common.Grpc.Tests | 4 | Error, ErrorType, Result, ResultFailureException |
 | 3 | `BrokerMessageBus` | MMCA.Common.Infrastructure | 2 | IIntegrationEvent, IMessageBus |
+| 3 | `CapturedState` | MMCA.Common.Infrastructure | 3 | AggregateCapture, IDomainEvent, OutboxMessage |
 | 3 | `CrossDataSourceDegradeConvention` | MMCA.Common.Infrastructure | 3 | DataSource, DataSourceKey, IEntityDataSourceRegistry |
 | 3 | `DataSourceService` | MMCA.Common.Infrastructure | 4 | DataSource, DataSourceKey, IDataSourceService, IEntityDataSourceRegistry |
 | 3 | `IDataSourceResolver` | MMCA.Common.Infrastructure | 3 | DataSource, DataSourceKey, PhysicalDataSource |
@@ -1248,8 +1272,8 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 3 | `IntegrationEventConsumer<TEvent>` | MMCA.Common.Infrastructure | 3 | IInboxStore, IIntegrationEvent, IIntegrationEventHandler<in TIntegrationEvent> |
 | 3 | `SignalRLiveChannelPublisher` | MMCA.Common.Infrastructure | 2 | ILiveChannelPublisher, NotificationHub |
 | 3 | `SignalRPushNotificationSender` | MMCA.Common.Infrastructure | 2 | IPushNotificationSender, NotificationHub |
+| 3 | `DistributedCacheServiceRedisTests` | MMCA.Common.Infrastructure.Redis.Tests | 1 | DistributedCacheService |
 | 3 | `DbSeederTests` | MMCA.Common.Infrastructure.Tests | 1 | TestableDbSeeder |
-| 3 | `DistributedCacheServiceTests` | MMCA.Common.Infrastructure.Tests | 2 | DistributedCacheService, WarningCountingLogger |
 | 3 | `EmptyEntityDataSourceRegistry` | MMCA.Common.Infrastructure.Tests | 2 | DataSourceKey, IEntityDataSourceRegistry |
 | 3 | `JwtSettingsTests` | MMCA.Common.Infrastructure.Tests | 2 | IJwtSettings, JwtSettings |
 | 3 | `MapRegistry` | MMCA.Common.Infrastructure.Tests | 2 | DataSourceKey, IEntityDataSourceRegistry |
@@ -1261,6 +1285,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 3 | `TestIntegrationEvent` | MMCA.Common.Infrastructure.Tests | 2 | BaseIntegrationEvent, IIntegrationEvent |
 | 3 | `TestPhysicalDataSources` | MMCA.Common.Infrastructure.Tests | 3 | DataSource, DataSourceKey, PhysicalDataSource |
 | 3 | `TokenServiceTests` | MMCA.Common.Infrastructure.Tests | 3 | JwtSettings, JwtSigningAlgorithm, TokenService |
+| 3 | `WarningCountingLogger` | MMCA.Common.Infrastructure.Tests | 1 | DistributedCacheService |
 | 3 | `Address` | MMCA.Common.Shared | 3 | AddressInvariants, Result, ValueObject |
 | 3 | `AddressInvariants` | MMCA.Common.Shared | 3 | Address, Error, Result |
 | 3 | `Currency` | MMCA.Common.Shared | 4 | CurrencyJsonConverter, Error, Result, ValueObject |
@@ -1317,7 +1342,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 3 | `UiHttpServiceHarnessTests` | MMCA.Common.UI.Tests | 1 | UiHttpServiceHarness |
 | 3 | `UnsavedChangesGuardTests` | MMCA.Common.UI.Tests | 1 | BunitTestBase |
 | 3 | `WasmTokenStorageServiceTests` | MMCA.Common.UI.Tests | 5 | ISessionCookieSync, ITokenRefresher, Mocks, Mocks, WasmTokenStorageService |
-| 4 | `SessionSelectionController` | MMCA.ADC.Conference.API | 16 | ApiControllerBase, CategoryDistributionDTO, ConferencePermissions, ContentSimilarityDTO, GetCategoryDistributionQuery, GetContentSimilarityQuery, GetSessionSelectionDashboardQuery, GetSpeakerSessionOverlapQuery, ICommandHandler<in TCommand, TResult>, IQueryHandler<in TQuery, TResult>, Result, Route, ScoreEventSessionsCommand, ScoreEventSessionsResultDTO, SessionSelectionDashboardDTO, SpeakerSessionOverlapDTO |
+| 4 | `SessionSelectionController` | MMCA.ADC.Conference.API | 16 | ApiControllerBase, CategoryDistributionDTO, ConferencePermissions, ContentSimilarityDTO, Error, GetCategoryDistributionQuery, GetContentSimilarityQuery, GetSessionSelectionDashboardQuery, GetSpeakerSessionOverlapQuery, IQueryHandler<in TQuery, TResult>, ISessionScoringQueue, Result, Route, SessionScoringEnqueueResult, SessionSelectionDashboardDTO, SpeakerSessionOverlapDTO |
 | 4 | `SessionCreatedHandler` | MMCA.ADC.Conference.Application | 3 | DomainEntityState, IDomainEventHandler<in TDomainEvent>, SessionChanged |
 | 4 | `SpeakerDeletedHandler` | MMCA.ADC.Conference.Application | 5 | DomainEntityState, IDomainEventHandler<in TDomainEvent>, IEventBus, SpeakerChanged, SpeakerUnlinkedFromUser |
 | 4 | `RoomChangedHandlerTests` | MMCA.ADC.Conference.Application.Tests | 3 | DomainEntityState, RoomChanged, RoomChangedHandler |
@@ -1335,7 +1360,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 4 | `ConferenceCategoryCreate` | MMCA.ADC.Conference.UI | 4 | ConferenceCategoryDTO, ConferenceRoutePaths, ErrorMessages, IConferenceCategoryUIService |
 | 4 | `ConferenceCategoryList` | MMCA.ADC.Conference.UI | 7 | ConferenceCategoryDTO, ConferenceRoutePaths, DataGridListPageBase<TDto>, ErrorMessages, IConferenceCategoryUIService, ListPageActions, MobileInfiniteScrollList<TItem> |
 | 4 | `ConferenceCategoryService` | MMCA.ADC.Conference.UI | 4 | ConferenceCategoryDTO, EntityServiceBase<TEntityDTO, TIdentifierType>, IConferenceCategoryUIService, ITokenStorageService |
-| 4 | `EventService` | MMCA.ADC.Conference.UI | 5 | EntityServiceBase<TEntityDTO, TIdentifierType>, EventDTO, IEventUIService, ITokenStorageService, RefreshFromSessionizeResultDTO |
+| 4 | `EventService` | MMCA.ADC.Conference.UI | 6 | EntityServiceBase<TEntityDTO, TIdentifierType>, EventDTO, EventTransitionRequest, IEventUIService, ITokenStorageService, RefreshFromSessionizeResultDTO |
 | 4 | `EventSpeakerService` | MMCA.ADC.Conference.UI | 4 | ChildEntityServiceBase, EventSpeakerDTO, IEventSpeakerUIService, ITokenStorageService |
 | 4 | `ISessionSelectionUIService` | MMCA.ADC.Conference.UI | 2 | ScoreEventSessionsResultDTO, SessionSelectionDashboardDTO |
 | 4 | `PublicSessionListView` | MMCA.ADC.Conference.UI | 8 | BookmarkService, ConferenceRoutePaths, IHapticFeedbackService, ISessionBookmarkUIService, ListPageActions, MobileInfiniteScrollList<TItem>, SessionDTO, SpeakerInfo |
@@ -1346,7 +1371,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 4 | `SessionService` | MMCA.ADC.Conference.UI | 4 | EntityServiceBase<TEntityDTO, TIdentifierType>, ISessionUIService, ITokenStorageService, SessionDTO |
 | 4 | `SessionSpeakerService` | MMCA.ADC.Conference.UI | 4 | ChildEntityServiceBase, ISessionSpeakerUIService, ITokenStorageService, SessionSpeakerDTO |
 | 4 | `SpeakerCategoryItemService` | MMCA.ADC.Conference.UI | 4 | ChildEntityServiceBase, ISpeakerCategoryItemUIService, ITokenStorageService, SpeakerCategoryItemDTO |
-| 4 | `SpeakerDashboardService` | MMCA.ADC.Conference.UI | 6 | AuthenticatedServiceBase, ISpeakerDashboardUIService, ITokenStorageService, PagedCollectionResult<T>, SessionDTO, SessionFeedbackDTO |
+| 4 | `SpeakerDashboardService` | MMCA.ADC.Conference.UI | 7 | AuthenticatedServiceBase, ISpeakerDashboardUIService, ITokenStorageService, PagedCollectionResult<T>, ServiceExceptionHelper, SessionDTO, SessionFeedbackDTO |
 | 4 | `SpeakerService` | MMCA.ADC.Conference.UI | 5 | EntityServiceBase<TEntityDTO, TIdentifierType>, ISpeakerUIService, ITokenStorageService, LinkUserRequest, SpeakerDTO |
 | 4 | `AddToCalendarButtonTests` | MMCA.ADC.Conference.UI.Tests | 6 | ApiSettings, BunitTestBase, CapturingHttpMessageHandler, HttpTestDoubles, IExternalLinkService, IShareService |
 | 4 | `OrganizerEventFeedbackServiceTests` | MMCA.ADC.Conference.UI.Tests | 7 | CapturingHttpMessageHandler, DomainInvariantViolationException, EventQuestionAnswerDTO, HttpTestDoubles, OrganizerEventFeedbackService, PagedCollectionResult<T>, PaginationMetadata |
@@ -1376,7 +1401,6 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 4 | `UserManagementTests` | MMCA.ADC.E2E.Tests | 4 | E2ETestBase, E2ETestCollection, PlaywrightFixture, UserListPage |
 | 4 | `WebVitalsTests` | MMCA.ADC.E2E.Tests | 4 | E2ETestBase, E2ETestCollection, PlaywrightFixture, WebVitalsCollector |
 | 4 | `EngagementModule` | MMCA.ADC.Engagement.API | 6 | ApplicationSettings, DisabledBookmarkCountService, DisabledUserEngagementExportService, IBookmarkCountService, IModule, IUserEngagementExportService |
-| 4 | `SessionQuestionsController` | MMCA.ADC.Engagement.API | 18 | ApiControllerBase, AuthorizationPolicies, EngagementFeatures, Error, GetModerationQueueQuery, GetSessionQuestionsQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IQueryHandler<in TQuery, TResult>, ModerateQuestionCommand, ModerationAction, Result, RoleNames, Route, SessionQuestionDTO, SubmitQuestionCommand, SubmitQuestionRequest, ToggleUpvoteCommand |
 | 4 | `LivePollInvariants` | MMCA.ADC.Engagement.Domain | 3 | CommonInvariants, Error, Result |
 | 4 | `LivePollVoteInvariants` | MMCA.ADC.Engagement.Domain | 2 | CommonInvariants, Result |
 | 4 | `SessionQuestionInvariants` | MMCA.ADC.Engagement.Domain | 3 | CommonInvariants, Error, Result |
@@ -1404,15 +1428,10 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 4 | `NowNextWidgetProvider` | MMCA.ADC.UI | 3 | MainActivity, NowNextSession, NowNextSnapshot |
 | 4 | `CookieSessionRefresher` | MMCA.Common.API | 7 | AuthenticationResponse, CookieTokenReader, ICookieSessionRefresher, RefreshTokenRequest, SessionCookieEndpoints, SessionCookieJar, SessionTokenResult |
 | 4 | `CurrencyJsonConverter` | MMCA.Common.API | 1 | Currency |
-| 4 | `DevicesController` | MMCA.Common.API | 8 | ApiControllerBase, DeviceInstallationRequest, Error, ICurrentUserService, IPushDeviceRegistrar, NotificationFeatures, Result, Route |
-| 4 | `InboxController` | MMCA.Common.API | 15 | ApiControllerBase, AuthorizationPolicies, Error, GetMyNotificationsQuery, GetUnreadNotificationCountQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IQueryHandler<in TQuery, TResult>, MarkAllNotificationsReadCommand, MarkNotificationReadCommand, NotificationFeatures, PagedCollectionResult<T>, Result, Route, UserNotificationDTO |
-| 4 | `NotificationsController` | MMCA.Common.API | 14 | ApiControllerBase, AuthorizationPolicies, Error, GetNotificationHistoryQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IQueryHandler<in TQuery, TResult>, NotificationFeatures, PagedCollectionResult<T>, PushNotificationDTO, Result, Route, SendPushNotificationCommand, SendPushNotificationRequest |
 | 4 | `SessionCookieAuthenticationHandler` | MMCA.Common.API | 1 | CookieTokenReader |
-| 4 | `WebApplicationExtensions` | MMCA.Common.API | 4 | CorrelationIdMiddleware, SoftDeletedUserMiddleware, SupportedCultures, WebApplicationBuilderExtensions |
 | 4 | `CookieSessionRefreshMiddlewareTests` | MMCA.Common.API.Tests | 5 | CookieSessionRefreshMiddleware, CookieSessionRefreshMiddlewareExtensions, ICookieSessionRefresher, NextDelegateSpy, SessionTokenResult |
 | 4 | `CookieTokenReaderTests` | MMCA.Common.API.Tests | 2 | CookieTokenReader, SessionCookieEndpoints |
 | 4 | `CurrencyJsonConverterTests` | MMCA.Common.API.Tests | 1 | Currency |
-| 4 | `DependencyInjectionTests` | MMCA.Common.API.Tests | 11 | DbUpdateExceptionHandler, DisabledFeatureHandler, DomainExceptionHandler, GlobalExceptionHandler, IdempotencyFilter, IdempotencySettings, IModule, ModuleLoader, OperationCanceledExceptionHandler, OwnerOrAdminFilter, ValidationExceptionHandler |
 | 4 | `RateLimitPartitionTests` | MMCA.Common.API.Tests | 1 | WebApplicationBuilderExtensions |
 | 4 | `TestApiController` | MMCA.Common.API.Tests | 2 | ApiControllerBase, Error |
 | 4 | `TestController` | MMCA.Common.API.Tests | 2 | ApiControllerBase, Error |
@@ -1433,7 +1452,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 4 | `IEntityRequestMapper<TEntity, TCreateRequest, TIdentifierType>` | MMCA.Common.Application | 3 | AuditableBaseEntity<TIdentifierType>, ICreateRequest, Result |
 | 4 | `INavigationMetadataProvider` | MMCA.Common.Application | 1 | NavigationMetadata |
 | 4 | `INavigationPopulator<in TEntity>` | MMCA.Common.Application | 1 | NavigationMetadata |
-| 4 | `IWriteRepository<TEntity, TIdentifierType>` | MMCA.Common.Application | 2 | AuditableBaseEntity<TIdentifierType>, IRowVersioned |
+| 4 | `IWriteRepository<TEntity, TIdentifierType>` | MMCA.Common.Application | 3 | AuditableBaseEntity<TIdentifierType>, IRowVersioned, IUpdatePropertySetter<TEntity> |
 | 4 | `StateRules<T>` | MMCA.Common.Application | 1 | AddressInvariants |
 | 4 | `ValidatingCommandDecorator<TCommand, TResult>` | MMCA.Common.Application | 3 | Error, ICommandHandler<in TCommand, TResult>, ResultFailureFactory |
 | 4 | `ZipCodeRules<T>` | MMCA.Common.Application | 1 | AddressInvariants |
@@ -1461,6 +1480,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 4 | `ParentEntity` | MMCA.Common.Application.Tests | 1 | AuditableBaseEntity<TIdentifierType> |
 | 4 | `Principal` | MMCA.Common.Application.Tests | 1 | AuditableBaseEntity<TIdentifierType> |
 | 4 | `QueryFieldServiceTests` | MMCA.Common.Application.Tests | 2 | ProductDto, QueryFieldService |
+| 4 | `QueryFilterServicePropertyCacheTests` | MMCA.Common.Application.Tests | 2 | QueryFilterService, Widget |
 | 4 | `QueryFilterServiceTests` | MMCA.Common.Application.Tests | 3 | Product, QueryFilterService, TestStrategy |
 | 4 | `QueryFilterServiceValidateTests` | MMCA.Common.Application.Tests | 2 | Product, QueryFilterService |
 | 4 | `RelatedA` | MMCA.Common.Application.Tests | 1 | AuditableBaseEntity<TIdentifierType> |
@@ -1479,6 +1499,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 4 | `TestIntegrationEventHandler` | MMCA.Common.Application.Tests | 2 | IIntegrationEventHandler<in TIntegrationEvent>, TestIntegrationEvent |
 | 4 | `TestReadEntity` | MMCA.Common.Application.Tests | 1 | AuditableBaseEntity<TIdentifierType> |
 | 4 | `FitnessPrincipal` | MMCA.Common.Architecture.Tests | 1 | AuditableBaseEntity<TIdentifierType> |
+| 4 | `QueryPipelineBenchmarks` | MMCA.Common.Benchmarks | 3 | ProductRow, QueryFieldService, QueryFilterService |
 | 4 | `SpecificationBenchmarks` | MMCA.Common.Benchmarks | 5 | ActiveSpec, AndSpecification<TEntity, TIdentifierType>, MinValueSpec, OrSpecification<TEntity, TIdentifierType>, SampleItem |
 | 4 | `AuditableAggregateRootEntity<TIdentifierType>` | MMCA.Common.Domain | 6 | AuditableBaseEntity<TIdentifierType>, Error, IAggregateRoot, IAuditableEntity, IDomainEvent, Result |
 | 4 | `PushNotificationInvariants` | MMCA.Common.Domain | 2 | CommonInvariants, Result |
@@ -1499,15 +1520,16 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 4 | `IEntityTypeConfigurationBase<TEntity, TIdentifierType>` | MMCA.Common.Infrastructure | 1 | AuditableBaseEntity<TIdentifierType> |
 | 4 | `ImageSharpImageProcessor` | MMCA.Common.Infrastructure | 3 | Error, IImageProcessor, Result |
 | 4 | `IntegrationEventConsumerExtensions` | MMCA.Common.Infrastructure | 2 | IIntegrationEvent, IntegrationEventConsumer<TEvent> |
-| 4 | `LoginProtectionService` | MMCA.Common.Infrastructure | 5 | Error, ICacheService, ILoginProtectionService, LoginProtectionSettings, Result |
 | 4 | `NullFileStorageService` | MMCA.Common.Infrastructure | 3 | Error, IFileStorageService, Result |
 | 4 | `NullPushDeviceRegistrar` | MMCA.Common.Infrastructure | 3 | DeviceInstallationRequest, IPushDeviceRegistrar, Result |
 | 4 | `DataSourceServiceAdditionalTests` | MMCA.Common.Infrastructure.Tests | 6 | DataSource, DataSourceKey, DataSourceService, FakeEntity, IEntityDataSourceRegistry, UnregisteredEntity |
 | 4 | `DataSourceServiceTests` | MMCA.Common.Infrastructure.Tests | 5 | DataSource, DataSourceKey, DataSourceService, FakeEntity, IEntityDataSourceRegistry |
 | 4 | `DependencyInjectionPushNotificationsTests` | MMCA.Common.Infrastructure.Tests | 6 | ILiveChannelPublisher, IPushNotificationSender, IPushNotificationSettings, PushNotificationSettings, SignalRLiveChannelPublisher, SignalRPushNotificationSender |
+| 4 | `DistributedCacheServiceTests` | MMCA.Common.Infrastructure.Tests | 3 | CacheKeyNamespace, DistributedCacheService, WarningCountingLogger |
 | 4 | `FakeEntity` | MMCA.Common.Infrastructure.Tests | 1 | AuditableBaseEntity<TIdentifierType> |
 | 4 | `FilteredIndexEntity` | MMCA.Common.Infrastructure.Tests | 1 | AuditableBaseEntity<TIdentifierType> |
 | 4 | `IntegrationEventConsumerTests` | MMCA.Common.Infrastructure.Tests | 4 | IInboxStore, IIntegrationEventHandler<in TIntegrationEvent>, IntegrationEventConsumer<TEvent>, TestIntegrationEvent |
+| 4 | `Product` | MMCA.Common.Infrastructure.Tests | 1 | AuditableBaseEntity<TIdentifierType> |
 | 4 | `RecordingDomainHandler` | MMCA.Common.Infrastructure.Tests | 2 | IDomainEventHandler<in TDomainEvent>, TestIntegrationEvent |
 | 4 | `RecordingIntegrationHandler` | MMCA.Common.Infrastructure.Tests | 2 | IIntegrationEventHandler<in TIntegrationEvent>, TestIntegrationEvent |
 | 4 | `RegistryUnattributed` | MMCA.Common.Infrastructure.Tests | 1 | AuditableBaseEntity<TIdentifierType> |
@@ -1520,6 +1542,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 4 | `TestMappedEntity` | MMCA.Common.Infrastructure.Tests | 1 | AuditableBaseEntity<TIdentifierType> |
 | 4 | `TestNonAggregateEntity` | MMCA.Common.Infrastructure.Tests | 1 | AuditableBaseEntity<TIdentifierType> |
 | 4 | `UniqueNamedEntity` | MMCA.Common.Infrastructure.Tests | 1 | AuditableBaseEntity<TIdentifierType> |
+| 4 | `Widget` | MMCA.Common.Infrastructure.Tests | 1 | AuditableBaseEntity<TIdentifierType> |
 | 4 | `Email` | MMCA.Common.Shared | 3 | EmailInvariants, Result, ValueObject |
 | 4 | `Money` | MMCA.Common.Shared | 4 | Currency, Error, Result, ValueObject |
 | 4 | `PhoneNumber` | MMCA.Common.Shared | 3 | PhoneNumberInvariants, Result, ValueObject |
@@ -1582,7 +1605,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 4 | `ServerTokenStorageService` | MMCA.Common.UI.Web | 5 | CookieTokenReader, ISessionCookieSync, ITokenRefresher, ITokenStorageService, JwtTokenInfo |
 | 5 | `TranslationCompletenessTests` | MMCA.ADC.Architecture.Tests | 1 | LocalizationResourceTestsBase |
 | 5 | `ConferenceModule` | MMCA.ADC.Conference.API | 6 | ApplicationSettings, DisabledEventLiveValidationService, DisabledSessionBookmarkValidationService, IEventLiveValidationService, IModule, ISessionBookmarkValidationService |
-| 5 | `SessionSelectionControllerTests` | MMCA.ADC.Conference.API.Tests | 20 | CategoryDistributionDTO, CategoryGroupDistribution, CategoryItemDistribution, ContentSimilarityDTO, Error, GetCategoryDistributionQuery, GetContentSimilarityQuery, GetSessionSelectionDashboardQuery, GetSpeakerSessionOverlapQuery, ICommandHandler<in TCommand, TResult>, IQueryHandler<in TQuery, TResult>, MultiSessionSpeaker, Result, ScoreEventSessionsCommand, ScoreEventSessionsResultDTO, SessionSelectionController, SessionSelectionDashboardDTO, SimilarSessionPair, SpeakerSessionOverlapDTO, SpeakerSessionSummary |
+| 5 | `SessionSelectionControllerTests` | MMCA.ADC.Conference.API.Tests | 22 | CategoryDistributionDTO, CategoryGroupDistribution, CategoryItemDistribution, ContentSimilarityDTO, Error, GetCategoryDistributionQuery, GetContentSimilarityQuery, GetSessionSelectionDashboardQuery, GetSpeakerSessionOverlapQuery, ICommandHandler<in TCommand, TResult>, IQueryHandler<in TQuery, TResult>, ISessionScoringQueue, MultiSessionSpeaker, Result, ScoreEventSessionsCommand, ScoreEventSessionsResultDTO, SessionScoringEnqueueResult, SessionSelectionController, SessionSelectionDashboardDTO, SimilarSessionPair …(+2) |
 | 5 | `EventNameRules<T>` | MMCA.ADC.Conference.Application | 2 | EventInvariants, RequiredStringRules<T> |
 | 5 | `EventTimeZoneRules<T>` | MMCA.ADC.Conference.Application | 1 | EventInvariants |
 | 5 | `QuestionTextRules<T>` | MMCA.ADC.Conference.Application | 1 | QuestionInvariants |
@@ -1618,7 +1641,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 5 | `QuestionInvariantsTests` | MMCA.ADC.Conference.Domain.Tests | 1 | QuestionInvariants |
 | 5 | `SessionInvariantsTests` | MMCA.ADC.Conference.Domain.Tests | 1 | SessionInvariants |
 | 5 | `SpeakerInvariantsTests` | MMCA.ADC.Conference.Domain.Tests | 1 | SpeakerInvariants |
-| 5 | `DependencyInjection` | MMCA.ADC.Conference.Infrastructure | 4 | AnthropicScoringService, IAiScoringService, ISessionizeService, SessionizeService |
+| 5 | `DependencyInjection` | MMCA.ADC.Conference.Infrastructure | 5 | AnthropicScoringService, IAiScoringService, ISessionizeService, SessionizeService, SessionScoringProcessor |
 | 5 | `DisabledEventLiveValidationServiceTests` | MMCA.ADC.Conference.Shared.Tests | 2 | DisabledEventLiveValidationService, QuestionModerationDefault |
 | 5 | `SpeakerDTOTests` | MMCA.ADC.Conference.Shared.Tests | 2 | Email, SpeakerDTO |
 | 5 | `EventCreate` | MMCA.ADC.Conference.UI | 5 | ConferenceRoutePaths, ErrorMessages, EventDTO, EventService, IEventUIService |
@@ -1654,22 +1677,16 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 5 | `UserDTOTests` | MMCA.ADC.Identity.Shared.Tests | 2 | Email, UserDTO |
 | 5 | `UserListDTOTests` | MMCA.ADC.Identity.Shared.Tests | 2 | Email, UserListDTO |
 | 5 | `UserServiceTests` | MMCA.ADC.Identity.UI.Tests | 8 | CapturingHttpMessageHandler, DomainInvariantViolationException, Email, HttpTestDoubles, PagedCollectionResult<T>, PaginationMetadata, UserListDTO, UserService |
-| 5 | `DependencyInjection` | MMCA.Common.API | 21 | CookieSessionRefresher, CookieTokenReader, CurrencyJsonConverter, DbUpdateExceptionHandler, DisabledFeatureHandler, DomainExceptionHandler, ErrorLocalizer, ErrorResources, ErrorResourceSource, GlobalExceptionHandler, ICookieSessionRefresher, IdempotencyFilter, IdempotencySettings, IErrorLocalizer, ModuleControllerFeatureProvider, ModuleLoader, ModulesSettings, OperationCanceledExceptionHandler, OwnerOrAdminFilter, UnhandledResultFailureFilter …(+1) |
-| 5 | `DependencyInjection` | MMCA.Common.API | 1 | NotificationsController |
 | 5 | `SessionCookieAuthenticationExtensions` | MMCA.Common.API | 1 | SessionCookieAuthenticationHandler |
 | 5 | `ApiControllerBaseTests` | MMCA.Common.API.Tests | 2 | Error, TestApiController |
-| 5 | `DevicesControllerTests` | MMCA.Common.API.Tests | 6 | DeviceInstallationRequest, DevicesController, Error, ICurrentUserService, IPushDeviceRegistrar, Result |
 | 5 | `EdgeErrorLocalizationTests` | MMCA.Common.API.Tests | 4 | Error, IErrorLocalizer, StubErrorLocalizer, TestController |
 | 5 | `InitTestWidget` | MMCA.Common.API.Tests | 1 | AuditableAggregateRootEntity<TIdentifierType> |
-| 5 | `NotificationInboxControllerTests` | MMCA.Common.API.Tests | 13 | Error, GetMyNotificationsQuery, GetUnreadNotificationCountQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, InboxController, IQueryHandler<in TQuery, TResult>, MarkAllNotificationsReadCommand, MarkNotificationReadCommand, PagedCollectionResult<T>, PaginationMetadata, Result, UserNotificationDTO |
-| 5 | `NotificationsControllerTests` | MMCA.Common.API.Tests | 12 | Error, GetNotificationHistoryQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IQueryHandler<in TQuery, TResult>, NotificationsController, PagedCollectionResult<T>, PaginationMetadata, PushNotificationDTO, Result, SendPushNotificationCommand, SendPushNotificationRequest |
-| 5 | `OwnershipHelperTests` | MMCA.Common.API.Tests | 3 | ICurrentUserService, OwnershipHelper, TestOwnerSpecification |
 | 5 | `RefresherHarness` | MMCA.Common.API.Tests | 3 | CookieSessionRefresher, StubHttpClientFactory, StubHttpMessageHandler |
 | 5 | `SessionCookieAuthenticationHandlerTests` | MMCA.Common.API.Tests | 4 | CookieTokenReader, FakeTimeProvider, SessionCookieAuthenticationHandler, SessionCookieEndpoints |
 | 5 | `TestAggregateEntity` | MMCA.Common.API.Tests | 1 | AuditableAggregateRootEntity<TIdentifierType> |
 | 5 | `AddressValidator` | MMCA.Common.Application | 7 | Address, AddressLine1Rules<T>, AddressLine2Rules<T>, CityRules<T>, CountryRules<T>, StateRules<T>, ZipCodeRules<T> |
 | 5 | `AuthenticationValidators` | MMCA.Common.Application | 3 | LoginRequest, RefreshTokenRequest, RegisterRequest |
-| 5 | `EntityQueryPipeline` | MMCA.Common.Application | 8 | AuditableBaseEntity<TIdentifierType>, EntityQueryParameters<TEntity>, IEntityQueryPipeline, IQueryableExecutor, NavigationMetadata, NavigationType, QueryFieldService, QueryFilterService |
+| 5 | `EntityQueryPipeline` | MMCA.Common.Application | 9 | AuditableBaseEntity<TIdentifierType>, EntityQueryParameters<TEntity>, IEntityQueryPipeline, IQueryableExecutor, NavigationMetadata, NavigationType, PagingMath, QueryFieldService, QueryFilterService |
 | 5 | `IAuthenticationService` | MMCA.Common.Application | 6 | AuthenticationResponse, Error, LoginRequest, RefreshTokenRequest, RegisterRequest, Result |
 | 5 | `IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>` | MMCA.Common.Application | 7 | AuditableBaseEntity<TIdentifierType>, BaseLookup<TIdentifierType>, IBaseDTO<TIdentifierType>, IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>, PagedCollectionResult<T>, Result, Specification<TEntity, TIdentifierType> |
 | 5 | `IReadRepository<TEntity, TIdentifierType>` | MMCA.Common.Application | 3 | AuditableBaseEntity<TIdentifierType>, IEntityQuerier<TEntity, TIdentifierType>, IEntityReader<TEntity, TIdentifierType> |
@@ -1715,6 +1732,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 5 | `IEntityTypeConfigurationCosmos<TEntity, TIdentifierType>` | MMCA.Common.Infrastructure | 2 | AuditableBaseEntity<TIdentifierType>, IEntityTypeConfigurationBase<TEntity, TIdentifierType> |
 | 5 | `IEntityTypeConfigurationSqlite<TEntity, TIdentifierType>` | MMCA.Common.Infrastructure | 2 | AuditableBaseEntity<TIdentifierType>, IEntityTypeConfigurationBase<TEntity, TIdentifierType> |
 | 5 | `IEntityTypeConfigurationSQLServer<TEntity, TIdentifierType>` | MMCA.Common.Infrastructure | 2 | AuditableBaseEntity<TIdentifierType>, IEntityTypeConfigurationBase<TEntity, TIdentifierType> |
+| 5 | `LoginProtectionService` | MMCA.Common.Infrastructure | 6 | Email, Error, ICacheService, ILoginProtectionService, LoginProtectionSettings, Result |
 | 5 | `DataSourceResolverTests` | MMCA.Common.Infrastructure.Tests | 6 | ConnectionStringSettings, DataSource, DataSourceEntrySettings, DataSourceKey, DataSourceResolver, DataSourcesSettings |
 | 5 | `DegradeCustomer` | MMCA.Common.Infrastructure.Tests | 2 | AuditableAggregateRootEntity<TIdentifierType>, DegradeOrder |
 | 5 | `DegradeOrder` | MMCA.Common.Infrastructure.Tests | 2 | AuditableAggregateRootEntity<TIdentifierType>, DegradeCustomer |
@@ -1723,7 +1741,6 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 5 | `FakeAggregate` | MMCA.Common.Infrastructure.Tests | 1 | AuditableAggregateRootEntity<TIdentifierType> |
 | 5 | `FakeAggregateEntity` | MMCA.Common.Infrastructure.Tests | 1 | AuditableAggregateRootEntity<TIdentifierType> |
 | 5 | `ImageSharpImageProcessorTests` | MMCA.Common.Infrastructure.Tests | 1 | ImageSharpImageProcessor |
-| 5 | `LoginProtectionServiceTests` | MMCA.Common.Infrastructure.Tests | 5 | ErrorType, FakeCacheService, LoginProtectionService, LoginProtectionSettings, Result |
 | 5 | `MultiSourceCustomer` | MMCA.Common.Infrastructure.Tests | 1 | AuditableAggregateRootEntity<TIdentifierType> |
 | 5 | `PortablePrincipal` | MMCA.Common.Infrastructure.Tests | 1 | AuditableAggregateRootEntity<TIdentifierType> |
 | 5 | `RegistryDuplicate` | MMCA.Common.Infrastructure.Tests | 1 | AuditableAggregateRootEntity<TIdentifierType> |
@@ -1833,7 +1850,6 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 6 | `QuestionCreateTests` | MMCA.ADC.Conference.UI.Tests | 4 | BunitTestBase, IQuestionUIService, QuestionCreate, QuestionDTO |
 | 6 | `SessionSelectionServiceTests` | MMCA.ADC.Conference.UI.Tests | 8 | CapturingHttpMessageHandler, CategoryDistributionDTO, HttpTestDoubles, ScoreEventSessionsResultDTO, SessionSelectionDashboardDTO, SessionSelectionService, SpeakerLocalitySummary, SpeakerSessionOverlapDTO |
 | 6 | `SessionSelectionSpeakerOverlapTests` | MMCA.ADC.Conference.UI.Tests | 5 | BunitTestBase, MultiSessionSpeaker, SessionSelectionSpeakerOverlap, Speaker, SpeakerSessionSummary |
-| 6 | `BookmarksController` | MMCA.ADC.Engagement.API | 19 | ApiControllerBase, AuthorizationPolicies, CreateBookmarkRequest, DeleteEntityCommand<TEntity, TIdentifierType>, EngagementFeatures, Error, GetBookmarkedSessionIdsQuery, GetUserBookmarksQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, IQueryHandler<in TQuery, TResult>, OwnerOrAdminFilter, PagedCollectionResult<T>, Result, RoleNames, Route, UserSessionBookmark, UserSessionBookmarkDTO |
 | 6 | `CreateLivePollCommandValidator` | MMCA.ADC.Engagement.Application | 2 | CreateLivePollCommand, CreateLivePollRequestValidator |
 | 6 | `UserSessionBookmarkDTOMapper` | MMCA.ADC.Engagement.Application | 3 | IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>, UserSessionBookmark, UserSessionBookmarkDTO |
 | 6 | `IBookmarkManagementDomainService` | MMCA.ADC.Engagement.Domain | 2 | Result, UserSessionBookmark |
@@ -1852,7 +1868,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 6 | `SessionLivePollPanelTests` | MMCA.ADC.Engagement.UI.Tests | 9 | BunitComponentTestBase, IHapticFeedbackService, ILivePollUIService, LivePollOptionResultDTO, LivePollResultsDTO, LivePollStatus, NullHapticFeedbackService, Question, SessionLivePollPanel |
 | 6 | `SessionLiveQuestionPanelTests` | MMCA.ADC.Engagement.UI.Tests | 8 | BunitComponentTestBase, ISessionQuestionUIService, ISpeechToTextService, Question, QuestionStatus, SessionLiveQuestionPanel, SessionQuestionDTO, SubmitQuestionRequest |
 | 6 | `DependencyInjectionTests` | MMCA.ADC.Identity.API.Tests | 2 | ApplicationSettings, IAuthenticationService |
-| 6 | `RegisterRequestValidator` | MMCA.ADC.Identity.Application | 5 | AddressValidator, EmailRules<T>, RegisterRequest, RequiredStringRules<T>, StrongPasswordRules<T> |
+| 6 | `RegisterRequestValidator` | MMCA.ADC.Identity.Application | 6 | AddressValidator, EmailRules<T>, RegisterRequest, RequiredStringRules<T>, StrongPasswordRules<T>, UserInvariants |
 | 6 | `User` | MMCA.ADC.Identity.Domain | 9 | AuditableAggregateRootEntity<TIdentifierType>, Email, IAnonymizable, IAuthUser, Result, UserDeleted, UserInvariants, UserPasswordChanged, UserRole |
 | 6 | `Profile` | MMCA.ADC.Identity.UI | 5 | IAuthUIService, IMediaPickerService, IUserUIService, PickedMedia, UserService |
 | 6 | `ProfileChangePasswordTests` | MMCA.ADC.Identity.UI.Tests | 5 | BunitTestBase, IAuthUIService, IUserUIService, ProfilePage, TestPrincipal |
@@ -1883,15 +1899,16 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 6 | `SpecificationAdditionalTests` | MMCA.Common.Domain.Tests | 6 | AgeRangeSpec, AndSpecification<TEntity, TIdentifierType>, NameEqualsSpec, NotSpecification<TEntity, TIdentifierType>, OrSpecification<TEntity, TIdentifierType>, TestEntity |
 | 6 | `SpecificationTests` | MMCA.Common.Domain.Tests | 6 | AgeGreaterThanSpec, AndSpecification<TEntity, TIdentifierType>, NameStartsWithSpec, NotSpecification<TEntity, TIdentifierType>, OrSpecification<TEntity, TIdentifierType>, TestEntity |
 | 6 | `UserNotificationTests` | MMCA.Common.Domain.Tests | 1 | UserNotification |
-| 6 | `ApplicationDbContext` | MMCA.Common.Infrastructure | 18 | AuditableBaseEntity<TIdentifierType>, AuditSaveChangesInterceptor, CrossDataSourceDegradeConvention, DataSource, DataSourceKey, DataSourceModelCacheKeyFactory, DomainEventSaveChangesInterceptor, IAuditableEntity, IEntityConfigurationAssemblyProvider, IEntityDataSourceRegistry, IEntityTypeConfigurationCosmos<TEntity, TIdentifierType>, IEntityTypeConfigurationSqlite<TEntity, TIdentifierType>, IEntityTypeConfigurationSQLServer<TEntity, TIdentifierType>, InboxMessage, OutboxMessage, PhysicalDataSource, SoftDeleteUniqueIndexConvention, ValReturn<T> |
+| 6 | `ApplicationDbContext` | MMCA.Common.Infrastructure | 19 | AuditableBaseEntity<TIdentifierType>, AuditSaveChangesInterceptor, CrossDataSourceDegradeConvention, DataSource, DataSourceKey, DataSourceModelCacheKeyFactory, DetectChangesScope, DomainEventSaveChangesInterceptor, IAuditableEntity, IEntityConfigurationAssemblyProvider, IEntityDataSourceRegistry, IEntityTypeConfigurationCosmos<TEntity, TIdentifierType>, IEntityTypeConfigurationSqlite<TEntity, TIdentifierType>, IEntityTypeConfigurationSQLServer<TEntity, TIdentifierType>, InboxMessage, OutboxMessage, PhysicalDataSource, SoftDeleteUniqueIndexConvention, ValReturn<T> |
 | 6 | `AuditSaveChangesInterceptor` | MMCA.Common.Infrastructure | 2 | ApplicationDbContext, IAuditableEntity |
 | 6 | `DataSourceModelCacheKeyFactory` | MMCA.Common.Infrastructure | 1 | ApplicationDbContext |
 | 6 | `DeferredDispatch` | MMCA.Common.Infrastructure | 2 | CapturedState, DomainEventSaveChangesInterceptor |
-| 6 | `DomainEventSaveChangesInterceptor` | MMCA.Common.Infrastructure | 10 | ApplicationDbContext, CapturedState, DeferredDispatch, IAggregateRoot, IDomainEvent, IDomainEventDispatcher, IIntegrationEvent, IOutboxSignal, OutboxFinalizer, OutboxMessage |
+| 6 | `DomainEventSaveChangesInterceptor` | MMCA.Common.Infrastructure | 11 | AggregateCapture, ApplicationDbContext, CapturedState, DeferredDispatch, IAggregateRoot, IDomainEvent, IDomainEventDispatcher, IIntegrationEvent, IOutboxSignal, OutboxFinalizer, OutboxMessage |
 | 6 | `EFReadRepository<TEntity, TIdentifierType>` | MMCA.Common.Infrastructure | 3 | AuditableBaseEntity<TIdentifierType>, BaseLookup<TIdentifierType>, IReadRepository<TEntity, TIdentifierType> |
 | 6 | `EFReadRepositoryDecorator<TEntity, TIdentifierType>` | MMCA.Common.Infrastructure | 4 | AuditableBaseEntity<TIdentifierType>, BaseLookup<TIdentifierType>, IReadRepository<TEntity, TIdentifierType>, ProfilingHelper |
 | 6 | `EntityTypeConfiguration<TEntity, TIdentifierType>` | MMCA.Common.Infrastructure | 9 | AuditableBaseEntity<TIdentifierType>, CosmosIntIdValueGenerator, DataSource, EntityTypeConfigurationBase<TEntity, TIdentifierType>, IEntityTypeConfigurationCosmos<TEntity, TIdentifierType>, IEntityTypeConfigurationSqlite<TEntity, TIdentifierType>, IEntityTypeConfigurationSQLServer<TEntity, TIdentifierType>, NamespaceConventions, UseDataSourceAttribute |
 | 6 | `OutboxFinalizer` | MMCA.Common.Infrastructure | 2 | ApplicationDbContext, OutboxMessage |
+| 6 | `LoginProtectionServiceTests` | MMCA.Common.Infrastructure.Tests | 5 | ErrorType, FakeCacheService, LoginProtectionService, LoginProtectionSettings, Result |
 | 6 | `ModelBuilderExtensionsTests` | MMCA.Common.Infrastructure.Tests | 4 | IEntityTypeConfigurationSqlite<TEntity, TIdentifierType>, ModelBuilderExtensions, TestMappedEntity, TestModelBuilderDbContext |
 | 6 | `MultiSourceOrder` | MMCA.Common.Infrastructure.Tests | 2 | AuditableAggregateRootEntity<TIdentifierType>, MultiSourceCustomer |
 | 6 | `PortableThing` | MMCA.Common.Infrastructure.Tests | 2 | AuditableAggregateRootEntity<TIdentifierType>, PortablePrincipal |
@@ -1906,7 +1923,6 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 6 | `NavMenuTests` | MMCA.Common.UI.Tests | 8 | BunitTestBase, IAuthUIService, IUIModule, LayoutSettings, NavItem, NavSection, StubUiModule, TestPrincipal |
 | 6 | `RegisterFormTests` | MMCA.Common.UI.Tests | 3 | BunitTestBase, IAuthUIService, RegisterRequest |
 | 7 | `CategoryItemsController` | MMCA.ADC.Conference.API | 17 | AddCategoryItemCommand, AddCategoryItemRequest, BaseLookup<TIdentifierType>, CategoryItem, CategoryItemDTO, CollectionResult<T>, ConferencePermissions, EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>, ICommandHandler<in TCommand, TResult>, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, PagedCollectionResult<T>, QueryFilterModelBinder, RemoveCategoryItemCommand, Result, Route, UpdateCategoryItemCommand, UpdateCategoryItemRequest |
-| 7 | `EventQuestionAnswersController` | MMCA.ADC.Conference.API | 20 | AddEventQuestionAnswerCommand, AddEventQuestionAnswerRequest, AuthorizationPolicies, BaseLookup<TIdentifierType>, CollectionResult<T>, EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>, EventQuestionAnswer, EventQuestionAnswerDTO, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, OwnEventQuestionAnswerSpecification, PagedCollectionResult<T>, QueryFilterModelBinder, RemoveEventQuestionAnswerCommand, Result, RoleNames, Route, UpdateEventQuestionAnswerCommand, UpdateEventQuestionAnswerRequest |
 | 7 | `EventSpeakersController` | MMCA.ADC.Conference.API | 15 | AddEventSpeakerCommand, AddEventSpeakerRequest, BaseLookup<TIdentifierType>, CollectionResult<T>, ConferencePermissions, EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>, EventSpeaker, EventSpeakerDTO, ICommandHandler<in TCommand, TResult>, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, PagedCollectionResult<T>, QueryFilterModelBinder, RemoveEventSpeakerCommand, Result, Route |
 | 7 | `RoomsController` | MMCA.ADC.Conference.API | 17 | AddRoomCommand, AddRoomRequest, BaseLookup<TIdentifierType>, CollectionResult<T>, ConferencePermissions, EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>, ICommandHandler<in TCommand, TResult>, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, PagedCollectionResult<T>, QueryFilterModelBinder, RemoveRoomCommand, Result, Room, RoomDTO, Route, UpdateRoomCommand, UpdateRoomRequest |
 | 7 | `SpeakerCategoryItemsController` | MMCA.ADC.Conference.API | 15 | AddSpeakerCategoryItemCommand, AddSpeakerCategoryItemRequest, BaseLookup<TIdentifierType>, CollectionResult<T>, ConferencePermissions, EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>, ICommandHandler<in TCommand, TResult>, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, PagedCollectionResult<T>, QueryFilterModelBinder, RemoveSpeakerCategoryItemCommand, Result, Route, SpeakerCategoryItem, SpeakerCategoryItemDTO |
@@ -1940,7 +1956,6 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 7 | `SessionSpeakerDTOMapper` | MMCA.ADC.Conference.Application | 3 | IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>, SessionSpeaker, SessionSpeakerDTO |
 | 7 | `SpeakerCreateRequestMapper` | MMCA.ADC.Conference.Application | 4 | IEntityRequestMapper<TEntity, TCreateRequest, TIdentifierType>, Result, Speaker, SpeakerCreateRequest |
 | 7 | `SpeakerCreateRequestValidator` | MMCA.ADC.Conference.Application | 3 | SpeakerCreateRequest, SpeakerFirstNameRules<T>, SpeakerLastNameRules<T> |
-| 7 | `SpeakerDTOMapper` | MMCA.ADC.Conference.Application | 8 | Email, ICurrentUserService, IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>, RoleNames, Speaker, SpeakerCategoryItemDTOMapper, SpeakerDTO, SpeakerQuestionAnswerDTOMapper |
 | 7 | `UpdateCategoryItemCommandValidator` | MMCA.ADC.Conference.Application | 3 | CategoryItemNameRules<T>, CategoryItemSortRules<T>, UpdateCategoryItemCommand |
 | 7 | `UpdateRoomCommandValidator` | MMCA.ADC.Conference.Application | 7 | RoomAccessibilityInfoRules<T>, RoomCapacityRules<T>, RoomFloorRules<T>, RoomLocationRules<T>, RoomNameRules<T>, RoomSortRules<T>, UpdateRoomCommand |
 | 7 | `UpdateSessionCommand` | MMCA.ADC.Conference.Application | 4 | ICacheInvalidating, ICommandWithRequest<out TRequest>, Session, SessionUpdateRequest |
@@ -1950,7 +1965,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 7 | `EventSpeakerDTOMapperTests` | MMCA.ADC.Conference.Application.Tests | 3 | Event, EventSpeaker, EventSpeakerDTOMapper |
 | 7 | `EventUpdateRequestValidatorTests` | MMCA.ADC.Conference.Application.Tests | 2 | EventUpdateRequest, EventUpdateRequestValidator |
 | 7 | `EventValidationRulesTests` | MMCA.ADC.Conference.Application.Tests | 3 | EventInvariants, TestEventModel, TestEventValidator |
-| 7 | `InMemoryRepository<TEntity, TIdentifierType>` | MMCA.ADC.Conference.Application.Tests | 4 | AuditableBaseEntity<TIdentifierType>, BaseLookup<TIdentifierType>, IRepository<TEntity, TIdentifierType>, IRowVersioned |
+| 7 | `InMemoryRepository<TEntity, TIdentifierType>` | MMCA.ADC.Conference.Application.Tests | 5 | AuditableBaseEntity<TIdentifierType>, BaseLookup<TIdentifierType>, IRepository<TEntity, TIdentifierType>, IRowVersioned, IUpdatePropertySetter<TEntity> |
 | 7 | `OwnEventQuestionAnswerSpecificationTests` | MMCA.ADC.Conference.Application.Tests | 2 | Event, OwnEventQuestionAnswerSpecification |
 | 7 | `PublishedEventSpecificationTests` | MMCA.ADC.Conference.Application.Tests | 2 | Event, PublishedEventSpecification |
 | 7 | `QuestionDTOMapperTests` | MMCA.ADC.Conference.Application.Tests | 2 | Question, QuestionDTOMapper |
@@ -1986,9 +2001,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 7 | `PublicEventDetailTests` | MMCA.ADC.Conference.UI.Tests | 6 | BunitTestBase, EventDTO, IClipboardService, IEventUIService, IMapNavigationService, PublicEventDetail |
 | 7 | `PublicSpeakerDetailTests` | MMCA.ADC.Conference.UI.Tests | 5 | BunitTestBase, ISessionUIService, ISpeakerUIService, PublicSpeakerDetail, SpeakerDTO |
 | 7 | `QuestionDetailTests` | MMCA.ADC.Conference.UI.Tests | 5 | BunitTestBase, IQuestionUIService, Question, QuestionDetail, QuestionDTO |
-| 7 | `SpeakerDashboardServiceTests` | MMCA.ADC.Conference.UI.Tests | 10 | CapturingHttpMessageHandler, HttpTestDoubles, PagedCollectionResult<T>, PaginationMetadata, RatingQuestionSummary, Session, SessionDTO, SessionFeedbackDTO, SessionSpeakerDTO, SpeakerDashboardService |
-| 7 | `LivePollsController` | MMCA.ADC.Engagement.API | 24 | ApiControllerBase, AuthorizationPolicies, CastVoteCommand, CastVoteRequest, CloseLivePollCommand, CreateLivePollCommand, CreateLivePollRequest, DeleteEntityCommand<TEntity, TIdentifierType>, EngagementFeatures, EngagementPermissions, Error, GetEventPollsQuery, GetOpenPollsQuery, GetPollResultsQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IQueryHandler<in TQuery, TResult>, LivePoll, LivePollDTO, LivePollResultsDTO …(+4) |
-| 7 | `ControllerMocks` | MMCA.ADC.Engagement.API.Tests | 28 | CastVoteCommand, CloseLivePollCommand, CreateBookmarkRequest, CreateLivePollCommand, DeleteEntityCommand<TEntity, TIdentifierType>, GetBookmarkedSessionIdsQuery, GetEventPollsQuery, GetModerationQueueQuery, GetOpenPollsQuery, GetPollResultsQuery, GetSessionQuestionsQuery, GetUserBookmarksQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, IQueryHandler<in TQuery, TResult>, LivePoll, LivePollDTO, LivePollResultsDTO, ModerateQuestionCommand …(+8) |
+| 7 | `SpeakerDashboardServiceTests` | MMCA.ADC.Conference.UI.Tests | 11 | CapturingHttpMessageHandler, DomainInvariantViolationException, HttpTestDoubles, PagedCollectionResult<T>, PaginationMetadata, RatingQuestionSummary, Session, SessionDTO, SessionFeedbackDTO, SessionSpeakerDTO, SpeakerDashboardService |
 | 7 | `LivePollDTOMapper` | MMCA.ADC.Engagement.Application | 3 | IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>, LivePoll, LivePollDTO |
 | 7 | `CreateLivePollCommandValidatorTests` | MMCA.ADC.Engagement.Application.Tests | 5 | CreateLivePollCommand, CreateLivePollCommandValidator, CreateLivePollRequest, LivePollInvariants, Question |
 | 7 | `TestSupport` | MMCA.ADC.Engagement.Application.Tests | 4 | AuditableBaseEntity<TIdentifierType>, BaseEntity<TIdentifierType>, IReadRepository<TEntity, TIdentifierType>, IRepository<TEntity, TIdentifierType> |
@@ -2005,7 +2018,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 7 | `ChangePreferencesCommand` | MMCA.ADC.Identity.Application | 3 | ChangePreferencesRequest, ICacheInvalidating, User |
 | 7 | `DeleteUserCommand` | MMCA.ADC.Identity.Application | 2 | ICacheInvalidating, User |
 | 7 | `UserDTOMapper` | MMCA.ADC.Identity.Application | 4 | Email, IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>, User, UserDTO |
-| 7 | `InMemoryRepository<TEntity, TIdentifierType>` | MMCA.ADC.Identity.Application.Tests | 4 | AuditableBaseEntity<TIdentifierType>, BaseLookup<TIdentifierType>, IRepository<TEntity, TIdentifierType>, IRowVersioned |
+| 7 | `InMemoryRepository<TEntity, TIdentifierType>` | MMCA.ADC.Identity.Application.Tests | 5 | AuditableBaseEntity<TIdentifierType>, BaseLookup<TIdentifierType>, IRepository<TEntity, TIdentifierType>, IRowVersioned, IUpdatePropertySetter<TEntity> |
 | 7 | `RegisterRequestValidatorTests` | MMCA.ADC.Identity.Application.Tests | 2 | RegisterRequest, RegisterRequestValidator |
 | 7 | `UserAnonymizeTests` | MMCA.ADC.Identity.Domain.Tests | 4 | Email, Result, User, UserRole |
 | 7 | `UserBuilder` | MMCA.ADC.Identity.Domain.Tests | 3 | EntityBuilderBase<TBuilder, TEntity>, User, UserRole |
@@ -2017,6 +2030,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 7 | `AggregateRootEntityControllerBase<TEntity, TEntityDTO, TIdentifierType, TCreateRequest>` | MMCA.Common.API | 10 | AuditableAggregateRootEntity<TIdentifierType>, DeleteEntityCommand<TEntity, TIdentifierType>, EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>, IAggregateRootEntityControllerBase<TEntityDTO, TIdentifierType, TCreateRequest>, IBaseDTO<TIdentifierType>, ICommandHandler<in TCommand, TResult>, ICreateRequest, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, Result, Route |
 | 7 | `TestEntityController` | MMCA.Common.API.Tests | 5 | EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>, Error, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, TestDTO, TestEntity |
 | 7 | `TestOAuthController` | MMCA.Common.API.Tests | 3 | IAuthenticationService, ICacheService, OAuthControllerBase |
+| 7 | `ICurrentUserService` | MMCA.Common.Application | 1 | User |
 | 7 | `IUnitOfWork` | MMCA.Common.Application | 4 | AuditableAggregateRootEntity<TIdentifierType>, AuditableBaseEntity<TIdentifierType>, IReadRepository<TEntity, TIdentifierType>, IRepository<TEntity, TIdentifierType> |
 | 7 | `NavigationLoaderTests` | MMCA.Common.Application.Tests | 4 | IReadRepository<TEntity, TIdentifierType>, NavigationLoader, StubChild, StubParent |
 | 7 | `PushNotificationDTOMapperTests` | MMCA.Common.Application.Tests | 5 | PushNotification, PushNotificationDTO, PushNotificationDTOMapper, PushNotificationStatus, Result |
@@ -2025,9 +2039,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 7 | `SpecificationFitnessTests` | MMCA.Common.Architecture.Tests | 4 | ArchitectureRules, NavigatingSpec, ScalarOnlySpec, SpecTestMap |
 | 7 | `SpecTestMap` | MMCA.Common.Architecture.Tests | 4 | ArchitectureMapBase, Layer, LayerRef, SpecificationFitnessTests |
 | 7 | `CosmosDbContext` | MMCA.Common.Infrastructure | 5 | ApplicationDbContext, DataSource, IEntityConfigurationAssemblyProvider, OutboxMessage, PhysicalDataSource |
-| 7 | `CurrentUserService` | MMCA.Common.Infrastructure | 2 | ICurrentUserService, User |
-| 7 | `EFRepository<TEntity, TIdentifierType>` | MMCA.Common.Infrastructure | 4 | AuditableBaseEntity<TIdentifierType>, EFReadRepository<TEntity, TIdentifierType>, IRepository<TEntity, TIdentifierType>, IRowVersioned |
-| 7 | `EFRepositoryDecorator<TEntity, TIdentifierType>` | MMCA.Common.Infrastructure | 5 | AuditableBaseEntity<TIdentifierType>, EFReadRepositoryDecorator<TEntity, TIdentifierType>, IRepository<TEntity, TIdentifierType>, IRowVersioned, ProfilingHelper |
+| 7 | `EFRepositoryDecorator<TEntity, TIdentifierType>` | MMCA.Common.Infrastructure | 6 | AuditableBaseEntity<TIdentifierType>, EFReadRepositoryDecorator<TEntity, TIdentifierType>, IRepository<TEntity, TIdentifierType>, IRowVersioned, IUpdatePropertySetter<TEntity>, ProfilingHelper |
 | 7 | `EntityTypeConfigurationCosmos<TEntity, TIdentifierType>` | MMCA.Common.Infrastructure | 3 | AuditableBaseEntity<TIdentifierType>, DataSource, EntityTypeConfiguration<TEntity, TIdentifierType> |
 | 7 | `EntityTypeConfigurationSqlite<TEntity, TIdentifierType>` | MMCA.Common.Infrastructure | 3 | AuditableBaseEntity<TIdentifierType>, DataSource, EntityTypeConfiguration<TEntity, TIdentifierType> |
 | 7 | `EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>` | MMCA.Common.Infrastructure | 3 | AuditableBaseEntity<TIdentifierType>, DataSource, EntityTypeConfiguration<TEntity, TIdentifierType> |
@@ -2038,12 +2050,17 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 7 | `SQLServerDbContext` | MMCA.Common.Infrastructure | 4 | ApplicationDbContext, DataSource, IEntityConfigurationAssemblyProvider, PhysicalDataSource |
 | 7 | `CleanupTestContext` | MMCA.Common.Infrastructure.Tests | 11 | ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, InboxMessage, IOutboxSignal, NullAssemblyProvider, OutboxMessage, TestPhysicalDataSources |
 | 7 | `DegradeTestContext` | MMCA.Common.Infrastructure.Tests | 7 | ApplicationDbContext, DataSourceKey, DegradeCustomer, DegradeOrder, EmptyAssemblyProvider, IEntityDataSourceRegistry, PhysicalDataSource |
+| 7 | `DetectionTestDbContext` | MMCA.Common.Infrastructure.Tests | 10 | ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, TestPhysicalDataSources, Widget |
 | 7 | `EFReadRepositoryDecoratorAdditionalTests` | MMCA.Common.Infrastructure.Tests | 3 | EFReadRepositoryDecorator<TEntity, TIdentifierType>, FakeEntity, IReadRepository<TEntity, TIdentifierType> |
 | 7 | `EFReadRepositoryDecoratorTests` | MMCA.Common.Infrastructure.Tests | 4 | BaseLookup<TIdentifierType>, EFReadRepositoryDecorator<TEntity, TIdentifierType>, FakeEntity, IReadRepository<TEntity, TIdentifierType> |
+| 7 | `FailingSaveInterceptor` | MMCA.Common.Infrastructure.Tests | 1 | OutboxRoutingTestDbContext |
 | 7 | `InboxTestDbContext` | MMCA.Common.Infrastructure.Tests | 4 | ApplicationDbContext, IEntityConfigurationAssemblyProvider, InboxMessage, TestPhysicalDataSources |
-| 7 | `OutboxRoutingTestDbContext` | MMCA.Common.Infrastructure.Tests | 9 | ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IEntityDataSourceRegistry, NullAssemblyProvider, OutboxMessage, TestAggregate, TestPhysicalDataSources |
+| 7 | `MidSaveContextCreatingDbContext` | MMCA.Common.Infrastructure.Tests | 10 | ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityConfigurationAssemblyProvider, IEntityDataSourceRegistry, IOutboxSignal, ReentrantSaveInterceptor, TestPhysicalDataSources |
+| 7 | `OutboxRoutingTestDbContext` | MMCA.Common.Infrastructure.Tests | 10 | ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, FailingSaveInterceptor, IEntityDataSourceRegistry, NullAssemblyProvider, OutboxMessage, TestAggregate, TestPhysicalDataSources |
 | 7 | `OutboxTestDbContext` | MMCA.Common.Infrastructure.Tests | 4 | ApplicationDbContext, IEntityConfigurationAssemblyProvider, OutboxMessage, TestPhysicalDataSources |
 | 7 | `PortableThingConfiguration` | MMCA.Common.Infrastructure.Tests | 3 | DataSource, EntityTypeConfiguration<TEntity, TIdentifierType>, PortableThing |
+| 7 | `QueryShapeTestDbContext` | MMCA.Common.Infrastructure.Tests | 10 | ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, Product, TestPhysicalDataSources |
+| 7 | `ReentrantSaveInterceptor` | MMCA.Common.Infrastructure.Tests | 1 | MidSaveContextCreatingDbContext |
 | 7 | `SoftDeleteTestDbContext` | MMCA.Common.Infrastructure.Tests | 10 | ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, SoftDeletableEntity, TestPhysicalDataSources |
 | 7 | `TestApplicationDbContext` | MMCA.Common.Infrastructure.Tests | 10 | ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityConfigurationAssemblyProvider, IEntityDataSourceRegistry, IOutboxSignal, TestEntity, TestPhysicalDataSources |
 | 7 | `TestAuditDbContext` | MMCA.Common.Infrastructure.Tests | 10 | ApplicationDbContext, AuditSaveChangesInterceptor, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, NullAssemblyProvider, TestAuditEntity, TestPhysicalDataSources |
@@ -2059,15 +2076,15 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 7 | `GalleryAuthenticationStateProvider` | MMCA.Common.UI.Gallery | 1 | User |
 | 8 | `DecoratorPipelineOrderTests` | MMCA.ADC.Architecture.Tests | 9 | ChangePreferencesCommand, ClassReference, DecoratorPipelineOrderTestsBase<TCommand, TCommandResult, TQuery, TQueryResult>, GetUserPreferencesQuery, ICacheService, ICorrelationContext, IUnitOfWork, Result, UserPreferencesResponse |
 | 8 | `ConferenceCategoriesController` | MMCA.ADC.Conference.API | 16 | AggregateRootEntityControllerBase<TEntity, TEntityDTO, TIdentifierType, TCreateRequest>, BaseLookup<TIdentifierType>, Category, CollectionResult<T>, ConferenceCategoryCreateRequest, ConferenceCategoryDTO, ConferenceCategoryUpdateRequest, ConferencePermissions, DeleteEntityCommand<TEntity, TIdentifierType>, ICommandHandler<in TCommand, TResult>, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, PagedCollectionResult<T>, QueryFilterModelBinder, Result, Route, UpdateConferenceCategoryCommand |
-| 8 | `EventsController` | MMCA.ADC.Conference.API | 28 | AggregateRootEntityControllerBase<TEntity, TEntityDTO, TIdentifierType, TCreateRequest>, BaseLookup<TIdentifierType>, CollectionResult<T>, ConferencePermissions, DeleteEntityCommand<TEntity, TIdentifierType>, Event, EventCreateRequest, EventDTO, EventUpdateRequest, ExportEventCalendarQuery, GetNowNextQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, IQueryHandler<in TQuery, TResult>, NowNextDTO, PagedCollectionResult<T>, PublishedEventSpecification, PublishEventCommand, QueryFilterModelBinder …(+8) |
+| 8 | `EventQuestionAnswersController` | MMCA.ADC.Conference.API | 20 | AddEventQuestionAnswerCommand, AddEventQuestionAnswerRequest, AuthorizationPolicies, BaseLookup<TIdentifierType>, CollectionResult<T>, EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>, EventQuestionAnswer, EventQuestionAnswerDTO, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, OwnEventQuestionAnswerSpecification, PagedCollectionResult<T>, QueryFilterModelBinder, RemoveEventQuestionAnswerCommand, Result, RoleNames, Route, UpdateEventQuestionAnswerCommand, UpdateEventQuestionAnswerRequest |
+| 8 | `EventsController` | MMCA.ADC.Conference.API | 29 | AggregateRootEntityControllerBase<TEntity, TEntityDTO, TIdentifierType, TCreateRequest>, BaseLookup<TIdentifierType>, CollectionResult<T>, ConferencePermissions, DeleteEntityCommand<TEntity, TIdentifierType>, Event, EventCreateRequest, EventDTO, EventTransitionRequest, EventUpdateRequest, ExportEventCalendarQuery, GetNowNextQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, IQueryHandler<in TQuery, TResult>, NowNextDTO, PagedCollectionResult<T>, PublishedEventSpecification, PublishEventCommand …(+9) |
 | 8 | `QuestionsController` | MMCA.ADC.Conference.API | 16 | AggregateRootEntityControllerBase<TEntity, TEntityDTO, TIdentifierType, TCreateRequest>, BaseLookup<TIdentifierType>, CollectionResult<T>, ConferencePermissions, DeleteEntityCommand<TEntity, TIdentifierType>, ICommandHandler<in TCommand, TResult>, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, PagedCollectionResult<T>, QueryFilterModelBinder, Question, QuestionCreateRequest, QuestionDTO, QuestionUpdateRequest, Result, Route, UpdateQuestionCommand |
 | 8 | `SessionCategoryItemsController` | MMCA.ADC.Conference.API | 15 | AddSessionCategoryItemCommand, AddSessionCategoryItemRequest, BaseLookup<TIdentifierType>, CollectionResult<T>, ConferencePermissions, EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>, ICommandHandler<in TCommand, TResult>, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, PagedCollectionResult<T>, QueryFilterModelBinder, RemoveSessionCategoryItemCommand, Result, Route, SessionCategoryItem, SessionCategoryItemDTO |
 | 8 | `SessionQuestionAnswersController` | MMCA.ADC.Conference.API | 20 | AddSessionQuestionAnswerCommand, AddSessionQuestionAnswerRequest, AuthorizationPolicies, BaseLookup<TIdentifierType>, CollectionResult<T>, EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, OwnSessionQuestionAnswerSpecification, PagedCollectionResult<T>, QueryFilterModelBinder, RemoveSessionQuestionAnswerCommand, Result, RoleNames, Route, SessionQuestionAnswer, SessionQuestionAnswerDTO, UpdateSessionQuestionAnswerCommand, UpdateSessionQuestionAnswerRequest |
-| 8 | `SessionsController` | MMCA.ADC.Conference.API | 25 | AggregateRootEntityControllerBase<TEntity, TEntityDTO, TIdentifierType, TCreateRequest>, BaseLookup<TIdentifierType>, CollectionResult<T>, ConferencePermissions, DeleteEntityCommand<TEntity, TIdentifierType>, Event, EventDTO, ExportSessionCalendarQuery, GetPublicSessionFilterQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, IQueryHandler<in TQuery, TResult>, PagedCollectionResult<T>, QueryFilterModelBinder, Result, RoleNames, Route, Session, SessionCreateRequest …(+5) |
+| 8 | `SessionsController` | MMCA.ADC.Conference.API | 27 | AggregateRootEntityControllerBase<TEntity, TEntityDTO, TIdentifierType, TCreateRequest>, AndSpecification<TEntity, TIdentifierType>, BaseLookup<TIdentifierType>, CollectionResult<T>, ConferencePermissions, DeleteEntityCommand<TEntity, TIdentifierType>, Event, EventDTO, ExportSessionCalendarQuery, GetPublicSessionFilterQuery, GetSessionsBySpeakerFilterQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, IQueryHandler<in TQuery, TResult>, PagedCollectionResult<T>, QueryFilterModelBinder, Result, RoleNames, Route …(+7) |
 | 8 | `SessionSpeakersController` | MMCA.ADC.Conference.API | 15 | AddSessionSpeakerCommand, AddSessionSpeakerRequest, BaseLookup<TIdentifierType>, CollectionResult<T>, ConferencePermissions, EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>, ICommandHandler<in TCommand, TResult>, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, PagedCollectionResult<T>, QueryFilterModelBinder, RemoveSessionSpeakerCommand, Result, Route, SessionSpeaker, SessionSpeakerDTO |
 | 8 | `SpeakersController` | MMCA.ADC.Conference.API | 28 | AggregateRootEntityControllerBase<TEntity, TEntityDTO, TIdentifierType, TCreateRequest>, BaseLookup<TIdentifierType>, CollectionResult<T>, ConferencePermissions, DeleteEntityCommand<TEntity, TIdentifierType>, GetSessionBookmarkCountQuery, GetSessionBookmarkCountsQuery, GetSessionFeedbackQuery, GetSpeakersByEventFilterQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, IQueryHandler<in TQuery, TResult>, LinkUserRequest, LinkUserToSpeakerCommand, PagedCollectionResult<T>, QueryFilterModelBinder, Result, RoleNames, Route …(+8) |
 | 8 | `CategoryItemsControllerTests` | MMCA.ADC.Conference.API.Tests | 12 | AddCategoryItemCommand, AddCategoryItemRequest, CategoryItem, CategoryItemDTO, CategoryItemsController, Error, ICommandHandler<in TCommand, TResult>, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, RemoveCategoryItemCommand, Result, UpdateCategoryItemCommand, UpdateCategoryItemRequest |
-| 8 | `EventQuestionAnswersControllerTests` | MMCA.ADC.Conference.API.Tests | 17 | AddEventQuestionAnswerCommand, AddEventQuestionAnswerRequest, CollectionResult<T>, Error, EventQuestionAnswer, EventQuestionAnswerDTO, EventQuestionAnswersController, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, PagedCollectionResult<T>, PaginationMetadata, RemoveEventQuestionAnswerCommand, Result, Specification<TEntity, TIdentifierType>, UpdateEventQuestionAnswerCommand, UpdateEventQuestionAnswerRequest |
 | 8 | `EventSpeakersControllerTests` | MMCA.ADC.Conference.API.Tests | 10 | AddEventSpeakerCommand, AddEventSpeakerRequest, Error, EventSpeaker, EventSpeakerDTO, EventSpeakersController, ICommandHandler<in TCommand, TResult>, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, RemoveEventSpeakerCommand, Result |
 | 8 | `RoomsControllerTests` | MMCA.ADC.Conference.API.Tests | 12 | AddRoomCommand, AddRoomRequest, Error, ICommandHandler<in TCommand, TResult>, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, RemoveRoomCommand, Result, Room, RoomDTO, RoomsController, UpdateRoomCommand, UpdateRoomRequest |
 | 8 | `SpeakerCategoryItemsControllerTests` | MMCA.ADC.Conference.API.Tests | 10 | AddSpeakerCategoryItemCommand, AddSpeakerCategoryItemRequest, Error, ICommandHandler<in TCommand, TResult>, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, RemoveSpeakerCategoryItemCommand, Result, SpeakerCategoryItem, SpeakerCategoryItemDTO, SpeakerCategoryItemsController |
@@ -2085,7 +2102,6 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 8 | `CreateConferenceCategoryHandler` | MMCA.ADC.Conference.Application | 8 | Category, ConferenceCategoryCreateRequest, ConferenceCategoryDTO, ConferenceCategoryDTOMapper, ICommandHandler<in TCommand, TResult>, IEntityRequestMapper<TEntity, TCreateRequest, TIdentifierType>, IUnitOfWork, Result |
 | 8 | `CreateEventHandler` | MMCA.ADC.Conference.Application | 8 | Event, EventCreateRequest, EventDTO, EventDTOMapper, ICommandHandler<in TCommand, TResult>, IEntityRequestMapper<TEntity, TCreateRequest, TIdentifierType>, IUnitOfWork, Result |
 | 8 | `CreateQuestionHandler` | MMCA.ADC.Conference.Application | 10 | Error, ICommandHandler<in TCommand, TResult>, IEntityRequestMapper<TEntity, TCreateRequest, TIdentifierType>, IUnitOfWork, Question, QuestionCreateRequest, QuestionDTO, QuestionDTOMapper, QuestionInvariants, Result |
-| 8 | `CreateSpeakerHandler` | MMCA.ADC.Conference.Application | 8 | ICommandHandler<in TCommand, TResult>, IEntityRequestMapper<TEntity, TCreateRequest, TIdentifierType>, IUnitOfWork, Result, Speaker, SpeakerCreateRequest, SpeakerDTO, SpeakerDTOMapper |
 | 8 | `DeleteEventHandler` | MMCA.ADC.Conference.Application | 8 | DeleteEntityCommand<TEntity, TIdentifierType>, Error, Event, ICommandHandler<in TCommand, TResult>, IEventCascadeDeletionDomainService, IUnitOfWork, Result, Session |
 | 8 | `EventLiveValidationService` | MMCA.ADC.Conference.Application | 9 | Error, Event, EventLiveInfo, IEventLiveValidationService, IUnitOfWork, Result, Session, SessionInvariants, SessionLiveInfo |
 | 8 | `ExportEventCalendarHandler` | MMCA.ADC.Conference.Application | 9 | CalendarExportMapper, Error, Event, ExportEventCalendarQuery, IcsCalendarBuilder, IQueryHandler<in TQuery, TResult>, IUnitOfWork, Result, Session |
@@ -2096,6 +2112,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 8 | `GetSessionBookmarkCountHandler` | MMCA.ADC.Conference.Application | 7 | Error, GetSessionBookmarkCountQuery, IBookmarkCountService, IQueryHandler<in TQuery, TResult>, IUnitOfWork, Result, Session |
 | 8 | `GetSessionBookmarkCountsHandler` | MMCA.ADC.Conference.Application | 6 | GetSessionBookmarkCountsQuery, IBookmarkCountService, IQueryHandler<in TQuery, TResult>, IUnitOfWork, Result, Session |
 | 8 | `GetSessionFeedbackHandler` | MMCA.ADC.Conference.Application | 10 | Error, GetSessionFeedbackQuery, IQueryHandler<in TQuery, TResult>, IUnitOfWork, Question, RatingQuestionSummary, Result, Session, SessionFeedbackDTO, TextQuestionResponses |
+| 8 | `GetSessionsBySpeakerFilterHandler` | MMCA.ADC.Conference.Application | 8 | GetSessionsBySpeakerFilterQuery, InlineSpecification<TEntity, TIdentifierType>, IQueryHandler<in TQuery, TResult>, IUnitOfWork, Result, Session, SessionSpeaker, Specification<TEntity, TIdentifierType> |
 | 8 | `GetSessionSelectionDashboardHandler` | MMCA.ADC.Conference.Application | 22 | Category, CategoryDistributionDTO, CategoryGroupDistribution, CategoryItemDistribution, Error, Event, GetSessionSelectionDashboardQuery, IQueryHandler<in TQuery, TResult>, IUnitOfWork, MultiSessionSpeaker, Result, Session, SessionAiScore, SessionAiScoreDTO, SessionSelectionDashboardDTO, SessionStatuses, Speaker, SpeakerLocalityHelper, SpeakerLocalitySummary, SpeakerSessionOverlapDTO …(+2) |
 | 8 | `GetSpeakersByEventFilterHandler` | MMCA.ADC.Conference.Application | 10 | EventSpeaker, GetSpeakersByEventFilterQuery, InlineSpecification<TEntity, TIdentifierType>, IQueryHandler<in TQuery, TResult>, IUnitOfWork, Result, Session, SessionSpeaker, Speaker, Specification<TEntity, TIdentifierType> |
 | 8 | `GetSpeakerSessionOverlapHandler` | MMCA.ADC.Conference.Application | 12 | Category, GetSpeakerSessionOverlapQuery, IQueryHandler<in TQuery, TResult>, IUnitOfWork, MultiSessionSpeaker, Result, Session, SessionStatuses, Speaker, SpeakerLocalityHelper, SpeakerSessionOverlapDTO, SpeakerSessionSummary |
@@ -2115,6 +2132,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 8 | `SessionCreateRequestValidator` | MMCA.ADC.Conference.Application | 9 | SessionAccessibilityInfoRules<T>, SessionCreateRequest, SessionDescriptionRules<T>, SessionEventIdRules<T>, SessionLiveUrlRules<T>, SessionRecordingUrlRules<T>, SessionResourceLinksRules<T>, SessionStatusRules<T>, SessionTitleRules<T> |
 | 8 | `SessionDTOMapper` | MMCA.ADC.Conference.Application | 6 | IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>, Session, SessionCategoryItemDTOMapper, SessionDTO, SessionQuestionAnswerDTOMapper, SessionSpeakerDTOMapper |
 | 8 | `SessionizeSyncContext` | MMCA.ADC.Conference.Application | 3 | Event, IUnitOfWork, SessionizeResponse |
+| 8 | `SpeakerDTOMapper` | MMCA.ADC.Conference.Application | 8 | Email, ICurrentUserService, IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>, RoleNames, Speaker, SpeakerCategoryItemDTOMapper, SpeakerDTO, SpeakerQuestionAnswerDTOMapper |
 | 8 | `UnlinkUserFromSpeakerHandler` | MMCA.ADC.Conference.Application | 7 | Error, ICommandHandler<in TCommand, TResult>, IUnitOfWork, Result, Speaker, SpeakerUnlinkedFromUser, UnlinkUserFromSpeakerCommand |
 | 8 | `UnpublishEventHandler` | MMCA.ADC.Conference.Application | 6 | Error, Event, ICommandHandler<in TCommand, TResult>, IUnitOfWork, Result, UnpublishEventCommand |
 | 8 | `UpdateCategoryItemHandler` | MMCA.ADC.Conference.Application | 6 | Category, Error, ICommandHandler<in TCommand, TResult>, IUnitOfWork, Result, UpdateCategoryItemCommand |
@@ -2124,7 +2142,6 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 8 | `UpdateQuestionHandler` | MMCA.ADC.Conference.Application | 10 | Error, EventQuestionAnswer, ICommandHandler<in TCommand, TResult>, IUnitOfWork, Question, QuestionDTO, QuestionDTOMapper, Result, SessionQuestionAnswer, UpdateQuestionCommand |
 | 8 | `UpdateRoomHandler` | MMCA.ADC.Conference.Application | 6 | Error, Event, ICommandHandler<in TCommand, TResult>, IUnitOfWork, Result, UpdateRoomCommand |
 | 8 | `UpdateSessionQuestionAnswerHandler` | MMCA.ADC.Conference.Application | 9 | Error, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IUnitOfWork, Result, RoleNames, Session, SessionQuestionAnswer, UpdateSessionQuestionAnswerCommand |
-| 8 | `UpdateSpeakerHandler` | MMCA.ADC.Conference.Application | 8 | Error, ICommandHandler<in TCommand, TResult>, IUnitOfWork, Result, Speaker, SpeakerDTO, SpeakerDTOMapper, UpdateSpeakerCommand |
 | 8 | `UserRegisteredHandler` | MMCA.ADC.Conference.Application | 8 | Email, IEventBus, IIntegrationEventHandler<in TIntegrationEvent>, IRepository<TEntity, TIdentifierType>, IUnitOfWork, Speaker, SpeakerLinkedToUser, UserRegistered |
 | 8 | `AddCategoryItemCommandValidatorTests` | MMCA.ADC.Conference.Application.Tests | 3 | AddCategoryItemCommand, AddCategoryItemCommandValidator, CategoryInvariants |
 | 8 | `AddEventQuestionAnswerCommandValidatorTests` | MMCA.ADC.Conference.Application.Tests | 2 | AddEventQuestionAnswerCommand, AddEventQuestionAnswerCommandValidator |
@@ -2147,7 +2164,6 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 8 | `SessionRoomSchedulingTests` | MMCA.ADC.Conference.Application.Tests | 3 | ErrorType, Session, SessionRoomScheduling |
 | 8 | `SessionSpeakerDTOMapperTests` | MMCA.ADC.Conference.Application.Tests | 3 | Session, SessionSpeaker, SessionSpeakerDTOMapper |
 | 8 | `SpeakerCreateRequestValidatorTests` | MMCA.ADC.Conference.Application.Tests | 3 | Email, SpeakerCreateRequest, SpeakerCreateRequestValidator |
-| 8 | `SpeakerDTOMapperTests` | MMCA.ADC.Conference.Application.Tests | 5 | ICurrentUserService, Speaker, SpeakerCategoryItemDTOMapper, SpeakerDTOMapper, SpeakerQuestionAnswerDTOMapper |
 | 8 | `UpdateCategoryItemCommandValidatorTests` | MMCA.ADC.Conference.Application.Tests | 3 | CategoryInvariants, UpdateCategoryItemCommand, UpdateCategoryItemCommandValidator |
 | 8 | `UpdateRoomCommandValidatorTests` | MMCA.ADC.Conference.Application.Tests | 3 | EventInvariants, UpdateRoomCommand, UpdateRoomCommandValidator |
 | 8 | `EventCascadeDeletionDomainService` | MMCA.ADC.Conference.Domain | 4 | Event, IEventCascadeDeletionDomainService, Result, Session |
@@ -2179,9 +2195,9 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 8 | `PublicSpeakerListEventFilterTests` | MMCA.ADC.Conference.UI.Tests | 8 | BunitTestBase, EventInfo, IEventLookupService, ISpeakerUIService, ListPageQueryStateService, ListPageStateService, PublicSpeakerList, TestPrincipal |
 | 8 | `SessionSelectionDashboardTests` | MMCA.ADC.Conference.UI.Tests | 16 | BunitTestBase, CategoryDistributionDTO, CategoryGroupDistribution, CategoryItemDistribution, EventInfo, IEventLookupService, ISessionSelectionUIService, MultiSessionSpeaker, ScoreEventSessionsResultDTO, SessionAiScoreDTO, SessionSelectionDashboard, SessionSelectionDashboardDTO, Speaker, SpeakerLocalitySummary, SpeakerSessionOverlapDTO, SpeakerSessionSummary |
 | 8 | `SpeakerDashboardTests` | MMCA.ADC.Conference.UI.Tests | 14 | BunitTestBase, EventInfo, IEventLookupService, ISpeakerDashboardUIService, ISpeakerUIService, RatingQuestionSummary, Session, SessionDTO, SessionFeedbackDTO, Speaker, SpeakerDashboard, SpeakerDTO, TestPrincipal, TextQuestionResponses |
-| 8 | `BookmarksControllerTests` | MMCA.ADC.Engagement.API.Tests | 17 | BookmarksController, ControllerMocks, CreateBookmarkRequest, DeleteEntityCommand<TEntity, TIdentifierType>, Error, GetBookmarkedSessionIdsQuery, GetUserBookmarksQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, IQueryHandler<in TQuery, TResult>, OwnerOrAdminFilter, PagedCollectionResult<T>, PaginationMetadata, Result, UserSessionBookmark, UserSessionBookmarkDTO |
-| 8 | `LivePollsControllerTests` | MMCA.ADC.Engagement.API.Tests | 22 | CastVoteCommand, CastVoteRequest, CloseLivePollCommand, ControllerMocks, CreateLivePollCommand, CreateLivePollRequest, DeleteEntityCommand<TEntity, TIdentifierType>, Error, GetEventPollsQuery, GetOpenPollsQuery, GetPollResultsQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IQueryHandler<in TQuery, TResult>, LivePoll, LivePollDTO, LivePollResultsDTO, LivePollsController, LivePollStatus, OpenLivePollCommand …(+2) |
-| 8 | `SessionQuestionsControllerTests` | MMCA.ADC.Engagement.API.Tests | 16 | ControllerMocks, Error, GetModerationQueueQuery, GetSessionQuestionsQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IQueryHandler<in TQuery, TResult>, ModerateQuestionCommand, ModerationAction, QuestionStatus, Result, SessionQuestionDTO, SessionQuestionsController, SubmitQuestionCommand, SubmitQuestionRequest, ToggleUpvoteCommand |
+| 8 | `LivePollsController` | MMCA.ADC.Engagement.API | 25 | ApiControllerBase, AuthorizationPolicies, CastVoteCommand, CastVoteRequest, CloseLivePollCommand, CreateLivePollCommand, CreateLivePollRequest, DeleteEntityCommand<TEntity, TIdentifierType>, EngagementFeatures, EngagementPermissions, Error, GetEventPollsQuery, GetOpenPollsQuery, GetPollResultsQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IQueryHandler<in TQuery, TResult>, LifecycleTransitionRequest, LivePoll, LivePollDTO …(+5) |
+| 8 | `SessionQuestionsController` | MMCA.ADC.Engagement.API | 19 | ApiControllerBase, AuthorizationPolicies, EngagementFeatures, Error, GetModerationQueueQuery, GetSessionQuestionsQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IQueryHandler<in TQuery, TResult>, LifecycleTransitionRequest, ModerateQuestionCommand, ModerationAction, Result, RoleNames, Route, SessionQuestionDTO, SubmitQuestionCommand, SubmitQuestionRequest, ToggleUpvoteCommand |
+| 8 | `ControllerMocks` | MMCA.ADC.Engagement.API.Tests | 28 | CastVoteCommand, CloseLivePollCommand, CreateBookmarkRequest, CreateLivePollCommand, DeleteEntityCommand<TEntity, TIdentifierType>, GetBookmarkedSessionIdsQuery, GetEventPollsQuery, GetModerationQueueQuery, GetOpenPollsQuery, GetPollResultsQuery, GetSessionQuestionsQuery, GetUserBookmarksQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, IQueryHandler<in TQuery, TResult>, LivePoll, LivePollDTO, LivePollResultsDTO, ModerateQuestionCommand …(+8) |
 | 8 | `BookmarkCountService` | MMCA.ADC.Engagement.Application | 4 | IBookmarkCountService, IQueryableExecutor, IUnitOfWork, UserSessionBookmark |
 | 8 | `CloseLivePollHandler` | MMCA.ADC.Engagement.Application | 12 | CloseLivePollCommand, Error, ICommandHandler<in TCommand, TResult>, IEventLiveValidationService, ILiveChannelPublishQueue, IUnitOfWork, LiveChannelPublishWorkItem, LivePoll, LivePollAuthorization, LivePollChannel, LivePollClosedPayload, Result |
 | 8 | `CreateBookmarkHandler` | MMCA.ADC.Engagement.Application | 10 | CreateBookmarkRequest, Error, IBookmarkManagementDomainService, ICommandHandler<in TCommand, TResult>, ISessionBookmarkValidationService, IUnitOfWork, Result, UserSessionBookmark, UserSessionBookmarkDTO, UserSessionBookmarkDTOMapper |
@@ -2192,8 +2208,9 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 8 | `LivePollResultsBuilder` | MMCA.ADC.Engagement.Application | 7 | IQueryableExecutor, IUnitOfWork, LivePoll, LivePollOptionResultDTO, LivePollResultsDTO, LivePollVote, Question |
 | 8 | `ModerateQuestionHandler` | MMCA.ADC.Engagement.Application | 17 | Error, ICommandHandler<in TCommand, TResult>, IEventLiveValidationService, ILiveChannelPublisher, IUnitOfWork, LivePollAuthorization, LivePollChannel, ModerateQuestionCommand, ModerationAction, QuestionStatus, Result, SessionQuestion, SessionQuestionAnsweredPayload, SessionQuestionApprovedPayload, SessionQuestionChannel, SessionQuestionDismissedPayload, SessionQuestionPendingCountChangedPayload |
 | 8 | `OpenLivePollHandler` | MMCA.ADC.Engagement.Application | 11 | Error, ICommandHandler<in TCommand, TResult>, IEventLiveValidationService, ILiveChannelPublisher, IUnitOfWork, LivePoll, LivePollAuthorization, LivePollChannel, LivePollOpenedPayload, OpenLivePollCommand, Result |
+| 8 | `SessionQuestionUpvoteChangedHandler` | MMCA.ADC.Engagement.Application | 10 | IDomainEventHandler<in TDomainEvent>, ILiveChannelPublishQueue, IUnitOfWork, LiveChannelPublishWorkItem, LivePollChannel, SessionQuestion, SessionQuestionChannel, SessionQuestionUpvote, SessionQuestionUpvoteChanged, SessionQuestionUpvoteChangedPayload |
 | 8 | `SessionQuestionViewBuilder` | MMCA.ADC.Engagement.Application | 5 | IQueryableExecutor, IUnitOfWork, SessionQuestion, SessionQuestionDTO, SessionQuestionUpvote |
-| 8 | `ToggleUpvoteHandler` | MMCA.ADC.Engagement.Application | 12 | Error, ICommandHandler<in TCommand, TResult>, ILiveChannelPublisher, IRepository<TEntity, TIdentifierType>, IUnitOfWork, LivePollChannel, Result, SessionQuestion, SessionQuestionChannel, SessionQuestionUpvote, SessionQuestionUpvoteChangedPayload, ToggleUpvoteCommand |
+| 8 | `ToggleUpvoteHandler` | MMCA.ADC.Engagement.Application | 8 | Error, ICommandHandler<in TCommand, TResult>, IRepository<TEntity, TIdentifierType>, IUnitOfWork, Result, SessionQuestion, SessionQuestionUpvote, ToggleUpvoteCommand |
 | 8 | `UserEngagementExportService` | MMCA.ADC.Engagement.Application | 7 | IUnitOfWork, IUserEngagementExportService, SessionQuestion, UserEngagementBookmarkExportDTO, UserEngagementExportDTO, UserEngagementSubmittedQuestionExportDTO, UserSessionBookmark |
 | 8 | `HandlerMocks` | MMCA.ADC.Engagement.Application.Tests | 7 | IEventLiveValidationService, ILiveChannelPublisher, ILiveChannelPublishQueue, IRepository<TEntity, TIdentifierType>, IUnitOfWork, LivePoll, LivePollVote |
 | 8 | `HandlerMocks` | MMCA.ADC.Engagement.Application.Tests | 6 | IEventLiveValidationService, ILiveChannelPublisher, IRepository<TEntity, TIdentifierType>, IUnitOfWork, SessionQuestion, SessionQuestionUpvote |
@@ -2231,6 +2248,11 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 8 | `UserNotificationExportService` | MMCA.ADC.Notification.Application | 6 | IQueryableExecutor, IUnitOfWork, IUserNotificationExportService, PushNotification, UserNotification, UserNotificationExportItemDTO |
 | 8 | `ADCHomePageContent` | MMCA.ADC.UI | 2 | ADCHome, IHomePageContent |
 | 8 | `DatabaseInitializationExtensions` | MMCA.Common.API | 7 | ApplicationSettings, DataSource, DataSourceKey, IDataSourceResolver, IDbContextFactory, IEntityDataSourceRegistry, ModuleLoader |
+| 8 | `DevicesController` | MMCA.Common.API | 8 | ApiControllerBase, DeviceInstallationRequest, Error, ICurrentUserService, IPushDeviceRegistrar, NotificationFeatures, Result, Route |
+| 8 | `InboxController` | MMCA.Common.API | 15 | ApiControllerBase, AuthorizationPolicies, Error, GetMyNotificationsQuery, GetUnreadNotificationCountQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IQueryHandler<in TQuery, TResult>, MarkAllNotificationsReadCommand, MarkNotificationReadCommand, NotificationFeatures, PagedCollectionResult<T>, Result, Route, UserNotificationDTO |
+| 8 | `NotificationsController` | MMCA.Common.API | 14 | ApiControllerBase, AuthorizationPolicies, Error, GetNotificationHistoryQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IQueryHandler<in TQuery, TResult>, NotificationFeatures, PagedCollectionResult<T>, PushNotificationDTO, Result, Route, SendPushNotificationCommand, SendPushNotificationRequest |
+| 8 | `OwnershipHelper` | MMCA.Common.API | 1 | ICurrentUserService |
+| 8 | `SoftDeletedUserMiddleware` | MMCA.Common.API | 3 | ICacheService, ICurrentUserService, ISoftDeletedUserValidator |
 | 8 | `EntityControllerBaseTests` | MMCA.Common.API.Tests | 13 | BaseLookup<TIdentifierType>, CollectionResult<T>, EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>, Error, IApplicationSettings, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, PagedCollectionResult<T>, PaginationMetadata, Result, Specification<TEntity, TIdentifierType>, TestDTO, TestEntity, TestEntityController |
 | 8 | `InitTestWidgetConfiguration` | MMCA.Common.API.Tests | 2 | EntityTypeConfigurationSqlite<TEntity, TIdentifierType>, InitTestWidget |
 | 8 | `OAuthControllerBaseTests` | MMCA.Common.API.Tests | 10 | AuthenticationResponse, Error, ExternalAuthExtensions, IAuthenticationService, ICacheService, Mocks, OAuthCodeExchangeRequest, Result, SingleServiceProvider, TestOAuthController |
@@ -2239,8 +2261,8 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 8 | `CrossSourceSpecification` | MMCA.Common.Application | 6 | AuditableBaseEntity<TIdentifierType>, IBaseEntity<TIdentifierType>, InlineSpecification<TEntity, TIdentifierType>, IUnitOfWork, ParameterReplacer, Specification<TEntity, TIdentifierType> |
 | 8 | `DeleteEntityHandler<TEntity, TIdentifierType>` | MMCA.Common.Application | 6 | AuditableAggregateRootEntity<TIdentifierType>, DeleteEntityCommand<TEntity, TIdentifierType>, Error, ICommandHandler<in TCommand, TResult>, IUnitOfWork, Result |
 | 8 | `EntityQueryService<TEntity, TEntityDTO, TIdentifierType>` | MMCA.Common.Application | 19 | AuditableBaseEntity<TIdentifierType>, BaseLookup<TIdentifierType>, EntityQueryParameters<TEntity>, Error, IBaseDTO<TIdentifierType>, IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>, IEntityQueryPipeline, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, INavigationMetadataProvider, INavigationPopulator<in TEntity>, IReadRepository<TEntity, TIdentifierType>, IUnitOfWork, NavigationMetadataProvider, PagedCollectionResult<T>, PaginationMetadata, QueryFieldService, QueryFilterService, Result, Specification<TEntity, TIdentifierType> |
-| 8 | `GetMyNotificationsHandler` | MMCA.Common.Application | 10 | GetMyNotificationsQuery, IQueryableExecutor, IQueryHandler<in TQuery, TResult>, IUnitOfWork, PagedCollectionResult<T>, PaginationMetadata, PushNotification, Result, UserNotification, UserNotificationDTO |
-| 8 | `GetNotificationHistoryHandler` | MMCA.Common.Application | 10 | GetNotificationHistoryQuery, IQueryableExecutor, IQueryHandler<in TQuery, TResult>, IUnitOfWork, PagedCollectionResult<T>, PaginationMetadata, PushNotification, PushNotificationDTO, PushNotificationDTOMapper, Result |
+| 8 | `GetMyNotificationsHandler` | MMCA.Common.Application | 11 | GetMyNotificationsQuery, IQueryableExecutor, IQueryHandler<in TQuery, TResult>, IUnitOfWork, PagedCollectionResult<T>, PaginationMetadata, PagingMath, PushNotification, Result, UserNotification, UserNotificationDTO |
+| 8 | `GetNotificationHistoryHandler` | MMCA.Common.Application | 11 | GetNotificationHistoryQuery, IQueryableExecutor, IQueryHandler<in TQuery, TResult>, IUnitOfWork, PagedCollectionResult<T>, PaginationMetadata, PagingMath, PushNotification, PushNotificationDTO, PushNotificationDTOMapper, Result |
 | 8 | `GetUnreadNotificationCountHandler` | MMCA.Common.Application | 6 | GetUnreadNotificationCountQuery, IQueryableExecutor, IQueryHandler<in TQuery, TResult>, IUnitOfWork, Result, UserNotification |
 | 8 | `INavigationDescriptor<in TEntity>` | MMCA.Common.Application | 1 | IUnitOfWork |
 | 8 | `MarkAllNotificationsReadHandler` | MMCA.Common.Application | 6 | ICommandHandler<in TCommand, TResult>, IQueryableExecutor, IUnitOfWork, MarkAllNotificationsReadCommand, Result, UserNotification |
@@ -2263,45 +2285,46 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 8 | `UIArchitectureConventionTests` | MMCA.Common.Architecture.Tests | 3 | CommonArchitectureMap, IArchitectureMap, UIArchitectureConventionTestsBase |
 | 8 | `ApplicationDbContextEFFactory` | MMCA.Common.Infrastructure | 6 | ApplicationDbContext, CosmosDbContext, DataSource, IDbContextFactory, SqliteDbContext, SQLServerDbContext |
 | 8 | `BrokerEventBus` | MMCA.Common.Infrastructure | 7 | IDataSourceResolver, IDbContextFactory, IEventBus, IIntegrationEvent, IOutboxSignal, OutboxMessage, OutboxSettings |
+| 8 | `CurrentUserService` | MMCA.Common.Infrastructure | 2 | ICurrentUserService, User |
 | 8 | `DbContextFactory` | MMCA.Common.Infrastructure | 13 | ApplicationDbContext, CosmosDbContext, DataSource, DataSourceKey, DomainEventSaveChangesInterceptor, ICurrentUserService, IDataSourceResolver, IDbContextFactory, IdentityInsertGroup, IEntityDataSourceRegistry, IPhysicalDbContextFactory, Result, SQLServerDbContext |
 | 8 | `DefaultCosmosDbContextFactory` | MMCA.Common.Infrastructure | 5 | CosmosDbContext, DataSource, DataSourceKey, IDbContextFactory, IPhysicalDbContextFactory |
 | 8 | `DefaultSqliteDbContextFactory` | MMCA.Common.Infrastructure | 5 | DataSource, DataSourceKey, IDbContextFactory, IPhysicalDbContextFactory, SqliteDbContext |
 | 8 | `DefaultSqlServerDbContextFactory` | MMCA.Common.Infrastructure | 5 | DataSource, DataSourceKey, IDbContextFactory, IPhysicalDbContextFactory, SQLServerDbContext |
 | 8 | `DesignTimeDbContextHelper` | MMCA.Common.Infrastructure | 17 | AuditSaveChangesInterceptor, DataSource, DataSourceKey, DataSourceResolver, DataSourcesSettings, DesignTimeDbContextOptions, DomainEventSaveChangesInterceptor, EntityDataSourceRegistry, ExplicitAssemblyProvider, IDataSourceResolver, IDomainEventDispatcher, IEntityConfigurationAssemblyProvider, IEntityDataSourceRegistry, IOutboxSignal, NullDomainEventDispatcher, OutboxSignal, SQLServerDbContext |
 | 8 | `EfInboxStore` | MMCA.Common.Infrastructure | 6 | ApplicationDbContext, IDataSourceResolver, IDbContextFactory, IInboxStore, InboxMessage, OutboxSettings |
+| 8 | `EFRepository<TEntity, TIdentifierType>` | MMCA.Common.Infrastructure | 8 | AuditableBaseEntity<TIdentifierType>, EFReadRepository<TEntity, TIdentifierType>, IAuditableEntity, ICurrentUserService, IRepository<TEntity, TIdentifierType>, IRowVersioned, IUpdatePropertySetter<TEntity>, UpdatePropertySetterBuilder<TEntity> |
 | 8 | `InProcessEventBus` | MMCA.Common.Infrastructure | 8 | IDataSourceResolver, IDbContextFactory, IDomainEventDispatcher, IEventBus, IIntegrationEvent, OutboxFinalizer, OutboxMessage, OutboxSettings |
 | 8 | `OutboxCleanupService` | MMCA.Common.Infrastructure | 9 | DataSource, DataSourceKey, IDataSourceResolver, IDbContextFactory, IEntityDataSourceRegistry, InboxMessage, MessageBusSettings, OutboxMessage, OutboxSettings |
 | 8 | `OutboxProcessor` | MMCA.Common.Infrastructure | 13 | ApplicationDbContext, DataSource, DataSourceKey, IDataSourceResolver, IDbContextFactory, IDomainEventDispatcher, IEntityDataSourceRegistry, IIntegrationEvent, IMessageBus, IOutboxSignal, OutboxCycleResult, OutboxMessage, OutboxSettings |
 | 8 | `PhysicalDbContextFactory` | MMCA.Common.Infrastructure | 9 | ApplicationDbContext, CosmosDbContext, DataSource, DataSourceKey, IDataSourceResolver, IEntityConfigurationAssemblyProvider, IPhysicalDbContextFactory, SqliteDbContext, SQLServerDbContext |
-| 8 | `PushNotificationConfiguration` | MMCA.Common.Infrastructure | 2 | EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>, PushNotification |
-| 8 | `RepositoryFactory` | MMCA.Common.Infrastructure | 10 | AuditableAggregateRootEntity<TIdentifierType>, AuditableBaseEntity<TIdentifierType>, EFReadRepository<TEntity, TIdentifierType>, EFReadRepositoryDecorator<TEntity, TIdentifierType>, EFRepository<TEntity, TIdentifierType>, EFRepositoryDecorator<TEntity, TIdentifierType>, IApplicationSettings, IReadRepository<TEntity, TIdentifierType>, IRepository<TEntity, TIdentifierType>, IRepositoryFactory |
+| 8 | `PushNotificationConfiguration` | MMCA.Common.Infrastructure | 3 | EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>, PushNotification, PushNotificationInvariants |
 | 8 | `UnitOfWork` | MMCA.Common.Infrastructure | 8 | AuditableAggregateRootEntity<TIdentifierType>, AuditableBaseEntity<TIdentifierType>, IDataSourceService, IDbContextFactory, IReadRepository<TEntity, TIdentifierType>, IRepository<TEntity, TIdentifierType>, IRepositoryFactory, IUnitOfWork |
 | 8 | `UserNotificationConfiguration` | MMCA.Common.Infrastructure | 2 | EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>, UserNotification |
 | 8 | `ApplicationDbContextTests` | MMCA.Common.Infrastructure.Tests | 4 | ApplicationDbContext, DataSource, TestApplicationDbContext, TestEntity |
 | 8 | `AuditSaveChangesInterceptorTests` | MMCA.Common.Infrastructure.Tests | 4 | AuditSaveChangesInterceptor, FakeTimeProvider, TestAuditDbContext, TestAuditEntity |
 | 8 | `ClaimBasedUserIdProviderTests` | MMCA.Common.Infrastructure.Tests | 2 | ClaimBasedUserIdProvider, TestConnectionContext |
 | 8 | `CrossDataSourceDegradeConventionTests` | MMCA.Common.Infrastructure.Tests | 14 | AuditSaveChangesInterceptor, DataSource, DataSourceKey, DataSourceModelCacheKeyFactory, DegradeCustomer, DegradeOrder, DegradeTestContext, DomainEventSaveChangesInterceptor, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, MapRegistry, OutboxSignal, PhysicalDataSource |
-| 8 | `CurrentUserServiceAdditionalTests` | MMCA.Common.Infrastructure.Tests | 2 | CurrentUserService, User |
-| 8 | `CurrentUserServiceTests` | MMCA.Common.Infrastructure.Tests | 2 | CurrentUserService, User |
 | 8 | `DependencyInjectionAdditionalTests` | MMCA.Common.Infrastructure.Tests | 6 | EntityConfigurationOptions, IDataSourceService, IDbContextFactory, IQueryableExecutor, IRepositoryFactory, IUnitOfWork |
 | 8 | `DesignAlphaEntityConfiguration` | MMCA.Common.Infrastructure.Tests | 2 | DesignAlphaEntity, EntityTypeConfigurationSQLServer<TEntity, TIdentifierType> |
 | 8 | `DesignBetaEntityConfiguration` | MMCA.Common.Infrastructure.Tests | 2 | DesignBetaEntity, EntityTypeConfigurationSQLServer<TEntity, TIdentifierType> |
 | 8 | `DomainEventSaveChangesInterceptorOutboxRoutingTests` | MMCA.Common.Infrastructure.Tests | 9 | DomainEventSaveChangesInterceptor, IDomainEvent, IDomainEventDispatcher, IOutboxSignal, OutboxMessage, OutboxRoutingTestDbContext, TestAggregate, TestIntegrationEvent, TestLocalEvent |
 | 8 | `DomainEventSaveChangesInterceptorTests` | MMCA.Common.Infrastructure.Tests | 7 | DomainEventSaveChangesInterceptor, IDomainEvent, IDomainEventDispatcher, IOutboxSignal, TestAggregate, TestDomainEvent, TestDomainEventDbContext |
-| 8 | `EFRepositoryAdditionalTests` | MMCA.Common.Infrastructure.Tests | 3 | EFRepository<TEntity, TIdentifierType>, TestDbContext, TestEntity |
 | 8 | `EFRepositoryDecoratorAdditionalTests` | MMCA.Common.Infrastructure.Tests | 3 | EFRepositoryDecorator<TEntity, TIdentifierType>, FakeAggregateEntity, IRepository<TEntity, TIdentifierType> |
 | 8 | `EFRepositoryDecoratorTests` | MMCA.Common.Infrastructure.Tests | 3 | EFRepositoryDecorator<TEntity, TIdentifierType>, FakeAggregateEntity, IRepository<TEntity, TIdentifierType> |
-| 8 | `EFRepositoryIntegrationTests` | MMCA.Common.Infrastructure.Tests | 5 | EFReadRepository<TEntity, TIdentifierType>, EFRepository<TEntity, TIdentifierType>, TestChildEntity, TestDbContext, TestEntity |
 | 8 | `EntityTypeConfigurationBaseTests` | MMCA.Common.Infrastructure.Tests | 6 | TestAggregateEntity, TestAggregateEntityConfiguration, TestConfigDbContext, TestNonAggregateConfigDbContext, TestNonAggregateEntity, TestNonAggregateEntityConfiguration |
 | 8 | `Mocks` | MMCA.Common.Infrastructure.Tests | 4 | IDataSourceResolver, IDbContextFactory, IDomainEventDispatcher, IOutboxSignal |
 | 8 | `MultiSourceCustomerConfiguration` | MMCA.Common.Infrastructure.Tests | 2 | EntityTypeConfigurationSqlite<TEntity, TIdentifierType>, MultiSourceCustomer |
 | 8 | `MultiSourceOrderConfiguration` | MMCA.Common.Infrastructure.Tests | 2 | EntityTypeConfigurationSqlite<TEntity, TIdentifierType>, MultiSourceOrder |
+| 8 | `NullUserService` | MMCA.Common.Infrastructure.Tests | 1 | ICurrentUserService |
 | 8 | `PortablePrincipalConfiguration` | MMCA.Common.Infrastructure.Tests | 2 | EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>, PortablePrincipal |
+| 8 | `QueryParameterizationTests` | MMCA.Common.Infrastructure.Tests | 3 | QueryFieldService, QueryFilterService, QueryShapeTestDbContext |
 | 8 | `RegistryDuplicateConfigurationA` | MMCA.Common.Infrastructure.Tests | 2 | EntityTypeConfigurationSqlite<TEntity, TIdentifierType>, RegistryDuplicate |
 | 8 | `RegistryDuplicateConfigurationB` | MMCA.Common.Infrastructure.Tests | 2 | EntityTypeConfigurationSqlite<TEntity, TIdentifierType>, RegistryDuplicate |
 | 8 | `RegistryInvoiceConfiguration` | MMCA.Common.Infrastructure.Tests | 2 | EntityTypeConfigurationSqlite<TEntity, TIdentifierType>, RegistryInvoice |
 | 8 | `RegistryOrderConfiguration` | MMCA.Common.Infrastructure.Tests | 2 | EntityTypeConfigurationSqlite<TEntity, TIdentifierType>, RegistryOrder |
 | 8 | `RegistrySqlServerEntityConfiguration` | MMCA.Common.Infrastructure.Tests | 2 | EntityTypeConfigurationSQLServer<TEntity, TIdentifierType>, RegistrySqlServerEntity |
+| 8 | `RoleOnlyService` | MMCA.Common.Infrastructure.Tests | 1 | ICurrentUserService |
+| 8 | `SaveChangeDetectionTests` | MMCA.Common.Infrastructure.Tests | 2 | DetectionTestDbContext, Widget |
 | 8 | `SoftDeleteQueryFilterTests` | MMCA.Common.Infrastructure.Tests | 2 | SoftDeletableEntity, SoftDeleteTestDbContext |
 | 8 | `SoftDeleteUniqueIndexConventionTests` | MMCA.Common.Infrastructure.Tests | 3 | FilteredIndexEntity, UniqueIndexTestDbContext, UniqueNamedEntity |
 | 8 | `SqliteTestEntityConfig` | MMCA.Common.Infrastructure.Tests | 2 | EntityTypeConfigurationSqlite<TEntity, TIdentifierType>, SqliteTestEntity |
@@ -2309,18 +2332,21 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 9 | `AdcArchitectureMap` | MMCA.ADC.Architecture.Tests | 17 | ApiControllerBase, ApplicationDbContext, ArchitectureMapBase, BaseEntity<TIdentifierType>, ConferenceModule, EngagementModule, EntityQueryService<TEntity, TEntityDTO, TIdentifierType>, Event, EventDTO, IdentityModule, Layer, LayerRef, Result, User, UserDTO, UserSessionBookmark, UserSessionBookmarkDTO |
 | 9 | `ConferenceModuleSeeder` | MMCA.ADC.Conference.API | 3 | ConferenceModuleDbSeeder, IModuleSeeder, IUnitOfWork |
 | 9 | `ConferenceCategoriesControllerTests` | MMCA.ADC.Conference.API.Tests | 11 | Category, ConferenceCategoriesController, ConferenceCategoryCreateRequest, ConferenceCategoryDTO, ConferenceCategoryUpdateRequest, DeleteEntityCommand<TEntity, TIdentifierType>, Error, ICommandHandler<in TCommand, TResult>, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, Result, UpdateConferenceCategoryCommand |
+| 9 | `EventQuestionAnswersControllerTests` | MMCA.ADC.Conference.API.Tests | 17 | AddEventQuestionAnswerCommand, AddEventQuestionAnswerRequest, CollectionResult<T>, Error, EventQuestionAnswer, EventQuestionAnswerDTO, EventQuestionAnswersController, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, PagedCollectionResult<T>, PaginationMetadata, RemoveEventQuestionAnswerCommand, Result, Specification<TEntity, TIdentifierType>, UpdateEventQuestionAnswerCommand, UpdateEventQuestionAnswerRequest |
 | 9 | `EventsControllerTests` | MMCA.ADC.Conference.API.Tests | 26 | CollectionResult<T>, DeleteEntityCommand<TEntity, TIdentifierType>, Error, ErrorType, Event, EventCreateRequest, EventDTO, EventsController, EventUpdateRequest, ExportEventCalendarQuery, GetNowNextQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, IQueryHandler<in TQuery, TResult>, NowNextDTO, PagedCollectionResult<T>, PaginationMetadata, PublishEventCommand, RefreshFromSessionizeCommand …(+6) |
 | 9 | `QuestionsControllerTests` | MMCA.ADC.Conference.API.Tests | 11 | DeleteEntityCommand<TEntity, TIdentifierType>, Error, ICommandHandler<in TCommand, TResult>, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, Question, QuestionCreateRequest, QuestionDTO, QuestionsController, QuestionUpdateRequest, Result, UpdateQuestionCommand |
 | 9 | `SessionCategoryItemsControllerTests` | MMCA.ADC.Conference.API.Tests | 10 | AddSessionCategoryItemCommand, AddSessionCategoryItemRequest, Error, ICommandHandler<in TCommand, TResult>, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, RemoveSessionCategoryItemCommand, Result, SessionCategoryItem, SessionCategoryItemDTO, SessionCategoryItemsController |
 | 9 | `SessionQuestionAnswersControllerTests` | MMCA.ADC.Conference.API.Tests | 17 | AddSessionQuestionAnswerCommand, AddSessionQuestionAnswerRequest, CollectionResult<T>, Error, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, PagedCollectionResult<T>, PaginationMetadata, RemoveSessionQuestionAnswerCommand, Result, SessionQuestionAnswer, SessionQuestionAnswerDTO, SessionQuestionAnswersController, Specification<TEntity, TIdentifierType>, UpdateSessionQuestionAnswerCommand, UpdateSessionQuestionAnswerRequest |
-| 9 | `SessionsControllerTests` | MMCA.ADC.Conference.API.Tests | 22 | CollectionResult<T>, DeleteEntityCommand<TEntity, TIdentifierType>, Error, Event, EventDTO, ExportSessionCalendarQuery, GetPublicSessionFilterQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, IQueryHandler<in TQuery, TResult>, PagedCollectionResult<T>, PaginationMetadata, Result, Session, SessionCreateRequest, SessionDTO, SessionsController, SessionUpdateRequest, Specification<TEntity, TIdentifierType> …(+2) |
+| 9 | `SessionsControllerTests` | MMCA.ADC.Conference.API.Tests | 23 | CollectionResult<T>, DeleteEntityCommand<TEntity, TIdentifierType>, Error, Event, EventDTO, ExportSessionCalendarQuery, GetPublicSessionFilterQuery, GetSessionsBySpeakerFilterQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, IQueryHandler<in TQuery, TResult>, PagedCollectionResult<T>, PaginationMetadata, Result, Session, SessionCreateRequest, SessionDTO, SessionsController, SessionUpdateRequest …(+3) |
 | 9 | `SessionSpeakersControllerTests` | MMCA.ADC.Conference.API.Tests | 10 | AddSessionSpeakerCommand, AddSessionSpeakerRequest, Error, ICommandHandler<in TCommand, TResult>, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, RemoveSessionSpeakerCommand, Result, SessionSpeaker, SessionSpeakerDTO, SessionSpeakersController |
 | 9 | `SpeakersControllerTests` | MMCA.ADC.Conference.API.Tests | 24 | DeleteEntityCommand<TEntity, TIdentifierType>, Error, GetSessionBookmarkCountQuery, GetSessionBookmarkCountsQuery, GetSessionFeedbackQuery, GetSpeakersByEventFilterQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, InlineSpecification<TEntity, TIdentifierType>, IQueryHandler<in TQuery, TResult>, LinkUserRequest, LinkUserToSpeakerCommand, PagedCollectionResult<T>, Result, SessionFeedbackDTO, Speaker, SpeakerCreateRequest, SpeakerDTO, SpeakersController …(+4) |
 | 9 | `CreateSessionHandler` | MMCA.ADC.Conference.Application | 11 | Error, ICommandHandler<in TCommand, TResult>, IEntityRequestMapper<TEntity, TCreateRequest, TIdentifierType>, IUnitOfWork, Result, Session, SessionCreateRequest, SessionDTO, SessionDTOMapper, SessionInvariants, SessionRoomScheduling |
+| 9 | `CreateSpeakerHandler` | MMCA.ADC.Conference.Application | 8 | ICommandHandler<in TCommand, TResult>, IEntityRequestMapper<TEntity, TCreateRequest, TIdentifierType>, IUnitOfWork, Result, Speaker, SpeakerCreateRequest, SpeakerDTO, SpeakerDTOMapper |
 | 9 | `GetPublicSessionFilterHandler` | MMCA.ADC.Conference.Application | 9 | CrossSourceSpecification, Event, GetPublicSessionFilterQuery, IQueryHandler<in TQuery, TResult>, IUnitOfWork, Result, Session, SessionStatuses, Specification<TEntity, TIdentifierType> |
 | 9 | `ISessionizeSyncStrategy` | MMCA.ADC.Conference.Application | 2 | SessionizeSyncContext, SessionizeSyncResult |
 | 9 | `SpeakerEntityQueryService` | MMCA.ADC.Conference.Application | 8 | EntityQueryService<TEntity, TEntityDTO, TIdentifierType>, IEntityQueryPipeline, INavigationMetadataProvider, INavigationPopulator<in TEntity>, IUnitOfWork, Speaker, SpeakerDTO, SpeakerDTOMapper |
 | 9 | `UpdateSessionHandler` | MMCA.ADC.Conference.Application | 11 | Error, Event, ICommandHandler<in TCommand, TResult>, IRepository<TEntity, TIdentifierType>, IUnitOfWork, Result, Session, SessionDTOMapper, SessionRoomScheduling, UpdateSessionCommand, UpdateSessionResult |
+| 9 | `UpdateSpeakerHandler` | MMCA.ADC.Conference.Application | 8 | Error, ICommandHandler<in TCommand, TResult>, IUnitOfWork, Result, Speaker, SpeakerDTO, SpeakerDTOMapper, UpdateSpeakerCommand |
 | 9 | `AddSessionCategoryItemCommandValidatorTests` | MMCA.ADC.Conference.Application.Tests | 2 | AddSessionCategoryItemCommand, AddSessionCategoryItemCommandValidator |
 | 9 | `AddSessionQuestionAnswerCommandValidatorTests` | MMCA.ADC.Conference.Application.Tests | 2 | AddSessionQuestionAnswerCommand, AddSessionQuestionAnswerCommandValidator |
 | 9 | `AddSessionSpeakerCommandValidatorTests` | MMCA.ADC.Conference.Application.Tests | 2 | AddSessionSpeakerCommand, AddSessionSpeakerCommandValidator |
@@ -2332,6 +2358,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 9 | `GetSessionFeedbackHandlerTests` | MMCA.ADC.Conference.Application.Tests | 9 | ErrorType, GetSessionFeedbackHandler, GetSessionFeedbackQuery, IRepository<TEntity, TIdentifierType>, IUnitOfWork, Question, Result, Session, SessionFeedbackDTO |
 | 9 | `SessionCreateRequestValidatorTests` | MMCA.ADC.Conference.Application.Tests | 3 | SessionCreateRequest, SessionCreateRequestValidator, SessionInvariants |
 | 9 | `SessionDTOMapperTests` | MMCA.ADC.Conference.Application.Tests | 6 | Event, Session, SessionCategoryItemDTOMapper, SessionDTOMapper, SessionQuestionAnswerDTOMapper, SessionSpeakerDTOMapper |
+| 9 | `SpeakerDTOMapperTests` | MMCA.ADC.Conference.Application.Tests | 5 | ICurrentUserService, Speaker, SpeakerCategoryItemDTOMapper, SpeakerDTOMapper, SpeakerQuestionAnswerDTOMapper |
 | 9 | `EventLiveValidationServiceGrpcAdapter` | MMCA.ADC.Conference.Contracts | 8 | Error, EventLiveInfo, EventLiveValidationService, GrpcErrorTrailerParser, IEventLiveValidationService, QuestionModerationDefault, Result, SessionLiveInfo |
 | 9 | `SessionBookmarkValidationServiceGrpcAdapter` | MMCA.ADC.Conference.Contracts | 5 | Error, GrpcErrorTrailerParser, ISessionBookmarkValidationService, Result, SessionBookmarkValidationService |
 | 9 | `EventCascadeDeletionDomainServiceTests` | MMCA.ADC.Conference.Domain.Tests | 3 | Event, EventCascadeDeletionDomainService, Session |
@@ -2341,12 +2368,16 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 9 | `SessionBookmarksGrpcService` | MMCA.ADC.Conference.Service | 2 | ISessionBookmarkValidationService, SessionBookmarkValidationService |
 | 9 | `PublicSessionListEventFilterTests` | MMCA.ADC.Conference.UI.Tests | 11 | BunitTestBase, Event, EventDTO, IEventUIService, ISessionUIService, ISpeakerLookupService, ListPageQueryStateService, ListPageStateService, PublicSessionList, SpeakerInfo, TestPrincipal |
 | 9 | `SessionListEventFilterTests` | MMCA.ADC.Conference.UI.Tests | 11 | BunitTestBase, Event, EventDTO, IEventUIService, ISessionUIService, ISpeakerLookupService, ListPageQueryStateService, ListPageStateService, SessionList, SpeakerInfo, TestPrincipal |
-| 9 | `CastVoteHandler` | MMCA.ADC.Engagement.Application | 13 | CastVoteCommand, Error, ICommandHandler<in TCommand, TResult>, ILiveChannelPublishQueue, IRepository<TEntity, TIdentifierType>, IUnitOfWork, LiveChannelPublishWorkItem, LivePoll, LivePollChannel, LivePollResultsBuilder, LivePollResultsDTO, LivePollVote, Result |
+| 9 | `LivePollsControllerTests` | MMCA.ADC.Engagement.API.Tests | 22 | CastVoteCommand, CastVoteRequest, CloseLivePollCommand, ControllerMocks, CreateLivePollCommand, CreateLivePollRequest, DeleteEntityCommand<TEntity, TIdentifierType>, Error, GetEventPollsQuery, GetOpenPollsQuery, GetPollResultsQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IQueryHandler<in TQuery, TResult>, LivePoll, LivePollDTO, LivePollResultsDTO, LivePollsController, LivePollStatus, OpenLivePollCommand …(+2) |
+| 9 | `SessionQuestionsControllerTests` | MMCA.ADC.Engagement.API.Tests | 16 | ControllerMocks, Error, GetModerationQueueQuery, GetSessionQuestionsQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IQueryHandler<in TQuery, TResult>, ModerateQuestionCommand, ModerationAction, QuestionStatus, Result, SessionQuestionDTO, SessionQuestionsController, SubmitQuestionCommand, SubmitQuestionRequest, ToggleUpvoteCommand |
+| 9 | `CastVoteHandler` | MMCA.ADC.Engagement.Application | 10 | CastVoteCommand, Error, ICommandHandler<in TCommand, TResult>, IRepository<TEntity, TIdentifierType>, IUnitOfWork, LivePoll, LivePollResultsBuilder, LivePollResultsDTO, LivePollVote, Result |
 | 9 | `GetModerationQueueHandler` | MMCA.ADC.Engagement.Application | 10 | GetModerationQueueQuery, IEventLiveValidationService, IQueryableExecutor, IQueryHandler<in TQuery, TResult>, IUnitOfWork, LivePollAuthorization, Result, SessionQuestion, SessionQuestionDTO, SessionQuestionViewBuilder |
 | 9 | `GetOpenPollsHandler` | MMCA.ADC.Engagement.Application | 9 | Error, GetOpenPollsQuery, IQueryHandler<in TQuery, TResult>, IUnitOfWork, LivePoll, LivePollResultsBuilder, LivePollResultsDTO, LivePollStatus, Result |
 | 9 | `GetPollResultsHandler` | MMCA.ADC.Engagement.Application | 8 | Error, GetPollResultsQuery, IQueryHandler<in TQuery, TResult>, IUnitOfWork, LivePoll, LivePollResultsBuilder, LivePollResultsDTO, Result |
 | 9 | `GetSessionQuestionsHandler` | MMCA.ADC.Engagement.Application | 9 | GetSessionQuestionsQuery, IQueryableExecutor, IQueryHandler<in TQuery, TResult>, IUnitOfWork, QuestionStatus, Result, SessionQuestion, SessionQuestionDTO, SessionQuestionViewBuilder |
+| 9 | `LivePollVoteChangedHandler` | MMCA.ADC.Engagement.Application | 8 | IDomainEventHandler<in TDomainEvent>, ILiveChannelPublishQueue, IUnitOfWork, LiveChannelPublishWorkItem, LivePoll, LivePollChannel, LivePollResultsBuilder, LivePollVoteChanged |
 | 9 | `SubmitQuestionHandler` | MMCA.ADC.Engagement.Application | 17 | Error, ICommandHandler<in TCommand, TResult>, IEventLiveValidationService, ILiveChannelPublisher, IUnitOfWork, LivePollChannel, QuestionModerationDefault, QuestionStatus, Result, SessionQuestion, SessionQuestionApprovedPayload, SessionQuestionChannel, SessionQuestionDTO, SessionQuestionInvariants, SessionQuestionPendingCountChangedPayload, SessionQuestionViewBuilder, SubmitQuestionCommand |
+| 9 | `LivePollResultsBuilderTests` | MMCA.ADC.Engagement.Application.Tests | 6 | InMemoryQueryableExecutor, IReadRepository<TEntity, TIdentifierType>, IUnitOfWork, LivePoll, LivePollResultsBuilder, LivePollVote |
 | 9 | `BookmarkCountServiceGrpcAdapter` | MMCA.ADC.Engagement.Contracts | 2 | BookmarkCountService, IBookmarkCountService |
 | 9 | `UserEngagementExportServiceGrpcAdapter` | MMCA.ADC.Engagement.Contracts | 5 | IUserEngagementExportService, UserEngagementBookmarkExportDTO, UserEngagementExportDTO, UserEngagementExportService, UserEngagementSubmittedQuestionExportDTO |
 | 9 | `EngagementTestDbContext` | MMCA.ADC.Engagement.Infrastructure.Tests | 12 | LivePoll, LivePollConfiguration, LivePollOption, LivePollOptionConfiguration, LivePollVote, LivePollVoteConfiguration, SessionQuestion, SessionQuestionConfiguration, SessionQuestionUpvote, SessionQuestionUpvoteConfiguration, UserSessionBookmark, UserSessionBookmarkConfiguration |
@@ -2368,9 +2399,17 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 9 | `UserNotificationExportServiceGrpcAdapter` | MMCA.ADC.Notification.Contracts | 3 | IUserNotificationExportService, UserNotificationExportItemDTO, UserNotificationExportService |
 | 9 | `UserNotificationExportGrpcService` | MMCA.ADC.Notification.Service | 2 | IUserNotificationExportService, UserNotificationExportService |
 | 9 | `MauiProgram` | MMCA.ADC.UI | 17 | ADCHomePageContent, App, AppActionsInitializer, ConfigurationOAuthUISettings, DeviceUIModule, DirectApiTokenRefresher, IDeepLinkDispatcher, IHomePageContent, IOAuthUISettings, IPublicLinkBuilder, ITokenRefresher, ITokenStorageService, IUIModule, JwtAuthenticationStateProvider, MauiPublicLinkBuilder, MauiTokenStorageService, UIModuleConfiguration |
+| 9 | `DependencyInjection` | MMCA.Common.API | 1 | NotificationsController |
+| 9 | `OwnerOrAdminFilter` | MMCA.Common.API | 4 | AllowMissingOwnerAttribute, ICurrentUserService, OwnerOrAdminFilterOptions, OwnershipHelper |
+| 9 | `WebApplicationExtensions` | MMCA.Common.API | 4 | CorrelationIdMiddleware, SoftDeletedUserMiddleware, SupportedCultures, WebApplicationBuilderExtensions |
 | 9 | `AggregateRootEntityControllerBaseTests` | MMCA.Common.API.Tests | 11 | DeleteEntityCommand<TEntity, TIdentifierType>, EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>, Error, IApplicationSettings, ICommandHandler<in TCommand, TResult>, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, Result, TestAggDTO, TestAggregateEntity, TestAggregateRootController, TestCreateRequest |
 | 9 | `DatabaseInitializationExtensionsTests` | MMCA.Common.API.Tests | 23 | ApplicationSettings, AuditSaveChangesInterceptor, ConnectionStringSettings, DataSource, DataSourceEntrySettings, DataSourceResolver, DataSourcesSettings, DbContextFactory, DomainEventSaveChangesInterceptor, EntityDataSourceRegistry, FixedAssemblyProvider, ICurrentUserService, IDataSourceResolver, IDbContextFactory, IDomainEventDispatcher, IEntityConfigurationAssemblyProvider, IEntityDataSourceRegistry, InitTestWidget, IOutboxSignal, IPhysicalDbContextFactory …(+3) |
+| 9 | `DevicesControllerTests` | MMCA.Common.API.Tests | 6 | DeviceInstallationRequest, DevicesController, Error, ICurrentUserService, IPushDeviceRegistrar, Result |
 | 9 | `FixedAssemblyProvider` | MMCA.Common.API.Tests | 2 | DatabaseInitializationExtensionsTests, IEntityConfigurationAssemblyProvider |
+| 9 | `NotificationInboxControllerTests` | MMCA.Common.API.Tests | 13 | Error, GetMyNotificationsQuery, GetUnreadNotificationCountQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, InboxController, IQueryHandler<in TQuery, TResult>, MarkAllNotificationsReadCommand, MarkNotificationReadCommand, PagedCollectionResult<T>, PaginationMetadata, Result, UserNotificationDTO |
+| 9 | `NotificationsControllerTests` | MMCA.Common.API.Tests | 12 | Error, GetNotificationHistoryQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IQueryHandler<in TQuery, TResult>, NotificationsController, PagedCollectionResult<T>, PaginationMetadata, PushNotificationDTO, Result, SendPushNotificationCommand, SendPushNotificationRequest |
+| 9 | `OwnershipHelperTests` | MMCA.Common.API.Tests | 3 | ICurrentUserService, OwnershipHelper, TestOwnerSpecification |
+| 9 | `SoftDeletedUserMiddlewareTests` | MMCA.Common.API.Tests | 4 | ICacheService, ICurrentUserService, ISoftDeletedUserValidator, SoftDeletedUserMiddleware |
 | 9 | `ChildNavigationDescriptor<TEntity, TParentId, TChild, TChildId>` | MMCA.Common.Application | 4 | AuditableBaseEntity<TIdentifierType>, INavigationDescriptor<in TEntity>, IUnitOfWork, NavigationLoader |
 | 9 | `DeclarativeNavigationPopulator<TEntity>` | MMCA.Common.Application | 4 | INavigationDescriptor<in TEntity>, INavigationPopulator<in TEntity>, IUnitOfWork, NavigationMetadata |
 | 9 | `DependencyInjection` | MMCA.Common.Application | 27 | ApplicationSettings, CachingCommandDecorator<TCommand, TResult>, CachingQueryDecorator<TQuery, TResult>, ClassReference, CommandRequestValidator<TCommand, TRequest>, DomainEventDispatcher, EntityQueryPipeline, FeatureGateCommandDecorator<TCommand, TResult>, FeatureGateQueryDecorator<TQuery, TResult>, IApplicationSettings, ICommandHandler<in TCommand, TResult>, ICommandWithRequest<out TRequest>, IDomainEventDispatcher, IDomainEventHandler<in TDomainEvent>, IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>, IEntityQueryPipeline, IEntityRequestMapper<TEntity, TCreateRequest, TIdentifierType>, IIntegrationEventHandler<in TIntegrationEvent>, INavigationMetadataProvider, IQueryHandler<in TQuery, TResult> …(+7) |
@@ -2389,27 +2428,27 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 9 | `TestableEntityQueryService` | MMCA.Common.Application.Tests | 8 | EntityQueryService<TEntity, TEntityDTO, TIdentifierType>, FakeEntity, FakeEntityDTO, IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>, IEntityQueryPipeline, INavigationMetadataProvider, INavigationPopulator<in TEntity>, IUnitOfWork |
 | 9 | `TestAuthenticationService` | MMCA.Common.Application.Tests | 10 | AuthenticationServiceBase<TUser>, AuthenticationValidators, Email, ILoginProtectionService, IPasswordHasher, ITokenService, IUnitOfWork, RegisterRequest, Result, TestAuthUser |
 | 9 | `TransactionalCommandDecoratorTests` | MMCA.Common.Application.Tests | 6 | ICommandHandler<in TCommand, TResult>, IUnitOfWork, NonTransactionalCommand, Result, TransactionalCommand, TransactionalCommandDecorator<TCommand, TResult> |
-| 9 | `DependencyInjection` | MMCA.Common.Infrastructure | 101 | ApplicationDbContext, ApplicationDbContextEFFactory, AuditSaveChangesInterceptor, AzureBlobFileStorageService, AzureNotificationHubDeviceRegistrar, AzureNotificationHubNativePushSender, BrokerEventBus, BrokerMessageBus, ClaimBasedUserIdProvider, ClassReference, ConnectionStringSettings, CorrelationContext, CosmosDbContext, CurrentUserService, DataSourceEntrySettings, DataSourceResolver, DataSourceService, DataSourcesSettings, DbContextFactory, DefaultCosmosDbContextFactory …(+81) |
+| 9 | `RepositoryFactory` | MMCA.Common.Infrastructure | 10 | AuditableAggregateRootEntity<TIdentifierType>, AuditableBaseEntity<TIdentifierType>, EFReadRepository<TEntity, TIdentifierType>, EFReadRepositoryDecorator<TEntity, TIdentifierType>, EFRepository<TEntity, TIdentifierType>, EFRepositoryDecorator<TEntity, TIdentifierType>, IApplicationSettings, IReadRepository<TEntity, TIdentifierType>, IRepository<TEntity, TIdentifierType>, IRepositoryFactory |
 | 9 | `ApplicationDbContextEFFactoryTests` | MMCA.Common.Infrastructure.Tests | 5 | ApplicationDbContextEFFactory, CosmosDbContext, IDbContextFactory, SqliteDbContext, SQLServerDbContext |
 | 9 | `BrokerEventBusTests` | MMCA.Common.Infrastructure.Tests | 19 | ApplicationDbContext, AuditSaveChangesInterceptor, BrokerEventBus, DataSource, DataSourceKey, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, IDataSourceResolver, IDbContextFactory, IDomainEventDispatcher, IEntityDataSourceRegistry, IIntegrationEvent, IOutboxSignal, Mocks, OutboxMessage, OutboxSettings, TestIntegrationEvent, TestNonOutboxContext, TestOutboxContext |
 | 9 | `BrokerMessageBusTests` | MMCA.Common.Infrastructure.Tests | 5 | BrokerMessageBus, IIntegrationEvent, Mocks, OtherIntegrationEvent, TestIntegrationEvent |
-| 9 | `CosmosConfigurationPortabilityTests` | MMCA.Common.Infrastructure.Tests | 17 | AuditSaveChangesInterceptor, ConnectionStringSettings, DataSource, DataSourceEntrySettings, DataSourceResolver, DataSourcesSettings, DomainEventSaveChangesInterceptor, EntityDataSourceRegistry, FixedAssemblyProvider, IDataSourceResolver, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, OutboxSignal, PhysicalDbContextFactory, PortablePrincipal, PortableThing |
-| 9 | `DbContextFactoryAdditionalTests` | MMCA.Common.Infrastructure.Tests | 6 | DataSource, DbContextFactory, ICurrentUserService, IDataSourceResolver, IEntityDataSourceRegistry, IPhysicalDbContextFactory |
+| 9 | `CurrentUserServiceAdditionalTests` | MMCA.Common.Infrastructure.Tests | 2 | CurrentUserService, User |
+| 9 | `CurrentUserServiceTests` | MMCA.Common.Infrastructure.Tests | 5 | CurrentUserService, ICurrentUserService, NullUserService, RoleOnlyService, User |
+| 9 | `DbContextFactoryAdditionalTests` | MMCA.Common.Infrastructure.Tests | 8 | DataSource, DataSourceKey, DbContextFactory, ICurrentUserService, IDataSourceResolver, IEntityDataSourceRegistry, IPhysicalDbContextFactory, MidSaveContextCreatingDbContext |
 | 9 | `DbContextFactoryTests` | MMCA.Common.Infrastructure.Tests | 8 | ApplicationDbContext, DataSource, DataSourceKey, DbContextFactory, ICurrentUserService, IDataSourceResolver, IEntityDataSourceRegistry, IPhysicalDbContextFactory |
 | 9 | `DbContextFactoryTransactionTests` | MMCA.Common.Infrastructure.Tests | 15 | DataSource, DataSourceKey, DbContextFactory, Error, ICurrentUserService, IDataSourceResolver, IDomainEvent, IDomainEventDispatcher, IEntityDataSourceRegistry, IPhysicalDbContextFactory, OutboxMessage, Result, TestAggregate, TestLocalEvent, TransactionTestDbContext |
 | 9 | `DependencyInjectionInfrastructureTests` | MMCA.Common.Infrastructure.Tests | 16 | AuditSaveChangesInterceptor, ConnectionStringSettings, DomainEventSaveChangesInterceptor, EntityConfigurationOptions, IConnectionStringSettings, IDataSourceService, IEntityConfigurationAssemblyProvider, IJwtSettings, IQueryableExecutor, IRepository<TEntity, TIdentifierType>, IRepositoryFactory, ISmtpSettings, IUnitOfWork, OutboxProcessor, OutboxSettings, SmtpSettings |
 | 9 | `DependencyInjectionTests` | MMCA.Common.Infrastructure.Tests | 20 | CorrelationContext, CurrentUserService, DistributedCacheService, EntityConfigurationOptions, ICacheService, ICorrelationContext, ICurrentUserService, IEmailSender, IEventBus, ILiveChannelPublisher, InProcessEventBus, IPasswordHasher, IPushNotificationSender, ITokenService, MemoryCacheService, NullLiveChannelPublisher, NullPushNotificationSender, PasswordHasher, SmtpEmailSender, TokenService |
 | 9 | `DesignTimeDbContextHelperTests` | MMCA.Common.Infrastructure.Tests | 8 | ConnectionStringSettings, DataSource, DataSourceEntrySettings, DataSourceKey, DesignAlphaEntity, DesignBetaEntity, DesignTimeDbContextHelper, DesignTimeDbContextOptions |
 | 9 | `EfInboxStoreTests` | MMCA.Common.Infrastructure.Tests | 16 | ApplicationDbContext, AuditSaveChangesInterceptor, DataSource, DataSourceKey, DomainEventSaveChangesInterceptor, EfInboxStore, EmptyEntityDataSourceRegistry, IDataSourceResolver, IDbContextFactory, IDomainEventDispatcher, IEntityConfigurationAssemblyProvider, IEntityDataSourceRegistry, InboxMessage, InboxTestDbContext, IOutboxSignal, OutboxSettings |
-| 9 | `FixedAssemblyProvider` | MMCA.Common.Infrastructure.Tests | 3 | CosmosConfigurationPortabilityTests, IEntityConfigurationAssemblyProvider, MultiSourceSqliteIntegrationTests |
+| 9 | `EFRepositoryAdditionalTests` | MMCA.Common.Infrastructure.Tests | 3 | EFRepository<TEntity, TIdentifierType>, TestDbContext, TestEntity |
+| 9 | `EFRepositoryIntegrationTests` | MMCA.Common.Infrastructure.Tests | 7 | EFReadRepository<TEntity, TIdentifierType>, EFRepository<TEntity, TIdentifierType>, FakeTimeProvider, ICurrentUserService, TestChildEntity, TestDbContext, TestEntity |
 | 9 | `InProcessEventBusOutboxTests` | MMCA.Common.Infrastructure.Tests | 11 | DataSource, DataSourceKey, IDataSourceResolver, IDbContextFactory, IDomainEvent, IDomainEventDispatcher, InProcessEventBus, OutboxMessage, OutboxSettings, TestIntegrationEvent, TestOutboxContext |
 | 9 | `InProcessEventBusTests` | MMCA.Common.Infrastructure.Tests | 10 | DataSource, DataSourceKey, IDataSourceResolver, IDbContextFactory, IDomainEvent, IDomainEventDispatcher, IIntegrationEvent, InProcessEventBus, OutboxSettings, TestNonOutboxContext |
 | 9 | `InProcessMessageBusTests` | MMCA.Common.Infrastructure.Tests | 11 | DomainEventDispatcher, IDomainEvent, IDomainEventDispatcher, IDomainEventHandler<in TDomainEvent>, IIntegrationEvent, IIntegrationEventHandler<in TIntegrationEvent>, InProcessMessageBus, Mocks, RecordingDomainHandler, RecordingIntegrationHandler, TestIntegrationEvent |
 | 9 | `Mocks` | MMCA.Common.Infrastructure.Tests | 6 | IDataSourceResolver, IDataSourceService, IDbContextFactory, IEntityDataSourceRegistry, IRepositoryFactory, OutboxCleanupService |
-| 9 | `MultiSourceSqliteIntegrationTests` | MMCA.Common.Infrastructure.Tests | 26 | AuditSaveChangesInterceptor, ConnectionStringSettings, DataSource, DataSourceEntrySettings, DataSourceResolver, DataSourceService, DataSourcesSettings, DbContextFactory, DomainEventSaveChangesInterceptor, EntityDataSourceRegistry, FixedAssemblyProvider, IApplicationSettings, ICurrentUserService, IDataSourceResolver, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, MultiSourceCustomer, MultiSourceOrder, MultiSourceTestEvent …(+6) |
 | 9 | `OutboxProcessorTests` | MMCA.Common.Infrastructure.Tests | 22 | AuditSaveChangesInterceptor, DataSource, DataSourceKey, DomainEventSaveChangesInterceptor, EmptyEntityDataSourceRegistry, FakeTimeProvider, IDataSourceResolver, IDbContextFactory, IDomainEvent, IDomainEventDispatcher, IEntityConfigurationAssemblyProvider, IEntityDataSourceRegistry, IIntegrationEvent, IMessageBus, IOutboxSignal, OutboxCycleResult, OutboxMessage, OutboxProcessor, OutboxSettings, OutboxTestDbContext …(+2) |
 | 9 | `OutboxProcessorWaitTests` | MMCA.Common.Infrastructure.Tests | 1 | OutboxProcessor |
-| 9 | `RepositoryFactoryTests` | MMCA.Common.Infrastructure.Tests | 11 | EFReadRepository<TEntity, TIdentifierType>, EFReadRepositoryDecorator<TEntity, TIdentifierType>, EFRepository<TEntity, TIdentifierType>, EFRepositoryDecorator<TEntity, TIdentifierType>, FakeAggregate, FakeEntity, IApplicationSettings, IReadRepository<TEntity, TIdentifierType>, IRepository<TEntity, TIdentifierType>, RepositoryFactory, TestDbContext |
 | 9 | `SqliteTestDbContext` | MMCA.Common.Infrastructure.Tests | 2 | SqliteTestEntity, SqliteTestEntityConfig |
 | 9 | `HandlerTestBase<THandler>` | MMCA.Common.Testing | 6 | AuditableAggregateRootEntity<TIdentifierType>, AuditableBaseEntity<TIdentifierType>, IReadRepository<TEntity, TIdentifierType>, IRepository<TEntity, TIdentifierType>, IUnitOfWork, UnitOfWork |
 | 9 | `DecoratorPipelineOrderTests` | MMCA.Common.Testing.Tests | 9 | DecoratorPipelineOrderTests, DecoratorPipelineOrderTestsBase<TCommand, TCommandResult, TQuery, TQueryResult>, ICacheService, ICorrelationContext, IUnitOfWork, PingCommand, PingCommandHandler, PingQuery, Result |
@@ -2466,6 +2505,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 10 | `GetCategoryDistributionHandlerTests` | MMCA.ADC.Conference.Application.Tests | 8 | Category, GetCategoryDistributionHandler, GetCategoryDistributionQuery, HandlerTestBase<THandler>, IRepository<TEntity, TIdentifierType>, Session, SessionStatuses, UnitOfWork |
 | 10 | `GetContentSimilarityHandlerTests` | MMCA.ADC.Conference.Application.Tests | 8 | Category, GetContentSimilarityHandler, GetContentSimilarityQuery, HandlerTestBase<THandler>, IRepository<TEntity, TIdentifierType>, Session, SessionStatuses, UnitOfWork |
 | 10 | `GetPublicSessionFilterHandlerTests` | MMCA.ADC.Conference.Application.Tests | 8 | Event, GetPublicSessionFilterHandler, GetPublicSessionFilterQuery, HandlerTestBase<THandler>, IReadRepository<TEntity, TIdentifierType>, Session, SessionStatuses, UnitOfWork |
+| 10 | `GetSessionsBySpeakerFilterHandlerTests` | MMCA.ADC.Conference.Application.Tests | 7 | GetSessionsBySpeakerFilterHandler, GetSessionsBySpeakerFilterQuery, HandlerTestBase<THandler>, IReadRepository<TEntity, TIdentifierType>, Session, SessionSpeaker, UnitOfWork |
 | 10 | `GetSessionSelectionDashboardHandlerTests` | MMCA.ADC.Conference.Application.Tests | 12 | Category, ErrorType, Event, GetSessionSelectionDashboardHandler, GetSessionSelectionDashboardQuery, HandlerTestBase<THandler>, IRepository<TEntity, TIdentifierType>, Session, SessionAiScore, SessionStatuses, Speaker, UnitOfWork |
 | 10 | `GetSpeakersByEventFilterHandlerTests` | MMCA.ADC.Conference.Application.Tests | 9 | EventSpeaker, GetSpeakersByEventFilterHandler, GetSpeakersByEventFilterQuery, HandlerTestBase<THandler>, IReadRepository<TEntity, TIdentifierType>, Session, SessionSpeaker, Speaker, UnitOfWork |
 | 10 | `GetSpeakerSessionOverlapHandlerTests` | MMCA.ADC.Conference.Application.Tests | 9 | Category, GetSpeakerSessionOverlapHandler, GetSpeakerSessionOverlapQuery, HandlerTestBase<THandler>, IRepository<TEntity, TIdentifierType>, Session, SessionStatuses, Speaker, UnitOfWork |
@@ -2496,9 +2536,10 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 10 | `UserRegisteredHandlerTests` | MMCA.ADC.Conference.Application.Tests | 10 | Fakes, IEventBus, InMemoryRepository<TEntity, TIdentifierType>, IUnitOfWork, RecordingEventBus, RecordingUnitOfWork, Speaker, SpeakerLinkedToUser, UserRegistered, UserRegisteredHandler |
 | 10 | `DependencyInjection` | MMCA.ADC.Conference.Contracts | 6 | EventLiveValidationService, EventLiveValidationServiceGrpcAdapter, IEventLiveValidationService, ISessionBookmarkValidationService, SessionBookmarkValidationService, SessionBookmarkValidationServiceGrpcAdapter |
 | 10 | `ConferenceEntityConfigurationTests` | MMCA.ADC.Conference.Infrastructure.Tests | 20 | Category, CategoryInvariants, CategoryItem, ConferenceTestDbContext, Event, EventInvariants, EventQuestionAnswer, EventSpeaker, Question, QuestionInvariants, Room, Session, SessionCategoryItem, SessionInvariants, SessionQuestionAnswer, SessionSpeaker, Speaker, SpeakerCategoryItem, SpeakerInvariants, SpeakerQuestionAnswer |
+| 10 | `BookmarksController` | MMCA.ADC.Engagement.API | 19 | ApiControllerBase, AuthorizationPolicies, CreateBookmarkRequest, DeleteEntityCommand<TEntity, TIdentifierType>, EngagementFeatures, Error, GetBookmarkedSessionIdsQuery, GetUserBookmarksQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, IQueryHandler<in TQuery, TResult>, OwnerOrAdminFilter, PagedCollectionResult<T>, Result, RoleNames, Route, UserSessionBookmark, UserSessionBookmarkDTO |
 | 10 | `LivePollNavigationPopulator` | MMCA.ADC.Engagement.Application | 5 | ChildNavigationDescriptor<TEntity, TParentId, TChild, TChildId>, DeclarativeNavigationPopulator<TEntity>, IUnitOfWork, LivePoll, LivePollOption |
 | 10 | `BookmarkCountServiceTests` | MMCA.ADC.Engagement.Application.Tests | 5 | BookmarkCountService, HandlerTestBase<THandler>, InMemoryQueryableExecutor, UnitOfWork, UserSessionBookmark |
-| 10 | `CastVoteHandlerTests` | MMCA.ADC.Engagement.Application.Tests | 16 | CastVoteCommand, CastVoteHandler, ErrorType, FixedTimeProvider, HandlerMocks, HandlerTestBase<THandler>, ILiveChannelPublishQueue, InMemoryQueryableExecutor, IReadRepository<TEntity, TIdentifierType>, LiveChannelPublishWorkItem, LivePoll, LivePollChannel, LivePollResultsBuilder, LivePollResultsDTO, LivePollVote, UnitOfWork |
+| 10 | `CastVoteHandlerTests` | MMCA.ADC.Engagement.Application.Tests | 12 | CastVoteCommand, CastVoteHandler, ErrorType, FixedTimeProvider, HandlerMocks, HandlerTestBase<THandler>, InMemoryQueryableExecutor, IReadRepository<TEntity, TIdentifierType>, LivePoll, LivePollResultsBuilder, LivePollVote, UnitOfWork |
 | 10 | `CloseLivePollHandlerTests` | MMCA.ADC.Engagement.Application.Tests | 16 | CloseLivePollCommand, CloseLivePollHandler, Error, ErrorType, HandlerMocks, HandlerTestBase<THandler>, IEventLiveValidationService, ILiveChannelPublishQueue, LiveChannelPublishWorkItem, LivePoll, LivePollChannel, LivePollStatus, QuestionModerationDefault, Result, SessionLiveInfo, UnitOfWork |
 | 10 | `CreateBookmarkHandlerTests` | MMCA.ADC.Engagement.Application.Tests | 12 | BookmarkManagementDomainService, CreateBookmarkHandler, CreateBookmarkRequest, Error, ErrorType, HandlerMocks, HandlerTestBase<THandler>, ISessionBookmarkValidationService, Result, UnitOfWork, UserSessionBookmark, UserSessionBookmarkDTOMapper |
 | 10 | `CreateLivePollHandlerTests` | MMCA.ADC.Engagement.Application.Tests | 17 | CreateLivePollCommand, CreateLivePollHandler, CreateLivePollRequest, Error, ErrorType, EventLiveInfo, HandlerMocks, HandlerTestBase<THandler>, IEventLiveValidationService, LivePoll, LivePollDTOMapper, LivePollStatus, Question, QuestionModerationDefault, Result, SessionLiveInfo, UnitOfWork |
@@ -2508,10 +2549,11 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 10 | `GetOpenPollsHandlerTests` | MMCA.ADC.Engagement.Application.Tests | 9 | ErrorType, GetOpenPollsHandler, GetOpenPollsQuery, HandlerTestBase<THandler>, InMemoryQueryableExecutor, LivePoll, LivePollResultsBuilder, LivePollVote, UnitOfWork |
 | 10 | `GetSessionQuestionsHandlerTests` | MMCA.ADC.Engagement.Application.Tests | 9 | GetSessionQuestionsHandler, GetSessionQuestionsQuery, HandlerTestBase<THandler>, InMemoryQueryableExecutor, QuestionStatus, SessionQuestion, SessionQuestionUpvote, SessionQuestionViewBuilder, UnitOfWork |
 | 10 | `GetUserBookmarksHandlerTests` | MMCA.ADC.Engagement.Application.Tests | 11 | Error, GetUserBookmarksHandler, GetUserBookmarksQuery, HandlerMocks, HandlerTestBase<THandler>, IQueryableExecutor, ISessionBookmarkValidationService, Result, UnitOfWork, UserSessionBookmark, UserSessionBookmarkDTOMapper |
+| 10 | `LivePollVoteChangedHandlerTests` | MMCA.ADC.Engagement.Application.Tests | 12 | DomainEntityState, InMemoryQueryableExecutor, IReadRepository<TEntity, TIdentifierType>, IUnitOfWork, LivePoll, LivePollChannel, LivePollResultsBuilder, LivePollResultsDTO, LivePollVote, LivePollVoteChanged, LivePollVoteChangedHandler, RecordingQueue |
 | 10 | `ModerateQuestionHandlerTests` | MMCA.ADC.Engagement.Application.Tests | 16 | Error, ErrorType, HandlerMocks, HandlerTestBase<THandler>, IEventLiveValidationService, ILiveChannelPublisher, ModerateQuestionCommand, ModerateQuestionHandler, ModerationAction, QuestionModerationDefault, QuestionStatus, Result, SessionLiveInfo, SessionQuestion, SessionQuestionChannel, UnitOfWork |
 | 10 | `OpenLivePollHandlerTests` | MMCA.ADC.Engagement.Application.Tests | 17 | Error, ErrorType, EventLiveInfo, FixedTimeProvider, HandlerMocks, HandlerTestBase<THandler>, IEventLiveValidationService, ILiveChannelPublisher, LivePoll, LivePollChannel, LivePollStatus, OpenLivePollCommand, OpenLivePollHandler, QuestionModerationDefault, Result, SessionLiveInfo, UnitOfWork |
 | 10 | `SubmitQuestionHandlerTests` | MMCA.ADC.Engagement.Application.Tests | 22 | Error, FixedTimeProvider, HandlerMocks, HandlerTestBase<THandler>, IEventLiveValidationService, ILiveChannelPublisher, InMemoryQueryableExecutor, IReadRepository<TEntity, TIdentifierType>, QuestionModerationDefault, QuestionStatus, Result, SessionLiveInfo, SessionQuestion, SessionQuestionApprovedPayload, SessionQuestionChannel, SessionQuestionInvariants, SessionQuestionPendingCountChangedPayload, SessionQuestionUpvote, SessionQuestionViewBuilder, SubmitQuestionCommand …(+2) |
-| 10 | `ToggleUpvoteHandlerTests` | MMCA.ADC.Engagement.Application.Tests | 12 | ErrorType, FixedTimeProvider, HandlerMocks, HandlerTestBase<THandler>, ILiveChannelPublisher, QuestionStatus, SessionQuestion, SessionQuestionChannel, SessionQuestionUpvote, ToggleUpvoteCommand, ToggleUpvoteHandler, UnitOfWork |
+| 10 | `ToggleUpvoteHandlerTests` | MMCA.ADC.Engagement.Application.Tests | 10 | ErrorType, FixedTimeProvider, HandlerMocks, HandlerTestBase<THandler>, QuestionStatus, SessionQuestion, SessionQuestionUpvote, ToggleUpvoteCommand, ToggleUpvoteHandler, UnitOfWork |
 | 10 | `DependencyInjection` | MMCA.ADC.Engagement.Contracts | 6 | BookmarkCountService, BookmarkCountServiceGrpcAdapter, IBookmarkCountService, IUserEngagementExportService, UserEngagementExportService, UserEngagementExportServiceGrpcAdapter |
 | 10 | `EngagementEntityConfigurationTests` | MMCA.ADC.Engagement.Infrastructure.Tests | 9 | EngagementTestDbContext, LivePoll, LivePollInvariants, LivePollOption, LivePollVote, SessionQuestion, SessionQuestionInvariants, SessionQuestionUpvote, UserSessionBookmark |
 | 10 | `DependencyInjection` | MMCA.ADC.Identity.Application | 10 | ApplicationSettings, AttendeeQueryService, AuthenticationService, AuthenticationValidators, ClassReference, ClassReference, IAttendeeQueryService, IAuthenticationService, ISoftDeletedUserValidator, SoftDeletedUserValidator |
@@ -2533,20 +2575,26 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 10 | `AppDelegate` | MMCA.ADC.UI | 2 | IDeepLinkDispatcher, MauiProgram |
 | 10 | `MainApplication` | MMCA.ADC.UI | 1 | MauiProgram |
 | 10 | `AuthControllerBase` | MMCA.Common.API | 9 | ApiControllerBase, AuthenticationResponse, AuthenticationService, CurrentUserService, IAuthenticationService, ICurrentUserService, LoginRequest, RefreshTokenRequest, RegisterRequest |
+| 10 | `DependencyInjection` | MMCA.Common.API | 21 | CookieSessionRefresher, CookieTokenReader, CurrencyJsonConverter, DbUpdateExceptionHandler, DisabledFeatureHandler, DomainExceptionHandler, ErrorLocalizer, ErrorResources, ErrorResourceSource, GlobalExceptionHandler, ICookieSessionRefresher, IdempotencyFilter, IdempotencySettings, IErrorLocalizer, ModuleControllerFeatureProvider, ModuleLoader, ModulesSettings, OperationCanceledExceptionHandler, OwnerOrAdminFilter, UnhandledResultFailureFilter …(+1) |
+| 10 | `DependencyInjectionTests` | MMCA.Common.API.Tests | 11 | DbUpdateExceptionHandler, DisabledFeatureHandler, DomainExceptionHandler, GlobalExceptionHandler, IdempotencyFilter, IdempotencySettings, IModule, ModuleLoader, OperationCanceledExceptionHandler, OwnerOrAdminFilter, ValidationExceptionHandler |
+| 10 | `OwnerOrAdminFilterTests` | MMCA.Common.API.Tests | 4 | AllowMissingOwnerAttribute, ICurrentUserService, OwnerOrAdminFilter, OwnerOrAdminFilterOptions |
 | 10 | `AuthenticationServiceBaseTests` | MMCA.Common.Application.Tests | 17 | AuthenticationResponse, AuthenticationValidators, Error, ErrorType, FixedTimeProvider, ILoginProtectionService, IPasswordHasher, IRepository<TEntity, TIdentifierType>, ITokenService, IUnitOfWork, LoginRequest, RefreshTokenRequest, RegisterRequest, Result, ServiceMocks, TestAuthenticationService, TestAuthUser |
 | 10 | `ChildNavigationDescriptorTests` | MMCA.Common.Application.Tests | 6 | ChildNavigationDescriptor<TEntity, TParentId, TChild, TChildId>, INavigationDescriptor<in TEntity>, IReadRepository<TEntity, TIdentifierType>, IUnitOfWork, OrderEntity, OrderLineEntity |
 | 10 | `DeclarativeNavigationPopulatorTests` | MMCA.Common.Application.Tests | 7 | DeclarativeNavigationPopulator<TEntity>, INavigationDescriptor<in TEntity>, IUnitOfWork, NavigationMetadata, NavigationPopulatorStubEntity, NavigationPropertyInfo, NavigationType |
 | 10 | `EntityQueryServiceTests` | MMCA.Common.Application.Tests | 10 | EntityQueryService<TEntity, TEntityDTO, TIdentifierType>, FakeEntity, FakeEntityDTO, IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>, IEntityQueryPipeline, INavigationMetadataProvider, INavigationPopulator<in TEntity>, IReadRepository<TEntity, TIdentifierType>, IUnitOfWork, TestableEntityQueryService |
 | 10 | `FKNavigationDescriptorTests` | MMCA.Common.Application.Tests | 6 | FKNavigationDescriptor<TEntity, TChild, TChildId>, INavigationDescriptor<in TEntity>, IReadRepository<TEntity, TIdentifierType>, IUnitOfWork, ParentEntity, RelatedEntity |
-| 10 | `EntityDataSourceRegistryTests` | MMCA.Common.Infrastructure.Tests | 15 | ConnectionStringSettings, DataSource, DataSourceEntrySettings, DataSourceKey, DataSourceResolver, DataSourcesSettings, EntityDataSourceRegistry, FixedAssemblyProvider, NamespaceConventions, PushNotification, RegistryDuplicate, RegistryInvoice, RegistryOrder, RegistrySqlServerEntity, RegistryUnattributed |
+| 10 | `DependencyInjection` | MMCA.Common.Infrastructure | 103 | ApplicationDbContext, ApplicationDbContextEFFactory, AuditSaveChangesInterceptor, AzureBlobFileStorageService, AzureNotificationHubDeviceRegistrar, AzureNotificationHubNativePushSender, BrokerEventBus, BrokerMessageBus, CacheKeyNamespace, CacheKeyPrefixOptions, ClaimBasedUserIdProvider, ClassReference, ConnectionStringSettings, CorrelationContext, CosmosDbContext, CurrentUserService, DataSourceEntrySettings, DataSourceResolver, DataSourceService, DataSourcesSettings …(+83) |
+| 10 | `CosmosConfigurationPortabilityTests` | MMCA.Common.Infrastructure.Tests | 17 | AuditSaveChangesInterceptor, ConnectionStringSettings, DataSource, DataSourceEntrySettings, DataSourceResolver, DataSourcesSettings, DomainEventSaveChangesInterceptor, EntityDataSourceRegistry, FixedAssemblyProvider, IDataSourceResolver, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, OutboxSignal, PhysicalDbContextFactory, PortablePrincipal, PortableThing |
 | 10 | `EntityTypeConfigurationTests` | MMCA.Common.Infrastructure.Tests | 2 | SqliteTestDbContext, SqliteTestEntity |
+| 10 | `FixedAssemblyProvider` | MMCA.Common.Infrastructure.Tests | 3 | CosmosConfigurationPortabilityTests, IEntityConfigurationAssemblyProvider, MultiSourceSqliteIntegrationTests |
+| 10 | `MultiSourceSqliteIntegrationTests` | MMCA.Common.Infrastructure.Tests | 26 | AuditSaveChangesInterceptor, ConnectionStringSettings, DataSource, DataSourceEntrySettings, DataSourceResolver, DataSourceService, DataSourcesSettings, DbContextFactory, DomainEventSaveChangesInterceptor, EntityDataSourceRegistry, FixedAssemblyProvider, IApplicationSettings, ICurrentUserService, IDataSourceResolver, IDomainEventDispatcher, IEntityDataSourceRegistry, IOutboxSignal, MultiSourceCustomer, MultiSourceOrder, MultiSourceTestEvent …(+6) |
 | 10 | `OutboxCleanupServiceTests` | MMCA.Common.Infrastructure.Tests | 14 | ApplicationDbContext, CleanupTestContext, DataSource, DataSourceKey, FakeTimeProvider, IDataSourceResolver, IDbContextFactory, IEntityDataSourceRegistry, InboxMessage, MessageBusSettings, Mocks, OutboxCleanupService, OutboxMessage, OutboxSettings |
-| 10 | `OutboxProcessorExecuteAsyncTests` | MMCA.Common.Infrastructure.Tests | 9 | DataSource, DataSourceKey, DependencyInjection, FakeTimeProvider, IDataSourceResolver, IEntityDataSourceRegistry, IOutboxSignal, OutboxProcessor, OutboxSettings |
+| 10 | `RepositoryFactoryTests` | MMCA.Common.Infrastructure.Tests | 11 | EFReadRepository<TEntity, TIdentifierType>, EFReadRepositoryDecorator<TEntity, TIdentifierType>, EFRepository<TEntity, TIdentifierType>, EFRepositoryDecorator<TEntity, TIdentifierType>, FakeAggregate, FakeEntity, IApplicationSettings, IReadRepository<TEntity, TIdentifierType>, IRepository<TEntity, TIdentifierType>, RepositoryFactory, TestDbContext |
 | 10 | `UnitOfWorkAdditionalTests` | MMCA.Common.Infrastructure.Tests | 12 | ApplicationDbContext, DataSource, DataSourceKey, FakeAggregate, FakeEntity, IDataSourceService, IDbContextFactory, IReadRepository<TEntity, TIdentifierType>, IRepository<TEntity, TIdentifierType>, IRepositoryFactory, Mocks, UnitOfWork |
 | 10 | `UnitOfWorkTests` | MMCA.Common.Infrastructure.Tests | 12 | ApplicationDbContext, DataSource, DataSourceKey, FakeAggregate, FakeEntity, IDataSourceService, IDbContextFactory, IReadRepository<TEntity, TIdentifierType>, IRepository<TEntity, TIdentifierType>, IRepositoryFactory, Mocks, UnitOfWork |
 | 10 | `HandlerTestBaseTests` | MMCA.Common.Testing.Tests | 5 | FakeHandler, HandlerTestBase<THandler>, TestAggregate, TestChildEntity, UnitOfWork |
 | 10 | `GalleryE2ECollection` | MMCA.Common.UI.E2E.Tests | 2 | GalleryHostFixture, PlaywrightFixture |
-| 11 | `DependencyInjection` | MMCA.ADC.Conference.Application | 49 | ApplicationSettings, Category, CategoryItem, CategoryItemDTO, ClassReference, ClassReference, ConferenceCategoryDTO, ConferenceCategoryNavigationPopulator, DeleteEntityCommand<TEntity, TIdentifierType>, DeleteEntityHandler<TEntity, TIdentifierType>, DeleteEventHandler, EntityQueryService<TEntity, TEntityDTO, TIdentifierType>, Event, EventCascadeDeletionDomainService, EventDTO, EventLiveValidationService, EventNavigationPopulator, EventQuestionAnswer, EventQuestionAnswerDTO, EventSpeaker …(+29) |
+| 11 | `DependencyInjection` | MMCA.ADC.Conference.Application | 51 | ApplicationSettings, Category, CategoryItem, CategoryItemDTO, ClassReference, ClassReference, ConferenceCategoryDTO, ConferenceCategoryNavigationPopulator, DeleteEntityCommand<TEntity, TIdentifierType>, DeleteEntityHandler<TEntity, TIdentifierType>, DeleteEventHandler, EntityQueryService<TEntity, TEntityDTO, TIdentifierType>, Event, EventCascadeDeletionDomainService, EventDTO, EventLiveValidationService, EventNavigationPopulator, EventQuestionAnswer, EventQuestionAnswerDTO, EventSpeaker …(+31) |
 | 11 | `RefreshFromSessionizeHandler` | MMCA.ADC.Conference.Application | 19 | CategorySyncStrategy, Error, Event, ICommandHandler<in TCommand, TResult>, ICurrentUserService, ISessionizeService, ISessionizeSyncStrategy, IUnitOfWork, QuestionSyncStrategy, RefreshFromSessionizeCommand, RefreshFromSessionizeResultDTO, Result, RoomSyncStrategy, SessionizeResponse, SessionizeSyncContext, SessionizeSyncResult, SessionSyncStrategy, SpeakerSyncStrategy, UnitOfWork |
 | 11 | `CategorySyncStrategyTests` | MMCA.ADC.Conference.Application.Tests | 10 | Category, CategorySyncStrategy, Event, IRepository<TEntity, TIdentifierType>, IUnitOfWork, SessionizeCategory, SessionizeCategoryItem, SessionizeResponse, SessionizeSyncContext, UnitOfWork |
 | 11 | `ConferenceCategoryNavigationPopulatorTests` | MMCA.ADC.Conference.Application.Tests | 6 | Category, ConferenceCategoryNavigationPopulator, HandlerTestBase<THandler>, INavigationPopulator<in TEntity>, NavigationMetadata, UnitOfWork |
@@ -2557,10 +2605,13 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 11 | `SessionSyncStrategyTests` | MMCA.ADC.Conference.Application.Tests | 9 | Event, IRepository<TEntity, TIdentifierType>, IUnitOfWork, Session, SessionizeResponse, SessionizeSession, SessionizeSyncContext, SessionSyncStrategy, UnitOfWork |
 | 11 | `SpeakerNavigationPopulatorTests` | MMCA.ADC.Conference.Application.Tests | 6 | HandlerTestBase<THandler>, INavigationPopulator<in TEntity>, NavigationMetadata, Speaker, SpeakerNavigationPopulator, UnitOfWork |
 | 11 | `SpeakerSyncStrategyTests` | MMCA.ADC.Conference.Application.Tests | 1 | SpeakerSyncStrategy |
+| 11 | `BookmarksControllerTests` | MMCA.ADC.Engagement.API.Tests | 17 | BookmarksController, ControllerMocks, CreateBookmarkRequest, DeleteEntityCommand<TEntity, TIdentifierType>, Error, GetBookmarkedSessionIdsQuery, GetUserBookmarksQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, IQueryHandler<in TQuery, TResult>, OwnerOrAdminFilter, PagedCollectionResult<T>, PaginationMetadata, Result, UserSessionBookmark, UserSessionBookmarkDTO |
 | 11 | `DependencyInjection` | MMCA.ADC.Engagement.Application | 29 | ApplicationSettings, BookmarkCountService, BookmarkManagementDomainService, ClassReference, ClassReference, DeleteEntityCommand<TEntity, TIdentifierType>, DeleteEntityHandler<TEntity, TIdentifierType>, EntityQueryService<TEntity, TEntityDTO, TIdentifierType>, IBookmarkCountService, IBookmarkManagementDomainService, ICommandHandler<in TCommand, TResult>, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, ILiveChannelPublishQueue, INavigationPopulator<in TEntity>, IUserEngagementExportService, LiveChannelPublishQueue, LivePoll, LivePollDTO, LivePollNavigationPopulator, LivePollResultsBuilder …(+9) |
 | 11 | `AuthController` | MMCA.ADC.Identity.API | 18 | AuthControllerBase, AuthenticationResponse, AuthenticationService, ChangePasswordCommand, ChangePasswordRequest, ChangePreferencesCommand, ChangePreferencesRequest, CurrentUserService, GetUserPreferencesQuery, IAuthenticationService, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IQueryHandler<in TQuery, TResult>, LoginRequest, RegisterRequest, Result, Route, UserPreferencesResponse |
 | 11 | `Program` | MMCA.ADC.UI | 1 | AppDelegate |
 | 11 | `TestAuthController` | MMCA.Common.API.Tests | 3 | AuthControllerBase, IAuthenticationService, ICurrentUserService |
+| 11 | `EntityDataSourceRegistryTests` | MMCA.Common.Infrastructure.Tests | 15 | ConnectionStringSettings, DataSource, DataSourceEntrySettings, DataSourceKey, DataSourceResolver, DataSourcesSettings, EntityDataSourceRegistry, FixedAssemblyProvider, NamespaceConventions, PushNotification, RegistryDuplicate, RegistryInvoice, RegistryOrder, RegistrySqlServerEntity, RegistryUnattributed |
+| 11 | `OutboxProcessorExecuteAsyncTests` | MMCA.Common.Infrastructure.Tests | 9 | DataSource, DataSourceKey, DependencyInjection, FakeTimeProvider, IDataSourceResolver, IEntityDataSourceRegistry, IOutboxSignal, OutboxProcessor, OutboxSettings |
 | 11 | `GalleryAxeTestBase` | MMCA.Common.UI.E2E.Tests | 4 | E2ETestConfiguration, GalleryE2ECollection, GalleryHostFixture, PlaywrightFixture |
 | 12 | `RefreshFromSessionizeHandlerTests` | MMCA.ADC.Conference.Application.Tests | 9 | ErrorType, Event, ICurrentUserService, IRepository<TEntity, TIdentifierType>, ISessionizeService, IUnitOfWork, RefreshFromSessionizeCommand, RefreshFromSessionizeHandler, SessionizeResponse |
 | 12 | `ConferenceTestWebApplicationFactory` | MMCA.ADC.Conference.IntegrationTests | 8 | FakeAiScoringService, FakeBookmarkCountService, FakeSessionizeService, IAiScoringService, IBookmarkCountService, ISessionizeService, JwtTokenGenerator, Program |

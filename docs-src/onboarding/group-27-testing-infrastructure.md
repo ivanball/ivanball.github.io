@@ -3,13 +3,15 @@
 **What this group covers.** Everything the codebase uses to *prove* itself: the four reusable
 test-support packages that ship out of `MMCA.Common/Source/Hosting` (`MMCA.Common.Testing`,
 `MMCA.Common.Testing.E2E`, `MMCA.Common.Testing.UI`, `MMCA.Common.Testing.Architecture`), the
-architecture-fitness rule library that gates the build, the backend-less component Gallery harness, and
-the many per-repo test projects that consume all of it. The distinction to hold onto while reading:
-most of the *types* in this group are reusable **bases, fixtures, harnesses, and helpers** compiled
-into and shipped by MMCA.Common, while the concrete `[Fact]`-bearing test classes that subclass them
-live in each consumer repo (`MMCA.Common.*.Tests`, `MMCA.ADC.*.Tests`, `MMCA.Store.*.Tests`). Those
-individual test classes are cataloged by project in the companion rollup section; this chapter teaches
-the *machinery* they stand on.
+architecture-fitness rule library that gates the build, the backend-less component Gallery harness,
+the BenchmarkDotNet performance suite, and the many per-repo test projects that consume all of it.
+The distinction to hold onto while reading: most of the *types* in this group are reusable **bases,
+fixtures, harnesses, and helpers** compiled into and shipped by MMCA.Common, while the concrete
+`[Fact]`-bearing test classes that subclass them live in each consumer repo (`MMCA.Common.*.Tests`,
+`MMCA.ADC.*.Tests`, `MMCA.Store.*.Tests`). Those individual test classes are cataloged by project in
+the companion rollup section; this chapter teaches the *machinery* they stand on. For how the tiers
+map onto CI jobs and solution filters, see
+[Testing Architecture & Solution Composition](devops-testing.md).
 
 There are five moving parts, and they map onto the test pyramid plus one governance layer:
 
@@ -19,23 +21,27 @@ There are five moving parts, and they map onto the test pyramid plus one governa
    [`JwtTokenGenerator`](#jwttokengenerator), [`FeatureManagementTestExtensions`](#featuremanagementtestextensions),
    [`EntityBuilderBase<TBuilder, TEntity>`](#entitybuilderbasetbuilder-tentity)) boots a real service
    host in-process against a throwaway SQL Server database and drives it over HTTP.
-2. **Architecture fitness functions** ([`IArchitectureMap`](#iarchitecturemap), [`Layer`](#layer),
-   [`LayerRef`](#layerref), [`ArchitectureAssert`](#architectureassert), [`RuleHelpers`](#rulehelpers),
-   [`CrossEntityNavigationFinder`](#crossentitynavigationfinder), the eighteen `ArchitectureRules.*`
-   partial files, and the thirty abstract `*TestsBase` classes including
-   [`RouteAuthorizationTestsBase`](#routeauthorizationtestsbase) and
-   [`BrandColorTokenTestsBase`](#brandcolortokentestsbase)) turn architectural rules into build-gating
-   assertions that run identically across every repo.
+2. **Architecture fitness functions** ([`IArchitectureMap`](#iarchitecturemap),
+   [`ArchitectureMapBase`](#architecturemapbase), [`Layer`](#layer), [`LayerRef`](#layerref),
+   [`ArchitectureAssert`](#architectureassert), [`RuleHelpers`](#rulehelpers),
+   [`CrossEntityNavigationFinder`](#crossentitynavigationfinder), the sixteen
+   [`ArchitectureRules`](#architecturerules) partial files, and the thirty abstract `*TestsBase`
+   classes including [`RouteAuthorizationTestsBase`](#routeauthorizationtestsbase) and
+   [`BrandColorTokenTestsBase`](#brandcolortokentestsbase)) turn architectural rules into
+   build-gating assertions that run identically across every repo.
 3. **Component (bUnit) testing** ([`BunitComponentTestBase`](#bunitcomponenttestbase),
    [`TestPrincipal`](#testprincipal), [`CapturingHttpMessageHandler`](#capturinghttpmessagehandler),
-   [`UiHttpServiceHarness`](#uihttpserviceharness), [`MarkupSnapshot`](#markupsnapshot)) render Blazor
-   components in isolation with real MudBlazor services and faked HTTP/auth edges.
+   [`UiHttpServiceHarness`](#uihttpserviceharness),
+   [`StubTokenStorageService`](#stubtokenstorageservice), [`MarkupSnapshot`](#markupsnapshot))
+   render Blazor components in isolation with real MudBlazor services and faked HTTP/auth edges.
 4. **End-to-end (Playwright) testing** ([`PlaywrightFixture`](#playwrightfixture),
-   [`E2ETestConfiguration`](#e2etestconfiguration), [`PageExtensions`](#pageextensions), [`AxeOptions`](#axeoptions),
-   [`AccessibilityViolationException`](#accessibilityviolationexception), [`WebVitalsCollector`](#webvitalscollector),
-   and the reusable page objects [`LoginPage`](#loginpage) / [`RegisterPage`](#registerpage) /
-   [`ProfilePage`](#profilepage)) drive a real browser against a running app, asserting accessibility and
-   performance alongside behavior.
+   [`E2ETestBase`](#e2etestbase), [`E2ETestConfiguration`](#e2etestconfiguration),
+   [`PageExtensions`](#pageextensions), [`AxeOptions`](#axeoptions),
+   [`AccessibilityViolationException`](#accessibilityviolationexception),
+   [`WebVitalsCollector`](#webvitalscollector), and the reusable page objects
+   [`LoginPage`](#loginpage) / [`RegisterPage`](#registerpage) / [`ProfilePage`](#profilepage))
+   drive a real browser against a running app, asserting accessibility and performance alongside
+   behavior.
 5. **Contract and pipeline bases** ([`SecurityHeadersTestsBase`](#securityheaderstestsbase),
    [`OpenApiContractTestsBase<TFixture>`](#openapicontracttestsbasetfixture),
    [`ProblemDetailsContractTestsBase<TFixture>`](#problemdetailscontracttestsbasetfixture),
@@ -45,255 +51,331 @@ There are five moving parts, and they map onto the test pyramid plus one governa
    guarantees so a refactor cannot silently drop them.
 
 This whole group is the [Rubric §14, Testability] story made concrete: the framework does not merely
-*permit* testing, it ships the reusable substrate so every consumer tests the same way. The front-end
-slices additionally carry [Rubric §21, Accessibility], [Rubric §22, Responsive/Cross-Browser],
-[Rubric §23, Front-End Performance], and [Rubric §28, Front-End Testing]; the fitness library carries
-[Rubric §34, Architecture Governance & Documentation].
+*permit* testing, it ships the reusable substrate so every consumer tests the same way. The
+front-end tiers additionally carry [Rubric §21, Accessibility], [Rubric §22,
+Responsive/Cross-Browser], [Rubric §23, Front-End Performance], and [Rubric §28, Front-End Testing];
+the fitness library carries [Rubric §34, Architecture Governance & Documentation].
 
 ## Integration tests: a real host, a throwaway database, a per-test reset
 
-The integration tier boots the actual application, not a mock of it. The abstraction at its center is
-[`IIntegrationTestFixture`](#iintegrationtestfixture)
+The integration tier boots the actual application, not a mock of it. The abstraction at its center
+is [`IIntegrationTestFixture`](#iintegrationtestfixture)
 (`MMCA.Common.Testing/IIntegrationTestFixture.cs:8`): a two-method contract, `CreateClient()`
 (`IIntegrationTestFixture.cs:11`) and `ResetDatabaseAsync()` (`IIntegrationTestFixture.cs:19`), that
 hides how the host and its database are provisioned. Its remarks are load-bearing: a host running
 multiple physical data sources (database per service, see
-[primer](00-primer.md#2-architectural-styles-this-codebase-commits-to) and [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)) must reset **every**
-relational source, and a fixture can resolve `IEntityDataSourceRegistry` / `IDataSourceResolver` from
-the booted host to enumerate them (`IIntegrationTestFixture.cs:13-18`).
+[primer](00-primer.md#2-architectural-styles-this-codebase-commits-to) and
+[ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)) must reset **every**
+relational source, and a fixture can resolve `IEntityDataSourceRegistry` / `IDataSourceResolver`
+from the booted host to enumerate them (`IIntegrationTestFixture.cs:13-18`).
 
 [`IntegrationTestBase<TFixture>`](#integrationtestbasetfixture)
 (`MMCA.Common.Testing/IntegrationTestBase.cs:13`) is the per-test base every integration test class
-inherits. It implements xUnit's `IAsyncLifetime`, so `InitializeAsync` resets the database before each
-test (`IntegrationTestBase.cs:31`) and `DisposeAsync` disposes the HTTP client after
-(`IntegrationTestBase.cs:34`). It exposes typed HTTP helpers (`GetAsync<T>`, `PostAsync<T>`,
+inherits. It implements xUnit's `IAsyncLifetime`, so `InitializeAsync` resets the database before
+each test (`IntegrationTestBase.cs:31`) and `DisposeAsync` disposes the HTTP client after
+(`IntegrationTestBase.cs:34-39`). It exposes typed HTTP helpers (`GetAsync<T>`, `PostAsync<T>`,
 `PutAsync<T>`, `PutAsync`, `DeleteAsync`, `IntegrationTestBase.cs:51-72`), bearer-token management
 (`SetBearerToken` / `ClearAuthentication`, `IntegrationTestBase.cs:42-48`), and a thread-safe
-`NextId()` counter seeded at 1000 (`IntegrationTestBase.cs:16,75`) so parallel tests never collide on
-generated identifiers. Downstream projects subclass it to add domain-specific auth and entity helpers.
+`NextId()` counter seeded at 1000 (`IntegrationTestBase.cs:16,75`) so parallel tests never collide
+on generated identifiers. Downstream projects subclass it to add domain-specific auth and entity
+helpers.
 
 [`SqlServerIntegrationTestFixtureBase<TEntryPoint>`](#sqlserverintegrationtestfixturebasetentrypoint)
-(`MMCA.Common.Testing/SqlServerIntegrationTestFixtureBase.cs:27`) is the concrete fixture scaffolding.
-`InitializeAsync` (`SqlServerIntegrationTestFixtureBase.cs:67`) mints a GUID-suffixed database name,
-sets `ASPNETCORE_ENVIRONMENT=Testing` and the top-level connection string as **process environment
-variables** (so the host reads them at configure-time, `:74-77`), builds the subclass-supplied
-`WebApplicationFactory` (`:79`), and forces database creation by requesting the first client, which runs
-the host's `Migrate` init strategy (`:81-84`). It then builds a Respawn checkpoint that ignores
-`__EFMigrationsHistory` (`:90-94`); `ResetDatabaseAsync` (`:99`) replays that checkpoint between tests,
-and `DisposeAsync` (`:115`) drops the throwaway database and restores every pushed environment variable
-(`:125-130`). The `Testing` environment is chosen deliberately so `appsettings.Development.json` (which
-points a module's `DataSources` entry at `localhost`) does not load, leaving the resolver to collapse
-onto the overridden top-level connection string, a single-database monolith shape (`:16-24`). Server
-selection defaults to LocalDB but is overridable through `SqlBaseEnvironmentVariable` (`:58`, read at
-`:69-70`) so CI can target a SQL service container. Because these fixtures need a reachable SQL Server,
-the per-module `*.Integration.slnf` suites build in a headless sandbox but only *run* in CI.
+(`MMCA.Common.Testing/SqlServerIntegrationTestFixtureBase.cs:27`) is the concrete fixture
+scaffolding. `InitializeAsync` (`SqlServerIntegrationTestFixtureBase.cs:67`) mints a GUID-suffixed
+database name (`:71-72`), sets `ASPNETCORE_ENVIRONMENT=Testing` and the top-level connection string
+as **process environment variables** (so the host reads them at configure-time, `:75-77`), builds the
+subclass-supplied `WebApplicationFactory` (`:79`), and forces database creation by requesting the
+first client, which runs the host's `Migrate` init strategy (`:81-84`). It then builds a Respawn
+checkpoint that ignores `__EFMigrationsHistory` (`:90-94`); `ResetDatabaseAsync` (`:99`) replays that
+checkpoint between tests, and `DisposeAsync` (`:115`) drops the throwaway database (`:167`) and
+restores every pushed environment variable (`:130`, restore loop at `:157-165`). The `Testing`
+environment is chosen deliberately so `appsettings.Development.json` (which points a module's
+`DataSources` entry at `localhost`) does not load, leaving the resolver to collapse onto the
+overridden top-level connection string, a single-database monolith shape (`:16-24`). Server selection
+defaults to LocalDB but is overridable through `SqlBaseEnvironmentVariable` (`:58`, read at `:69-70`)
+so CI can target a SQL service container. The fixture also exposes `ConnectionString` (`:45`) so
+SQL-fidelity tests can read the raw tables, and `Services` (`:52`) so a cross-service test can
+resolve a consumer-side handler out of the booted host. Because these fixtures need a reachable SQL
+Server, the per-module `*.Integration.slnf` suites build in a headless sandbox but only *run* in CI.
 
 Three helpers round out the tier. [`JwtTokenGenerator`](#jwttokengenerator)
 (`MMCA.Common.Testing/JwtTokenGenerator.cs:29`) issues **RS256**-signed tokens (`GenerateToken`,
-`JwtTokenGenerator.cs:111`) using an embedded dev RSA-2048 keypair (`JwtTokenGenerator.cs:48-95`) under a
-fixed `kid` of `mmca-test-key` (`:40`), so integration tests exercise the exact JWKS/RS256 validation code
-path production runs ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)); the class remarks flag, correctly, that the committed keypair is insecure
-by design and must never be used in a real deployment (`:21-27`). [`FeatureManagementTestExtensions`](#featuremanagementtestextensions)
+`JwtTokenGenerator.cs:111`, signing credentials built at `:129-130`) using an embedded dev RSA-2048
+keypair (`JwtTokenGenerator.cs:48-95`) under a fixed `kid` of `mmca-test-key` (`:40`), so integration
+tests exercise the exact JWKS/RS256 validation code path production runs
+([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)); the class
+remarks flag, correctly, that the committed keypair is insecure by design and must never be used in
+a real deployment (`:21-27`). [`FeatureManagementTestExtensions`](#featuremanagementtestextensions)
 (`MMCA.Common.Testing/FeatureManagementTestExtensions.cs:10`) adds a `ConfigureTestFeatureFlags`
-extension member (`:21`) that builds an in-memory `FeatureManagement:*` configuration so a test
-`WebApplicationFactory` can flip a gate without touching `appsettings.json`.
+extension member (`:21`) that builds an in-memory `FeatureManagement:*` configuration (`:24-32`) so a
+test `WebApplicationFactory` can flip a gate without touching `appsettings.json`.
 [`EntityBuilderBase<TBuilder, TEntity>`](#entitybuilderbasetbuilder-tentity)
 (`MMCA.Common.Testing/Builders/EntityBuilderBase.cs:9`) is a minimal fluent-builder base whose single
-abstract `Build()` (`:17`) returns the entity through its domain factory, so test setup specifies only
-what a test cares about. Together these embody [Rubric §11, Security] (real token validation rather than
-bypassed auth middleware) and [Rubric §14, Testability].
+abstract `Build()` (`:17`) returns the entity through its domain factory, so test setup specifies
+only what a test cares about. Together these embody [Rubric §11, Security] (real token validation
+rather than bypassed auth middleware) and [Rubric §14, Testability].
 
 ## Architecture fitness functions: rules that gate the build
 
-The layering and DDD conventions this codebase commits to are not left to code review, they are executed
-as tests. The reusable rule library lives in `MMCA.Common.Testing.Architecture` and is the subject of
-**[ADR-015](https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html)**. Its keystone is [`IArchitectureMap`](#iarchitecturemap)
-(`MMCA.Common.Testing.Architecture/IArchitectureMap.cs:39`): the single per-repo boundary every fitness
-function keys off. Each repo supplies one implementation (for example `StoreArchitectureMap`) declaring
-its layer and module assemblies as [`LayerRef`](#layerref) records (`IArchitectureMap.cs:31`) tagged by the
-[`Layer`](#layer) enum (`IArchitectureMap.cs:9`), and exposes them through query members such as
-`OfLayer`, `ModuleDomain`, `ModuleApplication`, `For`, `ModuleOf`, and `OtherModuleNamespaces`
-(`IArchitectureMap.cs:51-81`). The shared rules consume *only* the interface, which is why one rule body
-runs identically across MMCA.Common, MMCA.Store, MMCA.ADC, and Helpdesk: the map is the only thing that
-varies. `Layer` deliberately includes optional layers (`Ui`, `Grpc`, `Contracts`, `ServiceHost`,
-`IArchitectureMap.cs:16-19`) that a repo simply omits, so a rule iterating them is vacuously satisfied
-with no compile dependency on an absent assembly (`IArchitectureMap.cs:3-8`).
+The layering and DDD conventions this codebase commits to are not left to code review, they are
+executed as tests. The reusable rule library lives in `MMCA.Common.Testing.Architecture` and is the
+subject of **[ADR-015](https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html)**.
+Its keystone is [`IArchitectureMap`](#iarchitecturemap)
+(`MMCA.Common.Testing.Architecture/IArchitectureMap.cs:39`): the single per-repo boundary every
+fitness function keys off. Each repo supplies one implementation (for example
+`StoreArchitectureMap`) declaring its layer and module assemblies as [`LayerRef`](#layerref) records
+(`IArchitectureMap.cs:31`) tagged by the [`Layer`](#layer) enum (`IArchitectureMap.cs:9`), and
+exposes them through query members such as `OfLayer`, `ModuleDomain`, `ModuleApplication`, `For`,
+`ModuleOf`, and `OtherModuleNamespaces` (`IArchitectureMap.cs:51-81`). Most of that surface is
+derived rather than hand-written: [`ArchitectureMapBase`](#architecturemapbase)
+(`MMCA.Common.Testing.Architecture/ArchitectureMapBase.cs:11`) computes the projections from a single
+`DefineLayers()` declaration (`ArchitectureMapBase.cs:22`, lazily materialized at `:15-16,25`), which
+also centralizes every assembly and namespace string in one file so Ubuntu CI's case sensitivity is
+handled in one place (`ArchitectureMapBase.cs:8-9`). The shared rules consume *only* the interface,
+which is why one rule body runs identically across MMCA.Common, MMCA.Store, MMCA.ADC, and Helpdesk:
+the map is the only thing that varies. `Layer` deliberately includes optional layers (`Ui`, `Grpc`,
+`Contracts`, `ServiceHost`, `IArchitectureMap.cs:16-19`) that a repo simply omits, so a rule
+iterating them is vacuously satisfied with no compile dependency on an absent assembly
+(`IArchitectureMap.cs:3-8`).
 
-The rule bodies are split across sixteen `ArchitectureRules.*` partial files (layers, purity, handlers,
-handler results, entities, events, modules, slices, naming, transport, controllers,
-immutability, governance, localization, localized text, and specifications; aggregate-convention
-rules live inside `ArchitectureRules.Entities.cs` and are exercised through
-`Bases/AggregateConventionTestsBase.cs`, not a dedicated partial), and the thirty abstract
+The rule bodies are split across sixteen [`ArchitectureRules`](#architecturerules) partial files
+(controllers, entities, events, governance, handlers, handler results, immutability, layers,
+localization, localized text, modules, naming, purity, slices, specifications, and transport). The
+aggregate-convention rules live inside `ArchitectureRules.Entities.cs` (for example
+`DomainExposesAggregateRoots` at `MMCA.Common.Testing.Architecture/ArchitectureRules.Entities.cs:8`
+and `AggregateRootsHaveResultFactory` at `:19`) rather than in a dedicated partial, and are surfaced
+through `Bases/AggregateConventionTestsBase.cs:10`. Above the rules sit the thirty abstract
 `*TestsBase` classes under `Bases/` (`LayerDependencyTestsBase`, `DomainPurityTestsBase`,
 `MicroserviceExtractionTestsBase`, `ModuleIsolationTestsBase`, `PiiConventionTestsBase`,
-`DependencyVersionTestsBase`, `IntegrationEventContractTestsBase`, `DataResidencyTestsBase`, and more)
-each expose a rule as one `[Fact]` that a sealed per-repo subclass activates by supplying its map.
+`DependencyVersionTestsBase`, `IntegrationEventContractTestsBase`, `DataResidencyTestsBase`,
+`RawQueryableConventionTestsBase`, and more), each exposing its rules as `[Fact]`s that a sealed
+per-repo subclass activates by supplying its map. `AggregateConventionTestsBase` shows the shape in
+miniature: one abstract `Map` property and one `[Fact]` per rule
+(`MMCA.Common.Testing.Architecture/Bases/AggregateConventionTestsBase.cs:12-24`). The package ships
+93 test methods across those 30 bases, of which MMCA.Common's own build executes 56
+(`MMCA.Common/FACTS.md:43-48`, a generated and CI-gated count: read it there rather than restating
+it elsewhere).
+
 Failures report through [`ArchitectureAssert`](#architectureassert)
 (`MMCA.Common.Testing.Architecture/ArchitectureAssert.cs:8`), which has two overloads: one lists the
 failing types from a NetArchTest `TestResult` (`ArchitectureAssert.cs:11-23`), the other lists a
 reflection-derived violation set (`ArchitectureAssert.cs:26-32`). Rules NetArchTest cannot express
-(method return types, generic constraints, property accessors, attribute usage) reflect over loaded types
-via the internal [`RuleHelpers`](#rulehelpers) (`MMCA.Common.Testing.Architecture/RuleHelpers.cs:14`),
-whose `LoadableTypes` extension property tolerates a partially resolvable assembly by falling back to the
-`ReflectionTypeLoadException`'s resolved types (`RuleHelpers.cs:19-33`). One such walk,
+(method return types, generic constraints, property accessors, attribute usage) reflect over loaded
+types via the internal [`RuleHelpers`](#rulehelpers)
+(`MMCA.Common.Testing.Architecture/RuleHelpers.cs:14`), whose `LoadableTypes` extension property
+tolerates a partially resolvable assembly by falling back to the `ReflectionTypeLoadException`'s
+resolved types (`RuleHelpers.cs:19-33`), and whose `HasPublicMutableSetter` treats an `init`-only
+setter as immutable by checking for the `IsExternalInit` required modifier
+(`RuleHelpers.cs:121-136`). One such walk,
 [`CrossEntityNavigationFinder`](#crossentitynavigationfinder)
-(`MMCA.Common.Testing.Architecture/ArchitectureRules.Specifications.cs:97`), is an `ExpressionVisitor`
-that collects the entity types a specification's criteria navigates to beyond its own
-(`ArchitectureRules.Specifications.cs:99-105`). These runtime rules are the second of two enforcement
-layers, the first being the compile-time MSBuild layer guard
+(`MMCA.Common.Testing.Architecture/ArchitectureRules.Specifications.cs:97`), is an
+`ExpressionVisitor` that collects the entity types a specification's criteria navigates to beyond
+its own (`ArchitectureRules.Specifications.cs:101-114`). These runtime rules are the second of two
+enforcement layers, the first being the compile-time MSBuild layer guard
 (`MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets`, see
-[group 14](group-14-module-system-composition.md)); [ADR-015](https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html) describes both, and this is the clearest
-[Rubric §34, Architecture Governance] expression in the codebase.
+[group 14](group-14-module-system-composition.md));
+[ADR-015](https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html) describes
+both, and this is the clearest [Rubric §34, Architecture Governance] expression in the codebase.
 
 The fitness library reaches beyond pure layering into cross-cutting product guarantees.
 [`RouteAuthorizationTestsBase`](#routeauthorizationtestsbase)
-(`MMCA.Common.Testing.Architecture/Bases/RouteAuthorizationTestsBase.cs:22`, tagged rubric §25 in its own
-remarks, [Rubric §25, Navigation & IA]) reflects over routable Blazor pages and asserts every governed
-page keeps its `[Authorize(Roles = "...")]` gate, so an admin route cannot regress to a bare
-`[Authorize]`. It detects `RouteAttribute` and `AuthorizeAttribute` by full-name reflection
-(`RouteAuthorizationTestsBase.cs:24-25`) so the package stays free of ASP.NET references, and a
-`MinimumGovernedPages` floor (`:47`) guards against a moved namespace silently emptying the scan.
-[`BrandColorTokenTestsBase`](#brandcolortokentestsbase)
-(`MMCA.Common.Testing.Architecture/Bases/BrandColorTokenTestsBase.cs:13`, [Rubric §20, Design System &
-Theming]) reads landing-page stylesheets embedded as manifest resources and fails the build if a host
-re-hardcodes the brand hex `#1565C0` instead of sourcing `var(--mmca-primary)` from the shared token
-(`BrandColorTokenTestsBase.cs:15-16,24`). Sibling bases pin integration-event contracts ([ADR-010](https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html)), the
-MassTransit-v8 major-version policy (`DependencyVersionTestsBase`), data residency, forms conventions,
-localization resources, concurrency, and constructor dependency counts, so the governance-as-tests
-pattern spans much of the 34-category rubric.
+(`MMCA.Common.Testing.Architecture/Bases/RouteAuthorizationTestsBase.cs:22`, tagged rubric §25 in its
+own remarks, [Rubric §25, Navigation & IA]) reflects over routable Blazor pages and asserts every
+governed page keeps its `[Authorize(Roles = "...")]` gate
+(`RouteAuthorizationTestsBase.cs:49-60`), so an admin route cannot regress to a bare `[Authorize]`
+any authenticated user can reach. It detects `RouteAttribute` and `AuthorizeAttribute` by full-name
+reflection (`RouteAuthorizationTestsBase.cs:24-25`) so the package stays free of ASP.NET references,
+and a `MinimumGovernedPages` floor (`:47`) guards against a moved namespace silently emptying the
+scan. [`BrandColorTokenTestsBase`](#brandcolortokentestsbase)
+(`MMCA.Common.Testing.Architecture/Bases/BrandColorTokenTestsBase.cs:13`, [Rubric §20, Design System
+& Theming]) reads landing-page stylesheets embedded as manifest resources and fails the build if a
+host re-hardcodes the brand hex `#1565C0` instead of sourcing `var(--mmca-primary)` from the shared
+token (`BrandColorTokenTestsBase.cs:15-16,41-44`), with a non-empty check on the embedded list so the
+guard cannot pass vacuously (`:27-28`). Sibling bases pin integration-event contracts
+([ADR-010](https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html)), the
+MassTransit-v8 major-version policy (`Bases/DependencyVersionTestsBase.cs:15`), data residency,
+forms conventions, localization resources, concurrency, framework-version consistency, and
+constructor dependency counts, so the governance-as-tests pattern spans much of the 34-category
+rubric.
 
 ## Component tests: real MudBlazor, faked edges
 
 The bUnit tier renders a single Blazor component in-process with its real dependencies but stubbed
 network and auth. [`BunitComponentTestBase`](#bunitcomponenttestbase)
-(`MMCA.Common.Testing.UI/Infrastructure/BunitComponentTestBase.cs:33`) registers MudBlazor services and
-puts JSInterop in loose mode so MudBlazor's JS probes do not throw during render
+(`MMCA.Common.Testing.UI/Infrastructure/BunitComponentTestBase.cs:33`) registers MudBlazor services
+and puts JSInterop in loose mode so MudBlazor components that probe JS during render do not throw
 (`BunitComponentTestBase.cs:42-43`), then wires a **mutable** `AuthenticationStateProvider`
 (`BunitComponentTestBase.cs:97`) plus an `IsAuthenticatedAuthorizationService`
-(`BunitComponentTestBase.cs:111`) so both `<AuthorizeView>` cascades and pages that inject the provider
-directly behave. Tests render anonymously by default via `RenderUnderTest<TComponent>`
+(`BunitComponentTestBase.cs:111`) so both `<AuthorizeView>` cascades and pages that inject the
+provider directly behave. Tests render anonymously by default via `RenderUnderTest<TComponent>`
 (`BunitComponentTestBase.cs:59`) or as a supplied `ClaimsPrincipal` via `RenderAs<TComponent>`
-(`BunitComponentTestBase.cs:65`), with [`TestPrincipal`](#testprincipal)
-(`MMCA.Common.Testing.UI/Infrastructure/TestPrincipal.cs:6`) minting the authenticated principal
-(authentication type, `user_id` claim, name, roles, `TestPrincipal.cs:13-20`). `RenderMudProviders`
-(`BunitComponentTestBase.cs:83`) mounts the popover, dialog, and snackbar providers and returns them as a
-`MudProviderHandles` record (`BunitComponentTestBase.cs:92`) so components that open a dialog or raise a
-toast have somewhere to render. The class is pinned to bUnit v2 (the line compatible with xUnit v3 and
-Microsoft Testing Platform) and isolates every version-specific symbol here so a bUnit change touches
-only this file (`BunitComponentTestBase.cs:24-31`). Localization is pre-registered (`AddLocalization`,
-`BunitComponentTestBase.cs:48-52`) so components injecting `IStringLocalizer<T>` ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)) render without
-per-test setup, an [Rubric §27, i18n] touch.
+(`BunitComponentTestBase.cs:65`, which sets the provider and the cascading `AuthenticationState`
+together at `:70-75`), with [`TestPrincipal`](#testprincipal)
+(`MMCA.Common.Testing.UI/Infrastructure/TestPrincipal.cs:6`) minting the authenticated principal: a
+name claim, a `user_id` claim, the requested roles, and an authentication type so `IsAuthenticated`
+is true (`TestPrincipal.cs:13-21`). `RenderMudProviders` (`BunitComponentTestBase.cs:83`) mounts the
+popover, dialog, and snackbar providers and returns them as a `MudProviderHandles` record
+(`BunitComponentTestBase.cs:92`) so components that open a dialog or raise a toast have somewhere to
+render. The class is pinned to bUnit v2 (the line compatible with xUnit v3 and Microsoft Testing
+Platform) and isolates every version-specific symbol here so a bUnit change touches only this file
+(`BunitComponentTestBase.cs:24-31`). Localization is pre-registered (`AddLocalization`,
+`BunitComponentTestBase.cs:48-52`) so components injecting `IStringLocalizer<T>`
+([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)) render without per-test
+setup, a [Rubric §27, i18n] touch.
 
-HTTP-backed UI services are exercised without a server through [`CapturingHttpMessageHandler`](#capturinghttpmessagehandler)
+HTTP-backed UI services are exercised without a server through
+[`CapturingHttpMessageHandler`](#capturinghttpmessagehandler)
 (`MMCA.Common.Testing.UI/Infrastructure/CapturingHttpMessageHandler.cs:18`), a canned-response,
 request-recording `HttpMessageHandler` supporting both a responder delegate
-(`CapturingHttpMessageHandler.cs:38`) and route registration, with unmatched requests returning 404 to
-mirror the WebAPI's not-found behavior (`CapturingHttpMessageHandler.cs:7-17`); it rebuilds each response
-fresh so a Polly retry never reuses a consumed `HttpContent`, and records every request as a
-`CapturedRequest` (`CapturingHttpMessageHandler.cs:129`) against a registered `Route`
+(`CapturingHttpMessageHandler.cs:38`) and route registration (`SetResponse`,
+`CapturingHttpMessageHandler.cs:48`), with registered routes consulted first and unmatched requests
+returning 404 to mirror the WebAPI's not-found behavior
+(`CapturingHttpMessageHandler.cs:7-17,90-108`); it rebuilds each response fresh so a Polly retry
+never reuses a consumed `HttpContent` (`CapturingHttpMessageHandler.cs:112-121`), and records every
+request as a `CapturedRequest` (`CapturingHttpMessageHandler.cs:129`) against a registered `Route`
 (`CapturingHttpMessageHandler.cs:110`). [`UiHttpServiceHarness`](#uihttpserviceharness)
 (`MMCA.Common.Testing.UI/Infrastructure/UiHttpServiceHarness.cs:12`) wraps that handler with a
-`FreshApiClientFactory` (`UiHttpServiceHarness.cs:73`) returning a fresh `"APIClient"` per call (the
-services dispose each client, so the same instance must never come back twice) plus a fixed-token storage
-stub, on a `https://gateway.test/` base address (`UiHttpServiceHarness.cs:15`).
-[`MarkupSnapshot`](#markupsnapshot) (`MMCA.Common.Testing.UI/Infrastructure/MarkupSnapshot.cs:21`) adds
-dependency-free golden-markup regression testing: it normalizes the per-render GUIDs MudBlazor injects,
-compares against a committed baseline under `Snapshots/` next to the calling test, and returns a
-`MarkupSnapshotResult` (`MarkupSnapshot.cs:104`) for the caller to assert on; `UPDATE_SNAPSHOTS=1`
-rewrites baselines and a missing baseline is written but reported as a non-match so a regression cannot
-slip through (`MarkupSnapshot.cs:6-20`). This tier is [Rubric §28, Front-End Testing] and [Rubric §18, UI
-Architecture].
+`FreshApiClientFactory` (`UiHttpServiceHarness.cs:73`) returning a fresh client per call, which is
+load-bearing because the UI services dispose the client after each request, so a caching factory
+would hand later calls a disposed one (`UiHttpServiceHarness.cs:66-80`), plus a fixed-token
+[`StubTokenStorageService`](#stubtokenstorageservice) (`UiHttpServiceHarness.cs:48,61`), all on a
+`https://gateway.test/` base address (`UiHttpServiceHarness.cs:15`).
+[`MarkupSnapshot`](#markupsnapshot) (`MMCA.Common.Testing.UI/Infrastructure/MarkupSnapshot.cs:21`)
+adds dependency-free golden-markup regression testing: `Match` (`MarkupSnapshot.cs:31`) normalizes
+the per-render GUIDs MudBlazor injects (`MarkupSnapshot.cs:64-70`), compares against a committed
+baseline under `Snapshots/` next to the calling test (located through a `[CallerFilePath]` argument,
+`MarkupSnapshot.cs:31,37`), and returns a [`MarkupSnapshotResult`](#markupsnapshotresult)
+(`MarkupSnapshot.cs:104`) for the caller to assert on, which keeps the shipped package free of an
+assertion-library dependency (`MarkupSnapshot.cs:10-12`). `UPDATE_SNAPSHOTS=1` rewrites baselines
+(`MarkupSnapshot.cs:41-46`) and a missing baseline is written but reported as a non-match so a
+regression cannot slip through on an absent snapshot (`MarkupSnapshot.cs:48-54`). This tier is
+[Rubric §28, Front-End Testing] and [Rubric §18, UI Architecture].
 
 ## End-to-end tests: a real browser, accessibility and performance as gates
 
 The E2E tier drives a real browser through Playwright. [`PlaywrightFixture`](#playwrightfixture)
-(`MMCA.Common.Testing.E2E/Infrastructure/PlaywrightFixture.cs:6`) is an xUnit collection fixture that
-launches the engine selected from configuration, `chromium`, `firefox`, or `webkit`, with unknown values
-falling back to Chromium (`PlaywrightFixture.cs:16-22`). That environment-selected engine is what lets CI
-run the same suite as a cross-browser matrix, [Rubric §22, Responsive/Cross-Browser]; in MMCA.Common's
-`ui-e2e` job all three engines are required merge gates. Headless mode, slow motion, base URL, timeouts,
-trace capture, and the seeded admin/user credentials all come from
-[`E2ETestConfiguration`](#e2etestconfiguration) (`MMCA.Common.Testing.E2E/Infrastructure/E2ETestConfiguration.cs:8`),
-whose nested `AdminCredentials` (`E2ETestConfiguration.cs:66`) and `UserCredentials`
+(`MMCA.Common.Testing.E2E/Infrastructure/PlaywrightFixture.cs:6`) is an xUnit collection fixture (its
+collection definition sits beside it at `PlaywrightFixture.cs:39-43`) that launches the engine
+selected from configuration, `chromium`, `firefox`, or `webkit`, with unknown values falling back to
+Chromium (`PlaywrightFixture.cs:17-22`). That environment-selected engine is what lets CI run the
+same suite as a cross-browser matrix, [Rubric §22, Responsive/Cross-Browser]; in MMCA.Common's
+`ui-e2e` job all three engines are required merge gates. Headless mode, slow motion, base URL,
+timeouts, trace capture, and the seeded admin/user credentials all come from
+[`E2ETestConfiguration`](#e2etestconfiguration)
+(`MMCA.Common.Testing.E2E/Infrastructure/E2ETestConfiguration.cs:8`), whose nested
+`AdminCredentials` (`E2ETestConfiguration.cs:66`) and `UserCredentials`
 (`E2ETestConfiguration.cs:78`) let a downstream project set app-specific defaults through a
-`[ModuleInitializer]` while environment variables always win.
+`[ModuleInitializer]` while environment variables always win. Two of its knobs exist purely to
+de-flake CI: `AuthTimeout` (`E2ETestConfiguration.cs:27`) tunes the slowest step, the post-auth
+round-trip, independently of the 30-second general default (`:18-19`), and `AuthGraceTimeout`
+(`E2ETestConfiguration.cs:38`, default 15 seconds) gives the success signal a window to appear after
+a transient error alert flashes during the success-path reload.
+
+[`E2ETestBase`](#e2etestbase) (`MMCA.Common.Testing.E2E/Infrastructure/E2ETestBase.cs:8`) is the
+per-test base on top of that fixture. It opens a fresh browser context per test with
+`IgnoreHTTPSErrors` and the configured base URL (`E2ETestBase.cs:19-37`), optionally records a
+Playwright trace (`:31-34`) and, when `E2E_TRACE` names a directory, keeps only the traces of tests
+that failed so a full-suite run yields exactly the inspectable failures (`:55-77`). Its `LoginAsync`
+(`E2ETestBase.cs:85`) clears both token stores before signing in (localStorage for the WASM host and
+the HttpOnly session cookie for the Server host, `:93-110`), and `WaitForAuthResultAsync` (`:201`)
+races three signals so success detection does not depend on the logout button having hydrated
+(`:206-223`). `ScanAsync` (`:281`) and `ScanGridAsync` (`:271`) wrap the accessibility gate for
+settled pages and for MudDataGrid list pages respectively, the latter waiting for a data row and for
+the loading bar to disappear before scanning.
 
 The hard part of Blazor E2E is timing, and [`PageExtensions`](#pageextensions)
-(`MMCA.Common.Testing.E2E/Infrastructure/PageExtensions.cs:19`) is where that knowledge is centralized, as
-C# `extension(IPage)` and `extension(ILocator)` blocks (`PageExtensions.cs:21,185`, see
-[primer](00-primer.md#c-extensiont-types-read-this-once)). The app uses InteractiveAuto with
+(`MMCA.Common.Testing.E2E/Infrastructure/PageExtensions.cs:19`) is where that knowledge is
+centralized, as C# `extension(IPage)` and `extension(ILocator)` blocks (`PageExtensions.cs:21,185`,
+see [primer](00-primer.md#c-extensiont-types-read-this-once)). The app uses InteractiveAuto with
 prerendering, so a page appears as static HTML before the runtime wires its event handlers.
 `WaitForBlazorAsync` (`PageExtensions.cs:27`) waits for `window.Blazor._internal` then two animation
 frames plus a 500 ms settle before any interaction (`PageExtensions.cs:32-40`);
-`GotoAndWaitForBlazorAsync` (`:47`) pairs navigation with it and deliberately waits on `Load` rather than
-`NetworkIdle`, because the persistent SignalR WebSocket means network idle never arrives (`:50-52`);
-`BlazorNavigateAsync` (`:62`) routes client-side so a protected page is not re-prerendered without its
-token. `FillAndVerifyAsync` (`:197`) fills a field then auto-waits until the value sticks, retyping
-character by character if hydration wiped it (`:212-214`), and `ClickAndVerifyAsync` (`:230`) and
-`ClickAndWaitForUrlAsync` (`:273`) retry a click until its visible effect appears so a click that beats
-hydration is not silently swallowed. These helpers encode hard-won lessons about the prerender and
-hydration race and are shared by every page object.
+`GotoAndWaitForBlazorAsync` (`:47`) pairs navigation with it and deliberately waits on `Load` rather
+than `NetworkIdle`, because the persistent SignalR WebSocket means network idle never arrives
+(`:50-52`); `BlazorNavigateAsync` (`:62`) routes client-side so a protected page is not
+re-prerendered without its token, polling `window.location` instead of `WaitForURLAsync` because a
+same-document navigation fires no load event (`:76-82`); and `GotoProtectedAsync` (`:104`) loads a
+public page first when the runtime is not yet up. `FillAndVerifyAsync` (`:197`) fills a field then
+auto-waits until the value sticks, retyping character by character if hydration wiped it
+(`:212-214`), and `ClickAndVerifyAsync` (`:230`) and `ClickAndWaitForUrlAsync` (`:273`) retry a click
+until its visible effect appears so a click that beats hydration is not silently swallowed. These
+helpers encode hard-won lessons about the prerender and hydration race and are shared by every page
+object.
 
 Accessibility and performance are asserted here, not deferred to a separate audit.
 `AssertNoAccessibilityViolationsAsync` (`PageExtensions.cs:157`) runs an axe-core scan and throws
 [`AccessibilityViolationException`](#accessibilityviolationexception)
-(`MMCA.Common.Testing.E2E/Infrastructure/AccessibilityViolationException.cs:7`) with a compact per-node
-summary of every violation (`PageExtensions.cs:170-181`), so an inaccessible page fails the build,
-[Rubric §21, Accessibility]. The scan scope itself is shipped as [`AxeOptions`](#axeoptions)
+(`MMCA.Common.Testing.E2E/Infrastructure/AccessibilityViolationException.cs:7`) with a compact
+per-node summary of every violation (`PageExtensions.cs:170-181`), so an inaccessible page fails the
+build, [Rubric §21, Accessibility]. The scan scope itself is shipped as [`AxeOptions`](#axeoptions)
 (`MMCA.Common.Testing.E2E/Infrastructure/AxeOptions.cs:9`): `Wcag21Aa` (`AxeOptions.cs:17`) pins the
-documented target of WCAG 2.1 AA tags and deliberately excludes axe's advisory best-practice rules, and
-`Wcag21AaExceptMudPagerCombobox` (`AxeOptions.cs:35`) is the one documented carve-out for MudBlazor
-9.6.0's unlabeled pager select (`AxeOptions.cs:26-33`). [`WebVitalsCollector`](#webvitalscollector)
-(`MMCA.Common.Testing.E2E/Infrastructure/WebVitalsCollector.cs:17`) installs `PerformanceObserver`-based
-Core Web Vitals capture (LCP, CLS, FCP, TTFB, INP) as an init script before first paint (`InstallAsync`,
-`WebVitalsCollector.cs:37`), reads the accumulated values back as a `WebVitalsSample` (`CollectAsync`,
-`WebVitalsCollector.cs:44,73`), and writes a citable JSON artifact under `WEB_VITALS_OUTPUT_DIR`
-(`WriteArtifactAsync`, `WebVitalsCollector.cs:60`) for CI, [Rubric §23, Front-End Performance] (the source
-tags it rubric §12). LCP and CLS are Chromium-only, so on Firefox and WebKit those fields stay 0 and the
-observers fail silently rather than throwing (`WebVitalsCollector.cs:11-14,19-21`). The reusable identity
-page objects [`LoginPage`](#loginpage) (`MMCA.Common.Testing.E2E/PageObjects/LoginPage.cs:6`),
+documented target of WCAG 2.1 AA tags (`AxeOptions.cs:19-23`) and deliberately excludes axe's
+advisory best-practice rules, and `Wcag21AaExceptMudPagerCombobox` (`AxeOptions.cs:35`) is the one
+documented carve-out, disabling only `aria-input-field-name` for MudBlazor 9.6.0's unlabeled pager
+select (`AxeOptions.cs:26-33,42-45`). [`WebVitalsCollector`](#webvitalscollector)
+(`MMCA.Common.Testing.E2E/Infrastructure/WebVitalsCollector.cs:17`) installs
+`PerformanceObserver`-based Core Web Vitals capture (LCP, CLS, FCP, TTFB, INP) as an init script
+before first paint (`InstallAsync`, `WebVitalsCollector.cs:37`, script at `:23-32`), reads the
+accumulated values back as a `WebVitalsSample` (`CollectAsync`, `WebVitalsCollector.cs:44,73`), and
+writes a citable JSON artifact under `WEB_VITALS_OUTPUT_DIR` (`WriteArtifactAsync`,
+`WebVitalsCollector.cs:60`) for CI, [Rubric §23, Front-End Performance] (the source tags it rubric
+§12). LCP and CLS are Chromium-only, so on Firefox and WebKit those fields stay 0 and the observers
+fail silently rather than throwing (`WebVitalsCollector.cs:12-15,19-22`). The reusable identity page
+objects [`LoginPage`](#loginpage) (`MMCA.Common.Testing.E2E/PageObjects/LoginPage.cs:6`),
 [`RegisterPage`](#registerpage) (`MMCA.Common.Testing.E2E/PageObjects/RegisterPage.cs:6`), and
-[`ProfilePage`](#profilepage) (`MMCA.Common.Testing.E2E/PageObjects/ProfilePage.cs:6`) wrap the framework's
-real auth surfaces with role- and label-based locators (`LoginPage.cs:12-18`) and route their own fills
-through the anti-race helper (`LoginPage.cs:31-32`, invoked at `:25-26`); downstream apps add their own family, for example the
-`MMCA.ADC.E2E.Tests` page objects for events, sessions, speakers, rooms, questions, and feedback.
+[`ProfilePage`](#profilepage) (`MMCA.Common.Testing.E2E/PageObjects/ProfilePage.cs:6`) wrap the
+framework's real auth surfaces with role- and label-based locators (`LoginPage.cs:12-18`) and route
+their own fills through the anti-race helper (`LoginPage.cs:31-32`, invoked at `:25-26`); downstream
+apps add their own family, for example the `MMCA.ADC.E2E.Tests` page objects for events, sessions,
+speakers, rooms, questions, and feedback.
 
 ## The Gallery harness
 
-Component and E2E coverage of MMCA.Common's *own* UI needs a page to render, but the framework is not a
-runnable app. `MMCA.Common.UI.Gallery` is a deliberately backend-less Blazor host that renders the real
-`MMCA.Common.UI` auth pages (`/login`, `/register`), the shared notification pages, and a primitives
-showcase (`/components`), so a real-browser axe scan can run inside MMCA.Common's own CI
-(`MMCA.Common.UI.Gallery/GalleryHost.cs:15-20`). It is kept **outside** `MMCA.Common.slnx` (together with
-`MMCA.Common.UI.E2E.Tests`) so the unit-test run stays fast; the CI `ui-e2e` job builds both by csproj
-path and scans the gallery. The host runs without a backend by registering stubs before `AddUIShared` so
-its `TryAdd*` registrations defer to them (`GalleryHost.cs:55-63`): `NoOpAuthUIService`,
+Component and E2E coverage of MMCA.Common's *own* UI needs a page to render, but the framework is not
+a runnable app. `MMCA.Common.UI.Gallery` is a deliberately backend-less Blazor host that renders the
+real `MMCA.Common.UI` auth pages (`/login`, `/register`), the shared notification pages, and a
+primitives showcase (`/components`), so a real-browser axe scan can run inside MMCA.Common's own CI
+(`MMCA.Common.UI.Gallery/GalleryHost.cs:15-19`, host built by `BuildApp` at `:28`). It is kept
+**outside** `MMCA.Common.slnx` (together with `MMCA.Common.UI.E2E.Tests`) so the unit-test run stays
+fast; the CI `ui-e2e` job builds both by csproj path and scans the gallery. Because the E2E suite
+self-hosts it in-process, where the entry assembly is the test host and the environment is
+Production, the host also has to point the static-web-assets loader at the gallery's own runtime
+manifest and force it on, otherwise the auth pages render unstyled, never become interactive, and
+axe's contrast checks are meaningless (`GalleryHost.cs:38-48`).
+
+The host runs without a backend by registering stubs before `AddUIShared` so its `TryAdd*`
+registrations defer to them (`GalleryHost.cs:55-63`): `NoOpAuthUIService`,
 [`NullTokenStorageService`](#nulltokenstorageservice)
-(`MMCA.Common.UI.Gallery/Stubs/NullTokenStorageService.cs:10`), [`NullTokenRefresher`](#nulltokenrefresher)
+(`MMCA.Common.UI.Gallery/Stubs/NullTokenStorageService.cs:10`),
+[`NullTokenRefresher`](#nulltokenrefresher)
 (`MMCA.Common.UI.Gallery/Stubs/NullTokenRefresher.cs:9`), and
-[`GalleryAuthenticationStateProvider`](#galleryauthenticationstateprovider)
-(`MMCA.Common.UI.Gallery/Stubs/GalleryAuthenticationStateProvider.cs:16`), which mirrors the request's
-authentication in both render phases. Because the notification pages carry a real `[Authorize]` that
-`MapRazorComponents` surfaces as endpoint metadata, the gallery also needs a genuine authentication
-scheme: [`GalleryFakeAuthenticationHandler`](#galleryfakeauthenticationhandler)
-(`MMCA.Common.UI.Gallery/Stubs/GalleryFakeAuthenticationHandler.cs:19`) authenticates only requests
-carrying the `gallery_auth=1` cookie (`GalleryFakeAuthenticationHandler.cs:26,30`), so the guarded pages
-are scanned signed in while `/login`, `/register`, and `/components` are scanned in their deliberate
-anonymous state (`GalleryFakeAuthenticationHandler.cs:8-17`).
+[`GalleryAuthenticationStateProvider`](#galleryauthenticationstateprovider), plus canned notification
+services so the bell and the inbox render populated markup (`GalleryHost.cs:75-80`). Because the
+notification pages carry a real `[Authorize]` that `MapRazorComponents` surfaces as endpoint
+metadata, the gallery also needs a genuine authentication scheme:
+[`GalleryFakeAuthenticationHandler`](#galleryfakeauthenticationhandler)
+(`MMCA.Common.UI.Gallery/Stubs/GalleryFakeAuthenticationHandler.cs:19`, registered at
+`GalleryHost.cs:69-73`) authenticates only requests carrying the `gallery_auth=1` cookie
+(`GalleryFakeAuthenticationHandler.cs:26,30-39`), so the guarded pages are scanned signed in while
+`/login`, `/register`, and `/components` are scanned in their deliberate anonymous state
+(`GalleryFakeAuthenticationHandler.cs:8-18`).
 
-## Contract and pipeline bases
+## Contract, pipeline, and benchmark bases
 
-The last family pins guarantees that live in the composition of the stack rather than in any one type.
-[`SecurityHeadersTestsBase`](#securityheaderstestsbase) (`MMCA.Common.Testing/SecurityHeadersTestsBase.cs:16`,
-[Rubric §11, Security] and [Rubric §26, Front-End Security]) probes an always-responding endpoint
-(`ProbePath`, default `/alive`, `SecurityHeadersTestsBase.cs:19`) and asserts the hardened header set:
-`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy:
-strict-origin-when-cross-origin`, a `Permissions-Policy` containing `geolocation=()`, a
-`Content-Security-Policy` containing `frame-ancestors 'none'`, and, in the Production environment, HSTS
-(`SecurityHeadersTestsBase.cs:30-36`). Its siblings
+The last family pins guarantees that live in the composition of the stack rather than in any one
+type. [`SecurityHeadersTestsBase`](#securityheaderstestsbase)
+(`MMCA.Common.Testing/SecurityHeadersTestsBase.cs:16`, [Rubric §11, Security] and [Rubric §26,
+Front-End Security]) probes an always-responding endpoint (`ProbePath`, default `/alive`,
+`SecurityHeadersTestsBase.cs:19`) and asserts the hardened header set: `X-Content-Type-Options:
+nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, a
+`Permissions-Policy` containing `geolocation=()`, a `Content-Security-Policy` containing
+`frame-ancestors 'none'`, and, in the Production environment, HSTS
+(`SecurityHeadersTestsBase.cs:29-35`). Its siblings
 [`OpenApiContractTestsBase<TFixture>`](#openapicontracttestsbasetfixture)
-(`MMCA.Common.Testing/OpenApiContractTestsBase.cs:21`),
-[`ProblemDetailsContractTestsBase<TFixture>`](#problemdetailscontracttestsbasetfixture)
+(`MMCA.Common.Testing/OpenApiContractTestsBase.cs:21`, with a `MinimumPathCount` floor at `:37` and
+deliberately no committed snapshot file, so a new controller can never leave a stale baseline behind,
+`:14-16`), [`ProblemDetailsContractTestsBase<TFixture>`](#problemdetailscontracttestsbasetfixture)
 (`MMCA.Common.Testing/ProblemDetailsContractTestsBase.cs:21`), and
 [`ServiceInfoVersioningContractTestsBase<TFixture>`](#serviceinfoversioningcontracttestsbasetfixture)
 (`MMCA.Common.Testing/ServiceInfoVersioningContractTestsBase.cs:19`) all subclass
@@ -302,22 +384,39 @@ contracts, [Rubric §9, API & Contract Design].
 
 Two bases guard the CQRS pipeline itself.
 [`DecoratorPipelineOrderTestsBase<TCommand, TCommandResult, TQuery, TQueryResult>`](#decoratorpipelineordertestsbasetcommand-tcommandresult-tquery-tqueryresult)
-(`MMCA.Common.Testing/DecoratorPipelineOrderTestsBase.cs:36`) is the opt-in fitness function for [ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html):
-it builds a real `ServiceCollection` through the repo's own registration sequence, resolves the decorated
-handlers, unwraps each decorator's private inner-handler field by reflection, and asserts the runtime
-nesting is exactly FeatureGate, Logging, Caching, Validating, Transactional, handler for commands and
-FeatureGate, Logging, Caching, handler for queries (`DecoratorPipelineOrderTestsBase.cs:9-30`). Because
-Scrutor's `TryDecorate` applies decorators in reverse registration order, an innocent-looking reorder of
-the `AddApplicationDecorators()` lines silently changes runtime behavior, and this base turns that into a
-test failure (see [group 5](group-05-cqrs-pipeline.md)). [`HandlerTestBase<THandler>`](#handlertestbasethandler)
-(`MMCA.Common.Testing/HandlerTestBase.cs:38`) is the fast unit-tier counterpart for exercising a single
-handler without a host.
+(`MMCA.Common.Testing/DecoratorPipelineOrderTestsBase.cs:36`) is the opt-in fitness function for
+[ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html): it builds a real
+`ServiceCollection` through the repo's own registration sequence (`ConfigureServices`, `:44`),
+resolves the decorated handlers, unwraps each decorator's private inner-handler field by reflection
+so it verifies the constructed object graph rather than the registration list (`:27-30`), and asserts
+the runtime nesting is exactly FeatureGate, Logging, Caching, Validating, Transactional, handler for
+commands and FeatureGate, Logging, Caching, handler for queries
+(`DecoratorPipelineOrderTestsBase.cs:47-62`, asserted by the two `[Fact]`s at `:64-70`). Because
+Scrutor's `TryDecorate` applies decorators in reverse registration order, an innocent-looking reorder
+of the `AddApplicationDecorators()` lines silently changes runtime behavior, and this base turns that
+into a test failure (see [group 5](group-05-cqrs-pipeline.md)).
+[`HandlerTestBase<THandler>`](#handlertestbasethandler)
+(`MMCA.Common.Testing/HandlerTestBase.cs:38`) is the fast unit-tier counterpart for exercising a
+single handler without a host: it owns a `Mock<IUnitOfWork>` whose `SaveChangesAsync` is
+pre-configured to succeed (`HandlerTestBase.cs:41-42,45`), a `NullLogger<THandler>` (`:48`), and a
+`RegisterRepository<TEntity, TIdentifierType>()` helper (`:56`) that wires a repository mock into
+both the read and write accessors.
 
-The takeaway for a new engineer: pick the tier that matches what you are proving (a fast unit test for
-domain logic, bUnit for a component, an integration fixture for a full request path, an E2E page object
-for a browser flow, a `*TestsBase` subclass for an architectural invariant), and the reusable base you
-need is already in one of the four `MMCA.Common.Testing.*` packages. Every remaining concrete test class
-is cataloged by project in the companion per-project test rollup for this chapter.
+A smaller fourth tier measures rather than asserts behavior. `MMCA.Common.Benchmarks`
+(BenchmarkDotNet) covers the per-request query pipeline, where the dynamic-LINQ predicate is
+re-parsed per call and the shaper reflects over DTO properties
+(`MMCA.Common.Benchmarks/QueryPipelineBenchmarks.cs:9-18`), and the specification hot path
+(`MMCA.Common.Benchmarks/SpecificationBenchmarks.cs:8-15`), both with `[MemoryDiagnoser]` allocation
+tracking. Its results are compared in CI against the committed
+`MMCA.Common/Tests/Performance/perf-baseline.json`, so moving a number has to be a deliberate,
+reviewed change, [Rubric §12, Performance & Scalability].
+
+The takeaway for a new engineer: pick the tier that matches what you are proving (a fast unit test
+for domain logic, bUnit for a component, an integration fixture for a full request path, an E2E page
+object for a browser flow, a `*TestsBase` subclass for an architectural invariant, a benchmark for an
+allocation budget), and the reusable base you need is already in one of the four
+`MMCA.Common.Testing.*` packages. Every remaining concrete test class is cataloged by project in the
+companion per-project test rollup for this chapter.
 
 ### ObservabilityConventionTests
 > MMCA.ADC.Architecture.Tests · `MMCA.ADC.Architecture.Tests` · `MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/ObservabilityConventionTests.cs:17` · Level 0 · class (sealed partial)
@@ -2431,9 +2530,9 @@ These twelve sealed classes share one shape: each is a **thin subclass of a shar
 This guide treats **tests as grouped, not sectioned per `[Fact]`** (the logged exception in the
 charter): the reusable test *bases*, the shared architecture-fitness library and its per-repo thin
 subclasses, and the component **Gallery** harness each get their own `###` treatment in the earlier parts
-of this chapter, but the bulk of the suite, **1,094 individual test types across 40 projects**, is rolled
+of this chapter, but the bulk of the suite, **1,120 individual test types across 41 projects**, is rolled
 up here. Each row below names a test project (assembly), the count of test types it contributes to the
-1,094, **what** it covers, and its **style** (unit / integration / component / E2E / performance-smoke).
+1,120, **what** it covers, and its **style** (unit / integration / component / E2E / performance-smoke).
 Counts reconcile exactly to the unit input.
 
 A few cross-cutting facts hold for every row, so they are stated once here rather than repeated:
@@ -2441,10 +2540,12 @@ A few cross-cutting facts hold for every row, so they are stated once here rathe
 - **Stack.** Every project is **xUnit v3** run under the **Microsoft Testing Platform** (not VSTest,
   `global.json` sets `"runner": "Microsoft.Testing.Platform"`), with **AwesomeAssertions** for fluent
   asserts, **Moq** for test doubles, and **coverlet** for coverage (see for example
-  `MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/MMCA.Common.Testing.Tests.csproj:7`). The lone
+  `MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/MMCA.Common.Testing.Tests.csproj:8`). The lone
   exception is `MMCA.Common.Benchmarks`, a **BenchmarkDotNet** executable (not a test project). See
   [primer §3](../00-primer.md#3-the-external-stack-bcl--nuget--external-level-0) for the platform/runner
-  externals.
+  externals. MMCA.Common's CI runs the whole solution behind a discovery floor,
+  `--minimum-expected-tests 2000` (`MMCA.Common/.github/workflows/ci.yml:144`), so a regression that
+  silently stops discovering thousands of tests fails the build instead of passing quietly.
 - **Layering mirror.** The ADC module suites repeat the same seven-project shape per module
   (`{Module}.{Shared,Domain,Application,Infrastructure,API,UI}.Tests` + a per-service
   `{Module}.IntegrationTests`), so once you understand the Conference column you understand Engagement
@@ -2459,15 +2560,20 @@ A few cross-cutting facts hold for every row, so they are stated once here rathe
   [`HandlerTestBase<THandler>`](#handlertestbasethandler),
   [`BunitComponentTestBase`](#bunitcomponenttestbase), the Playwright fixtures) and the
   `MMCA.Common.UI.Gallery` harness.
+- **Four projects sit outside `MMCA.Common.slnx` on purpose.** `MMCA.Common.UI.Gallery`,
+  `MMCA.Common.UI.E2E.Tests`, `MMCA.Common.Benchmarks`, and `MMCA.Common.Infrastructure.Redis.Tests` are
+  absent from the solution file so that `dotnet test --solution MMCA.Common.slnx` never needs Playwright
+  browsers, a Docker daemon, or a multi-iteration timing run. CI builds and runs each one by csproj path
+  in its own job (`ui-e2e`, `performance-smoke`, `redis-integration`).
 - **Two integration tiers, deliberately split.** Each service has a per-service `*.IntegrationTests`
   project that boots **one** host through `WebApplicationFactory<Program>` with cross-service gRPC edges
   faked and no broker (these gate deploy via the `integration-tests` CI job and need a real SQL Server
   named by `ADC_TEST_SQL_BASE`). Separately, `MMCA.ADC.CrossService.IntegrationTests` and
   `MMCA.ADC.ServiceBusEmulator.IntegrationTests` run against **Testcontainers** to prove the genuine
-  broker and gRPC round-trips: both live in the non-gating nightly
+  broker and gRPC round-trips: both live in the non-gating
   `MMCA.ADC/.github/workflows/cross-service-tests.yml`, whose *recency* (not its result) gates deploys
-  through the `cross-service-freshness` job at
-  `MMCA.ADC/.github/workflows/deploy.yml:620` (a 5-day window).
+  through the `cross-service-freshness` job at `MMCA.ADC/.github/workflows/deploy.yml:619`, a 5-day
+  window set by `FRESHNESS_DAYS` at `MMCA.ADC/.github/workflows/deploy.yml:629`.
   `[Rubric §14, Testability]` (assesses how thoroughly and at what cost the system can be verified): the
   count and spread below, heavy at the inner Application/Domain layers, thinner at the edges, with a
   dedicated integration + E2E tier, is the classic healthy **test pyramid**, and the fact that the volume
@@ -2477,18 +2583,19 @@ A few cross-cutting facts hold for every row, so they are stated once here rathe
 
 | Test project (assembly) | Types | What it covers · style |
 |--------------------------|-------|------------------------|
-| `MMCA.Common.Shared.Tests` | 22 | The innermost layer: the `Result`/`Error`/`ErrorType` pattern, value objects (`Money`, `Email`, `Address`, `DateRange`, …) and their factory-method invariants, and DTO/paging contracts. Pure **unit** tests, no DI or DB. |
+| `MMCA.Common.Shared.Tests` | 23 | The innermost layer: the `Result`/`Error`/`ErrorType` pattern, value objects (`Money`, `Email`, `Address`, `DateRange`, …) and their factory-method invariants, DTO/paging contracts, and the striped keyed lock behind [`KeyedSemaphoreStripe`](group-08-auth.md#keyedsemaphorestripe) (mutual exclusion per key, independent progress across stripes, release on the exception path, and a bounded table size no matter how many caller-supplied keys arrive, `MMCA.Common/Tests/Core/MMCA.Common.Shared.Tests/Concurrency/KeyedSemaphoreStripeTests.cs:12`). Pure **unit** tests, no DI or DB. |
 | `MMCA.Common.Domain.Tests` | 43 | The entity hierarchy (`BaseEntity`→`AuditableBaseEntity`→`AuditableAggregateRootEntity`), domain-event collection, `SetItems<T>`/`GetChildOrNotFound<T>`, specifications, and the `PiiAttribute`/anonymization boundary plus the logging/telemetry redaction half of the `[Pii]` contract (masks marked members so a data subject's values never reach logs, [ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html) / §30). Pure **unit** tests over the framework domain primitives. |
-| `MMCA.Common.Application.Tests` | 161 | The CQRS engine: the decorator pipeline in its registered nesting order (FeatureGate→Logging→Caching→Validating→Transactional→handler, `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:88`), the opt-in MiniProfiler decorators added by `AddApplicationProfiling` (`.../DependencyInjection.cs:185`) and the `CqrsMetrics` counters/histograms (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Decorators/CqrsMetricsTests.cs:20`), `ModuleLoader` topological ordering, `DomainEventDispatcher` plus the swallow-and-log `SafeDomainEventHandler` base (`.../DomainEvents/SafeDomainEventHandlerTests.cs:9`), validation, the [`IMessageBus`](group-04-events-outbox.md#imessagebus) abstraction, entity-query projection/paging and the per-type filter strategies, the cross-source [`CrossSourceSpecification`](group-03-querying-specifications.md#crosssourcespecification) helper ([ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)), the magic-byte upload sniffer behind [`ImageContentSniffer`](group-07-persistence-ef-core.md#imagecontentsniffer) (`.../ImageContentSnifferTests.cs:12`, [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html)), and the notification read handlers driven by an injected `TimeProvider` test clock. The framework's largest suite; fast **unit** tests with mocked infrastructure. |
-| `MMCA.Common.Infrastructure.Tests` | 171 | The widest layer: EF repositories + Unit of Work, the multi-database resolver/registry (`DataSourceResolver`, `EntityDataSourceRegistry`, `DbContextFactory`) and the cross-data-source degrade convention (`.../Persistence/DataSources/CrossDataSourceDegradeConventionTests.cs:24`), the **outbox** processor (eligibility/smart-wait/retry) and the consumer-side [`EfInboxStore`](group-04-events-outbox.md#efinboxstore) idempotency ledger (`.../Persistence/Inbox/EfInboxStoreTests.cs:27`, [ADR-021](https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html)), caching, JWT issuance + JWKS + the login-attempt lockout service (`.../Auth/LoginProtectionServiceTests.cs:14`), column-level encryption (`.../Persistence/EncryptedStringConverterTests.cs:6`), the filtered-unique-index soft-delete convention (`.../Persistence/Conventions/SoftDeleteUniqueIndexConventionTests.cs:23`), image processing (`.../Services/ImageSharpImageProcessorTests.cs:15`, [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html)), the SignalR push + live-channel plumbing, the message-bus implementations, the polyglot Cosmos-config portability suite ([ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)), and the in-repo disaster-recovery database-restore drill (`.../Resilience/DatabaseRestoreDrillTests.cs`, a CI-gated RTO baseline, [ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html) / §29). Mostly **unit** with EF-InMemory/SQLite boundaries (no real SQL Server here). |
-| `MMCA.Common.API.Tests` | 65 | The presentation pipeline: `ApiControllerBase.HandleFailure` `ErrorType`→HTTP mapping, the exception-handler chain, the `[Idempotent]` filter + `Idempotency-Key` replay, the authenticated-only global rate limiter's partition logic (`.../Startup/RateLimitPartitionTests.cs`, [ADR-019](https://ivanball.github.io/docs/adr/019-rate-limiting.html)), permission policies/ownership filters, correlation, the JWKS and OIDC-discovery endpoints, the session-cookie auth handler/refresher/jar, the shared notification + device controllers, the public-endpoint output-cache policy, the database-initialization startup (the SQLite-`EnsureCreated`-under-`Migrate` path, [ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)), and the error-message **localization** edge (localizes the human-readable message while leaving the machine `Code`/ProblemDetails `title` untouched and degrading to English when no localizer is present, [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) / §27). **Unit** tests of middleware/filters/controllers in isolation. |
+| `MMCA.Common.Application.Tests` | 164 | The CQRS engine: the decorator pipeline in its registered nesting order (FeatureGate→Logging→Caching→Validating→Transactional→handler, `MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:88`), the opt-in MiniProfiler decorators added by `AddApplicationProfiling` (`.../DependencyInjection.cs:185`) and the `CqrsMetrics` counters/histograms (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Decorators/CqrsMetricsTests.cs:20`), `ModuleLoader` topological ordering, `DomainEventDispatcher` plus the swallow-and-log `SafeDomainEventHandler` base (`.../DomainEvents/SafeDomainEventHandlerTests.cs:9`), validation, the [`IMessageBus`](group-04-events-outbox.md#imessagebus) abstraction, entity-query projection/paging and the per-type filter strategies, the cross-source [`CrossSourceSpecification`](group-03-querying-specifications.md#crosssourcespecification) helper ([ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)), the magic-byte upload sniffer behind [`ImageContentSniffer`](group-07-persistence-ef-core.md#imagecontentsniffer) (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/ImageContentSnifferTests.cs:12`, [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html)), and the notification read handlers driven by an injected `TimeProvider` test clock. Two of its newer files are worth calling out because they defend non-obvious properties rather than behavior: `PagingMathTests` pins the page arithmetic (`.../Services/Query/PagingMathTests.cs:12`), and `QueryFilterServicePropertyCacheTests` asserts on the real static property cache inside [`QueryFilterService`](group-03-querying-specifications.md#queryfilterservice) to prove that caching a *miss* never happens, since filter names arrive in the query string and a negatively-cached miss would let any caller grow a process-lifetime dictionary one bogus name at a time while the request still returned a tidy 400 (`.../Services/Filtering/QueryFilterServicePropertyCacheTests.cs:14`, §11/§12). The framework's largest suite; fast **unit** tests with mocked infrastructure. |
+| `MMCA.Common.Infrastructure.Tests` | 185 | The widest layer: EF repositories + Unit of Work, the multi-database resolver/registry (`DataSourceResolver`, `EntityDataSourceRegistry`, `DbContextFactory`) with its transaction coverage (`.../Persistence/DbContextFactoryTransactionTests.cs:28`) and the cross-data-source degrade convention (`.../Persistence/DataSources/CrossDataSourceDegradeConventionTests.cs:24`), the **outbox** processor (eligibility/smart-wait/retry) plus its wake signal (`.../Persistence/OutboxSignalTests.cs:13`) and the consumer-side [`EfInboxStore`](group-04-events-outbox.md#efinboxstore) idempotency ledger (`.../Persistence/Inbox/EfInboxStoreTests.cs:27`, [ADR-021](https://ivanball.github.io/docs/adr/021-consumer-inbox-idempotency.html)), caching, JWT issuance + JWKS + the login-attempt lockout service (`.../Auth/LoginProtectionServiceTests.cs:14`), column-level encryption (`.../Persistence/EncryptedStringConverterTests.cs:6`), the filtered-unique-index soft-delete convention (`.../Persistence/Conventions/SoftDeleteUniqueIndexConventionTests.cs:23`), image processing (`.../Services/ImageSharpImageProcessorTests.cs:15`, [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html)), the SignalR push + live-channel plumbing, the message-bus implementations, the polyglot Cosmos-config portability suite ([ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)), and the in-repo disaster-recovery database-restore drill (`.../Resilience/DatabaseRestoreDrillTests.cs:18`, a CI-gated RTO baseline, [ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html) / §29). Three of its files are pure **§12 performance guards** and are the only place the emitted SQL or the tracker's work is inspected at all: `QueryParameterizationTests` asserts that the dynamic-LINQ filter and sort strategies send their values as SQL *parameters* rather than inlined literals, which is what decides whether SQL Server reuses a plan and whether EF's compiled-query cache hits (`.../Persistence/QueryParameterizationTests.cs:26`); `SaveChangeDetectionTests` pins that a save runs change detection exactly once (two interceptors scan the `ChangeTracker` from `SavingChanges` and EF detects again on its own, and `Entries<T>()` memoizes nothing, so each scan used to pay a full snapshot comparison over every tracked entity and property) *and* pins that suppressing the extra passes lost the tracker no actual changes (`.../Persistence/SaveChangeDetectionTests.cs:24`); and `PeriodicBackgroundServiceTests` drives [`PeriodicBackgroundService`](group-07-persistence-ef-core.md#periodicbackgroundservice) deterministically through a `FakeTimeProvider` clock to cover the enablement gate, the startup delay, interval-driven cycles, and the failing-cycle-never-kills-the-loop contract (`.../Services/PeriodicBackgroundServiceTests.cs:15`). Mostly **unit** with EF-InMemory/SQLite boundaries (no real SQL Server here). |
+| `MMCA.Common.Infrastructure.Redis.Tests` | 1 | The one tier in the framework that runs the shipped cache against a **real Redis**. The unit tier mocks `IDistributedCache`, which means it asserts the calls the cache makes and never the storage format Redis ends up holding, and that is a blind spot with teeth: Redis keys are typed, `INCR` creates a **string**, and the `IDistributedCache` Redis provider stores every entry as a **hash** of `absexp`/`sldexp`/`data`, so mixing the two at one key round-trips flawlessly against a mock and answers `WRONGTYPE` in production, on the [ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html) rate-limit and lockout counters. `DistributedCacheServiceRedisTests` starts a `redis:7-alpine` Testcontainer, builds [`DistributedCacheService`](group-09-caching.md#distributedcacheservice) exactly as `AddCaching` does when both a distributed cache and a multiplexer are registered, and proves the increment→read round-trip, that increments carry a TTL so a counter can never lock a subject out forever, that concurrent writers may undercount but must never leave the key unreadable (the honest statement of the current read-modify-write contract), prefix invalidation over a real `SCAN`, and a plain set/get/remove smoke (`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Redis.Tests/DistributedCacheServiceRedisTests.cs:27`). Needs Docker, so it is outside the slnx and runs in the `redis-integration` CI job (`MMCA.Common/.github/workflows/ci.yml:609`). **Integration** style. |
+| `MMCA.Common.API.Tests` | 65 | The presentation pipeline: `ApiControllerBase.HandleFailure` `ErrorType`→HTTP mapping, the exception-handler chain, the `[Idempotent]` filter + `Idempotency-Key` replay, the authenticated-only global rate limiter's partition logic (`MMCA.Common/Tests/Presentation/MMCA.Common.API.Tests/Startup/RateLimitPartitionTests.cs:16`, [ADR-019](https://ivanball.github.io/docs/adr/019-rate-limiting.html)), permission policies/ownership filters, correlation, the JWKS and OIDC-discovery endpoints, the session-cookie auth handler/refresher/jar, the shared notification + device controllers, the public-endpoint output-cache policy, the database-initialization startup (the SQLite-`EnsureCreated`-under-`Migrate` path, [ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)), and the error-message **localization** edge (localizes the human-readable message while leaving the machine `Code`/ProblemDetails `title` untouched and degrading to English when no localizer is present, [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) / §27). **Unit** tests of middleware/filters/controllers in isolation. |
 | `MMCA.Common.Grpc.Tests` | 13 | The gRPC transport boundary: `Result`↔`RpcException` round-tripping, the JWT-forwarding client interceptor, and the Polly **resilience** pipeline on typed clients (retry, circuit-breaker, and fault-injection). **Unit** tests asserting [ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html) / [ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html) behavior. |
-| `MMCA.Common.Aspire.Tests` | 11 | The hosting/observability extensions: `OutboxPollFilterProcessor` (drops recurring outbox-poll spans from telemetry export), the `SecurityHeadersMiddleware`, the startup **warm-up** gate (holds readiness closed until first-request warm-up completes so a rolling deploy never serves a cold replica, §29), the head-based trace-sampling cost knob (a ratio in (0,1) opts in, anything else samples everything, §31), and the metrics-instrumentation toggle (`.../Telemetry/MetricsInstrumentationToggleTests.cs:12`). **Unit** suite over the Aspire service-defaults package. |
+| `MMCA.Common.Aspire.Tests` | 11 | The hosting/observability extensions: `OutboxPollFilterProcessor` (drops recurring outbox-poll spans from telemetry export), the `SecurityHeadersMiddleware`, the startup **warm-up** gate (holds readiness closed until first-request warm-up completes so a rolling deploy never serves a cold replica, §29), the head-based trace-sampling cost knob (a ratio in (0,1) opts in, anything else samples everything, §31), and the metrics-instrumentation toggle (`MMCA.Common/Tests/Hosting/MMCA.Common.Aspire.Tests/Telemetry/MetricsInstrumentationToggleTests.cs:12`). **Unit** suite over the Aspire service-defaults package. |
 | `MMCA.Common.Testing.Tests` | 9 | The suite that tests the **test framework itself**, so a regression in the shared scaffolding fails here rather than silently weakening every consumer suite: `HandlerTestBaseTests` drives [`HandlerTestBase<THandler>`](#handlertestbasethandler) exactly as a consumer handler test would, registering repositories and relying on the pre-wired unit of work (`MMCA.Common/Tests/Hosting/MMCA.Common.Testing.Tests/HandlerTestBaseTests.cs:12`), and `DecoratorPipelineOrderTests` runs [`DecoratorPipelineOrderTestsBase<…>`](#decoratorpipelineordertestsbasetcommand-tcommandresult-tquery-tqueryresult) against MMCA.Common's own `AddApplication → ScanModuleApplicationServices → AddApplicationDecorators` sequence to prove the resolved pipelines nest in the [ADR-014](https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html) order (`.../DecoratorPipelineOrderTests.cs:20`). **Unit** style. |
 | `MMCA.Common.UI.Tests` | 71 | Shared Blazor components (delete-confirmation, empty-state, the mobile card/infinite-scroll lists, notification bell/inbox/list/send pages, primitives), the MudBlazor theme/provider harness, HTTP-resilience/service-exception helpers, list-page state/query-state services, the primitive markup snapshots, the auth-form view-model validation (§24), and the i18n globalization pair (the `[!!…!!]` bracket-sentinel pseudo-localizer and the `ResxMudLocalizer` MudBlazor-chrome boundary, [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) / §27) plus the auth-aware nav menu and its mobile top-row. Rendered with **bUnit** (component-render unit tests via [`BunitComponentTestBase`](#bunitcomponenttestbase)). |
 | `MMCA.Common.UI.Web.Tests` | 4 | The Blazor Server web-host pieces: `ServerTokenStorageService` (during SSR prerender tokens come from the HttpOnly session cookies; on the interactive circuit the access token is held in memory, hydrated single-flight, and refreshed proactively near expiry, while the refresh token is never readable), the server form-factor probe, and `BlazorCspPolicyProvider`, which pins the enforced production Content-Security-Policy verbatim (connect-src locked to the configured API/Gateway origin, no `unsafe-eval`, permissive Report-Only degradation on an unparseable endpoint, §26). **Unit** tests. |
-| `MMCA.Common.UI.E2E.Tests` | 11 | **Playwright** axe-core (WCAG 2.1 AA) + render-smoke over the backend-less **Gallery** host (real Login/Register pages, the primitives/components showcase, and the shared Notification pages against stubbed collaborators), plus the dark-mode toggle, a Web-Vitals probe, and two i18n/mobile-parity gates: a `qps-Ploc` pseudo-locale round-trip asserting the `[!!` sentinel and no horizontal overflow under ~40% text expansion ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) / §27), and the culture+theme controls pinned into the mobile top-row below 1024px ([ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html) / §22). Deliberately outside `MMCA.Common.slnx`; runs in CI's `ui-e2e` job. **E2E/accessibility** style. `[Rubric §21, Accessibility]` (assesses automated a11y gating): this is where the framework proves zero axe violations before downstream apps consume the pages. |
-| `MMCA.Common.Benchmarks` | 4 | A BenchmarkDotNet **performance-smoke** executable for the DB-free query hot path: `SpecificationBenchmarks` measures the per-instance compiled-expression cache behind [`Specification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#specificationtentity-tidentifiertype)`.IsSatisfiedBy` (a cached-compile baseline vs. the recompile-each-call anti-pattern) and the `And`/`Or` composition cost. Deliberately **outside `MMCA.Common.slnx`** (like the Gallery), run on demand with `dotnet run -c Release` (append `-- --job Dry` for a seconds-long correctness smoke). `[Rubric §12, Performance & Scalability]` (assesses measured, not assumed, hot-path cost): this is the evidence harness for the spec cache. **Performance-smoke** style. |
+| `MMCA.Common.UI.E2E.Tests` | 11 | **Playwright** axe-core (WCAG 2.1 AA) + render-smoke over the backend-less **Gallery** host (real Login/Register pages, the primitives/components showcase, and the shared Notification pages against stubbed collaborators), plus the dark-mode toggle, a Web-Vitals probe, and two i18n/mobile-parity gates: a `qps-Ploc` pseudo-locale round-trip asserting the `[!!` sentinel and no horizontal overflow under ~40% text expansion ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) / §27), and the culture+theme controls pinned into the mobile top-row below 1024px ([ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html) / §22). Deliberately outside `MMCA.Common.slnx`; runs in CI's `ui-e2e` job across chromium, firefox, and webkit. **E2E/accessibility** style. `[Rubric §21, Accessibility]` (assesses automated a11y gating): this is where the framework proves zero axe violations before downstream apps consume the pages. |
+| `MMCA.Common.Benchmarks` | 6 | A BenchmarkDotNet **performance-smoke** executable covering the two DB-free hot paths. `SpecificationBenchmarks` measures the per-instance compiled-expression cache behind [`Specification<TEntity, TIdentifierType>`](group-03-querying-specifications.md#specificationtentity-tidentifiertype)`.IsSatisfiedBy` (a cached-compile baseline vs. the recompile-each-call anti-pattern) and the `And`/`Or` composition cost (`MMCA.Common/Tests/Performance/MMCA.Common.Benchmarks/SpecificationBenchmarks.cs:14`); `QueryPipelineBenchmarks` adds the read side, which runs on every list request in every consumer and regresses silently because the dynamic-LINQ predicate is re-parsed per call and the shaper reflects over the DTO: a single `CONTAINS` filter, a three-strategy mixed filter, dynamic sorting, and full-field vs. sparse-`fields=` shaping of a 100-row page (`.../QueryPipelineBenchmarks.cs:17`). Deliberately **outside `MMCA.Common.slnx`** (like the Gallery), but not on-demand-only: CI's `performance-smoke` job runs the suite with `--job Short --exporters json` and then `build/perfgate` compares the results against the committed `Tests/Performance/perf-baseline.json`, failing on any violation of its allocation ceilings or machine-independent ratio floors (`MMCA.Common/.github/workflows/ci.yml:360` and `:369`). Moving a number deliberately means updating the baseline in the same PR. `[Rubric §12, Performance & Scalability]` (assesses measured, not assumed, hot-path cost): this is the evidence harness, and the baseline file turns it from a runs-clean smoke into a regression gate. **Performance-smoke** style. |
 
 ### MMCA.ADC, Conference module (the largest application module)
 
@@ -2496,9 +2603,9 @@ A few cross-cutting facts hold for every row, so they are stated once here rathe
 |--------------------------|-------|------------------------|
 | `MMCA.ADC.Conference.Shared.Tests` | 17 | Conference DTOs, requests, enums, and DTO/request mappers (the manual-mapping/Mapperly boundary, [ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html)). Pure **unit** tests. |
 | `MMCA.ADC.Conference.Domain.Tests` | 22 | The Conference aggregates (Event, Session, Speaker, Room, Category, Question/Answer): factory-method `Result<T>` outcomes, invariants, state transitions, and emitted domain events. **Unit** tests. |
-| `MMCA.ADC.Conference.Application.Tests` | 134 | The command/query handlers for the Conference controllers, validators, navigation populators, the **Sessionize import** orchestrator + sync strategies (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Application.Tests/Events/UseCases/RefreshFromSessionizeHandlerTests.cs`), and the event/session live-window validation served to the live layer over gRPC (`.../Events/EventLiveValidationServiceTests.cs`, [`GetPublicSessionFilterHandler`](group-18-conference-application.md#getpublicsessionfilterhandler) and its cross-source filter query, [ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)). The biggest application suite in ADC; fast **unit** tests with mocked repositories/services. |
-| `MMCA.ADC.Conference.Infrastructure.Tests` | 7 | Conference-specific EF configurations, the module DB seeder, the Sessionize HTTP client, and the Anthropic-backed session-scoring service (`.../MMCA.ADC.Conference.Infrastructure.Tests/Services/AnthropicScoringServiceTests.cs:12`). Small **unit** suite over faked HTTP handlers. |
-| `MMCA.ADC.Conference.API.Tests` | 16 | Conference REST controllers (events, sessions, speakers, rooms, categories, questions/answers, session selection), the module's permission grants, and the Conference error-resource localization completeness check (`.../MMCA.ADC.Conference.API.Tests/Localization/ConferenceErrorResourcesTests.cs:15`, §27). **Unit** tests of the API layer. |
+| `MMCA.ADC.Conference.Application.Tests` | 136 | The command/query handlers for the Conference controllers, validators, navigation populators, the **Sessionize import** orchestrator + sync strategies (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Application.Tests/Events/UseCases/RefreshFromSessionizeHandlerTests.cs:12`), and the event/session live-window validation served to the live layer over gRPC (`.../Events/EventLiveValidationServiceTests.cs:13`, [`GetPublicSessionFilterHandler`](group-18-conference-application.md#getpublicsessionfilterhandler) and its cross-source filter query, [ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)). It also carries the AI-scoring background queue (`.../Sessions/DecisionSupport/SessionScoringQueueTests.cs:11`, [`SessionScoringQueue`](group-18-conference-application.md#sessionscoringqueue)) and the sessions-by-speaker filter handler, whose specification resolves the `SessionSpeaker` join down to an engine-portable ID-list criteria so the speaker pages and speaker dashboard filter server-side instead of pulling the whole catalog (`.../Sessions/UseCases/GetSessionsBySpeakerFilter/GetSessionsBySpeakerFilterHandlerTests.cs:16`, [`GetSessionsBySpeakerFilterHandler`](group-18-conference-application.md#getsessionsbyspeakerfilterhandler), §12). The biggest application suite in ADC; fast **unit** tests with mocked repositories/services. |
+| `MMCA.ADC.Conference.Infrastructure.Tests` | 7 | Conference-specific EF configurations, the module DB seeder, the Sessionize HTTP client, and the Anthropic-backed session-scoring service (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.Infrastructure.Tests/Services/AnthropicScoringServiceTests.cs:12`). Small **unit** suite over faked HTTP handlers. |
+| `MMCA.ADC.Conference.API.Tests` | 16 | Conference REST controllers (events, sessions, speakers, rooms, categories, questions/answers, session selection), the module's permission grants, and the Conference error-resource localization completeness check (`MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.API.Tests/Localization/ConferenceErrorResourcesTests.cs:15`, §27). **Unit** tests of the API layer. |
 | `MMCA.ADC.Conference.UI.Tests` | 27 | Conference Blazor pages and components: the public event/session/speaker detail + filtered list pages, the management CRUD forms and management-route authorization, the organizer feedback dashboards, the speaker dashboard, the session-selection dashboard with its AI-score and speaker-overlap views (`.../Pages/SessionSelection/SessionSelectionAiScoresTests.cs:15`), and the share/QR/add-to-calendar buttons (`.../Components/QrCodeButtonTests.cs:14`). Rendered with **bUnit** (`BunitTestBase` over the shared [`BunitComponentTestBase`](#bunitcomponenttestbase)). **Component** tests. |
 | `MMCA.ADC.Conference.IntegrationTests` | 36 | Boots the **Conference service host** via `WebApplicationFactory<Program>` (gRPC peers faked, JWT re-pointed at an in-process test key) and drives real HTTP per role (Anonymous/Attendee/Speaker/Organizer), plus OpenAPI contract-snapshot, API-versioning, optimistic-concurrency, soft-delete + audit-stamp fidelity, idempotency replay, output-cache eviction, the `includeChildren` regression, and the in-process `CrossServiceUserRegisteredTests` (the Identity→Conference `UserRegistered` auto-link handler). **Integration** style; needs a real SQL Server (`ADC_TEST_SQL_BASE`), runs in the deploy-gating `integration-tests` CI job. |
 
@@ -2508,7 +2615,7 @@ A few cross-cutting facts hold for every row, so they are stated once here rathe
 |--------------------------|-------|------------------------|
 | `MMCA.ADC.Engagement.Shared.Tests` | 2 | Bookmark/feedback/live DTOs, requests, and mappers. **Unit**. |
 | `MMCA.ADC.Engagement.Domain.Tests` | 6 | The `UserSessionBookmark`, event/session feedback, and conference-day live-layer aggregates (`LivePoll` + `SessionQuestion`): factory `Result<T>` outcomes, invariants, and domain events. **Unit**. |
-| `MMCA.ADC.Engagement.Application.Tests` | 27 | Bookmark, feedback, and live-layer (poll / session-question) add/remove/query handlers and validators, including the cross-module `ISessionBookmarkValidationService` / `IBookmarkCountService` / `IEventLiveValidationService` gRPC collaborators (stubbed) and the best-effort `ILiveChannelPublisher` ingress. **Unit**. |
+| `MMCA.ADC.Engagement.Application.Tests` | 30 | Bookmark, feedback, and live-layer (poll / session-question) add/remove/query handlers and validators, including the cross-module `ISessionBookmarkValidationService` / `IBookmarkCountService` / `IEventLiveValidationService` gRPC collaborators (stubbed), the poll-results builder (`MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.Application.Tests/LivePolls/Services/LivePollResultsBuilderTests.cs:16`), and the best-effort `ILiveChannelPublisher` ingress together with the queue that decouples it from the request path (`.../Live/LiveChannelPublishQueueTests.cs:8`, [`LiveChannelPublishQueue`](group-22-engagement-module.md#livechannelpublishqueue)). **Unit**. |
 | `MMCA.ADC.Engagement.Infrastructure.Tests` | 4 | Engagement EF configuration plus the live-channel publish processor that fans domain changes out to the SignalR hub (`MMCA.ADC/Tests/Modules/Engagement/MMCA.ADC.Engagement.Infrastructure.Tests/Live/LiveChannelPublishProcessorTests.cs:10`). **Unit**. |
 | `MMCA.ADC.Engagement.API.Tests` | 6 | The Bookmarks/Feedback/Live REST controllers in isolation. **Unit**. |
 | `MMCA.ADC.Engagement.UI.Tests` | 19 | Engagement Blazor renders and their UI services: the bookmark UI, the session/event feedback pages, the conference-day live/presenter surfaces (Happening Now, live poll, session Q&A, the moderation panel), the live-channel join/reconnect path (`.../Pages/LiveChannelJoinTests.cs:37`), and the session-reminder planner/coordinator (`.../Services/SessionReminderPlannerTests.cs:11`). **Component** (bUnit). |
@@ -2524,30 +2631,30 @@ A few cross-cutting facts hold for every row, so they are stated once here rathe
 | `MMCA.ADC.Identity.Infrastructure.Tests` | 4 | Identity EF config/repository, RS256 token issuance, and the JWKS provider. **Unit**. |
 | `MMCA.ADC.Identity.API.Tests` | 7 | The Auth REST controller, the JWKS endpoint, and identity middleware in isolation. **Unit**. |
 | `MMCA.ADC.Identity.UI.Tests` | 6 | Identity Blazor pages (login/register/profile/user-management) rendered with **bUnit**. **Component**. |
-| `MMCA.ADC.Identity.IntegrationTests` | 33 | Boots the **Identity service host** via `WebApplicationFactory<Program>` and drives the full auth surface over real HTTP: registration, login and its anonymous edge cases, claims, profile, user preferences, soft-deleted-user handling, the external-OAuth challenge/exchange, GDPR user export (`.../Attendee/UserExportTests.cs:16`), and JWKS discovery. It also carries the two contract guards (OpenAPI snapshot and the RFC 9457 Problem Details subclass over [`ProblemDetailsContractTestsBase<TFixture>`](#problemdetailscontracttestsbasetfixture), `.../Contract/ProblemDetailsContractTests.cs:17`, §9), the compliance pair that proves erasure works end to end and that PII never reaches the log pipeline (`.../Compliance/ErasureAndPiiLoggingTests.cs:19`, [ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html) / §30), an outbox-fidelity guard asserting registration atomically enqueues `UserRegistered` into `[dbo].[OutboxMessages]` (`.../Data/OutboxFidelityTests.cs:17`), and the in-process `CrossServiceSpeakerLinkTests`. **Integration**; real SQL Server, deploy-gating CI job. |
+| `MMCA.ADC.Identity.IntegrationTests` | 33 | Boots the **Identity service host** via `WebApplicationFactory<Program>` and drives the full auth surface over real HTTP: registration, login and its anonymous edge cases, claims, profile, user preferences, soft-deleted-user handling, the external-OAuth challenge/exchange, GDPR user export (`MMCA.ADC/Tests/Integration/MMCA.ADC.Identity.IntegrationTests/Attendee/UserExportTests.cs:16`), and JWKS discovery. It also carries the two contract guards (OpenAPI snapshot and the RFC 9457 Problem Details subclass over [`ProblemDetailsContractTestsBase<TFixture>`](#problemdetailscontracttestsbasetfixture), `.../Contract/ProblemDetailsContractTests.cs:16`, §9), the compliance pair that proves erasure works end to end and that PII never reaches the log pipeline (`.../Compliance/ErasureAndPiiLoggingTests.cs:19`, [ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html) / §30), an outbox-fidelity guard asserting registration atomically enqueues `UserRegistered` into `[dbo].[OutboxMessages]` (`.../Data/OutboxFidelityTests.cs:17`), and the in-process `CrossServiceSpeakerLinkTests`. **Integration**; real SQL Server, deploy-gating CI job. |
 
 ### MMCA.ADC, Notification module (push + inbox on top of the framework's notification types)
 
 | Test project (assembly) | Types | What it covers · style |
 |--------------------------|-------|------------------------|
 | `MMCA.ADC.Notification.API.Tests` | 1 | `NotificationModuleTests` pins the module contract itself: its `Name`, its declared `Dependencies` on Identity, `RequiresDependencies`, and the `RegisterDisabledStubs` path that keeps the cross-module `IUserNotificationExportService` resolvable as a singleton `DisabledUserNotificationExportService` when the module is switched off (`MMCA.ADC/Tests/Modules/Notification/MMCA.ADC.Notification.API.Tests/NotificationModuleTests.cs:7`). **Unit**. |
-| `MMCA.ADC.Notification.Application.Tests` | 5 | The module's two application services plus its DI registration: `AttendeeNotificationRecipientProvider` resolving broadcast recipients through the Identity `IAttendeeQueryService` gRPC contract (`.../AttendeeNotificationRecipientProviderTests.cs:7`), `UserNotificationExportService` assembling a data-subject export from the user-notification and push-notification repositories over `InMemoryQueryableExecutor` on top of [`HandlerTestBase<THandler>`](#handlertestbasethandler) (`.../UserNotificationExportServiceTests.cs:11`, §30), and `AddModuleNotificationApplication` proving both are registered against their interfaces (`.../DependencyInjectionTests.cs:9`). **Unit**. |
-| `MMCA.ADC.Notification.IntegrationTests` | 8 | Boots the **Notification service host** via `WebApplicationFactory<Program>` (the Identity recipient-lookup gRPC client faked by `FakeAttendeeQueryService`) and exercises the push-notification REST endpoints + inbox (`NotificationsController`/`InboxController` from `MMCA.Common.API`, `.../Notifications/NotificationControllerTests.cs:16`), an OpenAPI contract snapshot (`.../Contract/OpenApiContractTests.cs:16`), and the real-time SignalR `NotificationHub`: a live `HubConnection` asserts authenticated connect, anonymous rejection (the hub carries `[Authorize]`), and a POST-triggered broadcast reaching the connected recipient (`.../Notifications/NotificationHubTests.cs:15`). **Integration**; real SQL Server (`ADC_TEST_SQL_BASE`), deploy-gating CI job. |
+| `MMCA.ADC.Notification.Application.Tests` | 5 | The module's two application services plus its DI registration: `AttendeeNotificationRecipientProvider` resolving broadcast recipients through the Identity `IAttendeeQueryService` gRPC contract (`MMCA.ADC/Tests/Modules/Notification/MMCA.ADC.Notification.Application.Tests/AttendeeNotificationRecipientProviderTests.cs:7`), `UserNotificationExportService` assembling a data-subject export from the user-notification and push-notification repositories over `InMemoryQueryableExecutor` on top of [`HandlerTestBase<THandler>`](#handlertestbasethandler) (`.../UserNotificationExportServiceTests.cs:11`, §30), and `AddModuleNotificationApplication` proving both are registered against their interfaces (`.../DependencyInjectionTests.cs:9`). **Unit**. |
+| `MMCA.ADC.Notification.IntegrationTests` | 8 | Boots the **Notification service host** via `WebApplicationFactory<Program>` (the Identity recipient-lookup gRPC client faked by `FakeAttendeeQueryService`) and exercises the push-notification REST endpoints + inbox (`NotificationsController`/`InboxController` from `MMCA.Common.API`, `MMCA.ADC/Tests/Integration/MMCA.ADC.Notification.IntegrationTests/Notifications/NotificationControllerTests.cs:16`), an OpenAPI contract snapshot (`.../Contract/OpenApiContractTests.cs:16`), and the real-time SignalR [`NotificationHub`](group-10-notifications.md#notificationhub): a live `HubConnection` asserts authenticated connect, anonymous rejection (the hub carries `[Authorize]`), and a POST-triggered broadcast reaching the connected recipient (`.../Notifications/NotificationHubTests.cs:15`). **Integration**; real SQL Server (`ADC_TEST_SQL_BASE`), deploy-gating CI job. |
 
 ### MMCA.ADC, host, cross-service, and end-to-end suites
 
 | Test project (assembly) | Types | What it covers · style |
 |--------------------------|-------|------------------------|
-| `MMCA.ADC.Gateway.Tests` | 6 | Boots the real **YARP Gateway** host in-process (`GatewayApplicationFactory`, pinned to `Production` so HSTS and the realistic non-development CORS branch run) and asserts three operational guarantees: every response carries the hardened security response headers on `/alive` (`.../SecurityHeadersTests.cs:11`, §26), the host **shuts down gracefully** within its bounded stop timeout, firing `ApplicationStopping`/`ApplicationStopped` (`.../GracefulShutdownTests.cs:14`, §29), and the full YARP route table forwards each pattern to the service that owns it, asserted by swapping the real `IHttpForwarder` for a recording fake that echoes the destination prefix into a response header so no backends are needed (`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/RouteMapTests.cs:19`). The Gateway is a pure reverse proxy (no DbContext/broker) so the boot needs no SQL. **Integration** style. |
-| `MMCA.ADC.CrossService.IntegrationTests` | 12 | The **real-broker + real-gRPC** tier: boots all three REST hosts (Identity/Conference/Engagement) in one process against a **Testcontainers** SQL Server and a **Testcontainers** RabbitMQ, so the genuine MassTransit outbox → broker → consumer round-trip (`UserRegistered` auto-link, `SpeakerLinked`/`SpeakerUnlinked` back-link) and the real Conference → Engagement bookmark-count gRPC read run end to end, over a sequential env-boot fixture and a smoke gate that fails first if the container/host wiring is wrong. **Integration** style; needs **Docker**, runs in the non-gating nightly cross-service workflow (not in `Integration.slnf`). |
-| `MMCA.ADC.ServiceBusEmulator.IntegrationTests` | 3 | **Broker-parity smoke** (§33): production runs on Azure Service Bus while local development runs RabbitMQ, so Service-Bus-specific transport behavior used to be observable only in the deployed environment. This tier runs MassTransit v8 against the official **Service Bus emulator** container with ADC's real integration-event contracts and proves the two transport-specific behaviors: admin-plane topology provisioning (topic per message type, subscription, receive-endpoint queue) and the AMQP publish → topic → subscription → consume round-trip (`MMCA.ADC/Tests/Integration/MMCA.ADC.ServiceBusEmulator.IntegrationTests/ServiceBusRoundTripSmokeTests.cs:22`). One warm collection-scoped emulator serves the whole tier because of the emulator's 10-connection and roughly one-admin-operation-per-second quotas, the image is pinned to `2.0.1` (the admin plane arrived in 2.0.0 and is the tier's whole premise), and the fixture's static constructor lowers MassTransit's process-global TTL/auto-delete defaults beneath the emulator's one-hour maximum, which is why this tier lives in its **own** test process (`.../Infrastructure/ServiceBusEmulatorFixture.cs:22`). **Integration** style; needs **Docker**, runs in the same nightly workflow. |
-| `MMCA.ADC.E2E.Tests` | 60 | **Playwright** end-to-end against the running Aspire stack, using a Page-Object model (`PageObjects/`) and `E2ETestBase` login helpers, organized by actor workflow (Organizer/Speaker/Attendee/Identity/Preferences) plus the Engagement live-poll and feedback flows, real-time notification push, a Web-Vitals budget check, and an `AccessibilityTests` axe sweep. Runs once per engine via `E2E_BROWSER` (chromium/firefox/webkit). The largest single project here and the source of most of the chapter's recorded E2E debugging history. `[Rubric §28, Front-End Testing]` + `[Rubric §22, Responsive/Cross-Browser]`: this suite is the cross-browser, real-user-flow safety net. **E2E** style. |
+| `MMCA.ADC.Gateway.Tests` | 6 | Boots the real **YARP Gateway** host in-process (`GatewayApplicationFactory`, pinned to `Production` so HSTS and the realistic non-development CORS branch run) and asserts three operational guarantees: every response carries the hardened security response headers on `/alive` (`MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/SecurityHeadersTests.cs:11`, §26), the host **shuts down gracefully** within its bounded stop timeout, firing `ApplicationStopping`/`ApplicationStopped` (`.../GracefulShutdownTests.cs:14`, §29), and the full YARP route table forwards each pattern to the service that owns it, asserted by swapping the real `IHttpForwarder` for a recording fake that echoes the destination prefix into a response header so no backends are needed (`.../RouteMapTests.cs:19`). The Gateway is a pure reverse proxy (no DbContext/broker) so the boot needs no SQL. **Integration** style. |
+| `MMCA.ADC.CrossService.IntegrationTests` | 12 | The **real-broker + real-gRPC** tier: boots all three REST hosts (Identity/Conference/Engagement) in one process against a **Testcontainers** SQL Server and a **Testcontainers** RabbitMQ, so the genuine MassTransit outbox → broker → consumer round-trip (`UserRegistered` auto-link, `SpeakerLinked`/`SpeakerUnlinked` back-link) and the real Conference → Engagement bookmark-count gRPC read run end to end, over a sequential env-boot fixture and a smoke gate that fails first if the container/host wiring is wrong. **Integration** style; needs **Docker**, runs in the weekday-nightly `cross-service` job (`MMCA.ADC/.github/workflows/cross-service-tests.yml:74`, scheduled by the `0 6 * * 1-5` cron at `.../cross-service-tests.yml:30`), not in `Integration.slnf`. This is the job whose recency the `cross-service-freshness` deploy gate keys off. |
+| `MMCA.ADC.ServiceBusEmulator.IntegrationTests` | 3 | **Broker-parity smoke** (§33): production runs on Azure Service Bus while local development runs RabbitMQ, so Service-Bus-specific transport behavior is otherwise observable only in the deployed environment. This tier runs MassTransit v8 against the official **Service Bus emulator** container with ADC's real integration-event contracts and proves the two transport-specific behaviors: admin-plane topology provisioning (topic per message type, subscription, receive-endpoint queue) and the AMQP publish → topic → subscription → consume round-trip (`MMCA.ADC/Tests/Integration/MMCA.ADC.ServiceBusEmulator.IntegrationTests/ServiceBusRoundTripSmokeTests.cs:22`). One warm collection-scoped emulator serves the whole tier because of the emulator's connection and admin-operation quotas, and the fixture's static constructor lowers MassTransit's process-global TTL/auto-delete defaults beneath the emulator's maximum, which is why this tier lives in its **own** test process (`.../Infrastructure/ServiceBusEmulatorFixture.cs:22`). Read the current CI status honestly: the job is `continue-on-error` with an 8-minute cap and, since 2026-07-24, **dispatch-only** (`if: … && github.event_name == 'workflow_dispatch'`, `MMCA.ADC/.github/workflows/cross-service-tests.yml:144`), because the emulator's floating companion SQL image hung container startup and was killed at the timeout on 7 of 7 measured runs, producing no signal while burning runner minutes and forcing every cross-service run to conclude `cancelled`. Nothing gates on it (the freshness gate keys off the `cross-service` job specifically), so unscheduling it changed no deploy precondition; run it by hand when validating a fix for the startup hang. **Integration** style; needs **Docker**. |
+| `MMCA.ADC.E2E.Tests` | 60 | **Playwright** end-to-end against the running Aspire stack, using a Page-Object model (`PageObjects/`) and `E2ETestBase` login helpers, organized by actor workflow (Organizer/Speaker/Attendee/Identity/Preferences) plus the Engagement live-poll and feedback flows, real-time notification push, a Web-Vitals budget check, and an `AccessibilityTests` axe sweep. Runs once per engine via `E2E_BROWSER` (chromium/firefox/webkit); the chromium leg gates deploy through `e2e-gate` while firefox and webkit stay on the Mon/Thu schedule. The largest single project here and the source of most of the chapter's recorded E2E debugging history. `[Rubric §28, Front-End Testing]` + `[Rubric §22, Responsive/Cross-Browser]`: this suite is the cross-browser, real-user-flow safety net. **E2E** style. |
 
-**Reconciliation.** Common: 22+43+161+171+65+13+11+9+71+4+11+4 = **585** (12 projects).
-ADC Conference: 17+22+134+7+16+27+36 = **259** (7). ADC Engagement: 2+6+27+4+6+19+13 = **77** (7).
+**Reconciliation.** Common: 23+43+164+185+1+65+13+11+9+71+4+11+6 = **606** (13 projects).
+ADC Conference: 17+22+136+7+16+27+36 = **261** (7). ADC Engagement: 2+6+30+4+6+19+13 = **80** (7).
 ADC Identity: 3+4+21+4+7+6+33 = **78** (7). ADC Notification: 1+5+8 = **14** (3).
 ADC host/cross-service/E2E: 6+12+3+60 = **81** (4).
-**Total = 585+259+77+78+14+81 = 1,094**, across **40 projects**, matching the unit input exactly.
+**Total = 606+261+80+78+14+81 = 1,120**, across **41 projects**, matching the unit input exactly.
 
 
 ---

@@ -4,11 +4,11 @@
 **Conference bounded context**, the largest and richest domain in MMCA.ADC. It models everything an
 organizer curates and an attendee browses: the **Event** (the conference itself, with its rooms,
 speaker roster, and venue details), the **Session** (a talk on the schedule), the **Speaker**, the
-**Category**/`CategoryItem` taxonomy (tracks, levels, formats), and the **Question**/answer machinery
-that captures structured metadata about events, sessions, and speakers. Five aggregate roots, a
-sixth AI-scoring aggregate, a dozen child entities, the static **invariant** classes that guard their
-business rules, the **domain events** every mutation raises, a pure **domain service** that
-coordinates cross-aggregate cascade deletes, and, across the package boundary in
+**Category**/**CategoryItem** taxonomy (tracks, levels, session formats), and the **Question**/answer
+machinery that captures structured metadata about events, sessions, and speakers. Five aggregate
+roots, a sixth AI-scoring aggregate, a dozen child entities, the static **invariant** classes that
+guard their business rules, the **domain events** every mutation raises, a pure **domain service**
+that coordinates the cross-aggregate cascade delete, and, across the package boundary in
 `MMCA.ADC.Conference.Shared`, the **DTO contracts**, the cross-module **service interfaces** the
 Engagement module calls, the **integration events** that keep the User-to-Speaker link consistent
 across services, and the **decision-support** read models that power the organizer's session-selection
@@ -20,22 +20,24 @@ applied to a real, non-trivial domain. If a pattern here looks unfamiliar, it wa
 and is only cross-referenced now: the [`Result`](group-01-result-error-handling.md#result) pattern
 (G01), the
 [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype)
-entity hierarchy and [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate) (G02),
-the [`EntityChangedEvent<TIdentifierType>`](group-04-events-outbox.md#entitychangedeventtidentifiertype)
+entity hierarchy, the [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute)
+marker, and [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate) (G02), the
+[`EntityChangedEvent<TIdentifierType>`](group-04-events-outbox.md#entitychangedeventtidentifiertype)
 event base and the outbox spine (G04), the
 [`INavigationPopulator<in TEntity>`](group-11-navigation-populators.md#inavigationpopulatorin-tentity)
-cross-container eager-loading extension point (G11), and the [`IModule`](group-14-module-system-composition.md#imodule)
-composition system (G14). The lens this chapter most strongly embodies is `[Rubric §4, Domain-Driven
-Design]` (does the model mirror the business, aggregates, value objects, invariants, ubiquitous
-language?): this is the codebase's most complete DDD specimen, and it is worth reading slowly, because
-the same shapes repeat across all five aggregates.
+cross-container eager-loading extension point (G11), and the
+[`IModule`](group-14-module-system-composition.md#imodule) composition system (G14). The lens this
+chapter most strongly embodies is `[Rubric §4, Domain-Driven Design]` (does the model mirror the
+business: aggregates, value objects, invariants, ubiquitous language?): this is the codebase's most
+complete DDD specimen, and it is worth reading slowly, because the same shapes repeat across all five
+aggregates.
 
 ## Two packages, one bounded context
 
 The Conference context spans two of the module's projects, and the split is deliberate Clean
 Architecture (`[Rubric §3, Clean Architecture]`). **`MMCA.ADC.Conference.Domain`** holds the
-behavior-rich aggregates, their invariants, their domain events, and the domain service, the inner
-ring that depends only on `MMCA.Common.Domain`/`.Shared` and knows nothing about EF, ASP.NET, or
+behavior-rich aggregates, their invariants, their domain events, and the domain service: the inner
+ring that depends only on `MMCA.Common.Domain`/`.Shared` and knows nothing about EF Core, ASP.NET, or
 serialization. **`MMCA.ADC.Conference.Shared`** holds the *contracts* that cross boundaries: the DTOs
 returned by the API, the cross-module validation interfaces the Engagement module consumes
 ([`ISessionBookmarkValidationService`](#isessionbookmarkvalidationservice) and
@@ -46,10 +48,10 @@ integration events Identity subscribes to, and the feature-flag, permission, and
 dragging in the domain. The [`AssemblyReference`](#assemblyreference)/[`ClassReference`](#classreference)
 anchor pair in `Domain`
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/AssemblyReference.cs:5,11`) is the
-trivial type Scrutor and the architecture-fitness tests pin to when they need to *name* the Conference
-domain assembly.
+trivial type that assembly scanning and the architecture-fitness tests pin to when they need to *name*
+the Conference domain assembly.
 
-## The five aggregates and their ownership boundaries
+## Five aggregates, a sixth scorecard, and their ownership boundaries
 
 An **aggregate** is a root entity plus the children it exclusively owns; invariants are enforced
 *inside* the boundary, and references *across* aggregates are by ID, never by object graph. The
@@ -59,140 +61,176 @@ so they inherit soft-delete, audit stamping, and the buffered `DomainEvents` col
 
 - [`Event`](#event)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/Event.cs:17`) owns
-  [`Room`](#room) (the physical rooms), [`EventSpeaker`](#eventspeaker) (the speaker roster, a join
-  to `Speaker` *by ID*), and [`EventQuestionAnswer`](#eventquestionanswer) (event-level structured
+  [`Room`](#room) (the physical rooms), [`EventSpeaker`](#eventspeaker) (the speaker roster, a join to
+  `Speaker` *by ID*), and [`EventQuestionAnswer`](#eventquestionanswer) (event-level structured
   answers). Its `Id` is database-generated (marked `[IdValueGenerated]`, `Event.cs:16`).
 - [`Session`](#session)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/Session.cs:16`) owns
   [`SessionSpeaker`](#sessionspeaker), [`SessionCategoryItem`](#sessioncategoryitem), and
   [`SessionQuestionAnswer`](#sessionquestionanswer). Critically, a Session references its `Event` and
-  `Room` by scalar FK (`EventId` at `Session.cs:60`, `RoomId` at `Session.cs:63`): they are *separate*
-  aggregates, even though the model exposes `Event`/`Room` navigations (`Session.cs:67,71`, both
+  `Room` by scalar FK (`EventId` at `Session.cs:58`, `RoomId` at `Session.cs:61`): they are *separate*
+  aggregates, even though the model exposes `Event`/`Room` navigations (`Session.cs:64-69`, both
   `[Navigation]`-decorated with public setters so the populator and query filtering can hydrate them)
   used only for read-side filtering, never to reach across the boundary and mutate. Session `Id`s are
-  **Sessionize-assigned**, not database-generated.
+  Sessionize-assigned, not database-generated, and `Duration` is a computed property over
+  `StartsAt`/`EndsAt` rather than a stored column (`Session.cs:74-76`).
 - [`Speaker`](#speaker)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/Speaker.cs:15`) owns
   [`SpeakerCategoryItem`](#speakercategoryitem) and [`SpeakerQuestionAnswer`](#speakerquestionanswer),
   holds an optional `Email` [value object](group-02-domain-building-blocks.md#email) (`Speaker.cs:24`),
-  and carries the cross-module `LinkedUserId` FK to an Identity `User` (`Speaker.cs:55`). Speaker `Id`s
-  are Sessionize-assigned GUIDs, with a fallback to `Guid.NewGuid()` for organizer-created speakers
-  (see the in-code BR note at `Speaker.cs:146-151`).
+  and carries the cross-module `LinkedUserId` FK to an Identity `User` (`Speaker.cs:51`). Speaker `Id`s
+  are Sessionize-assigned GUIDs, with a fallback to `Guid.NewGuid()` for organizer-created and seeded
+  speakers (see the in-code note at `Speaker.cs:141-146`).
 - [`Category`](#category)
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/Category.cs:16`) owns
   [`CategoryItem`](#categoryitem): the taxonomy roots ("Level", "Track", "Session format") and their
-  selectable options.
+  selectable options. Its `Id` is database-generated too (`Category.cs:15`); Sessionize imports supply
+  explicit IDs via `IDENTITY_INSERT`.
 - [`Question`](#question)
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Questions/Question.cs:15`) is a flat
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Questions/Question.cs:14`) is a flat
   aggregate (no children); its answers live on the *other* aggregates as `*QuestionAnswer` join
   entities, keyed by `QuestionId`.
 
 A sixth root, [`SessionAiScore`](#sessionaiscore)
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionAiScore.cs:12`), is an
-AI-generated scorecard for a session (seven 1.0-to-10.0 scores: an overall plus six per-criteria, at
-`SessionAiScore.cs:17-36`, together with the model's reasoning and identifier, each score
-range-guarded at `SessionAiScore.cs:133-140`), stored one-per-session and replaced on re-scoring. It
-is the persistence side of the decision-support feature described below. That a *scorecard* is modeled
-as its own aggregate, referencing the Session by scalar `SessionId` (`SessionAiScore.cs:15`) rather
-than nesting under it, is a clean aggregate-boundary call: scores have an independent lifecycle
-(computed asynchronously, re-run on demand) and should not be loaded every time a Session is read.
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionAiScore.cs:13`), is an
+AI-generated scorecard for a session: an overall score plus six per-criteria scores, all `decimal`
+(`SessionAiScore.cs:19-37`), together with the model's reasoning and model identifier
+(`SessionAiScore.cs:40-43`), each score range-guarded to 1.0 through 10.0 by a private helper
+(`SessionAiScore.cs:134-141`). It is stored one per session and replaced on re-scoring through
+`Update` (`SessionAiScore.cs:98`), and it is the persistence side of the decision-support feature
+described below. That a *scorecard* is modeled as its own aggregate, referencing the Session by scalar
+`SessionId` (`SessionAiScore.cs:16`) rather than nesting under it, is a clean aggregate-boundary call:
+scores have an independent lifecycle (computed asynchronously, re-run on demand) and should not be
+loaded every time a Session is read.
 
 ## The aggregate shape, taught once
 
-Open any of the five roots and you will see the *same* skeleton; this repetition is the point, and it
-is what makes the per-type sections that follow read quickly. The shape, using [`Event`](#event) as the
+Open any of the roots and you will see the *same* skeleton; this repetition is the point, and it is
+what makes the per-type sections that follow read quickly. The shape, using [`Event`](#event) as the
 exemplar:
 
 1. **Private-setter properties** (`Name { get; private set; }`, `Event.cs:20`): state can only change
    through the aggregate's own methods, never by an outside caller assigning a property. This is
    encapsulation as a compile-time guarantee (`[Rubric §4, Domain-Driven Design]`, `[Rubric §1,
    SOLID]`).
-2. **Backing-field collections exposed as `IReadOnlyCollection<T>`** (`_rooms` at `Event.cs:62` becomes
-   `Rooms => _rooms.AsReadOnly()` at `Event.cs:66`), each decorated `[Navigation(IsCollection = true)]`
-   so the navigation-populator machinery (G11) knows how to eager-load it. Children can only be
-   added or removed through `AddRoom`/`RemoveRoom`-style methods that enforce invariants (for example
-   duplicate-name rejection at `Event.cs:330-337`).
-3. **A private EF constructor** (`Event.cs:81`, for materialization) plus a **private state
-   constructor** (`Event.cs:87`) used only by the factory.
+2. **Backing-field collections exposed as `IReadOnlyCollection<T>`** (`_rooms` at `Event.cs:61` becomes
+   `Rooms => _rooms.AsReadOnly()` at `Event.cs:65`). Children can only be added, updated, or removed
+   through `AddRoom`/`UpdateRoom`/`RemoveRoom`-style methods that enforce invariants (for example the
+   duplicate-name rejection at `Event.cs:335-342`). Most collections are decorated
+   `[Navigation(IsCollection = true)]` so the navigation-populator machinery (G11) eager-loads them,
+   but two deliberately are **not**: `Event.EventQuestionAnswers` (`Event.cs:78-85`) and
+   `Session.SessionQuestionAnswers` (`Session.cs:89-98`) opt out because those collections grow with
+   attendance rather than with the schedule and were riding along on hot anonymous public reads that
+   never render them. Handlers that genuinely need them pass an explicit `includes:` list. That is a
+   `[Rubric §12, Performance & Scalability]` decision expressed as a deliberately absent attribute.
+3. **A private EF Core constructor** (`Event.cs:88`, for materialization) plus a **private state
+   constructor** (`Event.cs:94`) used only by the factory.
 4. **A static `Create(...)` factory returning [`Result<T>`](group-01-result-error-handling.md#result)**
-   (`Event.cs:125`): it validates invariants via `Result.Combine(...)` *before* constructing anything
-   (`Event.cs:138-143`), so an invalid aggregate is unrepresentable, then raises an `Added` domain
-   event (`Event.cs:162`). The `isIdValueGenerated ? default : id!.Value` dance (`Event.cs:145,158`)
-   reconciles database-generated IDs with explicitly supplied ones.
-5. **Mutator methods** (`Update` at `Event.cs:182`, `Publish`/`Unpublish` at `Event.cs:219,239`,
-   `LinkUser`/`UnlinkUser` on Speaker at `Speaker.cs:250,268`) that re-validate, mutate, and raise an
-   `Updated` event.
-6. **An overridden `Delete()`** (`Event.cs:275`) that calls `base.Delete()` (the soft-delete from
-   G02), then **cascade-soft-deletes each owned child** (`Event.cs:281-300`) and raises a `Deleted`
-   event (`Event.cs:302`). Soft-delete is the default everywhere (`[Rubric §8, Data Architecture]`:
-   the `IsDeleted` flag plus EF global query filters, never a hard `DELETE`).
-7. **`internal SetX(...)` methods** (`Event.cs:409`, `469`, `546`) delegating to the framework's
-   `SetItems` helper, the hooks the navigation populators call to hydrate the read-only collections
-   after a batch load.
+   (`Event.cs:131`): it validates invariants via `Result.Combine(...)` *before* constructing anything
+   (`Event.cs:144-147`), so an invalid aggregate is unrepresentable, then raises an `Added` domain
+   event (`Event.cs:168`). The `isIdValueGenerated ? default : id!.Value` dance (`Event.cs:151,164`)
+   reconciles database-generated IDs with explicitly supplied ones. Each root spells that
+   reconciliation slightly differently: [`Speaker`](#speaker) generates a GUID when no id is supplied
+   (`Speaker.cs:146`), and [`Category`](#category) throws for a missing id when identity is not
+   database-generated (`Category.cs:69`).
+5. **Mutator methods** (`Update` at `Event.cs:187`, `Publish`/`Unpublish` at `Event.cs:224,244`,
+   `LinkUser`/`UnlinkUser` on Speaker at `Speaker.cs:244,262`) that re-validate, mutate, and raise an
+   `Updated` event. Lifecycle guards return failures rather than throwing: publishing an already
+   published event yields the `"Event.AlreadyPublished"` invariant error (`Event.cs:228-232`).
+6. **An overridden `Delete()`** (`Event.cs:280`) that calls `base.Delete()` (the soft-delete from G02),
+   then **cascade-soft-deletes each owned child** (rooms, event speakers, and event answers at
+   `Event.cs:286-305`) and raises a `Deleted` event (`Event.cs:307`). [`Session`](#session) does the
+   same for its three child collections (`Session.cs:271-298`), [`Category`](#category) for its items
+   (`Category.cs:102-116`), and [`Speaker`](#speaker) uses its override for a different job: clearing
+   the cross-context link (`Speaker.cs:223-235`). Soft-delete is the default everywhere (`[Rubric §8,
+   Data Architecture]`: the `IsDeleted` flag plus EF Core global query filters, never a hard `DELETE`).
+7. **`internal SetX(...)` methods** (`Event.cs:414,474,551`) delegating to the framework's `SetItems`
+   helper: the hooks the navigation populators call to hydrate the read-only collections after a batch
+   load.
 
-Because the shape is identical, the child entities ([`Room`](#room), the four `*Speaker`/`*CategoryItem`
+Because the shape is identical, the child entities ([`Room`](#room), the `*Speaker`/`*CategoryItem`
 joins, the three `*QuestionAnswer` types) and their `*Changed` domain events are documented as
 **sibling families** in the sections that follow: taught once, then tabulated.
 
 ## Invariants, business rules as testable units
 
-Each aggregate has a co-located static **invariant class**, [`EventInvariants`](#eventinvariants),
+Each aggregate has a co-located static **invariant class**, [`EventInvariants`](#eventinvariants)
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Events/EventInvariants.cs:10`),
 [`SessionInvariants`](#sessioninvariants), [`SpeakerInvariants`](#speakerinvariants),
-[`CategoryInvariants`](#categoryinvariants), [`QuestionInvariants`](#questioninvariants), whose methods
-each return a [`Result`](group-01-result-error-handling.md#result) and are combined with
+[`CategoryInvariants`](#categoryinvariants), and [`QuestionInvariants`](#questioninvariants), whose
+methods each return a [`Result`](group-01-result-error-handling.md#result) and are combined with
 `Result.Combine(...)` in the factory and mutators. They build on
 [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants) (G02) for the generic
-string-not-empty and max-length checks and add domain-specific rules: `SessionInvariants` carries the
-length constants *shared with the EF configuration* so the domain rule and the column constraint can
-never drift
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionInvariants.cs:12-34`),
-plus the BR-49 status-eligibility check (`SessionInvariants.cs:78`) and the BR-122 zero-duration guard
-(`SessionInvariants.cs:95`); `QuestionInvariants` validates the free-text enum-like fields against
-allow-lists (`QuestionInvariants.cs:28-34,68`) and, for answers, checks each answer value against its
-question type (Rating 1-5, Text max 2000, Email format, `QuestionInvariants.cs:115`); `CategoryInvariants`
-enforces case-insensitive uniqueness of an item name within its category (BR-138, invoked from
-`Category.cs:137`). Centralizing each rule as a named, side-effect-free method is what makes the domain
-exhaustively unit-testable (`[Rubric §14, Testability]`) and keeps the ubiquitous language explicit:
-the error codes (`"Event.AlreadyPublished"` at `Event.cs:224`, `"Session.Duration.Invalid"` at
-`SessionInvariants.cs:100`) *are* the business vocabulary. The recurring `// BR-NN` comments are
-traceability links back to `specifications.md`.
+string-not-empty and max-length checks and add domain-specific rules. They also carry the **length
+constants shared with the EF Core configuration**, so the domain rule and the column constraint can
+never drift (`EventInvariants.cs:13-46`,
+`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionInvariants.cs:13-34`,
+`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/SpeakerInvariants.cs:13-40`).
 
-A nuance worth flagging: the `Status` field on Session is free-text, imported verbatim from Sessionize
+The domain-specific rules are where the ubiquitous language shows up. `SessionInvariants` holds the
+BR-91 service-session guard (`SessionInvariants.cs:91`), the BR-49 status-eligibility check
+(`SessionInvariants.cs:107`), the BR-122 zero-duration guard whose failure code is
+`"Session.Duration.Invalid"` (`SessionInvariants.cs:124-136`), and the reserved manual id range
+`999_999_000` through `999_999_999` for sessions that did not come from Sessionize
+(`SessionInvariants.cs:41-44`, mirrored for questions at
+`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Questions/QuestionInvariants.cs:37-40`).
+`QuestionInvariants` validates the free-text enum-like fields against allow-lists
+(`QuestionInvariants.cs:28-34`, checked at `:68,83,98`) and, for answers, checks each value against
+its question type: Rating must parse as an integer 1 through 5 (`QuestionInvariants.cs:128-140`), Text
+is capped at 2000 characters (`:25,142-154`), and Email must parse as a `System.Net.Mail.MailAddress`
+(`:156-171`). `CategoryInvariants` enforces case-insensitive uniqueness of an item name within its
+category (BR-138,
+`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/CategoryInvariants.cs:37`,
+invoked from `Category.cs:137-138`). Centralizing each rule as a named, side-effect-free method is
+what makes the domain exhaustively unit-testable (`[Rubric §14, Testability]`), and the error codes
+(`"Event.AlreadyPublished"` at `Event.cs:229`, `"Session.StatusIneligible"` at
+`SessionInvariants.cs:110`) *are* the business vocabulary. The recurring `// BR-NN` comments are
+traceability links back to the business-requirements catalogue.
+
+A nuance worth flagging: the `Status` field on Session is free text, imported verbatim from Sessionize
 (`Session.cs:31`), and [`SessionStatuses`](#sessionstatuses)
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionStatuses.cs:8`) is the
-constant catalogue of the recognized values plus the `IsEligible(...)` rule (everything except
-`Declined`/`Cancelled` is eligible for public display, bookmarking, and feedback, BR-49,
+constant catalogue of the recognized values (`Accepted`, `Waitlisted`, `Accept_Queue`, `Nominated`,
+`Decline_Queue`, `Declined`, at `SessionStatuses.cs:11-26`, enumerated for organizer filter dropdowns
+at `SessionStatuses.cs:31`) plus the `IsEligible(...)` rule: everything except `Declined` and
+`Cancelled` is eligible for public display, bookmarking, and feedback (BR-49,
 `SessionStatuses.cs:45-47`). Using `const string` values instead of a C# `enum` means an unrecognized
-Sessionize status does not break deserialization; it lives in `Domain` because eligibility is a domain
-rule, and it is referenced from the cross-module bookmark validation too. `[Rubric §8, Data
-Architecture]` (deliberate handling of externally-sourced data).
+Sessionize status does not break deserialization; the type lives in `Domain` because eligibility is a
+domain rule, and it is referenced from the cross-module bookmark validation too. `[Rubric §8, Data
+Architecture]` (deliberate handling of externally sourced data).
 
 ## Domain events and the outbox spine
 
 Every state-changing method raises a domain event through the inherited `AddDomainEvent(...)`. The
 events come in two shapes. The **aggregate-level** ones, [`EventChanged`](#eventchanged),
 [`SessionChanged`](#sessionchanged), [`SpeakerChanged`](#speakerchanged),
-[`CategoryChanged`](#categorychanged), [`QuestionChanged`](#questionchanged), derive from
+[`CategoryChanged`](#categorychanged), and [`QuestionChanged`](#questionchanged), derive from
 [`EntityChangedEvent<TIdentifierType>`](group-04-events-outbox.md#entitychangedeventtidentifiertype)
 and carry the [`DomainEntityState`](group-02-domain-building-blocks.md#domainentitystate)
-(Added/Updated/Deleted) plus a friendly label. The **child-level** ones, [`RoomChanged`](#roomchanged),
-[`EventSpeakerChanged`](#eventspeakerchanged), [`SessionSpeakerChanged`](#sessionspeakerchanged),
-[`SessionCategoryItemChanged`](#sessioncategoryitemchanged), the `*QuestionAnswerChanged` set, and the
-rest, carry both the parent and child IDs (for example `RoomChanged(state, Id, room.Id, room.Name)` at
-`Event.cs:347`) so a consumer can target the precise change and the module can invalidate the right
-output-cache tag. These are **intra-module domain events**: they ride the outbox ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)) but are
-consumed inside Conference. They do not cross the wire to other services; that is the job of
-integration events.
+(Added/Updated/Deleted) plus a friendly label, and sometimes one extra correlating field:
+`SessionChanged` also carries the parent `EventId`
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/DomainEvents/SessionChanged.cs:13-18`).
+The **child-level** ones, [`RoomChanged`](#roomchanged), [`EventSpeakerChanged`](#eventspeakerchanged),
+[`SessionSpeakerChanged`](#sessionspeakerchanged),
+[`SessionCategoryItemChanged`](#sessioncategoryitemchanged),
+[`SpeakerCategoryItemChanged`](#speakercategoryitemchanged), [`CategoryItemChanged`](#categoryitemchanged),
+and the `*QuestionAnswerChanged` set, carry both the parent and child IDs (for example
+`RoomChanged(state, Id, room.Id, room.Name)` at `Event.cs:352`) so a consumer can target the precise
+change and the module can invalidate the right output-cache tag. These are **intra-module domain
+events**: they ride the outbox ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)) but are consumed inside Conference. They do not cross the
+wire to other services; that is the job of integration events.
 
 The flow is exactly the outbox spine from [G04](group-04-events-outbox.md): a mutator buffers the event
 on the aggregate; on `SaveChangesAsync` the domain-event save-changes interceptor serializes it into an
 [`OutboxMessage`](group-04-events-outbox.md#outboxmessage) row in the *same* transaction; dual dispatch
-then delivers it at-least-once. Nothing in this chapter's code does any dispatching; the aggregates
-only *declare* what happened, which is the Clean-Architecture division of labor (`[Rubric §6, CQRS &
-Event-Driven]`). One domain detail is worth noting for the cross-context link: `Speaker.Delete()`
-captures the previous `LinkedUserId` *before* clearing it and stuffs it into the `Deleted`
-[`SpeakerChanged`](#speakerchanged) event (`Speaker.cs:232,241`), whose `PreviousLinkedUserId` payload
-field exists precisely so the cross-context cleanup handler has what it needs even though the field is
+then delivers it at least once. Nothing in this chapter's code does any dispatching; the aggregates
+only *declare* what happened, which is the Clean Architecture division of labor (`[Rubric §6, CQRS &
+Event-Driven]`). One domain detail matters for the cross-context link: `Speaker.Delete()` captures the
+previous `LinkedUserId` *before* clearing it and passes it into the `Deleted`
+[`SpeakerChanged`](#speakerchanged) event (`Speaker.cs:226,233,235`), whose optional
+`PreviousLinkedUserId` payload field
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Speakers/DomainEvents/SpeakerChanged.cs:20`)
+exists precisely so the cross-context cleanup handler has what it needs even though the field is
 already nulled within Conference (BR-70).
 
 ## The cross-aggregate cascade: a pure domain service
@@ -201,16 +239,17 @@ One business rule cannot live inside a single aggregate: deleting an `Event` mus
 `Session` belonging to it (BR-127), but Sessions are a *separate* aggregate (referenced by `EventId`,
 not owned). Putting a `List<Session>` inside `Event` would violate the aggregate boundary. The answer
 is a **domain service**, [`IEventCascadeDeletionDomainService`](#ieventcascadedeletiondomainservice)
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Services/IEventCascadeDeletionDomainService.cs:12`)
 and its implementation [`EventCascadeDeletionDomainService`](#eventcascadedeletiondomainservice)
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Services/EventCascadeDeletionDomainService.cs:11`),
 a pure, infrastructure-free coordinator that takes the pre-fetched `Event` plus its already-loaded
 `Session` collection and orchestrates the deletes: soft-delete each session first (BR-55 cascades to
-*its* children), then soft-delete the event (BR-72 cascades to rooms, speakers, and answers)
-(`EventCascadeDeletionDomainService.cs:14-24`). This is `[Rubric §4, Domain-Driven Design]`'s textbook
-"domain service for behavior that spans aggregates and belongs to no single one," and `[Rubric §3,
-Clean Architecture]`'s purity discipline: the service does no I/O; the *application* layer fetches the
-aggregates and saves them. It is the only Level-7/8 type in the chapter precisely because it depends on
-two aggregates.
+*its* children), then soft-delete the event (BR-72 cascades to rooms, event speakers, and event
+answers) (`EventCascadeDeletionDomainService.cs:14-24`). This is `[Rubric §4, Domain-Driven Design]`'s
+textbook "domain service for behavior that spans aggregates and belongs to no single one," and
+`[Rubric §3, Clean Architecture]`'s purity discipline: the service does no I/O; the *application* layer
+fetches the aggregates and saves them. It is the only Level 7/8 type in the chapter precisely because
+it depends on two aggregates.
 
 ## Read models and the AI decision-support feature
 
@@ -218,57 +257,101 @@ The largest cluster in `Conference.Shared` is the **DTO** layer, the wire contra
 API from the domain entities (`[Rubric §9, API & Contract Design]`; [ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html) chose manual/Mapperly
 mapping over reflection-based AutoMapper). Most are straightforward projections:
 [`EventDTO`](#eventdto), [`SessionDTO`](#sessiondto), [`SpeakerDTO`](#speakerdto),
-[`ConferenceCategoryDTO`](#conferencecategorydto), [`QuestionDTO`](#questiondto), [`RoomDTO`](#roomdto),
-and the per-child join DTOs, plus the speaker-facing feedback shapes
-([`SessionFeedbackDTO`](#sessionfeedbackdto) and its [`RatingQuestionSummary`](#ratingquestionsummary)/[`TextQuestionResponses`](#textquestionresponses)
-members). They carry the entity's `Id` (via the framework's `IBaseDTO` contract) and `init`-only
-properties: read contracts, immutable after construction.
+[`ConferenceCategoryDTO`](#conferencecategorydto), [`CategoryItemDTO`](#categoryitemdto),
+[`QuestionDTO`](#questiondto), [`RoomDTO`](#roomdto), and the per-child join DTOs
+([`EventSpeakerDTO`](#eventspeakerdto), [`SessionSpeakerDTO`](#sessionspeakerdto),
+[`SessionCategoryItemDTO`](#sessioncategoryitemdto),
+[`SpeakerCategoryItemDTO`](#speakercategoryitemdto), and the three `*QuestionAnswerDTO` records:
+[`EventQuestionAnswerDTO`](#eventquestionanswerdto),
+[`SessionQuestionAnswerDTO`](#sessionquestionanswerdto),
+[`SpeakerQuestionAnswerDTO`](#speakerquestionanswerdto)), plus the speaker-facing feedback shapes
+[`SessionFeedbackDTO`](#sessionfeedbackdto) with its [`RatingQuestionSummary`](#ratingquestionsummary)
+and [`TextQuestionResponses`](#textquestionresponses) members (BR-210,
+`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Speakers/SessionFeedbackDTO.cs:6,22,38`).
+They carry the entity's `Id` via the framework's `IBaseDTO<T>` contract and `required init`-only
+properties: read contracts, immutable after construction. Some also implement `IConcurrencyAware` and
+round-trip the `RowVersion` token
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/EventDTO.cs:9,15`), which is
+what [`EventTransitionRequest`](#eventtransitionrequest) echoes back on publish and unpublish so a
+transition decided against a stale view surfaces as 409 Conflict instead of applying silently ([ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html),
+`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/EventTransitionRequest.cs:14,17`;
+its own doc comment records that MMCA.Common's `ConcurrencyTokenRequest` supersedes it at the next
+framework sweep, `EventTransitionRequest.cs:12`). Alongside those sit the small task-shaped contracts:
+[`LinkUserRequest`](#linkuserrequest) (the manual speaker-to-user link body, BR-209),
+[`RefreshFromSessionizeResultDTO`](#refreshfromsessionizeresultdto) (per-entity synced counts, the
+BR-136 skipped-soft-deleted count, and non-fatal warnings), and the glanceable
+[`NowNextDTO`](#nownextdto)/[`NowNextSessionDTO`](#nownextsessiondto) snapshot behind the public
+now-next endpoint (the Android home-screen widget payload, carrying both event-local wall clock and UTC
+instants, `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/NowNextDTO.cs:14,29`).
 
 A distinct and more interesting subgroup is the **`DecisionSupport`** namespace: read models built
-purely to help an organizer *curate* a conference. [`SessionSelectionDashboardDTO`](#sessionselectiondashboarddto)
-is the composite; for one event it aggregates a [`CategoryDistributionDTO`](#categorydistributiondto)
-(how sessions spread across tracks and levels), a [`SpeakerSessionOverlapDTO`](#speakersessionoverlapdto)
-(speakers with multiple submissions), a [`ContentSimilarityDTO`](#contentsimilaritydto) (near-duplicate
-talks), per-tier [`SpeakerLocalitySummary`](#speakerlocalitysummary) counts (the Atlanta-versus-elsewhere
-breakdown that drives the local-speaker preference, tracked as a `CategoryItem` rather than a `Speaker`
-field), and a list of [`SessionAiScoreDTO`](#sessionaiscoredto). The AI scores are produced by an
-Anthropic-backed scoring service (in `Conference.Infrastructure`, outside this chapter) and persisted
-as the [`SessionAiScore`](#sessionaiscore) aggregate;
-[`ScoreEventSessionsResultDTO`](#scoreeventsessionsresultdto) reports a batch run's success and failure
-counts. This organizer workflow is guarded by the `conference:session-selection:manage` capability
-permission catalogued in [`ConferencePermissions`](#conferencepermissions) (`ConferencePermissions.cs:30`),
-not by a feature flag. The one flag the module does carry,
-[`ConferenceFeatures`](#conferencefeatures).`SessionizeIntegration`
+purely to help an organizer *curate* a conference.
+[`SessionSelectionDashboardDTO`](#sessionselectiondashboarddto)
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/DecisionSupport/SessionSelectionDashboardDTO.cs:8`)
+is the composite; for one event it carries the accepted, accept-queue, pending, and declined counts
+(`SessionSelectionDashboardDTO.cs:17-29`), a [`CategoryDistributionDTO`](#categorydistributiondto) (how
+sessions spread across tracks and levels, itself built from
+[`CategoryGroupDistribution`](#categorygroupdistribution) and
+[`CategoryItemDistribution`](#categoryitemdistribution)), a
+[`SpeakerSessionOverlapDTO`](#speakersessionoverlapdto) (speakers with multiple submissions, via
+[`MultiSessionSpeaker`](#multisessionspeaker) and [`SpeakerSessionSummary`](#speakersessionsummary)),
+per-tier [`SpeakerLocalitySummary`](#speakerlocalitysummary) counts
+(`SessionSelectionDashboardDTO.cs:38,45`), and a list of [`SessionAiScoreDTO`](#sessionaiscoredto)
+(`SessionSelectionDashboardDTO.cs:41`). The locality breakdown is the Atlanta-versus-elsewhere signal
+behind the local-speaker preference, and it is derived from a **locality category** in the taxonomy
+rather than from a field on `Speaker`: the dashboard handler resolves each speaker's tier through a
+locality-category lookup
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Sessions/UseCases/DecisionSupport/GetSessionSelectionDashboard/GetSessionSelectionDashboardHandler.cs:69-70,280`).
+[`ContentSimilarityDTO`](#contentsimilaritydto) and its [`SimilarSessionPair`](#similarsessionpair)
+rows (near-duplicate talks) are *not* members of the composite record: they are served by their own
+endpoint on the same controller
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionSelectionController.cs:83`).
+The AI scores are produced by an Anthropic-backed scoring service (in `Conference.Infrastructure`,
+outside this chapter) and persisted as the [`SessionAiScore`](#sessionaiscore) aggregate;
+[`ScoreEventSessionsResultDTO`](#scoreeventsessionsresultdto) reports a batch run's scored and failed
+counts
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/DecisionSupport/SessionAiScoreDTO.cs:60-67`).
+
+The whole organizer workflow is guarded by the `conference:session-selection:manage` capability
+permission catalogued in [`ConferencePermissions`](#conferencepermissions)
+(`ConferencePermissions.cs:30`), applied once at the controller level
+(`SessionSelectionController.cs:28`), not by a feature flag. The one flag the module does carry,
+[`ConferenceFeatures`](#conferencefeatures)`.SessionizeIntegration`
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/ConferenceFeatures.cs:15`), gates only
-the Sessionize external sync that seeds the raw session data this dashboard then analyzes, wired
-through the `[FeatureGate]`/`IFeatureGated` mechanism from
-[G05](group-05-cqrs-pipeline.md#ifeaturegated) (`[Rubric §10, Cross-Cutting Concerns]`, [ADR-031](https://ivanball.github.io/docs/adr/031-feature-flag-management.html)) on the
-`RefreshFromSessionizeCommand`, not on the scoring or dashboard handlers.
+the Sessionize external sync that seeds the raw session data this dashboard then analyzes: the
+`RefreshFromSessionizeCommand` implements [`IFeatureGated`](group-05-cqrs-pipeline.md#ifeaturegated)
+and returns the flag name from its `FeatureName` property
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/UseCases/RefreshFromSessionize/RefreshFromSessionizeCommand.cs:13,19`),
+so the decorator pipeline short-circuits it when the flag is off (`[Rubric §10, Cross-Cutting
+Concerns]`, [ADR-031](https://ivanball.github.io/docs/adr/031-feature-flag-management.html)). The scoring and dashboard handlers are not flag-gated.
 
 ## Authorization vocabulary and current-event selection
 
 Two more `Shared` helpers deserve a mention because they encode policy the whole module relies on.
 [`ConferencePermissions`](#conferencepermissions)
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferencePermissions.cs:9`)
-is the catalogue of the module's **capability permissions** (`conference:events:manage`,
+is the catalogue of the module's seven **capability permissions** (`conference:events:manage`,
 `conference:sessions:manage`, and so on, `ConferencePermissions.cs:12-30`), the stable string
 identifiers endpoints require via `[HasPermission(...)]` rather than by role name. The `All` and
 `ContentManagement` subsets (`ConferencePermissions.cs:33,49`) let a role grant an entire capability
 set or the narrower session-catalog-curation slice (sessions, speakers, and the category taxonomy) at
 once, a distinction capability checks express centrally and role checks cannot. This is the
 permission-based authorization story (`[Rubric §11, Security]`, [ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html)), decided by the
-role-to-permission grants declared in the module's registration, not scattered across controllers.
+role-to-permission grants declared in the module's registration rather than scattered across
+controllers.
 
 [`CurrentEventSelector`](#currenteventselector)
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/CurrentEventSelector.cs:10`) is
 the pure, generic helper every landing surface uses to pick *which* published event to feature: the
 event live now (soonest to end), else the next upcoming (soonest to start), else the most recently
 ended (`CurrentEventSelector.cs:38-52`). It shares the exact live-window math the backend enforces:
-`StartDate` at 00:00 local through `EndDate + 1 day` at 00:00 local, converted from the event's IANA
-time zone to UTC, with an unknown time-zone id degrading to treating the local dates as UTC
-(`CurrentEventSelector.cs:64-85`). Because it is generic over the event model, each consumer passes its
-own DTO plus accessor delegates, so the selection rule lives in one tested place rather than being
-re-derived per surface.
+`StartDate` at 00:00 local through `EndDate + 1 day` at 00:00 local (exclusive), converted from the
+event's IANA time zone to UTC, with an unknown time-zone id degrading to treating the local dates as
+UTC (`CurrentEventSelector.cs:64-85`). Because it is generic over the event model, each consumer passes
+its own DTO plus accessor delegates, so the selection rule lives in one tested place rather than being
+re-derived per surface; [`CurrentEventDefaults`](#currenteventdefaults)
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/CurrentEventDefaults.cs:8,17-23`)
+is the thin wrapper that binds those delegates for the common [`EventDTO`](#eventdto) shape.
 
 ## Crossing the module boundary: contracts, stubs, and integration events
 
@@ -277,61 +360,72 @@ Conference does not live alone. Three connection points join it to other modules
 Readiness]`, `[Rubric §3, Clean Architecture]`):
 
 - **Synchronous bookmark validation (inbound).** The Engagement module needs to validate that a
-  session is bookmarkable (exists, not a service session, eligible status) and to enumerate a session's
-  IDs by event. It depends on the
+  session is bookmarkable (exists, not a service session per BR-91, eligible status per BR-49) and to
+  enumerate a session's IDs by event (BR-58). It depends on the
   [`ISessionBookmarkValidationService`](#isessionbookmarkvalidationservice) *interface*
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/ISessionBookmarkValidationService.cs:10`),
-  implemented in `Conference.Application` in-process, or by a gRPC adapter when the modules run as
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/ISessionBookmarkValidationService.cs:10,19,30`),
+  implemented in `Conference.Application` in process, or by a gRPC adapter when the modules run as
   separate services ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)). When Conference is *disabled* in a host,
-  [`DisabledSessionBookmarkValidationService`](#disabledsessionbookmarkvalidationservice) is registered
-  as a null-object stub that approves every validation and returns an empty ID set: graceful
-  degradation rather than a missing-dependency crash.
+  [`DisabledSessionBookmarkValidationService`](#disabledsessionbookmarkvalidationservice)
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/DisabledSessionBookmarkValidationService.cs:30`)
+  is registered as a null-object stub that approves every validation and returns an empty ID set
+  (`DisabledSessionBookmarkValidationService.cs:33-38`): graceful degradation rather than a
+  missing-dependency crash.
 
 - **Synchronous live-layer validation (inbound).** The Engagement conference-day live layer (polls and
-  session Q&A) asks Conference whether a target event is published and inside its live window, and, for
-  a session, who the assigned speakers are, whether it is a plenum, and the event's question moderation
-  default. That contract is [`IEventLiveValidationService`](#ieventlivevalidationservice)
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/IEventLiveValidationService.cs:11`),
-  returning [`EventLiveInfo`](#eventliveinfo) and [`SessionLiveInfo`](#sessionliveinfo) snapshots so the
-  caller never references a Conference domain entity. The moderation default is the
-  [`QuestionModerationDefault`](#questionmoderationdefault) enum (`Pending`/`Approved`, BR-233,
-  `QuestionModerationDefault.cs:7`) carried on the `Event` (`Event.cs:54`). Its disabled stub,
-  [`DisabledEventLiveValidationService`](#disabledeventlivevalidationservice), deliberately **fails
-  open**: it reports the event as published with an always-open window
-  (`DisabledEventLiveValidationService.cs:25-42`) so the live-layer handlers can run without an
-  in-process Conference module, at the cost of skipping the published and live-window checks until the
-  host is wired to the Conference gRPC adapter.
+  session Q&A) asks Conference whether a target event is published and inside its live window, and,
+  for a session, who the assigned speakers are (BR-236), whether it is a plenum session, and the
+  event's question moderation default. That contract is
+  [`IEventLiveValidationService`](#ieventlivevalidationservice)
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/IEventLiveValidationService.cs:11,21,32`),
+  returning [`EventLiveInfo`](#eventliveinfo)
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/EventLiveInfo.cs:13`) and
+  [`SessionLiveInfo`](#sessionliveinfo)
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/SessionLiveInfo.cs:17`)
+  snapshots so the caller never references a Conference domain entity. The moderation default is the
+  [`QuestionModerationDefault`](#questionmoderationdefault) enum (`Pending = 0`/`Approved = 1`, BR-233,
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/QuestionModerationDefault.cs:7-13`)
+  carried on the `Event` (`Event.cs:53`, defaulted to `Pending` in both `Create` and `Update`,
+  `Event.cs:142,197`). Its disabled stub,
+  [`DisabledEventLiveValidationService`](#disabledeventlivevalidationservice)
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/DisabledEventLiveValidationService.cs:22`),
+  deliberately **fails open**: it reports the event as published with an always-open window, a default
+  event id, and no assigned speakers (`DisabledEventLiveValidationService.cs:25-42`) so the live-layer
+  handlers can run without an in-process Conference module, at the cost of skipping the published and
+  live-window checks until the host is wired to the Conference gRPC adapter.
 
 - **Asynchronous speaker linking (outbound).** When Conference links or unlinks a Speaker to or from an
   Identity `User` (the manual link command, or the automatic email-match triggered by Identity's
   `UserRegistered` event), it publishes [`SpeakerLinkedToUser`](#speakerlinkedtouser) /
   [`SpeakerUnlinkedFromUser`](#speakerunlinkedfromuser)
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Speakers/IntegrationEvents/SpeakerLinkedToUser.cs:20`),
-  integration events extending
-  [`BaseIntegrationEvent`](group-04-events-outbox.md#baseintegrationevent). Identity subscribes and
-  sets or clears `User.LinkedSpeakerId`, so the next JWT refresh carries the `speaker_id` claim
-  (BR-209). This is the eventually-consistent replacement for what used to be a direct cross-module
-  service call: the User-to-Speaker bidirectional link now survives the service split because it
-  travels as an event over the broker ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)/[ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)).
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Speakers/IntegrationEvents/SpeakerLinkedToUser.cs:20`
+  and `.../IntegrationEvents/SpeakerUnlinkedFromUser.cs:17`), integration events extending
+  [`BaseIntegrationEvent`](group-04-events-outbox.md#baseintegrationevent) and carrying just the two
+  identifiers. Identity subscribes and sets or clears `User.LinkedSpeakerId`, so the next JWT refresh
+  carries the `speaker_id` claim (BR-209). This is the eventually consistent replacement for what used
+  to be a direct cross-module service call: the User-to-Speaker bidirectional link now survives the
+  service split because it travels as an event over the broker ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)/[ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)).
 
 ## End-to-end: one organizer action
 
-To see the chapter cooperate, follow an organizer changing a room on a session's parent event. The
-application handler loads the [`Event`](#event) aggregate (with its `Rooms` hydrated by the navigation
-populator), calls `event.UpdateRoom(...)` (`Event.cs:363`), which routes through `GetRoomOrNotFound`
-(returning a `NotFound` [`Result`](group-01-result-error-handling.md#result) if the room is gone,
-`Event.cs:372-375`), delegates to the child's own `Room.Update(...)` (which validates *its*
-invariants), and on success raises a [`RoomChanged`](#roomchanged) `Updated` event (`Event.cs:381`).
-The handler calls `SaveChangesAsync`; the interceptor writes the `RoomChanged` to the outbox in the
-same transaction; in-process dispatch busts the relevant output-cache tags so the next read is fresh.
-No exception was thrown on the expected not-found path, no child was mutated from outside its
-aggregate, no event was hand-dispatched, and the same code path would behave identically whether
-Conference runs in the monolith or as its own service, which is exactly the property the framework
-groups (G01 through G14) exist to provide, here made concrete in a domain you can reason about. For the
-*why* behind each design choice, [ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html) (manual mapping), [ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html) (navigation populators), [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)
-(outbox), [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)/007/008 (database-per-service, gRPC, service topology), [ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html) (permission-based
-authorization), and [ADR-031](https://ivanball.github.io/docs/adr/031-feature-flag-management.html) (feature flags) are the primary references; the business rules themselves
-are catalogued in `MMCA.ADC/specifications.md`.
+To see the chapter cooperate, follow an organizer renaming a room on an event. The application handler
+loads the [`Event`](#event) aggregate (with its `Rooms` hydrated by the navigation populator), calls
+`event.UpdateRoom(...)` (`Event.cs:368`), which routes through the private `GetRoomOrNotFound` helper
+(`Event.cs:377-380`, delegating to the framework's `GetChildOrNotFound` at `Event.cs:555-558`, so a
+missing or soft-deleted room comes back as a `NotFound`
+[`Result`](group-01-result-error-handling.md#result) rather than an exception), delegates to the
+child's own `Room.Update(...)` (which validates *its* invariants), and on success raises a
+[`RoomChanged`](#roomchanged) `Updated` event (`Event.cs:386`). The handler calls `SaveChangesAsync`;
+the interceptor writes the `RoomChanged` to the outbox in the same transaction; in-process dispatch
+busts the relevant output-cache tags so the next read is fresh. No exception was thrown on the expected
+not-found path, no child was mutated from outside its aggregate, no event was hand-dispatched, and the
+same code path would behave identically whether Conference runs in the monolith or as its own service,
+which is exactly the property the framework groups (G01 through G14) exist to provide, here made
+concrete in a domain you can reason about. For the *why* behind each design choice, [ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html) (manual
+mapping), [ADR-002](https://ivanball.github.io/docs/adr/002-navigation-populators.html) (navigation populators), [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html) (outbox), [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)/[ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)/[ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)
+(database-per-service, gRPC extraction, service topology), [ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html) (permission-based authorization),
+[ADR-031](https://ivanball.github.io/docs/adr/031-feature-flag-management.html) (feature flags), and [ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html) (optimistic concurrency) are the primary references; the business
+rules themselves are catalogued in ADC's specifications guide.
 
 ### AssemblyReference, ClassReference
 <a id="assemblyreference"></a><a id="classreference"></a>
@@ -483,12 +577,12 @@ are catalogued in `MMCA.ADC/specifications.md`.
 ### EventLiveInfo
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/EventLiveInfo.cs:13` · Level 0 · record (sealed)
 
-- **What it is**: an immutable three-field snapshot of one event's live-window facts, whether the event is published, and the UTC start and (exclusive) end of its live window. It is what the Engagement live layer reads to decide "is this conference happening right now" without ever touching Conference's `Event` aggregate.
+- **What it is**: an immutable three-field snapshot of one event's live-window facts: whether the event is published, and the UTC start and (exclusive) end of its live window. It is what the Engagement live layer reads to decide "is this conference happening right now" without ever touching Conference's [`Event`](#event) aggregate.
 - **Depends on**: nothing first-party (BCL `bool`/`DateTime` only).
-- **Concept introduced, the cross-module "live window" snapshot.** `[Rubric §7, Microservices Readiness]` (assesses whether a module exposes a small, stable contract instead of leaking its internal entities across a boundary): rather than shipping the whole `Event` entity to another module (or, after extraction, another process), Conference does the time-zone arithmetic once, server-side, and hands back three plain values. The consumer then compares them against `DateTime.UtcNow` with **no** time-zone logic of its own (doc comment, `EventLiveInfo.cs:4-8`). The window is derived from the event's `StartDate`/`EndDate` and its IANA time zone: start is `StartDate` at 00:00 local, end (exclusive) is `EndDate + 1 day` at 00:00 local, both converted to UTC. `[Rubric §9, API & Contract Design]` (a narrow, purpose-built contract) also applies: this record carries exactly what a consumer needs to gate a live feature, nothing more.
-- **Walkthrough**: a positional `sealed record` (line 13) with three parameters, `IsPublished` (bool), `LiveWindowStartUtc`, and `LiveWindowEndUtc` (both `DateTime`, the end being exclusive per the XML docs on lines 10-12). There is no behavior: the type is a pure value carrier, and being a `record` it gets structural equality for free.
+- **Concept introduced, the cross-module live-window snapshot.** `[Rubric §7, Microservices Readiness]` (assesses whether a module exposes a small, stable contract instead of leaking its internal entities across a boundary): rather than shipping the whole `Event` entity to another module (or, after extraction, another process), Conference does the time-zone arithmetic once, server-side, and hands back three plain values. The consumer then compares them against `DateTime.UtcNow` with **no** time-zone logic of its own (doc comment, `EventLiveInfo.cs:3-8`). The window is derived from the event's `StartDate`/`EndDate` and its IANA time zone: start is `StartDate` at 00:00 local, end (exclusive) is `EndDate + 1 day` at 00:00 local, both converted to UTC. `[Rubric §9, API & Contract Design]` (a narrow, purpose-built contract) also applies: this record carries exactly what a consumer needs to gate a live feature, nothing more.
+- **Walkthrough**: a positional `sealed record` (`EventLiveInfo.cs:13`) with three parameters, `IsPublished` (`bool`), `LiveWindowStartUtc` and `LiveWindowEndUtc` (both `DateTime`, the end being exclusive per the param docs on `EventLiveInfo.cs:10-12`). There is no behavior: the type is a pure value carrier, and being a `record` it gets structural equality for free.
 - **Why it's built this way**: keeping the "when is an event live" definition in the owning module and putting only UTC instants on the wire means the rule lives in exactly one place, and the contract itself is time-zone-free. Consumers cannot drift from the canonical window because they never recompute it.
-- **Where it's used**: produced by the real [`EventLiveValidationService`](group-18-conference-application.md#eventlivevalidationservice) (Conference.Application) behind [`IEventLiveValidationService.GetEventLiveInfoAsync`](#ieventlivevalidationservice), and across the process boundary by the [`EventLiveValidationServiceGrpcAdapter`](group-20-conference-api-grpc.md#eventlivevalidationservicegrpcadapter) (group-20). The fail-open stub [`DisabledEventLiveValidationService`](#disabledeventlivevalidationservice) returns `new EventLiveInfo(true, DateTime.MinValue, DateTime.MaxValue)`. It is consumed by the Engagement [`LivePoll`](group-23-engagement-live-layer.md#livepoll) create/open handlers, which enforce "draft requires a published event" and "opening a poll requires now to be inside the window".
+- **Where it's used**: produced by the real [`EventLiveValidationService`](group-18-conference-application.md#eventlivevalidationservice) (Conference.Application) behind [`IEventLiveValidationService.GetEventLiveInfoAsync`](#ieventlivevalidationservice), and across the process boundary by the [`EventLiveValidationServiceGrpcAdapter`](group-20-conference-api-grpc.md#eventlivevalidationservicegrpcadapter) (group-20). The fail-open stub [`DisabledEventLiveValidationService`](#disabledeventlivevalidationservice) returns `new EventLiveInfo(true, DateTime.MinValue, DateTime.MaxValue)`. It is consumed by the Engagement event-wide [`LivePoll`](group-23-engagement-live-layer.md#livepoll) paths: [`CreateLivePollHandler`](group-23-engagement-live-layer.md#createlivepollhandler) reads `IsPublished` to enforce BR-222 (`CreateLivePollHandler.cs:70-84`), and [`OpenLivePollHandler`](group-23-engagement-live-layer.md#openlivepollhandler) reads the two window bounds and passes them into `LivePoll.Open` (`OpenLivePollHandler.cs:72-80`).
 
 ---
 
@@ -497,22 +591,22 @@ are catalogued in `MMCA.ADC/specifications.md`.
 
 - **What it is**: a two-value enum naming the initial status a newly submitted attendee question receives for an event's live Q&A (BR-233): `Pending` (queued for a moderator) or `Approved` (visible immediately, moderated after the fact).
 - **Depends on**: nothing first-party.
-- **Concept introduced, the per-event moderation policy knob.** `[Rubric §6, CQRS & Event-Driven]` (assesses whether events/commands carry enough context to be acted on without extra lookups): this small enum is the vocabulary the Engagement live layer reads to decide whether a freshly submitted [`SessionQuestion`](group-23-engagement-live-layer.md#sessionquestion) starts hidden or visible. Making it a two-value enum (rather than a bare `bool`) leaves room for future moderation modes and reads self-documentingly at the call site.
-- **Walkthrough**: two explicitly-numbered members (lines 10, 13), `Pending = 0` (the safe default: unset/zero means "hold for review") and `Approved = 1`. Explicit numbering keeps the wire meaning stable if members are ever reordered.
-- **Why it's built this way**: `Pending = 0` makes the conservative choice the default value, an event that never set a moderation preference holds new questions for review rather than publishing them unmoderated.
-- **Where it's used**: carried on [`EventDTO.QuestionModerationDefault`](#eventdto) and inside [`SessionLiveInfo`](#sessionliveinfo) (so the live layer learns the owning event's policy in the same call that fetches session facts). The stub [`DisabledEventLiveValidationService`](#disabledeventlivevalidationservice) reports `Pending`. Consumed by the Engagement `SubmitQuestion` handler (group-23) when setting a new question's initial status.
+- **Concept introduced, the per-event moderation policy knob.** `[Rubric §6, CQRS & Event-Driven]` (assesses whether the data crossing a boundary carries enough context to be acted on without extra lookups): this small enum is the vocabulary the Engagement live layer reads to decide whether a freshly submitted [`SessionQuestion`](group-23-engagement-live-layer.md#sessionquestion) starts hidden or visible. Making it a two-value enum rather than a bare `bool` leaves room for future moderation modes and reads self-documentingly at the call site.
+- **Walkthrough**: two explicitly numbered members, `Pending = 0` (`QuestionModerationDefault.cs:10`, the safe default: an unset/zero value means "hold for review") and `Approved = 1` (`QuestionModerationDefault.cs:13`). Explicit numbering keeps the wire meaning stable if the members are ever reordered.
+- **Why it's built this way**: `Pending = 0` makes the conservative choice the default value. An event that never set a moderation preference holds new questions for review rather than publishing them unmoderated.
+- **Where it's used**: carried on [`EventDTO.QuestionModerationDefault`](#eventdto) (`EventDTO.cs:48`) and inside [`SessionLiveInfo`](#sessionliveinfo) (`SessionLiveInfo.cs:24`), so the live layer learns the owning event's policy in the same call that fetches session facts. The stub [`DisabledEventLiveValidationService`](#disabledeventlivevalidationservice) reports `Pending` (`DisabledEventLiveValidationService.cs:42`). Consumed by the Engagement [`SubmitQuestionHandler`](group-23-engagement-live-layer.md#submitquestionhandler), which maps `Approved` to `QuestionStatus.Approved` and everything else to `QuestionStatus.Pending` when creating the question (`SubmitQuestionHandler.cs:76-87`).
 
 ---
 
 ### RefreshFromSessionizeResultDTO
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/RefreshFromSessionizeResultDTO.cs:7` · Level 0 · record (sealed)
 
-- **What it is**: the response DTO for the Sessionize refresh endpoint (`POST /events/{id}/sessionize/refresh`, UC-6). It reports per-entity sync counts plus a list of non-fatal warnings so an organizer can confirm what was actually imported.
+- **What it is**: the response DTO for the Sessionize refresh endpoint (`POST /Events/{id}/refresh`, UC-6). It reports per-entity sync counts plus a list of non-fatal warnings, so an organizer can confirm what was actually imported.
 - **Depends on**: nothing first-party (BCL only).
-- **Concept introduced, the informative mutation response.** `[Rubric §9, API & Contract Design]` (assesses stable, useful response contracts): rather than returning `204 No Content` for a bulk sync, the endpoint returns counts so the caller can verify the expected number of sessions, speakers, and categories landed. This is the read-back shape of a bulk write.
-- **Walkthrough**: eight `required` properties (lines 10-31), six `int` counts (`CategoriesSynced`, `CategoryItemsSynced`, `RoomsSynced`, `QuestionsSynced`, `SpeakersSynced`, `SessionsSynced`); `SkippedSoftDeleted` (line 28, BR-136: entities soft-deleted in the app are *not* restored when a sync re-encounters them); and `Warnings` (line 31, `IReadOnlyList<string>`, non-fatal issues such as a duration violation or a date-range mismatch). Every property is `required`, so a partial or forgotten field cannot be constructed.
-- **Why it's built this way**: `SkippedSoftDeleted` is surfaced explicitly because an organizer who soft-deleted a session and then re-ran a sync would otherwise be puzzled why their count doesn't match Sessionize; the count explains the gap.
-- **Where it's used**: the [`RefreshFromSessionizeCommand`](group-18-conference-application.md#refreshfromsessionizecommand) handler aggregates its per-strategy [`SessionizeSyncResult`](group-18-conference-application.md#sessionizesyncresult) values into this DTO (group-18); the Conference Events controller returns it as `200 OK` (group-20).
+- **Concept introduced, the informative mutation response.** `[Rubric §9, API & Contract Design]` (assesses stable, useful response contracts): rather than returning `204 No Content` for a bulk sync, the endpoint returns counts so the caller can verify that the expected number of sessions, speakers, and categories landed. This is the read-back shape of a bulk write. `[Rubric §13, Observability & Operability]` also applies in the small: the `Warnings` list turns silent partial-import oddities into something an operator can read off the response.
+- **Walkthrough**: eight `required init` properties (`RefreshFromSessionizeResultDTO.cs:10-31`). Six are `int` counts, `CategoriesSynced` (line 10), `CategoryItemsSynced` (line 13), `RoomsSynced` (line 16), `QuestionsSynced` (line 19), `SpeakersSynced` (line 22), and `SessionsSynced` (line 25). `SkippedSoftDeleted` (line 28) counts entities that a sync re-encountered but did not restore because the app had soft-deleted them (BR-136). `Warnings` (line 31) is an `IReadOnlyList<string>` of non-fatal issues such as a zero-duration session or a date-range mismatch. Every property is `required`, so a partial or forgotten field cannot be constructed.
+- **Why it's built this way**: `SkippedSoftDeleted` is surfaced explicitly because an organizer who soft-deleted a session and then re-ran a sync would otherwise be puzzled why the count does not match Sessionize. The handler even folds that count into the warning list when it is non-zero (`RefreshFromSessionizeHandler.cs:122-125`).
+- **Where it's used**: built by the [`RefreshFromSessionizeCommand`](group-18-conference-application.md#refreshfromsessionizecommand) handler, which reads the per-strategy [`SessionizeSyncResult`](group-18-conference-application.md#sessionizesyncresult) values and the shared sync context into it (`RefreshFromSessionizeHandler.cs:137-147`), with an all-zero instance returned when Sessionize sends an empty response (`RefreshFromSessionizeHandler.cs:94-104`). Returned as `200 OK` by [`EventsController.RefreshAsync`](group-20-conference-api-grpc.md#eventscontroller) (`EventsController.cs:289-290`) and surfaced to the organizer UI through [`EventService.RefreshFromSessionizeAsync`](group-21-conference-ui.md#eventservice) (`EventService.cs:47-55`).
 
 ---
 
@@ -520,11 +614,11 @@ are catalogued in `MMCA.ADC/specifications.md`.
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/EventQuestionAnswerDTO.cs:9` · Level 1 · record (class)
 
 - **What it is**: the read/write DTO for one event-level question answer, linking an event to a metadata question with the answer text an organizer supplied. It is one of the three child-collection DTOs that [`EventDTO`](#eventdto) composes.
-- **Depends on**: [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype) (over `EventQuestionAnswerIdentifierType`); the FK fields use the `EventIdentifierType` and `QuestionIdentifierType` aliases.
-- **Concept introduced, the child-collection DTO and `required`/`init` immutability.** The DTO shape and the [`IBaseDTO`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype) marker were taught in group-12; here is the family of child DTOs an aggregate DTO composes. `[Rubric §9, API & Contract Design]` (DTOs decoupled from domain entities, stable contracts): this record is the wire shape clients see, the [`EventQuestionAnswer`](#eventquestionanswer) join entity never crosses the boundary. Cross-aggregate references appear as **scalar FKs** (`QuestionId`), never nested objects, consistent with database-per-service ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)) where the related aggregate may live in a different source.
-- **Walkthrough**: four `required init` properties (lines 12-21), `Id` (the strong id alias), `EventId` (FK to the parent event), `QuestionId` (FK to the question), and `AnswerValue` (the answer text). Being a `record class` with all-`required` members, it cannot be partially constructed and is immutable after creation.
-- **Why it's built this way**: modelling the join as a flat DTO with scalar FKs keeps the contract stable and portable across the service boundary, the same shape the sibling child DTOs use.
-- **Where it's used**: nested in [`EventDTO.EventQuestionAnswers`](#eventdto); mapped from the [`EventQuestionAnswer`](#eventquestionanswer) entity by its Mapperly mapper (group-18).
+- **Depends on**: [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype) (`EventQuestionAnswerDTO.cs:1,9`), closed over `EventQuestionAnswerIdentifierType`; the foreign-key fields use the `EventIdentifierType` and `QuestionIdentifierType` aliases.
+- **Concept introduced, the child-collection DTO.** The DTO shape and the [`IBaseDTO`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype) contract were taught in group-12; this is the family of child DTOs that an aggregate DTO composes. `[Rubric §9, API & Contract Design]` (DTOs decoupled from domain entities, stable contracts): this record is the wire shape clients see, and the [`EventQuestionAnswer`](#eventquestionanswer) join entity never crosses the boundary. Cross-aggregate references appear as **scalar foreign keys** (`QuestionId`), never nested objects, consistent with database-per-service ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)), where the related aggregate may live in a different database.
+- **Walkthrough**: four `required init` properties (`EventQuestionAnswerDTO.cs:12-21`), `Id` (the strong id alias, line 12), `EventId` (foreign key to the parent event, line 15), `QuestionId` (foreign key to the question, line 18), and `AnswerValue` (the answer text, line 21). Being a `record class` with all-`required` members, it cannot be partially constructed and is immutable after creation.
+- **Why it's built this way**: modelling the join as a flat DTO with scalar foreign keys keeps the contract stable and portable across a process boundary, and it is the same shape the sibling child DTOs use.
+- **Where it's used**: nested in [`EventDTO.EventQuestionAnswers`](#eventdto) (`EventDTO.cs:63`); mapped from the [`EventQuestionAnswer`](#eventquestionanswer) entity by [`EventQuestionAnswerDTOMapper`](group-18-conference-application.md#eventquestionanswerdtomapper) (group-18).
 
 ---
 
@@ -532,10 +626,22 @@ are catalogued in `MMCA.ADC/specifications.md`.
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/EventSpeakerDTO.cs:8` · Level 1 · record (class)
 
 - **What it is**: the thinnest of the event child DTOs, the many-to-many join row between an event and a speaker.
-- **Depends on**: [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype) (over `EventSpeakerIdentifierType`); FK fields use `EventIdentifierType` and `SpeakerIdentifierType`.
-- **Concept**: same child-collection DTO shape introduced on [`EventQuestionAnswerDTO`](#eventquestionanswerdto), a flat `record class` with `required init` members and scalar FKs. `[Rubric §9, API & Contract Design]`.
-- **Walkthrough**: three `required init` properties (lines 11-17), `Id`, `EventId` (FK to the parent event), and `SpeakerId` (FK to the speaker). Nothing else: this row exists only to associate an [`Event`](#event) with a [`Speaker`](#speaker).
-- **Where it's used**: nested in [`EventDTO.EventSpeakers`](#eventdto); mapped from the [`EventSpeaker`](#eventspeaker) entity by [`EventSpeakerDTOMapper`](group-18-conference-application.md#eventspeakerdtomapper) (group-18).
+- **Depends on**: [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype) (`EventSpeakerDTO.cs:8`) closed over `EventSpeakerIdentifierType`; the foreign keys use `EventIdentifierType` and `SpeakerIdentifierType`.
+- **Concept**: the same child-collection DTO shape introduced on [`EventQuestionAnswerDTO`](#eventquestionanswerdto), a flat `record class` with `required init` members and scalar foreign keys. `[Rubric §9, API & Contract Design]`.
+- **Walkthrough**: three `required init` properties (`EventSpeakerDTO.cs:11-17`), `Id` (line 11), `EventId` (foreign key to the parent event, line 14), and `SpeakerId` (foreign key to the speaker, line 17). Nothing else: this row exists only to associate an [`Event`](#event) with a [`Speaker`](#speaker).
+- **Where it's used**: nested in [`EventDTO.EventSpeakers`](#eventdto) (`EventDTO.cs:60`); mapped from the [`EventSpeaker`](#eventspeaker) entity by [`EventSpeakerDTOMapper`](group-18-conference-application.md#eventspeakerdtomapper) (group-18).
+
+---
+
+### EventTransitionRequest
+> MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/EventTransitionRequest.cs:14` · Level 1 · record (sealed class)
+
+- **What it is**: the **optional** request body for the two event lifecycle transitions (publish and unpublish). Its only job is to carry the client's last-seen optimistic-concurrency token back to the server.
+- **Depends on**: [`IConcurrencyAware`](group-12-api-hosting-mapping.md#iconcurrencyaware) (`EventTransitionRequest.cs:1,14`).
+- **Concept introduced, the concurrency token on a body-less state transition.** `[Rubric §8, Data Architecture]` (assesses how concurrent writes are reconciled) and `[Rubric §9, API & Contract Design]` (assesses how a contract stays usable while still being safe): a publish/unpublish `POST` has no payload of its own, so there would normally be nothing to attach a rowversion to. This record exists purely to give one a home. Per [ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html), the client echoes the `RowVersion` it saw on the [`EventDTO`](#eventdto) it acted on, so a transition decided against a stale view of the event surfaces as `409 Conflict` instead of applying silently (doc comment, `EventTransitionRequest.cs:5-13`). The token is **nullable and the body is optional**: callers that omit it skip the stale-view check and rely on the fresh-load domain guard alone, which keeps the endpoint callable from a plain `curl` while still letting the UI opt into the stronger check.
+- **Walkthrough**: one member, `byte[]? RowVersion { get; init; }` (`EventTransitionRequest.cs:17`), the `IConcurrencyAware` implementation. No validation, no behavior: the handler decides what a null token means.
+- **Why it's built this way**: [ADR-035](https://ivanball.github.io/docs/adr/035-optimistic-concurrency.html) pushed the lifecycle toggles onto the same optimistic-concurrency footing as ordinary updates, without making the token mandatory (which would have broken every non-UI caller at once). The type's own doc comment records that it is scheduled to be replaced by MMCA.Common's [`ConcurrencyTokenRequest`](group-12-api-hosting-mapping.md#concurrencytokenrequest) at the next framework sweep (`EventTransitionRequest.cs:12`); as of this source, the ADC-local record is still the one in use.
+- **Where it's used**: bound with `[FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)]` by [`EventsController.PublishAsync`](group-20-conference-api-grpc.md#eventscontroller) (`EventsController.cs:251`) and `UnpublishAsync` (`EventsController.cs:273`), which forward `request?.RowVersion` into [`PublishEventCommand`](group-18-conference-application.md#publisheventcommand) (`EventsController.cs:255`) and [`UnpublishEventCommand`](group-18-conference-application.md#unpublisheventcommand) (`EventsController.cs:277`). Sent by [`EventService.PublishAsync`/`UnpublishAsync`](group-21-conference-ui.md#eventservice) in the Conference UI (`EventService.cs:25`, `EventService.cs:40`).
 
 ---
 
@@ -543,52 +649,54 @@ are catalogued in `MMCA.ADC/specifications.md`.
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/RoomDTO.cs:8` · Level 1 · record (class)
 
 - **What it is**: the richest of the event child DTOs, a conference room within an event's venue, with display and accessibility metadata.
-- **Depends on**: [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype) (over `RoomIdentifierType`); the FK uses `EventIdentifierType`.
-- **Concept**: the same child-DTO shape as [`EventQuestionAnswerDTO`](#eventquestionanswerdto), extended with optional presentation fields. `[Rubric §9, API & Contract Design]` (nullable optional fields let a room carry only the metadata that exists without forcing empty strings).
-- **Walkthrough**: `Id`, `Name`, and `EventId` are `required` (lines 11, 14, 32); `Sort` (line 17, display order) is a plain `int`; and four optional members, `Capacity` (`int?`), `Floor`, `Location`, and `AccessibilityInfo` (all `string?`, lines 20-29), default to null when absent. Note `AccessibilityInfo` carries the room's accessibility notes, part of the app's WCAG-aware venue data.
-- **Where it's used**: nested in [`EventDTO.Rooms`](#eventdto); mapped from the [`Room`](#room) entity by its Mapperly mapper (group-18); rendered by the Conference Room list/detail pages (group-21).
+- **Depends on**: [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype) (`RoomDTO.cs:8`) closed over `RoomIdentifierType`; the foreign key uses `EventIdentifierType`.
+- **Concept**: the same child-DTO shape as [`EventQuestionAnswerDTO`](#eventquestionanswerdto), extended with optional presentation fields. `[Rubric §9, API & Contract Design]`: nullable optional members let a room carry only the metadata that actually exists instead of forcing empty strings on the wire. `[Rubric §21, Accessibility]` is worth naming here too, because accessibility data is modelled as first-class room data (`AccessibilityInfo`, `RoomDTO.cs:29`) rather than being buried in a free-text description.
+- **Walkthrough**: three `required` members, `Id` (`RoomDTO.cs:11`), `Name` (`RoomDTO.cs:14`), and `EventId` (`RoomDTO.cs:32`, the parent foreign key, declared last in the file). `Sort` (`RoomDTO.cs:17`) is a plain `int` display order that defaults to zero. Four optional members follow, `Capacity` (`int?`, line 20), `Floor` (`string?`, line 23), `Location` (`string?`, line 26), and `AccessibilityInfo` (`string?`, line 29), each null when absent.
+- **Why it's built this way**: a room imported from Sessionize often has nothing beyond a name and a sort order, so everything past those is nullable. Making `EventId` required keeps a room from existing on the wire without an owning event.
+- **Where it's used**: nested in [`EventDTO.Rooms`](#eventdto) (`EventDTO.cs:57`); mapped from the [`Room`](#room) entity by [`RoomDTOMapper`](group-18-conference-application.md#roomdtomapper) (group-18); rendered by the Conference [`RoomList`](group-21-conference-ui.md#roomlist) page and its detail form (group-21).
 
 ---
 
 ### SessionLiveInfo
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/SessionLiveInfo.cs:17` · Level 1 · record (sealed)
 
-- **What it is**: the session-level counterpart to [`EventLiveInfo`](#eventliveinfo), a snapshot of everything the live layer needs to gate a single session's polls and Q&A: the owning event's published flag and live window, the session's assigned speaker ids, whether the session is a plenum (whole-conference) session, and the event's question-moderation default.
-- **Depends on**: [`QuestionModerationDefault`](#questionmoderationdefault) (a field); uses the `EventIdentifierType` and `SpeakerIdentifierType` aliases. BCL otherwise.
-- **Concept introduced, the enriched cross-module session snapshot.** `[Rubric §7, Microservices Readiness]` (a single, sufficient contract crossing the boundary): the Engagement live layer must answer several questions before it lets someone open a poll or moderate a question, is the event published and live, who are the session's speakers (so it can grant them moderation rights, BR-236), is it a plenum session, and what is the default status for new questions (BR-233). Rather than force N separate cross-service calls, Conference bundles all of it into one record returned by [`GetSessionLiveInfoAsync`](#ieventlivevalidationservice). `[Rubric §12, Performance & Scalability]` (one round-trip, not many) is the payoff of the bundling.
-- **Walkthrough**: a positional `sealed record` with seven parameters (lines 17-24), `EventId` (the owning event), `IsPublished`, `LiveWindowStartUtc`, `LiveWindowEndUtc` (same live-window semantics as [`EventLiveInfo`](#eventliveinfo)), `SpeakerIds` (`IReadOnlyCollection<SpeakerIdentifierType>`, the session's non-deleted assigned speakers), `IsPlenumSession` (bool), and `QuestionModerationDefault`. No behavior: a pure value carrier.
+- **What it is**: the session-level counterpart to [`EventLiveInfo`](#eventliveinfo), a snapshot of everything the live layer needs to gate a single session's polls and Q&A: the owning event's id, published flag and live window, the session's assigned speaker ids, whether the session is a plenum (whole-conference) session, and the event's question-moderation default.
+- **Depends on**: [`QuestionModerationDefault`](#questionmoderationdefault) (a parameter, `SessionLiveInfo.cs:24`); the `EventIdentifierType` and `SpeakerIdentifierType` aliases. BCL otherwise.
+- **Concept introduced, the enriched cross-module session snapshot.** `[Rubric §7, Microservices Readiness]` (a single, sufficient contract crossing the boundary): the Engagement live layer must answer several questions before it lets someone open a poll or moderate a question. Is the event published and live? Who are the session's speakers, so it can grant them moderation rights (BR-236)? Is it a plenum session? What is the default status for new questions (BR-233)? Rather than force several separate cross-service calls, Conference bundles all of it into one record returned by [`GetSessionLiveInfoAsync`](#ieventlivevalidationservice). `[Rubric §12, Performance & Scalability]` (one round-trip instead of many) is the payoff of that bundling.
+- **Walkthrough**: a positional `sealed record` with seven parameters (`SessionLiveInfo.cs:17-24`), `EventId` (the owning event, line 18), `IsPublished` (line 19), `LiveWindowStartUtc` and `LiveWindowEndUtc` (lines 20-21, same live-window semantics as [`EventLiveInfo`](#eventliveinfo)), `SpeakerIds` (`IReadOnlyCollection<SpeakerIdentifierType>`, the session's non-deleted assigned speakers, line 22), `IsPlenumSession` (line 23), and `QuestionModerationDefault` (line 24). No behavior: a pure value carrier.
 - **Why it's built this way**: the producer already loads the session and its owning event to compute the window, so it enriches the same result with the speaker set, plenum flag, and moderation default instead of making the consumer chase those separately. That keeps the speaker-rights and moderation decisions on data the owning module vouches for.
-- **Where it's used**: produced by [`EventLiveValidationService.GetSessionLiveInfoAsync`](group-18-conference-application.md#eventlivevalidationservice) (which also enforces the eligibility rules BR-49/BR-91) and its gRPC adapter (group-20); the stub [`DisabledEventLiveValidationService`](#disabledeventlivevalidationservice) fails open with a default event id, an always-open window, no speakers, and `Pending`. Consumed by the Engagement `LivePoll` and `SessionQuestion` handlers (group-23) for the speaker-moderation and question-visibility checks.
+- **Where it's used**: produced by [`EventLiveValidationService.GetSessionLiveInfoAsync`](group-18-conference-application.md#eventlivevalidationservice) (which also enforces the eligibility rules BR-49/BR-91) and by its gRPC adapter (group-20). Consumed by every Engagement live-layer entry point: [`CreateLivePollHandler`](group-23-engagement-live-layer.md#createlivepollhandler) (`CreateLivePollHandler.cs:38-59`, including the "session belongs to this event" check that is deliberately skipped when `EventId` is `default`), [`OpenLivePollHandler`](group-23-engagement-live-layer.md#openlivepollhandler) (`OpenLivePollHandler.cs:52-63`), `CloseLivePollHandler` (`CloseLivePollHandler.cs:49`), [`SubmitQuestionHandler`](group-23-engagement-live-layer.md#submitquestionhandler) (`SubmitQuestionHandler.cs:36-87`), `ModerateQuestionHandler` (`ModerateQuestionHandler.cs:50`), and `GetModerationQueueHandler` (`GetModerationQueueHandler.cs:33`).
 
 ---
 
 ### EventDTO
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/EventDTO.cs:9` · Level 2 · record (class)
 
-- **What it is**: the aggregate DTO for a conference event, the full wire shape a client reads or writes for the [`Event`](#event) aggregate, composing its three child collections (rooms, speaker associations, question answers) plus the event's own scalar fields and concurrency token.
-- **Depends on**: [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype) and [`IConcurrencyAware`](group-12-api-hosting-mapping.md#iconcurrencyaware) (both implemented, line 9); composes [`RoomDTO`](#roomdto), [`EventSpeakerDTO`](#eventspeakerdto), [`EventQuestionAnswerDTO`](#eventquestionanswerdto); carries [`QuestionModerationDefault`](#questionmoderationdefault).
-- **Concept introduced, the aggregate DTO and optimistic-concurrency round-trip on the wire.** `[Rubric §9, API & Contract Design]` (aggregate DTOs compose child DTOs so a UI gets everything it needs in one call, [ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html) manual/Mapperly mapping): `EventDTO` is the Level-2 "composite" that bundles the Level-1 children. `[Rubric §8, Data Architecture]` (optimistic concurrency): implementing [`IConcurrencyAware`](group-12-api-hosting-mapping.md#iconcurrencyaware) means the DTO round-trips the EF `RowVersion` token (line 16) so an update form can detect a concurrent edit. The inline `SuppressMessage` on `RowVersion` (line 15) documents that returning a `byte[]` is intentional, it is the raw rowversion token, and a second suppression on `VenueMapUrl` (line 40) records that a URL is stored as a plain string because it comes from external Sessionize input.
+- **What it is**: the aggregate DTO for a conference event, the full wire shape a client reads or writes for the [`Event`](#event) aggregate. It composes the three child collections (rooms, speaker associations, question answers) alongside the event's own scalar fields and its concurrency token.
+- **Depends on**: [`IBaseDTO<TIdentifierType>`](group-12-api-hosting-mapping.md#ibasedtotidentifiertype) and [`IConcurrencyAware`](group-12-api-hosting-mapping.md#iconcurrencyaware) (both implemented, `EventDTO.cs:9`); composes [`RoomDTO`](#roomdto), [`EventSpeakerDTO`](#eventspeakerdto), and [`EventQuestionAnswerDTO`](#eventquestionanswerdto); carries [`QuestionModerationDefault`](#questionmoderationdefault).
+- **Concept introduced, the aggregate DTO and the optimistic-concurrency round-trip on the wire.** `[Rubric §9, API & Contract Design]` (aggregate DTOs compose child DTOs so a UI gets everything it needs in one call; mapping is manual or Mapperly-generated per [ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html)): `EventDTO` is the Level-2 composite that bundles the Level-1 children. `[Rubric §8, Data Architecture]` (optimistic concurrency): implementing [`IConcurrencyAware`](group-12-api-hosting-mapping.md#iconcurrencyaware) means the DTO round-trips the EF `RowVersion` token (`EventDTO.cs:15`), so an update form (and the publish/unpublish transitions via [`EventTransitionRequest`](#eventtransitionrequest)) can detect a concurrent edit instead of silently overwriting one.
 - **Walkthrough**
-  - Identity and concurrency: `Id` (`required`, line 12) and the nullable `RowVersion` (line 16).
-  - Required core: `Name`, `StartDate`, `EndDate` (`DateOnly`), and `TimeZone` (the IANA id used to compute the live window) are `required` (lines 19-31).
-  - Optional scalars: `Description`, `SessionizeCode`, `VenueAddress`, `VenueMapUrl`, `WiFiInfo` (all `string?`), plus `IsPublished` (bool), `QuestionModerationDefault` (BR-233, line 50), and the two Sessionize-refresh audit fields `LastSessionizeRefreshOn` (`DateTime?`) / `LastSessionizeRefreshBy` (`string?`, lines 53-56).
-  - Child collections (lines 59-65): `Rooms`, `EventSpeakers`, and `EventQuestionAnswers`, each an `IReadOnlyCollection<>` of the matching child DTO, each defaulting to an empty collection (`= []`) so an event with no children is safe to render.
-- **Why it's built this way**: composing the children inline lets a single `GET /Events/{id}` return the whole event graph without follow-up calls, and defaulting the collections to `[]` avoids null checks in the UI. The `IConcurrencyAware` token is the write-path guard that turns a lost-update into a 409 instead of a silent overwrite.
-- **Where it's used**: produced by [`EventDTOMapper`](group-18-conference-application.md#eventdtomapper) (group-18), returned by the Conference Events controller (group-20), and consumed throughout the Events UI (group-21). It is also the concrete event model that [`CurrentEventDefaults`](#currenteventdefaults) binds [`CurrentEventSelector`](#currenteventselector) to.
+  - Identity and concurrency: `Id` (`required`, `EventDTO.cs:12`) and the nullable `RowVersion` (`EventDTO.cs:15`).
+  - Required core: `Name` (line 18), `StartDate` and `EndDate` (both `DateOnly`, lines 24 and 27), and `TimeZone` (line 30, the IANA id used to compute the live window).
+  - Optional scalars: `Description` (line 21), `SessionizeCode` (line 33), `VenueAddress` (line 36), `VenueMapUrl` (line 39), and `WiFiInfo` (line 42), all `string?`; plus `IsPublished` (line 45) and `QuestionModerationDefault` (line 48, BR-233).
+  - Sessionize refresh audit: `LastSessionizeRefreshOn` (`DateTime?`, line 51) and `LastSessionizeRefreshBy` (`string?`, line 54), stamped by the refresh handler so the UI can show when the last import ran and who ran it.
+  - Child collections (`EventDTO.cs:57-63`): `Rooms`, `EventSpeakers`, and `EventQuestionAnswers`, each an `IReadOnlyCollection<>` of the matching child DTO, each defaulting to an empty collection (`= []`) so an event with no children is safe to render.
+- **Why it's built this way**: composing the children inline lets a single `GET /Events/{id}` return the whole event graph without follow-up calls, and defaulting the collections to `[]` avoids null checks in the UI. The `IConcurrencyAware` token is the write-path guard that turns a lost update into a `409` instead of a silent overwrite.
+- **Where it's used**: produced by [`EventDTOMapper`](group-18-conference-application.md#eventdtomapper) (group-18); it is the DTO type parameter of [`EventsController`](group-20-conference-api-grpc.md#eventscontroller) itself (`EventsController.cs:45,57-58`), so every inherited GetAll/GetById/Create action speaks it; and it is consumed throughout the Events UI (group-21). It is also the concrete event model that [`CurrentEventDefaults`](#currenteventdefaults) binds [`CurrentEventSelector`](#currenteventselector) to.
 
 ---
 
 ### IEventLiveValidationService
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/IEventLiveValidationService.cs:11` · Level 3 · interface
 
-- **What it is**: the cross-module service contract the Engagement live layer calls to validate an event's or session's live-layer eligibility, returning [`EventLiveInfo`](#eventliveinfo) / [`SessionLiveInfo`](#sessionliveinfo) without the caller ever referencing a Conference domain entity.
-- **Depends on**: [`Result<T>`](group-01-result-error-handling.md#result) (via `MMCA.Common.Shared.Abstractions`, line 1); [`EventLiveInfo`](#eventliveinfo), [`SessionLiveInfo`](#sessionliveinfo); the `EventIdentifierType`/`SessionIdentifierType` aliases.
-- **Concept introduced, the owned-interface cross-module boundary.** `[Rubric §7, Microservices Readiness]` (assesses boundaries that survive extraction into separate processes) and `[Rubric §3, Clean Architecture]` (a module depends on an interface it can consume, not on another module's internals): the interface lives in Conference's `*.Shared` project, the module that *owns* the data publishes the contract, and the interface is defined in terms of ids and small DTOs only. When both modules run in one host, the real Conference.Application implementation is injected directly; after extraction, the same interface is satisfied by a gRPC adapter. Engagement's code does not change either way. This is the same boundary pattern the module uses for [`ISessionBookmarkValidationService`](#isessionbookmarkvalidationservice).
+- **What it is**: the cross-module service contract the Engagement live layer calls to validate an event's or a session's live-layer eligibility, returning [`EventLiveInfo`](#eventliveinfo) / [`SessionLiveInfo`](#sessionliveinfo) without the caller ever referencing a Conference domain entity.
+- **Depends on**: [`Result<T>`](group-01-result-error-handling.md#result) (via `MMCA.Common.Shared.Abstractions`, `IEventLiveValidationService.cs:1`); [`EventLiveInfo`](#eventliveinfo) and [`SessionLiveInfo`](#sessionliveinfo); the `EventIdentifierType`/`SessionIdentifierType` aliases.
+- **Concept introduced, the owned-interface cross-module boundary.** `[Rubric §7, Microservices Readiness]` (assesses boundaries that survive extraction into separate processes) and `[Rubric §3, Clean Architecture]` (a module depends on an interface it can consume, not on another module's internals): the interface lives in Conference's `*.Shared` project, so the module that **owns** the data publishes the contract, and it is defined in terms of ids and small DTOs only. When both modules run in one host, the real Conference.Application implementation is injected directly; after extraction, the same interface is satisfied by a gRPC adapter. Engagement's code does not change either way. This is the same pattern the module uses for [`ISessionBookmarkValidationService`](#isessionbookmarkvalidationservice).
 - **Walkthrough**: two methods, both returning `Task<Result<...>>` with a trailing `CancellationToken`.
-  - `GetEventLiveInfoAsync` (line 21): returns the event's published flag and live window, or a `NotFound` failure when the event does not exist. Consumers layer their own rules on top (draft creation requires published; opening a poll requires now to be inside the window), stated in the XML docs (lines 13-20).
-  - `GetSessionLiveInfoAsync` (line 32): returns a session's live facts (the owning event's window plus speakers, plenum flag, and moderation default), or a failure when the session does not exist, is a service session (BR-91), or has an ineligible status (BR-49), per the docs (lines 23-31).
-- **Why it's built this way**: returning [`Result<T>`](group-01-result-error-handling.md#result) rather than throwing lets the consumer branch on `NotFound`/eligibility failures as ordinary control flow; keeping the contract in `*.Shared` (id-and-DTO only) is what makes Conference extractable without breaking Engagement.
-- **Where it's used**: implemented in-process by [`EventLiveValidationService`](group-18-conference-application.md#eventlivevalidationservice) (Conference.Application, group-18), served over gRPC by [`EventLiveValidationGrpcService`](group-20-conference-api-grpc.md#eventlivevalidationgrpcservice) and consumed across the boundary via [`EventLiveValidationServiceGrpcAdapter`](group-20-conference-api-grpc.md#eventlivevalidationservicegrpcadapter) (registered by `AddConferenceEventLiveValidationClient`, which `Replace`s whatever was in the container). Injected into the Engagement [`LivePoll`](group-23-engagement-live-layer.md#livepoll) and [`SessionQuestion`](group-23-engagement-live-layer.md#sessionquestion) handlers (group-23). When Conference is not loaded in a host, the [`DisabledEventLiveValidationService`](#disabledeventlivevalidationservice) stub stands in.
+  - `GetEventLiveInfoAsync` (`IEventLiveValidationService.cs:21`): returns the event's published flag and live window, or a `NotFound` failure when the event does not exist. Consumers layer their own rules on top (draft creation requires published; opening a poll requires now to be inside the window), as stated in the doc comment (`IEventLiveValidationService.cs:13-20`).
+  - `GetSessionLiveInfoAsync` (`IEventLiveValidationService.cs:32`): returns a session's live facts (the owning event's window plus speakers, plenum flag, and moderation default), or a failure when the session does not exist, is a service session (BR-91), or has an ineligible status (BR-49), per the doc comment (`IEventLiveValidationService.cs:23-31`).
+- **Why it's built this way**: returning [`Result<T>`](group-01-result-error-handling.md#result) rather than throwing lets the consumer branch on `NotFound` and eligibility failures as ordinary control flow. Keeping the contract in `*.Shared`, expressed in ids and DTOs only, is what makes Conference extractable without breaking Engagement.
+- **Where it's used**: implemented in-process by [`EventLiveValidationService`](group-18-conference-application.md#eventlivevalidationservice) (Conference.Application, group-18), served over gRPC by [`EventLiveValidationGrpcService`](group-20-conference-api-grpc.md#eventlivevalidationgrpcservice) and consumed across the boundary via [`EventLiveValidationServiceGrpcAdapter`](group-20-conference-api-grpc.md#eventlivevalidationservicegrpcadapter). The Engagement service host calls `AddConferenceEventLiveValidationClient()` (`MMCA.ADC.Engagement.Service/Program.cs:186`), which `Replace`s whatever registration is already in the container (`MMCA.ADC.Conference.Contracts/DependencyInjection.cs:79`). Injected into the Engagement [`LivePoll`](group-23-engagement-live-layer.md#livepoll) and [`SessionQuestion`](group-23-engagement-live-layer.md#sessionquestion) handlers (group-23). When Conference is not loaded in a host, [`DisabledEventLiveValidationService`](#disabledeventlivevalidationservice) stands in.
 
 ---
 
@@ -597,38 +705,38 @@ are catalogued in `MMCA.ADC/specifications.md`.
 
 - **What it is**: the fail-open stub implementation of [`IEventLiveValidationService`](#ieventlivevalidationservice), registered when the Conference module is not loaded in a host (for example when Engagement runs as its own service without Conference in-process).
 - **Depends on**: [`IEventLiveValidationService`](#ieventlivevalidationservice), [`Result`](group-01-result-error-handling.md#result), [`EventLiveInfo`](#eventliveinfo), [`SessionLiveInfo`](#sessionliveinfo), [`QuestionModerationDefault`](#questionmoderationdefault).
-- **Concept introduced, the fail-open disabled-module stub (Null Object variant).** `[Rubric §2, Design Patterns]` (a Null-Object-style stub keeps consumers running when a dependency is absent) and `[Rubric §29, Resilience & Business Continuity]` (assesses graceful degradation): this stub deliberately **fails open**, it reports the event as published with an always-open window, so the Engagement live-layer handlers can complete without an in-process Conference module, at the cost of skipping the published/live-window checks (doc comment, lines 9-15). The real validation is restored when the host is wired to the Conference gRPC adapter, which `Replace`s this stub. It mirrors the convention where each owning module's `*.Shared` project ships a `Disabled*Service` stub for the interfaces it exposes (e.g. [`DisabledSessionBookmarkValidationService`](#disabledsessionbookmarkvalidationservice), named in the doc, line 19).
-- **Walkthrough**: two one-line methods, each returning a completed `Task` wrapping a success `Result`.
-  - `GetEventLiveInfoAsync` (line 25): `Result.Success(new EventLiveInfo(true, DateTime.MinValue, DateTime.MaxValue))`, published, with a window spanning all of time.
-  - `GetSessionLiveInfoAsync` (line 34): a success [`SessionLiveInfo`](#sessionliveinfo) with a `default` (unknown) event id, always-open window, no speakers (`[]`), `IsPlenumSession = false`, and `QuestionModerationDefault.Pending`. The remarks (lines 29-33) note the downstream effect: consumers skip the event-match check when the event id is default, and speaker-based rights resolve to organizers only.
-- **Why it's built this way**: fail-open (rather than fail-closed) is the right default here because the stub is only reached in a host that is *not* the authority on live windows; blocking every poll/question in that configuration would be worse than skipping a check that a properly-wired gRPC client will perform. The choice is explicit and documented, not accidental.
-- **Where it's used**: registered as the default `IEventLiveValidationService` in hosts where Conference is disabled (see the service `Program.cs` files, group-16/group-20), then `Replace`d by the gRPC client in production wiring.
+- **Concept introduced, the fail-open disabled-module stub (a Null Object variant).** `[Rubric §2, Design Patterns]` (a Null-Object-style stub keeps consumers running when a dependency is absent) and `[Rubric §29, Resilience & Business Continuity]` (assesses graceful degradation): this stub deliberately **fails open**. It reports the event as published with an always-open window, so the Engagement live-layer handlers can complete without an in-process Conference module, at the cost of skipping the published and live-window checks (doc comment, `DisabledEventLiveValidationService.cs:9-15`). Real validation is restored when the host is wired to the Conference gRPC adapter, which `Replace`s this stub. It mirrors the convention where each owning module's `*.Shared` project ships a `Disabled*Service` stub for the cross-module interfaces it exposes, naming [`DisabledSessionBookmarkValidationService`](#disabledsessionbookmarkvalidationservice) as the precedent (`DisabledEventLiveValidationService.cs:16-20`).
+- **Walkthrough**: two expression-bodied methods, each returning a completed `Task` wrapping a success `Result`.
+  - `GetEventLiveInfoAsync` (`DisabledEventLiveValidationService.cs:25-26`): `Result.Success(new EventLiveInfo(true, DateTime.MinValue, DateTime.MaxValue))`, published, with a window spanning all of time.
+  - `GetSessionLiveInfoAsync` (`DisabledEventLiveValidationService.cs:34-42`): a success [`SessionLiveInfo`](#sessionliveinfo) with a `default` (unknown) event id, the always-open window, no speakers (`[]`), `IsPlenumSession = false`, and `QuestionModerationDefault.Pending`. The remarks (`DisabledEventLiveValidationService.cs:29-33`) record the downstream effect: consumers skip the event-match check when the event id is `default` (see `CreateLivePollHandler.cs:44-45`), and speaker-based rights resolve to organizers only.
+- **Why it's built this way**: failing open rather than closed is the right default here because the stub is only reached in a host that is **not** the authority on live windows. Blocking every poll and question in that configuration would be worse than skipping a check that a properly wired gRPC client will perform. The choice is explicit and documented, not accidental.
+- **Where it's used**: registered by `ConferenceModule.RegisterDisabledStubs` as a singleton `IEventLiveValidationService` (`MMCA.ADC.Conference.API/ConferenceModule.cs:24`), the hook the module system calls when Conference is disabled in a host; then `Replace`d by the gRPC adapter in the Engagement service's production wiring (`MMCA.ADC.Conference.Contracts/DependencyInjection.cs:73-81`).
 
 ---
 
 ### CurrentEventSelector
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/CurrentEventSelector.cs:10` · Level 6 · class (static)
 
-- **What it is**: a static, generic helper that picks which published event a landing surface should feature, live now, else the next upcoming, else the most recently ended, using the same live-window math the backend enforces. It also exposes the window computation itself.
+- **What it is**: a static, generic helper that picks which event a landing surface should feature (live now, else the next upcoming, else the most recently ended) using the same live-window math the backend enforces. It also exposes that window computation itself as a public method.
 - **Depends on**: nothing first-party (BCL `TimeZoneInfo`, `DateOnly`/`DateTime`, LINQ). It is generic over the caller's event model via accessor delegates.
-- **Concept introduced, the shared-selection algorithm parameterized by accessors.** `[Rubric §16, Maintainability]` and `[Rubric §1, SOLID]` (one algorithm, many callers, without a shared base type): several surfaces need "which event is current" (the two ADC home hosts, the Engagement `LiveEventService`, the role-scoped Conference list pages), and each has its own event DTO. Rather than duplicate the classify-and-rank logic, `SelectCurrentOrNext<TEvent>` takes `Func<TEvent, ...>` accessors for start date, end date, and time-zone id, so it works over any shape without coupling to a concrete type. `[Rubric §27, Internationalization]` also applies: the window math is computed per the event's IANA time zone, and an unknown zone id degrades to treating the local dates as UTC (a defensive, resilience-minded fallback) rather than throwing.
+- **Concept introduced, the shared selection algorithm parameterized by accessors.** `[Rubric §16, Maintainability]` and `[Rubric §1, SOLID]` (one algorithm serving many callers without a shared base type): several surfaces need "which event is current", the ADC home page, the Engagement live-event service, the Conference list pages, and a server-side query handler, and they do not all hold the same event model. Rather than duplicate the classify-and-rank logic, `SelectCurrentOrNext<TEvent>` takes `Func<TEvent, ...>` accessors for start date, end date, and time-zone id, so it works over any shape without coupling to a concrete type. `[Rubric §27, Internationalization]` also applies: the window math is computed per the event's IANA time zone, and an unknown zone id degrades to treating the local dates as UTC rather than throwing.
 - **Walkthrough**
-  - `SelectCurrentOrNext<TEvent>(events, startDate, endDate, timeZoneId, utcNow)` (line 22): projects each event to its `(StartUtc, EndUtc)` window via `GetLiveWindowUtc` (lines 30-36), then applies the preference order, **live** events (`StartUtc <= utcNow < EndUtc`) ordered by soonest to end (lines 38-42), else **upcoming** events (`StartUtc > utcNow`) ordered by soonest to start (lines 44-48), else the most recently ended event (`OrderByDescending(EndUtc)`, line 52). Returns `null` when `events` is empty. Ties resolve by input order (stable ordering).
-  - `GetLiveWindowUtc(startDate, endDate, timeZoneId)` (line 64): computes `startLocal = StartDate` at 00:00 and `endLocal = EndDate + 1 day` at 00:00, then converts both from the event's zone to UTC via `TimeZoneInfo.FindSystemTimeZoneById` / `ConvertTimeToUtc` (lines 69-77). On `TimeZoneNotFoundException` it falls back to `DateTime.SpecifyKind(..., Utc)` (lines 79-84), treating the local dates as UTC to match existing consumers.
-- **Why it's built this way**: the accessor-delegate design lets one vetted implementation of the "current event" rule serve every surface, so the home-page countdown, the live layer, and the list-page default filter can never disagree about which event is featured. Colocating `GetLiveWindowUtc` here keeps the window definition identical to the one [`EventLiveInfo`](#eventliveinfo) advertises.
-- **Where it's used**: called by both ADCHome hosts (`MMCA.ADC.UI` and `MMCA.ADC.UI.Web.Client`), the Engagement `LiveEventService`, and the Conference public/organizer list pages (session/speaker/room lists) to compute their default event filter; the [`EventDTO`](#eventdto)-shaped callers go through the [`CurrentEventDefaults`](#currenteventdefaults) convenience wrapper.
+  - `SelectCurrentOrNext<TEvent>(events, startDate, endDate, timeZoneId, utcNow)` (`CurrentEventSelector.cs:22-53`, constrained `where TEvent : class`): projects each event to its `(StartUtc, EndUtc)` window via `GetLiveWindowUtc` (`CurrentEventSelector.cs:30-36`), then applies the preference order. **Live** events (`StartUtc <= utcNow && utcNow < EndUtc`) ordered by soonest to end (`CurrentEventSelector.cs:38-42`), else **upcoming** events (`StartUtc > utcNow`) ordered by soonest to start (`CurrentEventSelector.cs:44-48`), else the most recently ended event (`OrderByDescending(EndUtc)`, `CurrentEventSelector.cs:52`). Returns `null` when `events` is empty. Ties resolve by input order because LINQ's `OrderBy` is a stable sort (doc comment, `CurrentEventSelector.cs:8`).
+  - `GetLiveWindowUtc(startDate, endDate, timeZoneId)` (`CurrentEventSelector.cs:64-85`): computes `startLocal` as `StartDate` at 00:00 (`CurrentEventSelector.cs:69`) and `endLocal` as `EndDate + 1 day` at 00:00 (`CurrentEventSelector.cs:70`), then converts both from the event's zone to UTC via `TimeZoneInfo.FindSystemTimeZoneById` and `ConvertTimeToUtc` (`CurrentEventSelector.cs:74-77`). On `TimeZoneNotFoundException` it falls back to `DateTime.SpecifyKind(..., DateTimeKind.Utc)` (`CurrentEventSelector.cs:79-84`), treating the local dates as UTC to match the existing consumers.
+- **Why it's built this way**: the accessor-delegate design lets one vetted implementation of the "current event" rule serve every surface, so the home page, the live layer, and the list-page default filter can never disagree about which event is featured. Colocating `GetLiveWindowUtc` here keeps the window definition identical to the one [`EventLiveInfo`](#eventliveinfo) advertises (its doc comment points at that record, `CurrentEventSelector.cs:5`).
+- **Where it's used**: the Conference [`ADCHome`](group-21-conference-ui.md#adchome) page (`ADCHome.razor.cs:148`), the Conference list and dashboard pages that default their event filter, [`SpeakerList`](group-21-conference-ui.md#speakerlist) (`SpeakerList.razor.cs:103`), [`RoomList`](group-21-conference-ui.md#roomlist) (`RoomList.razor.cs:96`), `PublicSpeakerList` (`PublicSpeakerList.razor.cs:128`), [`SpeakerDashboard`](group-21-conference-ui.md#speakerdashboard) (`SpeakerDashboard.razor.cs:144`), [`SessionSelectionDashboard`](group-21-conference-ui.md#sessionselectiondashboard) (`SessionSelectionDashboard.razor.cs:71`); the Engagement [`LiveEventService`](group-23-engagement-live-layer.md#liveeventservice), which uses both methods (`LiveEventService.cs:27`, `LiveEventService.cs:38`); and server-side by [`GetNowNextHandler`](group-18-conference-application.md#getnownexthandler), which resolves the current event and its window for the Now/Next query (`GetNowNextHandler.cs:74`, `GetNowNextHandler.cs:107`). Callers holding an [`EventDTO`](#eventdto) usually go through the [`CurrentEventDefaults`](#currenteventdefaults) wrapper instead.
 
 ---
 
 ### CurrentEventDefaults
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Events` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/CurrentEventDefaults.cs:8` · Level 7 · class (static)
 
-- **What it is**: a thin convenience wrapper over [`CurrentEventSelector`](#currenteventselector) specialized to the [`EventDTO`](#eventdto) shape, so the many list pages and services that work with `EventDTO` do not repeat the same accessor lambdas.
+- **What it is**: a thin convenience wrapper over [`CurrentEventSelector`](#currenteventselector) specialized to the [`EventDTO`](#eventdto) shape, so the list pages and services that already work with `EventDTO` do not repeat the same accessor lambdas.
 - **Depends on**: [`CurrentEventSelector`](#currenteventselector), [`EventDTO`](#eventdto).
-- **Concept, the type-specialized wrapper (DRY over the generic helper).** `[Rubric §16, Maintainability]`: the generic [`CurrentEventSelector.SelectCurrentOrNext<TEvent>`](#currenteventselector) needs four accessor delegates on every call; since most callers pass `EventDTO`, this wrapper binds those lambdas once (`e => e.StartDate`, `e => e.EndDate`, `e => e.TimeZone`) so call sites shrink to `SelectCurrentOrNext(events, utcNow)`.
-- **Walkthrough**: one method, `SelectCurrentOrNext(IEnumerable<EventDTO> events, DateTime utcNow)` (line 17), which forwards to [`CurrentEventSelector.SelectCurrentOrNext`](#currenteventselector) with the three `EventDTO` accessors and returns the selected `EventDTO?` (null when the input is empty). No other logic: all the ranking lives in the generic helper.
-- **Why it's built this way**: keeping the `EventDTO` accessors in one place means a rename of an `EventDTO` date/time-zone property is a single edit here, not a change scattered across every list page.
-- **Where it's used**: the Conference list pages and any `EventDTO`-based service computing a default event filter (group-21); callers passing a non-`EventDTO` model call the generic [`CurrentEventSelector`](#currenteventselector) directly.
+- **Concept, the type-specialized wrapper (DRY over the generic helper).** `[Rubric §16, Maintainability]`: the generic [`CurrentEventSelector.SelectCurrentOrNext<TEvent>`](#currenteventselector) needs three accessor delegates on every call. Since many callers pass `EventDTO`, this wrapper binds those lambdas once, so a call site shrinks to `SelectCurrentOrNext(events, utcNow)`.
+- **Walkthrough**: one method, `SelectCurrentOrNext(IEnumerable<EventDTO> events, DateTime utcNow)` (`CurrentEventDefaults.cs:17`), which forwards to [`CurrentEventSelector.SelectCurrentOrNext`](#currenteventselector) with the three `EventDTO` accessors `e => e.StartDate`, `e => e.EndDate`, `e => e.TimeZone` (`CurrentEventDefaults.cs:18-23`) and returns the selected `EventDTO?` (null when the input is empty). No other logic: all the ranking lives in the generic helper.
+- **Why it's built this way**: keeping the `EventDTO` accessors in one place means renaming an `EventDTO` date or time-zone property is a single edit here, not a change scattered across every list page.
+- **Where it's used**: the Conference [`SessionList`](group-21-conference-ui.md#sessionlist) page (`SessionList.razor.cs:120`) and [`PublicSessionList`](group-21-conference-ui.md#publicsessionlist) page (`PublicSessionList.razor.cs:193`), each setting its default selected event id. Callers passing a non-`EventDTO` model call the generic [`CurrentEventSelector`](#currenteventselector) directly.
 
 ### NowNextSessionDTO
 > MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/NowNextDTO.cs:29` · Level 0 · record

@@ -4,19 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Phase 1b - Functional Group Taxonomy · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="This is the primary axis of the guide. Every one of the 2,588 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
+  <meta name="description" content="This is the primary axis of the guide. Every one of the 2,637 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
   <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/00-group-taxonomy.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Phase 1b - Functional Group Taxonomy">
-  <meta property="og:description" content="This is the primary axis of the guide. Every one of the 2,588 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
+  <meta property="og:description" content="This is the primary axis of the guide. Every one of the 2,637 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
   <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/00-group-taxonomy.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Phase 1b - Functional Group Taxonomy">
-  <meta name="twitter:description" content="This is the primary axis of the guide. Every one of the 2,588 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
+  <meta name="twitter:description" content="This is the primary axis of the guide. Every one of the 2,637 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"Phase 1b - Functional Group Taxonomy","item":"https://ivanball.github.io/docs/onboarding/00-group-taxonomy.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -117,7 +117,7 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Onboarding guide</p>
           <h1 id="phase-1b---functional-group-taxonomy">Phase 1b - Functional Group Taxonomy</h1>
-          <p>This is the <strong>primary axis</strong> of the guide. Every one of the <strong>2,588</strong> distinct first-party type
+          <p>This is the <strong>primary axis</strong> of the guide. Every one of the <strong>2,637</strong> distinct first-party type
           nodes from <a href="00-inventory.html"><code>00-inventory.md</code></a> is assigned to <strong>exactly one</strong> functional group -
           its primary <em>home</em>: the capability or cross-cutting concern it most exists to serve. A type used
           across many groups (e.g. <code>Result&lt;T&gt;</code>, the entity base) lives in the one foundational group that
@@ -191,7 +191,7 @@
           <tr>
           <td>G03</td>
           <td><strong>Querying: Specifications, Filtering &amp; the Entity Query Service</strong><br/>group-03-querying-specifications.md</td>
-          <td>27</td>
+          <td>29</td>
           <td>L0-L8</td>
           <td>Composable read-side: the Specification pattern, dynamic filtering/sorting/paging, and the generic entity query pipeline.</td>
           </tr>
@@ -219,22 +219,22 @@
           <tr>
           <td>G07</td>
           <td><strong>Persistence &amp; EF Core</strong><br/>group-07-persistence-ef-core.md</td>
-          <td>85</td>
-          <td>L0-L8</td>
+          <td>90</td>
+          <td>L0-L9</td>
           <td>The single SQLServerDbContext over the abstract ApplicationDbContext, interceptors, repositories, specifications evaluation, data-source routing (database-per-service), conventions, value generators, encryption, factories and design-time.</td>
           </tr>
           <tr>
           <td>G08</td>
           <td><strong>Authentication &amp; Authorization</strong><br/>group-08-auth.md</td>
-          <td>56</td>
-          <td>L0-L8</td>
+          <td>59</td>
+          <td>L0-L9</td>
           <td>JWT/JWKS dual-fetch token validation, current-user/claims, password hashing, cookie sessions, and policy/authorization plumbing.</td>
           </tr>
           <tr>
           <td>G09</td>
           <td><strong>Caching</strong><br/>group-09-caching.md</td>
-          <td>4</td>
-          <td>L0-L1</td>
+          <td>6</td>
+          <td>L0-L2</td>
           <td>The cache abstraction and its decorator-driven, invalidation-aware integration into the query pipeline.</td>
           </tr>
           <tr>
@@ -249,12 +249,12 @@
           <td><strong>Navigation Metadata &amp; Populators (EF-decoupled eager loading)</strong><br/>group-11-navigation-populators.md</td>
           <td>12</td>
           <td>L0-L9</td>
-          <td>INavigationMetadata/INavigationPopulator and the loader that hydrate cross-container/cross-source relationships without EF Include coupling (<a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>).</td>
+          <td>INavigationMetadata/INavigationPopulator and the loader that hydrate cross-container/cross-source relationships without EF Include coupling (ADR-002).</td>
           </tr>
           <tr>
           <td>G12</td>
           <td><strong>API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</strong><br/>group-12-api-hosting-mapping.md</td>
-          <td>56</td>
+          <td>57</td>
           <td>L0-L10</td>
           <td>The ASP.NET Core edge: controller bases, middleware, startup, model binders, JSON converters, feature management, idempotency, correlation, and manual DTO/request mapping.</td>
           </tr>
@@ -263,13 +263,13 @@
           <td><strong>gRPC &amp; Inter-Service Contracts</strong><br/>group-13-grpc-contracts.md</td>
           <td>6</td>
           <td>L0-L4</td>
-          <td>Typed gRPC clients/servers, interceptors, Result-over-the-wire, and the ServiceContract marker for synchronous inter-service calls (<a href="https://ivanball.github.io/docs/adr/007-grpc-extraction.html" target="_blank" rel="noopener">ADR-007</a>).</td>
+          <td>Typed gRPC clients/servers, interceptors, Result-over-the-wire, and the ServiceContract marker for synchronous inter-service calls (ADR-007).</td>
           </tr>
           <tr>
           <td>G14</td>
           <td><strong>Module System, Composition &amp; Configuration</strong><br/>group-14-module-system-composition.md</td>
           <td>34</td>
-          <td>L0-L9</td>
+          <td>L0-L10</td>
           <td>IModule discovery + Kahn-ordered ModuleLoader, the DI composition roots, assembly markers, data-source/database attributes, and options/settings binding.</td>
           </tr>
           <tr>
@@ -289,21 +289,21 @@
           <tr>
           <td>G17</td>
           <td><strong>ADC Conference - Domain Model &amp; Module Contracts</strong><br/>group-17-conference-domain.md</td>
-          <td>85</td>
+          <td>86</td>
           <td>L0-L8</td>
           <td>The Conference bounded context: Event/Session/Speaker/Category/Question aggregates, their domain events and invariants, plus the Shared identifiers/DTOs/integration-event contracts.</td>
           </tr>
           <tr>
           <td>G18</td>
           <td><strong>ADC Conference - Application &amp; Use Cases</strong><br/>group-18-conference-application.md</td>
-          <td>211</td>
+          <td>216</td>
           <td>L0-L11</td>
           <td>Conference CQRS handlers, validators, DTOs, specifications, the Sessionize import, and the session-selection decision-support analytics.</td>
           </tr>
           <tr>
           <td>G19</td>
           <td><strong>ADC Conference - Infrastructure &amp; Persistence</strong><br/>group-19-conference-infrastructure.md</td>
-          <td>27</td>
+          <td>28</td>
           <td>L0-L8</td>
           <td>The Conference module DbContext registration, EF entity configurations, database seeding, and infrastructure services.</td>
           </tr>
@@ -324,16 +324,16 @@
           <tr>
           <td>G22</td>
           <td><strong>ADC Engagement Module (Session Bookmarks)</strong><br/>group-22-engagement-module.md</td>
-          <td>72</td>
+          <td>73</td>
           <td>L0-L11</td>
           <td>The Engagement bounded context end-to-end: bookmark aggregate, use cases, persistence, API/contracts/service, and feedback UI.</td>
           </tr>
           <tr>
           <td>G26</td>
           <td><strong>ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</strong><br/>group-23-engagement-live-layer.md</td>
-          <td>92</td>
+          <td>94</td>
           <td>L0-L10</td>
-          <td>Real-time audience interaction in the Engagement bounded context: event-wide live polls with voting and moderated per-session Q&amp;A with upvoting, over the SignalR hub-channel transport (<a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>) and the cross-service gRPC live-channel adapter.</td>
+          <td>Real-time audience interaction in the Engagement bounded context: event-wide live polls with voting and moderated per-session Q&amp;A with upvoting, over the SignalR hub-channel transport (ADR-039) and the cross-service gRPC live-channel adapter.</td>
           </tr>
           <tr>
           <td>G23</td>
@@ -354,17 +354,17 @@
           <td><strong>Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</strong><br/>group-26-device-capability-layer.md</td>
           <td>87</td>
           <td>L0-L4</td>
-          <td>Per-capability interface contracts (biometric, geocoding/geolocation, speech, push registration, media/clipboard/screenshot, haptics, share, external auth/links, local cache/notifications, connectivity/battery/accessibility, deep links) plus their MAUI-native, browser-JS-interop, and inert fallback implementations, selected per host at DI composition time (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>/043/044/045).</td>
+          <td>Per-capability interface contracts (biometric, geocoding/geolocation, speech, push registration, media/clipboard/screenshot, haptics, share, external auth/links, local cache/notifications, connectivity/battery/accessibility, deep links) plus their MAUI-native, browser-JS-interop, and inert fallback implementations, selected per host at DI composition time (ADR-042/043/044/045).</td>
           </tr>
           <tr>
           <td>G25</td>
           <td><strong>Testing &amp; Quality Infrastructure</strong><br/>group-27-testing-infrastructure.md</td>
-          <td>1244</td>
+          <td>1270</td>
           <td>L0-L17</td>
           <td>All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).</td>
           </tr>
           </tbody></table></div>
-          <p><strong>Reconciliation:</strong> 1344 production types across 26 groups + 1244 test/testing types in G25 = <strong>2588</strong> (matches the inventory&#39;s distinct-node count). No type appears twice; none dropped.</p>
+          <p><strong>Reconciliation:</strong> 1367 production types across 26 groups + 1270 test/testing types in G25 = <strong>2637</strong> (matches the inventory&#39;s distinct-node count). No type appears twice; none dropped.</p>
           <hr>
           <h2 id="group-membership">Group membership</h2>
           <h3 id="g01---result--error-handling">G01 - Result &amp; Error Handling</h3>
@@ -631,7 +631,7 @@
           </tbody></table></div>
           <h3 id="g03---querying-specifications-filtering--the-entity-query-service">G03 - Querying: Specifications, Filtering &amp; the Entity Query Service</h3>
           <blockquote>
-          <p><code>group-03-querying-specifications.md</code> | 27 types | Composable read-side: the Specification pattern, dynamic filtering/sorting/paging, and the generic entity query pipeline.</p>
+          <p><code>group-03-querying-specifications.md</code> | 29 types | Composable read-side: the Specification pattern, dynamic filtering/sorting/paging, and the generic entity query pipeline.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -643,6 +643,12 @@
           </tr>
           </thead>
           <tbody><tr>
+          <td>0</td>
+          <td><code>DynamicQueryConfig</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Application.Services.Filtering</td>
+          </tr>
+          <tr>
           <td>0</td>
           <td><code>EntityQueryParameters&lt;TEntity&gt;</code></td>
           <td>record</td>
@@ -659,6 +665,12 @@
           <td><code>IFilterStrategy</code></td>
           <td>interface</td>
           <td>MMCA.Common.Application.Services.Filtering</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>PagingMath</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Application.Services.Query</td>
           </tr>
           <tr>
           <td>0</td>
@@ -1067,12 +1079,6 @@
           <td>MMCA.Common.Application.UseCases</td>
           </tr>
           <tr>
-          <td>0</td>
-          <td><code>QueryCacheKeyLocks</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Application.UseCases.Decorators</td>
-          </tr>
-          <tr>
           <td>1</td>
           <td><code>ProfilingCommandDecorator&lt;TCommand, TResult&gt;</code></td>
           <td>class</td>
@@ -1081,6 +1087,12 @@
           <tr>
           <td>1</td>
           <td><code>ProfilingQueryDecorator&lt;TQuery, TResult&gt;</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Application.UseCases.Decorators</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>QueryCacheKeyLocks</code></td>
           <td>class</td>
           <td>MMCA.Common.Application.UseCases.Decorators</td>
           </tr>
@@ -1263,7 +1275,7 @@
           </tbody></table></div>
           <h3 id="g07---persistence--ef-core">G07 - Persistence &amp; EF Core</h3>
           <blockquote>
-          <p><code>group-07-persistence-ef-core.md</code> | 85 types | The single SQLServerDbContext over the abstract ApplicationDbContext, interceptors, repositories, specifications evaluation, data-source routing (database-per-service), conventions, value generators, encryption, factories and design-time.</p>
+          <p><code>group-07-persistence-ef-core.md</code> | 90 types | The single SQLServerDbContext over the abstract ApplicationDbContext, interceptors, repositories, specifications evaluation, data-source routing (database-per-service), conventions, value generators, encryption, factories and design-time.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -1285,6 +1297,12 @@
           <td><code>DataSource</code></td>
           <td>enum</td>
           <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>DetectChangesScope</code></td>
+          <td>struct</td>
+          <td>MMCA.Common.Infrastructure.Persistence.DbContexts</td>
           </tr>
           <tr>
           <td>0</td>
@@ -1336,6 +1354,12 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>IUpdatePropertySetter&lt;TEntity&gt;</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>ModelBuilderExtensions</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.DbContexts</td>
@@ -1349,6 +1373,12 @@
           <tr>
           <td>0</td>
           <td><code>NativePushPayloads</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Services</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>PeriodicBackgroundService</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Services</td>
           </tr>
@@ -1413,8 +1443,14 @@
           <td>MMCA.Common.Infrastructure.Persistence.Conventions</td>
           </tr>
           <tr>
+          <td>1</td>
+          <td><code>UpdatePropertySetterBuilder&lt;TEntity&gt;</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Repositories</td>
+          </tr>
+          <tr>
           <td>2</td>
-          <td><code>CapturedState</code></td>
+          <td><code>AggregateCapture</code></td>
           <td>record</td>
           <td>MMCA.Common.Infrastructure.Persistence.Interceptors</td>
           </tr>
@@ -1453,6 +1489,12 @@
           <td><code>Snapshot</code></td>
           <td>record</td>
           <td>MMCA.Common.Infrastructure.Persistence.DataSources</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>CapturedState</code></td>
+          <td>record</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Interceptors</td>
           </tr>
           <tr>
           <td>3</td>
@@ -1654,12 +1696,6 @@
           </tr>
           <tr>
           <td>7</td>
-          <td><code>EFRepository&lt;TEntity, TIdentifierType&gt;</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Repositories</td>
-          </tr>
-          <tr>
-          <td>7</td>
           <td><code>EFRepositoryDecorator&lt;TEntity, TIdentifierType&gt;</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.Repositories</td>
@@ -1756,6 +1792,12 @@
           </tr>
           <tr>
           <td>8</td>
+          <td><code>EFRepository&lt;TEntity, TIdentifierType&gt;</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Repositories</td>
+          </tr>
+          <tr>
+          <td>8</td>
           <td><code>PhysicalDbContextFactory</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.DbContexts.Factory</td>
@@ -1765,12 +1807,6 @@
           <td><code>PushNotificationConfiguration</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration.Notifications</td>
-          </tr>
-          <tr>
-          <td>8</td>
-          <td><code>RepositoryFactory</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Persistence.Repositories.Factory</td>
           </tr>
           <tr>
           <td>8</td>
@@ -1784,10 +1820,16 @@
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration.Notifications</td>
           </tr>
+          <tr>
+          <td>9</td>
+          <td><code>RepositoryFactory</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Persistence.Repositories.Factory</td>
+          </tr>
           </tbody></table></div>
           <h3 id="g08---authentication--authorization">G08 - Authentication &amp; Authorization</h3>
           <blockquote>
-          <p><code>group-08-auth.md</code> | 56 types | JWT/JWKS dual-fetch token validation, current-user/claims, password hashing, cookie sessions, and policy/authorization plumbing.</p>
+          <p><code>group-08-auth.md</code> | 59 types | JWT/JWKS dual-fetch token validation, current-user/claims, password hashing, cookie sessions, and policy/authorization plumbing.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -1799,6 +1841,12 @@
           </tr>
           </thead>
           <tbody><tr>
+          <td>0</td>
+          <td><code>AllowMissingOwnerAttribute</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.Authorization</td>
+          </tr>
+          <tr>
           <td>0</td>
           <td><code>AuthClaimTypes</code></td>
           <td>class</td>
@@ -1845,12 +1893,6 @@
           <td><code>IcsEvent</code></td>
           <td>record</td>
           <td>MMCA.Common.Shared.Calendars</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>ICurrentUserService</code></td>
-          <td>interface</td>
-          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
           </tr>
           <tr>
           <td>0</td>
@@ -1926,6 +1968,12 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>Releaser</code></td>
+          <td>record struct</td>
+          <td>MMCA.Common.Shared.Concurrency</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>RoleNames</code></td>
           <td>class</td>
           <td>MMCA.Common.Shared.Auth</td>
@@ -1968,15 +2016,15 @@
           </tr>
           <tr>
           <td>1</td>
-          <td><code>LoginRequestValidator</code></td>
+          <td><code>KeyedSemaphoreStripe</code></td>
           <td>class</td>
-          <td>MMCA.Common.Application.Auth.Validation</td>
+          <td>MMCA.Common.Shared.Concurrency</td>
           </tr>
           <tr>
           <td>1</td>
-          <td><code>OwnershipHelper</code></td>
+          <td><code>LoginRequestValidator</code></td>
           <td>class</td>
-          <td>MMCA.Common.API.Authorization</td>
+          <td>MMCA.Common.Application.Auth.Validation</td>
           </tr>
           <tr>
           <td>1</td>
@@ -2019,12 +2067,6 @@
           <td><code>CookieSessionRefreshMiddleware</code></td>
           <td>class</td>
           <td>MMCA.Common.API.SessionCookies</td>
-          </tr>
-          <tr>
-          <td>2</td>
-          <td><code>OwnerOrAdminFilter</code></td>
-          <td>class</td>
-          <td>MMCA.Common.API.Authorization</td>
           </tr>
           <tr>
           <td>2</td>
@@ -2088,12 +2130,6 @@
           </tr>
           <tr>
           <td>4</td>
-          <td><code>LoginProtectionService</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Auth</td>
-          </tr>
-          <tr>
-          <td>4</td>
           <td><code>RegisterRequest</code></td>
           <td>record struct</td>
           <td>MMCA.Common.Shared.Auth</td>
@@ -2118,15 +2154,21 @@
           </tr>
           <tr>
           <td>5</td>
+          <td><code>LoginProtectionService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Auth</td>
+          </tr>
+          <tr>
+          <td>5</td>
           <td><code>SessionCookieAuthenticationExtensions</code></td>
           <td>class</td>
           <td>MMCA.Common.API.SessionCookies</td>
           </tr>
           <tr>
           <td>7</td>
-          <td><code>CurrentUserService</code></td>
-          <td>class</td>
-          <td>MMCA.Common.Infrastructure.Services</td>
+          <td><code>ICurrentUserService</code></td>
+          <td>interface</td>
+          <td>MMCA.Common.Application.Interfaces.Infrastructure</td>
           </tr>
           <tr>
           <td>8</td>
@@ -2134,10 +2176,28 @@
           <td>class</td>
           <td>MMCA.Common.Application.Auth</td>
           </tr>
+          <tr>
+          <td>8</td>
+          <td><code>CurrentUserService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Services</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>OwnershipHelper</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.Authorization</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>OwnerOrAdminFilter</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.Authorization</td>
+          </tr>
           </tbody></table></div>
           <h3 id="g09---caching">G09 - Caching</h3>
           <blockquote>
-          <p><code>group-09-caching.md</code> | 4 types | The cache abstraction and its decorator-driven, invalidation-aware integration into the query pipeline.</p>
+          <p><code>group-09-caching.md</code> | 6 types | The cache abstraction and its decorator-driven, invalidation-aware integration into the query pipeline.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -2149,6 +2209,12 @@
           </tr>
           </thead>
           <tbody><tr>
+          <td>0</td>
+          <td><code>CacheKeyPrefixOptions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Caching</td>
+          </tr>
+          <tr>
           <td>0</td>
           <td><code>CacheOptions</code></td>
           <td>class</td>
@@ -2162,13 +2228,19 @@
           </tr>
           <tr>
           <td>1</td>
-          <td><code>DistributedCacheService</code></td>
+          <td><code>CacheKeyNamespace</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Caching</td>
           </tr>
           <tr>
           <td>1</td>
           <td><code>MemoryCacheService</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Infrastructure.Caching</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>DistributedCacheService</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Caching</td>
           </tr>
@@ -2386,33 +2458,9 @@
           </tr>
           <tr>
           <td>4</td>
-          <td><code>DevicesController</code></td>
-          <td>class</td>
-          <td>MMCA.Common.API.Controllers.Notifications</td>
-          </tr>
-          <tr>
-          <td>4</td>
-          <td><code>InboxController</code></td>
-          <td>class</td>
-          <td>MMCA.Common.API.Controllers.Notifications</td>
-          </tr>
-          <tr>
-          <td>4</td>
-          <td><code>NotificationsController</code></td>
-          <td>class</td>
-          <td>MMCA.Common.API.Controllers.Notifications</td>
-          </tr>
-          <tr>
-          <td>4</td>
           <td><code>PushNotificationInvariants</code></td>
           <td>class</td>
           <td>MMCA.Common.Domain.Notifications.PushNotifications.Invariants</td>
-          </tr>
-          <tr>
-          <td>5</td>
-          <td><code>DependencyInjection</code></td>
-          <td>class</td>
-          <td>MMCA.Common.API.Notifications</td>
           </tr>
           <tr>
           <td>5</td>
@@ -2440,6 +2488,12 @@
           </tr>
           <tr>
           <td>8</td>
+          <td><code>DevicesController</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.Controllers.Notifications</td>
+          </tr>
+          <tr>
+          <td>8</td>
           <td><code>GetMyNotificationsHandler</code></td>
           <td>class</td>
           <td>MMCA.Common.Application.Notifications.UserNotifications.UseCases.GetInbox</td>
@@ -2458,6 +2512,12 @@
           </tr>
           <tr>
           <td>8</td>
+          <td><code>InboxController</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.Controllers.Notifications</td>
+          </tr>
+          <tr>
+          <td>8</td>
           <td><code>MarkAllNotificationsReadHandler</code></td>
           <td>class</td>
           <td>MMCA.Common.Application.Notifications.UserNotifications.UseCases.MarkAllRead</td>
@@ -2467,6 +2527,12 @@
           <td><code>MarkNotificationReadHandler</code></td>
           <td>class</td>
           <td>MMCA.Common.Application.Notifications.UserNotifications.UseCases.MarkRead</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>NotificationsController</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.Controllers.Notifications</td>
           </tr>
           <tr>
           <td>8</td>
@@ -2485,6 +2551,12 @@
           <td><code>DependencyInjection</code></td>
           <td>class</td>
           <td>MMCA.ADC.Notification.Application</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>DependencyInjection</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.Notifications</td>
           </tr>
           <tr>
           <td>9</td>
@@ -2513,7 +2585,7 @@
           </tbody></table></div>
           <h3 id="g11---navigation-metadata--populators-ef-decoupled-eager-loading">G11 - Navigation Metadata &amp; Populators (EF-decoupled eager loading)</h3>
           <blockquote>
-          <p><code>group-11-navigation-populators.md</code> | 12 types | INavigationMetadata/INavigationPopulator and the loader that hydrate cross-container/cross-source relationships without EF Include coupling (<a href="https://ivanball.github.io/docs/adr/002-navigation-populators.html" target="_blank" rel="noopener">ADR-002</a>).</p>
+          <p><code>group-11-navigation-populators.md</code> | 12 types | INavigationMetadata/INavigationPopulator and the loader that hydrate cross-container/cross-source relationships without EF Include coupling (ADR-002).</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -2599,7 +2671,7 @@
           </tbody></table></div>
           <h3 id="g12---api-hosting-middleware-idempotency--dtocontract-mapping">G12 - API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</h3>
           <blockquote>
-          <p><code>group-12-api-hosting-mapping.md</code> | 56 types | The ASP.NET Core edge: controller bases, middleware, startup, model binders, JSON converters, feature management, idempotency, correlation, and manual DTO/request mapping.</p>
+          <p><code>group-12-api-hosting-mapping.md</code> | 57 types | The ASP.NET Core edge: controller bases, middleware, startup, model binders, JSON converters, feature management, idempotency, correlation, and manual DTO/request mapping.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -2768,6 +2840,12 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>ConcurrencyTokenRequest</code></td>
+          <td>record</td>
+          <td>MMCA.Common.Shared.DTOs</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>CorrelationContext</code></td>
           <td>class</td>
           <td>MMCA.Common.Infrastructure.Services</td>
@@ -2792,12 +2870,6 @@
           </tr>
           <tr>
           <td>1</td>
-          <td><code>IdempotencyFilter</code></td>
-          <td>class</td>
-          <td>MMCA.Common.API.Idempotency</td>
-          </tr>
-          <tr>
-          <td>1</td>
           <td><code>JwksEndpointExtensions</code></td>
           <td>class</td>
           <td>MMCA.Common.API.Startup</td>
@@ -2815,12 +2887,6 @@
           <td>MMCA.Common.API.Controllers</td>
           </tr>
           <tr>
-          <td>1</td>
-          <td><code>SoftDeletedUserMiddleware</code></td>
-          <td>class</td>
-          <td>MMCA.Common.API.Middleware</td>
-          </tr>
-          <tr>
           <td>2</td>
           <td><code>ErrorHttpMapping</code></td>
           <td>class</td>
@@ -2828,7 +2894,7 @@
           </tr>
           <tr>
           <td>2</td>
-          <td><code>IdempotentAttribute</code></td>
+          <td><code>IdempotencyFilter</code></td>
           <td>class</td>
           <td>MMCA.Common.API.Idempotency</td>
           </tr>
@@ -2870,6 +2936,12 @@
           </tr>
           <tr>
           <td>3</td>
+          <td><code>IdempotentAttribute</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.Idempotency</td>
+          </tr>
+          <tr>
+          <td>3</td>
           <td><code>SignalRExtensions</code></td>
           <td>class</td>
           <td>MMCA.Common.API.Startup</td>
@@ -2905,18 +2977,6 @@
           <td>MMCA.Common.Application.Interfaces</td>
           </tr>
           <tr>
-          <td>4</td>
-          <td><code>WebApplicationExtensions</code></td>
-          <td>class</td>
-          <td>MMCA.Common.API.Startup</td>
-          </tr>
-          <tr>
-          <td>5</td>
-          <td><code>DependencyInjection</code></td>
-          <td>class</td>
-          <td>MMCA.Common.API</td>
-          </tr>
-          <tr>
           <td>6</td>
           <td><code>EntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></td>
           <td>class</td>
@@ -2941,15 +3001,33 @@
           <td>MMCA.Common.API.Startup</td>
           </tr>
           <tr>
+          <td>8</td>
+          <td><code>SoftDeletedUserMiddleware</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.Middleware</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>WebApplicationExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API.Startup</td>
+          </tr>
+          <tr>
           <td>10</td>
           <td><code>AuthControllerBase</code></td>
           <td>class</td>
           <td>MMCA.Common.API.Controllers</td>
           </tr>
+          <tr>
+          <td>10</td>
+          <td><code>DependencyInjection</code></td>
+          <td>class</td>
+          <td>MMCA.Common.API</td>
+          </tr>
           </tbody></table></div>
           <h3 id="g13---grpc--inter-service-contracts">G13 - gRPC &amp; Inter-Service Contracts</h3>
           <blockquote>
-          <p><code>group-13-grpc-contracts.md</code> | 6 types | Typed gRPC clients/servers, interceptors, Result-over-the-wire, and the ServiceContract marker for synchronous inter-service calls (<a href="https://ivanball.github.io/docs/adr/007-grpc-extraction.html" target="_blank" rel="noopener">ADR-007</a>).</p>
+          <p><code>group-13-grpc-contracts.md</code> | 6 types | Typed gRPC clients/servers, interceptors, Result-over-the-wire, and the ServiceContract marker for synchronous inter-service calls (ADR-007).</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -3206,13 +3284,13 @@
           <td>9</td>
           <td><code>DependencyInjection</code></td>
           <td>class</td>
-          <td>MMCA.Common.Infrastructure</td>
+          <td>MMCA.Common.Application</td>
           </tr>
           <tr>
-          <td>9</td>
+          <td>10</td>
           <td><code>DependencyInjection</code></td>
           <td>class</td>
-          <td>MMCA.Common.Application</td>
+          <td>MMCA.Common.Infrastructure</td>
           </tr>
           </tbody></table></div>
           <h3 id="g15---common-ui-framework-mudblazor-components-theme-base-pages">G15 - Common UI Framework (MudBlazor components, theme, base pages)</h3>
@@ -3833,7 +3911,7 @@
           </tbody></table></div>
           <h3 id="g17---adc-conference---domain-model--module-contracts">G17 - ADC Conference - Domain Model &amp; Module Contracts</h3>
           <blockquote>
-          <p><code>group-17-conference-domain.md</code> | 85 types | The Conference bounded context: Event/Session/Speaker/Category/Question aggregates, their domain events and invariants, plus the Shared identifiers/DTOs/integration-event contracts.</p>
+          <p><code>group-17-conference-domain.md</code> | 86 types | The Conference bounded context: Event/Session/Speaker/Category/Question aggregates, their domain events and invariants, plus the Shared identifiers/DTOs/integration-event contracts.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -3979,6 +4057,12 @@
           <tr>
           <td>1</td>
           <td><code>EventSpeakerDTO</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Conference.Shared.Events</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>EventTransitionRequest</code></td>
           <td>record</td>
           <td>MMCA.ADC.Conference.Shared.Events</td>
           </tr>
@@ -4357,7 +4441,7 @@
           </tbody></table></div>
           <h3 id="g18---adc-conference---application--use-cases">G18 - ADC Conference - Application &amp; Use Cases</h3>
           <blockquote>
-          <p><code>group-18-conference-application.md</code> | 211 types | Conference CQRS handlers, validators, DTOs, specifications, the Sessionize import, and the session-selection decision-support analytics.</p>
+          <p><code>group-18-conference-application.md</code> | 216 types | Conference CQRS handlers, validators, DTOs, specifications, the Sessionize import, and the session-selection decision-support analytics.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -4442,6 +4526,12 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>GetSessionsBySpeakerFilterQuery</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Conference.Application.Sessions.UseCases.GetSessionsBySpeakerFilter</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>GetSessionSelectionDashboardQuery</code></td>
           <td>record</td>
           <td>MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetSessionSelectionDashboard</td>
@@ -4520,6 +4610,12 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>SessionScoringEnqueueResult</code></td>
+          <td>enum</td>
+          <td>MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>SessionScoringResult</code></td>
           <td>record</td>
           <td>MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions</td>
@@ -4540,13 +4636,13 @@
           <td>0</td>
           <td><code>StatusBucket</code></td>
           <td>enum</td>
-          <td>MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetCategoryDistribution</td>
+          <td>MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetSessionSelectionDashboard</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>StatusBucket</code></td>
           <td>enum</td>
-          <td>MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetSessionSelectionDashboard</td>
+          <td>MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.GetCategoryDistribution</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4559,6 +4655,12 @@
           <td><code>EventUpdateRequest</code></td>
           <td>record</td>
           <td>MMCA.ADC.Conference.Application.Events.UseCases.Update</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>ISessionScoringQueue</code></td>
+          <td>interface</td>
+          <td>MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions</td>
           </tr>
           <tr>
           <td>1</td>
@@ -4613,6 +4715,12 @@
           <td><code>SessionizeResponse</code></td>
           <td>record</td>
           <td>MMCA.ADC.Conference.Application.Events.Sessionize</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td><code>SessionScoringQueue</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application.Sessions.UseCases.DecisionSupport.ScoreEventSessions</td>
           </tr>
           <tr>
           <td>3</td>
@@ -5180,12 +5288,6 @@
           </tr>
           <tr>
           <td>7</td>
-          <td><code>SpeakerDTOMapper</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.Application.Speakers.DTOs</td>
-          </tr>
-          <tr>
-          <td>7</td>
           <td><code>UpdateCategoryItemCommandValidator</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Application.Categories.UseCases.UpdateCategoryItem</td>
@@ -5294,12 +5396,6 @@
           </tr>
           <tr>
           <td>8</td>
-          <td><code>CreateSpeakerHandler</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.Application.Speakers.UseCases.Create</td>
-          </tr>
-          <tr>
-          <td>8</td>
           <td><code>DeleteEventHandler</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Application.Events.UseCases.Delete</td>
@@ -5357,6 +5453,12 @@
           <td><code>GetSessionFeedbackHandler</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Application.Speakers.UseCases.GetSessionFeedback</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>GetSessionsBySpeakerFilterHandler</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application.Sessions.UseCases.GetSessionsBySpeakerFilter</td>
           </tr>
           <tr>
           <td>8</td>
@@ -5474,6 +5576,12 @@
           </tr>
           <tr>
           <td>8</td>
+          <td><code>SpeakerDTOMapper</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application.Speakers.DTOs</td>
+          </tr>
+          <tr>
+          <td>8</td>
           <td><code>UnlinkUserFromSpeakerHandler</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Application.Speakers.UseCases.UnlinkUser</td>
@@ -5528,12 +5636,6 @@
           </tr>
           <tr>
           <td>8</td>
-          <td><code>UpdateSpeakerHandler</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.Application.Speakers.UseCases.Update</td>
-          </tr>
-          <tr>
-          <td>8</td>
           <td><code>UserRegisteredHandler</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Application.Users.IntegrationEventHandlers</td>
@@ -5543,6 +5645,12 @@
           <td><code>CreateSessionHandler</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Application.Sessions.UseCases.Create</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>CreateSpeakerHandler</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application.Speakers.UseCases.Create</td>
           </tr>
           <tr>
           <td>9</td>
@@ -5567,6 +5675,12 @@
           <td><code>UpdateSessionHandler</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Application.Sessions.UseCases.Update</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>UpdateSpeakerHandler</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Application.Speakers.UseCases.Update</td>
           </tr>
           <tr>
           <td>10</td>
@@ -5637,7 +5751,7 @@
           </tbody></table></div>
           <h3 id="g19---adc-conference---infrastructure--persistence">G19 - ADC Conference - Infrastructure &amp; Persistence</h3>
           <blockquote>
-          <p><code>group-19-conference-infrastructure.md</code> | 27 types | The Conference module DbContext registration, EF entity configurations, database seeding, and infrastructure services.</p>
+          <p><code>group-19-conference-infrastructure.md</code> | 28 types | The Conference module DbContext registration, EF entity configurations, database seeding, and infrastructure services.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -5693,6 +5807,12 @@
           <tr>
           <td>3</td>
           <td><code>AnthropicScoringService</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.Infrastructure.Services</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>SessionScoringProcessor</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.Infrastructure.Services</td>
           </tr>
@@ -5964,12 +6084,6 @@
           </tr>
           <tr>
           <td>7</td>
-          <td><code>EventQuestionAnswersController</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Conference.API.Controllers</td>
-          </tr>
-          <tr>
-          <td>7</td>
           <td><code>EventSpeakersController</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.API.Controllers</td>
@@ -5989,6 +6103,12 @@
           <tr>
           <td>8</td>
           <td><code>ConferenceCategoriesController</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Conference.API.Controllers</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>EventQuestionAnswersController</code></td>
           <td>class</td>
           <td>MMCA.ADC.Conference.API.Controllers</td>
           </tr>
@@ -6621,7 +6741,7 @@
           </tbody></table></div>
           <h3 id="g22---adc-engagement-module-session-bookmarks">G22 - ADC Engagement Module (Session Bookmarks)</h3>
           <blockquote>
-          <p><code>group-22-engagement-module.md</code> | 72 types | The Engagement bounded context end-to-end: bookmark aggregate, use cases, persistence, API/contracts/service, and feedback UI.</p>
+          <p><code>group-22-engagement-module.md</code> | 73 types | The Engagement bounded context end-to-end: bookmark aggregate, use cases, persistence, API/contracts/service, and feedback UI.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -6648,12 +6768,6 @@
           <td>0</td>
           <td><code>AssemblyReference</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.Infrastructure</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>AssemblyReference</code></td>
-          <td>class</td>
           <td>MMCA.ADC.Engagement.Application</td>
           </tr>
           <tr>
@@ -6664,7 +6778,7 @@
           </tr>
           <tr>
           <td>0</td>
-          <td><code>ClassReference</code></td>
+          <td><code>AssemblyReference</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.Infrastructure</td>
           </tr>
@@ -6685,6 +6799,12 @@
           <td><code>ClassReference</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.Domain</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>ClassReference</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Infrastructure</td>
           </tr>
           <tr>
           <td>0</td>
@@ -6781,6 +6901,12 @@
           <td><code>ILiveChannelPublishQueue</code></td>
           <td>interface</td>
           <td>MMCA.ADC.Engagement.Application.Live</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>LifecycleTransitionRequest</code></td>
+          <td>record</td>
+          <td>MMCA.ADC.Engagement.Shared</td>
           </tr>
           <tr>
           <td>1</td>
@@ -6940,12 +7066,6 @@
           </tr>
           <tr>
           <td>6</td>
-          <td><code>BookmarksController</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Engagement.API.Controllers</td>
-          </tr>
-          <tr>
-          <td>6</td>
           <td><code>EventFeedback</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.UI.Pages.Feedback</td>
@@ -7054,6 +7174,12 @@
           </tr>
           <tr>
           <td>10</td>
+          <td><code>BookmarksController</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.API.Controllers</td>
+          </tr>
+          <tr>
+          <td>10</td>
           <td><code>DependencyInjection</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.Contracts</td>
@@ -7067,7 +7193,7 @@
           </tbody></table></div>
           <h3 id="g26---adc-engagement-live-layer-real-time-polls--session-qa">G26 - ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</h3>
           <blockquote>
-          <p><code>group-23-engagement-live-layer.md</code> | 92 types | Real-time audience interaction in the Engagement bounded context: event-wide live polls with voting and moderated per-session Q&amp;A with upvoting, over the SignalR hub-channel transport (<a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>) and the cross-service gRPC live-channel adapter.</p>
+          <p><code>group-23-engagement-live-layer.md</code> | 94 types | Real-time audience interaction in the Engagement bounded context: event-wide live polls with voting and moderated per-session Q&amp;A with upvoting, over the SignalR hub-channel transport (ADR-039) and the cross-service gRPC live-channel adapter.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -7416,12 +7542,6 @@
           </tr>
           <tr>
           <td>4</td>
-          <td><code>SessionQuestionsController</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Engagement.API.Controllers</td>
-          </tr>
-          <tr>
-          <td>4</td>
           <td><code>SessionQuestionUpvoteInvariants</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.Domain.SessionQuestions</td>
@@ -7511,12 +7631,6 @@
           <td>MMCA.ADC.Engagement.Application.LivePolls.DTOs</td>
           </tr>
           <tr>
-          <td>7</td>
-          <td><code>LivePollsController</code></td>
-          <td>class</td>
-          <td>MMCA.ADC.Engagement.API.Controllers</td>
-          </tr>
-          <tr>
           <td>8</td>
           <td><code>CloseLivePollHandler</code></td>
           <td>class</td>
@@ -7560,6 +7674,12 @@
           </tr>
           <tr>
           <td>8</td>
+          <td><code>LivePollsController</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.API.Controllers</td>
+          </tr>
+          <tr>
+          <td>8</td>
           <td><code>LivePollVoteConfiguration</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.Infrastructure.Persistence.EntityConfiguration</td>
@@ -7575,6 +7695,18 @@
           <td><code>OpenLivePollHandler</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.Application.LivePolls.UseCases.Open</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>SessionQuestionsController</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.API.Controllers</td>
+          </tr>
+          <tr>
+          <td>8</td>
+          <td><code>SessionQuestionUpvoteChangedHandler</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Application.SessionQuestions.DomainEventHandlers</td>
           </tr>
           <tr>
           <td>8</td>
@@ -7617,6 +7749,12 @@
           <td><code>GetSessionQuestionsHandler</code></td>
           <td>class</td>
           <td>MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.GetSessionQuestions</td>
+          </tr>
+          <tr>
+          <td>9</td>
+          <td><code>LivePollVoteChangedHandler</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Application.LivePolls.DomainEventHandlers</td>
           </tr>
           <tr>
           <td>9</td>
@@ -8261,7 +8399,7 @@
           </tbody></table></div>
           <h3 id="g27---device-capability-abstraction-layer-native-contracts-maui-browser--fallback-adapters">G27 - Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</h3>
           <blockquote>
-          <p><code>group-26-device-capability-layer.md</code> | 87 types | Per-capability interface contracts (biometric, geocoding/geolocation, speech, push registration, media/clipboard/screenshot, haptics, share, external auth/links, local cache/notifications, connectivity/battery/accessibility, deep links) plus their MAUI-native, browser-JS-interop, and inert fallback implementations, selected per host at DI composition time (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>/043/044/045).</p>
+          <p><code>group-26-device-capability-layer.md</code> | 87 types | Per-capability interface contracts (biometric, geocoding/geolocation, speech, push registration, media/clipboard/screenshot, haptics, share, external auth/links, local cache/notifications, connectivity/battery/accessibility, deep links) plus their MAUI-native, browser-JS-interop, and inert fallback implementations, selected per host at DI composition time (ADR-042/043/044/045).</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -8797,7 +8935,7 @@
           </tbody></table></div>
           <h3 id="g25---testing--quality-infrastructure">G25 - Testing &amp; Quality Infrastructure</h3>
           <blockquote>
-          <p><code>group-27-testing-infrastructure.md</code> | 1244 types | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).</p>
+          <p><code>group-27-testing-infrastructure.md</code> | 1270 types | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).</p>
           </blockquote>
           <p>Rolled up by project (individual <code>[Fact]</code>s not sectioned - logged exception). Reusable test
           infrastructure assemblies (sectioned in full in the chapter) are marked <strong>(infra)</strong>.</p>
@@ -8824,7 +8962,7 @@
           </tr>
           <tr>
           <td><code>MMCA.ADC.Conference.Application.Tests</code></td>
-          <td>134</td>
+          <td>136</td>
           <td>L0-L12</td>
           <td></td>
           </tr>
@@ -8873,12 +9011,12 @@
           <tr>
           <td><code>MMCA.ADC.Engagement.API.Tests</code></td>
           <td>6</td>
-          <td>L1-L8</td>
+          <td>L1-L11</td>
           <td></td>
           </tr>
           <tr>
           <td><code>MMCA.ADC.Engagement.Application.Tests</code></td>
-          <td>27</td>
+          <td>30</td>
           <td>L0-L10</td>
           <td></td>
           </tr>
@@ -8992,7 +9130,7 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.Application.Tests</code></td>
-          <td>161</td>
+          <td>164</td>
           <td>L0-L10</td>
           <td></td>
           </tr>
@@ -9010,8 +9148,8 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.Benchmarks</code></td>
-          <td>4</td>
-          <td>L2-L4</td>
+          <td>6</td>
+          <td>L0-L4</td>
           <td></td>
           </tr>
           <tr>
@@ -9027,14 +9165,20 @@
           <td></td>
           </tr>
           <tr>
+          <td><code>MMCA.Common.Infrastructure.Redis.Tests</code></td>
+          <td>1</td>
+          <td>L3-L3</td>
+          <td></td>
+          </tr>
+          <tr>
           <td><code>MMCA.Common.Infrastructure.Tests</code></td>
-          <td>171</td>
-          <td>L0-L10</td>
+          <td>185</td>
+          <td>L0-L11</td>
           <td></td>
           </tr>
           <tr>
           <td><code>MMCA.Common.Shared.Tests</code></td>
-          <td>22</td>
+          <td>23</td>
           <td>L0-L5</td>
           <td></td>
           </tr>

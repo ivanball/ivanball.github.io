@@ -153,17 +153,17 @@
           Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pre>
           <p>When a type must reference a first-party type whose home group appears <strong>later</strong>, that forward
           reference is allowed (functional cohesion can outrank strict progressive disclosure) and is
-          cross-linked. Sixteen dependency <strong>cycles</strong> exist (mutually-dependent types, e.g. an aggregate root and
+          cross-linked. Eighteen dependency <strong>cycles</strong> exist (mutually-dependent types, e.g. an aggregate root and
           its child entity with bidirectional EF navigations); each is kept whole within a single group and
           called out where it occurs. They are listed in the
-          <a href="00-dependency-manifest.html#cycles-scc-size--1-16">dependency manifest</a>.</p>
+          <a href="00-dependency-manifest.html#cycles-scc-size--1-18">dependency manifest</a>.</p>
           <h3 id="how-the-inventory--leveling-were-computed">How the inventory &amp; leveling were computed</h3>
           <p>The type inventory and dependency graph are produced <strong>mechanically</strong> by a small Roslyn syntactic
           parser (<code>Tools/invtool/</code>), so the type list, namespaces, and <code>file:line</code> are exact and reproducible. Edges
           are resolved by <strong>namespace-aware name matching</strong>; ~96% bind by namespace visibility, the rest by a
-          globally-unique-name fallback (331 edges), and 27 references are dropped as ambiguous. The functional grouping is
+          globally-unique-name fallback (335 edges), and 28 references are dropped as ambiguous. The functional grouping is
           then applied mechanically (<code>Tools/invtool/classify.ps1</code> → <code>00-group-taxonomy.md</code>), so every one of the
-          <strong>2,588</strong> distinct type nodes maps to exactly one group with no silent drops. See the
+          <strong>2,637</strong> distinct type nodes maps to exactly one group with no silent drops. See the
           <a href="00-dependency-manifest.html#edge-resolution--accuracy">manifest&#39;s accuracy note</a> for residual caveats.</p>
           <hr>
           <h2 id="chapters">Chapters</h2>
@@ -181,11 +181,11 @@
           </tr>
           <tr>
           <td><a href="00-inventory.html"><code>00-inventory.md</code></a></td>
-          <td>Phase 0, every in-scope type (2,588 distinct), mechanically extracted, with <code>file:line</code></td>
+          <td>Phase 0, every in-scope type (2,637 distinct), mechanically extracted, with <code>file:line</code></td>
           </tr>
           <tr>
           <td><a href="00-dependency-manifest.html"><code>00-dependency-manifest.md</code></a></td>
-          <td>Phase 1a, per-type first-party deps + computed Level; the 16 cycles</td>
+          <td>Phase 1a, per-type first-party deps + computed Level; the 18 cycles</td>
           </tr>
           <tr>
           <td><a href="00-group-taxonomy.html"><code>00-group-taxonomy.md</code></a></td>
@@ -217,7 +217,7 @@
           <tr>
           <td>3</td>
           <td><a href="group-03-querying-specifications.html">Querying: Specifications, Filtering &amp; the Entity Query Service</a></td>
-          <td>27</td>
+          <td>29</td>
           <td>Specification pattern (incl. cross-source), dynamic filter/sort/page (incl. IN-list value parsing), the generic query pipeline</td>
           </tr>
           <tr>
@@ -241,19 +241,19 @@
           <tr>
           <td>7</td>
           <td><a href="group-07-persistence-ef-core.html">Persistence &amp; EF Core</a></td>
-          <td>85</td>
+          <td>90</td>
           <td><code>SQLServerDbContext</code> over abstract <code>ApplicationDbContext</code>, interceptors (incl. the deferred-dispatch record), repositories, engine-aware entity config, data-source routing, conventions (incl. the soft-delete unique-index convention), factories, managed file storage + image processing (<a href="https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html" target="_blank" rel="noopener">ADR-045</a>), native-push device registrar (<a href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html" target="_blank" rel="noopener">ADR-044</a>)</td>
           </tr>
           <tr>
           <td>8</td>
           <td><a href="group-08-auth.html">Authentication &amp; Authorization</a></td>
-          <td>56</td>
+          <td>59</td>
           <td>JWT/JWKS dual-fetch, the shared <code>AuthenticationServiceBase&lt;TUser&gt;</code> login/refresh workflow (<code>IAuthUser</code>), current-user/claims, password hashing, cookie sessions, role policies + the permission-based authorization mechanism (registry, <code>[HasPermission]</code>), the <code>RoleValue</code> base, the external-auth-broker contract (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>/043)</td>
           </tr>
           <tr>
           <td>9</td>
           <td><a href="group-09-caching.html">Caching</a></td>
-          <td>4</td>
+          <td>6</td>
           <td>The cache abstraction + its invalidation-aware decorator integration</td>
           </tr>
           <tr>
@@ -271,7 +271,7 @@
           <tr>
           <td>12</td>
           <td><a href="group-12-api-hosting-mapping.html">API Hosting, Middleware, Idempotency &amp; DTO/Contract Mapping</a></td>
-          <td>56</td>
+          <td>57</td>
           <td>Controller bases (incl. OAuth + service-info + API versioning, <a href="https://ivanball.github.io/docs/adr/046-http-api-versioning.html" target="_blank" rel="noopener">ADR-046</a>), middleware (incl. soft-deleted-user revocation, <a href="https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html" target="_blank" rel="noopener">ADR-047</a>), startup, model binders, JSON converters, feature mgmt, idempotency, mapping, edge error localization (i18n), authenticated output caching (<a href="https://ivanball.github.io/docs/adr/040-authenticated-output-caching-for-public-reads.html" target="_blank" rel="noopener">ADR-040</a>), app-association/deep-link endpoints (<a href="https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html" target="_blank" rel="noopener">ADR-043</a>)</td>
           </tr>
           <tr>
@@ -301,19 +301,19 @@
           <tr>
           <td>17</td>
           <td><a href="group-17-conference-domain.html">ADC Conference, Domain Model &amp; Module Contracts</a></td>
-          <td>85</td>
+          <td>86</td>
           <td>Event/Session/Speaker/Category/Question aggregates + domain events + invariants + Shared contracts (incl. <code>ConferencePermissions</code>, the current/next-event selector + live-validation contracts)</td>
           </tr>
           <tr>
           <td>18</td>
           <td><a href="group-18-conference-application.html">ADC Conference, Application &amp; Use Cases</a></td>
-          <td>211</td>
+          <td>216</td>
           <td>Conference CQRS handlers, validators (incl. the per-field session validation-rule family), DTOs, specs, Sessionize import, decision-support analytics, batch bookmark-count query, event-filtering-by-role handlers, calendar (.ics) export slice (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>)</td>
           </tr>
           <tr>
           <td>19</td>
           <td><a href="group-19-conference-infrastructure.html">ADC Conference, Infrastructure &amp; Persistence</a></td>
-          <td>27</td>
+          <td>28</td>
           <td>Conference DbContext registration, EF configs, seeding, infra services</td>
           </tr>
           <tr>
@@ -331,13 +331,13 @@
           <tr>
           <td>22</td>
           <td><a href="group-22-engagement-module.html">ADC Engagement Module (Session Bookmarks)</a></td>
-          <td>72</td>
+          <td>73</td>
           <td>The async session-bookmarking slice of the Engagement bounded context: bookmark aggregate, use cases, persistence, API/contracts/service, feedback UI, the durable live-channel publish queue (<a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>), the cross-service user-engagement export slice (gRPC)</td>
           </tr>
           <tr>
           <td>23</td>
           <td><a href="group-23-engagement-live-layer.html">ADC Engagement Live Layer (Real-Time Polls &amp; Session Q&amp;A)</a></td>
-          <td>92</td>
+          <td>94</td>
           <td>Event-wide live polls with voting + moderated per-session Q&amp;A with upvoting, over the <a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a> hub-channel transport and the cross-service gRPC live-channel adapter (HappeningNow / SessionLive / PresenterView)</td>
           </tr>
           <tr>
@@ -361,7 +361,7 @@
           <tr>
           <td>27</td>
           <td><a href="group-27-testing-infrastructure.html">Testing &amp; Quality Infrastructure</a></td>
-          <td>1244</td>
+          <td>1270</td>
           <td>All test projects + reusable Testing/Testing.E2E/Testing.UI/<strong>Testing.Architecture</strong> bases (incl. the handler + decorator-pipeline test bases and the Gallery auth stubs) + architecture-fitness tests + Gallery + the BenchmarkDotNet perf-smoke suite</td>
           </tr>
           </tbody></table></div>
@@ -375,7 +375,7 @@
           </thead>
           <tbody><tr>
           <td><a href="devops-cicd.html"><code>devops-cicd.md</code></a></td>
-          <td>CI/CD workflows (the 14-package lockstep release; ADC deploy/e2e/cost-guard/load-test/cutover)</td>
+          <td>CI/CD workflows (the 15-package lockstep release; ADC deploy/e2e/cost-guard/load-test/cutover)</td>
           </tr>
           <tr>
           <td><a href="devops-iac.html"><code>devops-iac.md</code></a></td>
