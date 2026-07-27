@@ -441,12 +441,15 @@ implements `ICacheInvalidating` so a successful create evicts cached ticket read
 // Source/Modules/Tickets/.../Application/Tickets/UseCases/Create/TicketCreateRequest.cs
 public record class TicketCreateRequest : ICreateRequest, ICacheInvalidating
 {
-    public string CachePrefix => $"{typeof(Ticket).FullName}:";
+    public string CachePrefix => TicketCacheKeys.Prefix;
     public required string Title { get; init; }
     public required string Description { get; init; }
     public required int RequesterUserId { get; init; }
 }
 ```
+
+`TicketCacheKeys` is the one place the module names cache entries, and the reason it exists is worth
+reading in ["Caching is a pair"](#caching-is-a-pair-and-you-wire-both-halves) below.
 
 ### 3c. Application: use case, validator, mapper, DI
 
@@ -604,6 +607,95 @@ Queries:  FeatureGate -> Logging -> Caching -> your handler
 The order is load-bearing: validation runs before the transaction opens; cache invalidation happens
 after a successful commit (outside the transaction); a business `Result.Failure` commits the
 transaction but skips cache invalidation; an exception rolls the transaction back.
+
+#### Caching is a pair, and you wire both halves
+
+The Caching decorator is two extension points that only do something **together**, and the framework
+cannot check that you wired both:
+
+- a query implements **`IQueryCacheable`** (`CacheKey` + `CacheDuration`) and is served from cache,
+- a command implements **`ICacheInvalidating`** (`CachePrefix`) and, on success, evicts every entry
+  whose key starts with that prefix.
+
+Implement only the command half and you get a write path that faithfully invalidates an empty cache:
+no error, no warning, no benefit. That is the easiest thing in the whole pipeline to get half-done,
+so the reference app wires both. Start from the key, because the decorator matches the two sides by
+**string prefix** and nothing at compile time is watching:
+
+```csharp
+// Source/Modules/Tickets/.../Application/Tickets/TicketCacheKeys.cs
+public static class TicketCacheKeys
+{
+    // Derived from the aggregate type name so two modules cannot collide on a shared cache.
+    public static string Prefix { get; } = $"{typeof(Ticket).FullName}:";
+
+    // Every input that changes the result belongs in the key. This read has only an id.
+    public static string ById(TicketIdentifierType id) =>
+        string.Create(CultureInfo.InvariantCulture, $"{Prefix}ById:{id}");
+}
+```
+
+The read side opts in by implementing `IQueryCacheable`. The duration is a **staleness budget**, not
+a performance knob: a write through the pipeline evicts the entry immediately, so it only bounds the
+window for changes that bypass the pipeline (a migration, a manual edit, another writer on the same
+database):
+
+```csharp
+// Source/Modules/Tickets/.../Application/Tickets/UseCases/GetById/GetTicketByIdQuery.cs
+public sealed record GetTicketByIdQuery(TicketIdentifierType Id) : IQueryCacheable
+{
+    public string CacheKey => TicketCacheKeys.ById(Id);
+    public TimeSpan CacheDuration => TimeSpan.FromMinutes(5);
+}
+```
+
+The write side returns the prefix its write dirties. Every ticket command does, from the same
+constant, which is the point: a hand-typed literal in one of seven commands is one rename away from
+a read that is never evicted, and the symptom appears later as a stale ticket rather than as a
+failure at the write.
+
+```csharp
+// Source/Modules/Tickets/.../Application/Tickets/UseCases/AddComment/AddCommentCommand.cs
+public sealed record AddCommentCommand(TicketIdentifierType TicketId, string Body, int AuthorUserId)
+    : ICacheInvalidating
+{
+    public string CachePrefix => TicketCacheKeys.Prefix;
+}
+```
+
+Two properties of the decorator are worth knowing before you rely on it:
+
+- **Invalidation runs only on success.** A `Result.Failure` persisted nothing, so evicting valid
+  entries would be pure loss. Assert this, because it is invisible in normal use.
+- **Invalidation runs outside the transaction**, after the commit. It cannot roll back with the
+  write, which is the correct trade: a spurious eviction costs one cache miss, whereas invalidating
+  inside the transaction would leave the cache holding pre-write state if the commit then failed.
+
+Both halves are testable without a database. Wire the two real decorators around stub handlers and a
+dictionary-backed `ICacheService`, and the assertions say nothing about whether the substrate is
+in-memory or Redis (source:
+`Tests/Modules/Tickets/MMCA.Helpdesk.Tickets.Application.Tests/Caching/TicketCacheInvalidationTests.cs`):
+
+```csharp
+var cache = new DictionaryCache();                       // a plain Dictionary behind ICacheService
+var handler = new CountingQueryHandler(TicketResult());  // counts how often the real read is reached
+var read = new CachingQueryDecorator<GetTicketByIdQuery, Result<TicketDTO>>(handler, cache);
+var write = new CachingCommandDecorator<ChangeTicketStatusCommand, Result<TicketDTO>>(
+    new StubCommandHandler(TicketResult(TicketStatus.Closed)), cache);
+
+await read.HandleAsync(new GetTicketByIdQuery(TicketId));     // miss: runs the handler, caches
+await read.HandleAsync(new GetTicketByIdQuery(TicketId));     // hit: handler not reached
+handler.Invocations.Should().Be(1);
+
+await write.HandleAsync(new ChangeTicketStatusCommand(TicketId, TicketStatus.Closed));
+
+await read.HandleAsync(new GetTicketByIdQuery(TicketId));     // miss again: the write evicted it
+handler.Invocations.Should().Be(2);
+```
+
+Add the negative case (a command returning `Result.Failure` must leave the entry in place) and one
+guard that the read key still starts with the prefix every command returns. That last test is the
+one that survives a rename.
 
 ---
 
