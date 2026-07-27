@@ -405,9 +405,9 @@ score them**, the filled scorecards live in `Architecture/ArchitectureEvaluation
 
 ### Two axes (so a tag can say "mature but mediocre" or vice-versa)
 
-- **Maturity (0–4)**: *process*: how consistently/automatically the pattern is governed
+- **Maturity (0–4)**, *process*: how consistently/automatically the pattern is governed
   (ad-hoc → enforced by CI).
-- **Implementation (0–10)**: *substance*: how good the implementation is right now, against the
+- **Implementation (0–10)**, *substance*: how good the implementation is right now, against the
   category's criteria and red flags.
 
 ### The categories, in three parts (quick index, full criteria in the rubric file)

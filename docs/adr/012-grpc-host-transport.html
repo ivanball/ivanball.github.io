@@ -182,7 +182,7 @@
           <li>JWKS authority differs by environment: <strong>prod ACA</strong> keeps the direct <code>http://identity</code> authority (the
           http2 ingress carries the HTTP/1.1 JwtBearer JWKS metadata fetch to the container), while the
           <strong>local-Aspire</strong> path was subsequently moved to the gateway-routed <code>WithJwksDiscovery(identity, gateway)</code>
-          form (the D32 fix) — a single-arg local <code>WithJwksDiscovery</code> would aim the HTTP/1.1 backchannel at the
+          form (the D32 fix): a single-arg local <code>WithJwksDiscovery</code> would aim the HTTP/1.1 backchannel at the
           now-Http2-only Identity HTTPS endpoint and fail on the ALPN mismatch. So Store&#39;s local JWKS now matches
           Profile A&#39;s gateway-routed discovery; only prod uses the in-cluster direct authority.</li>
           </ul>
@@ -269,27 +269,27 @@
           <p>Once modules were extracted into separate service hosts (ADR-008) that call each other synchronously
           over gRPC (ADR-007), each service&#39;s Kestrel had to serve <strong>both</strong> REST traffic (HTTP/1.1 from the
           gateway and clients) and gRPC traffic (HTTP/2 from peer services). On a <strong>cleartext</strong> endpoint there
-          is no TLS, so there is no ALPN to negotiate the protocol — Kestrel must be told up front which
+          is no TLS, so there is no ALPN to negotiate the protocol: Kestrel must be told up front which
           protocol(s) the cleartext port speaks. Two valid configurations exist, and the two downstream apps
           deliberately pick different ones because their cross-service topologies differ:</p>
           <ul>
           <li><strong>MMCA.ADC</strong> has a <strong>bidirectional</strong> gRPC pair (Conference ↔ Engagement, plus Notification →
           Identity). A gRPC client over h2c must reach a server that speaks HTTP/2 on cleartext.</li>
           <li><strong>MMCA.Store</strong> was <em>originally assumed</em> to have only <strong>one-directional, consumer-only</strong> gRPC edges
-          (Sales → Catalog, Sales → Identity). That assumption proved wrong in Azure Container Apps — Catalog
-          and Identity <strong>do</strong> serve inbound cleartext gRPC — which is why Store later converged on Profile A
+          (Sales → Catalog, Sales → Identity). That assumption proved wrong in Azure Container Apps (Catalog
+          and Identity <strong>do</strong> serve inbound cleartext gRPC) which is why Store later converged on Profile A
           (see the Update above). This section preserves the original split as historical rationale.</li>
           </ul>
           <p>The subtlety: a gRPC client using h2c <strong>prior knowledge</strong> sends an HTTP/2 preface with no upgrade
-          handshake. If the server&#39;s cleartext endpoint is <code>Http1AndHttp2</code>, Kestrel — lacking ALPN on
-          cleartext — answers HTTP/1.1 and the client fails with <code>HTTP_1_1_REQUIRED</code>. Forcing <code>Http2</code>-only on
-          cleartext fixes gRPC but then a default <code>HttpClient</code> (HTTP/1.1) — e.g. the JwtBearer JWKS backchannel
-          or the YARP forwarder — can no longer hit that endpoint directly. So the Kestrel choice forces
+          handshake. If the server&#39;s cleartext endpoint is <code>Http1AndHttp2</code>, Kestrel (lacking ALPN on
+          cleartext) answers HTTP/1.1 and the client fails with <code>HTTP_1_1_REQUIRED</code>. Forcing <code>Http2</code>-only on
+          cleartext fixes gRPC but then a default <code>HttpClient</code> (HTTP/1.1): e.g. the JwtBearer JWKS backchannel
+          or the YARP forwarder: can no longer hit that endpoint directly. So the Kestrel choice forces
           matching choices for <strong>gateway forwarding</strong> and <strong>JWKS discovery routing</strong>.</p>
           <h2 id="decision">Decision</h2>
           <p>Pick one of two coherent transport profiles per app, and wire the gateway forwarder and JWKS
           discovery to match.</p>
-          <h3 id="profile-a--adc-http2-only-h2c--gateway-routed-jwks">Profile A — ADC: <code>Http2</code>-only h2c + gateway-routed JWKS</h3>
+          <h3 id="profile-a-adc-http2-only-h2c--gateway-routed-jwks">Profile A (ADC): <code>Http2</code>-only h2c + gateway-routed JWKS</h3>
           <p>Use when services must <strong>serve</strong> gRPC on cleartext (any bidirectional / inbound gRPC edge).</p>
           <ul>
           <li><strong>Kestrel:</strong> <code>ConfigureEndpointDefaults(o =&gt; o.Protocols = HttpProtocols.Http2)</code> (also
@@ -313,7 +313,7 @@
           the update above), so &quot;serves no inbound gRPC&quot; no longer holds for the host, only for its default
           endpoint.</li>
           </ul>
-          <h3 id="profile-b--http1andhttp2--httpsalpn--forwardhttp2false--direct-jwks-stores-original-choice-now-retained-only-as-the-signalrwebsocket-exception">Profile B — <code>Http1AndHttp2</code> + HTTPS/ALPN + <code>ForwardHttp2=false</code> + direct JWKS (Store&#39;s original choice; now retained only as the SignalR/WebSocket exception)</h3>
+          <h3 id="profile-b-http1andhttp2--httpsalpn--forwardhttp2false--direct-jwks-stores-original-choice-now-retained-only-as-the-signalrwebsocket-exception">Profile B: <code>Http1AndHttp2</code> + HTTPS/ALPN + <code>ForwardHttp2=false</code> + direct JWKS (Store&#39;s original choice; now retained only as the SignalR/WebSocket exception)</h3>
           <p>Use when no service needs to <strong>serve</strong> gRPC on cleartext (consumer-only / one-directional gRPC).</p>
           <ul>
           <li><strong>Kestrel:</strong> <code>ConfigureEndpointDefaults(o =&gt; o.Protocols = HttpProtocols.Http1AndHttp2)</code> (also
@@ -350,7 +350,7 @@
           originally chose Profile B on the assumption its gRPC edges were consumer-only, but Catalog and
           Identity in fact serve inbound cleartext gRPC (Sales → Catalog, Sales → Identity), so it converged
           on Profile A (see the Update above). The only remaining Profile B case is a service that serves no
-          inbound cleartext gRPC yet needs the HTTP/1.1 Upgrade handshake — ADC&#39;s Notification (SignalR).</li>
+          inbound cleartext gRPC yet needs the HTTP/1.1 Upgrade handshake: ADC&#39;s Notification (SignalR).</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>

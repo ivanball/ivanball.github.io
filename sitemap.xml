@@ -37,7 +37,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/index.html</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-27</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
@@ -47,12 +47,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/002-navigation-populators.html</loc>
-    <lastmod>2026-07-20</lastmod>
+    <lastmod>2026-07-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html</loc>
-    <lastmod>2026-07-24</lastmod>
+    <lastmod>2026-07-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -62,42 +62,42 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html</loc>
-    <lastmod>2026-07-23</lastmod>
+    <lastmod>2026-07-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/006-database-per-service.html</loc>
-    <lastmod>2026-07-23</lastmod>
+    <lastmod>2026-07-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/007-grpc-extraction.html</loc>
-    <lastmod>2026-07-23</lastmod>
+    <lastmod>2026-07-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/008-service-extraction-topology.html</loc>
-    <lastmod>2026-07-20</lastmod>
+    <lastmod>2026-07-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html</loc>
-    <lastmod>2026-07-20</lastmod>
+    <lastmod>2026-07-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/010-integration-event-schema-versioning.html</loc>
-    <lastmod>2026-07-23</lastmod>
+    <lastmod>2026-07-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/011-single-locale-i18n.html</loc>
-    <lastmod>2026-07-20</lastmod>
+    <lastmod>2026-07-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/012-grpc-host-transport.html</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -122,7 +122,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/017-request-idempotency.html</loc>
-    <lastmod>2026-07-24</lastmod>
+    <lastmod>2026-07-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -172,27 +172,27 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html</loc>
-    <lastmod>2026-07-23</lastmod>
+    <lastmod>2026-07-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/028-dark-theme-mode.html</loc>
-    <lastmod>2026-07-20</lastmod>
+    <lastmod>2026-07-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/030-startup-sole-migrator.html</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/adr/031-feature-flag-management.html</loc>
-    <lastmod>2026-07-20</lastmod>
+    <lastmod>2026-07-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -522,12 +522,12 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/adc-RemediationBacklog.html</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/ArchitectureEvaluationCriteria.html</loc>
-    <lastmod>2026-07-23</lastmod>
+    <lastmod>2026-07-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -537,7 +537,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/governance/common-RemediationBacklog.html</loc>
-    <lastmod>2026-07-25</lastmod>
+    <lastmod>2026-07-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -562,7 +562,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/guides/adc-IntegrationTestReworkPlan.html</loc>
-    <lastmod>2026-07-23</lastmod>
+    <lastmod>2026-07-27</lastmod>
     <priority>0.6</priority>
   </url>
   <url>

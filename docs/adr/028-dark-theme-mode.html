@@ -188,7 +188,7 @@
           via a small JS interop call (<code>theme.js</code> <code>systemPrefersDark()</code> →
           <code>window.matchMedia(&#39;(prefers-color-scheme: dark)&#39;)</code>), used only when no cookie/profile value exists.</p>
           </li>
-          <li><p><strong>Theme is restored from the cookie/localStorage after first render — the no-flash SSR bootstrap is
+          <li><p><strong>Theme is restored from the cookie/localStorage after first render: the no-flash SSR bootstrap is
           outstanding.</strong> <code>ThemeService.InitializeAsync</code> reads the persisted value via JS interop from
           <code>OnAfterRenderAsync(firstRender)</code> and deliberately does <strong>not</strong> run during SSR prerender, so the bound
           <code>IsDarkMode</code> is corrected just after hydration. The cookie-as-single-source-of-truth persistence of
@@ -198,7 +198,7 @@
           server-side at prerender to close it is tracked as follow-up.</p>
           </li>
           <li><p><strong>The toggle ships in the shared <code>MainLayout</code></strong>, next to the i18n culture switcher, in the app-bar
-          <code>appbar-icon-actions</code> slot — so every consumer gets both controls without per-host wiring.</p>
+          <code>appbar-icon-actions</code> slot, so every consumer gets both controls without per-host wiring.</p>
           </li>
           <li><p><strong>The choice is persisted to the Identity profile (<code>User.PreferredTheme</code>)</strong>, in the <em>same</em> migration and
           with the <em>same</em> login-reconciliation rule as <code>User.PreferredCulture</code> (ADR-027): DB is the cross-device
@@ -215,7 +215,7 @@
           <li><strong>Reusing the i18n cookie/profile machinery</strong> means one persistence model for both user preferences,
           instead of two subtly different ones. Theme and locale are the same shape of problem, so the no-flash SSR
           bootstrap built for locale is the template theme will follow when it is wired.</li>
-          <li><strong>The palette already existed</strong>, so the cost is wiring + persistence, not design — and <code>BrandColorTokenTests</code>
+          <li><strong>The palette already existed</strong>, so the cost is wiring + persistence, not design, and <code>BrandColorTokenTests</code>
           already guards the C#↔CSS token sync, so the dark surfaces stay on-brand.</li>
           <li><strong>Defaulting to the OS preference</strong> respects the user&#39;s system setting on first visit while letting an
           explicit choice win and follow them across devices.</li>

@@ -4,7 +4,7 @@
 Accepted (2026-06-14)
 
 ## Context
-The framework already supplies the *mechanisms* for surviving partial failure — a standard Polly
+The framework already supplies the *mechanisms* for surviving partial failure: a standard Polly
 resilience handler (timeout / retry / circuit breaker), the outbox for at-least-once delivery
 (ADR-003), and database-per-service isolation (ADR-006). What was missing was a *stated contract*:
 
@@ -12,7 +12,7 @@ resilience handler (timeout / retry / circuit breaker), the outbox for at-least-
    `AddTypedServiceClient`) plus a global `ConfigureHttpClientDefaults` default in `MMCA.Common.Aspire`.
    Nothing stopped a new outbound client from silently shipping with no retry/circuit-breaker.
 2. **No recovery objectives.** Each consumer deploys its own databases, but RTO/RPO and the
-   single-region-vs-failover decision were undocumented — "we'd figure it out" is not a plan, and an
+   single-region-vs-failover decision were undocumented: "we'd figure it out" is not a plan, and an
    untested backup is not a backup (rubric §29).
 
 ## Decision
@@ -24,12 +24,12 @@ resilience handler (timeout / retry / circuit breaker), the outbox for at-least-
 2. **Consumers must declare recovery objectives.** Each consuming app documents, in its own
    `infra/DISASTER-RECOVERY.md`: RTO/RPO per failure scenario, the backup/restore mechanism, and an
    **explicit, signed-off** acceptance of single-region risk (or a multi-region failover plan).
-   A restore must be *drilled* — the DR doc carries a drill-result table that cannot stay empty.
+   A restore must be *drilled*: the DR doc carries a drill-result table that cannot stay empty.
 3. **Graceful degradation is the default posture.** When a synchronous dependency is unreachable,
    the resilience pipeline retries/breaks; cross-service consistency that can be deferred flows through
    the outbox (ADR-003), which buffers and guarantees eventual delivery after recovery.
 
-### Reference objectives (MMCA.ADC — a regional, non-24×7 conference app)
+### Reference objectives (MMCA.ADC: a regional, non-24×7 conference app)
 | Scenario | RPO | RTO |
 |---|---|---|
 | Accidental data loss / bad migration (within retention) | ≤ ~10 min (continuous PITR) | ≤ 2 h |
@@ -38,12 +38,12 @@ resilience handler (timeout / retry / circuit breaker), the outbox for at-least-
 
 ADC **deliberately accepts single-region risk**: sub-hour multi-region failover is not worth the
 cost/complexity at its scale. A different consumer (e.g. a 24×7 store) is expected to set tighter
-objectives and a failover plan in its own DR doc — the framework does not mandate one set of numbers,
+objectives and a failover plan in its own DR doc: the framework does not mandate one set of numbers,
 only that the numbers exist and the restore is drilled.
 
 ## Rationale
 - **Invariant over discipline.** A fitness function turns "remember to add resilience" into a build
-  gate — the same approach the framework already uses for the layer rules and the MassTransit-v8 pin.
+  gate: the same approach the framework already uses for the layer rules and the MassTransit-v8 pin.
 - **Objectives belong to the deployer.** RTO/RPO depend on the data and the business, which the
   framework can't know; it can only require that consumers decide and record them.
 - **Drilled, not assumed.** The single most common DR failure is discovering at 2 a.m. that the
@@ -60,4 +60,4 @@ only that the numbers exist and the restore is drilled.
 - Per-consumer DR docs can drift from reality; the drill-result table is the mitigation (a stale table
   is a visible smell).
 - A gRPC client that needs bespoke timeouts must override the standard handler explicitly rather than
-  opt out of resilience entirely — intentional friction.
+  opt out of resilience entirely: intentional friction.

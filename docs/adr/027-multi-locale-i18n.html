@@ -169,7 +169,7 @@
           internationalization so consumers can serve en-US and Spanish (<code>es</code>), with the structure to add more
           locales later. ADR-011&#39;s own &quot;if multi-locale is ever required&quot; scope is the blueprint this ADR
           implements; ADR-011 is now superseded, not deleted (the history matters).</p>
-          <p>The hard part is not translation files — it is making one culture decision flow consistently through a
+          <p>The hard part is not translation files: it is making one culture decision flow consistently through a
           Blazor <code>InteractiveAuto</code> app (SSR prerender → InteractiveServer circuit → InteractiveWebAssembly client)
           <em>and</em> through the cross-origin REST services behind the Gateway, without a flash of the wrong language or
           a prerender/hydration mismatch. The Result pattern (ADR-013) already gives every <code>Error</code> a stable
@@ -184,7 +184,7 @@
           resource base name is its full type name and the <code>.resx</code> lives next to it (<code>Login.razor</code> →
           <code>Login.resx</code> / <code>Login.es.resx</code>; a <code>*.Resources.SharedResource</code> marker for cross-cutting chrome). Keys
           are dotted and stable (<code>Nav.Home</code>, <code>Common.Button.Save</code>). Parameterized text uses <strong>composite format
-          keys</strong> (<code>&quot;Error loading {0}. {1}&quot;</code>) consumed as <code>L[&quot;Common.Error.Load&quot;, entity, detail]</code> — never string
+          keys</strong> (<code>&quot;Error loading {0}. {1}&quot;</code>) consumed as <code>L[&quot;Common.Error.Load&quot;, entity, detail]</code>: never string
           concatenation. The <code>.resx</code> compile to <strong>satellite assemblies</strong> that pack into the NuGet packages
           automatically (no <code>.csproj</code> change) and flow identically via <code>local.props</code> source mode.</p>
           </li>
@@ -193,7 +193,7 @@
           against <code>CurrentUICulture</code>, falling back to the error&#39;s existing English <code>Message</code> when no resource key
           exists. It is applied at the single Result→ProblemDetails projection point
           (<code>ErrorHttpMapping.BuildErrorsExtension</code>, used by <code>ApiControllerBase.HandleFailure</code> and
-          <code>UnhandledResultFailureFilter</code>). <strong>Domain, handler, and <code>Result</code> signatures do not change</strong> — they stay
+          <code>UnhandledResultFailureFilter</code>). <strong>Domain, handler, and <code>Result</code> signatures do not change</strong>: they stay
           culture-agnostic; only the edge speaks a culture. Modules register their own resource sources
           (<code>ErrorResourceSource</code>) additively; Common registers its own in <code>AddAPI</code>. FluentValidation rules carry
           stable <code>.WithErrorCode(&quot;&lt;Area&gt;.&lt;Field&gt;.&lt;Rule&gt;&quot;)</code> codes so validation errors localize through the same
@@ -209,7 +209,7 @@
           full reload; the WASM client reads the same cookie on startup (<code>MmcaCultureBootstrap.SetBrowserCultureAsync</code>) and sets
           <code>CultureInfo.DefaultThreadCurrent[UI]Culture</code> before <code>RunAsync()</code>, so prerender and hydration agree.
           The UI forwards the active culture to the API as <code>Accept-Language</code> (<code>CultureDelegatingHandler</code> on the
-          <code>&quot;APIClient&quot;</code>), because the cross-origin Gateway does not carry the cookie to the services — that header
+          <code>&quot;APIClient&quot;</code>), because the cross-origin Gateway does not carry the cookie to the services: that header
           is what makes backend errors come back localized.</p>
           </li>
           <li><p><strong>A user&#39;s chosen culture is persisted to the Identity profile (<code>User.PreferredCulture</code>).</strong> The DB value
@@ -228,7 +228,7 @@
           <li><p><strong>Translation completeness is a fitness gate (ADR-015).</strong> <code>ResourceTranslationsAreComplete</code>
           (<code>MMCA.Common.Testing.Architecture</code>, run as <code>LocalizationResourceTests</code> against <code>SupportedCultures.All</code>)
           fails the build if any base <code>.resx</code> under <code>Source/</code> lacks a complete, non-empty sibling for a required
-          culture — so a new English string cannot ship without its Spanish translation. Coverage is <strong>verified,
+          culture, so a new English string cannot ship without its Spanish translation. Coverage is <strong>verified,
           not assumed</strong>, closing the prior &quot;no missing-key/translation-coverage gate&quot; follow-up. The rule is opt-in
           and repo-agnostic (it takes the required-culture list), so the consumer apps can adopt the same gate for
           their module <code>.resx</code>.</p>
@@ -294,7 +294,7 @@
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>Every view and every user-facing message is touched</strong> — a large, mostly mechanical sweep, accepted as
+          <li><strong>Every view and every user-facing message is touched</strong>: a large, mostly mechanical sweep, accepted as
           the cost ADR-011 always named.</li>
           <li><strong>WASM Spanish formatting needs ICU globalization data</strong> (not <code>InvariantGlobalization</code>), a payload cost
           on the client bundle.</li>

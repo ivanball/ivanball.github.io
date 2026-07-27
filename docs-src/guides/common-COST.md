@@ -1,6 +1,6 @@
 # Cost & FinOps Notes (rubric §31)
 
-MMCA.Common is a library, so it cannot *provision* anything — right-sizing, scale rules, budgets,
+MMCA.Common is a library, so it cannot *provision* anything: right-sizing, scale rules, budgets,
 and per-service cost attribution live in the consumer apps' IaC (e.g. MMCA.ADC's `infra/main.bicep`,
 `cost-guard.yml`, and budget alerts). What the framework *can* do is keep its own cost-relevant
 defaults sane and document the levers consumers should set. This note consolidates the cost rationale
@@ -14,7 +14,7 @@ that previously lived only in code comments.
   Log Analytics / App Insights ingestion. This is on by default in `AddServiceDefaults()`.
 - **Head-based trace sampling is a built-in knob.** Set `Telemetry:TracesSampleRatio` to a value in
   `(0,1)` (e.g. `0.1` to keep 10% of traces) and `ConfigureOpenTelemetry` installs a
-  `ParentBasedSampler(TraceIdRatioBasedSampler(ratio))` — ParentBased so a sampled-in request keeps
+  `ParentBasedSampler(TraceIdRatioBasedSampler(ratio))`: ParentBased so a sampled-in request keeps
   its whole trace intact across services. Unset (the default) samples everything; an out-of-range or
   unparseable value also falls back to sample-everything, so a typo can never silently blind you. This
   is the single biggest lever on trace-ingestion cost once traffic grows.
@@ -34,7 +34,7 @@ that previously lived only in code comments.
   "dispatched successfully" line is `Debug` (it is the single highest-volume log line in steady
   state); failures stay loud (dead-letter = `Error`, retry = `Warning`). So a busy outbox does not
   emit an `Information` line per message. Consumers should keep production at `Information` (or higher
-  for noisy categories) rather than `Debug` — log volume is billed.
+  for noisy categories) rather than `Debug`: log volume is billed.
 - **Idle compute is kept cheap.** The shared `SocketsHttpHandler` keep-alive / pooled-connection
   tuning in `MMCA.Common.Aspire` avoids per-request connection churn; on consumption-billed compute
   (e.g. Azure Container Apps) steady low traffic stays in the cheap idle band instead of repeatedly
@@ -42,7 +42,7 @@ that previously lived only in code comments.
 - **The outbox poll interval is tunable and meant to be raised in production.** `OutboxProcessor`
   wakes on a signal (new rows written) and uses a smart wait, so real messages still flow in ~5s
   regardless of the fallback poll. `Outbox:PollingIntervalSeconds` therefore only controls *idle*
-  polling — set it high in deployed environments (MMCA.ADC uses **300s** vs the 2s local default) to
+  polling: set it high in deployed environments (MMCA.ADC uses **300s** vs the 2s local default) to
   cut idle DB chatter and telemetry without adding message latency.
 - **Outbox/inbox rows are purged, not kept forever.** `OutboxCleanupService` purges processed rows
   after `Outbox:RetentionDays` (default 7), bounding table growth (and the storage/scan cost of an
@@ -70,7 +70,7 @@ These belong in the consumer's IaC, not the library, but the framework documents
 consumer attributes spend and guards surges the same way. The worked, deployed versions are
 `MMCA.ADC/infra/main.bicep` (tags + budget) and `MMCA.ADC/.github/workflows/cost-guard.yml`.
 
-**Cost-attribution tags** — stamp every billable resource with a consistent tag set so Azure Cost
+**Cost-attribution tags**: stamp every billable resource with a consistent tag set so Azure Cost
 Analysis can group by application / environment / cost-centre:
 
 ```bicep
@@ -97,12 +97,12 @@ resource budget 'Microsoft.Consumption/budgets@2023-11-01' = if (enableBudget) {
 }
 ```
 
-**Surge-revert guard** — a scheduled, read-only check that fails if a temporary scale-up was left
+**Surge-revert guard**: a scheduled, read-only check that fails if a temporary scale-up was left
 running (the rubric's "scale-ups left running after the event" red flag). Distilled from
 `cost-guard.yml`:
 
 ```yaml
-# .github/workflows/cost-guard.yml — weekly + manual; READ-ONLY, never deploys.
+# .github/workflows/cost-guard.yml: weekly + manual; READ-ONLY, never deploys.
 on: { schedule: [{ cron: '0 7 * * 1' }], workflow_dispatch: {} }
 jobs:
   drift:
@@ -115,5 +115,5 @@ jobs:
 ## Out of scope for the framework (by design)
 
 Provisioning, scale rules, budgets, per-service cost attribution, and surge/revert automation are
-consumer/IaC concerns and are *not* added to the library — see also [ADR-009](../adr/009-resilience-and-recovery-objectives.md) (resilience/recovery
+consumer/IaC concerns and are *not* added to the library: see also [ADR-009](../adr/009-resilience-and-recovery-objectives.md) (resilience/recovery
 objectives are likewise the deployer's, not the framework's).

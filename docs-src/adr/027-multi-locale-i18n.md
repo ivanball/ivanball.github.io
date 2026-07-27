@@ -10,7 +10,7 @@ internationalization so consumers can serve en-US and Spanish (`es`), with the s
 locales later. ADR-011's own "if multi-locale is ever required" scope is the blueprint this ADR
 implements; ADR-011 is now superseded, not deleted (the history matters).
 
-The hard part is not translation files — it is making one culture decision flow consistently through a
+The hard part is not translation files: it is making one culture decision flow consistently through a
 Blazor `InteractiveAuto` app (SSR prerender → InteractiveServer circuit → InteractiveWebAssembly client)
 *and* through the cross-origin REST services behind the Gateway, without a flash of the wrong language or
 a prerender/hydration mismatch. The Result pattern (ADR-013) already gives every `Error` a stable
@@ -26,7 +26,7 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
    resource base name is its full type name and the `.resx` lives next to it (`Login.razor` →
    `Login.resx` / `Login.es.resx`; a `*.Resources.SharedResource` marker for cross-cutting chrome). Keys
    are dotted and stable (`Nav.Home`, `Common.Button.Save`). Parameterized text uses **composite format
-   keys** (`"Error loading {0}. {1}"`) consumed as `L["Common.Error.Load", entity, detail]` — never string
+   keys** (`"Error loading {0}. {1}"`) consumed as `L["Common.Error.Load", entity, detail]`: never string
    concatenation. The `.resx` compile to **satellite assemblies** that pack into the NuGet packages
    automatically (no `.csproj` change) and flow identically via `local.props` source mode.
 
@@ -35,7 +35,7 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
    against `CurrentUICulture`, falling back to the error's existing English `Message` when no resource key
    exists. It is applied at the single Result→ProblemDetails projection point
    (`ErrorHttpMapping.BuildErrorsExtension`, used by `ApiControllerBase.HandleFailure` and
-   `UnhandledResultFailureFilter`). **Domain, handler, and `Result` signatures do not change** — they stay
+   `UnhandledResultFailureFilter`). **Domain, handler, and `Result` signatures do not change**: they stay
    culture-agnostic; only the edge speaks a culture. Modules register their own resource sources
    (`ErrorResourceSource`) additively; Common registers its own in `AddAPI`. FluentValidation rules carry
    stable `.WithErrorCode("<Area>.<Field>.<Rule>")` codes so validation errors localize through the same
@@ -51,7 +51,7 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
    full reload; the WASM client reads the same cookie on startup (`MmcaCultureBootstrap.SetBrowserCultureAsync`) and sets
    `CultureInfo.DefaultThreadCurrent[UI]Culture` before `RunAsync()`, so prerender and hydration agree.
    The UI forwards the active culture to the API as `Accept-Language` (`CultureDelegatingHandler` on the
-   `"APIClient"`), because the cross-origin Gateway does not carry the cookie to the services — that header
+   `"APIClient"`), because the cross-origin Gateway does not carry the cookie to the services: that header
    is what makes backend errors come back localized.
 
 6. **A user's chosen culture is persisted to the Identity profile (`User.PreferredCulture`).** The DB value
@@ -70,7 +70,7 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
 8. **Translation completeness is a fitness gate (ADR-015).** `ResourceTranslationsAreComplete`
    (`MMCA.Common.Testing.Architecture`, run as `LocalizationResourceTests` against `SupportedCultures.All`)
    fails the build if any base `.resx` under `Source/` lacks a complete, non-empty sibling for a required
-   culture — so a new English string cannot ship without its Spanish translation. Coverage is **verified,
+   culture, so a new English string cannot ship without its Spanish translation. Coverage is **verified,
    not assumed**, closing the prior "no missing-key/translation-coverage gate" follow-up. The rule is opt-in
    and repo-agnostic (it takes the required-culture list), so the consumer apps can adopt the same gate for
    their module `.resx`.
@@ -138,7 +138,7 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
   name) and packs cleanly through the lockstep NuGet pipeline (ADR-016) without per-project MSBuild tweaks.
 
 ## Trade-offs
-- **Every view and every user-facing message is touched** — a large, mostly mechanical sweep, accepted as
+- **Every view and every user-facing message is touched**: a large, mostly mechanical sweep, accepted as
   the cost ADR-011 always named.
 - **WASM Spanish formatting needs ICU globalization data** (not `InvariantGlobalization`), a payload cost
   on the client bundle.

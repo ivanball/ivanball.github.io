@@ -168,8 +168,8 @@
           <h2 id="context">Context</h2>
           <p>The MMCA applications (the ADC conference app, the Store) and the <code>MMCA.Common.UI</code> library currently ship
           a single locale (en-US). The architecture rubric scores Internationalization (§27); rather than leave it
-          at an implicit zero, this ADR records that single-locale is a <strong>deliberate, scoped decision</strong> — not an
-          oversight — and states what re-introducing i18n would entail.</p>
+          at an implicit zero, this ADR records that single-locale is a <strong>deliberate, scoped decision</strong> (not an
+          oversight) and states what re-introducing i18n would entail.</p>
           <h2 id="decision">Decision</h2>
           <ol>
           <li><strong>Single-locale (en-US) is an explicit non-goal for now.</strong> User-facing strings are inline in markup;
@@ -185,14 +185,14 @@
           </ol>
           <h2 id="rationale">Rationale</h2>
           <ul>
-          <li>Recording the decision converts an implicit rubric-zero into a conscious, revisitable choice — the same
+          <li>Recording the decision converts an implicit rubric-zero into a conscious, revisitable choice: the same
           posture as the single-region DR acceptance in ADR-009.</li>
           <li>Premature i18n infrastructure adds complexity (resource indirection, culture bugs, layout churn) with no
           current user to benefit.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li>Adding a locale later touches every view plus the formatting paths — a real but bounded effort, accepted.</li>
+          <li>Adding a locale later touches every view plus the formatting paths: a real but bounded effort, accepted.</li>
           <li>Hard-coded strings make a future extraction larger; mitigated by the component-based UI (strings are
           localized to components/pages, so extraction is mechanical rather than archaeological).</li>
           </ul>

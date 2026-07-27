@@ -195,20 +195,20 @@
           </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
-          <li><strong>No business-logic rewrite</strong> — the gRPC adapter implements the interface modules already depend
+          <li><strong>No business-logic rewrite</strong>: the gRPC adapter implements the interface modules already depend
           on; swapping in-process for cross-process is a registration change.</li>
-          <li><strong>Transport stays at the edge</strong> — <code>MicroserviceExtractionTests</code> forbid <code>MassTransit</code>/gRPC types in
+          <li><strong>Transport stays at the edge</strong>: <code>MicroserviceExtractionTests</code> forbid <code>MassTransit</code>/gRPC types in
           Application/Domain/Shared, so the choice is reversible and the core stays clean.</li>
-          <li><strong>Strong contracts</strong> — the <code>.proto</code> definitions plus the in-process interface the adapter
+          <li><strong>Strong contracts</strong>: the <code>.proto</code> definitions plus the in-process interface the adapter
           implements are the wire surface. A <code>[ServiceContract(version)]</code> attribute (MMCA.Common.Shared) is
           provided to mark and version contract types explicitly, but it is an <strong>available extension point, not yet
-          applied</strong> — no contract type carries it today, and no fitness rule enforces it; the wire surface is
+          applied</strong>: no contract type carries it today, and no fitness rule enforces it; the wire surface is
           currently defined by the <code>.proto</code> files alone.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>Bidirectional pairs need care.</strong> Conference ↔ Engagement is a mutual gRPC pair; the AppHost
-          deliberately omits a reciprocal <code>WaitFor</code> to avoid a startup deadlock — transient &quot;peer not ready&quot;
+          deliberately omits a reciprocal <code>WaitFor</code> to avoid a startup deadlock: transient &quot;peer not ready&quot;
           errors self-heal via the resilience pipeline.</li>
           <li><strong>h2c assumptions.</strong> Target services must serve HTTP/2 on cleartext; the Notification service runs
           <code>Http1AndHttp2</code> for its SignalR WebSocket upgrade, unlike the <code>Http2</code>-only REST services.</li>

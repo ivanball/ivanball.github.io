@@ -178,7 +178,7 @@
           <li><strong>Opt-in per action.</strong> <code>[Idempotent]</code> (<code>IdempotentAttribute</code>, a <code>ServiceFilterAttribute</code> resolving
           <code>IdempotencyFilter</code> from DI) marks an action. Nothing is deduplicated unless the action declares it.</li>
           <li><strong>Client supplies the key.</strong> The caller sends an <code>Idempotency-Key</code> header. If the header is absent or
-          blank, the action runs normally with <strong>no</strong> deduplication — the key is the client&#39;s assertion that &quot;two
+          blank, the action runs normally with <strong>no</strong> deduplication: the key is the client&#39;s assertion that &quot;two
           requests with this key are the same operation.&quot;</li>
           <li><strong>The key is scoped to the caller and the endpoint, not taken bare.</strong> The cache key is
           <code>idempotency:{SHA-256(subject | method | route template | client key)}</code>, where the subject is the
@@ -236,7 +236,7 @@
           client that retries under a different identity (a rotated anonymous address, or a token exchange
           between the first attempt and the retry) misses the cache and re-executes. That is the correct
           trade against replaying one caller&#39;s response to another.</li>
-          <li><strong>Opt-in.</strong> An action that should be idempotent but is missing <code>[Idempotent]</code> gets no protection — the
+          <li><strong>Opt-in.</strong> An action that should be idempotent but is missing <code>[Idempotent]</code> gets no protection: the
           same audit-the-inventory caveat as ADR-005&#39;s <code>IAnonymizable</code>.</li>
           </ul>
           <h2 id="related">Related</h2>

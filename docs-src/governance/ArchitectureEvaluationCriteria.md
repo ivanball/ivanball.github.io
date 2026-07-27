@@ -8,8 +8,8 @@ Although written against a .NET / DDD / Clean Architecture / CQRS stack (modular
 evolving toward microservices) with a Blazor / MudBlazor front end, the criteria generalize
 to any enterprise codebase and component-based UI.
 
-The categories are organized in three parts: **Part A — Application / Backend Architecture**
-(§1–17), **Part B — Front-End / UI Architecture** (§18–28), and **Part C — Operational,
+The categories are organized in three parts: **Part A (Application / Backend Architecture**
+(§1–17), **Part B) Front-End / UI Architecture** (§18–28), and **Part C: Operational,
 Governance & Cross-Cutting Concerns** (§29–34).
 
 ---
@@ -33,11 +33,11 @@ Score each category 0–4. Use the same scale everywhere so totals are comparabl
 Alongside the maturity level, rate **how well each category is actually implemented** on a finer
 0–10 scale. The two axes measure different things and should both be recorded:
 
-- **Maturity (0–4)** — *process*: how consistently and how well-governed the pattern is (ad-hoc → enforced by CI).
-- **Implementation (0–10)** — *substance*: how good the implementation is right now, judged against the category's **criteria** and **red flags**.
+- **Maturity (0–4)**, *process*: how consistently and how well-governed the pattern is (ad-hoc → enforced by CI).
+- **Implementation (0–10)**, *substance*: how good the implementation is right now, judged against the category's **criteria** and **red flags**.
 
 A category can be mature-but-mediocre (enforced conventions wrapped around a weak design) or
-excellent-but-inconsistent (a strong implementation applied only in spots) — two scores capture that
+excellent-but-inconsistent (a strong implementation applied only in spots): two scores capture that
 difference where one cannot.
 
 | Score | Band | Meaning |
@@ -47,7 +47,7 @@ difference where one cannot.
 | 3–4 | **Partial** | Several criteria met; meaningful gaps remain; some red flags. |
 | 5–6 | **Adequate** | Most criteria met; functional with rough edges; a few red flags. |
 | 7–8 | **Strong** | Nearly all criteria met well; only minor, isolated gaps; no significant red flags. |
-| 9–10 | **Exemplary** | All criteria met to a high standard; reference-quality. **10 = perfectly implemented — nothing left to improve.** |
+| 9–10 | **Exemplary** | All criteria met to a high standard; reference-quality. **10 = perfectly implemented: nothing left to improve.** |
 
 **Rule of thumb:** the implementation score usually tracks maturity (≈ maturity × 2.5 as a starting
 point), then nudge it up or down for execution quality the coarse maturity level can't express. A
@@ -55,7 +55,7 @@ large gap between the two axes is itself a finding worth a note.
 
 ### Scoring model
 
-- **Weight** each category by risk to *this* system (weights below are defaults — adjust per engagement).
+- **Weight** each category by risk to *this* system (weights below are defaults: adjust per engagement).
 - **Maturity index** = Σ(category maturity score × weight) ÷ Σ(weight × 4) → a 0–100% architecture health index.
 - **Implementation index** = Σ(category implementation score × weight) ÷ Σ(weight × 10) → a parallel 0–100% measure of execution quality. Compare the two indices: a lower implementation index means quality is the weaker axis; a lower maturity index means consistency/governance is.
 - Capture **evidence** (file paths, PRs, ADRs) for every score. A score without evidence is an opinion.
@@ -83,7 +83,7 @@ large gap between the two axes is itself a finding worth a note.
 |15 | Best Practices & Code Quality |   2    |                |             |          |                  |
 |16 | Maintainability & Evolvability|   2    |                |             |          |                  |
 |17 | DevOps & Deployment           |   2    |                |             |          |                  |
-|   | **— Part B: Front-End / UI —**|        |                |             |          |                  |
+|   | **Part B: Front-End / UI**|        |                |             |          |                  |
 |18 | UI Architecture & Components  |   3    |                |             |          |                  |
 |19 | State Management & Data Flow  |   3    |                |             |          |                  |
 |20 | Design System & UI Consistency|   2    |                |             |          |                  |
@@ -95,7 +95,7 @@ large gap between the two axes is itself a finding worth a note.
 |26 | Front-End Security            |   3    |                |             |          |                  |
 |27 | Internationalization (i18n)   |   1    |                |             |          |                  |
 |28 | Front-End Testing & Quality   |   3    |                |             |          |                  |
-|   | **— Part C: Operational & Governance —** | |          |             |          |                  |
+|   | **Part C: Operational & Governance** | |          |             |          |                  |
 |29 | Resilience & Business Continuity| 3    |                |             |          |                  |
 |30 | Compliance, Privacy & Governance| 2    |                |             |          |                  |
 |31 | Cost Efficiency / FinOps      |   2    |                |             |          |                  |
@@ -111,11 +111,11 @@ large gap between the two axes is itself a finding worth a note.
 **Intent:** Object/module-level design discipline that keeps code flexible and decoupled.
 
 **Criteria**
-- **SRP** — each class/handler has one reason to change; no "god" services orchestrating unrelated concerns.
-- **OCP** — behavior extended via new types/strategies/decorators, not by editing switch statements.
-- **LSP** — derived types are substitutable; no `NotSupportedException` overrides or type-sniffing (`is`/`as` dispatch).
-- **ISP** — interfaces are narrow and role-specific; clients aren't forced to depend on members they ignore.
-- **DIP** — high-level modules depend on abstractions; concretions injected via DI, not `new`-ed inline.
+- **SRP**: each class/handler has one reason to change; no "god" services orchestrating unrelated concerns.
+- **OCP**: behavior extended via new types/strategies/decorators, not by editing switch statements.
+- **LSP**: derived types are substitutable; no `NotSupportedException` overrides or type-sniffing (`is`/`as` dispatch).
+- **ISP**: interfaces are narrow and role-specific; clients aren't forced to depend on members they ignore.
+- **DIP**: high-level modules depend on abstractions; concretions injected via DI, not `new`-ed inline.
 
 **Red flags**
 - Constructors with 8+ dependencies (SRP/ISP smell).
@@ -129,11 +129,11 @@ large gap between the two axes is itself a finding worth a note.
 
 ## 2. Design Patterns
 
-**Intent:** Appropriate, idiomatic use of patterns — solving real problems, not pattern theater.
+**Intent:** Appropriate, idiomatic use of patterns, solving real problems, not pattern theater.
 
 **Criteria**
 - Creational (Factory methods on entities, Builder, Options) used where construction is non-trivial.
-- Structural (Adapter, Decorator, Facade) used for boundaries and pipelines — e.g., handler decorator pipeline for validation/logging/transactions.
+- Structural (Adapter, Decorator, Facade) used for boundaries and pipelines: e.g., handler decorator pipeline for validation/logging/transactions.
 - Behavioral (Strategy, Mediator/dispatcher, Specification, Observer/domain events) used for variation and decoupling.
 - Domain patterns: **Result** for error flow, **Repository/Unit of Work**, **Specification** for query intent, **Outbox** for reliable messaging.
 - Patterns are *named consistently* and discoverable; team shares vocabulary.
@@ -154,9 +154,9 @@ large gap between the two axes is itself a finding worth a note.
 
 **Criteria**
 - **Dependency rule** enforced: Domain → (nothing); Application → Domain; Infrastructure/API/UI → inward only. Verified by project references and ideally an architecture test (NetArchTest/ArchUnitNET).
-- **Domain purity** — no EF, ASP.NET, serialization, or framework attributes in the domain layer.
-- **Ports & adapters** — application defines interfaces (ports); infrastructure implements them (adapters).
-- **Use-case centric** — application layer expresses business operations, not CRUD-on-tables.
+- **Domain purity**: no EF, ASP.NET, serialization, or framework attributes in the domain layer.
+- **Ports & adapters**: application defines interfaces (ports); infrastructure implements them (adapters).
+- **Use-case centric**: application layer expresses business operations, not CRUD-on-tables.
 - Framework concerns (DI wiring, middleware, persistence) live at the outermost ring.
 
 **Red flags**
@@ -174,7 +174,7 @@ large gap between the two axes is itself a finding worth a note.
 **Intent:** The model reflects the business; boundaries follow capability boundaries, not technical layers.
 
 **Criteria**
-- **Ubiquitous language** — type/method names match business terms used by stakeholders.
+- **Ubiquitous language**: type/method names match business terms used by stakeholders.
 - **Bounded contexts / modules** with explicit boundaries and ownership (e.g., Catalog, Sales, Identity).
 - **Aggregates** with clear roots and invariants enforced inside the boundary; references between aggregates by ID, not object graph.
 - **Value objects** for concepts with no identity (Money, Address, EmailAddress); immutability respected.
@@ -183,7 +183,7 @@ large gap between the two axes is itself a finding worth a note.
 - Rich behavior on entities, not setters-only.
 
 **Red flags**
-- Anemic domain model — all logic in services, entities are property bags.
+- Anemic domain model: all logic in services, entities are property bags.
 - Aggregates that load half the database; transactions spanning many aggregates.
 - Context boundaries that leak (one module querying another's tables directly).
 - Primitive obsession (raw `string`/`Guid`/`decimal` instead of strong types and identifier aliases).
@@ -240,15 +240,15 @@ large gap between the two axes is itself a finding worth a note.
 
 **Criteria**
 - **Service boundaries** align with bounded contexts; one team can own and deploy a service.
-- **Data ownership** — each service/module owns its schema; **no shared writable database** across service boundaries.
-- **Communication** — async events for integration, sync calls only where strong consistency is required; contracts are explicit and versioned.
-- **Resilience** — timeouts, retries with backoff, circuit breakers, bulkheads, graceful degradation.
-- **Independent deployability** — services build/test/deploy independently; backward-compatible contracts.
-- **Distributed observability** — correlation/trace IDs propagate across service hops.
+- **Data ownership**: each service/module owns its schema; **no shared writable database** across service boundaries.
+- **Communication**: async events for integration, sync calls only where strong consistency is required; contracts are explicit and versioned.
+- **Resilience**: timeouts, retries with backoff, circuit breakers, bulkheads, graceful degradation.
+- **Independent deployability**: services build/test/deploy independently; backward-compatible contracts.
+- **Distributed observability**: correlation/trace IDs propagate across service hops.
 - For a **modular monolith**: modules implement a common contract, are discovered/registered in dependency order, and are extractable without rewrites.
 
 **Red flags**
-- "Distributed monolith" — services that must deploy together; chatty synchronous call graphs.
+- "Distributed monolith": services that must deploy together; chatty synchronous call graphs.
 - Shared database tables read/written by multiple services.
 - No resilience policies; a downstream outage cascades.
 - Integration via direct DB access instead of contracts/events.
@@ -307,7 +307,7 @@ large gap between the two axes is itself a finding worth a note.
 **Intent:** Validation, caching, resilience, configuration, and mapping are centralized and consistent.
 
 **Criteria**
-- Validation, logging, transactions handled by pipeline behaviors/decorators — not copy-pasted.
+- Validation, logging, transactions handled by pipeline behaviors/decorators: not copy-pasted.
 - Configuration via strongly-typed options, validated at startup; environment-specific overrides clean.
 - Caching strategy explicit (what, where, invalidation) and not hiding correctness bugs.
 - Resilience policies (retry/timeout/circuit-breaker) applied consistently via a shared mechanism.
@@ -377,14 +377,14 @@ large gap between the two axes is itself a finding worth a note.
 - **Distributed tracing** (OpenTelemetry) and **metrics** (RED/USE) wired to a backend (e.g., App Insights).
 - **Health checks** (liveness/readiness) and dependency checks exposed for orchestrators.
 - Alerting on SLO breaches; dashboards exist and are used.
-- Noise control — high-volume/low-value telemetry (e.g., poll spans) deliberately filtered to manage cost.
+- Noise control: high-volume/low-value telemetry (e.g., poll spans) deliberately filtered to manage cost.
 - Runbooks for common failures; graceful shutdown and startup ordering.
 
 **Red flags**
 - `Console.WriteLine`/unstructured logs; no correlation across services.
 - No health endpoints; orchestrator can't tell if the app is alive.
 - Telemetry cost unmanaged (everything logged at Information) or, conversely, nothing logged.
-- No alerts — failures discovered by users.
+- No alerts: failures discovered by users.
 
 **Default weight:** 2
 
@@ -435,18 +435,18 @@ large gap between the two axes is itself a finding worth a note.
 
 ## 16. Maintainability & Evolvability
 
-**Intent:** The system absorbs change cheaply and ages well. (The *governance/documentation depth* behind this — ADRs, fitness functions, diagrams — is scored separately in §34.)
+**Intent:** The system absorbs change cheaply and ages well. (The *governance/documentation depth* behind this (ADRs, fitness functions, diagrams) is scored separately in §34.)
 
 **Criteria**
 - Low coupling / high cohesion measured (dependency graphs, change-coupling); modules swap independently.
 - Clear module/package boundaries with explicit, versioned contracts (e.g., shared framework packages consumed downstream).
-- **Consistent upgrade strategy** — framework changes rolled out to all consumers together (no long-lived divergent versions) per team policy.
+- **Consistent upgrade strategy**: framework changes rolled out to all consumers together (no long-lived divergent versions) per team policy.
 - Documentation that stays current: ADRs for the *why*, architecture map for the *what*.
 - Onboarding cost is low; conventions discoverable.
 - Tech-debt register exists and is serviced.
 
 **Red flags**
-- Shotgun surgery — one change touches many modules.
+- Shotgun surgery: one change touches many modules.
 - Divergent versions of a shared library across consumers; partial rollouts that linger.
 - Tribal knowledge; undocumented decisions; stale docs contradicting the code.
 
@@ -456,15 +456,15 @@ large gap between the two axes is itself a finding worth a note.
 
 ## 17. DevOps & Deployment
 
-**Intent:** Building, releasing, and provisioning are automated, repeatable, and safe. (The *local developer experience / inner loop* behind this — local orchestration, cross-repo dev, build speed — is scored separately in §33.)
+**Intent:** Building, releasing, and provisioning are automated, repeatable, and safe. (The *local developer experience / inner loop* behind this (local orchestration, cross-repo dev, build speed) is scored separately in §33.)
 
 **Criteria**
 - **CI** gates: build, analyzers, tests, security/audit on every PR; fast feedback.
 - **CD** with repeatable, automated deployments; rollback strategy.
-- **Infrastructure as Code** (Bicep/Terraform) — environments reproducible; no click-ops drift.
+- **Infrastructure as Code** (Bicep/Terraform): environments reproducible; no click-ops drift.
 - Secrets/identity via managed identity / OIDC, least privilege for deployment principals.
 - Environment parity; configuration externalized per environment.
-- Cost awareness — provisioning right-sized with evidence; temporary scale-ups tracked with revert plans.
+- Cost awareness: provisioning right-sized with evidence; temporary scale-ups tracked with revert plans.
 - Containerization/orchestration (or Aspire-style local-to-cloud parity) where applicable.
 
 **Red flags**
@@ -477,7 +477,7 @@ large gap between the two axes is itself a finding worth a note.
 
 ---
 
-# Part B — Front-End / UI Architecture
+# Part B: Front-End / UI Architecture
 
 Categories §18–28 assess the presentation tier. They use the same 0–4 maturity scale and
 weighting model as Part A. Where a concern has a backend counterpart (security, performance,
@@ -487,15 +487,15 @@ testing), Part B focuses on the **client/UI-specific** facets and cross-referenc
 
 ## 18. UI Architecture & Component Design
 
-**Intent:** Components are cohesive, reusable, and composed cleanly — the UI has a deliberate structure, not page-sized blobs.
+**Intent:** Components are cohesive, reusable, and composed cleanly, the UI has a deliberate structure, not page-sized blobs.
 
 **Criteria**
-- **Container/presentational split** — smart components own data/behavior; dumb components render from parameters and raise events. Logic isn't buried in markup.
-- **Component contracts** — typed parameters with sensible defaults; outputs via callbacks/`EventCallback`; two-way binding used intentionally, not everywhere.
-- **Composition over inheritance** — layouts, render fragments, and slots compose UI; minimal deep component hierarchies.
-- **Reuse** — shared/primitive components live in a common UI library (consumed by multiple apps), not copy-pasted per page.
-- **Render lifecycle discipline** — expensive work kept out of render; `ShouldRender`/keys/`@key` used to control re-render where it matters.
-- **Separation of concerns** — no direct data-access or business rules in components; they call application services/clients.
+- **Container/presentational split**: smart components own data/behavior; dumb components render from parameters and raise events. Logic isn't buried in markup.
+- **Component contracts**: typed parameters with sensible defaults; outputs via callbacks/`EventCallback`; two-way binding used intentionally, not everywhere.
+- **Composition over inheritance**: layouts, render fragments, and slots compose UI; minimal deep component hierarchies.
+- **Reuse**: shared/primitive components live in a common UI library (consumed by multiple apps), not copy-pasted per page.
+- **Render lifecycle discipline**: expensive work kept out of render; `ShouldRender`/keys/`@key` used to control re-render where it matters.
+- **Separation of concerns**: no direct data-access or business rules in components; they call application services/clients.
 
 **Red flags**
 - 1000-line page components mixing data fetching, validation, and markup.
@@ -513,17 +513,17 @@ testing), Part B focuses on the **client/UI-specific** facets and cross-referenc
 
 **Criteria**
 - **Single source of truth** per piece of state; ownership is explicit (component-local vs. scoped service vs. global store).
-- **Unidirectional data flow** — state flows down via parameters, changes flow up via events; avoid hidden mutation of shared objects.
-- **Server vs. client state distinguished** — fetched data cached with a staleness/invalidation strategy; not refetched on every render.
-- **Component communication** via well-defined channels (cascading values, scoped state services, mediators) — not static mutable globals.
-- **Render correctness** — `StateHasChanged` called intentionally; async state updates marshalled to the UI thread/context correctly.
-- **Lifetime correctness** — scoped vs. singleton services chosen correctly for the hosting model (Server vs. WASM); no accidental cross-user state leakage.
+- **Unidirectional data flow**: state flows down via parameters, changes flow up via events; avoid hidden mutation of shared objects.
+- **Server vs. client state distinguished**: fetched data cached with a staleness/invalidation strategy; not refetched on every render.
+- **Component communication** via well-defined channels (cascading values, scoped state services, mediators): not static mutable globals.
+- **Render correctness**: `StateHasChanged` called intentionally; async state updates marshalled to the UI thread/context correctly.
+- **Lifetime correctness**: scoped vs. singleton services chosen correctly for the hosting model (Server vs. WASM); no accidental cross-user state leakage.
 
 **Red flags**
 - Static mutable fields holding user/session state (leaks across users in Blazor Server).
 - Stale UI because a parent mutated state but didn't notify children (e.g., wrapped guard components reading a stale `IsDirty` because the parent didn't `StateHasChanged()` before navigating).
 - Refetching/recomputing on every render; no memoization or caching.
-- "Spooky action at a distance" — multiple components mutating one shared object.
+- "Spooky action at a distance": multiple components mutating one shared object.
 
 **Default weight:** 3
 
@@ -534,11 +534,11 @@ testing), Part B focuses on the **client/UI-specific** facets and cross-referenc
 **Intent:** A coherent visual language enforced by a component library, not re-implemented per screen.
 
 **Criteria**
-- **Component library used consistently** (e.g., MudBlazor) — teams build on it rather than bypassing it with raw HTML/CSS.
+- **Component library used consistently** (e.g., MudBlazor): teams build on it rather than bypassing it with raw HTML/CSS.
 - **Design tokens / theme** centralized (palette, typography, spacing, breakpoints); dark/light or brand variants driven from the theme.
-- **Consistency** — spacing, density, iconography, button hierarchy, empty/loading states look the same across pages.
-- **Encapsulated overrides** — custom styling wrapped in reusable components, not scattered inline styles or `!important` overrides.
-- **Known-issue guardrails** — wrappers/conventions exist around library quirks so every page doesn't re-hit the same bug (e.g., a grid wrapper that normalizes paging/sorting behavior).
+- **Consistency**: spacing, density, iconography, button hierarchy, empty/loading states look the same across pages.
+- **Encapsulated overrides**: custom styling wrapped in reusable components, not scattered inline styles or `!important` overrides.
+- **Known-issue guardrails**: wrappers/conventions exist around library quirks so every page doesn't re-hit the same bug (e.g., a grid wrapper that normalizes paging/sorting behavior).
 
 **Red flags**
 - Mixed component libraries or hand-rolled controls duplicating library ones.
@@ -552,15 +552,15 @@ testing), Part B focuses on the **client/UI-specific** facets and cross-referenc
 
 ## 21. Accessibility (a11y)
 
-**Intent:** The UI is usable by everyone, including assistive-technology users — and ideally enforced, not aspirational.
+**Intent:** The UI is usable by everyone, including assistive-technology users, and ideally enforced, not aspirational.
 
 **Criteria**
-- **Semantic structure** — correct landmarks/headings/lists; interactive elements are real buttons/links, not click-handlers on `div`s.
-- **Keyboard operability** — everything reachable and operable by keyboard; logical tab order; visible focus; no keyboard traps.
-- **ARIA where needed** — names/roles/states on custom widgets; live regions for async updates; relies on native semantics first.
-- **Color & contrast** — meets WCAG 2.1 AA contrast; information not conveyed by color alone.
-- **Forms** — labels associated with inputs; errors announced and programmatically linked to fields.
-- **Verification** — automated checks (axe/Lighthouse) in CI plus periodic manual screen-reader/keyboard passes; target conformance level stated (e.g., WCAG 2.1 AA).
+- **Semantic structure**: correct landmarks/headings/lists; interactive elements are real buttons/links, not click-handlers on `div`s.
+- **Keyboard operability**: everything reachable and operable by keyboard; logical tab order; visible focus; no keyboard traps.
+- **ARIA where needed**: names/roles/states on custom widgets; live regions for async updates; relies on native semantics first.
+- **Color & contrast**: meets WCAG 2.1 AA contrast; information not conveyed by color alone.
+- **Forms**: labels associated with inputs; errors announced and programmatically linked to fields.
+- **Verification**: automated checks (axe/Lighthouse) in CI plus periodic manual screen-reader/keyboard passes; target conformance level stated (e.g., WCAG 2.1 AA).
 
 **Red flags**
 - `div`/`span` click handlers with no role/keyboard support.
@@ -580,7 +580,7 @@ testing), Part B focuses on the **client/UI-specific** facets and cross-referenc
 - **Fluid/responsive layouts** via the design system's grid/breakpoints; no fixed-width desktop-only screens.
 - **Touch and pointer** both supported; adequate target sizes; no hover-only affordances for critical actions.
 - **Supported matrix defined** (browsers/devices) and verified; graceful degradation outside it.
-- **Content reflow** — tables/grids/dialogs adapt or provide mobile alternatives; no horizontal scrolling of core content.
+- **Content reflow**: tables/grids/dialogs adapt or provide mobile alternatives; no horizontal scrolling of core content.
 - **Density options** where data-dense (comfortable/compact) without breaking layout.
 
 **Red flags**
@@ -595,15 +595,15 @@ testing), Part B focuses on the **client/UI-specific** facets and cross-referenc
 
 ## 23. Front-End Performance & Rendering
 
-**Intent:** The UI loads and responds fast; rendering work is bounded. (Complements §12 — this is the client side.)
+**Intent:** The UI loads and responds fast; rendering work is bounded. (Complements §12: this is the client side.)
 
 **Criteria**
-- **Initial load** — bundle/payload size controlled; lazy-loading/code-splitting for heavy routes; prerender/SSR where it helps perceived speed.
-- **Render efficiency** — avoid unnecessary re-renders (`ShouldRender`, `@key`, stable callbacks); virtualization for long lists/grids.
-- **Data efficiency** — server-side paging/filtering/sorting for large sets (not loading everything client-side); debounced inputs.
-- **Perceived performance** — skeletons/optimistic UI/loading states; interactions stay responsive (no blocking the UI thread/circuit).
-- **Asset hygiene** — images sized/compressed; fonts/icons subset; caching headers set.
-- **Measured** — Core Web Vitals (LCP/INP/CLS) or equivalent tracked, not assumed.
+- **Initial load**: bundle/payload size controlled; lazy-loading/code-splitting for heavy routes; prerender/SSR where it helps perceived speed.
+- **Render efficiency**: avoid unnecessary re-renders (`ShouldRender`, `@key`, stable callbacks); virtualization for long lists/grids.
+- **Data efficiency**: server-side paging/filtering/sorting for large sets (not loading everything client-side); debounced inputs.
+- **Perceived performance**: skeletons/optimistic UI/loading states; interactions stay responsive (no blocking the UI thread/circuit).
+- **Asset hygiene**: images sized/compressed; fonts/icons subset; caching headers set.
+- **Measured**: Core Web Vitals (LCP/INP/CLS) or equivalent tracked, not assumed.
 
 **Red flags**
 - Loading entire datasets into the client then paging in memory.
@@ -617,15 +617,15 @@ testing), Part B focuses on the **client/UI-specific** facets and cross-referenc
 
 ## 24. Forms, Validation & UX Safety
 
-**Intent:** Data entry is safe, forgiving, and consistent — users don't lose work or get confused by errors.
+**Intent:** Data entry is safe, forgiving, and consistent, users don't lose work or get confused by errors.
 
 **Criteria**
-- **Validation parity** — client-side validation for fast feedback mirrors server-side rules (server remains authoritative; see §11).
-- **Error presentation** — field-level, human-readable, tied to inputs; summary for form-level errors; consistent styling.
-- **Dirty tracking & unsaved-changes guards** — navigating away from an edited form prompts; guard reads *current* dirty state reliably.
-- **States covered** — loading, submitting (disabled/!double-submit), success, empty, and error states all designed.
-- **Forgiving input** — sensible defaults, input masks/formatters, undo where feasible; destructive actions confirmed.
-- **Accessibility of validation** — errors announced and associated with fields (ties to §21).
+- **Validation parity**: client-side validation for fast feedback mirrors server-side rules (server remains authoritative; see §11).
+- **Error presentation**: field-level, human-readable, tied to inputs; summary for form-level errors; consistent styling.
+- **Dirty tracking & unsaved-changes guards**: navigating away from an edited form prompts; guard reads *current* dirty state reliably.
+- **States covered**: loading, submitting (disabled/!double-submit), success, empty, and error states all designed.
+- **Forgiving input**: sensible defaults, input masks/formatters, undo where feasible; destructive actions confirmed.
+- **Accessibility of validation**: errors announced and associated with fields (ties to §21).
 
 **Red flags**
 - Client validation that disagrees with the server (false pass/fail).
@@ -642,11 +642,11 @@ testing), Part B focuses on the **client/UI-specific** facets and cross-referenc
 **Intent:** Users can find their way; routes are meaningful, guarded, and role-aware.
 
 **Criteria**
-- **Route design** — clean, bookmarkable, deep-linkable URLs; parameters typed and validated.
-- **Guards & authorization** — route-level auth enforced (UI hiding is not security; see §11); unauthorized access redirects sensibly.
-- **Role-based flows** — navigation reflects actor roles; flows documented (e.g., per-actor navigation diagrams) and match the implementation.
-- **Wayfinding** — breadcrumbs/active states/back behavior consistent; not-found and forbidden pages handled.
-- **State on navigation** — query/route state preserved appropriately; in-progress work protected (ties to §24).
+- **Route design**: clean, bookmarkable, deep-linkable URLs; parameters typed and validated.
+- **Guards & authorization**: route-level auth enforced (UI hiding is not security; see §11); unauthorized access redirects sensibly.
+- **Role-based flows**: navigation reflects actor roles; flows documented (e.g., per-actor navigation diagrams) and match the implementation.
+- **Wayfinding**: breadcrumbs/active states/back behavior consistent; not-found and forbidden pages handled.
+- **State on navigation**: query/route state preserved appropriately; in-progress work protected (ties to §24).
 
 **Red flags**
 - Menu items visible to roles that can't use them (or hidden items still routable).
@@ -660,15 +660,15 @@ testing), Part B focuses on the **client/UI-specific** facets and cross-referenc
 
 ## 26. Front-End Security
 
-**Intent:** The client doesn't become the weak link — XSS, token handling, and trust boundaries are correct. (Complements §11.)
+**Intent:** The client doesn't become the weak link, XSS, token handling, and trust boundaries are correct. (Complements §11.)
 
 **Criteria**
-- **Output encoding / XSS** — no unsanitized HTML injection (`MarkupString`/`innerHTML` only on trusted, sanitized content); user content encoded by default.
-- **Token & session handling** — auth tokens stored and transmitted safely; minimal sensitive data in the browser; logout clears state.
+- **Output encoding / XSS**: no unsanitized HTML injection (`MarkupString`/`innerHTML` only on trusted, sanitized content); user content encoded by default.
+- **Token & session handling**: auth tokens stored and transmitted safely; minimal sensitive data in the browser; logout clears state.
 - **Content Security Policy** and security headers configured; third-party scripts vetted.
-- **No secrets in the client** — API keys/secrets never shipped to WASM/browser bundles.
-- **Client is untrusted** — all authorization re-checked server-side; client checks are UX only.
-- **Dependency hygiene** — JS/interop and front-end packages audited for vulnerabilities.
+- **No secrets in the client**: API keys/secrets never shipped to WASM/browser bundles.
+- **Client is untrusted**: all authorization re-checked server-side; client checks are UX only.
+- **Dependency hygiene**: JS/interop and front-end packages audited for vulnerabilities.
 
 **Red flags**
 - Rendering user input as raw HTML/markup without sanitization.
@@ -682,13 +682,13 @@ testing), Part B focuses on the **client/UI-specific** facets and cross-referenc
 
 ## 27. Internationalization & Localization
 
-**Intent:** The UI can be translated and respects culture — if in scope. (Score weight 0–1 if single-locale by design.)
+**Intent:** The UI can be translated and respects culture, if in scope. (Score weight 0–1 if single-locale by design.)
 
 **Criteria**
-- **Externalized strings** — UI text in resource files, not hard-coded; keys consistent.
-- **Culture-aware formatting** — dates, numbers, currency, time zones formatted per culture, not hard-coded.
-- **Layout tolerance** — components handle text expansion and, where required, RTL.
-- **Locale selection** — discoverable, persisted; server and client cultures aligned.
+- **Externalized strings**: UI text in resource files, not hard-coded; keys consistent.
+- **Culture-aware formatting**: dates, numbers, currency, time zones formatted per culture, not hard-coded.
+- **Layout tolerance**: components handle text expansion and, where required, RTL.
+- **Locale selection**: discoverable, persisted; server and client cultures aligned.
 - **Pluralization & interpolation** handled by the i18n mechanism, not string concatenation.
 
 **Red flags**
@@ -709,9 +709,9 @@ testing), Part B focuses on the **client/UI-specific** facets and cross-referenc
 - **Component tests** (e.g., bUnit) for rendering logic, parameters, events, and conditional UI.
 - **End-to-end tests** (e.g., Playwright) for critical user journeys; shared E2E infrastructure (page objects, fixtures, abstract bases) reused across apps rather than duplicated.
 - **Accessibility checks** (axe/Lighthouse) and ideally **visual-regression** tests run in CI.
-- **Stability** — tests use robust selectors (roles/test-ids), avoid timing flakiness, run as a merge gate.
-- **Coverage of states** — loading/empty/error/edge states tested, not just the happy path.
-- **Right pyramid** — many fast component tests, fewer broad E2E flows.
+- **Stability**: tests use robust selectors (roles/test-ids), avoid timing flakiness, run as a merge gate.
+- **Coverage of states**: loading/empty/error/edge states tested, not just the happy path.
+- **Right pyramid**: many fast component tests, fewer broad E2E flows.
 
 **Red flags**
 - Only manual click-testing; no automated UI tests.
@@ -723,7 +723,7 @@ testing), Part B focuses on the **client/UI-specific** facets and cross-referenc
 
 ---
 
-# Part C — Operational, Governance & Cross-Cutting Concerns
+# Part C: Operational, Governance & Cross-Cutting Concerns
 
 Categories §29–32 span backend and front end and are judged over the system's full lifecycle.
 They use the same 0–4 maturity scale and weighting.
@@ -735,12 +735,12 @@ They use the same 0–4 maturity scale and weighting.
 **Intent:** The system survives partial failure and recovers from disaster within defined objectives. (Extends the resilience facets of §7/§12 into a first-class recovery story.)
 
 **Criteria**
-- **Failure isolation** — timeouts, retries with backoff + jitter, circuit breakers, bulkheads; one failing dependency doesn't cascade.
-- **Graceful degradation** — fallbacks/queued work when a dependency is down; the broker buffers integration events and the outbox guarantees eventual delivery after recovery.
-- **Backup & restore** — automated backups for every stateful store (per-service DBs); **restores actually tested**; documented procedure.
-- **Disaster recovery** — defined **RTO/RPO** per service; failover/multi-region strategy, or a conscious and documented acceptance of single-region risk.
-- **Reliability targets** — SLOs/error budgets defined and measured; health/readiness probes drive orchestration and auto-heal.
-- **Failure testing** — chaos/fault injection or at least documented failure-mode analysis; startup ordering and graceful shutdown verified.
+- **Failure isolation**: timeouts, retries with backoff + jitter, circuit breakers, bulkheads; one failing dependency doesn't cascade.
+- **Graceful degradation**: fallbacks/queued work when a dependency is down; the broker buffers integration events and the outbox guarantees eventual delivery after recovery.
+- **Backup & restore**: automated backups for every stateful store (per-service DBs); **restores actually tested**; documented procedure.
+- **Disaster recovery**: defined **RTO/RPO** per service; failover/multi-region strategy, or a conscious and documented acceptance of single-region risk.
+- **Reliability targets**: SLOs/error budgets defined and measured; health/readiness probes drive orchestration and auto-heal.
+- **Failure testing**: chaos/fault injection or at least documented failure-mode analysis; startup ordering and graceful shutdown verified.
 
 **Red flags**
 - Backups that have never been restored (untested recovery).
@@ -757,16 +757,16 @@ They use the same 0–4 maturity scale and weighting.
 **Intent:** Personal and regulated data is classified, governed, and handled lawfully across its lifecycle. (§11 defends against attackers; this answers to regulators.)
 
 **Criteria**
-- **PII/sensitive-data inventory** — what's collected, where it's stored, who can access it.
-- **Retention & purge** — defined retention periods with an actual purge mechanism; **reconcile soft-delete with right-to-erasure** — soft-delete preserves rows, erasure requires real removal/anonymization, so a hard-delete/anonymize path must exist for subject requests.
-- **Data-subject rights** — export/access and deletion requests supported operationally, not just in theory.
-- **Data residency & sovereignty** — storage region matches regulatory/contractual requirements.
-- **Consent & lawful basis** — captured where required and auditable.
-- **Audit trail** — audit fields + access logs support accountability and legal hold.
+- **PII/sensitive-data inventory**: what's collected, where it's stored, who can access it.
+- **Retention & purge**: defined retention periods with an actual purge mechanism; **reconcile soft-delete with right-to-erasure**: soft-delete preserves rows, erasure requires real removal/anonymization, so a hard-delete/anonymize path must exist for subject requests.
+- **Data-subject rights**: export/access and deletion requests supported operationally, not just in theory.
+- **Data residency & sovereignty**: storage region matches regulatory/contractual requirements.
+- **Consent & lawful basis**: captured where required and auditable.
+- **Audit trail**: audit fields + access logs support accountability and legal hold.
 
 **Red flags**
 - Soft-delete as the *only* deletion path, with no erasure mechanism (direct GDPR/CCPA conflict).
-- No retention policy — data kept forever by default.
+- No retention policy: data kept forever by default.
 - PII in logs/telemetry; PII replicated into read models/caches without governance.
 - Residency requirements unverified for the chosen region.
 
@@ -779,15 +779,15 @@ They use the same 0–4 maturity scale and weighting.
 **Intent:** Cloud spend is proportional to value and driven by data, not guesswork. (§17 mentions cost; this makes it a first-class axis.)
 
 **Criteria**
-- **Right-sizing** — compute/database tiers matched to *measured* load; scaling rules backed by real traffic, not worst-case guesses.
-- **Reversible scale events** — temporary scale-ups for known peaks have an automated or scheduled **revert**; nothing stays scaled up after the event.
-- **Telemetry/log cost control** — retention tuned, high-volume/low-value signals filtered, sampling where appropriate (logs and traces are a real line item).
-- **Resource lifecycle** — dev/test/ephemeral resources deprovisioned; orphaned resources reaped.
-- **Cost visibility** — spend attributable per service/environment; budgets/alerts; cost considered in design (poll intervals, chatty calls).
-- **Tier fit** — shared/serverless/Basic tiers used for intermittent or archival workloads.
+- **Right-sizing**: compute/database tiers matched to *measured* load; scaling rules backed by real traffic, not worst-case guesses.
+- **Reversible scale events**: temporary scale-ups for known peaks have an automated or scheduled **revert**; nothing stays scaled up after the event.
+- **Telemetry/log cost control**: retention tuned, high-volume/low-value signals filtered, sampling where appropriate (logs and traces are a real line item).
+- **Resource lifecycle**: dev/test/ephemeral resources deprovisioned; orphaned resources reaped.
+- **Cost visibility**: spend attributable per service/environment; budgets/alerts; cost considered in design (poll intervals, chatty calls).
+- **Tier fit**: shared/serverless/Basic tiers used for intermittent or archival workloads.
 
 **Red flags**
-- Provisioning by guesswork — large over- (or under-) provisioning with no load evidence.
+- Provisioning by guesswork: large over- (or under-) provisioning with no load evidence.
 - Scale-ups left running after the event that justified them.
 - Unbounded log/trace retention; everything emitted at Information.
 - No per-service/environment cost attribution; surprises on the bill.
@@ -798,15 +798,15 @@ They use the same 0–4 maturity scale and weighting.
 
 ## 32. Dependency & Supply-Chain Management
 
-**Intent:** Third-party and inter-package dependencies are controlled, auditable, and evolve safely — especially critical for a framework that publishes packages. (Elevates §15's hygiene into release + provenance.)
+**Intent:** Third-party and inter-package dependencies are controlled, auditable, and evolve safely, especially critical for a framework that publishes packages. (Elevates §15's hygiene into release + provenance.)
 
 **Criteria**
-- **Pinned, central versions** (central package management); deliberate, reviewed upgrades — no accidental major bumps reintroducing known-bad versions (a library pinned for licensing must stay pinned).
-- **Vulnerability auditing in CI** across all feeds — including private/GitHub Packages, with audit-source config so private feeds don't break the build.
-- **Published-package versioning** — semantic versioning + a breaking-change policy for the framework's packages, so consumers know what an upgrade implies.
-- **Coordinated rollout** — framework changes swept across all consumers together; no long-lived divergent versions or lingering partial rollouts.
-- **Provenance & integrity** — SBOM, lock files, trusted sources only; transitive dependencies reviewed.
-- **License compliance** — dependency licenses tracked; commercial-license constraints honored.
+- **Pinned, central versions** (central package management); deliberate, reviewed upgrades: no accidental major bumps reintroducing known-bad versions (a library pinned for licensing must stay pinned).
+- **Vulnerability auditing in CI** across all feeds: including private/GitHub Packages, with audit-source config so private feeds don't break the build.
+- **Published-package versioning**: semantic versioning + a breaking-change policy for the framework's packages, so consumers know what an upgrade implies.
+- **Coordinated rollout**: framework changes swept across all consumers together; no long-lived divergent versions or lingering partial rollouts.
+- **Provenance & integrity**: SBOM, lock files, trusted sources only; transitive dependencies reviewed.
+- **License compliance**: dependency licenses tracked; commercial-license constraints honored.
 
 **Red flags**
 - Blanket "update all packages" that reintroduces a pinned/known-bad dependency.
@@ -820,21 +820,21 @@ They use the same 0–4 maturity scale and weighting.
 
 ## 33. Developer Experience & Inner Loop
 
-**Intent:** Developers build, run, test, and iterate locally with fast, low-friction feedback. (Promoted out of §17 — that scores release/ops automation; this scores the *inner* loop.)
+**Intent:** Developers build, run, test, and iterate locally with fast, low-friction feedback. (Promoted out of §17: that scores release/ops automation; this scores the *inner* loop.)
 
 **Criteria**
-- **Fast inner loop** — build and test times kept low; incremental builds; hot reload where available; tests fast enough to run constantly.
-- **One-command local run** — local orchestration brings up the whole system (e.g., Aspire AppHost spins up services, dependencies, and dashboards) with no manual wiring.
-- **Cross-repo local dev** — a frictionless way to develop the shared framework alongside consumers *without publishing* (e.g., a `local.props` override pointing at `../MMCA.Common/Source`); documented and gitignored.
-- **Onboarding** — a new dev is productive quickly; prerequisites, secrets bootstrap, and run instructions documented and current.
-- **Consistent tooling** — analyzers/formatting/`.editorconfig` enforce the same rules locally as CI; fast pre-merge feedback.
-- **Local/cloud parity** — local topology mirrors production (Aspire-to-Azure) so integration bugs surface locally, not in prod.
-- **Discoverable commands** — build/test/migrate/run are each one obvious command.
+- **Fast inner loop**: build and test times kept low; incremental builds; hot reload where available; tests fast enough to run constantly.
+- **One-command local run**: local orchestration brings up the whole system (e.g., Aspire AppHost spins up services, dependencies, and dashboards) with no manual wiring.
+- **Cross-repo local dev**: a frictionless way to develop the shared framework alongside consumers *without publishing* (e.g., a `local.props` override pointing at `../MMCA.Common/Source`); documented and gitignored.
+- **Onboarding**: a new dev is productive quickly; prerequisites, secrets bootstrap, and run instructions documented and current.
+- **Consistent tooling**: analyzers/formatting/`.editorconfig` enforce the same rules locally as CI; fast pre-merge feedback.
+- **Local/cloud parity**: local topology mirrors production (Aspire-to-Azure) so integration bugs surface locally, not in prod.
+- **Discoverable commands**: build/test/migrate/run are each one obvious command.
 
 **Red flags**
 - Multi-step manual setup to run locally; tribal knowledge required.
 - Slow builds/tests that discourage running them.
-- No cross-repo dev path — must publish a package to test a framework change.
+- No cross-repo dev path: must publish a package to test a framework change.
 - Local environment diverges from prod (different brokers/DBs) hiding integration bugs.
 
 **Default weight:** 2
@@ -843,15 +843,15 @@ They use the same 0–4 maturity scale and weighting.
 
 ## 34. Architecture Governance & Documentation
 
-**Intent:** Decisions are recorded, conformance is enforced, and the system is documented so it stays coherent as it evolves. (Promoted out of §16 — that scores the *property* of evolvability; this scores the *machinery* that protects it.)
+**Intent:** Decisions are recorded, conformance is enforced, and the system is documented so it stays coherent as it evolves. (Promoted out of §16: that scores the *property* of evolvability; this scores the *machinery* that protects it.)
 
 **Criteria**
-- **Decision records** — significant decisions captured as ADRs with context/rationale/consequences, and kept current (e.g., the `ADRs/` set on manual mapping, navigation populators, outbox dual-dispatch, auth dual-fetch).
-- **Fitness functions** — architecture rules enforced *automatically* as executable governance (architecture tests / NetArchTest), not just prose.
-- **Living documentation** — an architecture map/overview (C4, or a dependency-ordered class encyclopedia) that matches the code and is maintained.
-- **Documented conventions** — contributor guides (`CLAUDE.md`) describe patterns, layering rules, and how to extend; discoverable and current.
-- **Change governance** — a lightweight process for evolving cross-cutting patterns; consistency enforced across modules and repos.
-- **Traceability** — docs link to code/ADRs; stale docs are detected and pruned.
+- **Decision records**: significant decisions captured as ADRs with context/rationale/consequences, and kept current (e.g., the `ADRs/` set on manual mapping, navigation populators, outbox dual-dispatch, auth dual-fetch).
+- **Fitness functions**: architecture rules enforced *automatically* as executable governance (architecture tests / NetArchTest), not just prose.
+- **Living documentation**: an architecture map/overview (C4, or a dependency-ordered class encyclopedia) that matches the code and is maintained.
+- **Documented conventions**: contributor guides (`CLAUDE.md`) describe patterns, layering rules, and how to extend; discoverable and current.
+- **Change governance**: a lightweight process for evolving cross-cutting patterns; consistency enforced across modules and repos.
+- **Traceability**: docs link to code/ADRs; stale docs are detected and pruned.
 
 **Red flags**
 - Significant decisions live only in people's heads; ADRs absent or stale.
@@ -865,7 +865,7 @@ They use the same 0–4 maturity scale and weighting.
 
 ## Appendix: Quick-Scan Checklist
 
-A 2-minute triage before the full evaluation — any "no" warrants a deeper look.
+A 2-minute triage before the full evaluation: any "no" warrants a deeper look.
 
 - [ ] Can you draw the dependency graph and is it acyclic and inward-pointing?
 - [ ] Is the domain layer free of framework references?

@@ -6,8 +6,8 @@ safe scale-out, dead-letter visibility, post-commit dispatch; see Revision below
 
 ## Context
 Domain events must be reliably published after aggregate changes are persisted. Two failure modes exist:
-1. In-process dispatch fails (e.g., handler throws) — the event is lost if not persisted.
-2. Process crashes between persistence and dispatch — the event is lost if only dispatched in-memory.
+1. In-process dispatch fails (e.g., handler throws): the event is lost if not persisted.
+2. Process crashes between persistence and dispatch: the event is lost if only dispatched in-memory.
 
 ## Decision
 Use a dual-dispatch strategy:
@@ -19,12 +19,12 @@ Use a dual-dispatch strategy:
 - **Guaranteed delivery**: The outbox table is written atomically with the aggregate changes. Even if the process crashes after persistence, the background processor catches up.
 - **Low latency**: In-process dispatch handles the happy path without polling delay. In broker mode (`BrokerEventBus` persists the event to the outbox + signals; `OutboxProcessor` then publishes it to the broker via `IMessageBus`/`BrokerMessageBus`), the signal plus smart wait deliver integration events ~`ProcessingDelaySeconds` after publish even when the fallback interval is minutes long.
 - **Idempotent handlers**: Domain event handlers must be idempotent since the same event may be dispatched both in-process and by the background processor if the in-process mark-as-processed fails.
-- **Processing delay**: The eligibility delay prevents the background processor from re-dispatching events that were already dispatched in-process but not yet marked as processed. It bounds the duplicate-dispatch window — the in-process pipeline (save → dispatch → mark processed) must finish within it, or the event is re-dispatched (idempotency absorbs this).
+- **Processing delay**: The eligibility delay prevents the background processor from re-dispatching events that were already dispatched in-process but not yet marked as processed. It bounds the duplicate-dispatch window: the in-process pipeline (save → dispatch → mark processed) must finish within it, or the event is re-dispatched (idempotency absorbs this).
 - **Cheap idle polling**: A long fallback interval in deployed environments cuts idle DB chatter and its telemetry; additionally, the poll query runs inside an `OutboxPoll` activity that `OutboxPollFilterProcessor` (MMCA.Common.Aspire) suppresses from telemetry export, so idle polls do not flood Application Insights ingestion.
 
 ## Trade-offs
 - Domain event handlers must be idempotent (this is a good practice regardless).
-- The outbox table grows until processed entries are cleaned up — `OutboxCleanupService` purges rows whose `ProcessedOn` is older than `Outbox:RetentionDays` (default 7; set `0` to disable). See ADR-005.
+- The outbox table grows until processed entries are cleaned up: `OutboxCleanupService` purges rows whose `ProcessedOn` is older than `Outbox:RetentionDays` (default 7; set `0` to disable). See ADR-005.
 - Two distinct failure mechanisms exist. A message whose event **type cannot be resolved** is
   dead-lettered immediately on first pickup (it can never succeed) and requires manual investigation.
   A message that **throws during dispatch** is retried up to `Outbox:MaxRetries` (default 5) times,

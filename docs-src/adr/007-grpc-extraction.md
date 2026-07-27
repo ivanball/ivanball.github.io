@@ -35,19 +35,19 @@ Use **gRPC**, exposed through `MMCA.Common.Grpc`, with a contract-package conven
   `Disabled*` stub for that peer's interface, so resolution always succeeds.
 
 ## Rationale
-- **No business-logic rewrite** — the gRPC adapter implements the interface modules already depend
+- **No business-logic rewrite**: the gRPC adapter implements the interface modules already depend
   on; swapping in-process for cross-process is a registration change.
-- **Transport stays at the edge** — `MicroserviceExtractionTests` forbid `MassTransit`/gRPC types in
+- **Transport stays at the edge**: `MicroserviceExtractionTests` forbid `MassTransit`/gRPC types in
   Application/Domain/Shared, so the choice is reversible and the core stays clean.
-- **Strong contracts** — the `.proto` definitions plus the in-process interface the adapter
+- **Strong contracts**: the `.proto` definitions plus the in-process interface the adapter
   implements are the wire surface. A `[ServiceContract(version)]` attribute (MMCA.Common.Shared) is
   provided to mark and version contract types explicitly, but it is an **available extension point, not yet
-  applied** — no contract type carries it today, and no fitness rule enforces it; the wire surface is
+  applied**: no contract type carries it today, and no fitness rule enforces it; the wire surface is
   currently defined by the `.proto` files alone.
 
 ## Trade-offs
 - **Bidirectional pairs need care.** Conference ↔ Engagement is a mutual gRPC pair; the AppHost
-  deliberately omits a reciprocal `WaitFor` to avoid a startup deadlock — transient "peer not ready"
+  deliberately omits a reciprocal `WaitFor` to avoid a startup deadlock: transient "peer not ready"
   errors self-heal via the resilience pipeline.
 - **h2c assumptions.** Target services must serve HTTP/2 on cleartext; the Notification service runs
   `Http1AndHttp2` for its SignalR WebSocket upgrade, unlike the `Http2`-only REST services.

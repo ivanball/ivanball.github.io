@@ -152,7 +152,7 @@
           <p>The seed runs <strong>issuer-less</strong>: with no Identity module it registers a bare auth scheme and the
           controller is <code>[AllowAnonymous]</code>, so you get a running app immediately. <strong>Identity</strong> is the standard
           auth module you add when you want real RS256/JWKS authentication (and which becomes the <strong>JWKS issuer</strong>
-          when you extract Tickets) — that path is shown in Phase 2 and Phase 8.</p>
+          when you extract Tickets): that path is shown in Phase 2 and Phase 8.</p>
           <p>By the end you will have a green-building solution, applied EF migrations, a running Aspire stack
           (<code>sql</code> + <code>web</code> + <code>ui</code>), and passing architecture-fitness tests, plus a documented path to add Identity
           and pull Tickets out into a microservice.</p>
@@ -183,8 +183,8 @@
           phantom <code>CS0103</code> errors against new members. Build MMCA.Common with <code>-c Debug</code>, then build your app.</p>
           </blockquote>
           <p><strong>Pick the framework version.</strong> All fifteen packages move together. Use the latest released tag
-          (see <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a> for the current version; the <code>1.77.0</code> in the samples below is
-          illustrative only). Choose one version and use it for every <code>MMCA.Common.*</code> entry (Phase 1). See
+          (see <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a> for the current version; the <code>1.128.0</code> in the samples below was
+          current when this guide was last refreshed). Choose one version and use it for every <code>MMCA.Common.*</code> entry (Phase 1). See
           <a href="../adr/016-lockstep-versioning-masstransit-pin.html">ADR-016</a>: there is no phased rollout and no version
           skew across the fifteen packages.</p>
           <hr>
@@ -413,7 +413,7 @@
           never public constructors.</strong> See <a href="../adr/013-result-pattern.html">ADR-013</a>.</p>
           <p>The reference app uses <strong>database-generated</strong> integer ids (the <code>[IdValueGenerated]</code> attribute + the
           <code>TicketIdentifierType = int</code> alias). That has one important consequence: the factory does <strong>not</strong> raise
-          an &quot;Added&quot; domain event, because the id is still <code>0</code> at that point — creation is signalled <em>after the
+          an &quot;Added&quot; domain event, because the id is still <code>0</code> at that point: creation is signalled <em>after the
           commit</em> by an integration event (see 3c). Mutations raise a single <code>TicketChanged</code> domain event
           (<code>EntityChangedEvent</code>-derived) carrying the lifecycle state.</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/Ticket.cs</span>
@@ -490,9 +490,9 @@
                       : Result.Success();
           }</code></pre>
           <p><code>TicketComment</code> inherits <code>AuditableBaseEntity&lt;TicketCommentIdentifierType&gt;</code> and is <code>[IdValueGenerated]</code>
-          too, with its own <code>Create(...)</code> factory. Manage children <strong>through the aggregate root</strong> — <code>Ticket</code>
+          too, with its own <code>Create(...)</code> factory. Manage children <strong>through the aggregate root</strong>: <code>Ticket</code>
           exposes <code>AddComment</code> / <code>EditComment</code> / <code>RemoveComment</code> that validate, mutate <code>_comments</code>, and raise
-          <code>TicketChanged</code> — never mutate the collection or a comment from outside the aggregate.</p>
+          <code>TicketChanged</code>: never mutate the collection or a comment from outside the aggregate.</p>
           <h3 id="3b-shared-dto-request-integration-event-aliases">3b. Shared: DTO, request, integration event, aliases</h3>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs  (linked solution-wide via Directory.Build.props)</span>
           <span class="hljs-keyword">global</span> <span class="hljs-keyword">using</span> TicketIdentifierType = <span class="hljs-built_in">int</span>;
@@ -577,7 +577,7 @@
           }</code></pre>
           <h3 id="3d-infrastructure-ef-configuration-the-abstract-module-context-no-concrete-per-module-context">3d. Infrastructure: EF configuration, the abstract module context, no concrete per-module context</h3>
           <p>There is exactly <strong>one concrete</strong> context at runtime, the framework&#39;s sealed <code>SQLServerDbContext</code> (one
-          instance per database). Each module declares an <strong>abstract</strong> <code>ModuleApplicationDbContext : ApplicationDbContext</code> that <em>only</em> lists the module&#39;s <code>DbSet</code>s — it documents the module&#39;s entity set
+          instance per database). Each module declares an <strong>abstract</strong> <code>ModuleApplicationDbContext : ApplicationDbContext</code> that <em>only</em> lists the module&#39;s <code>DbSet</code>s: it documents the module&#39;s entity set
           and never gets instantiated. <strong>Never write a concrete per-module or per-app DbContext class</strong> (see
           <a href="../adr/006-database-per-service.html">ADR-006</a> and the &quot;Don&#39;t split SQLServerDbContext&quot; rule):</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">abstract</span> <span class="hljs-keyword">class</span> <span class="hljs-title">ModuleApplicationDbContext</span>(<span class="hljs-params">
@@ -602,7 +602,7 @@
           }</code></pre>
           <p>Configurations are <strong>auto-discovered by assembly-name convention</strong> (the module&#39;s Infrastructure
           assembly is registered for the design-time factory and the host), so the module&#39;s
-          <code>Infrastructure/DependencyInjection.cs</code> is a near no-op — <code>AddModuleTicketsInfrastructure()</code> just
+          <code>Infrastructure/DependencyInjection.cs</code> is a near no-op: <code>AddModuleTicketsInfrastructure()</code> just
           returns <code>services</code>. You obtain a repository through
           <code>IUnitOfWork.GetRepository&lt;Ticket, TicketIdentifierType&gt;()</code>; you never hand-write a context or a
           repository class. The three module layers are composed in the <strong>API layer&#39;s</strong> DI
@@ -637,8 +637,8 @@
                   <span class="hljs-keyword">return</span> Created(<span class="hljs-keyword">new</span> Uri(<span class="hljs-string">$&quot;Tickets/<span class="hljs-subst">{dto.Id}</span>&quot;</span>, UriKind.Relative), dto);
               }
           }</code></pre>
-          <p>The reference app&#39;s controller goes further — <code>GET {id}/details</code>, <code>PUT {id}</code>, <code>PUT {id}/status</code>,
-          <code>DELETE {id}</code>, and <code>POST|PUT|DELETE {id}/comments[/{commentId}]</code> — each one the same three lines: call
+          <p>The reference app&#39;s controller goes further: <code>GET {id}/details</code>, <code>PUT {id}</code>, <code>PUT {id}/status</code>,
+          <code>DELETE {id}</code>, and <code>POST|PUT|DELETE {id}/comments[/{commentId}]</code>, each one the same three lines: call
           the handler, <code>HandleFailure</code> on failure, else return the success shape.</p>
           <h3 id="what-the-pipeline-does-for-you">What the pipeline does for you</h3>
           <p>Once <code>AddApplicationDecorators()</code> runs (Phase 5), every handler is wrapped by the Scrutor decorator
@@ -694,7 +694,7 @@
           <h2 id="phase-5-compose-the-monolith-host-and-run-it">Phase 5: Compose the monolith host and run it</h2>
           <h3 id="the-web-host">The Web host</h3>
           <p>Create <code>Source/Hosts/MMCA.Helpdesk.Web</code> (the REST API host). Its <code>Program.cs</code> follows the <strong>fixed DI
-          sequence</strong>, and the load-bearing rule is that <code>AddApplicationDecorators()</code> comes <strong>last</strong> — decorators
+          sequence</strong>, and the load-bearing rule is that <code>AddApplicationDecorators()</code> comes <strong>last</strong>: decorators
           wrap handlers that already exist, and the module handlers are registered by <code>ModuleLoader</code> (each
           <code>IModule.Register</code> composes its Application+Infrastructure+API layers):</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> builder = WebApplication.CreateBuilder(<span class="hljs-keyword">args</span>);
@@ -752,13 +752,13 @@
           section (one DB) and no <code>MessageBus:Provider</code>, so the framework selects the <code>InProcessMessageBus</code>.</p>
           <h3 id="the-blazor-ui-host">The Blazor UI host</h3>
           <p><code>Source/Hosts/UI/MMCA.Helpdesk.UI.Web</code> is a <strong>Blazor Server + MudBlazor</strong> front end. It holds no domain
-          logic and no DbContext — it calls the API through a typed <code>HelpdeskApiClient</code> registered with
+          logic and no DbContext: it calls the API through a typed <code>HelpdeskApiClient</code> registered with
           <code>AddHttpClient&lt;HelpdeskApiClient&gt;(...)</code>, whose base address (<code>https+http://web</code>, from config) is
           resolved by the service-discovery handler that <code>AddServiceDefaults()</code> installs. Because Blazor Server
           runs the calls <strong>server-side</strong>, there is no browser CORS and no token to forward. On a failed response
           the client calls <code>ServiceExceptionHelper.ThrowIfDomainExceptionAsync</code> to surface the RFC 9457
           ProblemDetails message (e.g. &quot;Comments cannot be added to a closed ticket.&quot;) before the generic
-          <code>EnsureSuccessStatusCode</code> fallback — the same pattern <code>MMCA.Common.UI</code>&#39;s <code>EntityServiceBase</code> uses, so
+          <code>EnsureSuccessStatusCode</code> fallback: the same pattern <code>MMCA.Common.UI</code>&#39;s <code>EntityServiceBase</code> uses, so
           pages show a meaningful error. <code>Program.cs</code> is the standard Razor-components host plus
           <code>AddServiceDefaults()</code> / <code>MapDefaultEndpoints()</code>.</p>
           <h3 id="internationalization-adr-027-every-visible-string-follows-the-selected-language">Internationalization (ADR-027): every visible string follows the selected language</h3>
@@ -857,7 +857,7 @@
           <hr>
           <h2 id="phase-6-tests-and-the-architecture-fitness-map">Phase 6: Tests and the architecture-fitness map</h2>
           <h3 id="test-projects">Test projects</h3>
-          <p>The reference app ships two test projects — both run anywhere with <strong>no database</strong>:</p>
+          <p>The reference app ships two test projects: both run anywhere with <strong>no database</strong>:</p>
           <ul>
           <li><code>Tests/Modules/Tickets/...Domain.Tests</code>: xUnit v3 + AwesomeAssertions. Test factory methods,
           invariants, state transitions, and domain events (including the assertion that <code>Create</code> raises <strong>no</strong>
@@ -884,7 +884,7 @@
           
               <span class="hljs-function"><span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> IEnumerable&lt;LayerRef&gt; <span class="hljs-title">DefineLayers</span>()</span> =&gt;
               [
-                  <span class="hljs-comment">// Framework (MMCA.Common) — one anchor type per layer assembly</span>
+                  <span class="hljs-comment">// Framework (MMCA.Common): one anchor type per layer assembly</span>
                   Framework(Layer.Shared, <span class="hljs-keyword">typeof</span>(MMCA.Common.Shared.Abstractions.Result).Assembly),
                   Framework(Layer.Domain, <span class="hljs-keyword">typeof</span>(MMCA.Common.Domain.Entities.BaseEntity&lt;&gt;).Assembly),
                   Framework(Layer.Application, <span class="hljs-keyword">typeof</span>(MMCA.Common.Application.Services.EntityQueryService&lt;,,&gt;).Assembly),
@@ -923,7 +923,7 @@
           <hr>
           <h2 id="phase-8-extract-a-module-into-its-own-service-the-payoff">Phase 8: Extract a module into its own service (the payoff)</h2>
           <p>This phase is the documented next step beyond the reference app (which is build-verified as the
-          monolith through Phase 6); the scaffold already carries the plumbing — the <code>.Contracts</code> proto
+          monolith through Phase 6); the scaffold already carries the plumbing: the <code>.Contracts</code> proto
           convention and the <code>.Service</code> OpenAPI block in <code>Directory.Build.props</code>. Now make the &quot;extract later,
           without a rewrite&quot; promise concrete. We pull <strong>Tickets</strong> out of the monolith into its own service
           behind a gateway. The Tickets Domain, Application, Shared, Infrastructure, and API code is
@@ -1009,7 +1009,7 @@
           <h2 id="where-to-look-next">Where to look next</h2>
           <ul>
           <li><strong>MMCA.Helpdesk</strong> (<code>../MMCA.Helpdesk</code>): the minimal, build-verified monolith this guide is the
-          companion to — every step above maps to real code there. Read its <code>README.md</code> and <code>CLAUDE.md</code> for the
+          companion to: every step above maps to real code there. Read its <code>README.md</code> and <code>CLAUDE.md</code> for the
           Helpdesk-specific picture (issuer-less auth, the two event paths, the abstract module DbContext).</li>
           <li><strong>The ADRs</strong> (<a href="../adr/index.html">index</a>): the <em>why</em> behind every pattern you just used.</li>
           <li><strong><code>MMCA.Common/CLAUDE.md</code></strong>: the framework&#39;s layer rules, DI sequence, and extension points in depth.</li>

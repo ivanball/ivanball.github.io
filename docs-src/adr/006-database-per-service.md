@@ -10,7 +10,7 @@ When the modules were first extracted into independently-deployable services, al
 app still pointed at a **single shared SQL database** with a single `OutboxMessages` table. That
 left one significant defect: every service's `OutboxProcessor` polled the same outbox table with no
 origin filter, so the services **raced** to claim each other's rows (ADR-003 / ArchitecturalAnalysis
-§4.4 #5). It also undermined the data-autonomy half of "microservices" — services that share a
+§4.4 #5). It also undermined the data-autonomy half of "microservices": services that share a
 database are not independently evolvable at the schema level.
 
 MMCA.Common already provided the machinery for multiple physical data sources (`DataSourceResolver`,
@@ -29,7 +29,7 @@ Adopt **database-per-service**: each service owns its own physical database with
   route to a physical source by logical name (`[UseDatabase]` / module namespace) via
   `DataSourceResolver`, and to an engine by configuration base class (`[UseDataSource]`, ADR-018).
   The forbidden split is *per-module*, not per-engine.
-- **ADC** runs `ADC_Identity`, `ADC_Conference`, `ADC_Engagement`, `ADC_Notification` — locally on
+- **ADC** runs `ADC_Identity`, `ADC_Conference`, `ADC_Engagement`, `ADC_Notification`: locally on
   the shared Aspire SQL container and in Azure as four Basic-tier databases. The legacy `AtlDevCon`
   database is retained **read-only** as an archive and rollback path.
 - **Per-source outbox.** Each database has its own `OutboxMessages`; the `OutboxProcessor` drains
@@ -42,10 +42,10 @@ Adopt **database-per-service**: each service owns its own physical database with
 
 ## Rationale
 - **Removes the shared-outbox race** (the sharpest cost of the shared DB) without an `OriginService`
-  filter — physical isolation is simpler and stronger than a logical filter.
-- **Real data autonomy** — each service can evolve and scale its schema independently; lifts the
+  filter: physical isolation is simpler and stronger than a logical filter.
+- **Real data autonomy**: each service can evolve and scale its schema independently; lifts the
   former single-database scaling ceiling.
-- **Reuses existing framework extension points** — no new DbContext classes, no business-logic rewrite.
+- **Reuses existing framework extension points**: no new DbContext classes, no business-logic rewrite.
 
 ## Trade-offs
 - **No cross-database FKs or transactions.** Relationships that span services degrade to scalar IDs;

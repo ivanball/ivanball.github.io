@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Cost &amp; FinOps Notes (rubric §31) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="MMCA.Common is a library, so it cannot provision anything — right-sizing, scale rules, budgets, and per-service cost attribution live in the consumer…">
+  <meta name="description" content="MMCA.Common is a library, so it cannot provision anything: right-sizing, scale rules, budgets, and per-service cost attribution live in the consumer…">
   <link rel="canonical" href="https://ivanball.github.io/docs/guides/common-COST.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Cost &amp; FinOps Notes (rubric §31)">
-  <meta property="og:description" content="MMCA.Common is a library, so it cannot provision anything — right-sizing, scale rules, budgets, and per-service cost attribution live in the consumer…">
+  <meta property="og:description" content="MMCA.Common is a library, so it cannot provision anything: right-sizing, scale rules, budgets, and per-service cost attribution live in the consumer…">
   <meta property="og:url" content="https://ivanball.github.io/docs/guides/common-COST.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Cost &amp; FinOps Notes (rubric §31)">
-  <meta name="twitter:description" content="MMCA.Common is a library, so it cannot provision anything — right-sizing, scale rules, budgets, and per-service cost attribution live in the consumer…">
+  <meta name="twitter:description" content="MMCA.Common is a library, so it cannot provision anything: right-sizing, scale rules, budgets, and per-service cost attribution live in the consumer…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Common · Cost & FinOps Notes (rubric §31)","item":"https://ivanball.github.io/docs/guides/common-COST.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -120,7 +120,7 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
           <h1 id="cost--finops-notes-rubric-31">Cost &amp; FinOps Notes (rubric §31)</h1>
-          <p>MMCA.Common is a library, so it cannot <em>provision</em> anything — right-sizing, scale rules, budgets,
+          <p>MMCA.Common is a library, so it cannot <em>provision</em> anything: right-sizing, scale rules, budgets,
           and per-service cost attribution live in the consumer apps&#39; IaC (e.g. MMCA.ADC&#39;s <code>infra/main.bicep</code>,
           <code>cost-guard.yml</code>, and budget alerts). What the framework <em>can</em> do is keep its own cost-relevant
           defaults sane and document the levers consumers should set. This note consolidates the cost rationale
@@ -133,7 +133,7 @@
           Log Analytics / App Insights ingestion. This is on by default in <code>AddServiceDefaults()</code>.</li>
           <li><strong>Head-based trace sampling is a built-in knob.</strong> Set <code>Telemetry:TracesSampleRatio</code> to a value in
           <code>(0,1)</code> (e.g. <code>0.1</code> to keep 10% of traces) and <code>ConfigureOpenTelemetry</code> installs a
-          <code>ParentBasedSampler(TraceIdRatioBasedSampler(ratio))</code> — ParentBased so a sampled-in request keeps
+          <code>ParentBasedSampler(TraceIdRatioBasedSampler(ratio))</code>: ParentBased so a sampled-in request keeps
           its whole trace intact across services. Unset (the default) samples everything; an out-of-range or
           unparseable value also falls back to sample-everything, so a typo can never silently blind you. This
           is the single biggest lever on trace-ingestion cost once traffic grows.</li>
@@ -153,7 +153,7 @@
           &quot;dispatched successfully&quot; line is <code>Debug</code> (it is the single highest-volume log line in steady
           state); failures stay loud (dead-letter = <code>Error</code>, retry = <code>Warning</code>). So a busy outbox does not
           emit an <code>Information</code> line per message. Consumers should keep production at <code>Information</code> (or higher
-          for noisy categories) rather than <code>Debug</code> — log volume is billed.</li>
+          for noisy categories) rather than <code>Debug</code>: log volume is billed.</li>
           <li><strong>Idle compute is kept cheap.</strong> The shared <code>SocketsHttpHandler</code> keep-alive / pooled-connection
           tuning in <code>MMCA.Common.Aspire</code> avoids per-request connection churn; on consumption-billed compute
           (e.g. Azure Container Apps) steady low traffic stays in the cheap idle band instead of repeatedly
@@ -161,7 +161,7 @@
           <li><strong>The outbox poll interval is tunable and meant to be raised in production.</strong> <code>OutboxProcessor</code>
           wakes on a signal (new rows written) and uses a smart wait, so real messages still flow in ~5s
           regardless of the fallback poll. <code>Outbox:PollingIntervalSeconds</code> therefore only controls <em>idle</em>
-          polling — set it high in deployed environments (MMCA.ADC uses <strong>300s</strong> vs the 2s local default) to
+          polling: set it high in deployed environments (MMCA.ADC uses <strong>300s</strong> vs the 2s local default) to
           cut idle DB chatter and telemetry without adding message latency.</li>
           <li><strong>Outbox/inbox rows are purged, not kept forever.</strong> <code>OutboxCleanupService</code> purges processed rows
           after <code>Outbox:RetentionDays</code> (default 7), bounding table growth (and the storage/scan cost of an
@@ -187,7 +187,7 @@
           <p>These belong in the consumer&#39;s IaC, not the library, but the framework documents the shape so every
           consumer attributes spend and guards surges the same way. The worked, deployed versions are
           <code>MMCA.ADC/infra/main.bicep</code> (tags + budget) and <code>MMCA.ADC/.github/workflows/cost-guard.yml</code>.</p>
-          <p><strong>Cost-attribution tags</strong> — stamp every billable resource with a consistent tag set so Azure Cost
+          <p><strong>Cost-attribution tags</strong>: stamp every billable resource with a consistent tag set so Azure Cost
           Analysis can group by application / environment / cost-centre:</p>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">var commonTags = {
             application: &#39;myapp&#39;          // groups the whole app&#39;s spend
@@ -206,10 +206,10 @@
               notifications: { /* 80% actual + 100% forecasted → action group */ }
             }
           }</code></pre>
-          <p><strong>Surge-revert guard</strong> — a scheduled, read-only check that fails if a temporary scale-up was left
+          <p><strong>Surge-revert guard</strong>: a scheduled, read-only check that fails if a temporary scale-up was left
           running (the rubric&#39;s &quot;scale-ups left running after the event&quot; red flag). Distilled from
           <code>cost-guard.yml</code>:</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># .github/workflows/cost-guard.yml — weekly + manual; READ-ONLY, never deploys.</span>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># .github/workflows/cost-guard.yml: weekly + manual; READ-ONLY, never deploys.</span>
           <span class="hljs-attr">on:</span> { <span class="hljs-attr">schedule:</span> [{ <span class="hljs-attr">cron:</span> <span class="hljs-string">&#x27;0 7 * * 1&#x27;</span> }], <span class="hljs-attr">workflow_dispatch:</span> {} }
           <span class="hljs-attr">jobs:</span>
             <span class="hljs-attr">drift:</span>
@@ -219,7 +219,7 @@
                 <span class="hljs-comment"># or any SQL DB tier != the agreed cheap tier (e.g. Basic), and print reset steps.</span></code></pre>
           <h2 id="out-of-scope-for-the-framework-by-design">Out of scope for the framework (by design)</h2>
           <p>Provisioning, scale rules, budgets, per-service cost attribution, and surge/revert automation are
-          consumer/IaC concerns and are <em>not</em> added to the library — see also <a href="../adr/009-resilience-and-recovery-objectives.html">ADR-009</a> (resilience/recovery
+          consumer/IaC concerns and are <em>not</em> added to the library: see also <a href="../adr/009-resilience-and-recovery-objectives.html">ADR-009</a> (resilience/recovery
           objectives are likewise the deployer&#39;s, not the framework&#39;s).</p>
           
         <div class="doc-foot btn-row">
