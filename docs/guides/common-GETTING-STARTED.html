@@ -518,11 +518,13 @@
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Tickets/.../Application/Tickets/UseCases/Create/TicketCreateRequest.cs</span>
           <span class="hljs-keyword">public</span> <span class="hljs-keyword">record</span> <span class="hljs-title">class</span> <span class="hljs-title">TicketCreateRequest</span> : <span class="hljs-title">ICreateRequest</span>, <span class="hljs-title">ICacheInvalidating</span>
           {
-              <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> CachePrefix =&gt; <span class="hljs-string">$&quot;<span class="hljs-subst">{<span class="hljs-keyword">typeof</span>(Ticket).FullName}</span>:&quot;</span>;
+              <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> CachePrefix =&gt; TicketCacheKeys.Prefix;
               <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> <span class="hljs-built_in">string</span> Title { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
               <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> <span class="hljs-built_in">string</span> Description { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
               <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> <span class="hljs-built_in">int</span> RequesterUserId { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
           }</code></pre>
+          <p><code>TicketCacheKeys</code> is the one place the module names cache entries, and the reason it exists is worth
+          reading in <a href="#caching-is-a-pair-and-you-wire-both-halves">&quot;Caching is a pair&quot;</a> below.</p>
           <h3 id="3c-application-use-case-validator-mapper-di">3c. Application: use case, validator, mapper, DI</h3>
           <p>A command handler implements <code>ICommandHandler&lt;TCommand, TResult&gt;</code> and stays thin: the decorator
           pipeline supplies logging, caching, validation, and the transaction around it. The request is turned
@@ -648,6 +650,77 @@
           <p>The order is load-bearing: validation runs before the transaction opens; cache invalidation happens
           after a successful commit (outside the transaction); a business <code>Result.Failure</code> commits the
           transaction but skips cache invalidation; an exception rolls the transaction back.</p>
+          <h4 id="caching-is-a-pair-and-you-wire-both-halves">Caching is a pair, and you wire both halves</h4>
+          <p>The Caching decorator is two extension points that only do something <strong>together</strong>, and the framework
+          cannot check that you wired both:</p>
+          <ul>
+          <li>a query implements <strong><code>IQueryCacheable</code></strong> (<code>CacheKey</code> + <code>CacheDuration</code>) and is served from cache,</li>
+          <li>a command implements <strong><code>ICacheInvalidating</code></strong> (<code>CachePrefix</code>) and, on success, evicts every entry
+          whose key starts with that prefix.</li>
+          </ul>
+          <p>Implement only the command half and you get a write path that faithfully invalidates an empty cache:
+          no error, no warning, no benefit. That is the easiest thing in the whole pipeline to get half-done,
+          so the reference app wires both. Start from the key, because the decorator matches the two sides by
+          <strong>string prefix</strong> and nothing at compile time is watching:</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Tickets/.../Application/Tickets/TicketCacheKeys.cs</span>
+          <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">class</span> <span class="hljs-title">TicketCacheKeys</span>
+          {
+              <span class="hljs-comment">// Derived from the aggregate type name so two modules cannot collide on a shared cache.</span>
+              <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-built_in">string</span> Prefix { <span class="hljs-keyword">get</span>; } = <span class="hljs-string">$&quot;<span class="hljs-subst">{<span class="hljs-keyword">typeof</span>(Ticket).FullName}</span>:&quot;</span>;
+          
+              <span class="hljs-comment">// Every input that changes the result belongs in the key. This read has only an id.</span>
+              <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-built_in">string</span> <span class="hljs-title">ById</span>(<span class="hljs-params">TicketIdentifierType id</span>)</span> =&gt;
+                  <span class="hljs-built_in">string</span>.Create(CultureInfo.InvariantCulture, <span class="hljs-string">$&quot;<span class="hljs-subst">{Prefix}</span>ById:<span class="hljs-subst">{id}</span>&quot;</span>);
+          }</code></pre>
+          <p>The read side opts in by implementing <code>IQueryCacheable</code>. The duration is a <strong>staleness budget</strong>, not
+          a performance knob: a write through the pipeline evicts the entry immediately, so it only bounds the
+          window for changes that bypass the pipeline (a migration, a manual edit, another writer on the same
+          database):</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Tickets/.../Application/Tickets/UseCases/GetById/GetTicketByIdQuery.cs</span>
+          <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">GetTicketByIdQuery</span>(<span class="hljs-params">TicketIdentifierType Id</span>) : IQueryCacheable</span>
+          {
+              <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> CacheKey =&gt; TicketCacheKeys.ById(Id);
+              <span class="hljs-keyword">public</span> TimeSpan CacheDuration =&gt; TimeSpan.FromMinutes(<span class="hljs-number">5</span>);
+          }</code></pre>
+          <p>The write side returns the prefix its write dirties. Every ticket command does, from the same
+          constant, which is the point: a hand-typed literal in one of seven commands is one rename away from
+          a read that is never evicted, and the symptom appears later as a stale ticket rather than as a
+          failure at the write.</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Tickets/.../Application/Tickets/UseCases/AddComment/AddCommentCommand.cs</span>
+          <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">AddCommentCommand</span>(<span class="hljs-params">TicketIdentifierType TicketId, <span class="hljs-built_in">string</span> Body, <span class="hljs-built_in">int</span> AuthorUserId</span>)
+              : ICacheInvalidating</span>
+          {
+              <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> CachePrefix =&gt; TicketCacheKeys.Prefix;
+          }</code></pre>
+          <p>Two properties of the decorator are worth knowing before you rely on it:</p>
+          <ul>
+          <li><strong>Invalidation runs only on success.</strong> A <code>Result.Failure</code> persisted nothing, so evicting valid
+          entries would be pure loss. Assert this, because it is invisible in normal use.</li>
+          <li><strong>Invalidation runs outside the transaction</strong>, after the commit. It cannot roll back with the
+          write, which is the correct trade: a spurious eviction costs one cache miss, whereas invalidating
+          inside the transaction would leave the cache holding pre-write state if the commit then failed.</li>
+          </ul>
+          <p>Both halves are testable without a database. Wire the two real decorators around stub handlers and a
+          dictionary-backed <code>ICacheService</code>, and the assertions say nothing about whether the substrate is
+          in-memory or Redis (source:
+          <code>Tests/Modules/Tickets/MMCA.Helpdesk.Tickets.Application.Tests/Caching/TicketCacheInvalidationTests.cs</code>):</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> cache = <span class="hljs-keyword">new</span> DictionaryCache();                       <span class="hljs-comment">// a plain Dictionary behind ICacheService</span>
+          <span class="hljs-keyword">var</span> handler = <span class="hljs-keyword">new</span> CountingQueryHandler(TicketResult());  <span class="hljs-comment">// counts how often the real read is reached</span>
+          <span class="hljs-keyword">var</span> read = <span class="hljs-keyword">new</span> CachingQueryDecorator&lt;GetTicketByIdQuery, Result&lt;TicketDTO&gt;&gt;(handler, cache);
+          <span class="hljs-keyword">var</span> write = <span class="hljs-keyword">new</span> CachingCommandDecorator&lt;ChangeTicketStatusCommand, Result&lt;TicketDTO&gt;&gt;(
+              <span class="hljs-keyword">new</span> StubCommandHandler(TicketResult(TicketStatus.Closed)), cache);
+          
+          <span class="hljs-keyword">await</span> read.HandleAsync(<span class="hljs-keyword">new</span> GetTicketByIdQuery(TicketId));     <span class="hljs-comment">// miss: runs the handler, caches</span>
+          <span class="hljs-keyword">await</span> read.HandleAsync(<span class="hljs-keyword">new</span> GetTicketByIdQuery(TicketId));     <span class="hljs-comment">// hit: handler not reached</span>
+          handler.Invocations.Should().Be(<span class="hljs-number">1</span>);
+          
+          <span class="hljs-keyword">await</span> write.HandleAsync(<span class="hljs-keyword">new</span> ChangeTicketStatusCommand(TicketId, TicketStatus.Closed));
+          
+          <span class="hljs-keyword">await</span> read.HandleAsync(<span class="hljs-keyword">new</span> GetTicketByIdQuery(TicketId));     <span class="hljs-comment">// miss again: the write evicted it</span>
+          handler.Invocations.Should().Be(<span class="hljs-number">2</span>);</code></pre>
+          <p>Add the negative case (a command returning <code>Result.Failure</code> must leave the entry in place) and one
+          guard that the read key still starts with the prefix every command returns. That last test is the
+          one that survives a rename.</p>
           <hr>
           <h2 id="phase-4-dbcontext-model-and-migrations">Phase 4: DbContext model and migrations</h2>
           <p>Create <strong>one migrations project per (future) service database</strong>, even while you are a monolith. This
