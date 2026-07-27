@@ -21,10 +21,18 @@ included throughout.
 
 The continuous-integration workflow for the MMCA.Common framework. Because the fifteen packages are
 consumed by every downstream application, a regression here propagates to both `MMCA.ADC` and
-`MMCA.Store`. The workflow runs three jobs: a fast `build-and-test` covering unit and architecture
-tests (with coverage collection), a slower `ui-e2e` cross-browser matrix for real-browser accessibility
-and render-smoke testing, and a `coverage` job that merges the coverage tiers and enforces a coverage
-floor.
+`MMCA.Store`. The workflow runs **nine jobs**: a `changes` classifier that every other job keys off, a
+fast `build-and-test` covering unit and architecture tests (with coverage collection), a windows
+`build-maui` for the one package that cannot compile on Ubuntu, a `ui-e2e` cross-browser matrix for
+real-browser accessibility and render-smoke testing, a `performance-smoke` benchmark gate, a `coverage`
+job that merges the coverage tiers and enforces a floor, and three canaries that catch failure modes the
+solution build cannot see: `consumer-source-build`, `package-consumption`, and
+`sample-deployment-validate`, plus `redis-integration` for the one component whose storage format only a
+real server can falsify.
+
+That job count is the interesting fact about this workflow. A framework cannot verify itself by compiling
+itself: most of these jobs exist because a green `dotnet build` on the framework's own solution has, at
+some point, coexisted with a broken consumer, a broken package, or a broken deployment sample.
 
 [Rubric §17, DevOps & Deployment] assesses whether CI/CD is automated, gates are meaningful, and
 deployments are reproducible. This workflow embodies §17 as the automated gate that every MMCA.Common
@@ -33,36 +41,74 @@ change must pass before it can influence downstream consumers.
 ### Triggers
 
 ```yaml
-# ci.yml:3-7
+# ci.yml:14-16
 on:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
 ```
 
-Every push to `main` and every pull-request targeting `main` runs both jobs. There is no manual trigger,
-the gate is always-on.
+**Pull requests only.** There is deliberately no `push: [main]` trigger, and the comment above the
+trigger (`ci.yml:3-13`) records why: `main` is protected with "Require branches to be up to date before
+merging", so a `pull_request` check runs against `refs/pull/N/merge`, which is `main` already merged into
+the PR head. Under squash merge that merge result **is** the tree that lands on `main`, so a
+push-triggered re-run only re-verified an already-verified tree. The comment carries the measurement that
+settled it: 30 such runs over three days in July 2026, 266 wasted minutes, competing for the same
+concurrency slots as the PR runs they duplicated.
+
+Release verification does not depend on this, which is what makes the deletion safe: `release.yml` runs
+its own restore, build, and test against the `v*` tag before publishing.
 
 ```yaml
-# ci.yml:9-10
+# ci.yml:18-23
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.ms-playwright
 ```
 
-This env var forces GitHub's bundled JavaScript actions to use the Node 24 runtime, avoiding deprecation
-warnings that would surface as build noise under `TreatWarningsAsErrors`-minded practice.
+The first var forces GitHub's bundled JavaScript actions onto the Node 24 runtime, avoiding deprecation
+warnings that would surface as build noise. The second redirects Playwright's browser install out of
+`~/.cache/ms-playwright` and into the workspace, which is what lets `actions/cache` carry the browser
+binaries between runs. It has to be workflow-level rather than step-level because both the install step
+and the test run read it.
+
+```yaml
+# ci.yml:27-29
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+```
+
+Pushing to a PR again supersedes the still-running check set, since a stale run's result is never
+actionable. The `cancel-in-progress` expression is guarded on `event_name` rather than hardcoded to
+`true` so that a future non-PR trigger cannot cancel itself.
+
+### Job: `changes`, the docs-only short-circuit
+
+The first job (`ci.yml:36-70`) classifies the diff and exposes a single `code` output (`ci.yml:39-40`)
+that every heavy step below is guarded on. It walks the changed files against the base ref and sets
+`code=false` only when **every** changed path ends in `.md`.
+
+The design detail worth internalizing is that the flag guards **steps, not jobs**. All eight required
+status contexts must still post green on a docs-only PR, and a skipped job posts no context at all, so
+guarding at job level would leave branch protection waiting forever on checks that never arrive. Guarding
+at step level means the jobs all run, do almost nothing, and report green.
+
+The classifier is fail-safe in both directions (`ci.yml:52-59`): an unresolvable base ref or a failed
+`git diff` sets `code=true` and runs the full pipeline. Guessing "code changed" wastes runner minutes;
+guessing "docs only" ships an unverified change.
+
+One step deliberately escapes the guard, covered next.
 
 ### Job: `build-and-test`
 
-**Runs on:** `ubuntu-latest` (`ci.yml:14`). The Ubuntu runner matters: the Linux file system is
+**Runs on:** `ubuntu-latest` (`ci.yml:74`). The Ubuntu runner matters: the Linux file system is
 case-sensitive, so path-casing bugs that Windows masks are caught in CI. This is a deliberate choice
 documented in `MMCA.Common/CLAUDE.md` ("CI runs on Ubuntu, file paths are case-sensitive").
 
-**Step 1, Checkout with full history** (`ci.yml:16-18`):
+**Step 1, Checkout with full history** (`ci.yml:76-78`):
 
 ```yaml
-- uses: actions/checkout@v5
+- uses: actions/checkout@v7
   with:
     fetch-depth: 0 # MinVer needs full history
 ```
@@ -71,10 +117,34 @@ documented in `MMCA.Common/CLAUDE.md` ("CI runs on Ubuntu, file paths are case-s
 tool) cannot walk back to find the nearest `vX.Y.Z` tag and would produce an unstable pre-release version
 string. Shallow clones (the GitHub default of depth 1) silently break reproducible versioning.
 
-**Step 2, .NET 10 setup** (`ci.yml:20-22`): `actions/setup-dotnet@v5` pinned to `10.0.x` ensures the
-runner matches the `<TargetFramework>net10.0</TargetFramework>` in every project.
+**Step 2, .NET 10 setup** (`ci.yml:80-92`): `actions/setup-dotnet@v6` pinned to `10.0.x` ensures the
+runner matches the `<TargetFramework>net10.0</TargetFramework>` in every project. It also caches
+`~/.nuget/packages`, keyed on the committed lock files **plus** `Directory.Packages.props`, because
+`build/facts` and `build/perfgate` have no lock file and the repo does not pass `--locked-mode`, so the
+props file is what actually pins their versions. The cache itself is gated on the `code` flag
+(`ci.yml:89`): on a docs-only PR every restore step is skipped, `~/.nuget/packages` is never created, and
+setup-dotnet's cache-save step would otherwise fail the whole job with "Cache folder path does not exist
+on disk".
 
-**Step 3, Restore** (`ci.yml:24-25`):
+**Step 3, Verify FACTS.md is current** (`ci.yml:97-100`):
+
+```bash
+dotnet run --project build/facts -- . --check
+```
+
+A fast, dependency-free drift gate. `build/facts` recomputes the framework-wide facts from source (version
+from the git tag, package count, ADR range, fitness-method and base-class counts) and fails if the
+committed `FACTS.md` disagrees. Regenerate with `dotnet run --project build/facts -- .`.
+
+This is the one step **not** guarded on the `code` flag, and the comment (`ci.yml:98-99`) explains why:
+`FACTS.md` is itself markdown, so a docs-only PR is exactly the kind of change that can make it drift.
+The gate has to run precisely when everything else is skipped.
+
+[Rubric §26, Documentation & Knowledge Management] is served here in the only way that survives contact
+with time: the numbers other documents are told to link rather than restate are themselves machine-checked
+against the code.
+
+**Step 4, Restore** (`ci.yml:102-104`):
 
 ```bash
 dotnet restore MMCA.Common.slnx
@@ -82,7 +152,7 @@ dotnet restore MMCA.Common.slnx
 
 MMCA.Common uses NuGet lock files (`RestorePackagesWithLockFile`) and pins `packageSourceMapping` to
 nuget.org only, no `GITHUB_TOKEN` is needed to restore. This is explicitly documented in
-`MMCA.Common/CLAUDE.md` ("MMCA.Common builds/tests locally with NO token"). The lock file makes the
+`MMCA.Common/CLAUDE.md` ("building/testing Common needs NO GitHub token"). The lock file makes the
 restore reproducible: the exact dependency graph is committed and any unexpected transitive upgrade fails
 the restore.
 
@@ -90,7 +160,7 @@ the restore.
 supply-chain risks are visible. The pinned source mapping plus committed lock files are the §32
 implementation: a compromised or mutated transitive package cannot silently enter the build.
 
-**Step 4, Build in Release mode** (`ci.yml:27-28`):
+**Step 5, Build in Release mode** (`ci.yml:106-108`):
 
 ```bash
 dotnet build MMCA.Common.slnx -c Release --no-restore
@@ -100,17 +170,17 @@ Building in `Release` mode matters because the five analyzers (Meziantou, SonarA
 Roslynator, Microsoft.VisualStudio.Threading) run at error severity. Some analyzer rules only trigger
 in Release (e.g. certain null-forgiving suppression patterns). `TreatWarningsAsErrors` is globally
 enabled; a single analyzer finding fails the build. The `--no-restore` flag re-uses the locked packages
-from Step 3.
+from Step 4.
 
 [Rubric §15, Best Practices & Code Quality] (quality enforcement via analyzers at error severity) is
 realized here: the build *is* the static-analysis gate.
 
-**Step 5, Vulnerability audit** (`ci.yml:30-46`):
+**Step 6, Vulnerability audit** (`ci.yml:110-129`):
 
 ```bash
 dotnet list MMCA.Common.slnx package --vulnerable --include-transitive > audit.log 2>&1 || true
 cat audit.log
-suppressed=$(grep -oE 'GHSA-[a-z0-9-]+' Directory.Build.props | sort -u | paste -sd'|' -)
+suppressed=$(grep -E '<NuGetAuditSuppress\b' Directory.Build.props | grep -oE 'GHSA-[a-z0-9-]+' | sort -u | paste -sd'|' -)
 vulns=$(grep -E '^[[:space:]]*>[[:space:]]' audit.log || true)
 # drop any vulnerable-package row whose advisory is in the suppressed list, then fail on the rest
 if printf '%s' "$vulns" | grep -q .; then
@@ -122,10 +192,13 @@ fi
 dependency and writes any hits to `audit.log`. The `|| true` prevents an API-call failure from masking the
 parse. The gate is not a simple sentinel grep: because `dotnet list --vulnerable` ignores
 `NuGetAuditSuppress`, the step honors the same accepted-advisory list itself, it extracts every suppressed
-`GHSA-…` id from `Directory.Build.props` (the single source of truth), filters those advisories out of the
-vulnerable-package rows (the `>`-prefixed lines), and fails only if a *non-suppressed* vulnerable row
-remains (e.g. the unpatched SQLite advisory is an accepted exception). If any such package is found, the
-step fails and the workflow stops before tests run.
+`GHSA-...` id from `Directory.Build.props` (the single source of truth), filters those advisories out of
+the vulnerable-package rows (the `>`-prefixed lines), and fails only if a *non-suppressed* vulnerable row
+remains (e.g. the unpatched SQLite advisory is an accepted exception).
+
+Note how narrowly the extraction is scoped (`ci.yml:118-120`): it greps `<NuGetAuditSuppress` lines
+specifically, not the whole file, so a GHSA id merely *mentioned in a comment* about a non-accepted
+advisory cannot silently suppress it here. A looser grep would have turned prose into policy.
 
 Why this gate exists and why it comes *before* tests: a vulnerable dependency that reaches the published
 packages is a supply-chain liability for every downstream consumer. Catching it before the release
@@ -135,56 +208,89 @@ workflow runs (and before the package is published) is cheaper than retracting a
 (assesses whether secrets, auth, and dependency security are properly managed) is also touched: the
 vulnerability audit ensures the framework's own dependencies do not carry known CVEs.
 
-**Steps 6–7, Test with coverage and minimum-expected-tests guard** (`ci.yml:48-57`):
+**Steps 7 and 8, Test with coverage and the discovery-regression floor** (`ci.yml:131-144`):
 
 ```bash
 dotnet tool install --global dotnet-coverage
 dotnet-coverage collect -f cobertura -o coverage.unit.cobertura.xml \
-  "dotnet test --solution MMCA.Common.slnx -c Release --no-build --minimum-expected-tests 1"
+  "dotnet test --solution MMCA.Common.slnx -c Release --no-build --minimum-expected-tests 2000"
 ```
 
 The test run is wrapped in `dotnet-coverage collect` (installed in the step before), which emits a
 cobertura report and returns the inner test command's exit code, so a test failure still gates the build,
-coverage itself is report-only (the `coverage` job below consumes it). `--minimum-expected-tests 1` is a
-Microsoft Testing Platform (MTP) flag that fails the run if any test project discovers zero tests (MTP
-would otherwise exit with code 8, which is ambiguous). If a test project is added to the solution but all
-its tests are accidentally skipped or the test class is empty, this guard catches it immediately. The
-solution test suite covers the per-layer projects (`Shared.Tests`, `Domain.Tests`, `Application.Tests`,
-`Infrastructure.Tests`, `API.Tests`, `Grpc.Tests`, `UI.Tests`, `Aspire.Tests`) plus `Architecture.Tests`
-(NetArchTest layer/purity/extraction fitness functions, see
+coverage itself is report-only (the `coverage` job below consumes it).
+
+`--minimum-expected-tests 2000` is the load-bearing number. It is a Microsoft Testing Platform (MTP) flag
+that fails the run when fewer than N tests are discovered, and the floor sits just under the real suite
+size of roughly 2,254 (`ci.yml:141-142`). A floor of 1 would only catch a project that discovered nothing
+at all; a floor near the true count catches the far more common and far more dangerous failure, a
+discovery or filter regression that silently drops thousands of tests and reports green with a handful
+run. The solution test suite covers the per-layer projects (`Shared.Tests`, `Domain.Tests`,
+`Application.Tests`, `Infrastructure.Tests`, `API.Tests`, `Grpc.Tests`, `UI.Tests`, `Aspire.Tests`) plus
+`Architecture.Tests` (NetArchTest layer/purity/extraction fitness functions, see
 [the doubled architecture-enforcement / fitness functions](00-primer.md#architecture-enforcement-is-doubled-fitness-functions-rubric-34-3)).
 
 [Rubric §14, Testability & Test Strategy] assesses whether tests actually run and cover the system. The
-`--minimum-expected-tests 1` guard is a mechanical enforcement of §14: you cannot merge a test project
-that executes no tests.
+`--minimum-expected-tests` floor is a mechanical enforcement of §14: you cannot merge a change that
+quietly stops running the suite.
 
-The unit-tier cobertura report is uploaded as the `coverage-unit` artifact (`ci.yml:59-65`) for the
-`coverage` job to merge and gate on.
+The unit-tier cobertura report is uploaded as the `coverage-unit` artifact (`ci.yml:146-152`) for the
+`coverage` job to merge and gate on, under `if: always()` so a failing run still yields its partial
+coverage data.
+
+### Job: `build-maui`, the one package Ubuntu cannot compile
+
+`MMCA.Common.UI.Maui` multi-targets net10.0-android/ios/maccatalyst/windows, which needs the MAUI
+workloads, which Ubuntu runners do not have. So it stays **out of `MMCA.Common.slnx`** and builds in its
+own `windows-latest` job (`ci.yml:160-221`), the same mechanism that keeps the gallery and UI E2E projects
+out of the fast unit run ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)).
+It is a required merge gate alongside `build-and-test`.
+
+There are no tests here, and the comment says why (`ci.yml:158-159`): the capability contracts and their
+browser fallbacks are covered in `MMCA.Common.UI.Tests` on ubuntu, while the MAUI implementations are thin
+Essentials wrappers exercised on-device. A test that only proves a wrapper forwards a call is not worth a
+windows runner.
+
+The job is the **critical path of the whole CI run** (measured at 7.1 to 8.2 minutes, and the only windows
+runner), which is why two steps exist purely to make it cheaper. `Resolve SDK version and root`
+(`ci.yml:188-198`) computes a cache key from the resolved SDK version, deriving the SDK root from `dotnet`
+itself rather than trusting `$DOTNET_ROOT` to be exported, since an empty value there would silently turn
+the cache paths into garbage and miss forever. `Cache MAUI workload packs` (`ci.yml:200-211`) then carries
+the `sdk-manifests`, `packs`, `metadata`, `library-packs`, and `template-packs` directories between runs,
+keyed so that an SDK feature-band bump busts it.
+
+`dotnet workload install maui` still runs on a cache hit (`ci.yml:213-217`), deliberately: it is a no-op
+that reconciles the manifest, and it is the only thing that lets a partially-restored cache self-heal
+instead of failing the build underneath it.
 
 ### Job: `ui-e2e`, accessibility and render-smoke gate
 
-This job runs in parallel with `build-and-test`, on its own `ubuntu-latest` runner, with a 20-minute
-timeout (`ci.yml:75`). It is a **cross-browser matrix** over `chromium`, `firefox`, and `webkit`
-(`ci.yml:76-80`) with `fail-fast: false`, so one engine's failure does not cancel the others. **Chromium
-is the required merge gate; firefox and webkit are advisory**, `continue-on-error: ${{ matrix.browser !=
-'chromium' }}` (`ci.yml:83`) makes the non-chromium legs non-blocking until the matrix is proven reliably
-green. Its purpose is to catch two distinct failure classes that the unit-test job cannot: WCAG 2.1 AA
-accessibility violations in the shared Blazor UI components, and rendering regressions (a component that
-compiles but throws during SSR).
+This job (`ci.yml:228-322`) runs in parallel with `build-and-test`, on its own `ubuntu-latest` runner,
+with a 20-minute timeout (`ci.yml:232`). It is a **cross-browser matrix** over `chromium`, `firefox`, and
+`webkit` (`ci.yml:233-237`) with `fail-fast: false`, so one engine's failure does not cancel the others.
+
+**All three engines are required merge gates.** The matrix was introduced with the non-chromium legs
+non-blocking, then promoted as each proved itself: firefox on 2026-07-12 after a clean observed streak,
+webkit on 2026-07-16 after 11 consecutive green runs since its last flake (`ci.yml:238-240`). There is no
+`continue-on-error` in this job today. A webkit red blocks the merge like any other check.
+
+Its purpose is to catch two failure classes the unit-test job cannot: WCAG 2.1 AA accessibility violations
+in the shared Blazor UI components, and rendering regressions (a component that compiles but throws during
+render).
 
 **Why a separate job?** The gallery host (`Tests/Presentation/MMCA.Common.UI.Gallery`) and the E2E test
 project (`Tests/Presentation/MMCA.Common.UI.E2E.Tests`) are **intentionally excluded from
-`MMCA.Common.slnx`** (`ci.yml:67-71` comment). Playwright requires a full browser install
-(several hundred megabytes) and a headed-mode-capable runner config. Including these in `dotnet test
---solution` would slow every CI run for every code change, most of which do not touch the UI. Keeping the
-E2E gate separate means the unit/arch job stays fast while accessibility remains enforced.
+`MMCA.Common.slnx`** (`ci.yml:223-227` comment). Playwright requires a full browser install (several
+hundred megabytes) and a browser-capable runner config. Including these in `dotnet test --solution` would
+slow every CI run for every code change, most of which do not touch the UI. Keeping the E2E gate separate
+means the unit/arch job stays fast while accessibility remains enforced.
 
 **Step-by-step:**
 
-1. **Checkout** (`ci.yml:85-87`): `fetch-depth: 0` (the comment notes "MinVer needs full history"), same
+1. **Checkout** (`ci.yml:242-244`): `fetch-depth: 0` (the comment notes "MinVer needs full history"), same
    as `build-and-test`.
 
-2. **Build the E2E project directly** (`ci.yml:93-96`):
+2. **Build the E2E project directly** (`ci.yml:260-264`):
    ```bash
    dotnet build Tests/Presentation/MMCA.Common.UI.E2E.Tests/MMCA.Common.UI.E2E.Tests.csproj -c Release
    ```
@@ -192,20 +298,28 @@ E2E gate separate means the unit/arch job stays fast while accessibility remains
    included). The E2E project references MMCA.Common source projects directly (via project references, not
    NuGet packages), so no `GITHUB_TOKEN` is needed.
 
-3. **Install Playwright for the matrix browser** (`ci.yml:98-101`):
+3. **Cache and install Playwright for the matrix browser** (`ci.yml:269-287`):
    ```bash
    script=$(find Tests/Presentation/MMCA.Common.UI.E2E.Tests/bin/Release -name playwright.ps1 | head -1)
-   pwsh "$script" install --with-deps ${{ matrix.browser }}
+   if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+     pwsh "$script" install-deps ${{ matrix.browser }}
+   else
+     pwsh "$script" install --with-deps ${{ matrix.browser }}
+   fi
    ```
-   The `playwright.ps1` script is emitted into the build output by the Playwright MSBuild integration.
-   `find` locates it dynamically so the step does not hard-code a .NET version suffix in the path.
-   `--with-deps` installs the OS-level dependencies (font packages, shared libs) the engine needs and that
-   Ubuntu lacks by default. The engine is whichever matrix leg this run is (`chromium` / `firefox` /
-   `webkit`).
+   Browser binaries run 100 to 300 MB per engine and were re-downloaded on all three legs of every run,
+   which is what the workflow-level `PLAYWRIGHT_BROWSERS_PATH` and this cache step (`ci.yml:269-275`)
+   exist to stop. The cache key includes the engine, since each leg installs only its own.
 
-4. **Run the E2E suite** (`ci.yml:103-119`): the chromium leg installs `dotnet-coverage` (`ci.yml:103-105`)
-   and wraps the run in `dotnet-coverage collect`; the firefox/webkit legs run the same command plain
-   (`eval "$CMD"`). The inner command is:
+   The install branches on the cache hit, and the distinction is the useful part: OS-level shared
+   libraries and fonts live outside the cached directory, so a restored cache still needs `install-deps`,
+   the cheap half of `--with-deps`. Skipping it entirely on a hit would produce a browser that cannot
+   launch. The `playwright.ps1` script is emitted into the build output by the Playwright MSBuild
+   integration; `find` locates it dynamically so the step does not hard-code a .NET version suffix.
+
+4. **Run the E2E suite** (`ci.yml:289-306`): the chromium leg installs `dotnet-coverage`
+   (`ci.yml:289-291`) and wraps the run in `dotnet-coverage collect`; the firefox and webkit legs run the
+   same command plain (`eval "$CMD"`). The inner command is:
    ```yaml
    env:
      E2E_HEADLESS: "true"
@@ -213,8 +327,9 @@ E2E gate separate means the unit/arch job stays fast while accessibility remains
    run: dotnet test --project Tests/Presentation/MMCA.Common.UI.E2E.Tests/MMCA.Common.UI.E2E.Tests.csproj -c Release --no-build -- --minimum-expected-tests 1
    ```
    `E2E_HEADLESS: true` runs the browser without a display server (no Xvfb needed). `E2E_BROWSER` selects
-   the engine; `MMCA.Common.Testing.E2E`'s `PlaywrightFixture` reads this env var. The `-- --minimum-
-   expected-tests 1` suffix is the MTP filter separator, the same guard as in `build-and-test`.
+   the engine; `MMCA.Common.Testing.E2E`'s `PlaywrightFixture` reads this env var. The
+   `-- --minimum-expected-tests 1` suffix is the MTP filter separator, the same class of guard as in
+   `build-and-test` though at a floor of 1 rather than 2000.
 
    The suite self-hosts the gallery (`MMCA.Common.UI.Gallery`) in-process, then scans the Login and
    Register pages plus a primitives showcase with **axe-core** (via `Deque.AxeCore.Playwright`) at
@@ -226,8 +341,8 @@ E2E gate separate means the unit/arch job stays fast while accessibility remains
    smoke confirms that the real component tree renders without exceptions in a real browser context.
 
 5. **Upload coverage and Playwright traces**, the chromium leg uploads its E2E cobertura report as the
-   `coverage-e2e` artifact (`ci.yml:121-127`), and on failure each leg uploads its traces
-   (`ci.yml:129-135`):
+   `coverage-e2e` artifact (`ci.yml:308-314`), and on failure each leg uploads its traces
+   (`ci.yml:316-322`):
    ```yaml
    if: failure()
    uses: actions/upload-artifact@v7
@@ -246,20 +361,105 @@ E2E gate separate means the unit/arch job stays fast while accessibility remains
    feedback fast) is served: the trace artifact turns an opaque CI failure into a reproducible debugging
    session.
 
+### Job: `performance-smoke`, benchmarks plus a committed baseline
+
+This job (`ci.yml:330-369`) runs the BenchmarkDotNet harness and then compares the results against a
+committed baseline, which makes it two gates in one.
+
+The run itself (`ci.yml:354-360`) uses `--filter "*"` and `--job Short`:
+
+```bash
+dotnet run -c Release --project Tests/Performance/MMCA.Common.Benchmarks --no-launch-profile -- --filter "*" --job Short --exporters json
+```
+
+`--filter "*"` selects every benchmark non-interactively, and without it BenchmarkDotNet prompts for a
+selection and hangs in CI. `--job Short` (3 warmup + 3 iterations) produces real measurements in under a
+minute instead of a full multi-iteration timing run. `--no-launch-profile` keeps it deterministic on
+hosted runners.
+
+Then `build/perfgate` (`ci.yml:362-369`) compares the exported results against
+`Tests/Performance/perf-baseline.json` and fails on any violation. The baseline holds two kinds of
+assertion, and the difference matters: deterministic **allocation ceilings** (byte counts, which are
+stable across machines) and machine-independent **ratio floors**, such as the compiled-expression
+specification cache staying at least 1000x ahead of the recompile anti-pattern. Wall-clock times are not
+asserted, because a shared hosted runner cannot deliver them reproducibly. Moving a number deliberately
+means updating the baseline file in the same PR.
+
+[Rubric §12, Performance & Scalability] is served in the only form CI can honestly provide: not "is it
+fast" but "did the property that makes it fast stop holding".
+
 ### Job: `coverage`, merge report and coverage floor
 
-A third job (`ci.yml:140-194`) runs after both test jobs (`needs: [build-and-test, ui-e2e]`, `if:
+This job (`ci.yml:374-431`) runs after both test jobs (`needs: [changes, build-and-test, ui-e2e]`, `if:
 always()`). It downloads the `coverage-*` artifacts, merges the unit/architecture/bUnit and E2E cobertura
 tiers with ReportGenerator (`+MMCA.*;-*.Tests`, generated `*.generated.cs`/`*.g.cs` filtered out), and
-publishes the summary to the run's Step Summary (`ci.yml:156-168`). It then **enforces a coverage floor**
-(`ci.yml:182-193`) as a regression backstop: the *unit tier alone* (not the gallery-diluted merged report)
-must stay **≥ 53% line coverage** with generated code excluded, gated only when `build-and-test` succeeded.
-The comment explains the generated-code exclusion: source generators (e.g. Microsoft.AspNetCore.OpenApi)
-emit large uncovered files that otherwise tank the number (raw 45.3% vs hand-written 61.9%), so the floor
-sits a few points below the hand-written baseline and is meant to be ratcheted up as coverage grows.
+publishes the summary to the run's Step Summary (`ci.yml:391-404`).
+
+It then **enforces a coverage floor** (`ci.yml:420-431`) as a regression backstop: the *unit tier alone*
+(not the gallery-diluted merged report) must stay at **68.3% line coverage or better** with generated code
+excluded, and only when `build-and-test` succeeded, so that an upstream failure does not add a confusing
+secondary coverage failure.
+
+Two decisions are encoded in that number. Generated code is excluded because source generators (for
+example Microsoft.AspNetCore.OpenApi) emit large uncovered files that otherwise tank the figure: 45.3% raw
+versus 61.9% hand-written, measured 2026-06-19. And the floor sits about 2 points below the 70.3% measured
+after the July 2026 coverage program (session auth, broker bus, Grpc/OAuth/JWKS, UI services), leaving
+just enough slack to avoid false reds while still catching a real regression. It is meant to be ratcheted
+up as coverage grows.
 
 [Rubric §14, Testability & Test Strategy] is served: the coverage floor is a mechanical regression
-backstop on top of the `--minimum-expected-tests 1` guard.
+backstop on top of the `--minimum-expected-tests` guard.
+
+### The three canaries, and why a framework needs them
+
+The remaining jobs all exist for the same reason: **a green solution build does not prove the framework
+works for anyone who is not the framework.**
+
+**`consumer-source-build`** (`ci.yml:441-490`) is a cross-repo pre-merge canary. It checks out
+MMCA.Helpdesk as a sibling directory (`ci.yml:453-462`) and builds and tests it against *this PR's*
+framework source, so a breaking public-API change fails here rather than surfacing after a release and a
+lockstep sweep. Helpdesk is the ideal canary precisely because it is minimal: a single-module app that
+needs no database and no GitHub Packages token, shipping a committed `local.props` that swaps the
+`MMCA.Common.*` `PackageReference`s for `ProjectReference`s into `../MMCA.Common/Source`. The sibling
+checkout layout is what makes that relative path resolve to the PR's own checkout. Its test step
+(`ci.yml:485-490`) carries the same discovery floor idea as `build-and-test`, set to 40 against a suite of
+about 44. Promoted to a required gate on 2026-07-16 after 9 consecutive green runs.
+
+**`package-consumption`** (`ci.yml:502-585`) closes the gap that the previous job cannot: source-mode
+builds bind `ProjectReference`s, so pack breaks (NU5xxx) and package-mode-only restore, analyzer, and
+reference failures stay invisible to them. The comment records that this failure mode shipped **twice**
+before the job existed. So this job packs every slnx package into a local folder feed (`ci.yml:528-530`),
+then scaffolds a throwaway consumer (`ci.yml:532-580`) whose `nuget.config` maps `MMCA.Common.*` to that
+feed and everything else to nuget.org, and builds it.
+
+The throwaway consumer lives in `RUNNER_TEMP`, **outside the repo checkout**, and that placement is the
+whole point: inside the checkout it would inherit `Directory.Build.props` and `Directory.Packages.props`
+and stop resembling a real downstream app. It references the meta set (`API` + `Infrastructure` +
+`Testing.Architecture`) to pull the full package graph transitively, and compiles one smoke type against
+`Result` to prove the references actually bind rather than merely resolve.
+
+**`sample-deployment-validate`** (`ci.yml:593-607`) type-checks the `samples/deployment` Bicep templates
+with `az bicep build`, no cloud credentials required. A library cannot deploy itself, so this IaC/OIDC
+reference is documentation that would otherwise rot unobserved; compiling it on every PR keeps it honest.
+A real what-if or deploy stays a consumer-side concern, since ADC's and Store's `deploy.yml` are the
+production-proven versions.
+
+### Job: `redis-integration`
+
+The last job (`ci.yml:609-645`) runs `MMCA.Common.Infrastructure.Redis.Tests` against a real Redis via
+Testcontainers, which Ubuntu runners support with no extra setup since they ship a Docker daemon. Like the
+E2E and benchmark projects it lives outside `MMCA.Common.slnx` so the fast solution-wide unit loop never
+requires Docker, and is therefore built and run by path.
+
+The comment (`ci.yml:614-618`) states the falsifiability argument better than a summary can:
+`DistributedCacheService` is the one place where the **storage format** matters, and a
+`Mock<IDistributedCache>` cannot express it. Redis keys are typed, so a counter written as a string and
+read back as a hash round-trips perfectly against a mock and answers `WRONGTYPE` against a server. A test
+that cannot fail against a mock is not a test of the thing you care about.
+
+Its heavy step is code-guarded like every other job (`ci.yml:638-642`) so a docs-only PR does not pull a
+Redis image, while the job itself still runs and posts its context green, keeping it safe to add to branch
+protection.
 
 ---
 
@@ -1317,8 +1517,8 @@ contribute to a migration pattern that minimizes data loss risk and recovery tim
 
 | Workflow | Trigger | Gates production | Mutates Azure |
 |---|---|---|---|
-| `MMCA.Common/ci.yml` | push/PR → main | No (framework gate) | No |
-| `MMCA.Common/release.yml` | `v*` tag | No (publish gate) | No (GitHub Packages only) |
+| `MMCA.Common/ci.yml` | PR → main (no push trigger) | No (framework gate) | No |
+| `MMCA.Common/release.yml` | `v*` tag | No (publish gate) | No (GitHub Packages + nuget.org) |
 | `MMCA.ADC/deploy.yml` | push → main / dispatch | Yes | Yes |
 | `MMCA.ADC/e2e.yml` | nightly 07:00 UTC / dispatch | No (pending promotion) | No |
 | `MMCA.ADC/cost-guard.yml` | Monday 07:00 UTC / dispatch | No | No (read-only) |
@@ -1332,8 +1532,10 @@ never touched. It is not given its own section above, but it is part of the work
 
 The Azure-mutating workflows (`deploy.yml`, `cutover-per-service-dbs.yml`) share the `prod-azure`
 concurrency group with `cancel-in-progress: false`, ensuring the two cannot interleave. All Azure access
-uses OIDC federated identity (no static client secrets). The `.slnf`/`.slnx` test runs use
-`--minimum-expected-tests 1` to prevent empty test suites from silently passing.
+uses OIDC federated identity (no static client secrets). The `.slnf`/`.slnx` test runs pass
+`--minimum-expected-tests` to prevent empty or silently-truncated test suites from passing: ADC's runs
+floor at 1, while MMCA.Common's `build-and-test` floors at 2000 against a suite of roughly 2,254, so a
+discovery regression that drops thousands of tests fails instead of reporting green.
 
 ---
 
@@ -1345,9 +1547,9 @@ uses OIDC federated identity (no static client secrets). The `.slnf`/`.slnx` tes
 | §11 Security | OIDC in `deploy.yml`/`load-test.yml`/`cost-guard.yml`/`cutover`; ephemeral RSA key in `e2e.yml`; least-privilege tokens in `release.yml` |
 | §12 Performance & Scalability | `load-test.yml` k6 baseline at observed peak VUs |
 | §13 Observability & Operability | Smoke-gate failure output and rollback log in `deploy.yml`; AppHost log artifact in `e2e.yml` |
-| §14 Testability & Test Strategy | `--minimum-expected-tests 1` in all test steps; integration tests gate `deploy`; architecture fitness functions in `build-and-test` |
+| §14 Testability & Test Strategy | `--minimum-expected-tests` floors in all test steps (2000 for MMCA.Common's suite, 1 for ADC's); the 68.3% unit coverage floor in `ci.yml` `coverage`; integration tests gate `deploy`; architecture fitness functions in `build-and-test` |
 | §17 DevOps & Deployment | The full workflow set collectively; SHA-tagged images; phased Bicep deploy; smoke+rollback |
-| §21 Accessibility | `ci.yml` `ui-e2e` axe-core WCAG 2.1 AA gate on every MMCA.Common push |
+| §21 Accessibility | `ci.yml` `ui-e2e` axe-core WCAG 2.1 AA gate on every MMCA.Common pull request, across all three browser engines |
 | §28 Front-End Testing & Quality | `ci.yml` `ui-e2e` render smoke; `e2e.yml` full Playwright suite |
 | §29 Resilience & Business Continuity | `prod-azure` concurrency group; smoke+rollback in `deploy.yml`; outbox drain gate in `cutover`; `dr-drill.yml` PITR restore drill ([ADR-009](https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html) objectives) |
 | §30 Compliance & Privacy | SBOM generation in `release.yml` and `deploy.yml`; license report in `deploy.yml` supply-chain job |
