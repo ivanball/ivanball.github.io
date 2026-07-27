@@ -309,7 +309,7 @@
           <code>coverage-e2e</code> artifact (<code>ci.yml:121-127</code>), and on failure each leg uploads its traces
           (<code>ci.yml:129-135</code>):</p>
           <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">if:</span> <span class="hljs-string">failure()</span>
-          <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/upload-artifact@v4</span>
+          <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/upload-artifact@v7</span>
           <span class="hljs-attr">with:</span>
             <span class="hljs-attr">name:</span> <span class="hljs-string">ui-e2e-traces-${{</span> <span class="hljs-string">matrix.browser</span> <span class="hljs-string">}}</span>
             <span class="hljs-attr">path:</span> <span class="hljs-string">Tests/Presentation/MMCA.Common.UI.E2E.Tests/bin/Release/net10.0/playwright-traces/**</span>
@@ -341,7 +341,8 @@
           <h3 id="what-it-is-1">What it is</h3>
           <p>The lockstep NuGet release workflow. When a maintainer pushes a <code>vX.Y.Z</code> git tag, this workflow
           deterministically derives the version, packs all fifteen packages, generates a CycloneDX SBOM (a hard
-          gate), and pushes to GitHub Packages. Fifteen packages. One tag. One version. Every time.</p>
+          gate), and pushes to <strong>both</strong> GitHub Packages and nuget.org (ADR-053). Fifteen packages. One tag. One
+          version. Every time.</p>
           <p>The fifteen are packed by two jobs, not one: the ubuntu <code>publish</code> job packs the fourteen projects that
           sit in <code>MMCA.Common.slnx</code>, and a second <code>publish-maui</code> job on windows packs <code>MMCA.Common.UI.Maui</code> from
           the same tag, because its four MAUI target frameworks need workloads that Ubuntu runners do not carry
@@ -366,7 +367,7 @@
           <p>[Rubric §17, DevOps &amp; Deployment] is embodied: releasing is a tag-driven, automated, reproducible action
           with no manual steps after the tag is pushed.</p>
           <h3 id="trigger">Trigger</h3>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># release.yml:5</span>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># release.yml:3-5</span>
           <span class="hljs-attr">on:</span>
             <span class="hljs-attr">push:</span>
               <span class="hljs-attr">tags:</span> [<span class="hljs-string">&#x27;v*&#x27;</span>]</code></pre>
@@ -374,42 +375,47 @@
           can be cut from any state of the repository that has a valid tag. In practice, releases are always cut
           from <code>main</code>.</p>
           <h3 id="job-publish">Job: <code>publish</code></h3>
-          <p><strong>Permissions</strong> (<code>release.yml:13-15</code>):</p>
+          <p><strong>Permissions</strong> (<code>release.yml:13-16</code>):</p>
           <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">permissions:</span>
             <span class="hljs-attr">packages:</span> <span class="hljs-string">write</span>
-            <span class="hljs-attr">contents:</span> <span class="hljs-string">read</span></code></pre>
+            <span class="hljs-attr">contents:</span> <span class="hljs-string">read</span>
+            <span class="hljs-attr">id-token:</span> <span class="hljs-string">write</span> <span class="hljs-comment"># OIDC token for nuget.org trusted publishing (ADR-053)</span></code></pre>
           <p><code>packages: write</code> is required to push to GitHub Packages using <code>GITHUB_TOKEN</code>. <code>contents: read</code> is the
-          minimum for checkout. No other permissions are granted, least-privilege OAuth scope for the token.</p>
+          minimum for checkout. <code>id-token: write</code> lets the job mint an OIDC token, which is what it trades for a
+          short-lived nuget.org key in step 11. No other permissions are granted, least-privilege OAuth scope for
+          the token.</p>
           <p>[Rubric §11, Security] (assesses secrets, OIDC, and minimal-permission token usage) is served: the job
-          token only has write access to Packages, not to repo contents, issues, or deployments.</p>
+          token only has write access to Packages, not to repo contents, issues, or deployments, and the public
+          registry is reached with no stored API key at all.</p>
           <p><strong>Step 1, Checkout with full history</strong> (<code>release.yml:18-20</code>): <code>fetch-depth: 0</code> for MinVer, same as CI.</p>
-          <p><strong>Step 2, .NET 10 setup</strong> (<code>release.yml:21-23</code>): same as CI.</p>
-          <p><strong>Step 3, Restore</strong> (<code>release.yml:24-25</code>): <code>dotnet restore MMCA.Common.slnx</code>, lock files apply; no
+          <p><strong>Step 2, .NET 10 setup</strong> (<code>release.yml:22-31</code>): same as CI, including the NuGet cache keyed on the
+          committed lock files plus <code>Directory.Packages.props</code>.</p>
+          <p><strong>Step 3, Restore</strong> (<code>release.yml:33-34</code>): <code>dotnet restore MMCA.Common.slnx</code>, lock files apply; no
           <code>GITHUB_TOKEN</code> needed.</p>
-          <p><strong>Step 4, Determine version from tag</strong> (<code>release.yml:28-30</code>):</p>
+          <p><strong>Step 4, Determine version from tag</strong> (<code>release.yml:36-38</code>):</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-built_in">echo</span> <span class="hljs-string">&quot;VERSION=<span class="hljs-variable">${GITHUB_REF_NAME#v}</span>&quot;</span> &gt;&gt; <span class="hljs-variable">$GITHUB_OUTPUT</span></code></pre>
           <p><code>GITHUB_REF_NAME</code> is the full tag name (e.g. <code>v1.52.0</code>). The <code>#v</code> parameter expansion strips the leading
           <code>v</code>, yielding <code>1.52.0</code>. This string is then passed to the build and pack steps as an explicit version
           override.</p>
-          <p><strong>Step 5, Build with explicit version</strong> (<code>release.yml:32-33</code>):</p>
+          <p><strong>Step 5, Build with explicit version</strong> (<code>release.yml:40-41</code>):</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet build MMCA.Common.slnx -c Release --no-restore -p:MinVerSkip=<span class="hljs-literal">true</span> -p:Version=<span class="hljs-variable">${{ steps.version.outputs.VERSION }</span>}</code></pre>
           <p><code>-p:MinVerSkip=true</code> disables MinVer&#39;s git-tag-based version derivation and <code>-p:Version=...</code> injects the
           tag-derived version directly. This pattern avoids a subtle race: if MinVer ran here, it would derive the
           version from the tag, which should be the same value, but in edge cases (e.g. detached HEAD, retagged
           commit) the two sources could diverge. Making the version explicit from the start removes the ambiguity.</p>
-          <p><strong>Step 6, Test</strong> (<code>release.yml:35-36</code>):</p>
+          <p><strong>Step 6, Test</strong> (<code>release.yml:43-44</code>):</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet <span class="hljs-built_in">test</span> --solution MMCA.Common.slnx -c Release --no-build</code></pre>
           <p>Tests run again (no <code>--minimum-expected-tests 1</code> here, the release workflow is not the primary test
           gate; CI already covered this). This is a belt-and-suspenders pass to ensure the tagged commit is green
           before packaging.</p>
-          <p><strong>Step 7, Pack</strong> (<code>release.yml:38-39</code>):</p>
+          <p><strong>Step 7, Pack</strong> (<code>release.yml:46-47</code>):</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet pack MMCA.Common.slnx -c Release --no-build -o ./nupkgs -p:MinVerSkip=<span class="hljs-literal">true</span> -p:PackageVersion=<span class="hljs-variable">${{ steps.version.outputs.VERSION }</span>}</code></pre>
           <p><code>dotnet pack</code> over the entire solution packs the fourteen packable projects it contains (<code>Source/**</code>) in
           one command. <code>-p:PackageVersion</code> sets the NuGet package version metadata. <code>-o ./nupkgs</code> collects all
           <code>.nupkg</code> files in one directory for the push step. The fourteen packages produced here all share the same
           version string. The fifteenth, <code>MMCA.Common.UI.Maui</code>, is not in the solution and is packed by the
           <code>publish-maui</code> windows job into its own <code>./nupkgs-maui</code> directory from the same tag (ADR-042).</p>
-          <p><strong>Steps 8–9, SBOM generation and upload</strong> (<code>release.yml:45-57</code>):</p>
+          <p><strong>Steps 8 and 9, SBOM generation and upload</strong> (<code>release.yml:53-65</code>):</p>
           <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Generate</span> <span class="hljs-string">SBOM</span> <span class="hljs-string">(CycloneDX)</span>
             <span class="hljs-attr">run:</span> <span class="hljs-string">|
               dotnet tool install --global CycloneDX
@@ -417,20 +423,20 @@
               ls -la ./sbom
               test -n &quot;$(ls -A ./sbom 2&gt;/dev/null)&quot; || { echo &quot;::error::SBOM generation produced no output&quot;; exit 1; }
           </span><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Upload</span> <span class="hljs-string">SBOM</span>
-            <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/upload-artifact@v4</span>
+            <span class="hljs-attr">uses:</span> <span class="hljs-string">actions/upload-artifact@v7</span>
             <span class="hljs-attr">with:</span>
               <span class="hljs-attr">name:</span> <span class="hljs-string">sbom</span>
               <span class="hljs-attr">path:</span> <span class="hljs-string">./sbom</span>
               <span class="hljs-attr">if-no-files-found:</span> <span class="hljs-string">error</span></code></pre>
           <p>CycloneDX generates a Software Bill of Materials, a machine-readable inventory of every dependency&#39;s
-          identity, version, and license. The SBOM is now a <strong>hard gate</strong> (the comment on <code>release.yml:42-44</code> records
+          identity, version, and license. The SBOM is now a <strong>hard gate</strong> (the comment on <code>release.yml:49-52</code> records
           that it &quot;was continue-on-error while the tooling was being validated in CI, now promoted to a blocking
           step&quot;): a failed generation, an <em>empty</em> <code>./sbom</code> directory, or a missing artifact (<code>if-no-files-found: error</code>) fails the release. Every published version must ship a verifiable SBOM.</p>
           <p>[Rubric §30, Compliance, Privacy &amp; Data Governance] (assesses whether supply-chain and licensing
           obligations are tracked) is served: the SBOM is the machine-readable artifact that fulfills the
           &quot;know your dependencies&quot; requirement for regulated or commercially-distributed software, and gating on it
           guarantees no version ships without one.</p>
-          <p><strong>Step 10, Push to GitHub Packages</strong> (<code>release.yml:59-60</code>):</p>
+          <p><strong>Step 10, Push to GitHub Packages</strong> (<code>release.yml:67-68</code>):</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet nuget push ./nupkgs/*.nupkg \
             --<span class="hljs-built_in">source</span> <span class="hljs-string">&quot;https://nuget.pkg.github.com/ivanball/index.json&quot;</span> \
             --api-key <span class="hljs-variable">${{ secrets.GITHUB_TOKEN }</span>} \
@@ -441,6 +447,43 @@
           partial push followed by a retry would otherwise fail on already-uploaded packages.</p>
           <p><code>GITHUB_TOKEN</code> is automatically provided by GitHub Actions when <code>packages: write</code> is in the job
           permissions. No external secret is needed.</p>
+          <p><strong>Steps 11 and 12, Push to nuget.org via trusted publishing</strong> (<code>release.yml:79-88</code>):</p>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">NuGet</span> <span class="hljs-string">login</span> <span class="hljs-string">(OIDC</span> <span class="hljs-string">to</span> <span class="hljs-string">short-lived</span> <span class="hljs-string">key)</span>
+            <span class="hljs-attr">if:</span> <span class="hljs-string">github.repository_owner</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;ivanball&#x27;</span>
+            <span class="hljs-attr">uses:</span> <span class="hljs-string">NuGet/login@v1</span>
+            <span class="hljs-attr">id:</span> <span class="hljs-string">nuget-login</span>
+            <span class="hljs-attr">with:</span>
+              <span class="hljs-attr">user:</span> <span class="hljs-string">ivanball</span> <span class="hljs-comment"># nuget.org profile name, not an email; public, so not a secret</span>
+          <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Push</span> <span class="hljs-string">to</span> <span class="hljs-string">nuget.org</span>
+            <span class="hljs-attr">if:</span> <span class="hljs-string">github.repository_owner</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;ivanball&#x27;</span>
+            <span class="hljs-attr">run:</span> <span class="hljs-string">dotnet</span> <span class="hljs-string">nuget</span> <span class="hljs-string">push</span> <span class="hljs-string">./nupkgs/*.nupkg</span> <span class="hljs-string">--source</span> <span class="hljs-string">&quot;https://api.nuget.org/v3/index.json&quot;</span> <span class="hljs-string">--api-key</span> <span class="hljs-string">${{</span> <span class="hljs-string">steps.nuget-login.outputs.NUGET_API_KEY</span> <span class="hljs-string">}}</span> <span class="hljs-string">--skip-duplicate</span></code></pre>
+          <p>Every release goes to <strong>both</strong> registries
+          (<strong><a href="https://ivanball.github.io/docs/adr/053-dual-registry-package-publishing.html" target="_blank" rel="noopener">ADR-053</a></strong>). The reason
+          is install friction: GitHub Packages&#39; NuGet registry demands a PAT with <code>read:packages</code> even for public
+          packages, so a stranger following the README could not restore. nuget.org is the public install path;
+          GitHub Packages remains the internal one.</p>
+          <p>The interesting part is the auth. There is <strong>no stored API key</strong>: <code>NuGet/login</code> exchanges the job&#39;s OIDC
+          token for a key that lives one hour, so there is no long-lived secret to leak or rotate. The exchange is
+          governed by a policy on nuget.org pinned to this owner, this repository, and <strong>this workflow file</strong> by
+          their permanent GitHub ids, which is why <code>release.yml</code> cannot be renamed without breaking publishing, and
+          why a fork cannot publish. The key is requested immediately before the push because it is single-use and
+          short-lived. The <code>if: github.repository_owner == &#39;ivanball&#39;</code> guard keeps a fork&#39;s release run from
+          failing on an exchange it can never satisfy.</p>
+          <p>[Rubric §11, Security] again: this is the strongest form of the &quot;no long-lived credentials in CI&quot;
+          property, since there is no secret to steal even momentarily.</p>
+          <h3 id="job-publish-maui">Job: <code>publish-maui</code></h3>
+          <p>A second job on <code>windows-latest</code> (<code>release.yml:93-165</code>) packs the fifteenth package,
+          <code>MMCA.Common.UI.Maui</code>, which multi-targets net10.0-android/ios/maccatalyst/windows and therefore cannot
+          build on the ubuntu runner at all (ADR-042). It installs the MAUI workload, derives the version from the
+          same tag, builds and packs by csproj path into <code>./nupkgs-maui</code>, applies the same SBOM hard gate scoped to
+          that one project, and pushes to both registries. Because both jobs key off <code>GITHUB_REF_NAME</code>, the two
+          runners produce the same version string and lockstep survives the split.</p>
+          <p>Two details are load-bearing. The nuget.org trusted-publishing policy is keyed on the workflow <strong>file</strong>,
+          so one policy covers both jobs, but each job needs its own <code>id-token: write</code> and its own exchange: a
+          short-lived key is single-use and cannot cross a job boundary. And every <code>dotnet nuget push</code> step here
+          sets <code>shell: bash</code> (<code>release.yml:148</code>, <code>release.yml:164</code>), because the windows-default PowerShell passes
+          <code>*.nupkg</code> through unexpanded and the push then fails with &quot;File does not exist&quot; on the un-globbed pattern.</p>
+          <p>The cost of the split is release surface: two runners must both succeed for a release to be whole.</p>
           <hr>
           <h2 id="mmcaadc-deployyml">MMCA.ADC, <code>deploy.yml</code></h2>
           <p><strong>File:</strong> <code>MMCA.ADC/.github/workflows/deploy.yml</code></p>
