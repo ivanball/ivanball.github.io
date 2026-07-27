@@ -421,32 +421,6 @@ Some categories live most naturally in the DevOps/test chapters (§13–14, §17
 explained there. The coverage audit will include a matrix proving every one of the 34 is explained at
 least once against real code or a real artifact.
 
-**A note on §27, Internationalization & Localization.** `[Rubric §27, Internationalization &
-Localization]` assesses externalized strings and culture-aware formatting. The original single-locale
-stance ([ADR-011](https://ivanball.github.io/docs/adr/011-single-locale-i18n.html)) has been **superseded by [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)**: the framework now ships **two locales, en-US
-(default) and Spanish (es)**. UI strings resolve through `IStringLocalizer<T>` over co-located `.resx`
-files (the marker [`SharedResource`](group-15-common-ui-framework.md#sharedresource) anchors the shared
-set), and **backend `Result` errors are localized server-side at the edge** keyed by the existing
-`Error.Code` by [`ErrorLocalizer`](group-12-api-hosting-mapping.md#errorlocalizer) over per-module
-[`ErrorResources`](group-12-api-hosting-mapping.md#errorresources) (English `Message` is the fallback;
-`Code`/`Type` stay machine markers). One **culture cookie is the source of truth** across SSR / Blazor
-Server / WASM, forwarded to services as `Accept-Language` by
-[`CultureDelegatingHandler`](group-15-common-ui-framework.md#culturedelegatinghandler) and persisted to
-`User.PreferredCulture`; the supported set is the allowlist
-[`SupportedCultures`](group-12-api-hosting-mapping.md#supportedcultures). Where culture *would* introduce
-bugs the code is still deliberately **culture-invariant**: identifier parsing uses
-`CultureInfo.InvariantCulture` ([`DomainHelper`](group-02-domain-building-blocks.md#domainhelper),
-`MMCA.Common/Source/Core/MMCA.Common.Shared/Extensions/DomainHelper.cs:43-47`). Culture-aware date/number
-formatting is currently guarded only by an advisory analyzer suggestion (`MA0076`); a fitness-rule gate is
-noted as follow-up in [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html).
-
-**A note on §20, theming (day/dark).** Beyond the design tokens, **[ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html)** adds a day/dark mode:
-[`ThemeService`](group-15-common-ui-framework.md#themeservice) binds `MudThemeProvider`'s
-`@bind-IsDarkMode` to the already-defined `MMCATheme.PaletteDark`, persists the choice to cookie +
-localStorage + `User.PreferredTheme`, and defaults to the OS `prefers-color-scheme`, reusing [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)'s
-cookie/profile persistence. Honest gap: the no-flash SSR bootstrap is **not yet wired for theme**, so a
-first-paint flash is possible (stated, not yet remediated).
-
 ---
 
 You're ready for [`group-01`, Result & Error Handling](group-01-result-error-handling.md).
