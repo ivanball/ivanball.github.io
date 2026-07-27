@@ -214,18 +214,7 @@ the full set, for orientation:
 | 054 | Saga compensation + reconciliation backstop: each workflow step raises a domain event and its compensating action runs in its own handler and DI scope, committing after the originating transaction; idempotency is a persisted aggregate marker written by the same `SaveChanges` as the compensating writes | [g04](group-04-events-outbox.md) |
 | 055 | Repository + Specification contract: the read side is ISP-split into `IEntityReader` (id lookups) and `IEntityQuerier` (collections, projections, counts), and a fitness rule fails the build on raw `IQueryable` surfaces in Application code | [g03](group-03-querying-specifications.md)/[g07](group-07-persistence-ef-core.md) |
 
-ADRs 011 onward were authored after this guide's first build; their patterns were already documented here,
-and the chapters now cross-reference the ADR numbers. Recent framework additions include the
-**device capability abstraction layer** ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)/043/044/045: per-capability contracts with MAUI-native,
-browser, and inert-fallback adapters, mobile deep links, native OS push, managed file storage + user
-avatars), taught in the new [g26](group-26-device-capability-layer.md) chapter and cross-referenced in
-g07/g10/g12/g24. The newest records are the saga-compensation and reconciliation contract
-([ADR-054](https://ivanball.github.io/docs/adr/054-saga-compensation-and-reconciliation.html)) and the
-repository/specification contract ([ADR-055](https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html)),
-which together pin down how cross-boundary consistency and the data-access surface are expected to
-behave. The canonical index for the full set is the
-Website repo's `docs-src/adr/README.md` (published at <https://ivanball.github.io/docs/adr/>), which owns
-the count and range.
+The canonical index for the full set can be found at <https://ivanball.github.io/docs/adr/>.
 
 ---
 
@@ -431,32 +420,6 @@ Continuity · §30 Compliance, Privacy & Data Governance · §31 Cost Efficiency
 Some categories live most naturally in the DevOps/test chapters (§13–14, §17, §28, §29–34) and are
 explained there. The coverage audit will include a matrix proving every one of the 34 is explained at
 least once against real code or a real artifact.
-
-**A note on §27, Internationalization & Localization.** `[Rubric §27, Internationalization &
-Localization]` assesses externalized strings and culture-aware formatting. The original single-locale
-stance ([ADR-011](https://ivanball.github.io/docs/adr/011-single-locale-i18n.html)) has been **superseded by [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)**: the framework now ships **two locales, en-US
-(default) and Spanish (es)**. UI strings resolve through `IStringLocalizer<T>` over co-located `.resx`
-files (the marker [`SharedResource`](group-15-common-ui-framework.md#sharedresource) anchors the shared
-set), and **backend `Result` errors are localized server-side at the edge** keyed by the existing
-`Error.Code` by [`ErrorLocalizer`](group-12-api-hosting-mapping.md#errorlocalizer) over per-module
-[`ErrorResources`](group-12-api-hosting-mapping.md#errorresources) (English `Message` is the fallback;
-`Code`/`Type` stay machine markers). One **culture cookie is the source of truth** across SSR / Blazor
-Server / WASM, forwarded to services as `Accept-Language` by
-[`CultureDelegatingHandler`](group-15-common-ui-framework.md#culturedelegatinghandler) and persisted to
-`User.PreferredCulture`; the supported set is the allowlist
-[`SupportedCultures`](group-12-api-hosting-mapping.md#supportedcultures). Where culture *would* introduce
-bugs the code is still deliberately **culture-invariant**: identifier parsing uses
-`CultureInfo.InvariantCulture` ([`DomainHelper`](group-02-domain-building-blocks.md#domainhelper),
-`MMCA.Common/Source/Core/MMCA.Common.Shared/Extensions/DomainHelper.cs:43-47`). Culture-aware date/number
-formatting is currently guarded only by an advisory analyzer suggestion (`MA0076`); a fitness-rule gate is
-noted as follow-up in [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html).
-
-**A note on §20, theming (day/dark).** Beyond the design tokens, **[ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html)** adds a day/dark mode:
-[`ThemeService`](group-15-common-ui-framework.md#themeservice) binds `MudThemeProvider`'s
-`@bind-IsDarkMode` to the already-defined `MMCATheme.PaletteDark`, persists the choice to cookie +
-localStorage + `User.PreferredTheme`, and defaults to the OS `prefers-color-scheme`, reusing [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)'s
-cookie/profile persistence. Honest gap: the no-flash SSR bootstrap is **not yet wired for theme**, so a
-first-paint flash is possible (stated, not yet remediated).
 
 ---
 
