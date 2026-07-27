@@ -54,11 +54,14 @@ The old project (`Tests/Integration/MMCA.ADC.IntegrationTests`) is still on disk
 from `MMCA.ADC.slnx` because it referenced the deleted `MMCA.ADC.WebAPI` host; its 34 types are
 being re-homed onto the per-service projects.
 
-`MMCA.Common.slnx` (`MMCA.Common/MMCA.Common.slnx`) includes all thirteen source packages, the four
-Core (`.Shared`, `.Domain`, `.Application`, `.Infrastructure`), three Presentation (`.API`, `.Grpc`,
-`.UI`), two Aspire (`.Aspire`, `.Aspire.Hosting`), and four Testing (`.Testing`, `.Testing.Architecture`,
-`.Testing.E2E`, `.Testing.UI`), plus nine test projects. Two projects are **intentionally absent from
-the `.slnx`**:
+`MMCA.Common.slnx` (`MMCA.Common/MMCA.Common.slnx`) includes fourteen of the fifteen source packages,
+the four Core (`.Shared`, `.Domain`, `.Application`, `.Infrastructure`), four Presentation (`.API`,
+`.Grpc`, `.UI`, `.UI.Web`), two Aspire (`.Aspire`, `.Aspire.Hosting`), and four Testing (`.Testing`,
+`.Testing.Architecture`, `.Testing.E2E`, `.Testing.UI`), plus nine test projects. The fifteenth package,
+`MMCA.Common.UI.Maui`, sits **outside the `.slnx`** on purpose: its four MAUI target frameworks cannot
+build on the ubuntu runners the solution's CI uses, so it is built and packed by dedicated windows jobs
+([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)). Two test
+projects are **also intentionally absent from the `.slnx`**:
 
 - `Tests/Presentation/MMCA.Common.UI.Gallery`, a backend-less Blazor host that renders the real
   `LoginPage`, `RegisterPage`, and a UI-primitives showcase; it exists solely to give Playwright

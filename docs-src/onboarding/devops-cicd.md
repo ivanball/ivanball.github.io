@@ -19,7 +19,7 @@ included throughout.
 
 ### What it is
 
-The continuous-integration workflow for the MMCA.Common framework. Because the thirteen packages are
+The continuous-integration workflow for the MMCA.Common framework. Because the fifteen packages are
 consumed by every downstream application, a regression here propagates to both `MMCA.ADC` and
 `MMCA.Store`. The workflow runs three jobs: a fast `build-and-test` covering unit and architecture
 tests (with coverage collection), a slower `ui-e2e` cross-browser matrix for real-browser accessibility
@@ -270,13 +270,19 @@ backstop on top of the `--minimum-expected-tests 1` guard.
 ### What it is
 
 The lockstep NuGet release workflow. When a maintainer pushes a `vX.Y.Z` git tag, this workflow
-deterministically derives the version, packs all thirteen packages, generates a CycloneDX SBOM (a hard
-gate), and pushes to GitHub Packages. Thirteen packages. One tag. One version. Every time.
+deterministically derives the version, packs all fifteen packages, generates a CycloneDX SBOM (a hard
+gate), and pushes to GitHub Packages. Fifteen packages. One tag. One version. Every time.
+
+The fifteen are packed by two jobs, not one: the ubuntu `publish` job packs the fourteen projects that
+sit in `MMCA.Common.slnx`, and a second `publish-maui` job on windows packs `MMCA.Common.UI.Maui` from
+the same tag, because its four MAUI target frameworks need workloads that Ubuntu runners do not carry
+(**[ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)**). Both jobs
+derive their version from the same tag, so the lockstep release stays whole.
 
 ### Why lockstep matters
 
-MMCA.Common's thirteen packages form a coherent framework layer. A consumer's `Directory.Packages.props`
-references all thirteen at the same version number. If they could release independently, a consumer bumping
+MMCA.Common's fifteen packages form a coherent framework layer. A consumer's `Directory.Packages.props`
+references all fifteen at the same version number. If they could release independently, a consumer bumping
 only some of them would import incompatible API surfaces, for example, an `Application` handler
 interface that references a `Shared` type that was renamed in `Shared` v2 but not yet reflected in the
 old `Application` v1. Lockstep eliminates this class of dependency mismatch entirely. This policy is
@@ -287,9 +293,10 @@ MassTransit's major reaches 9).
 
 [Rubric §32, Dependency & Supply-Chain] is embodied: the lockstep mechanism means a consumer's
 `Directory.Packages.props` is the single source of truth for which generation of the framework is in use,
-with no possibility of a half-upgraded state. (The thirteen are the four core, `.Shared`, `.Domain`,
-`.Application`, `.Infrastructure`; three presentation, `.API`, `.Grpc`, `.UI`; two Aspire, `.Aspire`,
-`.Aspire.Hosting`; and four testing, `.Testing`, `.Testing.E2E`, `.Testing.UI`, `.Testing.Architecture`.)
+with no possibility of a half-upgraded state. (The fifteen are the four core, `.Shared`, `.Domain`,
+`.Application`, `.Infrastructure`; five presentation, `.API`, `.Grpc`, `.UI`, `.UI.Web`, `.UI.Maui`;
+two Aspire, `.Aspire`, `.Aspire.Hosting`; and four testing, `.Testing`, `.Testing.E2E`, `.Testing.UI`,
+`.Testing.Architecture`.)
 
 [Rubric §17, DevOps & Deployment] is embodied: releasing is a tag-driven, automated, reproducible action
 with no manual steps after the tag is pushed.
@@ -358,9 +365,11 @@ before packaging.
 ```bash
 dotnet pack MMCA.Common.slnx -c Release --no-build -o ./nupkgs -p:MinVerSkip=true -p:PackageVersion=${{ steps.version.outputs.VERSION }}
 ```
-`dotnet pack` over the entire solution packs all thirteen packable projects (`Source/**`) in one command.
-`-p:PackageVersion` sets the NuGet package version metadata. `-o ./nupkgs` collects all `.nupkg` files
-in one directory for the push step. The thirteen packages produced here all share the same version string.
+`dotnet pack` over the entire solution packs the fourteen packable projects it contains (`Source/**`) in
+one command. `-p:PackageVersion` sets the NuGet package version metadata. `-o ./nupkgs` collects all
+`.nupkg` files in one directory for the push step. The fourteen packages produced here all share the same
+version string. The fifteenth, `MMCA.Common.UI.Maui`, is not in the solution and is packed by the
+`publish-maui` windows job into its own `./nupkgs-maui` directory from the same tag (ADR-042).
 
 **Steps 8–9, SBOM generation and upload** (`release.yml:45-57`):
 ```yaml
@@ -397,7 +406,7 @@ dotnet nuget push ./nupkgs/*.nupkg \
 ```
 `--skip-duplicate` means an accidental re-push of an already-published version does not fail the
 workflow, it silently skips duplicates. This is important because `dotnet nuget push ./nupkgs/*.nupkg`
-expands the glob before the push, and if the thirteen packages happen to be in non-alphabetical order, a
+expands the glob before the push, and if the fourteen packages happen to be in non-alphabetical order, a
 partial push followed by a retry would otherwise fail on already-uploaded packages.
 
 `GITHUB_TOKEN` is automatically provided by GitHub Actions when `packages: write` is in the job
@@ -474,7 +483,7 @@ the credential-leak surface area of a static client secret. The federated creden
 workload is not on Ubuntu runners), the AppHost (Aspire orchestration), and the integration and E2E test
 projects. The filter gives a fast, reliable build without requiring workloads beyond the standard .NET SDK.
 `GITHUB_TOKEN` is passed as an env var so the NuGet credential provider can authenticate to GitHub
-Packages and pull the thirteen MMCA.Common packages.
+Packages and pull the fifteen MMCA.Common packages.
 
 **Step 2, Build** (`deploy.yml:44-45`): `dotnet build MMCA.ADC.CI.slnf --no-restore -c Release`, same
 TreatWarningsAsErrors + five-analyzer enforcement as Common.

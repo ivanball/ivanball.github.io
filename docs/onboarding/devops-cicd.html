@@ -158,7 +158,7 @@
           <h2 id="mmcacommon-ciyml">MMCA.Common, <code>ci.yml</code></h2>
           <p><strong>File:</strong> <code>MMCA.Common/.github/workflows/ci.yml</code></p>
           <h3 id="what-it-is">What it is</h3>
-          <p>The continuous-integration workflow for the MMCA.Common framework. Because the thirteen packages are
+          <p>The continuous-integration workflow for the MMCA.Common framework. Because the fifteen packages are
           consumed by every downstream application, a regression here propagates to both <code>MMCA.ADC</code> and
           <code>MMCA.Store</code>. The workflow runs three jobs: a fast <code>build-and-test</code> covering unit and architecture
           tests (with coverage collection), a slower <code>ui-e2e</code> cross-browser matrix for real-browser accessibility
@@ -340,11 +340,16 @@
           <p><strong>File:</strong> <code>MMCA.Common/.github/workflows/release.yml</code></p>
           <h3 id="what-it-is-1">What it is</h3>
           <p>The lockstep NuGet release workflow. When a maintainer pushes a <code>vX.Y.Z</code> git tag, this workflow
-          deterministically derives the version, packs all thirteen packages, generates a CycloneDX SBOM (a hard
-          gate), and pushes to GitHub Packages. Thirteen packages. One tag. One version. Every time.</p>
+          deterministically derives the version, packs all fifteen packages, generates a CycloneDX SBOM (a hard
+          gate), and pushes to GitHub Packages. Fifteen packages. One tag. One version. Every time.</p>
+          <p>The fifteen are packed by two jobs, not one: the ubuntu <code>publish</code> job packs the fourteen projects that
+          sit in <code>MMCA.Common.slnx</code>, and a second <code>publish-maui</code> job on windows packs <code>MMCA.Common.UI.Maui</code> from
+          the same tag, because its four MAUI target frameworks need workloads that Ubuntu runners do not carry
+          (<strong><a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a></strong>). Both jobs
+          derive their version from the same tag, so the lockstep release stays whole.</p>
           <h3 id="why-lockstep-matters">Why lockstep matters</h3>
-          <p>MMCA.Common&#39;s thirteen packages form a coherent framework layer. A consumer&#39;s <code>Directory.Packages.props</code>
-          references all thirteen at the same version number. If they could release independently, a consumer bumping
+          <p>MMCA.Common&#39;s fifteen packages form a coherent framework layer. A consumer&#39;s <code>Directory.Packages.props</code>
+          references all fifteen at the same version number. If they could release independently, a consumer bumping
           only some of them would import incompatible API surfaces, for example, an <code>Application</code> handler
           interface that references a <code>Shared</code> type that was renamed in <code>Shared</code> v2 but not yet reflected in the
           old <code>Application</code> v1. Lockstep eliminates this class of dependency mismatch entirely. This policy is
@@ -354,9 +359,10 @@
           MassTransit&#39;s major reaches 9).</p>
           <p>[Rubric §32, Dependency &amp; Supply-Chain] is embodied: the lockstep mechanism means a consumer&#39;s
           <code>Directory.Packages.props</code> is the single source of truth for which generation of the framework is in use,
-          with no possibility of a half-upgraded state. (The thirteen are the four core, <code>.Shared</code>, <code>.Domain</code>,
-          <code>.Application</code>, <code>.Infrastructure</code>; three presentation, <code>.API</code>, <code>.Grpc</code>, <code>.UI</code>; two Aspire, <code>.Aspire</code>,
-          <code>.Aspire.Hosting</code>; and four testing, <code>.Testing</code>, <code>.Testing.E2E</code>, <code>.Testing.UI</code>, <code>.Testing.Architecture</code>.)</p>
+          with no possibility of a half-upgraded state. (The fifteen are the four core, <code>.Shared</code>, <code>.Domain</code>,
+          <code>.Application</code>, <code>.Infrastructure</code>; five presentation, <code>.API</code>, <code>.Grpc</code>, <code>.UI</code>, <code>.UI.Web</code>, <code>.UI.Maui</code>;
+          two Aspire, <code>.Aspire</code>, <code>.Aspire.Hosting</code>; and four testing, <code>.Testing</code>, <code>.Testing.E2E</code>, <code>.Testing.UI</code>,
+          <code>.Testing.Architecture</code>.)</p>
           <p>[Rubric §17, DevOps &amp; Deployment] is embodied: releasing is a tag-driven, automated, reproducible action
           with no manual steps after the tag is pushed.</p>
           <h3 id="trigger">Trigger</h3>
@@ -398,9 +404,11 @@
           before packaging.</p>
           <p><strong>Step 7, Pack</strong> (<code>release.yml:38-39</code>):</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet pack MMCA.Common.slnx -c Release --no-build -o ./nupkgs -p:MinVerSkip=<span class="hljs-literal">true</span> -p:PackageVersion=<span class="hljs-variable">${{ steps.version.outputs.VERSION }</span>}</code></pre>
-          <p><code>dotnet pack</code> over the entire solution packs all thirteen packable projects (<code>Source/**</code>) in one command.
-          <code>-p:PackageVersion</code> sets the NuGet package version metadata. <code>-o ./nupkgs</code> collects all <code>.nupkg</code> files
-          in one directory for the push step. The thirteen packages produced here all share the same version string.</p>
+          <p><code>dotnet pack</code> over the entire solution packs the fourteen packable projects it contains (<code>Source/**</code>) in
+          one command. <code>-p:PackageVersion</code> sets the NuGet package version metadata. <code>-o ./nupkgs</code> collects all
+          <code>.nupkg</code> files in one directory for the push step. The fourteen packages produced here all share the same
+          version string. The fifteenth, <code>MMCA.Common.UI.Maui</code>, is not in the solution and is packed by the
+          <code>publish-maui</code> windows job into its own <code>./nupkgs-maui</code> directory from the same tag (ADR-042).</p>
           <p><strong>Steps 8–9, SBOM generation and upload</strong> (<code>release.yml:45-57</code>):</p>
           <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Generate</span> <span class="hljs-string">SBOM</span> <span class="hljs-string">(CycloneDX)</span>
             <span class="hljs-attr">run:</span> <span class="hljs-string">|
@@ -429,7 +437,7 @@
             --skip-duplicate</code></pre>
           <p><code>--skip-duplicate</code> means an accidental re-push of an already-published version does not fail the
           workflow, it silently skips duplicates. This is important because <code>dotnet nuget push ./nupkgs/*.nupkg</code>
-          expands the glob before the push, and if the thirteen packages happen to be in non-alphabetical order, a
+          expands the glob before the push, and if the fourteen packages happen to be in non-alphabetical order, a
           partial push followed by a retry would otherwise fail on already-uploaded packages.</p>
           <p><code>GITHUB_TOKEN</code> is automatically provided by GitHub Actions when <code>packages: write</code> is in the job
           permissions. No external secret is needed.</p>
@@ -483,7 +491,7 @@
           workload is not on Ubuntu runners), the AppHost (Aspire orchestration), and the integration and E2E test
           projects. The filter gives a fast, reliable build without requiring workloads beyond the standard .NET SDK.
           <code>GITHUB_TOKEN</code> is passed as an env var so the NuGet credential provider can authenticate to GitHub
-          Packages and pull the thirteen MMCA.Common packages.</p>
+          Packages and pull the fifteen MMCA.Common packages.</p>
           <p><strong>Step 2, Build</strong> (<code>deploy.yml:44-45</code>): <code>dotnet build MMCA.ADC.CI.slnf --no-restore -c Release</code>, same
           TreatWarningsAsErrors + five-analyzer enforcement as Common.</p>
           <p><strong>Step 3, Unit and architecture tests with coverage</strong> (<code>deploy.yml:47-65</code>):</p>

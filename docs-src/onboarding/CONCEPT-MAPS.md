@@ -11,15 +11,15 @@ Diagrams are grounded in:
 
 ---
 
-## 1. System context, two codebases + the 13 packages
+## 1. System context, two codebases + the 15 packages
 
-`MMCA.Common` is a framework published as thirteen NuGet packages in lockstep; `MMCA.ADC` and
+`MMCA.Common` is a framework published as fifteen NuGet packages in lockstep; `MMCA.ADC` and
 `MMCA.Store` consume them. The framework depends on neither consumer (that one-way arrow is why the
 Common groups come first in the guide).
 
 ```mermaid
 flowchart TD
-    subgraph COMMON["MMCA.Common: framework, 13 NuGet packages (lockstep versioned)"]
+    subgraph COMMON["MMCA.Common: framework, 15 NuGet packages (lockstep versioned)"]
         direction TB
         subgraph CORE["Core (4)"]
             SH["Shared"]
@@ -27,10 +27,12 @@ flowchart TD
             APP["Application"]
             INF["Infrastructure"]
         end
-        subgraph PRES["Presentation / transport (3)"]
+        subgraph PRES["Presentation / transport (5)"]
             API["API"]
             GRPC["Grpc"]
             UI["UI"]
+            UIW["UI.Web"]
+            UIM["UI.Maui"]
         end
         subgraph ASP["Aspire (2)"]
             ASPIRE["Aspire"]
@@ -52,7 +54,7 @@ flowchart TD
 
     classDef fw fill:#e8f0fe,stroke:#4285f4,color:#111
     classDef con fill:#e6f4ea,stroke:#34a853,color:#111
-    class SH,DOM,APP,INF,API,GRPC,UI,ASPIRE,ASPH,T1,T2,T3,T4 fw
+    class SH,DOM,APP,INF,API,GRPC,UI,UIW,UIM,ASPIRE,ASPH,T1,T2,T3,T4 fw
     class ADC,STORE con
 ```
 

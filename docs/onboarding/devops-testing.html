@@ -212,11 +212,14 @@
           The old project (<code>Tests/Integration/MMCA.ADC.IntegrationTests</code>) is still on disk but is excluded
           from <code>MMCA.ADC.slnx</code> because it referenced the deleted <code>MMCA.ADC.WebAPI</code> host; its 34 types are
           being re-homed onto the per-service projects.</p>
-          <p><code>MMCA.Common.slnx</code> (<code>MMCA.Common/MMCA.Common.slnx</code>) includes all thirteen source packages, the four
-          Core (<code>.Shared</code>, <code>.Domain</code>, <code>.Application</code>, <code>.Infrastructure</code>), three Presentation (<code>.API</code>, <code>.Grpc</code>,
-          <code>.UI</code>), two Aspire (<code>.Aspire</code>, <code>.Aspire.Hosting</code>), and four Testing (<code>.Testing</code>, <code>.Testing.Architecture</code>,
-          <code>.Testing.E2E</code>, <code>.Testing.UI</code>), plus nine test projects. Two projects are <strong>intentionally absent from
-          the <code>.slnx</code></strong>:</p>
+          <p><code>MMCA.Common.slnx</code> (<code>MMCA.Common/MMCA.Common.slnx</code>) includes fourteen of the fifteen source packages,
+          the four Core (<code>.Shared</code>, <code>.Domain</code>, <code>.Application</code>, <code>.Infrastructure</code>), four Presentation (<code>.API</code>,
+          <code>.Grpc</code>, <code>.UI</code>, <code>.UI.Web</code>), two Aspire (<code>.Aspire</code>, <code>.Aspire.Hosting</code>), and four Testing (<code>.Testing</code>,
+          <code>.Testing.Architecture</code>, <code>.Testing.E2E</code>, <code>.Testing.UI</code>), plus nine test projects. The fifteenth package,
+          <code>MMCA.Common.UI.Maui</code>, sits <strong>outside the <code>.slnx</code></strong> on purpose: its four MAUI target frameworks cannot
+          build on the ubuntu runners the solution&#39;s CI uses, so it is built and packed by dedicated windows jobs
+          (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>). Two test
+          projects are <strong>also intentionally absent from the <code>.slnx</code></strong>:</p>
           <ul>
           <li><code>Tests/Presentation/MMCA.Common.UI.Gallery</code>, a backend-less Blazor host that renders the real
           <code>LoginPage</code>, <code>RegisterPage</code>, and a UI-primitives showcase; it exists solely to give Playwright
