@@ -17,8 +17,8 @@ is documented rather than pre-built (the plumbing is in place). Wherever a step 
 that points at real, working code you can copy from MMCA.Helpdesk, MMCA.ADC, or MMCA.Store.
 
 > **Reading the framework itself:** for the *why* behind each pattern, read the relevant
-> [ADR](../adr/README.md). For a type-by-type tour of the framework internals, see the workspace
-> onboarding guide under `Docs/Onboarding`. This guide is the consumer-facing "how do I start" path.
+> [ADR](../adr/README.md). For a type-by-type tour of the framework internals, see the
+> [onboarding guide](../onboarding/00-index.md). This guide is the consumer-facing "how do I start" path.
 
 ---
 
@@ -119,22 +119,22 @@ to v8** (v9 needs a commercial license, enforced by a build gate in MMCA.Common,
   </PropertyGroup>
   <ItemGroup>
     <!-- MMCA Common packages: all at one version, bumped in lockstep -->
-    <PackageVersion Include="MMCA.Common.Shared" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.Domain" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.Application" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.Infrastructure" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.API" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.Grpc" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.UI" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.UI.Web" Version="1.77.0" />
+    <PackageVersion Include="MMCA.Common.Shared" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.Domain" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.Application" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.Infrastructure" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.API" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.Grpc" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.UI" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.UI.Web" Version="1.128.0" />
     <!-- MAUI heads only: the one MAUI-TFM package (ADR-042); web-only apps skip it -->
-    <PackageVersion Include="MMCA.Common.UI.Maui" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.Aspire" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.Aspire.Hosting" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.Testing" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.Testing.E2E" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.Testing.UI" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.Testing.Architecture" Version="1.77.0" />
+    <PackageVersion Include="MMCA.Common.UI.Maui" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.Aspire" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.Aspire.Hosting" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.Testing" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.Testing.E2E" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.Testing.UI" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.Testing.Architecture" Version="1.128.0" />
     <!-- Third-party versions: copy the relevant rows from MMCA.ADC/Directory.Packages.props -->
     <!-- (EF Core, FluentValidation, Riok.Mapperly, Scrutor, xunit.v3, Aspire.*, Yarp, the 5 analyzers, etc.) -->
   </ItemGroup>
@@ -923,7 +923,8 @@ no database needed).
 When a new MMCA.Common release ships, upgrade in **one pass**: bump **every** `MMCA.Common.*` entry in
 `Directory.Packages.props` to the new version together. There is no phased rollout and no per-package
 skew (your app has no lock file, so the bump is the whole upgrade). Keep MassTransit at v8. See
-[ADR-016](../adr/016-lockstep-versioning-masstransit-pin.md) and `MMCA.Common/VERSIONING.md`.
+[ADR-016](../adr/016-lockstep-versioning-masstransit-pin.md) and the
+[versioning policy](common-VERSIONING.md).
 
 For local framework co-development, flip `UseLocalMMCA` in `local.props`, and remember to rebuild
 MMCA.Common in Debug before your app after editing framework source.
@@ -1043,8 +1044,8 @@ plus eventual consistency through the outbox, never cross-database foreign keys.
 - **MMCA.Helpdesk** (`../MMCA.Helpdesk`): the minimal, build-verified monolith this guide is the
   companion to — every step above maps to real code there. Read its `README.md` and `CLAUDE.md` for the
   Helpdesk-specific picture (issuer-less auth, the two event paths, the abstract module DbContext).
-- **The ADRs** ([ADRs/README.md](../adr/README.md)): the *why* behind every pattern you just used.
+- **The ADRs** ([index](../adr/README.md)): the *why* behind every pattern you just used.
 - **`MMCA.Common/CLAUDE.md`**: the framework's layer rules, DI sequence, and extension points in depth.
-- **`Docs/Onboarding`**: a type-by-type tour of the framework internals.
+- **The [onboarding guide](../onboarding/00-index.md)**: a type-by-type tour of the framework internals.
 - **MMCA.ADC and MMCA.Store**: two complete, production apps to copy patterns from. ADC is the richer
   template (four modules, OAuth social login, SignalR notifications); Store is the simpler one.

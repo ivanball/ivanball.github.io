@@ -135,8 +135,8 @@
           that points at real, working code you can copy from MMCA.Helpdesk, MMCA.ADC, or MMCA.Store.</p>
           <blockquote>
           <p><strong>Reading the framework itself:</strong> for the <em>why</em> behind each pattern, read the relevant
-          <a href="../adr/index.html">ADR</a>. For a type-by-type tour of the framework internals, see the workspace
-          onboarding guide under <code>Docs/Onboarding</code>. This guide is the consumer-facing &quot;how do I start&quot; path.</p>
+          <a href="../adr/index.html">ADR</a>. For a type-by-type tour of the framework internals, see the
+          <a href="../onboarding/index.html">onboarding guide</a>. This guide is the consumer-facing &quot;how do I start&quot; path.</p>
           </blockquote>
           <hr>
           <h2 id="what-you-will-build">What you will build</h2>
@@ -222,22 +222,22 @@
             <span class="hljs-tag">&lt;/<span class="hljs-name">PropertyGroup</span>&gt;</span>
             <span class="hljs-tag">&lt;<span class="hljs-name">ItemGroup</span>&gt;</span>
               <span class="hljs-comment">&lt;!-- MMCA Common packages: all at one version, bumped in lockstep --&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Shared&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.77.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Domain&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.77.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Application&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.77.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Infrastructure&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.77.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.API&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.77.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Grpc&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.77.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.UI&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.77.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.UI.Web&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.77.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Shared&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Domain&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Application&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Infrastructure&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.API&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Grpc&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.UI&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.UI.Web&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
               <span class="hljs-comment">&lt;!-- MAUI heads only: the one MAUI-TFM package (ADR-042); web-only apps skip it --&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.UI.Maui&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.77.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Aspire&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.77.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Aspire.Hosting&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.77.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Testing&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.77.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Testing.E2E&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.77.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Testing.UI&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.77.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Testing.Architecture&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.77.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.UI.Maui&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Aspire&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Aspire.Hosting&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Testing&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Testing.E2E&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Testing.UI&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Testing.Architecture&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
               <span class="hljs-comment">&lt;!-- Third-party versions: copy the relevant rows from MMCA.ADC/Directory.Packages.props --&gt;</span>
               <span class="hljs-comment">&lt;!-- (EF Core, FluentValidation, Riok.Mapperly, Scrutor, xunit.v3, Aspire.*, Yarp, the 5 analyzers, etc.) --&gt;</span>
             <span class="hljs-tag">&lt;/<span class="hljs-name">ItemGroup</span>&gt;</span>
@@ -916,7 +916,8 @@
           <p>When a new MMCA.Common release ships, upgrade in <strong>one pass</strong>: bump <strong>every</strong> <code>MMCA.Common.*</code> entry in
           <code>Directory.Packages.props</code> to the new version together. There is no phased rollout and no per-package
           skew (your app has no lock file, so the bump is the whole upgrade). Keep MassTransit at v8. See
-          <a href="../adr/016-lockstep-versioning-masstransit-pin.html">ADR-016</a> and <code>MMCA.Common/VERSIONING.md</code>.</p>
+          <a href="../adr/016-lockstep-versioning-masstransit-pin.html">ADR-016</a> and the
+          <a href="common-VERSIONING.html">versioning policy</a>.</p>
           <p>For local framework co-development, flip <code>UseLocalMMCA</code> in <code>local.props</code>, and remember to rebuild
           MMCA.Common in Debug before your app after editing framework source.</p>
           <hr>
@@ -1010,9 +1011,9 @@
           <li><strong>MMCA.Helpdesk</strong> (<code>../MMCA.Helpdesk</code>): the minimal, build-verified monolith this guide is the
           companion to — every step above maps to real code there. Read its <code>README.md</code> and <code>CLAUDE.md</code> for the
           Helpdesk-specific picture (issuer-less auth, the two event paths, the abstract module DbContext).</li>
-          <li><strong>The ADRs</strong> (<a href="../adr/index.html">ADRs/README.md</a>): the <em>why</em> behind every pattern you just used.</li>
+          <li><strong>The ADRs</strong> (<a href="../adr/index.html">index</a>): the <em>why</em> behind every pattern you just used.</li>
           <li><strong><code>MMCA.Common/CLAUDE.md</code></strong>: the framework&#39;s layer rules, DI sequence, and extension points in depth.</li>
-          <li><strong><code>Docs/Onboarding</code></strong>: a type-by-type tour of the framework internals.</li>
+          <li><strong>The <a href="../onboarding/index.html">onboarding guide</a></strong>: a type-by-type tour of the framework internals.</li>
           <li><strong>MMCA.ADC and MMCA.Store</strong>: two complete, production apps to copy patterns from. ADC is the richer
           template (four modules, OAuth social login, SignalR notifications); Store is the simpler one.</li>
           </ul>

@@ -9,7 +9,7 @@ exercises the backup → catastrophic-loss → restore → verify cycle and reco
 so the recovery *procedure* itself is demonstrated in CI rather than only described, and (3) give
 consumers a baseline SLO/error-budget template and a restore-drill runbook so the recovery story is
 defined once and adopted, not reinvented per app. This complements
-[`ADRs/009-resilience-and-recovery-objectives.md`](../adr/009-resilience-and-recovery-objectives.md)
+[ADR-009](../adr/009-resilience-and-recovery-objectives.md)
 (the *decision*); this file is the *operational reference*.
 
 ## What the framework provides (and verifies in-repo)

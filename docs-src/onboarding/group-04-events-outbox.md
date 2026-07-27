@@ -1209,8 +1209,7 @@ For the mechanics of *why* each design choice was made, [ADR-003](https://ivanba
   invoked by the [`OutboxProcessor`](#outboxprocessor) when draining *already-persisted* entries, or
   by paths that have already taken responsibility for outbox persistence, it is the in-process
   counterpart of [`BrokerMessageBus`](#brokermessagebus), not a "persist + dispatch" bus. Code wanting
-  the persist-and-dispatch semantics uses [`IEventBus`](#ieventbus) /
-  [`IIntegrationEventPublisher`](#iintegrationeventpublisher) instead.
+  the persist-and-dispatch semantics uses [`IEventBus`](#ieventbus) instead.
 - **Why it's built this way**: keeping the monolith path a single synchronous dispatcher call means
   integration tests need no broker container, and the common (monolith) deployment pays no broker
   latency. The outbox still provides the at-least-once safety net via the
@@ -1268,24 +1267,6 @@ For the mechanics of *why* each design choice was made, [ADR-003](https://ivanba
   every integration event the service consumes (e.g. Conference consuming `UserRegistered`; Identity
   consuming `SpeakerLinkedToUser` / `SpeakerUnlinkedFromUser`).
 
-### IntegrationEventPublisher
-
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Services` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventPublisher.cs:12` · Level 3 · class (sealed)
-
-- **What it is**: implements [`IIntegrationEventPublisher`](#iintegrationeventpublisher) by delegating
-  straight to [`IEventBus`](#ieventbus). A thin adapter preserving the older single-event publish
-  contract for callers that inject `IIntegrationEventPublisher` rather than [`IEventBus`](#ieventbus).
-- **Depends on**: [`IEventBus`](#ieventbus), [`IIntegrationEvent`](#iintegrationevent),
-  [`IIntegrationEventPublisher`](#iintegrationeventpublisher).
-- **Concept reinforced, adapter for contract backward-compatibility.** `[Rubric §1, SOLID]`
-  (Liskov / interface-segregation: the adapter lets the narrower `IIntegrationEventPublisher` contract
-  be satisfied by the same outbox-backed [`IEventBus`](#ieventbus) implementation). The single method
-  `PublishAsync` (line 15–16) is one expression-bodied delegation; the doc comment recommends new code
-  inject [`IEventBus`](#ieventbus) directly.
-- **Where it's used**: handlers that publish an individual integration event inject
-  `IIntegrationEventPublisher` (e.g. ADC's `SpeakerDeletedHandler` publishing `SpeakerUnlinkedFromUser`),
-  ultimately routing through whichever [`IEventBus`](#ieventbus) is registered (in-process or broker).
-
 ### IntegrationEventConsumerExtensions
 
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Services` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventConsumerExtensions.cs:11` · Level 4 · class (static)
@@ -1319,8 +1300,8 @@ For the mechanics of *why* each design choice was made, [ADR-003](https://ivanba
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Services` · Level 8 · class (sealed)
 
 These two [`IEventBus`](#ieventbus) implementations are the publish entry point that integration-event
-producers (link handlers, `AuthenticationService`, republish handlers) call via
-[`IIntegrationEventPublisher`](#iintegrationeventpublisher). They are **structurally parallel**, both
+producers (link handlers, `AuthenticationService`, republish handlers) inject directly. They are
+**structurally parallel**, both
 persist an [`OutboxMessage`](#outboxmessage) to the outbox-owning data source in the *same* save, and
 differ **only** in what they do *after* persisting.
 
@@ -1369,8 +1350,7 @@ differ **only** in what they do *after* persisting.
   service without touching any publishing code, `AddBrokerMessaging` simply swaps the registration,
   config-driven by `MessageBus:Provider` (see
   [`MessageBusSettings`](group-14-module-system-composition.md#messagebussettings)).
-- **Where they're used**: [`IIntegrationEventPublisher`](#iintegrationeventpublisher) and direct
-  [`IEventBus`](#ieventbus) injections resolve one of these; called by ADC's link handlers,
+- **Where they're used**: every [`IEventBus`](#ieventbus) injection resolves one of these; called by ADC's link handlers,
   `UserRegisteredHandler`'s republish, and `AuthenticationService`.
 
 

@@ -124,42 +124,67 @@
           single unit. They share one version number so a consumer never has to reason about cross-package
           compatibility. (<code>MMCA.Common.UI.Maui</code> rides the same tag but is built and packed by a dedicated
           windows job in <code>release.yml</code>, since its MAUI target frameworks cannot build on the ubuntu runner.)</p>
+          <p>Every release goes to <strong>two registries</strong> (<a href="../adr/053-dual-registry-package-publishing.html">ADR-053</a>):
+          nuget.org (the public install path, credential-free) and GitHub Packages (retained for versions
+          predating nuget.org publishing, which were not backfilled). One tag drives both pushes. The nuget.org
+          push authenticates with <strong>OIDC trusted publishing</strong>, not a stored API key: each publishing job mints a
+          short-lived key immediately before the push, so no long-lived credential exists in the repository.</p>
           <h2 id="semantic-versioning">Semantic Versioning</h2>
-          <p>Versions follow <a href="https://semver.org/" target="_blank" rel="noopener">SemVer 2.0</a> — <code>MAJOR.MINOR.PATCH</code>:</p>
+          <p>Versions follow <a href="https://semver.org/" target="_blank" rel="noopener">SemVer 2.0</a>: <code>MAJOR.MINOR.PATCH</code>:</p>
           <ul>
-          <li><strong>MAJOR</strong> — a breaking change to the public API or a behavior contract (see below).</li>
-          <li><strong>MINOR</strong> — backward-compatible new capability.</li>
-          <li><strong>PATCH</strong> — backward-compatible bug fix.</li>
+          <li><strong>MAJOR</strong>: reserved (see &quot;Breaking changes within 1.x&quot; below).</li>
+          <li><strong>MINOR</strong>: new capability, and the channel breaking changes currently ship in.</li>
+          <li><strong>PATCH</strong>: backward-compatible bug fix.</li>
           </ul>
           <p>Versions are produced by <strong>MinVer</strong> from annotated git tags of the form <code>vMAJOR.MINOR.PATCH</code>
           (e.g. <code>v1.51.0</code>). Untagged builds get a height-based pre-release suffix. There is no hand-edited
           version property; tag the commit and the release workflow packs and pushes.</p>
           <h2 id="what-counts-as-breaking">What counts as breaking</h2>
-          <p>A <strong>MAJOR</strong> bump is required for any of:</p>
+          <p>A change is <strong>breaking</strong> if it is any of:</p>
           <ul>
           <li>Removing or renaming a public type/member, or changing a signature.</li>
           <li>Changing the meaning of an existing configuration key, or changing a default in a way that
-          alters runtime behavior for an unchanged consumer (e.g. the <code>Outbox:RetentionDays</code> default —
+          alters runtime behavior for an unchanged consumer (e.g. the <code>Outbox:RetentionDays</code> default,
           call these out in <a href="https://github.com/ivanball/MMCA.Common/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG.md</a> under <strong>Changed (Behavior)</strong>).</li>
           <li>Tightening a base-class contract (e.g. making a virtual member abstract, or a factory now
           returning <code>Result&lt;T&gt;</code> where it returned a bare entity).</li>
           <li>Removing or narrowing a supported transport/provider/data-source engine.</li>
           </ul>
-          <p>Additive, opt-in changes (new settings with safe defaults, new overloads, new interfaces) are
-          <strong>MINOR</strong>.</p>
+          <p>Additive, opt-in changes (new settings with safe defaults, new overloads, new interfaces) are not
+          breaking.</p>
+          <h2 id="breaking-changes-within-1x">Breaking changes within 1.x</h2>
+          <p><strong>Breaking changes ship as MINOR bumps, not MAJOR ones</strong>, and the version number is therefore not a
+          reliable breakage signal on its own. This is deliberate and follows from the lockstep model: the
+          framework and every first-party consumer are released and swept by the same owner in one pass
+          (<a href="../adr/016-lockstep-versioning-masstransit-pin.html">ADR-016</a>), so a removal is only ever observed
+          together with the change set that fixes it. Recent examples: <code>v1.79.0</code> renamed the Aspire.Hosting
+          extension <code>WithDataSource</code> to <code>WithSQLServerDataSource</code>, and <code>v1.123.0</code> removed the
+          <code>IIntegrationEventPublisher</code> interface and its <code>IntegrationEventPublisher</code> adapter outright, callers
+          moving to <code>IEventBus</code>.</p>
+          <p><strong>What this means for you:</strong> read the
+          <a href="https://github.com/ivanball/MMCA.Common/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG</a> before every bump, not
+          just before a major one. Each release that contains a breaking change opens with a bold
+          <strong>Breaking:</strong> line and lists the affected APIs under <strong>Removed</strong> or <strong>Changed (Behavior)</strong>. Pin an
+          exact version and upgrade deliberately; do not use a floating version range.</p>
           <h2 id="consumer-rollout">Consumer rollout</h2>
-          <p>Per project convention, framework upgrades are <strong>swept across all consumers in one pass</strong> —
+          <p>Per project convention, framework upgrades are <strong>swept across all consumers in one pass</strong>:
           there are no opt-in flags or phased rollouts for a MMCA.Common change. When a release contains a
-          breaking change, the consuming repos (MMCA.ADC, MMCA.Store) are updated in the same change set.</p>
+          breaking change, the consuming repos (MMCA.ADC, MMCA.Store, MMCA.Helpdesk) are updated in the same
+          change set. For an API <strong>removal</strong>, MMCA.Helpdesk is swapped first: it builds against framework
+          source, so it is the gate that proves the replacement API compiles before the packages are cut.</p>
           <h2 id="deprecation">Deprecation</h2>
-          <p>Prefer deprecation over removal where possible: mark the old API <code>[Obsolete(&quot;…&quot;, error: false)]</code>
-          for at least one MINOR release, document the replacement in the CHANGELOG, then remove in the next
-          MAJOR.</p>
+          <p>There is <strong>no <code>[Obsolete]</code> grace period</strong> today. Because the lockstep sweep updates every first-party
+          caller in the same change set, a superseded API is removed in the release that supersedes it rather
+          than marked obsolete and carried. <code>[Obsolete]</code> is used only where the compiler warning is the point
+          (steering authors away from a pattern that still compiles, e.g. composed sentences that cannot be
+          translated under <a href="../adr/027-multi-locale-i18n.html">ADR-027</a>), not as a removal countdown.</p>
+          <p>The replacement is always named in the CHANGELOG entry alongside the removal. If external adoption
+          makes a grace period worthwhile, the change is to add one here first, not to assume one exists.</p>
           <h2 id="supply-chain">Supply chain</h2>
           <ul>
           <li>All package versions are centrally pinned (<code>Directory.Packages.props</code>).</li>
           <li>NuGet <strong>lock files</strong> are committed for reproducible restores.</li>
-          <li><code>MassTransit</code> is pinned to <strong>v8</strong> by policy (v9 needs a commercial license) — enforced by a
+          <li><code>MassTransit</code> is pinned to <strong>v8</strong> by policy (v9 needs a commercial license), enforced by a
           fitness test, not just a comment.</li>
           <li>A <strong>CycloneDX SBOM</strong> is produced at release; dependency vulnerabilities are audited in CI.</li>
           </ul>
@@ -175,6 +200,7 @@
             <ul>
             <li><a href="#semantic-versioning">Semantic Versioning</a></li>
             <li><a href="#what-counts-as-breaking">What counts as breaking</a></li>
+            <li><a href="#breaking-changes-within-1x">Breaking changes within 1.x</a></li>
             <li><a href="#consumer-rollout">Consumer rollout</a></li>
             <li><a href="#deprecation">Deprecation</a></li>
             <li><a href="#supply-chain">Supply chain</a></li>

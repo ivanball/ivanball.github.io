@@ -487,7 +487,7 @@ references all fifteen at the same version number. If they could release indepen
 only some of them would import incompatible API surfaces, for example, an `Application` handler
 interface that references a `Shared` type that was renamed in `Shared` v2 but not yet reflected in the
 old `Application` v1. Lockstep eliminates this class of dependency mismatch entirely. This policy is
-**[ADR-016](https://ivanball.github.io/docs/adr/016-lockstep-versioning-masstransit-pin.html)** (lockstep versioning + the MassTransit-v8 pin), documented in `MMCA.Common/VERSIONING.md`
+**[ADR-016](https://ivanball.github.io/docs/adr/016-lockstep-versioning-masstransit-pin.html)** (lockstep versioning + the MassTransit-v8 pin), documented in the [versioning policy](https://ivanball.github.io/docs/guides/common-VERSIONING.html)
 and in `MMCA.Common/CLAUDE.md` ("consumers bump every entry together in their `Directory.Packages.props`,
 no phased rollout"), and enforced as a build gate (`DependencyVersionTests` fails the build if
 MassTransit's major reaches 9).

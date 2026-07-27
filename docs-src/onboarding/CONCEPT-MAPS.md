@@ -3,7 +3,7 @@
 Mermaid diagrams distilled from the [Onboarding guide](00-index.md) (primer, group taxonomy,
 dependency manifest, and the 26 group chapters). Each diagram captures a *relationship* between the
 concepts the guide teaches: the layering, the 26 functional groups, the cross-cutting patterns, and
-the ADRs (see `MMCA.Common/ADRs/README.md` for the canonical range) / rubric categories that explain the "why".
+the ADRs (see `Website/docs-src/adr/README.md` for the canonical range) / rubric categories that explain the "why".
 
 Diagrams are grounded in:
 [`00-primer.md`](00-primer.md) · [`00-group-taxonomy.md`](00-group-taxonomy.md) ·
@@ -578,7 +578,7 @@ flowchart LR
 
 ## 13. The 34 ADRs, grouped by theme
 
-Every accepted ADR in `MMCA.Common/ADRs/`, clustered by the concern it governs. (011 is struck
+Every accepted ADR in `Website/docs-src/adr/`, clustered by the concern it governs. (011 is struck
 through: superseded by 027.)
 
 ```mermaid

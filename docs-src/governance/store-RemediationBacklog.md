@@ -4,7 +4,7 @@ Derived from [`ArchitectureScorecard.md`](../governance/store-ArchitectureScorec
 Items are categories scoring below 4 (maturity) or with a notable implementation gap, ranked by
 **priority = (4 − maturity) × weight** (and impl-gap items called out separately). This is Store's first
 in-repo remediation ledger; the scorecard is the source of truth for scores, [`../MMCA.Common/FACTS.md`](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md)
-for framework-wide facts, and [`../Docs/Architecture/ArchitectureRemediation.md`](../Docs/Architecture/ArchitectureRemediation.md)
+for framework-wide facts, and the workspace-internal `Docs/Architecture/ArchitectureRemediation.md` (not published)
 for the cross-repo `[C→A]` roll-up.
 
 **Status legend:** ☐ open · ◐ in progress · ☑ done

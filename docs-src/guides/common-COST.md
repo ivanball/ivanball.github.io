@@ -115,5 +115,5 @@ jobs:
 ## Out of scope for the framework (by design)
 
 Provisioning, scale rules, budgets, per-service cost attribution, and surge/revert automation are
-consumer/IaC concerns and are *not* added to the library — see also `ADRs/009` (resilience/recovery
+consumer/IaC concerns and are *not* added to the library — see also [ADR-009](../adr/009-resilience-and-recovery-objectives.md) (resilience/recovery
 objectives are likewise the deployer's, not the framework's).

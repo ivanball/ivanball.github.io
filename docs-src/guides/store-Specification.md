@@ -7,11 +7,11 @@ MMCA is an **e-commerce platform** built with .NET 10.0 using DDD and Clean Arch
 The system operates in the **online retail / e-commerce** domain, supporting the full purchase lifecycle from product browsing through payment and delivery.
 
 **Major Business Areas:**
-- **Product Catalog Management** — categories, products, and product variants with pricing
-- **Shopping & Ordering** — cart management, checkout, order placement
-- **Payment Processing** — Stripe-integrated checkout with webhook confirmation
-- **Inventory Management** — stock tracking per product variant
-- **Customer Identity & Authentication** — registration, login, JWT-based sessions
+- **Product Catalog Management**: categories, products, and product variants with pricing
+- **Shopping & Ordering**: cart management, checkout, order placement
+- **Payment Processing**: Stripe-integrated checkout with webhook confirmation
+- **Inventory Management**: stock tracking per product variant
+- **Customer Identity & Authentication**: registration, login, JWT-based sessions
 
 **Technical Stack:**
 - .NET 10.0 (LangVersion: preview), Blazor Server + WebAssembly hybrid (InteractiveAuto), MudBlazor UI
@@ -291,26 +291,39 @@ The system operates in the **online retail / e-commerce** domain, supporting the
 1. Fetch the customer's shopping cart with all items
 2. Retrieve current unit prices for all product variants from the Catalog module (cross-module call)
 3. Fetch inventory items for all product variants
-4. Execute the checkout domain service which:
+4. Reject the checkout if any variant is missing from the price map (it was soft-deleted between
+   cart-add and checkout), naming the offending variant
+5. Execute the checkout domain service which:
    a. Validates the cart is not empty
    b. Validates inventory exists for every item in the cart
-   c. **Decrements inventory** for each item (reserves stock)
+   c. Runs a **fail-fast sufficiency check** per item against the loaded snapshot
    d. Creates Order Lines with current prices (price snapshot at time of purchase)
    e. Creates the Order with status `PendingPayment`
    f. Transitions the cart to `CheckedOut` status
-5. Persist the new Order
-6. Return the Order details
+6. Commit the write phase inside one explicit transaction: the **atomic conditional inventory
+   decrements** first, then the order insert and cart transition
+7. Return the Order details
 
 **Business Rules Applied:**
 - Cart must contain at least one item
+- Every product variant must still exist in the Catalog module
 - All product variants must have corresponding inventory records
 - Sufficient inventory must be available for each item
 - Prices are locked at checkout time (not at cart-add time)
-- This is an atomic (transactional) operation (`ITransactional`)
+- The write phase is atomic, but the command is **deliberately not `ITransactional`**: the handler
+  opens the transaction itself so the cross-module price fetch stays outside it and cross-service
+  latency never extends lock hold time
+
+**Concurrency:** the domain service's sufficiency check reads a point-in-time snapshot and is only a
+fail-fast. The real oversell guard is `IInventoryAllocationService.DecrementAsync`, which issues one
+atomic conditional `UPDATE` per variant: a row that no longer has enough stock matches zero rows, the
+Result fails, and the whole transaction rolls back. Because that path uses `ExecuteUpdateAsync` it
+bypasses the save pipeline, so **no `InventoryAdjusted` domain event is raised on checkout**.
 
 **Implemented in:**
 - `Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs`
 - `Source/Modules/Sales/MMCA.Store.Sales.Domain/Services/CheckOutDomainService.cs`
+- `Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Services/InventoryAllocationService.cs`
 
 ---
 
@@ -320,7 +333,7 @@ The system operates in the **online retail / e-commerce** domain, supporting the
 
 **Steps:**
 1. Fetch the order with its order lines
-2. Call Stripe API to create a checkout session (converts Money to smallest currency unit — cents)
+2. Call Stripe API to create a checkout session (converts Money to smallest currency unit: cents)
 3. Transition order status to `PaymentInitiated`
 4. Store the Stripe session ID on the order
 5. Return the checkout URL for the customer to complete payment
@@ -347,17 +360,23 @@ The system operates in the **online retail / e-commerce** domain, supporting the
 **Steps:**
 1. Fetch the order with its order lines
 2. Validate the order is in a cancellable state (PendingPayment, PaymentInitiated, or PaymentFailed)
-3. Transition order status to `Cancelled`
-4. **Restore inventory**: for each order line, increase inventory by the ordered quantity
-5. Persist changes
+3. Transition order status to `Cancelled` and persist. The cancellation commits on its own; no
+   inventory work happens inside this transaction.
+4. **After the commit**, the `OrderCancelled` domain event drives `OrderCancelledSagaHandler`, which
+   runs in its own DI scope and restores inventory for each order line
 
 **Business Rules Applied:**
 - Orders in PendingPayment, PaymentInitiated, or PaymentFailed can be cancelled
 - Paid or delivered orders cannot be cancelled (no refund workflow)
-- Inventory is automatically restored upon cancellation
+- Inventory is restored by a compensating handler, not inline ([ADR-054](../adr/054-saga-compensation-and-reconciliation.md))
+- Restoration is idempotent under at-least-once redelivery: `Order.InventoryRestored` is the marker,
+  and it is committed by the same `SaveChangesAsync` as the inventory increases. The order's rowversion
+  token makes two concurrent deliveries mutually exclusive; the loser fails and the outbox retry then
+  sees the committed marker.
 
 **Implemented in:**
 - `Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Cancel/CancelOrderHandler.cs`
+- `Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/Saga/OrderCancelledSagaHandler.cs`
 
 ---
 
@@ -390,6 +409,57 @@ The system operates in the **online retail / e-commerce** domain, supporting the
 
 **Implemented in:**
 - `Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Deliver/DeliverOrderHandler.cs`
+
+---
+
+### 3.9 Payment Verification (webhook backstop)
+
+**Trigger:** The customer (or an admin) asks the system to re-check a payment whose webhook never
+arrived, typically from a "Retry / check payment" affordance on the order.
+
+**Steps:**
+1. Validate ownership (owner or admin)
+2. Query Stripe directly for the order's checkout session
+3. If Stripe reports the session paid, mark the order `Paid` exactly as the webhook path would
+4. If the order is already `Paid`, or is not in a verifiable state, succeed without changes
+
+**Business Rules Applied:**
+- Webhooks are the fast path but are not guaranteed; this is the reconciliation backstop that keeps a
+  paid customer from sitting in `PaymentInitiated` indefinitely ([ADR-054](../adr/054-saga-compensation-and-reconciliation.md))
+- The operation is idempotent by construction: it converges the order onto whatever Stripe says
+
+**Implemented in:**
+- `Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/VerifyPayment/VerifyPaymentHandler.cs`
+
+---
+
+### 3.10 Product Images
+
+**Trigger:** An administrator manages the image collection on a product; any visitor views one.
+
+Behind the `CatalogFeatures.ProductImages` feature gate, with storage per
+[ADR-045](../adr/045-managed-file-storage-and-avatars.md). Uploads are capped at 6 MB of request body
+(the 5 MB domain constraint plus multipart overhead). Reads are anonymous and output-cached for 300
+seconds; every mutation evicts the products cache. Both a legacy single-image route set (`/image`) and
+the current collection route set (`/images`) are exposed, sharing one upload handler. Reordering
+reassigns display order from the supplied id list, and the first id becomes the primary image.
+
+**Implemented in:**
+- `Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductImagesController.cs`
+
+---
+
+### 3.11 Data Subject Rights (GDPR/CCPA)
+
+**Trigger:** A user exports or erases their own account data; an administrator does it on their behalf.
+
+Export returns the personal data held for the user in a portable JSON format. Erasure deletes the
+account and irreversibly anonymizes its personal data, which is distinct from the soft-delete used for
+ordinary lifecycle ([ADR-005](../adr/005-soft-delete-vs-erasure.md)). Both endpoints authorize the
+owner or an Admin, enforced in the handlers rather than by a controller-wide policy.
+
+**Implemented in:**
+- `Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/UsersController.cs`
 
 ---
 
@@ -653,7 +723,7 @@ The system enforces strict module boundaries. Modules communicate only through s
 **Confirmed behaviors:**
 - Sales module cannot directly access Catalog domain entities
 - When Catalog module is disabled, a stub `DisabledProductVariantService` is registered
-- Sales module declares a hard dependency on Catalog (`RequiresDependencies = true`) — it will not start without Catalog
+- Sales module declares a hard dependency on Catalog (`RequiresDependencies = true`): it will not start without Catalog
 - Module discovery uses reflection; registration follows topological dependency order (Kahn's algorithm)
 
 ---
@@ -782,7 +852,7 @@ Entity types are routed to data sources via `[UseDataSource]` attribute on EF co
 
 ### 14.4 Cart Reactivation Clears All Items
 **Observation:** When a customer adds an item to a previously checked-out cart, all previous items are deleted and the cart is reactivated empty (with only the new item). The business intent behind clearing the cart rather than preserving previous items is unclear.
-**Recommendation:** Confirm this is the desired behavior — some systems prefer to retain unchecked-out items.
+**Recommendation:** Confirm this is the desired behavior: some systems prefer to retain unchecked-out items.
 
 ### 14.5 No Price Change Protection
 **Observation:** Product variant prices can be changed at any time by administrators. If a customer has items in their cart and prices change before checkout, the customer will be charged the new price (prices are fetched at checkout, not at cart-add time).
@@ -793,7 +863,7 @@ Entity types are routed to data sources via `[UseDataSource]` attribute on EF co
 **Recommendation:** Consider whether shipping/tracking details are needed for the business use case.
 
 ### 14.7 No Partial Order Fulfillment
-**Observation:** Orders are delivered as a whole — there is no concept of partial shipments or split deliveries.
+**Observation:** Orders are delivered as a whole: there is no concept of partial shipments or split deliveries.
 **Recommendation:** Clarify if partial fulfillment is a future requirement.
 
 ### 14.8 No Customer/User Deactivation Endpoint
@@ -805,7 +875,7 @@ Entity types are routed to data sources via `[UseDataSource]` attribute on EF co
 **Recommendation:** Consider validating no products reference the category before deletion, or cascading the nullification.
 
 ### 14.10 Inventory List Endpoint Not Exposed
-**Observation:** The `InventoryItemsController` only exposes `GetById` — the `GetAll`, `GetPaged`, and `Lookup` endpoints from the base class are not overridden. The UI `InventoryItemList` page may need these endpoints.
+**Observation:** The `InventoryItemsController` only exposes `GetById`, the `GetAll`, `GetPaged`, and `Lookup` endpoints from the base class are not overridden. The UI `InventoryItemList` page may need these endpoints.
 **Recommendation:** Verify how the inventory list page fetches its data and whether list endpoints should be added.
 
 ---
@@ -821,12 +891,12 @@ The system seeds the following data at startup:
 **Catalog:**
 - Categories: "Jewelry" (id=1), "Watches" (id=2)
 - Product: "Gold Ring" (id=11, brand: "WhatNot", category: Jewelry)
-- Variants: "Gold Ring - Size 6" ($15.00), "Gold Ring - Size 7" ($15.50), "Gold Ring - Size 8" ($16.00) — all USD
+- Variants: "Gold Ring - Size 6" ($15.00), "Gold Ring - Size 7" ($15.50), "Gold Ring - Size 8" ($16.00): all USD
 
 **Inventory:** 100,000 units per variant (for all 3 Gold Ring sizes)
 
-**Seeding is idempotent** — seeders check for existing data via `ExistsAsync()` before inserting, and only run for enabled modules.
+**Seeding is idempotent**: seeders check for existing data via `ExistsAsync()` before inserting, and only run for enabled modules.
 
 ---
 
-*This specification is derived entirely from the source code. All business rules, workflows, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-03-18.*
+*This specification is derived entirely from the source code. All business rules, workflows, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-07-27 (re-verified against MMCA.Store HEAD `1dfdc991`).*

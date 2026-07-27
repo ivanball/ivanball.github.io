@@ -584,189 +584,17 @@
           <li><strong>Why it&#39;s built this way</strong>: the MAUI iOS template requires an explicit <code>Main</code> that names the <code>AppDelegate</code>; there is nothing app-specific to customize here.</li>
           <li><strong>Where it&#39;s used</strong>: the iOS process entry point; it never runs on the other platform heads.</li>
           </ul>
-          <h3 id="adceventinfo">ADCEventInfo</h3>
-          <blockquote>
-          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Pages/ADCHome.razor.cs:178</code> · Level 0 · record</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: A private, sealed, deserialization-only projection of the public events API response, holding the fields the landing page needs to drive its countdown and venue block. It is not shared with any other page.</li>
-          <li><strong>Depends on</strong>: BCL only: <code>int</code>, <code>string</code>, <code>DateOnly</code> (<code>ADCHome.razor.cs:178-186</code>). Consumed inside <a href="#adchome">ADCHome</a> and wrapped by <a href="#adccollectionresult">ADCCollectionResult</a>.</li>
-          <li><strong>Concept introduced</strong>: <strong>Page-local API projection.</strong> Rather than reuse a shared event DTO, the page declares its own positional record with exactly the fields it reads, so the anonymous <code>events</code> endpoint&#39;s shape stays private to this one component. <code>[Rubric §18, UI Architecture]</code>, which assesses how UI concerns are structured: here the page owns a narrow read model instead of leaking a cross-cutting contract.</li>
-          <li><strong>Walkthrough</strong>: Eight positional members (<code>ADCHome.razor.cs:179-186</code>): <code>Id</code>, <code>Name</code>, <code>Description?</code>, <code>StartDate</code>, <code>EndDate</code>, <code>TimeZone</code>, <code>VenueAddress?</code>, <code>VenueMapUrl?</code>. <code>StartDate</code>/<code>EndDate</code>/<code>TimeZone</code> feed <code>UpdateCountdown()</code>&#39;s time-zone conversion (<code>ADCHome.razor.cs:121-155</code>); <code>VenueAddress</code> (with its own fallback) builds the Google Maps search URL (<code>ADCHome.razor.cs:40-43</code>). The nullable members allow a partial or absent event to fall back to hardcoded defaults.</li>
-          <li><strong>Why it&#39;s built this way</strong>: Keeping the projection private prevents accidental reuse and keeps the wire shape a page detail. Its deserialization is driven by <code>JsonSerializerDefaults.Web</code> options (<code>ADCHome.razor.cs:15</code>).</li>
-          <li><strong>Where it&#39;s used</strong>: Deserialized in <code>LoadEventAsync()</code> via <code>GetFromJsonAsync&lt;ADCCollectionResult&gt;</code> (<code>ADCHome.razor.cs:80</code>), then reduced to a single featured event by <a href="group-17-conference-domain.html#currenteventselector">CurrentEventSelector</a>.</li>
-          </ul>
-          <h3 id="conferencetrackinfo">ConferenceTrackInfo</h3>
-          <blockquote>
-          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Pages/ADCHome.razor.cs:285</code> · Level 0 · record</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: A private, sealed record for one conference track in the static track catalog rendered on the landing page.</li>
-          <li><strong>Depends on</strong>: BCL <code>string</code> only (<code>ADCHome.razor.cs:285</code>). Icon values come from MudBlazor&#39;s <code>Icons.Material.*</code> constants (NuGet).</li>
-          <li><strong>Concept introduced</strong>: <strong>Hardcoded editorial content records.</strong> The track grid changes at most once per conference year, so the twelve tracks are declared as a <code>private static readonly</code> array (<code>ADCHome.razor.cs:203-229</code>) rather than fetched. This is the static half of the page&#39;s two-tier content model (see <a href="#adceventinfo">ADCEventInfo</a> for the dynamic half). <code>[Rubric §18, UI Architecture]</code>: content that rarely changes is compiled in, avoiding a CMS dependency.</li>
-          <li><strong>Walkthrough</strong>: Three positional members (<code>ADCHome.razor.cs:285</code>): <code>Name</code>, <code>Icon</code> (a MudBlazor icon constant such as <code>Icons.Material.Filled.Psychology</code>, <code>ADCHome.razor.cs:205</code>), and <code>Topics</code> (a comma-separated description string). Each element of the <code>Tracks</code> array is passed to <code>&lt;MudIcon&gt;</code> and the track card in the Razor markup.</li>
-          <li><strong>Why it&#39;s built this way</strong>: A code-resident catalog keeps the track grid rendering instantly and independent of the API. An <code>i18n: allow</code> comment (<code>ADCHome.razor.cs:189-190</code>) documents that this English-only editorial data is intentionally not localized while the UI chrome around it is.</li>
-          <li><strong>Where it&#39;s used</strong>: The <code>Tracks</code> static array in <a href="#adchome">ADCHome</a> (<code>ADCHome.razor.cs:203</code>).</li>
-          </ul>
-          <h3 id="eventphase">EventPhase</h3>
-          <blockquote>
-          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Pages/ADCHome.razor.cs:29</code> · Level 0 · enum</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: A private enum with three states, <code>Upcoming</code>, <code>Live</code>, and <code>Ended</code>, that classifies where the conference sits relative to now and drives the countdown timer&#39;s behavior.</li>
-          <li><strong>Depends on</strong>: Nothing (<code>ADCHome.razor.cs:29-34</code>).</li>
-          <li><strong>Concept introduced</strong>: <strong>Derived UI state as an enum.</strong> The phase is not stored; it is recomputed every tick from the event window, keeping render logic a pure function of the current time. <code>[Rubric §19, State Management]</code>, which assesses how transient UI state is modeled: here a single enum field replaces several booleans and makes the render branch exhaustive.</li>
-          <li><strong>Walkthrough</strong>: <code>UpdateCountdown()</code> sets <code>_phase</code> (<code>ADCHome.razor.cs:146-154</code>): if the start instant is still in the future it is <code>Upcoming</code>; otherwise <code>Live</code> while now is before the computed end instant, else <code>Ended</code>. <code>OnTimerTick</code> stops the one-second timer via <code>_countdownTimer?.Change(-1, -1)</code> once the phase reaches <code>Ended</code> (<code>ADCHome.razor.cs:114-118</code>), and <code>OnInitializedAsync</code> never starts the timer if the event already ended (<code>ADCHome.razor.cs:69-72</code>).</li>
-          <li><strong>Why it&#39;s built this way</strong>: Encoding the countdown lifecycle as one value keeps timer start/stop decisions and template branches in sync and avoids ticking forever after the conference ends.</li>
-          <li><strong>Where it&#39;s used</strong>: The <code>_phase</code> field of <a href="#adchome">ADCHome</a>.</li>
-          </ul>
-          <h3 id="keynotespeakerinfo">KeynoteSpeakerInfo</h3>
-          <blockquote>
-          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Pages/ADCHome.razor.cs:284</code> · Level 0 · record</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: A private, sealed record carrying the static keynote-speaker content (name, title, talk title, and multi-paragraph bio) for the landing page&#39;s keynote section.</li>
-          <li><strong>Depends on</strong>: BCL <code>string</code> / <code>string[]</code> only (<code>ADCHome.razor.cs:284</code>).</li>
-          <li><strong>Concept introduced</strong>: Same hardcoded editorial-content pattern as <a href="#conferencetrackinfo">ConferenceTrackInfo</a>; the single keynote is a <code>private static readonly</code> instance (<code>ADCHome.razor.cs:191-201</code>).</li>
-          <li><strong>Walkthrough</strong>: Four positional members (<code>ADCHome.razor.cs:284</code>): <code>Name</code>, <code>Title</code>, <code>TalkTitle</code>, and <code>BioParagraphs</code> (<code>string[]</code>). Modeling the bio as an array lets the Razor template render each paragraph in its own element rather than splitting one blob of text.</li>
-          <li><strong>Why it&#39;s built this way</strong>: The keynote changes once per conference cycle, so it lives in code alongside the tracks and sponsors under the same <code>i18n: allow</code> editorial exemption (<code>ADCHome.razor.cs:189-190</code>).</li>
-          <li><strong>Where it&#39;s used</strong>: The <code>Keynote</code> static field in <a href="#adchome">ADCHome</a> (<code>ADCHome.razor.cs:191</code>).</li>
-          </ul>
-          <h3 id="sponsorinfo">SponsorInfo</h3>
-          <blockquote>
-          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Pages/ADCHome.razor.cs:287</code> · Level 0 · record</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: A private, sealed record for a single sponsor: display name, logo URL, and link URL.</li>
-          <li><strong>Depends on</strong>: BCL <code>string</code> only (<code>ADCHome.razor.cs:287</code>).</li>
-          <li><strong>Concept introduced</strong>: Same hardcoded editorial-content pattern as <a href="#conferencetrackinfo">ConferenceTrackInfo</a>. Because the logo and link URLs are literal external constants, the whole <code>SponsorTiers</code> array carries a documented <code>S1075</code> suppression (<code>URIs should not be hardcoded</code>) at <code>ADCHome.razor.cs:231</code>, a deliberate analyzer exception, not a smell.</li>
-          <li><strong>Walkthrough</strong>: Three positional members (<code>ADCHome.razor.cs:287</code>): <code>Name</code>, <code>LogoUrl</code>, <code>Url</code>. Instances are nested inside each <a href="#sponsortierinfo">SponsorTierInfo</a> in the <code>SponsorTiers</code> array (<code>ADCHome.razor.cs:232-258</code>); tiers with no confirmed sponsors carry an empty list (Gold and Silver, <code>ADCHome.razor.cs:249-250</code>).</li>
-          <li><strong>Where it&#39;s used</strong>: Nested within <a href="#sponsortierinfo">SponsorTierInfo</a> and rendered by <a href="#adchome">ADCHome</a>.</li>
-          </ul>
-          <h3 id="adccollectionresult">ADCCollectionResult</h3>
-          <blockquote>
-          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Pages/ADCHome.razor.cs:176</code> · Level 1 · record</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: A private, sealed record that is the deserialization envelope for the events API, wrapping the returned list of <a href="#adceventinfo">ADCEventInfo</a>.</li>
-          <li><strong>Depends on</strong>: <a href="#adceventinfo">ADCEventInfo</a> (<code>ADCHome.razor.cs:176</code>), plus BCL <code>List&lt;T&gt;</code>. It is Level 1 because it composes the Level-0 projection.</li>
-          <li><strong>Concept introduced</strong>: <strong>Collection envelope projection.</strong> The public collection endpoint returns an object with an <code>Items</code> array rather than a bare array, so the page declares a matching one-member wrapper. <code>[Rubric §9, API &amp; Contract Design]</code>, which assesses how contracts are shaped at boundaries: the client mirrors the server envelope narrowly instead of importing a shared paged-result type.</li>
-          <li><strong>Walkthrough</strong>: A single positional member, <code>List&lt;ADCEventInfo&gt;? Items</code> (<code>ADCHome.razor.cs:176</code>). <code>LoadEventAsync()</code> deserializes into it and coalesces a null <code>Items</code> to an empty array before selection (<code>ADCHome.razor.cs:80-89</code>).</li>
-          <li><strong>Why it&#39;s built this way</strong>: A dedicated envelope keeps deserialization total: a missing or empty payload flows through as an empty list and the page falls back to its hardcoded defaults rather than throwing.</li>
-          <li><strong>Where it&#39;s used</strong>: The <code>GetFromJsonAsync&lt;ADCCollectionResult&gt;</code> call inside <a href="#adchome">ADCHome</a> (<code>ADCHome.razor.cs:80</code>).</li>
-          </ul>
-          <h3 id="sponsortierinfo">SponsorTierInfo</h3>
-          <blockquote>
-          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Pages/ADCHome.razor.cs:286</code> · Level 1 · record</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: A private, sealed record grouping sponsors into a named, color-coded tier (for example Platinum, Gold, Silver, Swag) for the sponsor wall.</li>
-          <li><strong>Depends on</strong>: <a href="#sponsorinfo">SponsorInfo</a> via <code>IReadOnlyList&lt;SponsorInfo&gt;</code> (<code>ADCHome.razor.cs:286</code>), plus BCL <code>string</code>. Composing the Level-0 sponsor record makes this Level 1.</li>
-          <li><strong>Concept introduced</strong>: Same hardcoded editorial-content pattern as <a href="#conferencetrackinfo">ConferenceTrackInfo</a>, one level up: a tier owns its own list of sponsors so the wall can render tier headings and swatches.</li>
-          <li><strong>Walkthrough</strong>: Three positional members (<code>ADCHome.razor.cs:286</code>): <code>Name</code>, <code>Color</code> (a hex swatch such as <code>#E5E4E2</code>), and <code>Sponsors</code>. The <code>SponsorTiers</code> array declares four tiers (<code>ADCHome.razor.cs:232-258</code>). Two helpers key off the tier: <code>GetTierIcon</code> maps the tier name to a MudBlazor icon (<code>ADCHome.razor.cs:260-267</code>), and <code>GetTierHeading</code> builds a localized &quot;<code>&lt;tier&gt; &lt;label&gt;</code>&quot; heading, choosing singular/plural and sponsor/partner wording for the Swag tier via a tuple switch and resource lookups (<code>ADCHome.razor.cs:271-282</code>).</li>
-          <li><strong>Why it&#39;s built this way</strong>: <code>GetTierHeading</code> runs the visible tier labels through the <code>L[...]</code> localizer (<a href="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html" target="_blank" rel="noopener">ADR-027</a>) so word order and pluralization follow the selected language, while the sponsor names themselves stay editorial content (<code>ADCHome.razor.cs:269-270</code>). <code>[Rubric §27, i18n]</code>, which assesses localization readiness: the chrome around the sponsor data is localized even though the data is not.</li>
-          <li><strong>Where it&#39;s used</strong>: The <code>SponsorTiers</code> static array in <a href="#adchome">ADCHome</a> (<code>ADCHome.razor.cs:232</code>).</li>
-          </ul>
-          <h3 id="adchome">ADCHome</h3>
-          <blockquote>
-          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Pages/ADCHome.razor.cs:13</code> · Level 7 · class</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: The sealed partial code-behind for the ADC conference landing page: a hero with a live countdown, the keynote section, the twelve-track grid, the sponsor wall, and the venue/location block. It fetches the featured event to drive the countdown and composes all the record types above.</li>
-          <li><strong>Depends on</strong>: <a href="#adccollectionresult">ADCCollectionResult</a>, <a href="#adceventinfo">ADCEventInfo</a>, <a href="#eventphase">EventPhase</a>, <a href="#keynotespeakerinfo">KeynoteSpeakerInfo</a>, <a href="#conferencetrackinfo">ConferenceTrackInfo</a>, <a href="#sponsortierinfo">SponsorTierInfo</a>, <a href="#sponsorinfo">SponsorInfo</a> (all declared in this file), and <a href="group-17-conference-domain.html#currenteventselector">CurrentEventSelector</a> from the Conference shared layer (<code>ADCHome.razor.cs:84</code>). Externals: <code>IHttpClientFactory</code>, <code>System.Threading.Timer</code>, <code>TimeZoneInfo</code>, <code>System.Text.Json</code> (BCL), MudBlazor <code>Icons</code>, and the injected <code>L</code> localizer (<code>ADCHome.razor.cs:1-5</code>).</li>
-          <li><strong>Concept introduced</strong>: <strong>Timer-driven Blazor countdown with disciplined disposal.</strong> The page is a self-contained stateful component: it opens a <code>CancellationTokenSource</code>, loads data, then ticks a one-second <code>Timer</code>, and it implements <code>IDisposable</code> to tear all of that down. <code>[Rubric §19, State Management]</code>, which assesses lifecycle and transient state: the component cancels its in-flight fetch, stops and disposes the timer, and guards ticks with a <code>_disposed</code> flag so a late callback cannot touch a torn-down component (<code>ADCHome.razor.cs:106-119</code>, <code>166-173</code>). <code>[Rubric §18, UI Architecture]</code>: the two-tier content model (fetched event versus hardcoded editorial data) keeps the page rendering even when the API is slow or unavailable.</li>
-          <li><strong>Walkthrough</strong>:<ul>
-          <li>Fields (<code>ADCHome.razor.cs:15-27</code>): static <code>ApiJsonOptions</code> (web JSON defaults) and <code>EventStartTime</code> (08:00), plus per-instance <code>_cts</code>, <code>_countdownTimer</code>, <code>_timeRemaining</code>, <code>_phase</code>, <code>_event</code>, <code>_isLoading</code>, and <code>_disposed</code>.</li>
-          <li><code>OnInitializedAsync</code> (<code>ADCHome.razor.cs:64-73</code>): creates the <code>_cts</code>, awaits <code>LoadEventAsync</code>, and starts the one-second timer only when the phase is not already <code>Ended</code>.</li>
-          <li><code>LoadEventAsync</code> (<code>ADCHome.razor.cs:75-104</code>): fetches <code>events</code> through the named <code>APIClient</code>, then calls <code>CurrentEventSelector.SelectCurrentOrNext(...)</code> to feature the live-or-next event instead of an arbitrary first item; it swallows <code>OperationCanceledException</code> (disposed mid-load) and <code>HttpRequestException</code> (API down) so the fallback defaults render, and always clears <code>_isLoading</code> and refreshes the countdown in <code>finally</code>.</li>
-          <li><code>UpdateCountdown</code> (<code>ADCHome.razor.cs:121-155</code>): converts the event&#39;s local start/end (using its <code>TimeZone</code>, defaulting to <code>America/New_York</code>) to UTC via <code>TimeZoneInfo</code>, falling back to treating the values as UTC on <code>TimeZoneNotFoundException</code>, then sets <code>_timeRemaining</code> and <code>_phase</code>.</li>
-          <li><code>OnTimerTick</code> (<code>ADCHome.razor.cs:106-119</code>): returns immediately if disposed, recomputes the countdown, marshals a re-render with <code>InvokeAsync(StateHasChanged)</code>, and halts the timer once <code>Ended</code>.</li>
-          <li>Presentation helpers: <code>HeroTitleParts</code> splits the event name to accent the keyword between &quot;Atlanta &quot; and &quot; Conference&quot; (<code>ADCHome.razor.cs:50-62</code>); <code>FormatEventDate</code> formats the date with a resource-supplied pattern under <code>CurrentCulture</code> (<code>ADCHome.razor.cs:157-164</code>); <code>GetTierIcon</code> and <code>GetTierHeading</code> back the sponsor wall (<code>ADCHome.razor.cs:260-282</code>).</li>
-          <li><code>Dispose</code> (<code>ADCHome.razor.cs:166-173</code>): sets <code>_disposed</code>, cancels and disposes the <code>_cts</code>, and stops and disposes the timer.</li>
-          </ul>
-          </li>
-          <li><strong>Why it&#39;s built this way</strong>: Cancellation plus the <code>_disposed</code> guard prevent the classic Blazor bug where a background timer or an in-flight HTTP call calls back into a disposed component. Routing event selection through the shared <code>CurrentEventSelector</code> keeps the &quot;which event is featured&quot; rule identical across clients (an unordered <code>FirstOrDefault</code> would pin the oldest seeded event, <code>ADCHome.razor.cs:82-83</code>). Formatting and tier headings go through the <code>L[...]</code> localizer so the chrome honors <a href="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html" target="_blank" rel="noopener">ADR-027</a> while the editorial content stays English-only.</li>
-          <li><strong>Where it&#39;s used</strong>: Exposed as the home component through <a href="#adchomepagecontent">ADCHomePageContent</a>, and referenced by its WebAssembly twin in <code>MMCA.ADC.UI.Web.Client</code> (a structural duplicate compiled for the browser render path).</li>
-          <li><strong>Caveats / not-in-source</strong>: The Razor markup (<code>ADCHome.razor</code>) is not part of this unit; this code-behind file is the ground truth for the page&#39;s data and lifecycle logic.</li>
-          </ul>
           <h3 id="adchomepagecontent-1">ADCHomePageContent</h3>
           <blockquote>
           <p>MMCA.ADC.UI · <code>MMCA.ADC.UI.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Pages/ADCHomePageContent.cs:8</code> · Level 8 · class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: A sealed adapter that plugs the ADC landing page into the shared host shell by implementing the framework&#39;s home-page content contract: it names the component type and the page title.</li>
-          <li><strong>Depends on</strong>: <a href="group-15-common-ui-framework.html#ihomepagecontent">IHomePageContent</a> from <code>MMCA.Common.UI</code> (<code>ADCHomePageContent.cs:1,8</code>) and <a href="#adchome">ADCHome</a> via <code>typeof</code> (<code>ADCHomePageContent.cs:10</code>).</li>
+          <li><strong>Depends on</strong>: <a href="group-15-common-ui-framework.html#ihomepagecontent">IHomePageContent</a> from <code>MMCA.Common.UI</code> (<code>ADCHomePageContent.cs:1,8</code>) and <a href="group-21-conference-ui.html#adchome">ADCHome</a> via <code>typeof</code> (<code>ADCHomePageContent.cs:10</code>).</li>
           <li><strong>Concept introduced</strong>: <strong>App-supplied content for a shared shell.</strong> The shared <code>Home.razor</code> shell does not hardcode any app&#39;s landing page; each app registers an <code>IHomePageContent</code> that tells the shell which component to render and what title to show. <code>[Rubric §2, Design Patterns]</code>, which assesses pattern use at boundaries: this is a small strategy/adapter that keeps the shell app-agnostic and the ADC-specific landing page in the ADC UI project.</li>
           <li><strong>Walkthrough</strong>: Two get-only members: <code>ComponentType =&gt; typeof(ADCHome)</code> (<code>ADCHomePageContent.cs:10</code>) hands the shell the component to render, and <code>PageTitle =&gt; &quot;Atlanta Developers Conference&quot;</code> (<code>ADCHomePageContent.cs:12</code>) supplies the title (an <code>i18n: allow</code> brand name).</li>
           <li><strong>Why it&#39;s built this way</strong>: Inverting the dependency (app implements the Common contract, Common consumes it) lets the same shell host Store, ADC, and Helpdesk without any app reference, satisfying the framework&#39;s &quot;build once, compose per app&quot; boundary.</li>
           <li><strong>Where it&#39;s used</strong>: Registered in the ADC UI host&#39;s DI as the <code>IHomePageContent</code> implementation, resolved by the shared <code>Home.razor</code> shell (MAUI host); the WebAssembly client project carries its own structural twin.</li>
-          </ul>
-          <h3 id="adceventinfo-1">ADCEventInfo</h3>
-          <blockquote>
-          <p>MMCA.ADC.UI.Web.Client · <code>MMCA.ADC.UI.Web.Client.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHome.razor.cs:209</code> · Level 0 · record</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: the private wire-shape the <a href="#adchome"><code>ADCHome</code></a> landing page deserializes each published event into, the subset of the Conference <code>/events</code> response the countdown and hero actually read (<code>Id</code>, <code>Name</code>, <code>Description</code>, <code>StartDate</code>, <code>EndDate</code>, <code>TimeZone</code>, <code>VenueAddress</code>, <code>VenueMapUrl</code>).</li>
-          <li><strong>Depends on</strong>: nothing first-party (BCL <code>DateOnly</code>). It is a <code>private sealed record</code> nested inside <code>ADCHome</code>.</li>
-          <li><strong>Concept</strong>: a component-local read model. <code>[Rubric §9, API &amp; Contract Design]</code> (assesses tight, purpose-shaped client contracts): rather than pull the full server DTO into the client, the page declares only the eight fields it renders, so a change to unrelated event fields cannot break the landing page. <code>[Rubric §18, UI Architecture]</code> (a page owns its own view model).</li>
-          <li><strong>Walkthrough</strong>: a positional record with eight components (<code>ADCHome.razor.cs:209-217</code>). <code>Description</code>, <code>VenueAddress</code>, and <code>VenueMapUrl</code> are nullable so the fallback getters on the page can substitute defaults; <code>StartDate</code>/<code>EndDate</code> are <code>DateOnly</code> and <code>TimeZone</code> a string, the three inputs <code>UpdateCountdown</code> needs to compute UTC boundaries (<code>ADCHome.razor.cs:161-171</code>).</li>
-          <li><strong>Why it&#39;s built this way</strong>: keeping it <code>private</code> to the page means it is an implementation detail, never a shared contract; <code>System.Text.Json</code> (<code>JsonSerializerDefaults.Web</code>) binds it by property name off the <code>events</code> payload.</li>
-          <li><strong>Where it&#39;s used</strong>: the element type of <a href="#adccollectionresult"><code>ADCCollectionResult.Items</code></a>, selected down to one featured event by <a href="group-17-conference-domain.html#currenteventselector"><code>CurrentEventSelector</code></a> in <code>ADCHome.LoadEventAsync</code> (<code>ADCHome.razor.cs:133-142</code>).</li>
-          </ul>
-          <h3 id="conferencetrackinfo-1">ConferenceTrackInfo</h3>
-          <blockquote>
-          <p>MMCA.ADC.UI.Web.Client · <code>MMCA.ADC.UI.Web.Client.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHome.razor.cs:316</code> · Level 0 · record</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: a three-field content record (<code>Name</code>, <code>Icon</code>, <code>Topics</code>) describing one conference track card on the landing page.</li>
-          <li><strong>Depends on</strong>: nothing first-party; <code>Icon</code> values come from MudBlazor&#39;s <code>Icons.Material.Filled.*</code> constants (a NuGet string catalog).</li>
-          <li><strong>Concept</strong>: static editorial content held in code. <code>[Rubric §18, UI Architecture]</code> and <code>[Rubric §27, Internationalization]</code>: the twelve <code>Tracks</code> entries (<code>ADCHome.razor.cs:234-260</code>) are the same English-only catalog the API would serve, marked <code>// i18n: allow</code> at the array declaration (<code>ADCHome.razor.cs:220-221</code>); the localized chrome wraps this content rather than translating it.</li>
-          <li><strong>Walkthrough</strong>: a positional <code>private sealed record</code> (<code>ADCHome.razor.cs:316</code>). <code>Icon</code> carries a MudBlazor material-icon path string (e.g. <code>Icons.Material.Filled.Psychology</code>); <code>Topics</code> is a single comma-joined string rendered under each track name.</li>
-          <li><strong>Where it&#39;s used</strong>: the static <code>Tracks</code> array field on <a href="#adchome"><code>ADCHome</code></a> (<code>ADCHome.razor.cs:234</code>), rendered by the page&#39;s Razor markup.</li>
-          </ul>
-          <h3 id="eventphase-1">EventPhase</h3>
-          <blockquote>
-          <p>MMCA.ADC.UI.Web.Client · <code>MMCA.ADC.UI.Web.Client.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHome.razor.cs:30</code> · Level 0 · enum</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: the three-state lifecycle the landing page uses to decide what to show relative to the featured event&#39;s start/end: <code>Upcoming</code>, <code>Live</code>, <code>Ended</code>.</li>
-          <li><strong>Depends on</strong>: nothing first-party. It is a <code>private enum</code> nested in <a href="#adchome"><code>ADCHome</code></a>.</li>
-          <li><strong>Concept</strong>: UI state as an explicit enum rather than a tangle of booleans. <code>[Rubric §19, State Management]</code> (assesses a single, legible source of view state): the page computes one <code>_phase</code> field from the clock and branches its hero, countdown, and timer arming off it instead of scattering <code>now &lt; start</code> comparisons through the markup.</li>
-          <li><strong>Walkthrough</strong>: three members, <code>Upcoming</code>, <code>Live</code>, <code>Ended</code> (<code>ADCHome.razor.cs:32-34</code>). It is assigned in exactly one place, the <code>now switch</code> inside <code>UpdateCountdown</code> (<code>ADCHome.razor.cs:180-185</code>): before start is <code>Upcoming</code>, before end is <code>Live</code>, otherwise <code>Ended</code>. <code>ArmPhaseTimerForEventEnd</code> only schedules its one-shot re-render while <code>_phase == EventPhase.Live</code> (<code>ADCHome.razor.cs:102</code>).</li>
-          <li><strong>Where it&#39;s used</strong>: entirely within <a href="#adchome"><code>ADCHome</code></a>; it never crosses the component boundary.</li>
-          </ul>
-          <h3 id="keynotespeakerinfo-1">KeynoteSpeakerInfo</h3>
-          <blockquote>
-          <p>MMCA.ADC.UI.Web.Client · <code>MMCA.ADC.UI.Web.Client.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHome.razor.cs:315</code> · Level 0 · record</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: a four-field content record for the featured keynote (<code>Name</code>, <code>Title</code>, <code>TalkTitle</code>, <code>BioParagraphs</code>), where <code>BioParagraphs</code> is a <code>string[]</code> rendered as the multi-paragraph abstract.</li>
-          <li><strong>Depends on</strong>: nothing first-party.</li>
-          <li><strong>Concept</strong>: see <a href="#conferencetrackinfo"><code>ConferenceTrackInfo</code></a>, the same static-editorial-content pattern. The single <code>Keynote</code> instance (<code>ADCHome.razor.cs:222-232</code>) is <code>// i18n: allow</code> conference content, not localized chrome.</li>
-          <li><strong>Walkthrough</strong>: a positional <code>private sealed record</code> (<code>ADCHome.razor.cs:315</code>); <code>BioParagraphs</code> is an array so the markup can emit one block per paragraph without splitting a single string.</li>
-          <li><strong>Where it&#39;s used</strong>: the static <code>Keynote</code> field on <a href="#adchome"><code>ADCHome</code></a> (<code>ADCHome.razor.cs:222</code>).</li>
-          </ul>
-          <h3 id="sponsorinfo-1">SponsorInfo</h3>
-          <blockquote>
-          <p>MMCA.ADC.UI.Web.Client · <code>MMCA.ADC.UI.Web.Client.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHome.razor.cs:318</code> · Level 0 · record</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: a single sponsor&#39;s display data: <code>Name</code>, <code>LogoUrl</code>, and the outbound <code>Url</code> its logo links to.</li>
-          <li><strong>Depends on</strong>: nothing first-party.</li>
-          <li><strong>Concept</strong>: the leaf of the sponsor content tree. <code>[Rubric §26, Front-End Security]</code> touches this lightly: the logo and link URLs are hardcoded external constants (an S1075 analyzer suppression is applied at the <code>SponsorTiers</code> field, <code>ADCHome.razor.cs:262</code>), a deliberate trade for editorial content that never comes from user input.</li>
-          <li><strong>Walkthrough</strong>: a positional <code>private sealed record</code> (<code>ADCHome.razor.cs:318</code>), constructed inline inside the <code>SponsorTiers</code> initializer (e.g. <code>ADCHome.razor.cs:267-278</code>).</li>
-          <li><strong>Where it&#39;s used</strong>: held in the <code>Sponsors</code> list of each <a href="#sponsortierinfo"><code>SponsorTierInfo</code></a>.</li>
-          </ul>
-          <h3 id="adccollectionresult-1">ADCCollectionResult</h3>
-          <blockquote>
-          <p>MMCA.ADC.UI.Web.Client · <code>MMCA.ADC.UI.Web.Client.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHome.razor.cs:207</code> · Level 1 · record</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: the tiny envelope the page deserializes the <code>/events</code> response into, a single nullable <code>Items</code> list of <a href="#adceventinfo"><code>ADCEventInfo</code></a>.</li>
-          <li><strong>Depends on</strong>: <a href="#adceventinfo"><code>ADCEventInfo</code></a> (Level 0).</li>
-          <li><strong>Concept</strong>: a client-side projection of the framework&#39;s paged collection contract. <code>[Rubric §9, API &amp; Contract Design]</code>: the server returns a richer collection shape, but the page only needs <code>Items</code>, so it declares a one-property record that binds that field and ignores the rest.</li>
-          <li><strong>Walkthrough</strong>: <code>private sealed record ADCCollectionResult(List&lt;ADCEventInfo&gt;? Items)</code> (<code>ADCHome.razor.cs:207</code>). <code>Items</code> is nullable; the caller coalesces it to an empty array before selection (<code>result?.Items ?? []</code>, <code>ADCHome.razor.cs:139</code>).</li>
-          <li><strong>Where it&#39;s used</strong>: the type argument of the <code>GetFromJsonAsync&lt;ADCCollectionResult&gt;(&quot;events&quot;, …)</code> call in <code>ADCHome.LoadEventAsync</code> (<code>ADCHome.razor.cs:133</code>).</li>
           </ul>
           <h3 id="appactionsinitializer-1">AppActionsInitializer</h3>
           <blockquote>
@@ -812,51 +640,18 @@
           <li><strong>Why it&#39;s built this way</strong>: keeping the same <code>ITokenStorageService</code> interface across heads means the shared auth pipeline is head-agnostic; only the storage backend swaps. See <code>TokenStorageDesignNote.md</code> for the cross-head storage rationale.</li>
           <li><strong>Where it&#39;s used</strong>: registered as the <code>ITokenStorageService</code> in the MAUI head&#39;s DI; consumed by the shared auth/token-refresh services in <a href="group-15-common-ui-framework.html">Group 15</a>.</li>
           </ul>
-          <h3 id="sponsortierinfo-1">SponsorTierInfo</h3>
-          <blockquote>
-          <p>MMCA.ADC.UI.Web.Client · <code>MMCA.ADC.UI.Web.Client.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHome.razor.cs:317</code> · Level 1 · record</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: a sponsor tier grouping, its <code>Name</code>, a <code>Color</code> swatch, and the <code>Sponsors</code> list of <a href="#sponsorinfo"><code>SponsorInfo</code></a> shown in that band.</li>
-          <li><strong>Depends on</strong>: <a href="#sponsorinfo"><code>SponsorInfo</code></a> (Level 0).</li>
-          <li><strong>Concept</strong>: the one-to-many parent of the sponsor content tree. <code>[Rubric §20, Design System &amp; Theming]</code> (assesses consistent visual tokens): each tier carries its own hex <code>Color</code> and is paired with a material icon by the page&#39;s <code>GetTierIcon</code> switch (<code>ADCHome.razor.cs:291-298</code>), keeping tier styling data-driven.</li>
-          <li><strong>Walkthrough</strong>: <code>private sealed record SponsorTierInfo(string Name, string Color, IReadOnlyList&lt;SponsorInfo&gt; Sponsors)</code> (<code>ADCHome.razor.cs:317</code>). The four tiers are declared in the static <code>SponsorTiers</code> array (<code>ADCHome.razor.cs:263-289</code>); Gold and Silver ship with empty sponsor lists today. The page turns a tier plus its count into a localized &quot;&lt;tier&gt; &lt;label&gt;&quot; heading via <code>GetTierHeading</code> (<code>ADCHome.razor.cs:302-313</code>), whose singular/plural and partner-vs-sponsor wording is resource-driven (<a href="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html" target="_blank" rel="noopener">ADR-027</a>).</li>
-          <li><strong>Where it&#39;s used</strong>: the static <code>SponsorTiers</code> field on <a href="#adchome"><code>ADCHome</code></a> (<code>ADCHome.razor.cs:263</code>).</li>
-          </ul>
-          <h3 id="adchome-1">ADCHome</h3>
-          <blockquote>
-          <p>MMCA.ADC.UI.Web.Client · <code>MMCA.ADC.UI.Web.Client.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHome.razor.cs:13</code> · Level 7 · class (sealed partial)</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: the code-behind for the ADC conference landing page, a <code>sealed partial</code> component implementing <code>IDisposable</code> that fetches the featured published event, drives a countdown timer, and renders the hero, keynote, tracks, sponsors, and venue map.</li>
-          <li><strong>Depends on</strong>: <a href="#adceventinfo"><code>ADCEventInfo</code></a>/<a href="#adccollectionresult"><code>ADCCollectionResult</code></a> (its API models), <a href="#eventphase"><code>EventPhase</code></a>, the content records <a href="#keynotespeakerinfo"><code>KeynoteSpeakerInfo</code></a>/<a href="#conferencetrackinfo"><code>ConferenceTrackInfo</code></a>/<a href="#sponsortierinfo"><code>SponsorTierInfo</code></a>/<a href="#sponsorinfo"><code>SponsorInfo</code></a>, and <a href="group-17-conference-domain.html#currenteventselector"><code>CurrentEventSelector</code></a> for the &quot;current-or-next&quot; pick. Externals: <code>IHttpClientFactory</code>, <code>System.Threading.Timer</code>, <code>TimeZoneInfo</code>, MudBlazor, and the injected <code>IStringLocalizer</code> (<code>L</code>).</li>
-          <li><strong>Concept introduced, a prerender-safe, render-fenced Blazor page.</strong> <code>[Rubric §23, Front-End Performance]</code> (assesses avoiding wasted server work and wasted re-renders). Two decisions stand out. First, <code>OnInitializedAsync</code> <strong>skips the backend fetch during SSR prerender</strong> (<code>if (!RendererInfo.IsInteractive)</code>, <code>ADCHome.razor.cs:74-79</code>): an un-timed server-side call to a cold or unreachable backend would block the prerender, and therefore the page load and the post-login <code>NavigateTo(&quot;/&quot;)</code>, indefinitely, so the static fallback renders now and the interactive pass loads the real event. Second, the per-second ticking lives in a child countdown component (a render fence); this page only arms a <strong>single one-shot timer</strong> for the <code>Live -&gt; Ended</code> flip (<code>ArmPhaseTimerForEventEnd</code>, <code>ADCHome.razor.cs:100-115</code>) instead of re-rendering the whole page every second for the entire event. <code>[Rubric §29, Resilience &amp; Business Continuity]</code>: a failed fetch (<code>HttpRequestException</code>) or a disposed component (<code>OperationCanceledException</code>) falls through to hardcoded fallback defaults rather than erroring (<code>ADCHome.razor.cs:144-157</code>). <code>[Rubric §27, Internationalization]</code>: user-facing chrome resolves through <code>L[...]</code> and the date pattern itself is a resource (<code>FormatEventDate</code>, <code>ADCHome.razor.cs:188-195</code>, <a href="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html" target="_blank" rel="noopener">ADR-027</a>).</li>
-          <li><strong>Walkthrough</strong><ul>
-          <li>Fields (<code>ADCHome.razor.cs:15-28</code>): a static <code>JsonSerializerOptions</code> (Web defaults), a static 08:00 <code>EventStartTime</code>, a <code>CancellationTokenSource</code>, the one-shot <code>_phaseTimer</code>, the computed <code>_startUtc</code>/<code>_endUtc</code>, <code>_phase</code>, the loaded <code>_event</code>, and <code>_isLoading</code>/<code>_disposed</code> flags.</li>
-          <li>Presentation helpers: <code>EventName</code>/<code>EventDescription</code>/<code>VenueAddress</code>/<code>MapSearchUrl</code> (<code>ADCHome.razor.cs:37-44</code>) coalesce the loaded event against brand defaults; <code>HeroTitleParts</code> (<code>:51</code>) splits the name to accent the keyword between &quot;Atlanta &quot; and &quot; Conference&quot;.</li>
-          <li><code>OnInitializedAsync</code> (<code>ADCHome.razor.cs:65</code>): creates the CTS, takes the prerender fast path, otherwise awaits <code>LoadEventAsync</code> then arms the end-of-event timer.</li>
-          <li><code>LoadEventAsync</code> (<code>ADCHome.razor.cs:128</code>): resolves the named <code>&quot;APIClient&quot;</code> HttpClient, <code>GetFromJsonAsync&lt;ADCCollectionResult&gt;(&quot;events&quot;, …)</code>, then narrows to one event with <code>CurrentEventSelector.SelectCurrentOrNext(...)</code> (<code>:137-142</code>) so an unordered <code>FirstOrDefault</code> cannot pin the oldest seeded event; the <code>finally</code> always clears <code>_isLoading</code> and recomputes the countdown.</li>
-          <li><code>UpdateCountdown</code> (<code>ADCHome.razor.cs:159</code>): converts the event&#39;s local start/end (or 2026-10-17 defaults) to UTC via <code>TimeZoneInfo</code>, falling back to the local values if the zone id is unknown (<code>:173-177</code>), then assigns <code>_phase</code> from the <code>now switch</code> (<code>:180-185</code>).</li>
-          <li><code>OnCountdownElapsedAsync</code> (<code>:89</code>) and <code>OnEventEnded</code> (<code>:117</code>) recompute and re-render on the <code>Upcoming -&gt; Live</code> and <code>Live -&gt; Ended</code> transitions; <code>Dispose</code> (<code>:197</code>) sets <code>_disposed</code>, cancels/disposes the CTS, and disposes the timer.</li>
-          <li>Static content: the single <code>Keynote</code>, twelve <code>Tracks</code>, and four <code>SponsorTiers</code> (<code>ADCHome.razor.cs:222-289</code>), plus the <code>GetTierIcon</code>/<code>GetTierHeading</code> helpers.</li>
-          </ul>
-          </li>
-          <li><strong>Why it&#39;s built this way</strong>: the landing page must render instantly and identically whether the backend is warm, cold, or down, and must never wedge the prerender that gates login navigation; pushing the tick into a child fence and the fetch behind an interactivity check delivers both.</li>
-          <li><strong>Where it&#39;s used</strong>: exposed to the shared <code>Home.razor</code> shell by <a href="#adchomepagecontent"><code>ADCHomePageContent</code></a>, which names it as its <code>ComponentType</code>.</li>
-          <li><strong>Caveats / not-in-source</strong>: the per-second countdown rendering and the <code>OnCountdownElapsedAsync</code> trigger live in the child countdown component&#39;s markup, not in this file; only the <code>Live -&gt; Ended</code> one-shot is wired here.</li>
-          </ul>
           <h3 id="adchomepagecontent-2">ADCHomePageContent</h3>
           <blockquote>
           <p>MMCA.ADC.UI.Web.Client · <code>MMCA.ADC.UI.Web.Client.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHomePageContent.cs:8</code> · Level 8 · class (sealed)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the ADC binding of the framework&#39;s <a href="group-15-common-ui-framework.html#ihomepagecontent"><code>IHomePageContent</code></a> extension point, it tells the shared <code>Home.razor</code> shell which component to render as the app&#39;s landing page and what browser title to use.</li>
-          <li><strong>Depends on</strong>: <a href="group-15-common-ui-framework.html#ihomepagecontent"><code>IHomePageContent</code></a> (implements), <a href="#adchome"><code>ADCHome</code></a> (the component it points at).</li>
+          <li><strong>Depends on</strong>: <a href="group-15-common-ui-framework.html#ihomepagecontent"><code>IHomePageContent</code></a> (implements), <a href="group-21-conference-ui.html#adchome"><code>ADCHome</code></a> (the component it points at).</li>
           <li><strong>Concept introduced, app-supplied content into a shared shell.</strong> <code>[Rubric §18, UI Architecture]</code> and <code>[Rubric §2, Design Patterns]</code> (assess a reusable shell that host apps specialize): the framework ships a generic <code>Home.razor</code> shell; each app registers one <code>IHomePageContent</code> that hands the shell a <code>ComponentType</code> to render and a <code>PageTitle</code>. This inverts the dependency, the shared shell never references the ADC page directly.</li>
           <li><strong>Walkthrough</strong>: two expression-bodied properties, <code>ComponentType =&gt; typeof(ADCHome)</code> (<code>ADCHomePageContent.cs:10</code>) and <code>PageTitle =&gt; &quot;Atlanta Developers Conference&quot;</code> (<code>:12</code>, an <code>// i18n: allow</code> brand name). No state, no logic.</li>
           <li><strong>Why it&#39;s built this way</strong>: keeping the shell app-agnostic means the Web/WASM heads reuse one landing shell and only the plugged-in content differs per app.</li>
           <li><strong>Where it&#39;s used</strong>: registered as the <code>IHomePageContent</code> for the ADC Web client and resolved by the shared <code>Home.razor</code> shell in <a href="group-15-common-ui-framework.html">Group 15</a>.</li>
-          <li><strong>Caveats / not-in-source</strong>: the prior tier edition described a paired MAUI <code>ADCHomePageContent</code> in <code>MMCA.ADC.UI</code>; this unit&#39;s source is the single WASM-client class in <code>MMCA.ADC.UI.Web.Client</code>, which references the same <a href="#adchome"><code>ADCHome</code></a> component.</li>
+          <li><strong>Caveats / not-in-source</strong>: the prior tier edition described a paired MAUI <code>ADCHomePageContent</code> in <code>MMCA.ADC.UI</code>; this unit&#39;s source is the single WASM-client class in <code>MMCA.ADC.UI.Web.Client</code>, which references the same <a href="group-21-conference-ui.html#adchome"><code>ADCHome</code></a> component.</li>
           </ul>
           <h3 id="app-1">App</h3>
           <blockquote>

@@ -158,7 +158,7 @@
           <strong>adapters</strong> that implement each contract per host: MAUI-native, browser-JS-interop, and inert
           fallback. The head chooses which family it gets at DI composition time. This is the
           [Rubric §18, UI Architecture] and [Rubric §22, Responsive/Cross-Browser] story in miniature, and the
-          whole design is <a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a> (<code>MMCA.Common/ADRs/042-device-capability-abstraction.md</code>).</p>
+          whole design is <a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a> (<code>Website/docs-src/adr/042-device-capability-abstraction.md</code>).</p>
           <p><strong>The contract-per-capability shape.</strong> Every capability is its own narrow interface in the
           <code>MMCA.Common.UI.Services.Capabilities</code> namespace (form-factor detection, <a href="#iformfactor"><code>IFormFactor</code></a>,
           sits one level up in <code>MMCA.Common.UI.Services</code>). The contracts are deliberately tiny and
@@ -239,7 +239,7 @@
           correct answer for &quot;what am I running on&quot; is injected, not detected inline.</p>
           <p><strong>Deep links: one funnel from native navigation into Blazor routing.</strong> The most involved runtime flow
           in this group is the deep-link path (<a href="https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html" target="_blank" rel="noopener">ADR-043</a>,
-          <code>MMCA.Common/ADRs/043-mobile-deep-links-and-native-oauth-callback.md</code>).
+          <code>Website/docs-src/adr/043-mobile-deep-links-and-native-oauth-callback.md</code>).
           <a href="#ideeplinkdispatcher"><code>IDeepLinkDispatcher</code></a>
           (<code>MMCA.Common.UI/Services/Capabilities/IDeepLinkDispatcher.cs:10</code>) is the single boundary between
           native navigation sources (notification taps, home-screen app actions, app links, QR scans) and the
@@ -262,7 +262,7 @@
           <p><strong>Wired-but-inert capabilities.</strong> A recurring, honest theme in this layer is capabilities that are
           fully registered but deliberately do nothing yet, because their real backing requires credentials or a
           later feature wave. Native push (<a href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html" target="_blank" rel="noopener">ADR-044</a>,
-          <code>MMCA.Common/ADRs/044-native-push-delivery.md</code>) registers a real
+          <code>Website/docs-src/adr/044-native-push-delivery.md</code>) registers a real
           <a href="#ipushregistrationservice"><code>IPushRegistrationService</code></a>
           (<code>MMCA.Common.UI/Services/Capabilities/IPushRegistrationService.cs:10</code>) on MAUI heads, but the
           <a href="#ipushdevicetokenprovider"><code>IPushDeviceTokenProvider</code></a> defaults to a null provider that yields no
@@ -814,7 +814,7 @@
           <li><code>ListenAsync(CultureInfo, IProgress&lt;string&gt;?, CancellationToken)</code> (<code>ISpeechToTextService.cs:20-23</code>): listens until the recognizer finalizes or the token cancels, streaming partial hypotheses through the <code>partialResults</code> progress sink, and returns the final transcript, or <code>null</code> on permission denial, cancellation, or recognizer failure (<code>ISpeechToTextService.cs:16-19</code>). The <code>null</code>-on-failure contract is the same never-throw discipline the whole layer follows: a caller can only fall back to typing, never to a broken path.</li>
           </ul>
           </li>
-          <li><strong>Why it&#39;s built this way</strong>: keeping recognition behind a <code>Shared</code>-only interface lets the MAUI head supply a real recognizer while browser and null heads register an inert one, all selected at DI composition time (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>, <code>MMCA.Common/ADRs/042-device-capability-abstraction.md</code>).</li>
+          <li><strong>Why it&#39;s built this way</strong>: keeping recognition behind a <code>Shared</code>-only interface lets the MAUI head supply a real recognizer while browser and null heads register an inert one, all selected at DI composition time (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>, <code>Website/docs-src/adr/042-device-capability-abstraction.md</code>).</li>
           <li><strong>Where it&#39;s used</strong>: registered as a singleton with the <code>NullSpeechToTextService</code> default in <code>AddDeviceCapabilityDefaults</code> (<code>MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:41</code>); the MAUI-native override ships in the <code>MMCA.Common.UI.Maui</code> package. Consumed by shared components that offer voice input on feedback and Q&amp;A forms.</li>
           </ul>
           <h3 id="itexttospeechservice">ITextToSpeechService</h3>

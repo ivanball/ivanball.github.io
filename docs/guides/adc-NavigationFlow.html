@@ -152,7 +152,7 @@
           </tr>
           </tbody></table></div>
           <blockquote>
-          <p><strong>Roles &amp; menu:</strong> <code>Organizer</code> is the only elevated role (default is <code>Attendee</code>). A <em>Speaker</em> is an attendee whose account is linked to a Speaker, surfaced via the <code>speaker_id</code> claim. The left nav is data-driven from each module&#39;s <code>IUIModule.NavItems</code> — items carry a required role (<code>Organizer</code>) or claim (<code>speaker_id</code>) and are hidden when the user lacks it. See <strong>Authorization Model</strong> at the end.</p>
+          <p><strong>Roles &amp; menu:</strong> <code>Organizer</code> is the only elevated role (default is <code>Attendee</code>). A <em>Speaker</em> is an attendee whose account is linked to a Speaker, surfaced via the <code>speaker_id</code> claim. The left nav is data-driven from each module&#39;s <code>IUIModule.NavItems</code>: items carry a required role (<code>Organizer</code>) or claim (<code>speaker_id</code>) and are hidden when the user lacks it. See <strong>Authorization Model</strong> at the end.</p>
           </blockquote>
           <hr>
           <h2 id="1-anonymous-user">1. Anonymous User</h2>
@@ -221,12 +221,22 @@
                   SessionFeedback[&quot;/feedback/session/{SessionId}&lt;br/&gt;Session Feedback&quot;]
               end
           
+              subgraph Live[&quot;Conference-Day Live Layer&quot;]
+                  HappeningNow[&quot;/happening-now&lt;br/&gt;Happening Now&quot;]
+                  SessionLive[&quot;/conference/sessions/{Id}/live&lt;br/&gt;Live Session (Q and A, polls)&quot;]
+              end
+          
               Home[&quot;/  Home Page&quot;]
           
               Home --&gt;|nav menu| PubEvents
               Home --&gt;|nav menu| PubSessions
               Home --&gt;|nav menu| PubSpeakers
               Home --&gt;|nav menu| MyProfile
+              Home --&gt;|nav menu| HappeningNow
+          
+              HappeningNow --&gt;|join a running session| SessionLive
+              PubSessionDetail --&gt;|join live| SessionLive
+              SessionLive --&gt;|back| PubSessionDetail
           
               Login --&gt;|on success| Home
               Register --&gt;|on success| Home
@@ -262,6 +272,7 @@
           
               subgraph Speaker[&quot;Speaker Area&quot;]
                   Dashboard[&quot;/speaker/dashboard&lt;br/&gt;Speaker Dashboard&quot;]
+                  Presenter[&quot;/conference/sessions/{Id}/present&lt;br/&gt;Presenter View&quot;]
               end
           
               subgraph Public[&quot;Public Conference&quot;]
@@ -285,6 +296,8 @@
               Home --&gt;|nav menu| PubSpeakers
               Home --&gt;|nav menu| MyProfile
               Home --&gt;|nav menu| Dashboard
+          
+              Dashboard --&gt;|present a session| Presenter
           
               Login --&gt;|on success| Home
               MyProfile --&gt;|logout| Home
@@ -335,7 +348,7 @@
                   EventList[&quot;/events&lt;br/&gt;Event List&quot;]
                   EventCreate[&quot;/events/create&lt;br/&gt;Create Event&quot;]
                   EventDetail[&quot;/events/{Id}&lt;br/&gt;Edit Event&quot;]
-                  AdminEventFB[&quot;/events/{Id}/feedback&lt;br/&gt;Event Feedback Analytics&quot;]
+                  AdminEventFB[&quot;/events/{EventId}/feedback&lt;br/&gt;Event Feedback Analytics&quot;]
               end
           
               subgraph SessionMgmt[&quot;Organizer: Session Management&quot;]
@@ -452,7 +465,7 @@
               RoomDetail --&gt;|back| RoomList</pre>
           <hr>
           <h2 id="5-functionality-flows-attendee--speaker">5. Functionality Flows (Attendee &amp; Speaker)</h2>
-          <p>The diagrams in sections 1–4 map <em>which pages</em> each actor can reach. The diagrams below map <em>how attendees and speakers accomplish each functionality</em>, including inline actions — bookmarking, schedule filtering, dashboard editing — that are not separate pages. Pages appear as <code>route</code> nodes; edge labels are user actions. Flows in 5.3–5.5 require authentication.</p>
+          <p>The diagrams in sections 1-4 map <em>which pages</em> each actor can reach. The diagrams below map <em>how attendees and speakers accomplish each functionality</em>, including inline actions (bookmarking, schedule filtering, dashboard editing) that are not separate pages. Pages appear as <code>route</code> nodes; edge labels are user actions. Flows in 5.3-5.5 require authentication.</p>
           <h3 id="51-account--identity">5.1 Account &amp; Identity</h3>
           <pre class="mermaid">flowchart TD
               Visitor([&quot;Visitor&quot;]) --&gt;|Register| Register[&quot;/register&lt;br/&gt;Register&quot;]
@@ -508,6 +521,34 @@
               MySessions --&gt;|bookmark-count badge| Counts[&quot;See attendee bookmark counts&quot;]
               MySessions --&gt;|expand review icon| Feedback[&quot;View ratings avg and count, plus text comments&quot;]
               MySessions --&gt;|session title| SessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;]</pre>
+          <h3 id="56-conference-day-live-layer-adr-039">5.6 Conference-Day Live Layer (ADR-039)</h3>
+          <p>The live layer is the conference-day surface: it appears for any authenticated user, and the
+          moderation controls appear only for the session&#39;s presenter or an Organizer. The client renders
+          optimistically and the server is the real authority on who may moderate (BR-236).</p>
+          <pre class="mermaid">flowchart TD
+              Home[&quot;/&lt;br/&gt;Home&quot;] --&gt;|nav menu, Happening Now| HN[&quot;/happening-now&lt;br/&gt;Happening Now&quot;]
+          
+              HN --&gt; NowNext[&quot;Tab: Now and Next, live and upcoming sessions&quot;]
+              HN --&gt; Polls[&quot;Tab: Polls, open event-wide polls with live tallies&quot;]
+              HN -.-&gt;|organizer or presenter only| Manage[&quot;Tab: Manage, author, open and close polls&quot;]
+          
+              NowNext --&gt;|Go live| Live[&quot;/conference/sessions/{Id}/live&lt;br/&gt;Live Session&quot;]
+              SessionDetail2[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;] --&gt;|join live| Live
+          
+              Live --&gt; LivePolls[&quot;Poll panel: vote, change vote while open&quot;]
+              Live --&gt; LiveQA[&quot;Q and A panel: submit a question, upvote approved ones&quot;]
+              Live -.-&gt;|presenter or organizer only| Moderate[&quot;Moderation panel: approve, dismiss, mark answered&quot;]
+          
+              Dash2[&quot;/speaker/dashboard&lt;br/&gt;Speaker Dashboard&quot;] --&gt;|present| Present[&quot;/conference/sessions/{Id}/present&lt;br/&gt;Presenter View&quot;]
+              Present --&gt; PresentPolls[&quot;Presenter layout: open poll results and the approved question queue&quot;]</pre>
+          <h3 id="57-device-settings-maui-head-only">5.7 Device Settings (MAUI head only)</h3>
+          <p><code>/settings/device</code> ships <strong>only in the MAUI head</strong> (a host-owned page routed via <code>DeviceUIModule</code>),
+          so it can assume native capabilities exist. It is not reachable from the web heads.</p>
+          <pre class="mermaid">flowchart TD
+              MauiHome[&quot;/&lt;br/&gt;Home, MAUI head&quot;] --&gt;|nav menu| Device[&quot;/settings/device&lt;br/&gt;Device Settings&quot;]
+              Device --&gt; Reminders[&quot;Session reminders: schedule local notifications for bookmarked sessions&quot;]
+              Device --&gt; Biometrics[&quot;Biometric unlock toggle&quot;]
+              Device --&gt; Prefs[&quot;Device preferences persisted on-device&quot;]</pre>
           <hr>
           <h2 id="navigation-patterns">Navigation Patterns</h2>
           <h3 id="authentication-redirects">Authentication Redirects</h3>
@@ -519,12 +560,14 @@
           <h3 id="authorization-model">Authorization Model</h3>
           <ul>
           <li><strong>Roles:</strong> <code>Organizer</code> is the only elevated role; every other authenticated user is an <code>Attendee</code> (the default). There is no separate &quot;Admin&quot; role.</li>
-          <li><strong>Speaker:</strong> not a role — an attendee whose account is linked to a Speaker, surfaced as the <code>speaker_id</code> JWT claim (auto-linked by email match at registration, or linked manually by an organizer).</li>
+          <li><strong>Speaker:</strong> not a role, but an attendee whose account is linked to a Speaker, surfaced as the <code>speaker_id</code> JWT claim (auto-linked by email match at registration, or linked manually by an organizer).</li>
+          <li><strong>In-page rights, not route rights:</strong> the live layer gates <em>panels</em>, not routes. <code>/conference/sessions/{Id}/live</code> is one page for everyone authenticated; the moderation panel renders only when the caller is the session&#39;s presenter or an Organizer, and the server re-checks that on every moderation call (BR-236), so the client-side gate is convenience, not security.</li>
           <li><strong>Menu-driven visibility:</strong> the left nav is built from each module&#39;s <code>IUIModule.NavItems</code>. Items declare a required role (<code>Organizer</code>) or claim (<code>speaker_id</code>); the menu hides what the current user can&#39;t use. Organizer items sit in the <em>Admin</em> nav section (most grouped under &quot;Conference&quot;); &quot;My Profile&quot; and the Speaker &quot;Dashboard&quot; sit in the <em>User</em> section.</li>
           <li><strong>Page guards (<code>@attribute [Authorize…]</code>):</strong><ul>
-          <li><em>Organizer role required:</em> <code>/sessions/selection-dashboard</code>, <code>/events/{Id}/feedback</code>, <code>/sessions/{SessionId}/feedback</code>, and every conference/user management page (<code>/events</code>, <code>/sessions</code>, <code>/speakers</code>, <code>/conferencecategories</code>, <code>/questions</code>, <code>/rooms</code>, <code>/users</code>), each carrying a page-level <code>[Authorize(Roles = &quot;Organizer&quot;)]</code> (e.g. <code>EventList.razor</code>, <code>UserList.razor</code>). The shared <code>Routes.razor</code> renders the Forbidden page for an authenticated non-Organizer; the inherited <code>RegisteredUser_AdminPages_ShouldBeForbidden</code> E2E fact pins this for all seven routes. API-side role enforcement applies as well (defense in depth).</li>
-          <li><em>Authentication only:</em> <code>/profile</code>, <code>/profile/claims</code>, <code>/speaker/dashboard</code>, both attendee feedback forms, and <code>/speakers/{Id}</code> (SpeakerDetail is the one management page still gated by plain <code>[Authorize]</code> because linked speakers edit their own bio there; organizer-only actions on it are enforced API-side).</li>
-          <li><em>Public (no attribute):</em> all <code>/conference/*</code> read pages.</li>
+          <li><em>Organizer role required:</em> <code>/sessions/selection-dashboard</code>, <code>/events/{EventId}/feedback</code>, <code>/sessions/{SessionId}/feedback</code>, and every conference/user management page (<code>/events</code>, <code>/sessions</code>, <code>/speakers</code>, <code>/conferencecategories</code>, <code>/questions</code>, <code>/rooms</code>, <code>/users</code>), each carrying a page-level <code>[Authorize(Roles = &quot;Organizer&quot;)]</code> (e.g. <code>EventList.razor</code>, <code>UserList.razor</code>). The shared <code>Routes.razor</code> renders the Forbidden page for an authenticated non-Organizer; the inherited <code>RegisteredUser_AdminPages_ShouldBeForbidden</code> E2E fact pins this for all seven routes. API-side role enforcement applies as well (defense in depth).</li>
+          <li><em>Authentication only:</em> <code>/profile</code>, <code>/profile/claims</code>, <code>/speaker/dashboard</code>, both attendee feedback forms, the conference-day live pages (<code>/happening-now</code>, <code>/conference/sessions/{Id}/live</code>, <code>/conference/sessions/{Id}/present</code>), and <code>/speakers/{Id}</code> (SpeakerDetail is the one management page still gated by plain <code>[Authorize]</code> because linked speakers edit their own bio there; organizer-only actions on it are enforced API-side).</li>
+          <li><em>Public (no attribute):</em> all <code>/conference/*</code> read pages, except the two live-layer routes above.</li>
+          <li><em>MAUI head only:</em> <code>/settings/device</code> is registered by <code>DeviceUIModule</code> and exists in no web head.</li>
           </ul>
           </li>
           </ul>
