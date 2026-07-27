@@ -230,7 +230,7 @@ E2E gate separate means the unit/arch job stays fast while accessibility remains
    (`ci.yml:129-135`):
    ```yaml
    if: failure()
-   uses: actions/upload-artifact@v4
+   uses: actions/upload-artifact@v7
    with:
      name: ui-e2e-traces-${{ matrix.browser }}
      path: Tests/Presentation/MMCA.Common.UI.E2E.Tests/bin/Release/net10.0/playwright-traces/**
@@ -271,7 +271,8 @@ backstop on top of the `--minimum-expected-tests 1` guard.
 
 The lockstep NuGet release workflow. When a maintainer pushes a `vX.Y.Z` git tag, this workflow
 deterministically derives the version, packs all fifteen packages, generates a CycloneDX SBOM (a hard
-gate), and pushes to GitHub Packages. Fifteen packages. One tag. One version. Every time.
+gate), and pushes to **both** GitHub Packages and nuget.org (ADR-053). Fifteen packages. One tag. One
+version. Every time.
 
 The fifteen are packed by two jobs, not one: the ubuntu `publish` job packs the fourteen projects that
 sit in `MMCA.Common.slnx`, and a second `publish-maui` job on windows packs `MMCA.Common.UI.Maui` from
@@ -304,7 +305,7 @@ with no manual steps after the tag is pushed.
 ### Trigger
 
 ```yaml
-# release.yml:5
+# release.yml:3-5
 on:
   push:
     tags: ['v*']
@@ -316,27 +317,32 @@ from `main`.
 
 ### Job: `publish`
 
-**Permissions** (`release.yml:13-15`):
+**Permissions** (`release.yml:13-16`):
 ```yaml
 permissions:
   packages: write
   contents: read
+  id-token: write # OIDC token for nuget.org trusted publishing (ADR-053)
 ```
 
 `packages: write` is required to push to GitHub Packages using `GITHUB_TOKEN`. `contents: read` is the
-minimum for checkout. No other permissions are granted, least-privilege OAuth scope for the token.
+minimum for checkout. `id-token: write` lets the job mint an OIDC token, which is what it trades for a
+short-lived nuget.org key in step 11. No other permissions are granted, least-privilege OAuth scope for
+the token.
 
 [Rubric §11, Security] (assesses secrets, OIDC, and minimal-permission token usage) is served: the job
-token only has write access to Packages, not to repo contents, issues, or deployments.
+token only has write access to Packages, not to repo contents, issues, or deployments, and the public
+registry is reached with no stored API key at all.
 
 **Step 1, Checkout with full history** (`release.yml:18-20`): `fetch-depth: 0` for MinVer, same as CI.
 
-**Step 2, .NET 10 setup** (`release.yml:21-23`): same as CI.
+**Step 2, .NET 10 setup** (`release.yml:22-31`): same as CI, including the NuGet cache keyed on the
+committed lock files plus `Directory.Packages.props`.
 
-**Step 3, Restore** (`release.yml:24-25`): `dotnet restore MMCA.Common.slnx`, lock files apply; no
+**Step 3, Restore** (`release.yml:33-34`): `dotnet restore MMCA.Common.slnx`, lock files apply; no
 `GITHUB_TOKEN` needed.
 
-**Step 4, Determine version from tag** (`release.yml:28-30`):
+**Step 4, Determine version from tag** (`release.yml:36-38`):
 ```bash
 echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 ```
@@ -344,7 +350,7 @@ echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 `v`, yielding `1.52.0`. This string is then passed to the build and pack steps as an explicit version
 override.
 
-**Step 5, Build with explicit version** (`release.yml:32-33`):
+**Step 5, Build with explicit version** (`release.yml:40-41`):
 ```bash
 dotnet build MMCA.Common.slnx -c Release --no-restore -p:MinVerSkip=true -p:Version=${{ steps.version.outputs.VERSION }}
 ```
@@ -353,7 +359,7 @@ tag-derived version directly. This pattern avoids a subtle race: if MinVer ran h
 version from the tag, which should be the same value, but in edge cases (e.g. detached HEAD, retagged
 commit) the two sources could diverge. Making the version explicit from the start removes the ambiguity.
 
-**Step 6, Test** (`release.yml:35-36`):
+**Step 6, Test** (`release.yml:43-44`):
 ```bash
 dotnet test --solution MMCA.Common.slnx -c Release --no-build
 ```
@@ -361,7 +367,7 @@ Tests run again (no `--minimum-expected-tests 1` here, the release workflow is n
 gate; CI already covered this). This is a belt-and-suspenders pass to ensure the tagged commit is green
 before packaging.
 
-**Step 7, Pack** (`release.yml:38-39`):
+**Step 7, Pack** (`release.yml:46-47`):
 ```bash
 dotnet pack MMCA.Common.slnx -c Release --no-build -o ./nupkgs -p:MinVerSkip=true -p:PackageVersion=${{ steps.version.outputs.VERSION }}
 ```
@@ -371,7 +377,7 @@ one command. `-p:PackageVersion` sets the NuGet package version metadata. `-o ./
 version string. The fifteenth, `MMCA.Common.UI.Maui`, is not in the solution and is packed by the
 `publish-maui` windows job into its own `./nupkgs-maui` directory from the same tag (ADR-042).
 
-**Steps 8–9, SBOM generation and upload** (`release.yml:45-57`):
+**Steps 8 and 9, SBOM generation and upload** (`release.yml:53-65`):
 ```yaml
 - name: Generate SBOM (CycloneDX)
   run: |
@@ -380,14 +386,14 @@ version string. The fifteenth, `MMCA.Common.UI.Maui`, is not in the solution and
     ls -la ./sbom
     test -n "$(ls -A ./sbom 2>/dev/null)" || { echo "::error::SBOM generation produced no output"; exit 1; }
 - name: Upload SBOM
-  uses: actions/upload-artifact@v4
+  uses: actions/upload-artifact@v7
   with:
     name: sbom
     path: ./sbom
     if-no-files-found: error
 ```
 CycloneDX generates a Software Bill of Materials, a machine-readable inventory of every dependency's
-identity, version, and license. The SBOM is now a **hard gate** (the comment on `release.yml:42-44` records
+identity, version, and license. The SBOM is now a **hard gate** (the comment on `release.yml:49-52` records
 that it "was continue-on-error while the tooling was being validated in CI, now promoted to a blocking
 step"): a failed generation, an *empty* `./sbom` directory, or a missing artifact (`if-no-files-found:
 error`) fails the release. Every published version must ship a verifiable SBOM.
@@ -397,7 +403,7 @@ obligations are tracked) is served: the SBOM is the machine-readable artifact th
 "know your dependencies" requirement for regulated or commercially-distributed software, and gating on it
 guarantees no version ships without one.
 
-**Step 10, Push to GitHub Packages** (`release.yml:59-60`):
+**Step 10, Push to GitHub Packages** (`release.yml:67-68`):
 ```bash
 dotnet nuget push ./nupkgs/*.nupkg \
   --source "https://nuget.pkg.github.com/ivanball/index.json" \
@@ -411,6 +417,52 @@ partial push followed by a retry would otherwise fail on already-uploaded packag
 
 `GITHUB_TOKEN` is automatically provided by GitHub Actions when `packages: write` is in the job
 permissions. No external secret is needed.
+
+**Steps 11 and 12, Push to nuget.org via trusted publishing** (`release.yml:79-88`):
+```yaml
+- name: NuGet login (OIDC to short-lived key)
+  if: github.repository_owner == 'ivanball'
+  uses: NuGet/login@v1
+  id: nuget-login
+  with:
+    user: ivanball # nuget.org profile name, not an email; public, so not a secret
+- name: Push to nuget.org
+  if: github.repository_owner == 'ivanball'
+  run: dotnet nuget push ./nupkgs/*.nupkg --source "https://api.nuget.org/v3/index.json" --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }} --skip-duplicate
+```
+Every release goes to **both** registries
+(**[ADR-053](https://ivanball.github.io/docs/adr/053-dual-registry-package-publishing.html)**). The reason
+is install friction: GitHub Packages' NuGet registry demands a PAT with `read:packages` even for public
+packages, so a stranger following the README could not restore. nuget.org is the public install path;
+GitHub Packages remains the internal one.
+
+The interesting part is the auth. There is **no stored API key**: `NuGet/login` exchanges the job's OIDC
+token for a key that lives one hour, so there is no long-lived secret to leak or rotate. The exchange is
+governed by a policy on nuget.org pinned to this owner, this repository, and **this workflow file** by
+their permanent GitHub ids, which is why `release.yml` cannot be renamed without breaking publishing, and
+why a fork cannot publish. The key is requested immediately before the push because it is single-use and
+short-lived. The `if: github.repository_owner == 'ivanball'` guard keeps a fork's release run from
+failing on an exchange it can never satisfy.
+
+[Rubric §11, Security] again: this is the strongest form of the "no long-lived credentials in CI"
+property, since there is no secret to steal even momentarily.
+
+### Job: `publish-maui`
+
+A second job on `windows-latest` (`release.yml:93-165`) packs the fifteenth package,
+`MMCA.Common.UI.Maui`, which multi-targets net10.0-android/ios/maccatalyst/windows and therefore cannot
+build on the ubuntu runner at all (ADR-042). It installs the MAUI workload, derives the version from the
+same tag, builds and packs by csproj path into `./nupkgs-maui`, applies the same SBOM hard gate scoped to
+that one project, and pushes to both registries. Because both jobs key off `GITHUB_REF_NAME`, the two
+runners produce the same version string and lockstep survives the split.
+
+Two details are load-bearing. The nuget.org trusted-publishing policy is keyed on the workflow **file**,
+so one policy covers both jobs, but each job needs its own `id-token: write` and its own exchange: a
+short-lived key is single-use and cannot cross a job boundary. And every `dotnet nuget push` step here
+sets `shell: bash` (`release.yml:148`, `release.yml:164`), because the windows-default PowerShell passes
+`*.nupkg` through unexpanded and the push then fails with "File does not exist" on the un-globbed pattern.
+
+The cost of the split is release surface: two runners must both succeed for a release to be whole.
 
 ---
 
