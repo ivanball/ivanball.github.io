@@ -152,12 +152,12 @@
           <a href="00-primer.html"><code>00-primer.md</code></a> · <a href="00-group-taxonomy.html"><code>00-group-taxonomy.md</code></a> ·
           <a href="00-dependency-manifest.html"><code>00-dependency-manifest.md</code></a> · the <code>group-NN-*.md</code> chapters.</p>
           <hr>
-          <h2 id="1-system-context-two-codebases--the-13-packages">1. System context, two codebases + the 13 packages</h2>
-          <p><code>MMCA.Common</code> is a framework published as thirteen NuGet packages in lockstep; <code>MMCA.ADC</code> and
+          <h2 id="1-system-context-two-codebases--the-15-packages">1. System context, two codebases + the 15 packages</h2>
+          <p><code>MMCA.Common</code> is a framework published as fifteen NuGet packages in lockstep; <code>MMCA.ADC</code> and
           <code>MMCA.Store</code> consume them. The framework depends on neither consumer (that one-way arrow is why the
           Common groups come first in the guide).</p>
           <pre class="mermaid">flowchart TD
-              subgraph COMMON[&quot;MMCA.Common: framework, 13 NuGet packages (lockstep versioned)&quot;]
+              subgraph COMMON[&quot;MMCA.Common: framework, 15 NuGet packages (lockstep versioned)&quot;]
                   direction TB
                   subgraph CORE[&quot;Core (4)&quot;]
                       SH[&quot;Shared&quot;]
@@ -165,10 +165,12 @@
                       APP[&quot;Application&quot;]
                       INF[&quot;Infrastructure&quot;]
                   end
-                  subgraph PRES[&quot;Presentation / transport (3)&quot;]
+                  subgraph PRES[&quot;Presentation / transport (5)&quot;]
                       API[&quot;API&quot;]
                       GRPC[&quot;Grpc&quot;]
                       UI[&quot;UI&quot;]
+                      UIW[&quot;UI.Web&quot;]
+                      UIM[&quot;UI.Maui&quot;]
                   end
                   subgraph ASP[&quot;Aspire (2)&quot;]
                       ASPIRE[&quot;Aspire&quot;]
@@ -190,7 +192,7 @@
           
               classDef fw fill:#e8f0fe,stroke:#4285f4,color:#111
               classDef con fill:#e6f4ea,stroke:#34a853,color:#111
-              class SH,DOM,APP,INF,API,GRPC,UI,ASPIRE,ASPH,T1,T2,T3,T4 fw
+              class SH,DOM,APP,INF,API,GRPC,UI,UIW,UIM,ASPIRE,ASPH,T1,T2,T3,T4 fw
               class ADC,STORE con</pre>
           <hr>
           <h2 id="2-clean-architecture-the-layered-dependency-rule">2. Clean Architecture, the layered dependency rule</h2>
@@ -780,7 +782,7 @@
           <nav class="doc-toc" aria-label="On this page">
             <p class="doc-toc-title">On this page</p>
             <ul>
-            <li><a href="#1-system-context-two-codebases--the-13-packages">1. System context, two codebases + the 13 packages</a></li>
+            <li><a href="#1-system-context-two-codebases--the-15-packages">1. System context, two codebases + the 15 packages</a></li>
             <li><a href="#2-clean-architecture-the-layered-dependency-rule">2. Clean Architecture, the layered dependency rule</a></li>
             <li><a href="#3-the-25-functional-groups-dependency--build-order">3. The 25 functional groups, dependency / build order</a></li>
             <li><a href="#4-core-framework-patterns-how-the-building-blocks-compose">4. Core framework patterns, how the building blocks compose</a></li>
