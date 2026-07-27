@@ -214,18 +214,7 @@ the full set, for orientation:
 | 054 | Saga compensation + reconciliation backstop: each workflow step raises a domain event and its compensating action runs in its own handler and DI scope, committing after the originating transaction; idempotency is a persisted aggregate marker written by the same `SaveChanges` as the compensating writes | [g04](group-04-events-outbox.md) |
 | 055 | Repository + Specification contract: the read side is ISP-split into `IEntityReader` (id lookups) and `IEntityQuerier` (collections, projections, counts), and a fitness rule fails the build on raw `IQueryable` surfaces in Application code | [g03](group-03-querying-specifications.md)/[g07](group-07-persistence-ef-core.md) |
 
-ADRs 011 onward were authored after this guide's first build; their patterns were already documented here,
-and the chapters now cross-reference the ADR numbers. Recent framework additions include the
-**device capability abstraction layer** ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)/043/044/045: per-capability contracts with MAUI-native,
-browser, and inert-fallback adapters, mobile deep links, native OS push, managed file storage + user
-avatars), taught in the new [g26](group-26-device-capability-layer.md) chapter and cross-referenced in
-g07/g10/g12/g24. The newest records are the saga-compensation and reconciliation contract
-([ADR-054](https://ivanball.github.io/docs/adr/054-saga-compensation-and-reconciliation.html)) and the
-repository/specification contract ([ADR-055](https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html)),
-which together pin down how cross-boundary consistency and the data-access surface are expected to
-behave. The canonical index for the full set is the
-Website repo's `docs-src/adr/README.md` (published at <https://ivanball.github.io/docs/adr/>), which owns
-the count and range.
+The canonical index for the full set can be found at <https://ivanball.github.io/docs/adr/>.
 
 ---
 
