@@ -8,8 +8,8 @@ retained for history.
 ## Context
 The MMCA applications (the ADC conference app, the Store) and the `MMCA.Common.UI` library currently ship
 a single locale (en-US). The architecture rubric scores Internationalization (§27); rather than leave it
-at an implicit zero, this ADR records that single-locale is a **deliberate, scoped decision** — not an
-oversight — and states what re-introducing i18n would entail.
+at an implicit zero, this ADR records that single-locale is a **deliberate, scoped decision** (not an
+oversight) and states what re-introducing i18n would entail.
 
 ## Decision
 1. **Single-locale (en-US) is an explicit non-goal for now.** User-facing strings are inline in markup;
@@ -24,12 +24,12 @@ oversight — and states what re-introducing i18n would entail.
    string concatenation.
 
 ## Rationale
-- Recording the decision converts an implicit rubric-zero into a conscious, revisitable choice — the same
+- Recording the decision converts an implicit rubric-zero into a conscious, revisitable choice: the same
   posture as the single-region DR acceptance in ADR-009.
 - Premature i18n infrastructure adds complexity (resource indirection, culture bugs, layout churn) with no
   current user to benefit.
 
 ## Trade-offs
-- Adding a locale later touches every view plus the formatting paths — a real but bounded effort, accepted.
+- Adding a locale later touches every view plus the formatting paths: a real but bounded effort, accepted.
 - Hard-coded strings make a future extraction larger; mitigated by the component-based UI (strings are
   localized to components/pages, so extraction is mechanical rather than archaeological).

@@ -20,7 +20,7 @@ Provide opt-in, client-driven request idempotency as an MVC action filter in `MM
 - **Opt-in per action.** `[Idempotent]` (`IdempotentAttribute`, a `ServiceFilterAttribute` resolving
   `IdempotencyFilter` from DI) marks an action. Nothing is deduplicated unless the action declares it.
 - **Client supplies the key.** The caller sends an `Idempotency-Key` header. If the header is absent or
-  blank, the action runs normally with **no** deduplication — the key is the client's assertion that "two
+  blank, the action runs normally with **no** deduplication: the key is the client's assertion that "two
   requests with this key are the same operation."
 - **The key is scoped to the caller and the endpoint, not taken bare.** The cache key is
   `idempotency:{SHA-256(subject | method | route template | client key)}`, where the subject is the
@@ -76,7 +76,7 @@ Provide opt-in, client-driven request idempotency as an MVC action filter in `MM
   client that retries under a different identity (a rotated anonymous address, or a token exchange
   between the first attempt and the retry) misses the cache and re-executes. That is the correct
   trade against replaying one caller's response to another.
-- **Opt-in.** An action that should be idempotent but is missing `[Idempotent]` gets no protection — the
+- **Opt-in.** An action that should be idempotent but is missing `[Idempotent]` gets no protection: the
   same audit-the-inventory caveat as ADR-005's `IAnonymizable`.
 
 ## Related

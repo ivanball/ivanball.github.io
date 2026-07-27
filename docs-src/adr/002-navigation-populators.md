@@ -10,8 +10,8 @@ The application supports multiple database backends (SQL Server, Cosmos DB, SQLi
 Each entity that has unsupported navigations gets a `INavigationPopulator<TEntity>` implementation. A `DeclarativeNavigationPopulator<TEntity>` base class (added in MMCA.Common) allows populators to be defined as a list of `INavigationDescriptor<TEntity>` declarations rather than imperative if-check boilerplate.
 
 Two descriptor types exist:
-- `ChildNavigationDescriptor` — for child collection navigations (e.g., `Event.Rooms`)
-- `FKNavigationDescriptor` — for FK reference navigations (e.g., `Product.Category`)
+- `ChildNavigationDescriptor`: for child collection navigations (e.g., `Event.Rooms`)
+- `FKNavigationDescriptor`: for FK reference navigations (e.g., `Product.Category`)
 
 Both delegate to `NavigationLoader`, which batch-loads related entities in a single `WHERE FK IN (...)` query to avoid N+1 problems.
 

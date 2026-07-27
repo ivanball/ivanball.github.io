@@ -170,7 +170,7 @@
           app still pointed at a <strong>single shared SQL database</strong> with a single <code>OutboxMessages</code> table. That
           left one significant defect: every service&#39;s <code>OutboxProcessor</code> polled the same outbox table with no
           origin filter, so the services <strong>raced</strong> to claim each other&#39;s rows (ADR-003 / ArchitecturalAnalysis
-          §4.4 #5). It also undermined the data-autonomy half of &quot;microservices&quot; — services that share a
+          §4.4 #5). It also undermined the data-autonomy half of &quot;microservices&quot;: services that share a
           database are not independently evolvable at the schema level.</p>
           <p>MMCA.Common already provided the machinery for multiple physical data sources (<code>DataSourceResolver</code>,
           <code>EntityDataSourceRegistry</code>, <code>DbContextFactory</code>, <code>CrossDataSourceDegradeConvention</code>), so the move was
@@ -187,7 +187,7 @@
           route to a physical source by logical name (<code>[UseDatabase]</code> / module namespace) via
           <code>DataSourceResolver</code>, and to an engine by configuration base class (<code>[UseDataSource]</code>, ADR-018).
           The forbidden split is <em>per-module</em>, not per-engine.</li>
-          <li><strong>ADC</strong> runs <code>ADC_Identity</code>, <code>ADC_Conference</code>, <code>ADC_Engagement</code>, <code>ADC_Notification</code> — locally on
+          <li><strong>ADC</strong> runs <code>ADC_Identity</code>, <code>ADC_Conference</code>, <code>ADC_Engagement</code>, <code>ADC_Notification</code>: locally on
           the shared Aspire SQL container and in Azure as four Basic-tier databases. The legacy <code>AtlDevCon</code>
           database is retained <strong>read-only</strong> as an archive and rollback path.</li>
           <li><strong>Per-source outbox.</strong> Each database has its own <code>OutboxMessages</code>; the <code>OutboxProcessor</code> drains
@@ -201,10 +201,10 @@
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>Removes the shared-outbox race</strong> (the sharpest cost of the shared DB) without an <code>OriginService</code>
-          filter — physical isolation is simpler and stronger than a logical filter.</li>
-          <li><strong>Real data autonomy</strong> — each service can evolve and scale its schema independently; lifts the
+          filter: physical isolation is simpler and stronger than a logical filter.</li>
+          <li><strong>Real data autonomy</strong>: each service can evolve and scale its schema independently; lifts the
           former single-database scaling ceiling.</li>
-          <li><strong>Reuses existing framework extension points</strong> — no new DbContext classes, no business-logic rewrite.</li>
+          <li><strong>Reuses existing framework extension points</strong>: no new DbContext classes, no business-logic rewrite.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>

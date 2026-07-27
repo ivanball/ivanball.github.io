@@ -169,8 +169,8 @@
           <p>Each entity that has unsupported navigations gets a <code>INavigationPopulator&lt;TEntity&gt;</code> implementation. A <code>DeclarativeNavigationPopulator&lt;TEntity&gt;</code> base class (added in MMCA.Common) allows populators to be defined as a list of <code>INavigationDescriptor&lt;TEntity&gt;</code> declarations rather than imperative if-check boilerplate.</p>
           <p>Two descriptor types exist:</p>
           <ul>
-          <li><code>ChildNavigationDescriptor</code> — for child collection navigations (e.g., <code>Event.Rooms</code>)</li>
-          <li><code>FKNavigationDescriptor</code> — for FK reference navigations (e.g., <code>Product.Category</code>)</li>
+          <li><code>ChildNavigationDescriptor</code>: for child collection navigations (e.g., <code>Event.Rooms</code>)</li>
+          <li><code>FKNavigationDescriptor</code>: for FK reference navigations (e.g., <code>Product.Category</code>)</li>
           </ul>
           <p>Both delegate to <code>NavigationLoader</code>, which batch-loads related entities in a single <code>WHERE FK IN (...)</code> query to avoid N+1 problems.</p>
           <h2 id="rationale">Rationale</h2>

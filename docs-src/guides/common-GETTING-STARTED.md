@@ -17,8 +17,8 @@ is documented rather than pre-built (the plumbing is in place). Wherever a step 
 that points at real, working code you can copy from MMCA.Helpdesk, MMCA.ADC, or MMCA.Store.
 
 > **Reading the framework itself:** for the *why* behind each pattern, read the relevant
-> [ADR](../adr/README.md). For a type-by-type tour of the framework internals, see the workspace
-> onboarding guide under `Docs/Onboarding`. This guide is the consumer-facing "how do I start" path.
+> [ADR](../adr/README.md). For a type-by-type tour of the framework internals, see the
+> [onboarding guide](../onboarding/00-index.md). This guide is the consumer-facing "how do I start" path.
 
 ---
 
@@ -36,7 +36,7 @@ A modular monolith with one business module and two hosts:
 The seed runs **issuer-less**: with no Identity module it registers a bare auth scheme and the
 controller is `[AllowAnonymous]`, so you get a running app immediately. **Identity** is the standard
 auth module you add when you want real RS256/JWKS authentication (and which becomes the **JWKS issuer**
-when you extract Tickets) — that path is shown in Phase 2 and Phase 8.
+when you extract Tickets): that path is shown in Phase 2 and Phase 8.
 
 By the end you will have a green-building solution, applied EF migrations, a running Aspire stack
 (`sql` + `web` + `ui`), and passing architecture-fitness tests, plus a documented path to add Identity
@@ -70,8 +70,8 @@ and pull Tickets out into a microservice.
 > phantom `CS0103` errors against new members. Build MMCA.Common with `-c Debug`, then build your app.
 
 **Pick the framework version.** All fifteen packages move together. Use the latest released tag
-(see [FACTS.md](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md) for the current version; the `1.77.0` in the samples below is
-illustrative only). Choose one version and use it for every `MMCA.Common.*` entry (Phase 1). See
+(see [FACTS.md](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md) for the current version; the `1.128.0` in the samples below was
+current when this guide was last refreshed). Choose one version and use it for every `MMCA.Common.*` entry (Phase 1). See
 [ADR-016](../adr/016-lockstep-versioning-masstransit-pin.md): there is no phased rollout and no version
 skew across the fifteen packages.
 
@@ -119,22 +119,22 @@ to v8** (v9 needs a commercial license, enforced by a build gate in MMCA.Common,
   </PropertyGroup>
   <ItemGroup>
     <!-- MMCA Common packages: all at one version, bumped in lockstep -->
-    <PackageVersion Include="MMCA.Common.Shared" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.Domain" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.Application" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.Infrastructure" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.API" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.Grpc" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.UI" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.UI.Web" Version="1.77.0" />
+    <PackageVersion Include="MMCA.Common.Shared" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.Domain" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.Application" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.Infrastructure" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.API" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.Grpc" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.UI" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.UI.Web" Version="1.128.0" />
     <!-- MAUI heads only: the one MAUI-TFM package (ADR-042); web-only apps skip it -->
-    <PackageVersion Include="MMCA.Common.UI.Maui" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.Aspire" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.Aspire.Hosting" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.Testing" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.Testing.E2E" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.Testing.UI" Version="1.77.0" />
-    <PackageVersion Include="MMCA.Common.Testing.Architecture" Version="1.77.0" />
+    <PackageVersion Include="MMCA.Common.UI.Maui" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.Aspire" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.Aspire.Hosting" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.Testing" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.Testing.E2E" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.Testing.UI" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.Testing.Architecture" Version="1.128.0" />
     <!-- Third-party versions: copy the relevant rows from MMCA.ADC/Directory.Packages.props -->
     <!-- (EF Core, FluentValidation, Riok.Mapperly, Scrutor, xunit.v3, Aspire.*, Yarp, the 5 analyzers, etc.) -->
   </ItemGroup>
@@ -317,7 +317,7 @@ never public constructors.** See [ADR-013](../adr/013-result-pattern.md).
 
 The reference app uses **database-generated** integer ids (the `[IdValueGenerated]` attribute + the
 `TicketIdentifierType = int` alias). That has one important consequence: the factory does **not** raise
-an "Added" domain event, because the id is still `0` at that point — creation is signalled *after the
+an "Added" domain event, because the id is still `0` at that point: creation is signalled *after the
 commit* by an integration event (see 3c). Mutations raise a single `TicketChanged` domain event
 (`EntityChangedEvent`-derived) carrying the lifecycle state.
 
@@ -402,9 +402,9 @@ public static class TicketInvariants
 ```
 
 `TicketComment` inherits `AuditableBaseEntity<TicketCommentIdentifierType>` and is `[IdValueGenerated]`
-too, with its own `Create(...)` factory. Manage children **through the aggregate root** — `Ticket`
+too, with its own `Create(...)` factory. Manage children **through the aggregate root**: `Ticket`
 exposes `AddComment` / `EditComment` / `RemoveComment` that validate, mutate `_comments`, and raise
-`TicketChanged` — never mutate the collection or a comment from outside the aggregate.
+`TicketChanged`: never mutate the collection or a comment from outside the aggregate.
 
 ### 3b. Shared: DTO, request, integration event, aliases
 
@@ -513,7 +513,7 @@ public static class DependencyInjection
 
 There is exactly **one concrete** context at runtime, the framework's sealed `SQLServerDbContext` (one
 instance per database). Each module declares an **abstract** `ModuleApplicationDbContext :
-ApplicationDbContext` that *only* lists the module's `DbSet`s — it documents the module's entity set
+ApplicationDbContext` that *only* lists the module's `DbSet`s: it documents the module's entity set
 and never gets instantiated. **Never write a concrete per-module or per-app DbContext class** (see
 [ADR-006](../adr/006-database-per-service.md) and the "Don't split SQLServerDbContext" rule):
 
@@ -546,7 +546,7 @@ internal sealed class TicketConfiguration : EntityTypeConfigurationSQLServer<Tic
 
 Configurations are **auto-discovered by assembly-name convention** (the module's Infrastructure
 assembly is registered for the design-time factory and the host), so the module's
-`Infrastructure/DependencyInjection.cs` is a near no-op — `AddModuleTicketsInfrastructure()` just
+`Infrastructure/DependencyInjection.cs` is a near no-op: `AddModuleTicketsInfrastructure()` just
 returns `services`. You obtain a repository through
 `IUnitOfWork.GetRepository<Ticket, TicketIdentifierType>()`; you never hand-write a context or a
 repository class. The three module layers are composed in the **API layer's** DI
@@ -587,8 +587,8 @@ public sealed class TicketsController(
 }
 ```
 
-The reference app's controller goes further — `GET {id}/details`, `PUT {id}`, `PUT {id}/status`,
-`DELETE {id}`, and `POST|PUT|DELETE {id}/comments[/{commentId}]` — each one the same three lines: call
+The reference app's controller goes further: `GET {id}/details`, `PUT {id}`, `PUT {id}/status`,
+`DELETE {id}`, and `POST|PUT|DELETE {id}/comments[/{commentId}]`, each one the same three lines: call
 the handler, `HandleFailure` on failure, else return the success shape.
 
 ### What the pipeline does for you
@@ -668,7 +668,7 @@ At runtime the host applies migrations via the framework's `InitializeDatabaseAs
 ### The Web host
 
 Create `Source/Hosts/MMCA.Helpdesk.Web` (the REST API host). Its `Program.cs` follows the **fixed DI
-sequence**, and the load-bearing rule is that `AddApplicationDecorators()` comes **last** — decorators
+sequence**, and the load-bearing rule is that `AddApplicationDecorators()` comes **last**: decorators
 wrap handlers that already exist, and the module handlers are registered by `ModuleLoader` (each
 `IModule.Register` composes its Application+Infrastructure+API layers):
 
@@ -732,13 +732,13 @@ section (one DB) and no `MessageBus:Provider`, so the framework selects the `InP
 ### The Blazor UI host
 
 `Source/Hosts/UI/MMCA.Helpdesk.UI.Web` is a **Blazor Server + MudBlazor** front end. It holds no domain
-logic and no DbContext — it calls the API through a typed `HelpdeskApiClient` registered with
+logic and no DbContext: it calls the API through a typed `HelpdeskApiClient` registered with
 `AddHttpClient<HelpdeskApiClient>(...)`, whose base address (`https+http://web`, from config) is
 resolved by the service-discovery handler that `AddServiceDefaults()` installs. Because Blazor Server
 runs the calls **server-side**, there is no browser CORS and no token to forward. On a failed response
 the client calls `ServiceExceptionHelper.ThrowIfDomainExceptionAsync` to surface the RFC 9457
 ProblemDetails message (e.g. "Comments cannot be added to a closed ticket.") before the generic
-`EnsureSuccessStatusCode` fallback — the same pattern `MMCA.Common.UI`'s `EntityServiceBase` uses, so
+`EnsureSuccessStatusCode` fallback: the same pattern `MMCA.Common.UI`'s `EntityServiceBase` uses, so
 pages show a meaningful error. `Program.cs` is the standard Razor-components host plus
 `AddServiceDefaults()` / `MapDefaultEndpoints()`.
 
@@ -856,7 +856,7 @@ out, and that an outbox row was written for the `TicketOpenedIntegrationEvent`.
 
 ### Test projects
 
-The reference app ships two test projects — both run anywhere with **no database**:
+The reference app ships two test projects: both run anywhere with **no database**:
 
 - `Tests/Modules/Tickets/...Domain.Tests`: xUnit v3 + AwesomeAssertions. Test factory methods,
   invariants, state transitions, and domain events (including the assertion that `Create` raises **no**
@@ -886,7 +886,7 @@ internal sealed class HelpdeskArchitectureMap : ArchitectureMapBase
 
     protected override IEnumerable<LayerRef> DefineLayers() =>
     [
-        // Framework (MMCA.Common) — one anchor type per layer assembly
+        // Framework (MMCA.Common): one anchor type per layer assembly
         Framework(Layer.Shared, typeof(MMCA.Common.Shared.Abstractions.Result).Assembly),
         Framework(Layer.Domain, typeof(MMCA.Common.Domain.Entities.BaseEntity<>).Assembly),
         Framework(Layer.Application, typeof(MMCA.Common.Application.Services.EntityQueryService<,,>).Assembly),
@@ -923,7 +923,8 @@ no database needed).
 When a new MMCA.Common release ships, upgrade in **one pass**: bump **every** `MMCA.Common.*` entry in
 `Directory.Packages.props` to the new version together. There is no phased rollout and no per-package
 skew (your app has no lock file, so the bump is the whole upgrade). Keep MassTransit at v8. See
-[ADR-016](../adr/016-lockstep-versioning-masstransit-pin.md) and `MMCA.Common/VERSIONING.md`.
+[ADR-016](../adr/016-lockstep-versioning-masstransit-pin.md) and the
+[versioning policy](common-VERSIONING.md).
 
 For local framework co-development, flip `UseLocalMMCA` in `local.props`, and remember to rebuild
 MMCA.Common in Debug before your app after editing framework source.
@@ -933,7 +934,7 @@ MMCA.Common in Debug before your app after editing framework source.
 ## Phase 8: Extract a module into its own service (the payoff)
 
 This phase is the documented next step beyond the reference app (which is build-verified as the
-monolith through Phase 6); the scaffold already carries the plumbing — the `.Contracts` proto
+monolith through Phase 6); the scaffold already carries the plumbing: the `.Contracts` proto
 convention and the `.Service` OpenAPI block in `Directory.Build.props`. Now make the "extract later,
 without a rewrite" promise concrete. We pull **Tickets** out of the monolith into its own service
 behind a gateway. The Tickets Domain, Application, Shared, Infrastructure, and API code is
@@ -1041,10 +1042,10 @@ plus eventual consistency through the outbox, never cross-database foreign keys.
 ## Where to look next
 
 - **MMCA.Helpdesk** (`../MMCA.Helpdesk`): the minimal, build-verified monolith this guide is the
-  companion to — every step above maps to real code there. Read its `README.md` and `CLAUDE.md` for the
+  companion to: every step above maps to real code there. Read its `README.md` and `CLAUDE.md` for the
   Helpdesk-specific picture (issuer-less auth, the two event paths, the abstract module DbContext).
-- **The ADRs** ([ADRs/README.md](../adr/README.md)): the *why* behind every pattern you just used.
+- **The ADRs** ([index](../adr/README.md)): the *why* behind every pattern you just used.
 - **`MMCA.Common/CLAUDE.md`**: the framework's layer rules, DI sequence, and extension points in depth.
-- **`Docs/Onboarding`**: a type-by-type tour of the framework internals.
+- **The [onboarding guide](../onboarding/00-index.md)**: a type-by-type tour of the framework internals.
 - **MMCA.ADC and MMCA.Store**: two complete, production apps to copy patterns from. ADC is the richer
   template (four modules, OAuth social login, SignalR notifications); Store is the simpler one.

@@ -166,22 +166,22 @@
           <h2 id="context">Context</h2>
           <p>ADC began as a modular monolith: one <code>MMCA.ADC.WebAPI</code> host loaded every module (Identity, Conference,
           Engagement, Notification) in-process via the <code>ModuleLoader</code>, sharing one database and dispatching
-          domain/integration events in-process. The modular structure — per-module Domain/Application/
-          Infrastructure/API/Shared, with strict module isolation enforced by the architecture tests — was always
+          domain/integration events in-process. The modular structure (per-module Domain/Application/
+          Infrastructure/API/Shared, with strict module isolation enforced by the architecture tests) was always
           maintained, but everything deployed and scaled as a single unit.</p>
           <p>Two forces pushed past that:</p>
           <ul>
-          <li><strong>Uneven scale + cost.</strong> Traffic is lopsided — the public Conference read paths spike around the event
+          <li><strong>Uneven scale + cost.</strong> Traffic is lopsided: the public Conference read paths spike around the event
           while Identity/Engagement/Notification stay flat (the 2026 conference peaked at ~67 concurrent, almost
           all on the Conference surface). Scaling one monolith means scaling everything.</li>
           <li><strong>Fault &amp; deploy isolation.</strong> A bad deploy or a runaway path in one module took the others down with
           it, and every change redeployed the whole surface.</li>
           </ul>
           <p>The modular boundaries were already clean enough to split along; the question was how to extract
-          <strong>without rewriting business logic</strong> or losing the ability to reason about — and revert — the system.</p>
+          <strong>without rewriting business logic</strong> or losing the ability to reason about (and revert) the system.</p>
           <h2 id="decision">Decision</h2>
-          <p>Extract <strong>one service host per module</strong> — <code>MMCA.ADC.{Identity,Conference,Engagement,Notification}.Service</code>
-          — and front them with a single <strong>YARP reverse-proxy Gateway</strong> (<code>MMCA.ADC.Gateway</code>, pinned to
+          <p>Extract <strong>one service host per module</strong>: <code>MMCA.ADC.{Identity,Conference,Engagement,Notification}.Service</code>
+          and front them with a single <strong>YARP reverse-proxy Gateway</strong> (<code>MMCA.ADC.Gateway</code>, pinned to
           <code>https://localhost:6001</code>). Delete the combined <code>MMCA.ADC.WebAPI</code> host.</p>
           <ul>
           <li><strong>Each service is the monolith with one module enabled.</strong> The hosts still run <code>ModuleLoader</code>, just with
@@ -202,7 +202,7 @@
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>No business-logic rewrite.</strong> Because a service is just the monolith with one module enabled,
-          extraction was a hosting/wiring change, not a domain change — and the module-isolation tests already
+          extraction was a hosting/wiring change, not a domain change, and the module-isolation tests already
           guaranteed modules didn&#39;t reach into each other&#39;s internals.</li>
           <li><strong>One entry point.</strong> A single Gateway keeps client config trivial (one pinned URL the MAUI app bakes
           in), centralizes CORS and auth-forwarding, and lets the internal services run cleartext h2c without
@@ -210,19 +210,19 @@
           <li><strong>Per-module split (not coarser or finer).</strong> The module already was the consistency and ownership
           boundary; one service per module maps deploy/scale units onto boundaries the team already reasons about.</li>
           <li><strong>Reversible by construction.</strong> Transport at the edge + the <code>ModuleLoader</code> mean a service can be
-          re-collapsed into a combined host (or peers co-hosted) by changing configuration, not code — useful
+          re-collapsed into a combined host (or peers co-hosted) by changing configuration, not code: useful
           insurance for a small team adopting microservices.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>Operational complexity.</strong> Four deployables plus a Gateway, service discovery, a broker, and
-          per-service databases — versus one process. Mitigated locally by Aspire orchestration and in prod by
+          per-service databases, versus one process. Mitigated locally by Aspire orchestration and in prod by
           Bicep / Azure Container Apps.</li>
           <li><strong>Distributed-systems semantics.</strong> Cross-service consistency is eventual (outbox + integration events);
           there are no cross-service transactions or cross-database FKs (ADR-006). Bidirectional gRPC pairs
           (Conference ↔ Engagement) need deliberate startup handling (ADR-007).</li>
           <li><strong>Transport constraints leak into hosting.</strong> The REST services run <code>Http2</code>-only on cleartext for h2c
-          gRPC, while Notification runs <code>Http1AndHttp2</code> for its SignalR WebSocket upgrade — a per-host Kestrel
+          gRPC, while Notification runs <code>Http1AndHttp2</code> for its SignalR WebSocket upgrade: a per-host Kestrel
           nuance that didn&#39;t exist in the monolith.</li>
           <li><strong>Duplicated host wiring.</strong> Each service repeats the same pipeline setup; shared concerns live in
           <code>MMCA.Common.API</code> / <code>ServiceDefaults</code> to limit the drift.</li>
@@ -232,7 +232,7 @@
           <strong>standard extraction shape</strong>, not an ADC-only choice. MMCA.Store followed it: one service host per
           module (<code>MMCA.Store.{Catalog,Identity,Sales}.Service</code>) behind a single <code>MMCA.Store.Gateway</code> (also
           pinned to <code>https://localhost:6001</code>), with its combined <code>MMCA.Store.WebAPI</code> host likewise deleted.
-          Store&#39;s cross-service topology differs in transport detail (see ADR-012 — both apps now run Profile A),
+          Store&#39;s cross-service topology differs in transport detail (see ADR-012: both apps now run Profile A),
           but the extraction shape is identical.</p>
           <h2 id="related">Related</h2>
           <p>ADR-003 (outbox dual dispatch), ADR-004 (cross-service token validation via JWKS), ADR-006 (database

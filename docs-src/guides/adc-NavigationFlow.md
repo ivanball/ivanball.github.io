@@ -11,7 +11,7 @@ This document maps the site navigation flow for each actor in the MMCA.ADC appli
 | **Speaker** | Attendee + speaker dashboard | Authenticated, account linked to a Speaker (`speaker_id` claim) |
 | **Organizer** | Full access: conference CRUD, user management, feedback analytics, session selection | Authenticated, `Organizer` role |
 
-> **Roles & menu:** `Organizer` is the only elevated role (default is `Attendee`). A *Speaker* is an attendee whose account is linked to a Speaker, surfaced via the `speaker_id` claim. The left nav is data-driven from each module's `IUIModule.NavItems` — items carry a required role (`Organizer`) or claim (`speaker_id`) and are hidden when the user lacks it. See **Authorization Model** at the end.
+> **Roles & menu:** `Organizer` is the only elevated role (default is `Attendee`). A *Speaker* is an attendee whose account is linked to a Speaker, surfaced via the `speaker_id` claim. The left nav is data-driven from each module's `IUIModule.NavItems`: items carry a required role (`Organizer`) or claim (`speaker_id`) and are hidden when the user lacks it. See **Authorization Model** at the end.
 
 ---
 
@@ -90,12 +90,22 @@ flowchart TD
         SessionFeedback["/feedback/session/{SessionId}<br/>Session Feedback"]
     end
 
+    subgraph Live["Conference-Day Live Layer"]
+        HappeningNow["/happening-now<br/>Happening Now"]
+        SessionLive["/conference/sessions/{Id}/live<br/>Live Session (Q and A, polls)"]
+    end
+
     Home["/  Home Page"]
 
     Home -->|nav menu| PubEvents
     Home -->|nav menu| PubSessions
     Home -->|nav menu| PubSpeakers
     Home -->|nav menu| MyProfile
+    Home -->|nav menu| HappeningNow
+
+    HappeningNow -->|join a running session| SessionLive
+    PubSessionDetail -->|join live| SessionLive
+    SessionLive -->|back| PubSessionDetail
 
     Login -->|on success| Home
     Register -->|on success| Home
@@ -137,6 +147,7 @@ flowchart TD
 
     subgraph Speaker["Speaker Area"]
         Dashboard["/speaker/dashboard<br/>Speaker Dashboard"]
+        Presenter["/conference/sessions/{Id}/present<br/>Presenter View"]
     end
 
     subgraph Public["Public Conference"]
@@ -160,6 +171,8 @@ flowchart TD
     Home -->|nav menu| PubSpeakers
     Home -->|nav menu| MyProfile
     Home -->|nav menu| Dashboard
+
+    Dashboard -->|present a session| Presenter
 
     Login -->|on success| Home
     MyProfile -->|logout| Home
@@ -216,7 +229,7 @@ flowchart TD
         EventList["/events<br/>Event List"]
         EventCreate["/events/create<br/>Create Event"]
         EventDetail["/events/{Id}<br/>Edit Event"]
-        AdminEventFB["/events/{Id}/feedback<br/>Event Feedback Analytics"]
+        AdminEventFB["/events/{EventId}/feedback<br/>Event Feedback Analytics"]
     end
 
     subgraph SessionMgmt["Organizer: Session Management"]
@@ -337,7 +350,7 @@ flowchart TD
 
 ## 5. Functionality Flows (Attendee & Speaker)
 
-The diagrams in sections 1–4 map *which pages* each actor can reach. The diagrams below map *how attendees and speakers accomplish each functionality*, including inline actions — bookmarking, schedule filtering, dashboard editing — that are not separate pages. Pages appear as `route` nodes; edge labels are user actions. Flows in 5.3–5.5 require authentication.
+The diagrams in sections 1-4 map *which pages* each actor can reach. The diagrams below map *how attendees and speakers accomplish each functionality*, including inline actions (bookmarking, schedule filtering, dashboard editing) that are not separate pages. Pages appear as `route` nodes; edge labels are user actions. Flows in 5.3-5.5 require authentication.
 
 ### 5.1 Account & Identity
 
@@ -414,6 +427,44 @@ flowchart TD
     MySessions -->|session title| SessionDetail["/conference/sessions/{Id}<br/>Session Detail"]
 ```
 
+### 5.6 Conference-Day Live Layer (ADR-039)
+
+The live layer is the conference-day surface: it appears for any authenticated user, and the
+moderation controls appear only for the session's presenter or an Organizer. The client renders
+optimistically and the server is the real authority on who may moderate (BR-236).
+
+```mermaid
+flowchart TD
+    Home["/<br/>Home"] -->|nav menu, Happening Now| HN["/happening-now<br/>Happening Now"]
+
+    HN --> NowNext["Tab: Now and Next, live and upcoming sessions"]
+    HN --> Polls["Tab: Polls, open event-wide polls with live tallies"]
+    HN -.->|organizer or presenter only| Manage["Tab: Manage, author, open and close polls"]
+
+    NowNext -->|Go live| Live["/conference/sessions/{Id}/live<br/>Live Session"]
+    SessionDetail2["/conference/sessions/{Id}<br/>Session Detail"] -->|join live| Live
+
+    Live --> LivePolls["Poll panel: vote, change vote while open"]
+    Live --> LiveQA["Q and A panel: submit a question, upvote approved ones"]
+    Live -.->|presenter or organizer only| Moderate["Moderation panel: approve, dismiss, mark answered"]
+
+    Dash2["/speaker/dashboard<br/>Speaker Dashboard"] -->|present| Present["/conference/sessions/{Id}/present<br/>Presenter View"]
+    Present --> PresentPolls["Presenter layout: open poll results and the approved question queue"]
+```
+
+### 5.7 Device Settings (MAUI head only)
+
+`/settings/device` ships **only in the MAUI head** (a host-owned page routed via `DeviceUIModule`),
+so it can assume native capabilities exist. It is not reachable from the web heads.
+
+```mermaid
+flowchart TD
+    MauiHome["/<br/>Home, MAUI head"] -->|nav menu| Device["/settings/device<br/>Device Settings"]
+    Device --> Reminders["Session reminders: schedule local notifications for bookmarked sessions"]
+    Device --> Biometrics["Biometric unlock toggle"]
+    Device --> Prefs["Device preferences persisted on-device"]
+```
+
 ---
 
 ## Navigation Patterns
@@ -425,12 +476,14 @@ flowchart TD
 
 ### Authorization Model
 - **Roles:** `Organizer` is the only elevated role; every other authenticated user is an `Attendee` (the default). There is no separate "Admin" role.
-- **Speaker:** not a role — an attendee whose account is linked to a Speaker, surfaced as the `speaker_id` JWT claim (auto-linked by email match at registration, or linked manually by an organizer).
+- **Speaker:** not a role, but an attendee whose account is linked to a Speaker, surfaced as the `speaker_id` JWT claim (auto-linked by email match at registration, or linked manually by an organizer).
+- **In-page rights, not route rights:** the live layer gates *panels*, not routes. `/conference/sessions/{Id}/live` is one page for everyone authenticated; the moderation panel renders only when the caller is the session's presenter or an Organizer, and the server re-checks that on every moderation call (BR-236), so the client-side gate is convenience, not security.
 - **Menu-driven visibility:** the left nav is built from each module's `IUIModule.NavItems`. Items declare a required role (`Organizer`) or claim (`speaker_id`); the menu hides what the current user can't use. Organizer items sit in the *Admin* nav section (most grouped under "Conference"); "My Profile" and the Speaker "Dashboard" sit in the *User* section.
 - **Page guards (`@attribute [Authorize…]`):**
-  - *Organizer role required:* `/sessions/selection-dashboard`, `/events/{Id}/feedback`, `/sessions/{SessionId}/feedback`, and every conference/user management page (`/events`, `/sessions`, `/speakers`, `/conferencecategories`, `/questions`, `/rooms`, `/users`), each carrying a page-level `[Authorize(Roles = "Organizer")]` (e.g. `EventList.razor`, `UserList.razor`). The shared `Routes.razor` renders the Forbidden page for an authenticated non-Organizer; the inherited `RegisteredUser_AdminPages_ShouldBeForbidden` E2E fact pins this for all seven routes. API-side role enforcement applies as well (defense in depth).
-  - *Authentication only:* `/profile`, `/profile/claims`, `/speaker/dashboard`, both attendee feedback forms, and `/speakers/{Id}` (SpeakerDetail is the one management page still gated by plain `[Authorize]` because linked speakers edit their own bio there; organizer-only actions on it are enforced API-side).
-  - *Public (no attribute):* all `/conference/*` read pages.
+  - *Organizer role required:* `/sessions/selection-dashboard`, `/events/{EventId}/feedback`, `/sessions/{SessionId}/feedback`, and every conference/user management page (`/events`, `/sessions`, `/speakers`, `/conferencecategories`, `/questions`, `/rooms`, `/users`), each carrying a page-level `[Authorize(Roles = "Organizer")]` (e.g. `EventList.razor`, `UserList.razor`). The shared `Routes.razor` renders the Forbidden page for an authenticated non-Organizer; the inherited `RegisteredUser_AdminPages_ShouldBeForbidden` E2E fact pins this for all seven routes. API-side role enforcement applies as well (defense in depth).
+  - *Authentication only:* `/profile`, `/profile/claims`, `/speaker/dashboard`, both attendee feedback forms, the conference-day live pages (`/happening-now`, `/conference/sessions/{Id}/live`, `/conference/sessions/{Id}/present`), and `/speakers/{Id}` (SpeakerDetail is the one management page still gated by plain `[Authorize]` because linked speakers edit their own bio there; organizer-only actions on it are enforced API-side).
+  - *Public (no attribute):* all `/conference/*` read pages, except the two live-layer routes above.
+  - *MAUI head only:* `/settings/device` is registered by `DeviceUIModule` and exists in no web head.
 
 ### CRUD Pattern (Organizer)
 All admin entity management follows the same navigation pattern:

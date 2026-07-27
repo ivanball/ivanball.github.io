@@ -125,11 +125,11 @@
           <p>The system operates in the <strong>online retail / e-commerce</strong> domain, supporting the full purchase lifecycle from product browsing through payment and delivery.</p>
           <p><strong>Major Business Areas:</strong></p>
           <ul>
-          <li><strong>Product Catalog Management</strong> — categories, products, and product variants with pricing</li>
-          <li><strong>Shopping &amp; Ordering</strong> — cart management, checkout, order placement</li>
-          <li><strong>Payment Processing</strong> — Stripe-integrated checkout with webhook confirmation</li>
-          <li><strong>Inventory Management</strong> — stock tracking per product variant</li>
-          <li><strong>Customer Identity &amp; Authentication</strong> — registration, login, JWT-based sessions</li>
+          <li><strong>Product Catalog Management</strong>: categories, products, and product variants with pricing</li>
+          <li><strong>Shopping &amp; Ordering</strong>: cart management, checkout, order placement</li>
+          <li><strong>Payment Processing</strong>: Stripe-integrated checkout with webhook confirmation</li>
+          <li><strong>Inventory Management</strong>: stock tracking per product variant</li>
+          <li><strong>Customer Identity &amp; Authentication</strong>: registration, login, JWT-based sessions</li>
           </ul>
           <p><strong>Technical Stack:</strong></p>
           <ul>
@@ -555,28 +555,40 @@
           <li>Fetch the customer&#39;s shopping cart with all items</li>
           <li>Retrieve current unit prices for all product variants from the Catalog module (cross-module call)</li>
           <li>Fetch inventory items for all product variants</li>
+          <li>Reject the checkout if any variant is missing from the price map (it was soft-deleted between
+          cart-add and checkout), naming the offending variant</li>
           <li>Execute the checkout domain service which:
           a. Validates the cart is not empty
           b. Validates inventory exists for every item in the cart
-          c. <strong>Decrements inventory</strong> for each item (reserves stock)
+          c. Runs a <strong>fail-fast sufficiency check</strong> per item against the loaded snapshot
           d. Creates Order Lines with current prices (price snapshot at time of purchase)
           e. Creates the Order with status <code>PendingPayment</code>
           f. Transitions the cart to <code>CheckedOut</code> status</li>
-          <li>Persist the new Order</li>
+          <li>Commit the write phase inside one explicit transaction: the <strong>atomic conditional inventory
+          decrements</strong> first, then the order insert and cart transition</li>
           <li>Return the Order details</li>
           </ol>
           <p><strong>Business Rules Applied:</strong></p>
           <ul>
           <li>Cart must contain at least one item</li>
+          <li>Every product variant must still exist in the Catalog module</li>
           <li>All product variants must have corresponding inventory records</li>
           <li>Sufficient inventory must be available for each item</li>
           <li>Prices are locked at checkout time (not at cart-add time)</li>
-          <li>This is an atomic (transactional) operation (<code>ITransactional</code>)</li>
+          <li>The write phase is atomic, but the command is <strong>deliberately not <code>ITransactional</code></strong>: the handler
+          opens the transaction itself so the cross-module price fetch stays outside it and cross-service
+          latency never extends lock hold time</li>
           </ul>
+          <p><strong>Concurrency:</strong> the domain service&#39;s sufficiency check reads a point-in-time snapshot and is only a
+          fail-fast. The real oversell guard is <code>IInventoryAllocationService.DecrementAsync</code>, which issues one
+          atomic conditional <code>UPDATE</code> per variant: a row that no longer has enough stock matches zero rows, the
+          Result fails, and the whole transaction rolls back. Because that path uses <code>ExecuteUpdateAsync</code> it
+          bypasses the save pipeline, so <strong>no <code>InventoryAdjusted</code> domain event is raised on checkout</strong>.</p>
           <p><strong>Implemented in:</strong></p>
           <ul>
           <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs</code></li>
           <li><code>Source/Modules/Sales/MMCA.Store.Sales.Domain/Services/CheckOutDomainService.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Infrastructure/Services/InventoryAllocationService.cs</code></li>
           </ul>
           <hr>
           <h3 id="35-payment-processing-stripe">3.5 Payment Processing (Stripe)</h3>
@@ -584,7 +596,7 @@
           <p><strong>Steps:</strong></p>
           <ol>
           <li>Fetch the order with its order lines</li>
-          <li>Call Stripe API to create a checkout session (converts Money to smallest currency unit — cents)</li>
+          <li>Call Stripe API to create a checkout session (converts Money to smallest currency unit: cents)</li>
           <li>Transition order status to <code>PaymentInitiated</code></li>
           <li>Store the Stripe session ID on the order</li>
           <li>Return the checkout URL for the customer to complete payment</li>
@@ -613,19 +625,25 @@
           <ol>
           <li>Fetch the order with its order lines</li>
           <li>Validate the order is in a cancellable state (PendingPayment, PaymentInitiated, or PaymentFailed)</li>
-          <li>Transition order status to <code>Cancelled</code></li>
-          <li><strong>Restore inventory</strong>: for each order line, increase inventory by the ordered quantity</li>
-          <li>Persist changes</li>
+          <li>Transition order status to <code>Cancelled</code> and persist. The cancellation commits on its own; no
+          inventory work happens inside this transaction.</li>
+          <li><strong>After the commit</strong>, the <code>OrderCancelled</code> domain event drives <code>OrderCancelledSagaHandler</code>, which
+          runs in its own DI scope and restores inventory for each order line</li>
           </ol>
           <p><strong>Business Rules Applied:</strong></p>
           <ul>
           <li>Orders in PendingPayment, PaymentInitiated, or PaymentFailed can be cancelled</li>
           <li>Paid or delivered orders cannot be cancelled (no refund workflow)</li>
-          <li>Inventory is automatically restored upon cancellation</li>
+          <li>Inventory is restored by a compensating handler, not inline (<a href="../adr/054-saga-compensation-and-reconciliation.html">ADR-054</a>)</li>
+          <li>Restoration is idempotent under at-least-once redelivery: <code>Order.InventoryRestored</code> is the marker,
+          and it is committed by the same <code>SaveChangesAsync</code> as the inventory increases. The order&#39;s rowversion
+          token makes two concurrent deliveries mutually exclusive; the loser fails and the outbox retry then
+          sees the committed marker.</li>
           </ul>
           <p><strong>Implemented in:</strong></p>
           <ul>
           <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Cancel/CancelOrderHandler.cs</code></li>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/Saga/OrderCancelledSagaHandler.cs</code></li>
           </ul>
           <hr>
           <h3 id="37-manual-payment-override">3.7 Manual Payment Override</h3>
@@ -656,6 +674,51 @@
           <p><strong>Implemented in:</strong></p>
           <ul>
           <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/Deliver/DeliverOrderHandler.cs</code></li>
+          </ul>
+          <hr>
+          <h3 id="39-payment-verification-webhook-backstop">3.9 Payment Verification (webhook backstop)</h3>
+          <p><strong>Trigger:</strong> The customer (or an admin) asks the system to re-check a payment whose webhook never
+          arrived, typically from a &quot;Retry / check payment&quot; affordance on the order.</p>
+          <p><strong>Steps:</strong></p>
+          <ol>
+          <li>Validate ownership (owner or admin)</li>
+          <li>Query Stripe directly for the order&#39;s checkout session</li>
+          <li>If Stripe reports the session paid, mark the order <code>Paid</code> exactly as the webhook path would</li>
+          <li>If the order is already <code>Paid</code>, or is not in a verifiable state, succeed without changes</li>
+          </ol>
+          <p><strong>Business Rules Applied:</strong></p>
+          <ul>
+          <li>Webhooks are the fast path but are not guaranteed; this is the reconciliation backstop that keeps a
+          paid customer from sitting in <code>PaymentInitiated</code> indefinitely (<a href="../adr/054-saga-compensation-and-reconciliation.html">ADR-054</a>)</li>
+          <li>The operation is idempotent by construction: it converges the order onto whatever Stripe says</li>
+          </ul>
+          <p><strong>Implemented in:</strong></p>
+          <ul>
+          <li><code>Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/UseCases/VerifyPayment/VerifyPaymentHandler.cs</code></li>
+          </ul>
+          <hr>
+          <h3 id="310-product-images">3.10 Product Images</h3>
+          <p><strong>Trigger:</strong> An administrator manages the image collection on a product; any visitor views one.</p>
+          <p>Behind the <code>CatalogFeatures.ProductImages</code> feature gate, with storage per
+          <a href="../adr/045-managed-file-storage-and-avatars.html">ADR-045</a>. Uploads are capped at 6 MB of request body
+          (the 5 MB domain constraint plus multipart overhead). Reads are anonymous and output-cached for 300
+          seconds; every mutation evicts the products cache. Both a legacy single-image route set (<code>/image</code>) and
+          the current collection route set (<code>/images</code>) are exposed, sharing one upload handler. Reordering
+          reassigns display order from the supplied id list, and the first id becomes the primary image.</p>
+          <p><strong>Implemented in:</strong></p>
+          <ul>
+          <li><code>Source/Modules/Catalog/MMCA.Store.Catalog.API/Controllers/ProductImagesController.cs</code></li>
+          </ul>
+          <hr>
+          <h3 id="311-data-subject-rights-gdprccpa">3.11 Data Subject Rights (GDPR/CCPA)</h3>
+          <p><strong>Trigger:</strong> A user exports or erases their own account data; an administrator does it on their behalf.</p>
+          <p>Export returns the personal data held for the user in a portable JSON format. Erasure deletes the
+          account and irreversibly anonymizes its personal data, which is distinct from the soft-delete used for
+          ordinary lifecycle (<a href="../adr/005-soft-delete-vs-erasure.html">ADR-005</a>). Both endpoints authorize the
+          owner or an Admin, enforced in the handlers rather than by a controller-wide policy.</p>
+          <p><strong>Implemented in:</strong></p>
+          <ul>
+          <li><code>Source/Modules/Identity/MMCA.Store.Identity.API/Controllers/UsersController.cs</code></li>
           </ul>
           <hr>
           <h2 id="4-order-status-state-machine">4. Order Status State Machine</h2>
@@ -1396,7 +1459,7 @@
           <ul>
           <li>Sales module cannot directly access Catalog domain entities</li>
           <li>When Catalog module is disabled, a stub <code>DisabledProductVariantService</code> is registered</li>
-          <li>Sales module declares a hard dependency on Catalog (<code>RequiresDependencies = true</code>) — it will not start without Catalog</li>
+          <li>Sales module declares a hard dependency on Catalog (<code>RequiresDependencies = true</code>): it will not start without Catalog</li>
           <li>Module discovery uses reflection; registration follows topological dependency order (Kahn&#39;s algorithm)</li>
           </ul>
           <hr>
@@ -1549,7 +1612,7 @@
           <strong>Recommendation:</strong> This may be intentional (allowing customers to add items that are temporarily out of stock) or may warrant a stock availability indicator on the cart.</p>
           <h3 id="144-cart-reactivation-clears-all-items">14.4 Cart Reactivation Clears All Items</h3>
           <p><strong>Observation:</strong> When a customer adds an item to a previously checked-out cart, all previous items are deleted and the cart is reactivated empty (with only the new item). The business intent behind clearing the cart rather than preserving previous items is unclear.
-          <strong>Recommendation:</strong> Confirm this is the desired behavior — some systems prefer to retain unchecked-out items.</p>
+          <strong>Recommendation:</strong> Confirm this is the desired behavior: some systems prefer to retain unchecked-out items.</p>
           <h3 id="145-no-price-change-protection">14.5 No Price Change Protection</h3>
           <p><strong>Observation:</strong> Product variant prices can be changed at any time by administrators. If a customer has items in their cart and prices change before checkout, the customer will be charged the new price (prices are fetched at checkout, not at cart-add time).
           <strong>Recommendation:</strong> Determine if customers should be notified of price changes or if cart items should display price warnings.</p>
@@ -1557,7 +1620,7 @@
           <p><strong>Observation:</strong> The <code>MarkAsDelivered</code> transition exists but there is no tracking number, carrier information, or estimated delivery date. Delivery is a binary admin action.
           <strong>Recommendation:</strong> Consider whether shipping/tracking details are needed for the business use case.</p>
           <h3 id="147-no-partial-order-fulfillment">14.7 No Partial Order Fulfillment</h3>
-          <p><strong>Observation:</strong> Orders are delivered as a whole — there is no concept of partial shipments or split deliveries.
+          <p><strong>Observation:</strong> Orders are delivered as a whole: there is no concept of partial shipments or split deliveries.
           <strong>Recommendation:</strong> Clarify if partial fulfillment is a future requirement.</p>
           <h3 id="148-no-customeruser-deactivation-endpoint">14.8 No Customer/User Deactivation Endpoint</h3>
           <p><strong>Observation:</strong> <code>User.Deactivate()</code> method and <code>UserDeactivated</code> domain event exist in the domain model, but no API endpoint or UI action exposes this functionality.
@@ -1566,7 +1629,7 @@
           <p><strong>Observation:</strong> Deleting a category doesn&#39;t check for assigned products. Products with a deleted category may have an orphaned <code>CategoryId</code>.
           <strong>Recommendation:</strong> Consider validating no products reference the category before deletion, or cascading the nullification.</p>
           <h3 id="1410-inventory-list-endpoint-not-exposed">14.10 Inventory List Endpoint Not Exposed</h3>
-          <p><strong>Observation:</strong> The <code>InventoryItemsController</code> only exposes <code>GetById</code> — the <code>GetAll</code>, <code>GetPaged</code>, and <code>Lookup</code> endpoints from the base class are not overridden. The UI <code>InventoryItemList</code> page may need these endpoints.
+          <p><strong>Observation:</strong> The <code>InventoryItemsController</code> only exposes <code>GetById</code>, the <code>GetAll</code>, <code>GetPaged</code>, and <code>Lookup</code> endpoints from the base class are not overridden. The UI <code>InventoryItemList</code> page may need these endpoints.
           <strong>Recommendation:</strong> Verify how the inventory list page fetches its data and whether list endpoints should be added.</p>
           <hr>
           <h2 id="15-seed-data-initial-system-state">15. Seed Data (Initial System State)</h2>
@@ -1580,12 +1643,12 @@
           <ul>
           <li>Categories: &quot;Jewelry&quot; (id=1), &quot;Watches&quot; (id=2)</li>
           <li>Product: &quot;Gold Ring&quot; (id=11, brand: &quot;WhatNot&quot;, category: Jewelry)</li>
-          <li>Variants: &quot;Gold Ring - Size 6&quot; ($15.00), &quot;Gold Ring - Size 7&quot; ($15.50), &quot;Gold Ring - Size 8&quot; ($16.00) — all USD</li>
+          <li>Variants: &quot;Gold Ring - Size 6&quot; ($15.00), &quot;Gold Ring - Size 7&quot; ($15.50), &quot;Gold Ring - Size 8&quot; ($16.00): all USD</li>
           </ul>
           <p><strong>Inventory:</strong> 100,000 units per variant (for all 3 Gold Ring sizes)</p>
-          <p><strong>Seeding is idempotent</strong> — seeders check for existing data via <code>ExistsAsync()</code> before inserting, and only run for enabled modules.</p>
+          <p><strong>Seeding is idempotent</strong>: seeders check for existing data via <code>ExistsAsync()</code> before inserting, and only run for enabled modules.</p>
           <hr>
-          <p><em>This specification is derived entirely from the source code. All business rules, workflows, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-03-18.</em></p>
+          <p><em>This specification is derived entirely from the source code. All business rules, workflows, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-07-27 (re-verified against MMCA.Store HEAD <code>1dfdc991</code>).</em></p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>

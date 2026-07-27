@@ -30,7 +30,7 @@ intended end state but is not yet wired for theme (see Decision 3).
    via a small JS interop call (`theme.js` `systemPrefersDark()` →
    `window.matchMedia('(prefers-color-scheme: dark)')`), used only when no cookie/profile value exists.
 
-3. **Theme is restored from the cookie/localStorage after first render — the no-flash SSR bootstrap is
+3. **Theme is restored from the cookie/localStorage after first render: the no-flash SSR bootstrap is
    outstanding.** `ThemeService.InitializeAsync` reads the persisted value via JS interop from
    `OnAfterRenderAsync(firstRender)` and deliberately does **not** run during SSR prerender, so the bound
    `IsDarkMode` is corrected just after hydration. The cookie-as-single-source-of-truth persistence of
@@ -40,7 +40,7 @@ intended end state but is not yet wired for theme (see Decision 3).
    server-side at prerender to close it is tracked as follow-up.
 
 4. **The toggle ships in the shared `MainLayout`**, next to the i18n culture switcher, in the app-bar
-   `appbar-icon-actions` slot — so every consumer gets both controls without per-host wiring.
+   `appbar-icon-actions` slot, so every consumer gets both controls without per-host wiring.
 
 5. **The choice is persisted to the Identity profile (`User.PreferredTheme`)**, in the *same* migration and
    with the *same* login-reconciliation rule as `User.PreferredCulture` (ADR-027): DB is the cross-device
@@ -55,7 +55,7 @@ intended end state but is not yet wired for theme (see Decision 3).
 - **Reusing the i18n cookie/profile machinery** means one persistence model for both user preferences,
   instead of two subtly different ones. Theme and locale are the same shape of problem, so the no-flash SSR
   bootstrap built for locale is the template theme will follow when it is wired.
-- **The palette already existed**, so the cost is wiring + persistence, not design — and `BrandColorTokenTests`
+- **The palette already existed**, so the cost is wiring + persistence, not design, and `BrandColorTokenTests`
   already guards the C#↔CSS token sync, so the dark surfaces stay on-brand.
 - **Defaulting to the OS preference** respects the user's system setting on first visit while letting an
   explicit choice win and follow them across devices.

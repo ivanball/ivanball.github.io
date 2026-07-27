@@ -14,7 +14,7 @@ connectivity, battery, accessibility announcements, deep links) plus three famil
 **adapters** that implement each contract per host: MAUI-native, browser-JS-interop, and inert
 fallback. The head chooses which family it gets at DI composition time. This is the
 [Rubric §18, UI Architecture] and [Rubric §22, Responsive/Cross-Browser] story in miniature, and the
-whole design is [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) (`MMCA.Common/ADRs/042-device-capability-abstraction.md`).
+whole design is [ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html) (`Website/docs-src/adr/042-device-capability-abstraction.md`).
 
 **The contract-per-capability shape.** Every capability is its own narrow interface in the
 `MMCA.Common.UI.Services.Capabilities` namespace (form-factor detection, [`IFormFactor`](#iformfactor),
@@ -101,7 +101,7 @@ correct answer for "what am I running on" is injected, not detected inline.
 
 **Deep links: one funnel from native navigation into Blazor routing.** The most involved runtime flow
 in this group is the deep-link path ([ADR-043](https://ivanball.github.io/docs/adr/043-mobile-deep-links-and-native-oauth-callback.html),
-`MMCA.Common/ADRs/043-mobile-deep-links-and-native-oauth-callback.md`).
+`Website/docs-src/adr/043-mobile-deep-links-and-native-oauth-callback.md`).
 [`IDeepLinkDispatcher`](#ideeplinkdispatcher)
 (`MMCA.Common.UI/Services/Capabilities/IDeepLinkDispatcher.cs:10`) is the single boundary between
 native navigation sources (notification taps, home-screen app actions, app links, QR scans) and the
@@ -125,7 +125,7 @@ and registers the native capability bundle.
 **Wired-but-inert capabilities.** A recurring, honest theme in this layer is capabilities that are
 fully registered but deliberately do nothing yet, because their real backing requires credentials or a
 later feature wave. Native push ([ADR-044](https://ivanball.github.io/docs/adr/044-native-push-delivery.html),
-`MMCA.Common/ADRs/044-native-push-delivery.md`) registers a real
+`Website/docs-src/adr/044-native-push-delivery.md`) registers a real
 [`IPushRegistrationService`](#ipushregistrationservice)
 (`MMCA.Common.UI/Services/Capabilities/IPushRegistrationService.cs:10`) on MAUI heads, but the
 [`IPushDeviceTokenProvider`](#ipushdevicetokenprovider) defaults to a null provider that yields no
@@ -614,7 +614,7 @@ delivery), and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-st
 - **Walkthrough**: two members.
   - `IsSupported` (`ISpeechToTextService.cs:13`): whether speech recognition is available on this platform.
   - `ListenAsync(CultureInfo, IProgress<string>?, CancellationToken)` (`ISpeechToTextService.cs:20-23`): listens until the recognizer finalizes or the token cancels, streaming partial hypotheses through the `partialResults` progress sink, and returns the final transcript, or `null` on permission denial, cancellation, or recognizer failure (`ISpeechToTextService.cs:16-19`). The `null`-on-failure contract is the same never-throw discipline the whole layer follows: a caller can only fall back to typing, never to a broken path.
-- **Why it's built this way**: keeping recognition behind a `Shared`-only interface lets the MAUI head supply a real recognizer while browser and null heads register an inert one, all selected at DI composition time ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html), `MMCA.Common/ADRs/042-device-capability-abstraction.md`).
+- **Why it's built this way**: keeping recognition behind a `Shared`-only interface lets the MAUI head supply a real recognizer while browser and null heads register an inert one, all selected at DI composition time ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html), `Website/docs-src/adr/042-device-capability-abstraction.md`).
 - **Where it's used**: registered as a singleton with the `NullSpeechToTextService` default in `AddDeviceCapabilityDefaults` (`MMCA.Common.UI/Services/Capabilities/DependencyInjection.cs:41`); the MAUI-native override ships in the `MMCA.Common.UI.Maui` package. Consumed by shared components that offer voice input on feedback and Q&A forms.
 
 ### ITextToSpeechService

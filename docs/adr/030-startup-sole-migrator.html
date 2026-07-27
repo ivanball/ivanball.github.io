@@ -169,9 +169,9 @@
           <code>DatabaseInitializationExtensions</code> offers three strategies via <code>ApplicationSettings.DatabaseInitStrategy</code>,
           acting per physical SQL Server source:</p>
           <ul>
-          <li><code>&quot;Migrate&quot;</code> — auto-apply pending EF Core migrations (the code documents this as <strong>development/testing</strong>).</li>
-          <li><code>&quot;EnsureCreated&quot;</code> — legacy <code>EnsureCreated</code> for every source in use.</li>
-          <li><code>&quot;None&quot;</code> — the <strong>production</strong> guard: validate that no SQL Server source has unapplied migrations and
+          <li><code>&quot;Migrate&quot;</code>: auto-apply pending EF Core migrations (the code documents this as <strong>development/testing</strong>).</li>
+          <li><code>&quot;EnsureCreated&quot;</code>: legacy <code>EnsureCreated</code> for every source in use.</li>
+          <li><code>&quot;None&quot;</code>, the <strong>production</strong> guard: validate that no SQL Server source has unapplied migrations and
           throw a per-source breakdown if any is behind.</li>
           </ul>
           <p>The framework&#39;s own comments mark <code>&quot;None&quot;</code> as the production strategy and <code>&quot;Migrate&quot;</code> as dev/test. Both
@@ -179,7 +179,7 @@
           it deserves to be recorded.</p>
           <h2 id="decision">Decision</h2>
           <p>In Azure Container Apps, <strong>every service host runs <code>ApplicationSettings__DatabaseInitStrategy = Migrate</code>
-          in production and is the sole migrator of its own database</strong> — it applies its pending EF Core migrations
+          in production and is the sole migrator of its own database</strong>: it applies its pending EF Core migrations
           at startup, before the new revision serves traffic. There is deliberately <strong>no</strong> separate deploy-step
           migration (no <code>sqlcmd</code> / <code>dotnet ef database update</code> apply in <code>deploy.yml</code>).</p>
           <ul>
@@ -196,7 +196,7 @@
           <code>sqlcmd</code> that <em>is</em> installed in the pipeline is a connectivity/readiness probe, not a migration apply.</li>
           <li><strong>Build-time drift gate, not a runtime apply.</strong> CI runs
           <code>dotnet ef migrations has-pending-model-changes</code> (Store <code>deploy.yml:166</code>, ADC <code>deploy.yml:233</code>) so a
-          model that has drifted from its migrations fails the build — but that gate only <em>detects</em>; it never
+          model that has drifted from its migrations fails the build, but that gate only <em>detects</em>; it never
           applies anything. The container does the applying.</li>
           <li><strong>This overrides the framework&#39;s documented &quot;None for production&quot; default</strong>, accepting auto-migrate-on-
           boot in prod as the price of one fewer moving part.</li>
@@ -208,7 +208,7 @@
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>One migrator, one mechanism.</strong> The code that owns the schema applies the schema; there is no second
-          tool to keep in lockstep and no ordering race between a deploy step and container boot — exactly the
+          tool to keep in lockstep and no ordering race between a deploy step and container boot: exactly the
           failure the incident exposed.</li>
           <li><strong>Database-per-service keeps each migration small and scoped.</strong> A boot-time apply touches only one
           service&#39;s database, so it is fast and its blast radius is one service.</li>
@@ -221,7 +221,7 @@
           migration would ship itself on the next deploy. The apps accept this; the build-time model-drift gate
           is the compensating control, and the per-service blast radius bounds the damage.</li>
           <li><strong>A failed startup migration fails the new revision.</strong> ACA keeps traffic on the previous revision
-          (readiness gating, ADR-025), but a <em>half-applied</em> migration still needs manual recovery — there is no
+          (readiness gating, ADR-025), but a <em>half-applied</em> migration still needs manual recovery: there is no
           automated down-migration.</li>
           <li><strong>Rolling updates briefly overlap two revisions.</strong> <code>minReplicas: 1</code> keeps it to one applier per
           revision, but during a rollout the old and new revisions coexist for a window; a long migration can

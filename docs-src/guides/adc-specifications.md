@@ -9,14 +9,16 @@ ADC is a conference management system for the **Atlanta Developers Conference**.
 
 ### Core Business Domains (organized by bounded context)
 
-**Conference** (master schedule data — organizer-managed, Sessionize-imported):
+**Conference** (master schedule data: organizer-managed, Sessionize-imported):
 - **Event Management** - Creating and managing conference events, rooms, sessions, and speakers
 - **Speaker & Category Management** - Organizing speakers by categories (e.g., track, level, tags)
 - **Feedback Collection** - Gathering attendee ratings and comments on events, individual sessions, and speakers
 - **External Data Sync** - Importing conference data from Sessionize
 
-**Engagement** (attendee-generated activity — user-facing):
+**Engagement** (attendee-generated activity: user-facing):
 - **Personal Schedule** - Attendee session bookmarking
+- **Live Polls** - Conference-day polls scoped to an event or a single session, with live tallies ([ADR-039](../adr/039-live-channel-push.md))
+- **Live Session Q and A** - Attendee-submitted questions with moderation and upvoting, displayed anonymously
 
 **Identity** (identity and authentication):
 - **User Management** - Email + password registration, JWT authentication, and role-based authorization
@@ -80,11 +82,11 @@ ADC is a conference management system for the **Atlanta Developers Conference**.
 | Status | Current status of the session, imported from Sessionize. Default: null (manually created sessions have no status). The system recognizes six Sessionize status values: `Accepted` (confirmed), `Waitlisted` (on waitlist), `Accept Queue` (queued for acceptance review), `Nominated` (nominated for consideration), `Decline Queue` (queued for decline review), and `Declined` (rejected). Only `Accepted` and null statuses are eligible for public display, bookmarking, and feedback (BR-49). All other statuses are excluded from public views and engagement actions. |
 | IsInformed | Whether the speaker has been informed about the session status |
 | IsConfirmed | Whether the speaker has confirmed their participation |
-| IsServiceSession | Whether this is a non-talk session (e.g., lunch break, registration, networking). Service sessions are displayed on the schedule but are not bookmarkable and do not support feedback. Default: false. Note: keynotes are typically not service sessions — they are talks with speakers. |
-| IsPlenumSession | Whether this is a plenum (plenary/all-hands) session (default: false). Informational — used for display purposes to distinguish plenary sessions from breakout sessions. Imported from Sessionize when available. |
+| IsServiceSession | Whether this is a non-talk session (e.g., lunch break, registration, networking). Service sessions are displayed on the schedule but are not bookmarkable and do not support feedback. Default: false. Note: keynotes are typically not service sessions: they are talks with speakers. |
+| IsPlenumSession | Whether this is a plenum (plenary/all-hands) session (default: false). Informational: used for display purposes to distinguish plenary sessions from breakout sessions. Imported from Sessionize when available. |
 | LiveUrl | URL to a live stream for the session (optional). Allows attendees to watch the session remotely. Displayed alongside session details when present. |
 | RecordingUrl | URL to a recording of the session (optional). Typically populated after the session concludes. Displayed alongside session details when present. |
-| AccessibilityInfo | Description of accessibility accommodations for this session (optional, e.g., "Live captioning provided", "Sign language interpreter available"). Informational — displayed to attendees for planning. |
+| AccessibilityInfo | Description of accessibility accommodations for this session (optional, e.g., "Live captioning provided", "Sign language interpreter available"). Informational: displayed to attendees for planning. |
 | ResourceLinks | Free-text field for speakers to share supplementary links (slides, code repos, blog posts). Optional. Displayed to attendees alongside session details. |
 | Duration | Computed: `EndsAt - StartsAt` when both are non-null, null otherwise. Read-only, no database column. Serialized in DTOs as total minutes (e.g., `60`). Cannot be used for database-level filtering or sorting. |
 
@@ -94,7 +96,7 @@ ADC is a conference management system for the **Atlanta Developers Conference**.
 - Owns many **SessionSpeakers** (child join entities linking Session ↔ Speaker)
 - Owns many **SessionQuestionAnswers** (child feedback entities)
 - Owns many **SessionCategoryItems** (child join entities linking Session ↔ CategoryItem)
-- Referenced by many **UserSessionBookmarks** (Engagement context — own aggregate root)
+- Referenced by many **UserSessionBookmarks** (Engagement context: own aggregate root)
 
 ---
 
@@ -104,7 +106,7 @@ ADC is a conference management system for the **Atlanta Developers Conference**.
 |---|---|
 | FirstName | Speaker's first name (required) |
 | LastName | Speaker's last name (required) |
-| Email | Speaker's email address (optional, imported from Sessionize). Not exposed via public API — used only for organizer management. |
+| Email | Speaker's email address (optional, imported from Sessionize). Not exposed via public API: used only for organizer management. |
 | Bio | Speaker biography (optional) |
 | TagLine | Short tagline or title (optional) |
 | ProfilePicture | URL to the speaker's profile picture (optional) |
@@ -121,9 +123,9 @@ ADC is a conference management system for the **Atlanta Developers Conference**.
 - Has many **SessionSpeakers** (sessions the speaker presents)
 - Owns many **SpeakerCategoryItems** (child join entities linking Speaker ↔ CategoryItem)
 - Owns many **SpeakerQuestionAnswers** (child feedback entities for speaker-level survey responses)
-- May be linked to one **User** (via LinkedUserId — 1:1, see Section 12.4)
+- May be linked to one **User** (via LinkedUserId: 1:1, see Section 12.4)
 
-**Lifecycle:** `Speaker.Create(id?, firstName, lastName, email?, bio?, tagLine?, profilePicture?, isTopSpeaker)` sets core identity fields. Social links (TwitterHandle, LinkedInUrl, GitHubUrl, WebsiteUrl) and LinkedUserId are set only via `Update()` — they are not accepted at creation time. This reflects the typical flow: speakers are created during Sessionize import with basic profile data, and social links are populated in a subsequent update pass.
+**Lifecycle:** `Speaker.Create(id?, firstName, lastName, email?, bio?, tagLine?, profilePicture?, isTopSpeaker)` sets core identity fields. Social links (TwitterHandle, LinkedInUrl, GitHubUrl, WebsiteUrl) and LinkedUserId are set only via `Update()`, they are not accepted at creation time. This reflects the typical flow: speakers are created during Sessionize import with basic profile data, and social links are populated in a subsequent update pass.
 
 ---
 
@@ -136,7 +138,7 @@ ADC is a conference management system for the **Atlanta Developers Conference**.
 | Type | Category type classifier (optional) |
 
 **Relationships:**
-- Owns many **CategoryItems** (child entities — the values within this category)
+- Owns many **CategoryItems** (child entities: the values within this category)
 
 > **Global scope warning:** Categories are not scoped to a specific event (IR-5). All events share the same category pool. When multiple events use Sessionize import (UC-6), Sessionize-assigned Category and CategoryItem IDs (BR-61) must be consistent across all Sessionize sources. If two events import from different Sessionize instances that assign different meanings to the same category ID, the second refresh will overwrite the first event's category data (BR-48). This is acceptable for the current single-event-per-year model but becomes a data corruption risk if multiple concurrent events use independent Sessionize sources. See BR-74 for mitigation guidance.
 
@@ -165,7 +167,7 @@ ADC is a conference management system for the **Atlanta Developers Conference**.
 | Capacity | Maximum seating capacity of the room (optional, integer). Displayed to attendees for planning purposes. |
 | Floor | Floor number or level name within the venue (optional, e.g., "2", "Mezzanine"). Used for wayfinding. |
 | Location | Descriptive location within the venue (optional, e.g., "East Wing", "Near Registration Desk"). Used for wayfinding. |
-| AccessibilityInfo | Description of accessibility features for the room (optional, e.g., "Wheelchair accessible, hearing loop available, reserved seating for mobility aids"). Informational — displayed to attendees for planning. |
+| AccessibilityInfo | Description of accessibility features for the room (optional, e.g., "Wheelchair accessible, hearing loop available, reserved seating for mobility aids"). Informational: displayed to attendees for planning. |
 
 **Relationships:**
 - Belongs to one **Event** (required)
@@ -178,11 +180,11 @@ ADC is a conference management system for the **Atlanta Developers Conference**.
 | Attribute | Meaning |
 |---|---|
 | QuestionText | The survey question text (required) |
-| QuestionEntity | Indicates whether the question targets "Session", "Event", or "Speaker" (required — determines which survey the question appears in; see BR-15) |
-| QuestionType | The answer format: "Rating" (numeric score), "Text" (free-text comment), or "Email" (email address). Determines answer validation: Rating answers must be integers 1–5, Text answers are free-text (max 2000 chars), Email answers must be valid email format. Unrecognized values are rejected. (required) |
+| QuestionEntity | Indicates whether the question targets "Session", "Event", or "Speaker" (required: determines which survey the question appears in; see BR-15) |
+| QuestionType | The answer format: "Rating" (numeric score), "Text" (free-text comment), or "Email" (email address). Determines answer validation: Rating answers must be integers 1-5, Text answers are free-text (max 2000 chars), Email answers must be valid email format. Unrecognized values are rejected. (required) |
 | Sort | Display order of the question in the survey |
-| IsRequired | Whether the attendee should answer this question (default: false). Advisory — clients should enforce in the UI, but the server does not validate completeness (BR-95). |
-| QuestionSource | The origin of the question: "Sessionize" (imported from Sessionize during refresh) or "User" (created manually by an organizer). Required, case-insensitive. Determines provenance tracking — Sessionize-sourced questions follow the Sessionize source-of-truth rule (BR-48) during refresh, while User-sourced questions are unaffected by Sessionize refresh. |
+| IsRequired | Whether the attendee should answer this question (default: false). Advisory: clients should enforce in the UI, but the server does not validate completeness (BR-95). |
+| QuestionSource | The origin of the question: "Sessionize" (imported from Sessionize during refresh) or "User" (created manually by an organizer). Required, case-insensitive. Determines provenance tracking: Sessionize-sourced questions follow the Sessionize source-of-truth rule (BR-48) during refresh, while User-sourced questions are unaffected by Sessionize refresh. |
 
 **Relationships:**
 - Has many **EventQuestionAnswers**
@@ -219,7 +221,7 @@ ADC is a conference management system for the **Atlanta Developers Conference**.
 
 ---
 
-> **Join Entity Convention:** All join entities below are pure association records with no business attributes beyond their foreign keys. They support **add and delete only** — update is not meaningful when there are no mutable attributes. To change an association, delete and re-create it.
+> **Join Entity Convention:** All join entities below are pure association records with no business attributes beyond their foreign keys. They support **add and delete only**: update is not meaningful when there are no mutable attributes. To change an association, delete and re-create it.
 
 #### EventSpeaker (Join Entity)
 
@@ -274,7 +276,86 @@ Links a **Speaker** to a **CategoryItem** (tag/classification).
 - References one **Session** (required)
 
 **Business Rules:** BR-21 (unique per user+session), BR-22 (informational only)
-- The session's EventId is **not denormalized** onto the bookmark — it is derived from `Session.EventId` when needed via a join, avoiding inconsistency if a session were reassigned
+- The session's EventId is **not denormalized** onto the bookmark: it is derived from `Session.EventId` when needed via a join, avoiding inconsistency if a session were reassigned
+
+---
+
+#### The conference-day live layer
+
+Live polls and live Q and A are the conference-day surface of the Engagement context
+([ADR-039](../adr/039-live-channel-push.md)). Both sit behind their own feature gates
+(`Engagement.LivePolls` and `Engagement.SessionQA`), so a deployment can run the schedule without the
+live layer.
+
+Two design choices recur across all five aggregates below and are worth reading once:
+
+- **Live-window snapshotting.** Whether an event is "live" is Conference data, but checking it per
+  vote or per upvote would mean a cross-service call on the hottest path in the system. Instead the
+  event's live-window end is copied onto the poll when it opens (BR-223/BR-224) and onto the question
+  when it is submitted (BR-237), so the accept/reject check is a local comparison.
+- **Votes and upvotes are their own aggregate roots, not children.** They are the highest-write rows
+  in the system. Loading them into the parent aggregate would bloat the change tracker and contend on
+  the parent row, so each is a standalone root with a filtered unique index enforcing one active row
+  per (parent, user) (BR-225, BR-235).
+
+#### LivePoll (Aggregate Root)
+
+| Attribute | Meaning |
+|---|---|
+| EventId | The event the poll belongs to (required) |
+| SessionId | The session the poll is scoped to, or null for an event-wide poll (BR-230) |
+| Question | The poll question, 1-200 characters (BR-220) |
+| Status | Draft, Open, or Closed (BR-221) |
+| LiveWindowEndUtc | Exclusive end of the event's live window, snapshotted when the poll is opened (BR-224) |
+
+**Relationships:**
+- Owns many **LivePollOptions** (authored with the poll, 2-10, unique texts, each 1-100 characters, BR-220)
+- Referenced by many **LivePollVotes** (separate aggregate roots, BR-225)
+
+**Business Rules:** BR-220, BR-221, BR-222, BR-223, BR-224, BR-226, BR-228, BR-230, BR-236
+
+#### LivePollOption
+
+Child of LivePoll: display `Text` and a `Sort` order. Cascade soft-deleted with its parent.
+
+#### LivePollVote (Aggregate Root)
+
+| Attribute | Meaning |
+|---|---|
+| LivePollId | The poll voted on |
+| OptionId | The chosen option (must belong to the poll and not be deleted, BR-226) |
+| UserId | The voting user |
+
+**Business Rules:** BR-224, BR-225, BR-226
+
+#### SessionQuestion (Aggregate Root)
+
+| Attribute | Meaning |
+|---|---|
+| SessionId | The session the question was asked in (required) |
+| EventId | The owning event, denormalized from the session at submission. Metadata only, deliberately not validated |
+| UserId | The submitting user. **Never exposed on DTOs**: questions display anonymously (BR-238) |
+| Text | The question text, 1-500 characters (BR-231) |
+| Status | Pending, Approved, or Dismissed; starts at the event's moderation default (BR-233/BR-234) |
+| IsAnswered | Set once a moderator marks an approved question answered (BR-234) |
+| LiveWindowEndUtc | Exclusive end of the event's live window, snapshotted at submission (BR-237) |
+
+**Relationships:**
+- Referenced by many **SessionQuestionUpvotes** (separate aggregate roots, BR-235)
+
+**Business Rules:** BR-231, BR-233, BR-234, BR-235, BR-236, BR-237, BR-238
+
+#### SessionQuestionUpvote (Aggregate Root)
+
+| Attribute | Meaning |
+|---|---|
+| SessionQuestionId | The question upvoted |
+| UserId | The upvoting user |
+
+One active upvote per (question, user), enforced by a filtered unique index. Un-upvoting soft-deletes
+the row and re-upvoting reactivates it rather than inserting a second one (BR-235, the BR-135 pattern).
+
+**Business Rules:** BR-235, BR-237, BR-238
 
 ---
 
@@ -304,7 +385,7 @@ Links a **Speaker** to a **CategoryItem** (tag/classification).
 
 **Relationships:**
 - Referenced by many **UserSessionBookmarks** (Engagement context)
-- May be linked to one **Speaker** (via LinkedSpeakerId — 1:1, see Section 12.4)
+- May be linked to one **Speaker** (via LinkedSpeakerId: 1:1, see Section 12.4)
 
 **Lookup capabilities:** Users can be found by Email (unique lookup).
 
@@ -339,90 +420,109 @@ Every entity in the system tracks:
 
 ### Explicit Rules
 
-> **Reading guide:** Some rules reference other rules defined later in the document (e.g., BR-63, BR-80 are defined in Section 10). Forward references use the `BR-*` numbering consistently — search for the number to find the full definition.
+> **Reading guide:** Some rules reference other rules defined later in the document (e.g., BR-63, BR-80 are defined in Section 10). Forward references use the `BR-*` numbering consistently: search for the number to find the full definition.
 
-> **Numbering convention:** Business rule numbers (BR-\*) are not sequential. Rules are numbered in the order they were identified during iterative specification development. Gaps (e.g., BR-23 through BR-40 do not exist) and out-of-sequence additions (e.g., BR-127 was added after BR-129) are intentional — renumbering would break cross-references throughout the document. Rules numbered BR-200+ are grouped in Section 12 (Authentication & Identity Architecture) and address the email-based identity model.
+> **Numbering convention:** Business rule numbers (BR-\*) are not sequential. Rules are numbered in the order they were identified during iterative specification development. Gaps (e.g., BR-23 through BR-40 do not exist) and out-of-sequence additions (e.g., BR-127 was added after BR-129) are intentional: renumbering would break cross-references throughout the document. Rules numbered BR-200+ are grouped in Section 12 (Authentication & Identity Architecture) and address the email-based identity model.
 
 | # | Rule |
 |---|---|
-| BR-1 | All entities use **soft delete** — records are never physically removed; the `IsDeleted` flag is set to true |
+| BR-1 | All entities use **soft delete**: records are never physically removed; the `IsDeleted` flag is set to true |
 | BR-2 | A child entity must belong to its specified aggregate root; the parent ID in the child must match the aggregate root ID |
 | BR-3 | The aggregate root must exist before a child entity can be added, updated, or deleted |
 | BR-4 | When updating a child entity, the child must already exist in the aggregate's collection (matched by ID) |
 | BR-5 | When deleting a child entity, the child must exist in the aggregate's collection |
 | BR-6 | Sessionize data refresh requires a non-empty `SessionizeCode` on the event |
 | BR-7 | Sessionize refresh is **idempotent**: existing entities (matched by ID) are updated, new ones are added, duplicates are skipped |
-| BR-8 | Event question answers are **scoped to the authenticated user** for Attendees — attendees can only see their own answers. Organizers can read all answers for moderation purposes (BR-53, Section 11.9). Speakers can view feedback on their own sessions (BR-210). |
-| BR-9 | Session question answers are **scoped to the authenticated user** for Attendees — attendees can only see their own answers. Organizers can read all answers (BR-53, Section 11.9). Speakers can view feedback on sessions they present (BR-210). |
+| BR-8 | Event question answers are **scoped to the authenticated user** for Attendees: attendees can only see their own answers. Organizers can read all answers for moderation purposes (BR-53, Section 11.9). Speakers can view feedback on their own sessions (BR-210). |
+| BR-9 | Session question answers are **scoped to the authenticated user** for Attendees: attendees can only see their own answers. Organizers can read all answers (BR-53, Section 11.9). Speakers can view feedback on sessions they present (BR-210). |
 | BR-10 | PUT requests require the route ID to match the entity ID in the request body |
 | BR-11 | Pagination page size is capped at **500 items** maximum |
 | BR-12 | JWT tokens expire after **1 hour** from issuance |
 | BR-13 | A `DateRange` end date must be greater than or equal to the start date |
 | BR-14 | A `DateTimeRange` end must be greater than or equal to the start |
-| BR-15 | `Question.QuestionEntity` is required and must be exactly `"Session"`, `"Event"`, or `"Speaker"` (**case-insensitive** — `"session"`, `"EVENT"`, `"Speaker"` are all accepted and stored as the canonical casing). Questions without a target entity type are rejected. Unrecognized values are rejected with HTTP 422. |
+| BR-15 | `Question.QuestionEntity` is required and must be exactly `"Session"`, `"Event"`, or `"Speaker"` (**case-insensitive**: `"session"`, `"EVENT"`, `"Speaker"` are all accepted and stored as the canonical casing). Questions without a target entity type are rejected. Unrecognized values are rejected with HTTP 422. |
 | BR-16 | Features requiring session time windows (session feedback submission) are unavailable when a session's `StartsAt` or `EndsAt` is null. The UI should hide time-gated actions for unscheduled sessions. All server-side time comparisons for time-gated features use the event's configured `TimeZone` (see Event entity). |
 | BR-17 | Business rule violations are treated as client errors (HTTP 400) |
 | BR-18 | Pagination metadata values (TotalItemCount, PageSize, CurrentPage) must be non-negative |
 | BR-19 | CategoryItem `Name` is required and cannot be null |
 | BR-20 | API rate limit: **100 requests per minute** per client, with a queue of 2 |
-| BR-21 | A user can bookmark a session only once — unique per (UserId, SessionId) |
+| BR-21 | A user can bookmark a session only once: unique per (UserId, SessionId) |
 | BR-22 | Bookmarking a session does not reserve a seat; it is informational only |
 | BR-41 | Conference write endpoints (Event, Session, Speaker, Room, Category, Question CRUD and Sessionize refresh) require the **Organizer** role |
-| BR-42 | Engagement write endpoints (bookmarks, feedback submission) require **authentication** but not the Organizer role — any authenticated user can perform these actions |
+| BR-42 | Engagement write endpoints (bookmarks, feedback submission) require **authentication** but not the Organizer role: any authenticated user can perform these actions |
 | BR-43 | Read endpoints for Conference entities (events, sessions, speakers, rooms, categories) are **publicly accessible** without authentication |
 | BR-45 | New users default to the `Attendee` role. Users can be promoted to `Organizer` by database seeding. |
-| BR-48 | Sessionize refresh overwrites all **field values** on matched entities (matched by Sessionize ID). Manual edits made after the last sync are replaced on the next refresh — **Sessionize is the source of truth** for field content on imported entities. Sessionize does not control entity lifecycle — entities absent from a Sessionize response are not deleted (see BR-62). |
-| BR-49 | `Session.Status` recognizes six Sessionize status values: **`Accepted`** — session is confirmed and appears on the public schedule; it is bookmarkable and eligible for feedback. **`Waitlisted`** — session is on the waitlist, pending a slot. **`Accept Queue`** — session is queued for acceptance review. **`Nominated`** — session has been nominated for consideration. **`Decline Queue`** — session is queued for decline review. **`Declined`** — session was rejected. Only **`Accepted`** sessions appear on the public schedule and are eligible for bookmarking and feedback. All other statuses (`Waitlisted`, `Accept Queue`, `Nominated`, `Decline Queue`, `Declined`) are excluded from public views (filtered from GET list responses for non-organizers) and cannot be bookmarked or receive feedback. Unknown values from Sessionize are stored as-is and treated as ineligible — they are excluded from public views and engagement actions. **Null status** (the default for manually created sessions) follows `Accepted` rules — the session is visible, bookmarkable, and eligible for feedback. |
-| BR-50 | `Question.QuestionType` must be one of: `Rating`, `Text`, `Email` (**case-insensitive** — matching uses `OrdinalIgnoreCase`). These determine answer validation (BR-124) for all question answer types (EventQuestionAnswer, SessionQuestionAnswer, SpeakerQuestionAnswer). Unrecognized values are rejected. |
+| BR-48 | Sessionize refresh overwrites all **field values** on matched entities (matched by Sessionize ID). Manual edits made after the last sync are replaced on the next refresh: **Sessionize is the source of truth** for field content on imported entities. Sessionize does not control entity lifecycle: entities absent from a Sessionize response are not deleted (see BR-62). |
+| BR-49 | `Session.Status` recognizes six Sessionize status values: **`Accepted`**: session is confirmed and appears on the public schedule; it is bookmarkable and eligible for feedback. **`Waitlisted`**: session is on the waitlist, pending a slot. **`Accept Queue`**: session is queued for acceptance review. **`Nominated`**: session has been nominated for consideration. **`Decline Queue`**: session is queued for decline review. **`Declined`**: session was rejected. Only **`Accepted`** sessions appear on the public schedule and are eligible for bookmarking and feedback. All other statuses (`Waitlisted`, `Accept Queue`, `Nominated`, `Decline Queue`, `Declined`) are excluded from public views (filtered from GET list responses for non-organizers) and cannot be bookmarked or receive feedback. Unknown values from Sessionize are stored as-is and treated as ineligible: they are excluded from public views and engagement actions. **Null status** (the default for manually created sessions) follows `Accepted` rules: the session is visible, bookmarkable, and eligible for feedback. |
+| BR-50 | `Question.QuestionType` must be one of: `Rating`, `Text`, `Email` (**case-insensitive**: matching uses `OrdinalIgnoreCase`). These determine answer validation (BR-124) for all question answer types (EventQuestionAnswer, SessionQuestionAnswer, SpeakerQuestionAnswer). Unrecognized values are rejected. |
 | BR-51 | The Organizer role grants read access to a paginated user list, filterable by Email, FirstName, LastName, and Role. The response includes UserId, Email, FirstName, LastName, Role, and CreatedOn. Device-specific fields are excluded from the response to protect attendee device privacy. |
-| BR-52 | Attendees can only update (`PUT`) or delete (`DELETE`) EventQuestionAnswer and SessionQuestionAnswer records where `CreatedBy` matches their authenticated user ID. Attempting to modify another user's answer returns HTTP 403. The `POST`-as-upsert endpoint (BR-107) always operates on the authenticated user's own answers — `CreatedBy` is set from the JWT, never from the request body. |
-| BR-53 | Organizers can update (`PUT`) or delete (`DELETE`) any EventQuestionAnswer or SessionQuestionAnswer regardless of `CreatedBy`, enabling content moderation (e.g., removing inappropriate text responses). Organizer moderation uses `PUT`/`DELETE` by the answer's ID — the `POST`-as-upsert endpoint still keys on the organizer's own `CreatedBy`, so it cannot overwrite another user's answer via POST. |
+| BR-52 | Attendees can only update (`PUT`) or delete (`DELETE`) EventQuestionAnswer and SessionQuestionAnswer records where `CreatedBy` matches their authenticated user ID. Attempting to modify another user's answer returns HTTP 403. The `POST`-as-upsert endpoint (BR-107) always operates on the authenticated user's own answers: `CreatedBy` is set from the JWT, never from the request body. |
+| BR-53 | Organizers can update (`PUT`) or delete (`DELETE`) any EventQuestionAnswer or SessionQuestionAnswer regardless of `CreatedBy`, enabling content moderation (e.g., removing inappropriate text responses). Organizer moderation uses `PUT`/`DELETE` by the answer's ID: the `POST`-as-upsert endpoint still keys on the organizer's own `CreatedBy`, so it cannot overwrite another user's answer via POST. |
 | BR-55 | Soft-deleting a Session cascade soft-deletes all owned child entities (SessionSpeakers, SessionQuestionAnswers, SessionCategoryItems). |
 | BR-56 | Soft-deleting a User soft-deletes the User record and revokes the user's refresh token (preventing further token refresh). Raises `UserDeleted` domain event. Engagement data (bookmarks) is retained but excluded from user-facing queries. |
 | BR-58 | Engagement list endpoints support pagination (subject to the 500-item cap in BR-11) and filtering: bookmarks by `EventId` (derived via Session join) |
-| BR-60 | Domain events are raised for entity mutations. **Child entity** changes raise a `*Changed` domain event carrying `DomainEntityState` (Added/Updated/Deleted). **Aggregate root** lifecycle changes raise both a `*Created` event on creation and a `*Changed` event (with DomainEntityState Updated/Deleted) on update or deletion. **Exception:** `UserSessionBookmark` uses a single `UserSessionBookmarkChanged` event with `DomainEntityState` (Added/Deleted) instead of separate Created/Changed events — bookmarks have no update operation and no distinct handler requirements for creation vs. deletion, so a single event with state discrimination is sufficient. Current domain events — **Aggregate root lifecycle:** `EventCreated`, `EventChanged`, `SessionCreated`, `SessionChanged`, `SpeakerCreated`, `SpeakerChanged`, `CategoryCreated`, `CategoryChanged`, `QuestionCreated`, `QuestionChanged`, `UserSessionBookmarkChanged`, `UserRegistered`, `UserPasswordChanged`, `UserDeleted`. **Child entity changes:** `RoomChanged`, `CategoryItemChanged`, `EventQuestionAnswerChanged`, `EventSpeakerChanged`, `SessionCategoryItemChanged`, `SessionQuestionAnswerChanged`, `SessionSpeakerChanged`, `SpeakerCategoryItemChanged`, `SpeakerQuestionAnswerChanged`. Not all events have registered handlers — events without handlers serve as extension points for future requirements. See Section 6 for handler details. |
-| BR-86 | `Event.StartDate` and `Event.EndDate` form a `DateRange`. An event may span one or more days. For single-day events, `StartDate` equals `EndDate`. Session `StartsAt`/`EndsAt` values should fall within the event's date range, but this is not enforced as a hard constraint — Sessionize-imported sessions may have slightly misaligned dates due to timezone handling. **Date comparison semantics:** The date portion of `Session.StartsAt` and `Session.EndsAt` (which are `DateTime` values in the event's local time zone) is compared against the event's `DateOnly` `StartDate`/`EndDate`. A session is considered outside the range if `StartsAt.Date < StartDate` or `EndsAt.Date > EndDate`. Sessions crossing midnight (ending after the event's `EndDate`) trigger the warning but are not rejected — this accommodates late-evening sessions. **Validation behavior:** When a session is created or updated with times outside the event's date range, the operation succeeds but the API response includes a warning header (`X-Warning: Session time falls outside the event's date range`). Sessionize imports log the same warning without blocking the import. |
+| BR-60 | Domain events are raised for entity mutations. **Child entity** changes raise a `*Changed` domain event carrying `DomainEntityState` (Added/Updated/Deleted). **Aggregate root** lifecycle changes raise both a `*Created` event on creation and a `*Changed` event (with DomainEntityState Updated/Deleted) on update or deletion. **Exception:** `UserSessionBookmark` uses a single `UserSessionBookmarkChanged` event with `DomainEntityState` (Added/Deleted) instead of separate Created/Changed events: bookmarks have no update operation and no distinct handler requirements for creation vs. deletion, so a single event with state discrimination is sufficient. Current domain events: **Aggregate root lifecycle:** `EventCreated`, `EventChanged`, `SessionCreated`, `SessionChanged`, `SpeakerCreated`, `SpeakerChanged`, `CategoryCreated`, `CategoryChanged`, `QuestionCreated`, `QuestionChanged`, `UserSessionBookmarkChanged`, `UserRegistered`, `UserPasswordChanged`, `UserDeleted`. **Child entity changes:** `RoomChanged`, `CategoryItemChanged`, `EventQuestionAnswerChanged`, `EventSpeakerChanged`, `SessionCategoryItemChanged`, `SessionQuestionAnswerChanged`, `SessionSpeakerChanged`, `SpeakerCategoryItemChanged`, `SpeakerQuestionAnswerChanged`. Not all events have registered handlers: events without handlers serve as extension points for future requirements. See Section 6 for handler details. |
+| BR-86 | `Event.StartDate` and `Event.EndDate` form a `DateRange`. An event may span one or more days. For single-day events, `StartDate` equals `EndDate`. Session `StartsAt`/`EndsAt` values should fall within the event's date range, but this is not enforced as a hard constraint: Sessionize-imported sessions may have slightly misaligned dates due to timezone handling. **Date comparison semantics:** The date portion of `Session.StartsAt` and `Session.EndsAt` (which are `DateTime` values in the event's local time zone) is compared against the event's `DateOnly` `StartDate`/`EndDate`. A session is considered outside the range if `StartsAt.Date < StartDate` or `EndsAt.Date > EndDate`. Sessions crossing midnight (ending after the event's `EndDate`) trigger the warning but are not rejected: this accommodates late-evening sessions. **Validation behavior:** When a session is created or updated with times outside the event's date range, the operation succeeds but the API response includes a warning header (`X-Warning: Session time falls outside the event's date range`). Sessionize imports log the same warning without blocking the import. |
 | BR-87 | `Event.TimeZone` is a required IANA time zone identifier (e.g., "America/New_York", "Europe/London"). Session `StartsAt` and `EndsAt` values are stored as `DateTime` representing **local time in the event's time zone** (not UTC, not `DateTimeOffset`). The `TimeZone` value is validated against the IANA time zone database. See section 10.20 for full storage semantics. |
-| BR-91 | `Session.IsServiceSession` defaults to false. Service sessions (`IsServiceSession = true`) are non-talk schedule entries (e.g., lunch break, registration, networking) that are displayed on the schedule but **cannot** be bookmarked or receive feedback. Attempts to create a `UserSessionBookmark` or `SessionQuestionAnswer` for a service session return HTTP 400 with detail "This action is not available for service sessions." Service sessions may still have rooms and time slots assigned. Sessionize imports set `IsServiceSession` based on the Sessionize `isServiceSession` flag. Note: keynotes are typically **not** service sessions — they are talks with speakers that attendees may want to bookmark and rate. |
+| BR-91 | `Session.IsServiceSession` defaults to false. Service sessions (`IsServiceSession = true`) are non-talk schedule entries (e.g., lunch break, registration, networking) that are displayed on the schedule but **cannot** be bookmarked or receive feedback. Attempts to create a `UserSessionBookmark` or `SessionQuestionAnswer` for a service session return HTTP 400 with detail "This action is not available for service sessions." Service sessions may still have rooms and time slots assigned. Sessionize imports set `IsServiceSession` based on the Sessionize `isServiceSession` flag. Note: keynotes are typically **not** service sessions: they are talks with speakers that attendees may want to bookmark and rate. |
 | BR-93 | `Room.Capacity` is an optional positive integer. When present, it is displayed to attendees alongside room information. There is no system-enforced capacity limit. |
-| BR-94 | `Room.Floor` and `Room.Location` are optional wayfinding fields displayed to attendees alongside session details. They have no behavioral significance — they are informational only. |
-| BR-95 | `Question.IsRequired` defaults to false. When true, clients should prompt the user to answer this question before submitting. This is advisory — the server does not enforce required-question validation. |
+| BR-94 | `Room.Floor` and `Room.Location` are optional wayfinding fields displayed to attendees alongside session details. They have no behavioral significance: they are informational only. |
+| BR-95 | `Question.IsRequired` defaults to false. When true, clients should prompt the user to answer this question before submitting. This is advisory: the server does not enforce required-question validation. |
 | BR-98 | `Event.VenueAddress`, `Event.VenueMapUrl`, and `Event.WiFiInfo` are optional informational fields with no behavioral significance. They are included in event read responses. `VenueMapUrl` must be a valid absolute URL when provided. |
 | BR-99 | Speaker social link fields (`TwitterHandle`, `LinkedInUrl`, `GitHubUrl`, `WebsiteUrl`) are imported from Sessionize during refresh (UC-6). Sessionize exports these as "links" associated with speaker profiles. `TwitterHandle` stores the handle only (without the "@" prefix or full URL). `LinkedInUrl`, `GitHubUrl`, and `WebsiteUrl` must be valid absolute URLs when provided. Social links are included in public speaker read responses. **Format rationale:** `TwitterHandle` stores the handle rather than a full URL because Sessionize exports Twitter/X identifiers as handles, and the platform URL has changed (twitter.com to x.com). Storing the handle lets clients construct the correct URL. If Sessionize changes its export format to full URLs in the future, this field can be updated to store URLs like the other social link fields. |
 | BR-101 | **Data retention:** All data (active and soft-deleted) is retained indefinitely. Soft-deleted records remain in the database but are excluded from all queries. There is no automated purge or archival process. |
 | BR-102 | Feedback for multi-speaker sessions is at the **session level**, not per-speaker. All speakers assigned to a session via `SessionSpeaker` share the same feedback data. Per-speaker feedback within a session is a potential future enhancement. |
-| BR-107 | **Feedback submission:** Feedback (EventQuestionAnswer, SessionQuestionAnswer, or SpeakerQuestionAnswer) is submitted per-question via the entity's `POST` endpoint. Each answer is a `{ QuestionId, AnswerValue }` pair associated with the target entity and the authenticated user. `POST` performs an **upsert**: if no answer exists for the (CreatedBy, QuestionId, EntityId) combination, a new record is created (HTTP 201); if one already exists, its `AnswerValue` is overwritten and the response is HTTP 200. This is not standard create-only semantics — `POST` is explicitly an upsert to simplify the client (no need to check existence or switch between POST/PUT). `PUT` on an existing answer also updates it (standard update). **Deferred capability:** SpeakerQuestionAnswer exists in the domain model only; no REST controller or attendee UI ships today (see §10.29), so only the Event and Session answer endpoints are live. |
-| BR-108 | **Event visibility:** `Event.IsPublished` controls public visibility. Unpublished events (default) are visible **only to organizers** — public read endpoints (BR-43) exclude them. Published events (`IsPublished = true`) are visible to all users. Only organizers can change event visibility via `POST /api/events/{id}/publish` and `POST /api/events/{id}/unpublish`. These are action endpoints (state transitions), not resource replacements, so they use POST rather than PUT. No request body is required. |
-| BR-111 | `Room.AccessibilityInfo` is an optional free-text field describing accessibility features (e.g., "Wheelchair accessible, hearing loop available"). Displayed to attendees alongside room information. Informational only — no behavioral significance. |
+| BR-107 | **Feedback submission:** Feedback (EventQuestionAnswer, SessionQuestionAnswer, or SpeakerQuestionAnswer) is submitted per-question via the entity's `POST` endpoint. Each answer is a `{ QuestionId, AnswerValue }` pair associated with the target entity and the authenticated user. `POST` performs an **upsert**: if no answer exists for the (CreatedBy, QuestionId, EntityId) combination, a new record is created (HTTP 201); if one already exists, its `AnswerValue` is overwritten and the response is HTTP 200. This is not standard create-only semantics: `POST` is explicitly an upsert to simplify the client (no need to check existence or switch between POST/PUT). `PUT` on an existing answer also updates it (standard update). **Deferred capability:** SpeakerQuestionAnswer exists in the domain model only; no REST controller or attendee UI ships today (see §10.29), so only the Event and Session answer endpoints are live. |
+| BR-108 | **Event visibility:** `Event.IsPublished` controls public visibility. Unpublished events (default) are visible **only to organizers**: public read endpoints (BR-43) exclude them. Published events (`IsPublished = true`) are visible to all users. Only organizers can change event visibility via `POST /api/events/{id}/publish` and `POST /api/events/{id}/unpublish`. These are action endpoints (state transitions), not resource replacements, so they use POST rather than PUT. No request body is required. |
+| BR-111 | `Room.AccessibilityInfo` is an optional free-text field describing accessibility features (e.g., "Wheelchair accessible, hearing loop available"). Displayed to attendees alongside room information. Informational only: no behavioral significance. |
 | BR-112 | `Session.AccessibilityInfo` is an optional free-text field describing accessibility accommodations (e.g., "Live captioning provided, sign language interpreter available"). Displayed to attendees alongside session details. Informational only. |
-| BR-114 | `Session.Duration` is a **read-only computed property** — calculated as the difference between `EndsAt` and `StartsAt` in total minutes (e.g., `60`). Returns null when either `StartsAt` or `EndsAt` is null. Serialized in DTOs but has no database column. Cannot be used for database-level filtering or sorting. |
+| BR-114 | `Session.Duration` is a **read-only computed property**: calculated as the difference between `EndsAt` and `StartsAt` in total minutes (e.g., `60`). Returns null when either `StartsAt` or `EndsAt` is null. Serialized in DTOs but has no database column. Cannot be used for database-level filtering or sorting. |
 | BR-116 | **Image hosting (amended 2026-07-11, ADR-045):** Speaker profile pictures (`ProfilePicture`) and venue maps (`VenueMapUrl`) remain **externally hosted URLs** (speaker images imported from Sessionize). The former blanket "no managed file upload service" rule is superseded for USER AVATARS by BR-116a; no other managed uploads exist. |
 | BR-116a | **User avatar photos (added 2026-07-11, ADR-045):** an authenticated user may set ONE avatar photo on their own account via `POST /Users/me/avatar` (multipart, max 2 MB; jpeg/png/webp accepted by magic-byte sniffing) and remove it via `DELETE /Users/me/avatar` (idempotent). The server re-encodes every upload to a 256x256 JPEG (EXIF and all metadata stripped; the original is never stored) and stores it in the public-read `avatars` blob container under `{userId}-{random8}.jpg`; a replacement deletes the previous blob. `User.AvatarUrl` is PII: exported in the GDPR data export, nulled on anonymize with the blob deleted. |
 | BR-120 | **Organizer action traceability:** Sensitive organizer actions (session status changes, event status changes, Sessionize refresh) are traceable via the auditable fields (`CreatedBy`, `CreatedOn`, `LastModifiedBy`, `LastModifiedOn`) on affected entities. Sessionize refresh timing is tracked via `Event.LastSessionizeRefreshOn` and `Event.LastSessionizeRefreshBy`. |
 | BR-121 | **Sponsor/expo support** is out of scope for the current system. |
-| BR-122 | **Session duration validation:** When a Session's `StartsAt` and `EndsAt` are both non-null, `EndsAt` must be **strictly greater than** `StartsAt` (not equal). A zero-duration session is invalid. **Two-tier enforcement:** (1) **API create/update** — enforced as a hard constraint; requests with `EndsAt <= StartsAt` are rejected with HTTP 422. (2) **Sessionize import** — validation is relaxed; sessions violating this constraint are stored as-is but flagged with a warning in the import response (import is not blocked — the organizer can correct the times manually). This two-tier approach exists because Sessionize is the source of truth and its data cannot be rejected without breaking the sync. |
-| BR-123 | **Feedback answer uniqueness:** `EventQuestionAnswer` is unique per `(CreatedBy, QuestionId, EventId)` — an attendee can submit only one answer per question per event. `SessionQuestionAnswer` is unique per `(CreatedBy, QuestionId, SessionId)`. `SpeakerQuestionAnswer` is unique per `(CreatedBy, QuestionId, SpeakerId)`. If an attendee submits an answer when one already exists for that combination, the existing answer's `AnswerValue` is **overwritten**. |
-| BR-124 | **Feedback answer validation:** `AnswerValue` validation depends on the associated Question's `QuestionType`: **Rating** — must be a numeric integer between 1 and 5 inclusive (1=Poor, 2=Below Average, 3=Average, 4=Good, 5=Excellent); non-numeric values or values outside this range are rejected (HTTP 422). **Text** — free-text with a maximum length of 2000 characters. **Email** — must contain exactly one `@` with a non-empty local part and a domain containing at least one `.` (standard `MailAddress` parsing); invalid format is rejected (HTTP 422). The Rating scale labels are a client-side display concern — the API validates only the 1–5 integer range. |
+| BR-122 | **Session duration validation:** When a Session's `StartsAt` and `EndsAt` are both non-null, `EndsAt` must be **strictly greater than** `StartsAt` (not equal). A zero-duration session is invalid. **Two-tier enforcement:** (1) **API create/update**: enforced as a hard constraint; requests with `EndsAt <= StartsAt` are rejected with HTTP 422. (2) **Sessionize import**: validation is relaxed; sessions violating this constraint are stored as-is but flagged with a warning in the import response (import is not blocked: the organizer can correct the times manually). This two-tier approach exists because Sessionize is the source of truth and its data cannot be rejected without breaking the sync. |
+| BR-123 | **Feedback answer uniqueness:** `EventQuestionAnswer` is unique per `(CreatedBy, QuestionId, EventId)`, an attendee can submit only one answer per question per event. `SessionQuestionAnswer` is unique per `(CreatedBy, QuestionId, SessionId)`. `SpeakerQuestionAnswer` is unique per `(CreatedBy, QuestionId, SpeakerId)`. If an attendee submits an answer when one already exists for that combination, the existing answer's `AnswerValue` is **overwritten**. |
+| BR-124 | **Feedback answer validation:** `AnswerValue` validation depends on the associated Question's `QuestionType`: **Rating**: must be a numeric integer between 1 and 5 inclusive (1=Poor, 2=Below Average, 3=Average, 4=Good, 5=Excellent); non-numeric values or values outside this range are rejected (HTTP 422). **Text**: free-text with a maximum length of 2000 characters. **Email**: must contain exactly one `@` with a non-empty local part and a domain containing at least one `.` (standard `MailAddress` parsing); invalid format is rejected (HTTP 422). The Rating scale labels are a client-side display concern: the API validates only the 1-5 integer range. |
 | BR-127 | **Cascade soft-delete on Event deletion:** When an Event is soft-deleted, all owned children and all Sessions belonging to the Event are cascade soft-deleted. See BR-72 (Section 10.8) for the complete cascade specification. |
 | BR-128 | **Cross-entity foreign key validation:** When creating or updating an `EventQuestionAnswer`, the system validates that the referenced `QuestionId` exists and that the Question's `QuestionEntity` equals `"Event"`. When creating or updating a `SessionQuestionAnswer`, the system validates that `QuestionEntity` equals `"Session"`. When creating or updating a `SpeakerQuestionAnswer`, the system validates that `QuestionEntity` equals `"Speaker"`. Submitting an answer that references a non-existent Question or a Question targeting the wrong entity type returns HTTP 422 with detail "Question not found or does not apply to this entity type." |
-| BR-129 | **Concurrency model:** The system uses **last-write-wins** semantics — no optimistic concurrency control (ETags, row versions) is enforced. Concurrent updates to the same entity overwrite each other without conflict detection. This is acceptable because: (1) Conference data is managed by a small number of organizers with low write frequency, (2) Sessionize refresh is the primary write path and is throttled per-event (BR-63), (3) Engagement writes (bookmarks, feedback) target distinct rows per user. If concurrent organizer editing becomes a problem, optimistic concurrency via EF Core row versions can be added without changing the API contract. **Sessionize refresh concurrency:** A Sessionize refresh writes many entities in a single transaction. If an organizer edits an entity while a refresh is in progress, last-write-wins applies — whichever transaction commits last determines the final state. The per-event throttle (BR-63) reduces but does not eliminate this window. Organizers should avoid manual edits immediately after triggering a refresh. |
+| BR-129 | **Concurrency model:** The system uses **last-write-wins** semantics: no optimistic concurrency control (ETags, row versions) is enforced. Concurrent updates to the same entity overwrite each other without conflict detection. This is acceptable because: (1) Conference data is managed by a small number of organizers with low write frequency, (2) Sessionize refresh is the primary write path and is throttled per-event (BR-63), (3) Engagement writes (bookmarks, feedback) target distinct rows per user. If concurrent organizer editing becomes a problem, optimistic concurrency via EF Core row versions can be added without changing the API contract. **Sessionize refresh concurrency:** A Sessionize refresh writes many entities in a single transaction. If an organizer edits an entity while a refresh is in progress, last-write-wins applies: whichever transaction commits last determines the final state. The per-event throttle (BR-63) reduces but does not eliminate this window. Organizers should avoid manual edits immediately after triggering a refresh. |
 | BR-130 | **Session.RoomId cross-event validation:** When a Session's `RoomId` is set (non-null), the referenced Room must belong to the same Event as the Session (`Room.EventId == Session.EventId`). Assigning a Room from a different Event is rejected with HTTP 422. This is enforced at the service layer during create and update. Sessionize imports always assign rooms within the correct event scope. |
-| BR-131 | **Time zone change impact:** Changing `Event.TimeZone` on an event that already has sessions does **not** adjust stored `Session.StartsAt`/`Session.EndsAt` values — those values represent local time in the *original* time zone and become semantically incorrect under the new time zone. Organizers should only change `TimeZone` before sessions are scheduled, or trigger a Sessionize refresh (UC-6) afterward to re-import session times in the correct time zone. When an event already has sessions, changing `TimeZone` succeeds but the API response includes a warning header (`X-Warning: Event time zone changed — existing session times may be semantically incorrect. Consider triggering a Sessionize refresh.`). This is consistent with the date range warning behavior in BR-86. |
-| BR-132 | **Session visibility inherits event visibility:** Sessions belonging to unpublished events are excluded from public list/lookup responses and single-entity GET responses for non-organizers. Organizers can see all sessions regardless of event visibility. This ensures consistency with the Event Lifecycle (Section 5) which states "Unpublished events and their sessions are visible only to organizers." Non-accepted sessions (BR-49 — any status other than `Accepted` or null) are also excluded from public responses. |
-| BR-133 | **Soft-deleted user JWT validation:** Middleware must validate that the authenticated user's account has not been soft-deleted on every authenticated request. If `User.IsDeleted = true` for the `user_id` in the JWT, the request is rejected with HTTP 401. This is necessary because JWTs are stateless and remain valid until expiry (BR-12) — a soft-deleted user's token would otherwise grant access for up to 1 hour after deletion. The middleware check adds one database lookup per authenticated request, which can be mitigated with short-lived caching (e.g., 30-second cache of deleted user IDs). |
-| BR-134 | **Publish validation:** Publishing an event (`POST /api/events/{id}/publish`) has **no minimum data requirements** — an event can be published with zero sessions, zero speakers, and zero rooms. This is a deliberate decision: organizers may want to publish an event early (for visibility) and populate the schedule later. Validation of schedule completeness is an organizer responsibility, not a system constraint. |
+| BR-131 | **Time zone change impact:** Changing `Event.TimeZone` on an event that already has sessions does **not** adjust stored `Session.StartsAt`/`Session.EndsAt` values: those values represent local time in the *original* time zone and become semantically incorrect under the new time zone. Organizers should only change `TimeZone` before sessions are scheduled, or trigger a Sessionize refresh (UC-6) afterward to re-import session times in the correct time zone. When an event already has sessions, changing `TimeZone` succeeds but the API response includes a warning header (`X-Warning: Event time zone changed: existing session times may be semantically incorrect. Consider triggering a Sessionize refresh.`). This is consistent with the date range warning behavior in BR-86. |
+| BR-132 | **Session visibility inherits event visibility:** Sessions belonging to unpublished events are excluded from public list/lookup responses and single-entity GET responses for non-organizers. Organizers can see all sessions regardless of event visibility. This ensures consistency with the Event Lifecycle (Section 5) which states "Unpublished events and their sessions are visible only to organizers." Non-accepted sessions (BR-49: any status other than `Accepted` or null) are also excluded from public responses. |
+| BR-133 | **Soft-deleted user JWT validation:** Middleware must validate that the authenticated user's account has not been soft-deleted on every authenticated request. If `User.IsDeleted = true` for the `user_id` in the JWT, the request is rejected with HTTP 401. This is necessary because JWTs are stateless and remain valid until expiry (BR-12): a soft-deleted user's token would otherwise grant access for up to 1 hour after deletion. The middleware check adds one database lookup per authenticated request, which can be mitigated with short-lived caching (e.g., 30-second cache of deleted user IDs). |
+| BR-134 | **Publish validation:** Publishing an event (`POST /api/events/{id}/publish`) has **no minimum data requirements**: an event can be published with zero sessions, zero speakers, and zero rooms. This is a deliberate decision: organizers may want to publish an event early (for visibility) and populate the schedule later. Validation of schedule completeness is an organizer responsibility, not a system constraint. |
+| | |
+| **Conference-day live layer (ADR-039)** | |
+| BR-220 | **Poll authoring shape:** a poll carries a question of 1-200 characters and between **2 and 10** options, each 1-100 characters, and option texts must be unique within the poll. Options are authored with the poll, not added later. |
+| BR-221 | **Poll lifecycle is strictly Draft to Open to Closed.** Only a Draft poll can be opened, only an Open poll can be closed, and **there is no reopen**. |
+| BR-222 | **Polls can only be created for a published event.** The target event must exist and have `IsPublished = true`. |
+| BR-223 | **Polls can only be opened while the event is live:** the current instant must fall inside the event's live window. Opening snapshots the window's exclusive end onto the poll. |
+| BR-224 | **Votes are accepted only while the poll is Open and the event is still live**, checked against the window end snapshotted at open time (BR-223) rather than by re-reading Conference data per vote. |
+| BR-225 | **One active vote per (poll, user)**, enforced by a filtered unique index. Re-voting while the poll is open updates the existing row rather than inserting a second one; a soft-deleted vote is reactivated rather than duplicated. |
+| BR-226 | **A vote's option must belong to that poll and must not be deleted.** |
+| BR-228 | **An Open poll cannot be deleted.** It must be closed first, so a delete cannot silently end a running vote. Deleting a poll cascade soft-deletes its options. |
+| BR-229 | **Live-channel broadcasts are best-effort and post-commit.** Handlers enqueue a broadcast on a bounded in-process queue after their transaction commits; a dropped or failed broadcast never fails the originating write. Clients recover the true state on their next read. |
+| BR-230 | **A poll is either session-scoped or event-wide.** A null `SessionId` means event-wide; the "open polls" attendee view returns event-wide polls only. |
+| BR-231 | **Question text is 1-500 characters.** A user may have at most **10 open (non-dismissed) questions per session** at a time. |
+| BR-233 | **A submitted question starts at the event's moderation default** (`Event.QuestionModerationDefault`, Pending or Approved), so an event can run pre-moderated or open. |
+| BR-234 | **Moderation transitions:** Approve from Pending or Dismissed; Dismiss from Pending or Approved; re-applying the current status fails. A question can be marked **answered only while Approved, and only once**. |
+| BR-235 | **One active upvote per (question, user)**, enforced by a filtered unique index. Un-upvoting soft-deletes the row and re-upvoting reactivates it. |
+| BR-236 | **Live-layer authoring rights:** organizers and admins manage everything; a speaker manages only content scoped to a session they are assigned to. Event-wide scope is organizer/admin only. The caller identity is bound from the token at the API edge, **never from the request body**, and the server re-checks on every call, so the client-side gate is convenience rather than security. |
+| BR-237 | **Upvotes are accepted only while the question is Approved and the event is still live**, checked against the window end snapshotted at submission time. |
+| BR-238 | **Questions display anonymously.** The submitting `UserId` is never exposed on a DTO, and upvote broadcasts carry only the fresh count, never who voted. |
 
 ### Inferred Rules
 
 | # | Rule | Reasoning |
 |---|---|---|
-| ~~IR-1~~ | ~~A user is uniquely identified by their email address~~ — **Promoted to explicit rule BR-200/BR-201.** See Section 12.1. | Now explicitly defined in authentication architecture |
+| ~~IR-1~~ | ~~A user is uniquely identified by their email address~~: **Promoted to explicit rule BR-200/BR-201.** See Section 12.1. | Now explicitly defined in authentication architecture |
 | IR-2 | An EventSpeaker association is unique per (EventId, SpeakerId) pair | Duplicates are prevented during Sessionize import |
 | IR-3 | A SpeakerCategoryItem is unique per (SpeakerId, CategoryItemId) pair | Duplicates are prevented during Sessionize import |
 | IR-4 | Each question belongs to either Events or Sessions (determined by `QuestionEntity` field) | Questions are categorized by their target entity type |
-| IR-5 | Categories are global (not event-scoped) — **multi-event risk:** see Category entity note and BR-74 | Categories have no EventId; they are shared across events. Safe when all events share one Sessionize source; risky with independent Sessionize sources per event. |
-| IR-6 | A SessionSpeaker association is unique per (SessionId, SpeakerId) pair — a speaker can only be linked to the same session once | Duplicates would be meaningless; prevented during Sessionize import and manual assignment |
-| IR-7 | A SessionCategoryItem association is unique per (SessionId, CategoryItemId) pair — a session can only be tagged with the same category item once | Duplicates would be meaningless; prevented during Sessionize import and manual assignment |
+| IR-5 | Categories are global (not event-scoped): **multi-event risk:** see Category entity note and BR-74 | Categories have no EventId; they are shared across events. Safe when all events share one Sessionize source; risky with independent Sessionize sources per event. |
+| IR-6 | A SessionSpeaker association is unique per (SessionId, SpeakerId) pair: a speaker can only be linked to the same session once | Duplicates would be meaningless; prevented during Sessionize import and manual assignment |
+| IR-7 | A SessionCategoryItem association is unique per (SessionId, CategoryItemId) pair: a session can only be tagged with the same category item once | Duplicates would be meaningless; prevented during Sessionize import and manual assignment |
 
 ---
 
@@ -446,7 +546,7 @@ See **UC-30** (Registration) and **UC-31** (Login) in Section 12.2 for the curre
 
 **Alternate Flows:**
 - Request a single event by ID
-- Request events in lookup format (Id + Name pairs) for dropdown population — see section 11.7 for the lookup endpoint contract
+- Request events in lookup format (Id + Name pairs) for dropdown population: see section 11.7 for the lookup endpoint contract
 - Request with `includeChildren=true` to get nested child entities (one level only, per BR-80)
 - Filter by `IsPublished` to find published events
 
@@ -488,7 +588,7 @@ See **UC-30** (Registration) and **UC-31** (Login) in Section 12.2 for the curre
 
 **Main Flow:**
 1. Attendee submits feedback per-question via standard CRUD on SessionQuestionAnswer (BR-107)
-2. System validates that the session is not a service session (BR-91) and has an eligible status — Accepted or null (BR-49)
+2. System validates that the session is not a service session (BR-91) and has an eligible status: Accepted or null (BR-49)
 3. System validates each `AnswerValue` against the question's `QuestionType` (BR-124)
 4. Each answer is associated with the session and question, with `CreatedBy` set to the current user ID
 5. If the user has previously submitted an answer for the same (QuestionId, SessionId), the existing answer is overwritten (BR-123)
@@ -504,24 +604,24 @@ See **UC-30** (Registration) and **UC-31** (Login) in Section 12.2 for the curre
 
 **Main Flow:**
 1. Organizer triggers refresh for a specific event (`POST /api/events/{id}/refresh`). This is a POST because it mutates server state (upserts entities); GET is not appropriate for write operations.
-2. System checks the per-event throttle (BR-63) — if a refresh occurred within the last 5 minutes, returns HTTP 429 with `Retry-After` header
+2. System checks the per-event throttle (BR-63): if a refresh occurred within the last 5 minutes, returns HTTP 429 with `Retry-After` header
 3. System retrieves the event and verifies it has a `SessionizeCode` (BR-6)
 4. System calls the Sessionize "View All" API endpoint
 5. System synchronizes data in order:
-   a. **Categories and CategoryItems** — upsert (add if new, update if existing)
-   b. **Questions** — upsert questions from Sessionize with `QuestionSource = "Sessionize"` (question definitions with text, type, and entity target)
-   c. **Rooms** — upsert
-   d. **Speakers** — upsert speakers (including social links: TwitterHandle, LinkedInUrl, GitHubUrl, WebsiteUrl, and `IsTopSpeaker` flag), create EventSpeaker links if not already linked, assign SpeakerCategoryItems, import SpeakerQuestionAnswers
-   e. **Sessions** — upsert sessions (including `IsServiceSession`, `IsPlenumSession`, `LiveUrl`, `RecordingUrl` from Sessionize), create SessionSpeaker and SessionCategoryItem links
+   a. **Categories and CategoryItems**: upsert (add if new, update if existing)
+   b. **Questions**: upsert questions from Sessionize with `QuestionSource = "Sessionize"` (question definitions with text, type, and entity target)
+   c. **Rooms**: upsert
+   d. **Speakers**: upsert speakers (including social links: TwitterHandle, LinkedInUrl, GitHubUrl, WebsiteUrl, and `IsTopSpeaker` flag), create EventSpeaker links if not already linked, assign SpeakerCategoryItems, import SpeakerQuestionAnswers
+   e. **Sessions**: upsert sessions (including `IsServiceSession`, `IsPlenumSession`, `LiveUrl`, `RecordingUrl` from Sessionize), create SessionSpeaker and SessionCategoryItem links
 6. System updates `Event.LastSessionizeRefreshOn` and `Event.LastSessionizeRefreshBy`
 7. All changes are persisted transactionally
 
 **Alternate Flows:**
 - If `SessionizeCode` is blank, returns HTTP 400 with detail "Event has no SessionizeCode configured"
-- If the Sessionize API is unreachable (timeout, HTTP 5xx, DNS failure), returns HTTP 502 Bad Gateway with detail "Sessionize API is unavailable. Try again later." No partial data is persisted — the transaction is rolled back.
-- If the Sessionize API returns an empty or null response, returns HTTP 200 with a response body indicating zero entities synced (not an error — the Sessionize event may have no data yet)
+- If the Sessionize API is unreachable (timeout, HTTP 5xx, DNS failure), returns HTTP 502 Bad Gateway with detail "Sessionize API is unavailable. Try again later." No partial data is persisted: the transaction is rolled back.
+- If the Sessionize API returns an empty or null response, returns HTTP 200 with a response body indicating zero entities synced (not an error: the Sessionize event may have no data yet)
 
-**Important:** Sessionize refresh **only** syncs Conference master data (categories, questions, rooms, speakers, sessions). User-generated data — EventQuestionAnswers, SessionQuestionAnswers, SpeakerQuestionAnswers, and UserSessionBookmarks — is **never modified** by a Sessionize refresh. Locally soft-deleted entities (BR-136) are skipped during refresh.
+**Important:** Sessionize refresh **only** syncs Conference master data (categories, questions, rooms, speakers, sessions). User-generated data: EventQuestionAnswers, SessionQuestionAnswers, SpeakerQuestionAnswers, and UserSessionBookmarks: is **never modified** by a Sessionize refresh. Locally soft-deleted entities (BR-136) are skipped during refresh.
 
 **Postconditions:** Local data reflects the current state of the Sessionize schedule.
 
@@ -537,7 +637,7 @@ See **UC-30** (Registration) and **UC-31** (Login) in Section 12.2 for the curre
   "sessionsSynced": 35,
   "skippedSoftDeleted": 2,
   "warnings": [
-    "Session 'Lightning Talk X' has zero duration (StartsAt equals EndsAt) — stored as-is per BR-122",
+    "Session 'Lightning Talk X' has zero duration (StartsAt equals EndsAt): stored as-is per BR-122",
     "Skipped 2 soft-deleted entities present in Sessionize response (BR-136)"
   ]
 }
@@ -603,12 +703,12 @@ See **UC-30** (Registration) and **UC-31** (Login) in Section 12.2 for the curre
 **Main Flow:**
 1. Attendee browses sessions (UC-3)
 2. Attendee bookmarks a session (`POST /api/bookmarks` with UserId and SessionId)
-3. System creates a `UserSessionBookmark` record (standalone aggregate root — not through the User aggregate)
-4. Attendee views their personal schedule (`GET /api/bookmarks?userId={userId}`) — returns bookmarked sessions in chronological order
+3. System creates a `UserSessionBookmark` record (standalone aggregate root: not through the User aggregate)
+4. Attendee views their personal schedule (`GET /api/bookmarks?userId={userId}`): returns bookmarked sessions in chronological order
 
 **Alternate Flows:**
 - Attendee removes a bookmark (`DELETE /api/bookmarks/{bookmarkId}`)
-- Attendee retrieves bookmarked session IDs for quick lookup (`GET /api/bookmarks/session-ids?userId={userId}`) — returns a dictionary of SessionId → BookmarkId for efficient UI rendering (e.g., toggle bookmark buttons)
+- Attendee retrieves bookmarked session IDs for quick lookup (`GET /api/bookmarks/session-ids?userId={userId}`): returns a dictionary of SessionId → BookmarkId for efficient UI rendering (e.g., toggle bookmark buttons)
 - Attempting to bookmark the same session twice returns a conflict/duplicate error
 - Attempting to bookmark a service session (`IsServiceSession = true`) returns HTTP 400 (BR-91)
 - Attempting to bookmark a session with non-eligible status (anything other than Accepted or null) returns HTTP 400 (BR-49)
@@ -625,12 +725,12 @@ See **UC-30** (Registration) and **UC-31** (Login) in Section 12.2 for the curre
 **Actors:** Organizer
 **Preconditions:** User has the Organizer role (BR-41)
 
-**Scope:** This use case covers the standard create, update, and delete operations for Conference aggregate roots — **Event**, **Session**, **Speaker**, and **Question** — and their child entities managed through the parent aggregate. Read operations are public (BR-43).
+**Scope:** This use case covers the standard create, update, and delete operations for Conference aggregate roots: **Event**, **Session**, **Speaker**, and **Question**: and their child entities managed through the parent aggregate. Read operations are public (BR-43).
 
 **Main Flow:**
 1. Organizer creates, updates, or deletes a Conference entity via the REST API
 2. For aggregate roots: direct CRUD operations with soft delete (BR-1)
-3. For child entities: operations routed through the parent aggregate — parent must exist (BR-3), child parent ID must match aggregate root ID (BR-2), child must exist for update (BR-4) or delete (BR-5)
+3. For child entities: operations routed through the parent aggregate: parent must exist (BR-3), child parent ID must match aggregate root ID (BR-2), child must exist for update (BR-4) or delete (BR-5)
 4. Each mutation raises the appropriate domain event (see section 6)
 
 **Note:** Operations with non-standard business logic are documented as individual use cases: room management (UC-7), category/item management (UC-8), speaker category assignments (UC-9), and Sessionize refresh (UC-6). The Actor-Action Matrix provides the complete enumeration of all actions.
@@ -650,13 +750,149 @@ See **UC-30** (Registration) and **UC-31** (Login) in Section 12.2 for the curre
 3. System soft-deletes the User record (BR-1, BR-56)
 
 **Alternate Flows:**
-- Non-owner, non-organizer attempts deletion — system returns HTTP 403
-- User does not exist — system returns HTTP 404
-- User is already soft-deleted — system returns HTTP 200 (idempotent)
+- Non-owner, non-organizer attempts deletion: system returns HTTP 403
+- User does not exist: system returns HTTP 404
+- User is already soft-deleted: system returns HTTP 200 (idempotent)
 
 **Postconditions:** User can no longer authenticate.
 
 **Business Rules:** BR-1, BR-56
+
+---
+
+### UC-22: Run a Live Poll
+
+**Actors:** Organizer (any scope), Speaker (sessions they are assigned to)
+**Preconditions:** Caller is authenticated; the target event exists and is published (BR-222); the
+`Engagement.LivePolls` feature is enabled
+
+**Main Flow:**
+1. Author creates a poll with its options; it starts as **Draft** (BR-220, BR-221)
+2. During the event's live window, the author opens the poll (`POST /api/livepolls/{id}/open`). The
+   system snapshots the live-window end onto the poll (BR-223)
+3. Attendees see the poll and vote (UC-23)
+4. The author closes the poll (`POST /api/livepolls/{id}/close`); it cannot be reopened (BR-221)
+
+**Alternate Flows:**
+- Caller is neither an organizer nor an assigned speaker for the scope: HTTP 403 (BR-236)
+- Open attempted outside the live window: invariant failure (BR-223)
+- Open attempted on a non-Draft poll, or close on a non-Open poll: invariant failure (BR-221)
+- Delete attempted while Open: rejected, the poll must be closed first (BR-228)
+
+**Postconditions:** The poll's tallies are final and remain readable.
+
+**Business Rules:** BR-220, BR-221, BR-222, BR-223, BR-228, BR-230, BR-236
+
+---
+
+### UC-23: Vote in a Live Poll
+
+**Actors:** Authenticated attendee
+**Preconditions:** The poll is Open and the event is still live (BR-224)
+
+**Main Flow:**
+1. Attendee opens `/happening-now` (event-wide polls) or the session's live page (session-scoped polls)
+2. Attendee casts a vote for an option (`POST /api/livepolls/{id}/votes`)
+3. System validates the option belongs to the poll and is not deleted (BR-226)
+4. System records the vote and returns the fresh tallies plus the caller's own choice
+
+**Alternate Flows:**
+- Attendee votes again while the poll is open: the existing vote is **changed**, not duplicated (BR-225)
+- Poll is Closed, or the live window has passed: invariant failure (BR-224)
+
+**Postconditions:** Exactly one active vote exists for this (poll, user).
+
+**Business Rules:** BR-224, BR-225, BR-226, BR-229
+
+---
+
+### UC-24: Ask a Question in a Live Session
+
+**Actors:** Authenticated attendee
+**Preconditions:** The `Engagement.SessionQA` feature is enabled; the event is live
+
+**Main Flow:**
+1. Attendee submits a question on the session's live page (`POST /api/sessionquestions`)
+2. System validates the text (1-500 characters) and the caller's open-question count for that
+   session (BR-231)
+3. The question is created at the event's moderation default, Pending or Approved (BR-233)
+4. Once Approved, the question appears in the attendee view for everyone, **without naming the
+   submitter** (BR-238)
+
+**Alternate Flows:**
+- Text empty or over 500 characters: validation error
+- Caller already has 10 open questions for the session: rejected (BR-231)
+
+**Postconditions:** The question is queued for moderation or immediately visible.
+
+**Business Rules:** BR-231, BR-233, BR-237, BR-238
+
+---
+
+### UC-25: Moderate Session Questions
+
+**Actors:** Organizer, Speaker assigned to the session
+**Preconditions:** Caller passes the live-layer rights check (BR-236)
+
+**Main Flow:**
+1. Moderator opens the moderation view (`GET /api/sessionquestions/moderation`), which lists all
+   statuses with Pending first
+2. Moderator approves, dismisses, or marks an approved question answered
+
+**Alternate Flows:**
+- Approving an already-Approved question, or dismissing an already-Dismissed one: invariant failure (BR-234)
+- Marking answered on a question that is not Approved, or already answered: invariant failure (BR-234)
+- Caller is not an organizer or an assigned speaker: HTTP 403, enforced server-side on every call (BR-236)
+
+**Postconditions:** The attendee view reflects the moderation decision.
+
+**Business Rules:** BR-234, BR-236
+
+---
+
+### UC-26: Upvote a Question
+
+**Actors:** Authenticated attendee
+**Preconditions:** The question is Approved and the event is still live (BR-237)
+
+**Main Flow:**
+1. Attendee upvotes an approved question (`POST /api/sessionquestions/{id}/upvotes`)
+2. System returns the fresh count
+
+**Alternate Flows:**
+- Attendee removes their upvote (`DELETE .../upvotes`): the row is soft-deleted; re-upvoting
+  reactivates it rather than inserting a second (BR-235)
+- Question not Approved, or the live window has passed: invariant failure (BR-237)
+
+**Postconditions:** At most one active upvote exists for this (question, user). Broadcasts carry only
+the count, never who voted (BR-238).
+
+**Business Rules:** BR-235, BR-237, BR-238
+
+---
+
+### UC-27: Score Sessions for Selection
+
+**Actors:** Organizer
+**Preconditions:** Caller holds the Organizer role; the event has submitted sessions
+
+**Main Flow:**
+1. Organizer opens the selection dashboard (`GET /api/sessionselection/dashboard/{eventId}`), which
+   composes category distribution, speaker overlap, and content similarity
+2. Organizer queues AI scoring for all eligible sessions (`POST /api/sessionselection/score/{eventId}`)
+3. The request returns **202 Accepted** immediately; scoring runs on a hosted background worker
+   ([ADR-052](../adr/052-background-job-execution.md)) because it takes minutes and issues one paid
+   API call per session
+4. Organizer refreshes the dashboard to see results
+
+**Alternate Flows:**
+- A run is already queued or in progress for the same event: HTTP 409 rather than a duplicate run
+
+**Postconditions:** Sessions carry AI scores that inform the accept/decline decision.
+
+> **Use-case numbering.** UC-12 to UC-18, UC-20, and UC-28/UC-29 are unused; the numbers were retired
+> as the specification was reorganized and are deliberately not recycled. UC-30 to UC-33 are the
+> authentication flows and live in Section 12.2.
 
 ---
 
@@ -668,11 +904,11 @@ This section maps every action in the system to the actor(s) that can perform it
 
 | Actor | Identity | Authorization | Additive? |
 |---|---|---|---|
-| **API Consumer** | Unauthenticated | None — public endpoints only (BR-43) | Base level |
-| **Attendee** | Authenticated via email + password (UC-31) | Authenticated — valid JWT with `role: Attendee` (BR-42) | Includes all API Consumer actions |
-| **Speaker** | Attendee with `speaker_id` claim | Same as Attendee + speaker-specific data views (BR-210) | Not a separate role — an Attendee with a speaker identity link |
+| **API Consumer** | Unauthenticated | None: public endpoints only (BR-43) | Base level |
+| **Attendee** | Authenticated via email + password (UC-31) | Authenticated: valid JWT with `role: Attendee` (BR-42) | Includes all API Consumer actions |
+| **Speaker** | Attendee with `speaker_id` claim | Same as Attendee + speaker-specific data views (BR-210) | Not a separate role: an Attendee with a speaker identity link |
 | **Organizer** | Authenticated, `User.Role = Organizer` | Organizer role required (BR-41) | Includes all Attendee actions + all Speaker view access |
-| **System** | Non-human — domain event handlers | N/A | Autonomous |
+| **System** | Non-human: domain event handlers | N/A | Autonomous |
 
 #### API Consumer (Unauthenticated)
 
@@ -715,7 +951,7 @@ All API Consumer actions, plus:
 | # | Action | Source | Constraints |
 |---|--------|--------|-------------|
 | 18 | Submit event feedback | UC-4, BR-42, BR-107 | Per-question submission; records `CreatedBy`; overwrites existing answers (BR-123) |
-| 19 | Read own event feedback answers | UC-4, BR-8 | Scoped to own answers only — cannot see others' |
+| 19 | Read own event feedback answers | UC-4, BR-8 | Scoped to own answers only: cannot see others' |
 | 20 | Update own event feedback answer | Key Cap #1, BR-42 | Route ID must match body ID (BR-10) |
 | 21 | Delete own event feedback answer (soft) | Key Cap #1, BR-42, BR-1 | Soft delete only |
 | 22 | Submit session feedback | UC-5, BR-42, BR-49, BR-107 | Per-question submission; records `CreatedBy`; only for Accepted/null sessions (BR-49); overwrites existing (BR-123) |
@@ -744,8 +980,8 @@ All Attendee actions, plus:
 
 | # | Action | Source | Constraints |
 |---|--------|--------|-------------|
-| 90 | View session feedback (public) | BR-210 | `AllowAnonymous` — publicly accessible; no auth or `speaker_id` matching required (available to all actors including API Consumers) |
-| 91 | View session bookmark counts (public) | BR-210 | `AllowAnonymous` — publicly accessible; no auth or `speaker_id` matching required |
+| 90 | View session feedback (public) | BR-210 | `AllowAnonymous`, publicly accessible; no auth or `speaker_id` matching required (available to all actors including API Consumers) |
+| 91 | View session bookmark counts (public) | BR-210 | `AllowAnonymous`, publicly accessible; no auth or `speaker_id` matching required |
 | 92 | Update own speaker profile | BR-214 | `speaker_id` must match URL `{speakerId}`; edits overwritten on Sessionize refresh (BR-215) |
 
 > **Note:** Actions 90 and 91 are technically accessible to all actors (including unauthenticated API Consumers) because the endpoints use `AllowAnonymous`. They are listed here because the feature was designed for speaker self-service and the `{speakerId}` parameter refers to the speaker's own data. Any authenticated user or API consumer can call these endpoints for any speaker.
@@ -812,13 +1048,13 @@ All Attendee actions, plus:
 | 70 | Delete category item (soft) | Category | UC-8 | `DELETE /api/categoryitems/{id}` | |
 | 71 | Add category item to speaker | Speaker | UC-9 | `POST /api/speakercategoryitems` | |
 | 73 | Delete speaker category item (soft) | Speaker | Key Cap #1, BR-41 | `DELETE /api/speakercategoryitems/{id}` | |
-| 73a | Add question answer to speaker | Speaker | Key Cap #1, BR-41 | *(domain only — no REST controller)* | Raises `SpeakerQuestionAnswerChanged` (Added). **Not yet exposed via REST API** — SpeakerQuestionAnswer CRUD is supported at the domain layer but no `SpeakerQuestionAnswersController` exists. Speaker question answers are currently populated only via Sessionize import (UC-6). |
-| 73b | Update speaker question answer | Speaker | Key Cap #1, BR-41 | *(domain only — no REST controller)* | Raises `SpeakerQuestionAnswerChanged` (Updated) |
-| 73c | Delete speaker question answer (soft) | Speaker | Key Cap #1, BR-41 | *(domain only — no REST controller)* | Raises `SpeakerQuestionAnswerChanged` (Deleted) |
+| 73a | Add question answer to speaker | Speaker | Key Cap #1, BR-41 | *(domain only: no REST controller)* | Raises `SpeakerQuestionAnswerChanged` (Added). **Not yet exposed via REST API**: SpeakerQuestionAnswer CRUD is supported at the domain layer but no `SpeakerQuestionAnswersController` exists. Speaker question answers are currently populated only via Sessionize import (UC-6). |
+| 73b | Update speaker question answer | Speaker | Key Cap #1, BR-41 | *(domain only: no REST controller)* | Raises `SpeakerQuestionAnswerChanged` (Updated) |
+| 73c | Delete speaker question answer (soft) | Speaker | Key Cap #1, BR-41 | *(domain only: no REST controller)* | Raises `SpeakerQuestionAnswerChanged` (Deleted) |
 
 > **Endpoint convention:** Child entity write endpoints use top-level routes (e.g., `/api/rooms`, not `/api/events/{eventId}/rooms`). The parent aggregate ID is included in the request body and validated via BR-2 (child's parent ID must match the aggregate root ID). Read endpoints for all child entities also use top-level routes (see Section 11.3).
 
-> **Note:** Join entities (EventSpeaker, SessionSpeaker, SessionCategoryItem, SpeakerCategoryItem) have no update action — they have no mutable attributes beyond foreign keys. CategoryItem retains update because it has mutable fields (`Name`, `Sort`).
+> **Note:** Join entities (EventSpeaker, SessionSpeaker, SessionCategoryItem, SpeakerCategoryItem) have no update action: they have no mutable attributes beyond foreign keys. CategoryItem retains update because it has mutable fields (`Name`, `Sort`).
 
 **Sessionize integration:**
 
@@ -862,8 +1098,8 @@ Actions initiated autonomously by domain event handlers after persistence:
 | **API Consumer** | UC-2, UC-3 | 13 entity read endpoints + 2 speaker metrics (feedback, bookmark count) | 15 |
 | **Attendee** | UC-30, UC-31, UC-32, UC-33, UC-4, UC-5, UC-10, UC-11, UC-21 | + API Consumer actions + feedback update/delete + account deletion + password change | 30 |
 | **Speaker** | *(Attendee + speaker-specific views)* | Profile editing (feedback + bookmark count views are public, already in API Consumer) | Attendee + 1 |
-| **Organizer** | UC-6–UC-9, UC-19, UC-21 | + Attendee actions + Conference CRUD (29 write actions — speaker question answer endpoints are domain-only, not yet exposed via REST) + user list/delete + publish/unpublish + speaker link/unlink | 62 |
-| **System** | — | Logging | 2 |
+| **Organizer** | UC-6-UC-9, UC-19, UC-21 | + Attendee actions + Conference CRUD (29 write actions: speaker question answer endpoints are domain-only, not yet exposed via REST) + user list/delete + publish/unpublish + speaker link/unlink | 62 |
+| **System** |: | Logging | 2 |
 
 ---
 
@@ -871,7 +1107,7 @@ Actions initiated autonomously by domain event handlers after persistence:
 
 ### Session Status
 
-The `Session.Status` field is a free-text string imported from Sessionize. Default: null (for manually created sessions). Known Sessionize values: `Accepted`, `Waitlisted`, `Accept Queue`, `Nominated`, `Decline Queue`, `Declined`. **No state machine is enforced** — the status is stored as-is from the external system. Only `Accepted` and null statuses are eligible for public display, bookmarking, and feedback. All other statuses (including unknown values) are excluded from public views and engagement actions (BR-49).
+The `Session.Status` field is a free-text string imported from Sessionize. Default: null (for manually created sessions). Known Sessionize values: `Accepted`, `Waitlisted`, `Accept Queue`, `Nominated`, `Decline Queue`, `Declined`. **No state machine is enforced**: the status is stored as-is from the external system. Only `Accepted` and null statuses are eligible for public display, bookmarking, and feedback. All other statuses (including unknown values) are excluded from public views and engagement actions (BR-49).
 
 ### Session Confirmation Workflow
 
@@ -880,7 +1116,7 @@ The `Session.Status` field is a free-text string imported from Sessionize. Defau
 | `IsInformed` | Speaker has been notified of their session status |
 | `IsConfirmed` | Speaker has confirmed their participation |
 
-**Note:** These are boolean flags set during Sessionize import. No state-machine transition enforcement exists — they are informational fields.
+**Note:** These are boolean flags set during Sessionize import. No state-machine transition enforcement exists: they are informational fields.
 
 ### Entity Lifecycle States (DomainEntityState)
 
@@ -917,7 +1153,7 @@ Soft-deleted records are automatically excluded from all normal queries.
 
 ### Domain Events
 
-Domain events are raised for entity mutations. Not all events have registered handlers — events without handlers serve as extension points for future requirements.
+Domain events are raised for entity mutations. Not all events have registered handlers: events without handlers serve as extension points for future requirements.
 
 | Domain Event | Trigger | Carried Data | Context |
 |---|---|---|---|
@@ -932,7 +1168,7 @@ Domain events are raised for entity mutations. Not all events have registered ha
 | `CategoryChanged` | Category is updated or soft-deleted | DomainEntityState (Updated/Deleted), Category | Conference |
 | `QuestionCreated` | New question is created | The Question entity | Conference |
 | `QuestionChanged` | Question is updated or soft-deleted | DomainEntityState (Updated/Deleted), Question | Conference |
-| `UserSessionBookmarkChanged` | Bookmark is created or soft-deleted | DomainEntityState (Added/Deleted), UserSessionBookmark | Engagement | *(Uses single Changed event with Added/Deleted states instead of separate Created/Changed — see BR-60 exception note)* |
+| `UserSessionBookmarkChanged` | Bookmark is created or soft-deleted | DomainEntityState (Added/Deleted), UserSessionBookmark | Engagement | *(Uses single Changed event with Added/Deleted states instead of separate Created/Changed: see BR-60 exception note)* |
 | `UserRegistered` | New user account is created | UserId?, Email, FirstName, LastName, Role | Identity |
 | `UserPasswordChanged` | User changes their password | UserId | Identity |
 | `UserDeleted` | User account is soft-deleted | UserId | Identity |
@@ -953,9 +1189,9 @@ Domain events are raised for entity mutations. Not all events have registered ha
 |---|---|---|
 | `RoomChanged` | Conference | Logs the room change |
 | `SessionCreated` | Conference | Logs the session creation |
-| `SpeakerChanged` (Deleted) | Identity | **Cross-context link cleanup:** Clears `User.LinkedSpeakerId` for the linked user (if any). See BR-70. This is the only handler that crosses a bounded context boundary — it enables the Conference context to notify Identity of a speaker deletion without a direct cross-context write. |
+| `SpeakerChanged` (Deleted) | Identity | **Cross-context link cleanup:** Clears `User.LinkedSpeakerId` for the linked user (if any). See BR-70. This is the only handler that crosses a bounded context boundary: it enables the Conference context to notify Identity of a speaker deletion without a direct cross-context write. |
 
-> **Note:** Only `RoomChanged`, `SessionCreated`, and `SpeakerChanged` (Deleted) currently have registered handlers. All three perform logging or link cleanup. The remaining domain events (including `UserRegistered`, `UserPasswordChanged`, `UserDeleted`, `SpeakerQuestionAnswerChanged`, and others) are defined but have no handlers — they exist as extension points and will gain handlers when concrete requirements emerge (e.g., real-time notifications, audit logging, analytics, engagement analytics via `UserSessionBookmarkChanged`).
+> **Note:** Only `RoomChanged`, `SessionCreated`, and `SpeakerChanged` (Deleted) currently have registered handlers. All three perform logging or link cleanup. The remaining domain events (including `UserRegistered`, `UserPasswordChanged`, `UserDeleted`, `SpeakerQuestionAnswerChanged`, and others) are defined but have no handlers: they exist as extension points and will gain handlers when concrete requirements emerge (e.g., real-time notifications, audit logging, analytics, engagement analytics via `UserSessionBookmarkChanged`).
 
 ### Dispatch Mechanism
 
@@ -973,7 +1209,7 @@ Domain events are raised during entity mutations and dispatched asynchronously a
 | Required fields | Event.Name, Event.StartDate, Event.EndDate, Event.TimeZone, Session.Title, Speaker.FirstName, Speaker.LastName, Room.Name, Category.Title, CategoryItem.Name, Question.QuestionText, Question.QuestionEntity (BR-15), Question.QuestionSource, EventQuestionAnswer.AnswerValue, SessionQuestionAnswer.AnswerValue, SpeakerQuestionAnswer.AnswerValue, User.Email, User.PasswordHash, User.PasswordSalt, User.FirstName, User.LastName |
 | Unique aggregate child | A child entity can only be updated/deleted if it exists in the aggregate's collection (by ID match) |
 | Parent-child integrity | Child entity's parent ID must match the aggregate root ID when performing operations through the aggregate |
-| Cascade restrictions | Cross-aggregate relationships do not cascade deletes — deleting a parent does not automatically delete records in other aggregates (SessionSpeaker, SessionCategoryItem, SpeakerCategoryItem, EventQuestionAnswer) |
+| Cascade restrictions | Cross-aggregate relationships do not cascade deletes: deleting a parent does not automatically delete records in other aggregates (SessionSpeaker, SessionCategoryItem, SpeakerCategoryItem, EventQuestionAnswer) |
 | Cross-context soft-delete (Session) | Soft-deleting a Session cascade soft-deletes all owned children (SessionSpeakers, SessionQuestionAnswers, SessionCategoryItems) per BR-55. Engagement records (bookmarks) referencing the session are not cascade-deleted. |
 | Cross-context soft-delete (Event) | Soft-deleting an Event cascade soft-deletes all Sessions belonging to that Event (and their children) per BR-127. |
 | Soft-delete (User) | Soft-deletes the User record per BR-56. Engagement records (bookmarks) are retained but excluded from user-facing queries. |
@@ -993,15 +1229,15 @@ Domain events are raised during entity mutations and dispatched asynchronously a
 | Feedback FK validation | EventQuestionAnswer.QuestionId must reference a Question with `QuestionEntity = "Event"`. SessionQuestionAnswer.QuestionId must reference a Question with `QuestionEntity = "Session"`. SpeakerQuestionAnswer.QuestionId must reference a Question with `QuestionEntity = "Speaker"`. Mismatches are rejected (BR-128). |
 | Bookmark uniqueness | Only one active UserSessionBookmark per (UserId, SessionId) pair. Re-bookmarking after soft-delete reactivates the existing record (BR-135). |
 | Bookmark session status | Bookmarks can only be created for sessions with `Accepted` or null status. All other statuses (`Waitlisted`, `Accept Queue`, `Nominated`, `Decline Queue`, `Declined`, and unknown values) are ineligible for bookmarking (BR-49). Existing bookmarks are retained when a session's status changes to a non-eligible value (BR-139). |
-| Bookmark denormalization avoidance | UserSessionBookmark does not store EventId — it is derived from Session.EventId via join when needed |
-| Engagement aggregate independence | Engagement entities (bookmarks) are standalone aggregate roots — they reference User and Session but are not managed through those aggregates, preventing write contention |
+| Bookmark denormalization avoidance | UserSessionBookmark does not store EventId: it is derived from Session.EventId via join when needed |
+| Engagement aggregate independence | Engagement entities (bookmarks) are standalone aggregate roots: they reference User and Session but are not managed through those aggregates, preventing write contention |
 | Engagement pagination & filtering | Engagement list endpoints support pagination (BR-11 cap) and filtering: bookmarks by `EventId` via Session join (BR-58) |
 | Service session restrictions | Service sessions (`IsServiceSession = true`) cannot be bookmarked or receive feedback (BR-91) |
-| Event visibility | Unpublished events are visible only to organizers; published events are visible to all (BR-108). Visibility cascades to sessions — sessions belonging to unpublished events are excluded from public query results (consistent with Section 5 Event Lifecycle). Child entities within the Event aggregate (Rooms, EventSpeakers, EventQuestionAnswers) follow the same visibility as their parent event (BR-132). |
+| Event visibility | Unpublished events are visible only to organizers; published events are visible to all (BR-108). Visibility cascades to sessions: sessions belonging to unpublished events are excluded from public query results (consistent with Section 5 Event Lifecycle). Child entities within the Event aggregate (Rooms, EventSpeakers, EventQuestionAnswers) follow the same visibility as their parent event (BR-132). |
 | Session visibility | Sessions belonging to unpublished events are excluded from public list endpoints (GET /api/sessions). A session can be retrieved by ID only if its parent event is published or the requester is an Organizer. See BR-132. |
-| EventQuestionAnswer uniqueness | Only one answer per (CreatedBy, QuestionId, EventId) — subsequent submissions overwrite the existing answer (BR-123). |
-| SessionQuestionAnswer uniqueness | Only one answer per (CreatedBy, QuestionId, SessionId) — subsequent submissions overwrite the existing answer (BR-123). |
-| SpeakerQuestionAnswer uniqueness | Only one answer per (CreatedBy, QuestionId, SpeakerId) — subsequent submissions overwrite the existing answer (BR-123). |
+| EventQuestionAnswer uniqueness | Only one answer per (CreatedBy, QuestionId, EventId): subsequent submissions overwrite the existing answer (BR-123). |
+| SessionQuestionAnswer uniqueness | Only one answer per (CreatedBy, QuestionId, SessionId): subsequent submissions overwrite the existing answer (BR-123). |
+| SpeakerQuestionAnswer uniqueness | Only one answer per (CreatedBy, QuestionId, SpeakerId): subsequent submissions overwrite the existing answer (BR-123). |
 | CategoryItem name uniqueness | CategoryItem.Name must be unique within its parent Category (case-insensitive) (BR-138). |
 | Question field immutability | Question.QuestionType and Question.QuestionEntity cannot be changed after answers exist (BR-137). |
 | Speaker-User linking | 1:1 bidirectional relationship via `User.LinkedSpeakerId` and `Speaker.LinkedUserId`. Cleared on speaker soft-delete (BR-70). |
@@ -1015,8 +1251,8 @@ Domain events are raised during entity mutations and dispatched asynchronously a
 | DateTimeRange validity | End datetime must be >= start datetime |
 | Event date range | Event.StartDate must be <= Event.EndDate (enforced by DateRange value object) (BR-86) |
 | Time zone awareness | All server-side time comparisons use the event's configured IANA time zone (BR-87) |
-| Session duration validity | When both StartsAt and EndsAt are non-null, EndsAt must be strictly greater than StartsAt — zero-duration sessions are invalid (BR-122) |
-| Concurrency model | Last-write-wins — no optimistic concurrency (ETags, row versions). See BR-129 for rationale. |
+| Session duration validity | When both StartsAt and EndsAt are non-null, EndsAt must be strictly greater than StartsAt: zero-duration sessions are invalid (BR-122) |
+| Concurrency model | Last-write-wins: no optimistic concurrency (ETags, row versions). See BR-129 for rationale. |
 
 ---
 
@@ -1028,8 +1264,8 @@ Domain events are raised during entity mutations and dispatched asynchronously a
 |---|---|
 | **Purpose** | Import conference schedule, speakers, rooms, and category data from the Sessionize event management platform |
 | **Trigger** | Manual API call: `POST /api/events/{id}/refresh` (Organizer role required) |
-| **Data received** | Categories, CategoryItems, Rooms, Speakers (with category assignments, email, social links — TwitterHandle, LinkedInUrl, GitHubUrl, WebsiteUrl — and `IsTopSpeaker` flag), Sessions (with speaker and category assignments, `IsServiceSession` flag, `IsPlenumSession` flag, `LiveUrl`, and `RecordingUrl`), Questions (with `QuestionSource = "Sessionize"`). Social links enable attendees to follow/connect with speakers. |
-| **Sync behavior** | Idempotent upsert — new records are created, existing records (by ID) are updated. Sessionize is the source of truth: refresh overwrites all fields on matched entities, replacing any manual edits (BR-48). Soft-deleted entities are skipped (BR-136). User-generated data (feedback, bookmarks) is never modified. |
+| **Data received** | Categories, CategoryItems, Rooms, Speakers (with category assignments, email, social links: TwitterHandle, LinkedInUrl, GitHubUrl, WebsiteUrl: and `IsTopSpeaker` flag), Sessions (with speaker and category assignments, `IsServiceSession` flag, `IsPlenumSession` flag, `LiveUrl`, and `RecordingUrl`), Questions (with `QuestionSource = "Sessionize"`). Social links enable attendees to follow/connect with speakers. |
+| **Sync behavior** | Idempotent upsert: new records are created, existing records (by ID) are updated. Sessionize is the source of truth: refresh overwrites all fields on matched entities, replacing any manual edits (BR-48). Soft-deleted entities are skipped (BR-136). User-generated data (feedback, bookmarks) is never modified. |
 | **Identifier** | Event's `SessionizeCode` field (e.g., "kqf8l42a") |
 | **Scope** | Categories and speakers are synced globally; rooms, event-speakers, sessions, and their associations are scoped to the specific event |
 
@@ -1066,7 +1302,7 @@ Domain events are raised during entity mutations and dispatched asynchronously a
 | **Aggregate Root** | A DDD pattern entity that controls access to and consistency of its child entities |
 | **Domain Event** | A notification that something meaningful happened in the domain, dispatched after persistence |
 | **Specification** | A query-object pattern that encapsulates filtering criteria for entity retrieval |
-| **UserSessionBookmark** | A record indicating that an attendee plans to attend a specific session — forms their personal schedule |
+| **UserSessionBookmark** | A record indicating that an attendee plans to attend a specific session: forms their personal schedule |
 | **Organizer** | A conference administrator who manages master schedule data (events, sessions, speakers, rooms, categories). Identified by the `Organizer` value in the `User.Role` field. |
 | **Attendee Role** | The default user role assigned at registration. Grants access to engagement features (bookmarks, feedback) but not conference data management. |
 | **Service Session** | A non-talk entry on the schedule (e.g., lunch break, registration, networking). Displayed on the schedule but excluded from engagement features (bookmarking, feedback). Identified by `IsServiceSession = true`. Keynotes are typically not service sessions. |
@@ -1094,10 +1330,10 @@ Domain events are raised during entity mutations and dispatched asynchronously a
 
 | Aggregate Root | Context | Owned Children | Why These Children |
 |---|---|---|---|
-| **Event** | Conference | Room, EventSpeaker, EventQuestionAnswer | Structural parts of "what makes up an event" — venue rooms, speaker lineup, and event-level feedback. Organizer-managed, low-write. |
-| **Session** | Conference | SessionSpeaker, SessionQuestionAnswer, SessionCategoryItem | Structural parts of "what defines a session" — who presents it, how it's tagged, and session-level feedback. Organizer-managed (speakers/tags) or burst-write (feedback). |
+| **Event** | Conference | Room, EventSpeaker, EventQuestionAnswer | Structural parts of "what makes up an event": venue rooms, speaker lineup, and event-level feedback. Organizer-managed, low-write. |
+| **Session** | Conference | SessionSpeaker, SessionQuestionAnswer, SessionCategoryItem | Structural parts of "what defines a session": who presents it, how it's tagged, and session-level feedback. Organizer-managed (speakers/tags) or burst-write (feedback). |
 | **Speaker** | Conference | SpeakerCategoryItem, SpeakerQuestionAnswer | Category tags and feedback are part of the speaker's profile definition. |
-| **Category** | Conference | CategoryItem | Items are the values within a category — they have no independent lifecycle. |
+| **Category** | Conference | CategoryItem | Items are the values within a category: they have no independent lifecycle. |
 | **Question** | Conference | *(none)* | Template entity. Answers are children of Event/Session, not of Question. |
 | **UserSessionBookmark** | Engagement | *(none)* | Standalone preference record. |
 | **User** | Identity | *(none)* | Pure identity. Attendee-generated content is in Engagement. |
@@ -1106,9 +1342,9 @@ Domain events are raised during entity mutations and dispatched asynchronously a
 
 | Entity | References (not ownership) | Crosses Context Boundary? | Cascade on Delete? |
 |---|---|---|---|
-| **Speaker** | → User (Identity, optional — LinkedUserId, 1:1 bidirectional with User.LinkedSpeakerId; see Section 12.4) | **Yes: Conference → Identity** | No cascade. Link cleared via `SpeakerChanged` domain event handler (BR-70). |
-| **User** | → Speaker (Conference, optional — LinkedSpeakerId, 1:1 bidirectional with Speaker.LinkedUserId; see Section 12.4) | **Yes: Identity → Conference** | No cascade. Link cleared via `SpeakerChanged` domain event handler (BR-70). |
-| **Session** | → Event (Conference, required), → Room (Conference, optional — note: Room is a child of Event, not an aggregate root; this is a pragmatic cross-aggregate reference to a child entity, acceptable because Room has a stable identity via Sessionize-assigned ID per BR-61. **Validation:** BR-130 requires `Room.EventId == Session.EventId` — the Session service reads the Room to enforce this cross-aggregate constraint during create/update.) | No: within Conference, but crosses aggregate boundaries | Session cascade soft-deleted when parent Event is deleted (BR-127). Room reference is not cascade-affected. |
+| **Speaker** | → User (Identity, optional: LinkedUserId, 1:1 bidirectional with User.LinkedSpeakerId; see Section 12.4) | **Yes: Conference → Identity** | No cascade. Link cleared via `SpeakerChanged` domain event handler (BR-70). |
+| **User** | → Speaker (Conference, optional: LinkedSpeakerId, 1:1 bidirectional with Speaker.LinkedUserId; see Section 12.4) | **Yes: Identity → Conference** | No cascade. Link cleared via `SpeakerChanged` domain event handler (BR-70). |
+| **Session** | → Event (Conference, required), → Room (Conference, optional: note: Room is a child of Event, not an aggregate root; this is a pragmatic cross-aggregate reference to a child entity, acceptable because Room has a stable identity via Sessionize-assigned ID per BR-61. **Validation:** BR-130 requires `Room.EventId == Session.EventId`, the Session service reads the Room to enforce this cross-aggregate constraint during create/update.) | No: within Conference, but crosses aggregate boundaries | Session cascade soft-deleted when parent Event is deleted (BR-127). Room reference is not cascade-affected. |
 | **UserSessionBookmark** | → User (Identity), → Session (Conference) | Yes: Engagement → Identity, Engagement → Conference | No cascade from Session or User deletion. Bookmarks are retained but excluded from queries (BR-55, BR-56). |
 | **EventQuestionAnswer** | → Event (owner, Conference), → Question (Conference) | No: within Conference | Cascade soft-deleted with parent Event (BR-72). Question deletion does not cascade (BR-73). |
 | **SessionQuestionAnswer** | → Session (owner, Conference), → Question (Conference) | No: within Conference | Cascade soft-deleted with parent Session (BR-55). Question deletion does not cascade (BR-73). |
@@ -1132,7 +1368,7 @@ The original Events + Identity split grouped all conference-related entities tog
 | **Time sensitivity** | Updated hours/days before the event | Updated in real-time during the event |
 | **Consistency model** | Strong consistency (aggregate invariants matter) | Eventual consistency acceptable |
 
-The primary benefit is **conceptual separation** — organizer-managed master data vs. attendee-generated activity — which keeps each module focused. The contention argument is secondary: Engagement aggregate roots are standalone (no parent to contend on), so the throughput benefit is about clean module boundaries rather than aggregate-level lock contention.
+The primary benefit is **conceptual separation**: organizer-managed master data vs. attendee-generated activity: which keeps each module focused. The contention argument is secondary: Engagement aggregate roots are standalone (no parent to contend on), so the throughput benefit is about clean module boundaries rather than aggregate-level lock contention.
 
 **Why Engagement entities are standalone aggregate roots (not children of User or Session):**
 
@@ -1148,38 +1384,38 @@ This is a deliberate trade-off with known contention risk. Feedback writes are r
 
 The contention risk is real but bounded at the expected scale:
 
-- **Session feedback** submissions tend to concentrate in the period after each session ends, producing a **burst** of 20–100 submissions in the first few minutes — not a gradual trickle. For a conference with a few hundred attendees, this burst is manageable: individual requests take milliseconds, and the database handles this concurrency without degradation.
-- **Event feedback** is spread across the event's duration — minimal contention.
+- **Session feedback** submissions tend to concentrate in the period after each session ends, producing a **burst** of 20-100 submissions in the first few minutes: not a gradual trickle. For a conference with a few hundred attendees, this burst is manageable: individual requests take milliseconds, and the database handles this concurrency without degradation.
+- **Event feedback** is spread across the event's duration: minimal contention.
 - The implementation must add child rows without locking or replacing the parent's entire child collection. Child entity additions should be **append-only inserts** keyed to the parent, not load-modify-save-all cycles.
-- With last-write-wins semantics (BR-129), there is no risk of optimistic concurrency failures — only of two writes to the same unique key racing, which the upsert logic (BR-123) handles.
+- With last-write-wins semantics (BR-129), there is no risk of optimistic concurrency failures: only of two writes to the same unique key racing, which the upsert logic (BR-123) handles.
 
-**Feedback entities are the primary candidate for extraction to the Engagement context** if attendee volume exceeds ~200 concurrent writers per session. EventQuestionAnswer, SessionQuestionAnswer, and SpeakerQuestionAnswer match the Engagement write profile on every dimension (attendee-generated, high-write during live events, real-time during sessions, eventual consistency acceptable) — the same rationale that justified separating UserSessionBookmark. They remain in Conference for v1 because the contention is bounded at current scale and the aggregate ownership simplifies transactional consistency. Extraction requires moving entities to standalone aggregate roots and adjusting DI — the domain model and API contract do not change.
+**Feedback entities are the primary candidate for extraction to the Engagement context** if attendee volume exceeds ~200 concurrent writers per session. EventQuestionAnswer, SessionQuestionAnswer, and SpeakerQuestionAnswer match the Engagement write profile on every dimension (attendee-generated, high-write during live events, real-time during sessions, eventual consistency acceptable): the same rationale that justified separating UserSessionBookmark. They remain in Conference for v1 because the contention is bounded at current scale and the aggregate ownership simplifies transactional consistency. Extraction requires moving entities to standalone aggregate roots and adjusting DI: the domain model and API contract do not change.
 
 **Cross-aggregate validation for feedback submission (known hotspot):**
 
-Submitting a `SessionQuestionAnswer` (a child of the Session aggregate) requires validating state from three aggregates: (1) **Session** — exists, is not a service session (BR-91), status is Accepted or null (BR-49); (2) **Event** — is published (BR-108); (3) **Question** — exists, correct `QuestionEntity` (BR-128), `QuestionType` for answer validation (BR-124). `EventQuestionAnswer` similarly validates across Event and Question. `SpeakerQuestionAnswer` validates across Speaker and Question. This cross-aggregate read-on-write is intentional — the business rules genuinely require this validation and it cannot be decomposed further. The feedback services therefore depend on Event and Question read repositories in addition to their owning aggregate's repository. This is not accidental coupling; it is documented here so future developers understand why these service-layer dependencies exist and do not attempt to remove them in the name of aggregate isolation.
+Submitting a `SessionQuestionAnswer` (a child of the Session aggregate) requires validating state from three aggregates: (1) **Session**: exists, is not a service session (BR-91), status is Accepted or null (BR-49); (2) **Event**: is published (BR-108); (3) **Question**: exists, correct `QuestionEntity` (BR-128), `QuestionType` for answer validation (BR-124). `EventQuestionAnswer` similarly validates across Event and Question. `SpeakerQuestionAnswer` validates across Speaker and Question. This cross-aggregate read-on-write is intentional: the business rules genuinely require this validation and it cannot be decomposed further. The feedback services therefore depend on Event and Question read repositories in addition to their owning aggregate's repository. This is not accidental coupling; it is documented here so future developers understand why these service-layer dependencies exist and do not attempt to remove them in the name of aggregate isolation.
 
 **Why UserSessionBookmark does not store EventId:**
 
-A bookmark needs only UserId and SessionId. The Event is derivable from `Session.EventId`. Denormalizing EventId onto the bookmark is unnecessary because `Session.EventId` is immutable (BR-140) — there is no inconsistency risk. Queries that need to filter bookmarks by event join through Session — this is a read-path concern solvable by indexing, not a domain model concern.
+A bookmark needs only UserId and SessionId. The Event is derivable from `Session.EventId`. Denormalizing EventId onto the bookmark is unnecessary because `Session.EventId` is immutable (BR-140): there is no inconsistency risk. Queries that need to filter bookmarks by event join through Session: this is a read-path concern solvable by indexing, not a domain model concern.
 
 **Why bookmarks use soft-delete instead of hard-delete:**
 
-UserSessionBookmark follows the universal soft-delete pattern (BR-1) despite bookmarks having no historical reporting value. The rationale: (1) Consistency — every entity in the system uses soft-delete, eliminating special-case logic in the repository layer and keeping architecture tests simple. (2) Recovery — if a user accidentally removes a bookmark, the soft-deleted record could be restored (though no restore endpoint exists today). (3) Analytics — soft-deleted bookmarks provide engagement data (e.g., "how many users bookmarked then un-bookmarked this session"). The cost is minimal: soft-deleted bookmarks are excluded from queries and consume negligible storage.
+UserSessionBookmark follows the universal soft-delete pattern (BR-1) despite bookmarks having no historical reporting value. The rationale: (1) Consistency: every entity in the system uses soft-delete, eliminating special-case logic in the repository layer and keeping architecture tests simple. (2) Recovery: if a user accidentally removes a bookmark, the soft-deleted record could be restored (though no restore endpoint exists today). (3) Analytics: soft-deleted bookmarks provide engagement data (e.g., "how many users bookmarked then un-bookmarked this session"). The cost is minimal: soft-deleted bookmarks are excluded from queries and consume negligible storage.
 
 **Domain event dispatch:**
 
-Domain events are raised during entity mutations (e.g., adding a room to an event raises `RoomChanged`) and dispatched asynchronously after changes are persisted. Most domain events are produced and consumed within the Conference context. The exception is `SpeakerChanged` (Deleted), which is produced in the Conference context and consumed by a handler in the Identity context to clear the speaker-user link (BR-70). This is the only cross-context domain event handler — it replaces a direct cross-context write with an event-driven approach to maintain bounded context isolation. See Section 6 for the full list of domain events and their handlers.
+Domain events are raised during entity mutations (e.g., adding a room to an event raises `RoomChanged`) and dispatched asynchronously after changes are persisted. Most domain events are produced and consumed within the Conference context. The exception is `SpeakerChanged` (Deleted), which is produced in the Conference context and consumed by a handler in the Identity context to clear the speaker-user link (BR-70). This is the only cross-context domain event handler: it replaces a direct cross-context write with an event-driven approach to maintain bounded context isolation. See Section 6 for the full list of domain events and their handlers.
 
 **Why Session is an aggregate root but cascade-deleted by Event (BR-127):**
 
-Session is an aggregate root because it independently owns children (SessionSpeakers, SessionQuestionAnswers, SessionCategoryItems) and is the target of cross-context references (UserSessionBookmark). It has its own lifecycle for scheduling, feedback, and bookmarking. However, when an Event is soft-deleted, orphaning its Sessions would create inconsistency — sessions with no parent event are meaningless. BR-127 introduces a pragmatic cross-aggregate cascade: Event deletion cascades to Sessions. This violates the strict DDD principle that aggregate roots are only deleted through their own boundary, but the alternative (requiring organizers to manually delete every session before deleting an event) is operationally impractical. The cascade is implemented at the service layer (not database-level), so domain events and child cascades (BR-55) fire correctly.
+Session is an aggregate root because it independently owns children (SessionSpeakers, SessionQuestionAnswers, SessionCategoryItems) and is the target of cross-context references (UserSessionBookmark). It has its own lifecycle for scheduling, feedback, and bookmarking. However, when an Event is soft-deleted, orphaning its Sessions would create inconsistency: sessions with no parent event are meaningless. BR-127 introduces a pragmatic cross-aggregate cascade: Event deletion cascades to Sessions. This violates the strict DDD principle that aggregate roots are only deleted through their own boundary, but the alternative (requiring organizers to manually delete every session before deleting an event) is operationally impractical. The cascade is implemented at the service layer (not database-level), so domain events and child cascades (BR-55) fire correctly.
 
-**Why Organizers can submit feedback:** Organizers inherit all Attendee capabilities, including feedback submission. This is intentional — conference organizers typically attend sessions. The Organizer role grants write access to all Conference entities, making it impossible to define "their" sessions vs. others'. Feedback is scoped to the authenticated user (BR-8, BR-9).
+**Why Organizers can submit feedback:** Organizers inherit all Attendee capabilities, including feedback submission. This is intentional: conference organizers typically attend sessions. The Organizer role grants write access to all Conference entities, making it impossible to define "their" sessions vs. others'. Feedback is scoped to the authenticated user (BR-8, BR-9).
 
 **How role-based authorization works:**
 
-The system has two user roles — `Attendee` (default) and `Organizer` — stored on the User entity. At login (UC-31), the role is included as a `role` claim in the JWT. Authorization is enforced at three levels:
+The system has two user roles: `Attendee` (default) and `Organizer`, stored on the User entity. At login (UC-31), the role is included as a `role` claim in the JWT. Authorization is enforced at three levels:
 
 | Level | Who | Endpoints | Enforcement |
 |---|---|---|---|
@@ -1193,7 +1429,7 @@ This design keeps the User entity simple (a single `Role` field rather than a ma
 
 **Why per-question feedback submission with POST-as-upsert:**
 
-Feedback answers are submitted individually via `POST` on EventQuestionAnswer and SessionQuestionAnswer endpoints. Unlike other entities where `POST` is create-only, feedback `POST` performs an **upsert** — it creates a new answer or overwrites an existing one for the same (CreatedBy, QuestionId, EntityId) key (BR-107, BR-123). This is a deliberate deviation from pure CRUD semantics that simplifies the client: attendees don't need to check whether they've already answered a question before submitting. The `Question.IsRequired` flag is advisory — clients should enforce it in the UI but the server does not validate completeness across all questions.
+Feedback answers are submitted individually via `POST` on EventQuestionAnswer and SessionQuestionAnswer endpoints. Unlike other entities where `POST` is create-only, feedback `POST` performs an **upsert**: it creates a new answer or overwrites an existing one for the same (CreatedBy, QuestionId, EntityId) key (BR-107, BR-123). This is a deliberate deviation from pure CRUD semantics that simplifies the client: attendees don't need to check whether they've already answered a question before submitting. The `Question.IsRequired` flag is advisory: clients should enforce it in the UI but the server does not validate completeness across all questions.
 
 ---
 
@@ -1209,11 +1445,11 @@ This section addresses gaps, ambiguities, and implicit design decisions identifi
 
 The domain model does not explain how entities imported from Sessionize are matched to local records during upsert. The resolution:
 
-Sessionize assigns stable IDs to each entity type — integers for Categories, CategoryItems, Rooms, and Sessions; GUIDs for Speakers. During import, the system uses these Sessionize-assigned IDs as the **local primary key**. `ExistsAsync(sessionizeId)` determines whether to create or update.
+Sessionize assigns stable IDs to each entity type: integers for Categories, CategoryItems, Rooms, and Sessions; GUIDs for Speakers. During import, the system uses these Sessionize-assigned IDs as the **local primary key**. `ExistsAsync(sessionizeId)` determines whether to create or update.
 
 | # | Rule |
 |---|---|
-| BR-61 | Entity IDs for Sessionize-imported entities (Category, CategoryItem, Room, Speaker, Session) are assigned by Sessionize and stored as the local primary key. These entities use `ValueGeneratedNever` for ID generation — the database does not auto-generate IDs for them. **Question** also uses `ValueGeneratedNever` — Sessionize-imported questions use their Sessionize-assigned IDs, while user-created questions (via manual CRUD) receive IDs from a reserved range (999,999,000–999,999,999) auto-allocated by the create handler to avoid collisions with Sessionize-assigned IDs. Entities that are never Sessionize-imported (Event, EventSpeaker, SessionSpeaker, SessionCategoryItem, SpeakerCategoryItem, EventQuestionAnswer, SessionQuestionAnswer, SpeakerQuestionAnswer, User, and all Engagement entities) use database-auto-generated IDs (`ValueGeneratedOnAdd`). |
+| BR-61 | Entity IDs for Sessionize-imported entities (Category, CategoryItem, Room, Speaker, Session) are assigned by Sessionize and stored as the local primary key. These entities use `ValueGeneratedNever` for ID generation: the database does not auto-generate IDs for them. **Question** also uses `ValueGeneratedNever`, Sessionize-imported questions use their Sessionize-assigned IDs, while user-created questions (via manual CRUD) receive IDs from a reserved range (999,999,000-999,999,999) auto-allocated by the create handler to avoid collisions with Sessionize-assigned IDs. Entities that are never Sessionize-imported (Event, EventSpeaker, SessionSpeaker, SessionCategoryItem, SpeakerCategoryItem, EventQuestionAnswer, SessionQuestionAnswer, SpeakerQuestionAnswer, User, and all Engagement entities) use database-auto-generated IDs (`ValueGeneratedOnAdd`). |
 
 #### Removal Handling (clarifies BR-7)
 
@@ -1221,7 +1457,7 @@ BR-7 covers add and update but is silent on what happens when an entity exists l
 
 | # | Rule |
 |---|---|
-| BR-62 | Sessionize refresh performs **additive sync only** — it creates new entities and updates existing ones but **never soft-deletes** entities absent from the Sessionize response. Entities removed from Sessionize remain active locally until an organizer manually soft-deletes them. This prevents data loss when Sessionize returns partial data due to API pagination, filtering, or transient errors. |
+| BR-62 | Sessionize refresh performs **additive sync only**: it creates new entities and updates existing ones but **never soft-deletes** entities absent from the Sessionize response. Entities removed from Sessionize remain active locally until an organizer manually soft-deletes them. This prevents data loss when Sessionize returns partial data due to API pagination, filtering, or transient errors. |
 
 #### Refresh Throttling
 
@@ -1239,7 +1475,7 @@ The Speaker entity includes an `Email` property (imported from Sessionize), but 
 
 | # | Rule |
 |---|---|
-| BR-66 | `Speaker.Email` is optional (speakers may not have their email published in Sessionize) and **not unique** — though duplicates would be unusual. Speaker email is **not exposed** via public API read endpoints (GET /api/speakers) because email is PII — it is not information attendees need. Social links (BR-99) are public because speakers intentionally share them for professional networking. Speaker email is visible to Organizers via the write/management endpoints. It follows the Sessionize source-of-truth rule (BR-48). |
+| BR-66 | `Speaker.Email` is optional (speakers may not have their email published in Sessionize) and **not unique**: though duplicates would be unusual. Speaker email is **not exposed** via public API read endpoints (GET /api/speakers) because email is PII: it is not information attendees need. Social links (BR-99) are public because speakers intentionally share them for professional networking. Speaker email is visible to Organizers via the write/management endpoints. It follows the Sessionize source-of-truth rule (BR-48). |
 
 ---
 
@@ -1259,10 +1495,10 @@ BR-55 covers Session soft-delete and BR-56 covers User soft-delete, but the spec
 
 | # | Rule |
 |---|---|
-| BR-70 | Soft-deleting a **Speaker** soft-deletes the Speaker record only. Associated `EventSpeaker`, `SessionSpeaker`, and `SpeakerCategoryItem` records are **not cascade-deleted** — they remain active but reference a soft-deleted speaker. **Query filtering for dangling references:** Top-level read endpoints for join entities (`GET /api/eventspeakers`, `GET /api/sessionspeakers`, `GET /api/speakercategoryitems`) must filter results to exclude records where the referenced Speaker is soft-deleted, in addition to the standard `IsDeleted` filter on the join entity itself. Similarly, `includeChildren` responses for Event and Session aggregates exclude join entity records referencing soft-deleted speakers. This prevents consumers from receiving join records that point to unfetchable (soft-deleted) speakers. **Speaker-user link cleanup (via domain event):** If the speaker is linked to a User (via `LinkedUserId`/`LinkedSpeakerId`), `Speaker.LinkedUserId` is cleared within the Conference context during the soft-delete operation. After persistence, the `SpeakerChanged` domain event (with DomainEntityState.Deleted) is dispatched. A handler in the **Identity context** receives this event and clears `User.LinkedSpeakerId` — this is an eventually-consistent cross-context operation rather than a direct cross-context write, maintaining bounded context isolation (see Section 6 Event Handlers). The eventual consistency window is negligible in practice: the user's current JWT retains the stale `speaker_id` claim until expiry (BR-12) regardless of when the User record is updated, and speaker-specific endpoints return HTTP 404 for the soft-deleted speaker immediately. The `speaker_id` claim will be absent from the user's next JWT issued at login or token refresh. |
-| BR-71 | Soft-deleting a **Category** soft-deletes the Category record **and cascade soft-deletes all child CategoryItems**. Associated `SessionCategoryItem` and `SpeakerCategoryItem` records referencing deleted items are **not cascade-deleted** — they remain active but reference soft-deleted items. These orphaned references are excluded from display because soft-deleted CategoryItems are filtered from queries. **Sessionize refresh interaction:** CategoryItems that are cascade-deleted via their parent Category are subject to BR-136 — Sessionize refresh will skip these soft-deleted items rather than reactivating them. Organizers who wish to remove a category grouping without suppressing its items from future Sessionize refreshes should un-delete the individual CategoryItems after deleting the Category, then reassign them to a different Category or leave them as standalone items for the next refresh to reconcile. |
-| BR-72 | Soft-deleting an **Event** soft-deletes the Event record **and cascade soft-deletes all owned child entities** (Rooms, EventSpeakers, EventQuestionAnswers) **and all Sessions belonging to the event** (which in turn cascade soft-delete their owned children per BR-55). This supersedes the previous non-cascade behavior — see BR-127. **Note:** This cascade includes EventQuestionAnswers (attendee feedback), which will be hidden from queries. Unlike Question soft-delete (BR-73, which preserves answers), Event soft-delete prioritizes data consistency — an event's children are meaningless without the parent. Organizers should export feedback data before soft-deleting an event if historical reporting is needed. |
-| BR-73 | Soft-deleting a **Question** soft-deletes the Question record only. Existing `EventQuestionAnswer`, `SessionQuestionAnswer`, and `SpeakerQuestionAnswer` records referencing the question are **not cascade-deleted** — they retain their answer data for historical reporting. The soft-deleted question no longer appears in survey lists for new feedback submission. |
+| BR-70 | Soft-deleting a **Speaker** soft-deletes the Speaker record only. Associated `EventSpeaker`, `SessionSpeaker`, and `SpeakerCategoryItem` records are **not cascade-deleted**: they remain active but reference a soft-deleted speaker. **Query filtering for dangling references:** Top-level read endpoints for join entities (`GET /api/eventspeakers`, `GET /api/sessionspeakers`, `GET /api/speakercategoryitems`) must filter results to exclude records where the referenced Speaker is soft-deleted, in addition to the standard `IsDeleted` filter on the join entity itself. Similarly, `includeChildren` responses for Event and Session aggregates exclude join entity records referencing soft-deleted speakers. This prevents consumers from receiving join records that point to unfetchable (soft-deleted) speakers. **Speaker-user link cleanup (via domain event):** If the speaker is linked to a User (via `LinkedUserId`/`LinkedSpeakerId`), `Speaker.LinkedUserId` is cleared within the Conference context during the soft-delete operation. After persistence, the `SpeakerChanged` domain event (with DomainEntityState.Deleted) is dispatched. A handler in the **Identity context** receives this event and clears `User.LinkedSpeakerId`, this is an eventually-consistent cross-context operation rather than a direct cross-context write, maintaining bounded context isolation (see Section 6 Event Handlers). The eventual consistency window is negligible in practice: the user's current JWT retains the stale `speaker_id` claim until expiry (BR-12) regardless of when the User record is updated, and speaker-specific endpoints return HTTP 404 for the soft-deleted speaker immediately. The `speaker_id` claim will be absent from the user's next JWT issued at login or token refresh. |
+| BR-71 | Soft-deleting a **Category** soft-deletes the Category record **and cascade soft-deletes all child CategoryItems**. Associated `SessionCategoryItem` and `SpeakerCategoryItem` records referencing deleted items are **not cascade-deleted**: they remain active but reference soft-deleted items. These orphaned references are excluded from display because soft-deleted CategoryItems are filtered from queries. **Sessionize refresh interaction:** CategoryItems that are cascade-deleted via their parent Category are subject to BR-136: Sessionize refresh will skip these soft-deleted items rather than reactivating them. Organizers who wish to remove a category grouping without suppressing its items from future Sessionize refreshes should un-delete the individual CategoryItems after deleting the Category, then reassign them to a different Category or leave them as standalone items for the next refresh to reconcile. |
+| BR-72 | Soft-deleting an **Event** soft-deletes the Event record **and cascade soft-deletes all owned child entities** (Rooms, EventSpeakers, EventQuestionAnswers) **and all Sessions belonging to the event** (which in turn cascade soft-delete their owned children per BR-55). This supersedes the previous non-cascade behavior: see BR-127. **Note:** This cascade includes EventQuestionAnswers (attendee feedback), which will be hidden from queries. Unlike Question soft-delete (BR-73, which preserves answers), Event soft-delete prioritizes data consistency: an event's children are meaningless without the parent. Organizers should export feedback data before soft-deleting an event if historical reporting is needed. |
+| BR-73 | Soft-deleting a **Question** soft-deletes the Question record only. Existing `EventQuestionAnswer`, `SessionQuestionAnswer`, and `SpeakerQuestionAnswer` records referencing the question are **not cascade-deleted**: they retain their answer data for historical reporting. The soft-deleted question no longer appears in survey lists for new feedback submission. |
 
 **Cascade rationale summary:**
 
@@ -1279,11 +1515,11 @@ BR-55 covers Session soft-delete and BR-56 covers User soft-delete, but the spec
 
 ### 10.9 Question Scoping (clarifies Question entity)
 
-Questions have no `EventId` — they are global. The spec does not address whether different events can have different survey questions.
+Questions have no `EventId`, they are global. The spec does not address whether different events can have different survey questions.
 
 | # | Rule |
 |---|---|
-| BR-74 | Questions are **global survey templates** not scoped to a specific event. All events, sessions, and speakers share the same question pool, filtered by `QuestionEntity` ("Event", "Session", or "Speaker"). This is sufficient for the current single-event-per-year conference model. If event-specific surveys are needed in the future, a `QuestionEvent` join entity can associate specific questions with specific events without changing the Question entity itself. **Note:** The same global-scope consideration applies to Categories (IR-5). Categories and Questions are both event-independent — acceptable when all events share a single Sessionize source or manual configuration, but a **data corruption risk** if multiple concurrent events import from independent Sessionize instances (category IDs could collide and overwrite each other per BR-48/BR-61). If the system evolves to support multiple concurrent events with independent Sessionize sources, both Categories and Questions should be evaluated for event-scoping. |
+| BR-74 | Questions are **global survey templates** not scoped to a specific event. All events, sessions, and speakers share the same question pool, filtered by `QuestionEntity` ("Event", "Session", or "Speaker"). This is sufficient for the current single-event-per-year conference model. If event-specific surveys are needed in the future, a `QuestionEvent` join entity can associate specific questions with specific events without changing the Question entity itself. **Note:** The same global-scope consideration applies to Categories (IR-5). Categories and Questions are both event-independent: acceptable when all events share a single Sessionize source or manual configuration, but a **data corruption risk** if multiple concurrent events import from independent Sessionize instances (category IDs could collide and overwrite each other per BR-48/BR-61). If the system evolves to support multiple concurrent events with independent Sessionize sources, both Categories and Questions should be evaluated for event-scoping. |
 
 ---
 
@@ -1303,11 +1539,11 @@ The spec mentions `includeChildren=true` but does not define depth or scope per 
 | Session | SessionSpeakers, SessionCategoryItems, SessionQuestionAnswers |
 | Speaker | SpeakerCategoryItems, SpeakerQuestionAnswers |
 | Category | CategoryItems |
-| Question | *(none — EventQuestionAnswers and SessionQuestionAnswers are cross-aggregate references, loaded via their own endpoints)* |
+| Question | *(none: EventQuestionAnswers and SessionQuestionAnswers are cross-aggregate references, loaded via their own endpoints)* |
 
 **Example:** `GET /api/events/{id}?includeChildren=true` returns the event with its rooms, event-speakers, and event question answers. It does **not** include the event's sessions (which are a separate aggregate, queried via `GET /api/sessions?filters[EventId].eq={id}`).
 
-**Feedback scoping in `includeChildren`:** When `includeChildren=true` returns EventQuestionAnswers (on Event) or SessionQuestionAnswers (on Session), the feedback records are scoped by the requester's role: **Attendees** see only their own answers (`CreatedBy` matches authenticated user). **Organizers** see all answers. **Unauthenticated** requests see no feedback answers — the feedback child collections are returned as empty arrays. This is consistent with BR-8 and BR-9.
+**Feedback scoping in `includeChildren`:** When `includeChildren=true` returns EventQuestionAnswers (on Event) or SessionQuestionAnswers (on Session), the feedback records are scoped by the requester's role: **Attendees** see only their own answers (`CreatedBy` matches authenticated user). **Organizers** see all answers. **Unauthenticated** requests see no feedback answers: the feedback child collections are returned as empty arrays. This is consistent with BR-8 and BR-9.
 
 ---
 
@@ -1323,7 +1559,7 @@ The spec mentions `includeChildren=true` but does not define depth or scope per 
 
 ### 10.16 Time-Gated HTTP Status Correction
 
-HTTP 403 ("Forbidden") should not be used for temporal constraint violations — those are client errors (bad request timing), not authorization failures.
+HTTP 403 ("Forbidden") should not be used for temporal constraint violations: those are client errors (bad request timing), not authorization failures.
 
 | # | Rule |
 |---|---|
@@ -1345,7 +1581,7 @@ Entity `Sort` fields (on Room, CategoryItem, Category, Question) have no specifi
 
 The Speaker entity includes `FullName` described as "Computed: {FirstName} {LastName}" without specifying the implementation.
 
-`Speaker.FullName` is a **read-only computed property** — a C# property getter (`$"{FirstName} {LastName}"`), not a database column. It is serialized into DTOs and available for display. Because it has no database column, it cannot be used in database-level filtering or sorting. Clients that need to filter or sort by name should use `FirstName` or `LastName`.
+`Speaker.FullName` is a **read-only computed property**: a C# property getter (`$"{FirstName} {LastName}"`), not a database column. It is serialized into DTOs and available for display. Because it has no database column, it cannot be used in database-level filtering or sorting. Clients that need to filter or sort by name should use `FirstName` or `LastName`.
 
 ---
 
@@ -1363,7 +1599,7 @@ BR-21 enforces bookmark uniqueness per (UserId, SessionId), and BR-1 requires so
 
 | # | Rule |
 |---|---|
-| BR-135 | **Bookmark reactivation:** The uniqueness check for bookmarks (BR-21) considers only active (non-deleted) records for conflict detection. When a user bookmarks a session for which a soft-deleted bookmark exists, the existing record is **reactivated** (`IsDeleted` set to false, `LastModifiedOn`/`LastModifiedBy` updated) rather than creating a new record. This prevents unbounded growth of soft-deleted bookmark records from repeated bookmark/un-bookmark cycles. The same reactivation pattern applies to all join entities with uniqueness constraints (EventSpeaker, SessionSpeaker, SessionCategoryItem, SpeakerCategoryItem) — re-creating a previously soft-deleted association reactivates the existing record. |
+| BR-135 | **Bookmark reactivation:** The uniqueness check for bookmarks (BR-21) considers only active (non-deleted) records for conflict detection. When a user bookmarks a session for which a soft-deleted bookmark exists, the existing record is **reactivated** (`IsDeleted` set to false, `LastModifiedOn`/`LastModifiedBy` updated) rather than creating a new record. This prevents unbounded growth of soft-deleted bookmark records from repeated bookmark/un-bookmark cycles. The same reactivation pattern applies to all join entities with uniqueness constraints (EventSpeaker, SessionSpeaker, SessionCategoryItem, SpeakerCategoryItem): re-creating a previously soft-deleted association reactivates the existing record. |
 
 ---
 
@@ -1373,7 +1609,7 @@ The spec does not define what happens when a Sessionize refresh includes an enti
 
 | # | Rule |
 |---|---|
-| BR-136 | **Sessionize refresh skips soft-deleted entities.** During a Sessionize refresh (UC-6), if an entity in the Sessionize response matches a locally soft-deleted record (by ID), the soft-deleted record is **not reactivated or updated** — the organizer's delete decision takes precedence over Sessionize data. Skipped entities are counted in a `skippedSoftDeleted` field in the refresh response and logged as a warning (e.g., "Skipped 2 soft-deleted speakers present in Sessionize response"). To restore a soft-deleted imported entity, an organizer must un-delete it manually (future restore endpoint) before triggering a refresh. **Rationale:** Sessionize is the source of truth for *field content* (BR-48), but entity lifecycle (active vs. deleted) is an organizer decision. Automatically reactivating soft-deleted entities would be surprising — an organizer who deliberately removed a declined speaker would see them reappear on the next refresh. |
+| BR-136 | **Sessionize refresh skips soft-deleted entities.** During a Sessionize refresh (UC-6), if an entity in the Sessionize response matches a locally soft-deleted record (by ID), the soft-deleted record is **not reactivated or updated**: the organizer's delete decision takes precedence over Sessionize data. Skipped entities are counted in a `skippedSoftDeleted` field in the refresh response and logged as a warning (e.g., "Skipped 2 soft-deleted speakers present in Sessionize response"). To restore a soft-deleted imported entity, an organizer must un-delete it manually (future restore endpoint) before triggering a refresh. **Rationale:** Sessionize is the source of truth for *field content* (BR-48), but entity lifecycle (active vs. deleted) is an organizer decision. Automatically reactivating soft-deleted entities would be surprising: an organizer who deliberately removed a declined speaker would see them reappear on the next refresh. |
 
 ---
 
@@ -1383,7 +1619,7 @@ The spec does not address what happens when a Question's `QuestionType` or `Ques
 
 | # | Rule |
 |---|---|
-| BR-137 | **Question.QuestionType and Question.QuestionEntity are immutable after answers exist.** Once any EventQuestionAnswer, SessionQuestionAnswer, or SpeakerQuestionAnswer references a Question, the Question's `QuestionType` and `QuestionEntity` fields cannot be changed via `PUT`. Attempts to change either field on a Question with existing answers return HTTP 422 with detail "QuestionType and QuestionEntity cannot be changed after answers have been submitted." To change the question type or target entity, soft-delete the existing Question and create a new one. **Rationale:** Changing a Rating question to Text (or vice versa) would make existing answers semantically invalid — a numeric "4" becomes meaningless as free text, and free text cannot be interpreted as a rating. Changing `QuestionEntity` from `"Event"` to `"Session"` or `"Speaker"` (or vice versa) would make existing answers reference a question targeting the wrong entity type, silently breaking the FK validation invariant (BR-128). Other Question fields (`QuestionText`, `Sort`, `IsRequired`) remain mutable. |
+| BR-137 | **Question.QuestionType and Question.QuestionEntity are immutable after answers exist.** Once any EventQuestionAnswer, SessionQuestionAnswer, or SpeakerQuestionAnswer references a Question, the Question's `QuestionType` and `QuestionEntity` fields cannot be changed via `PUT`. Attempts to change either field on a Question with existing answers return HTTP 422 with detail "QuestionType and QuestionEntity cannot be changed after answers have been submitted." To change the question type or target entity, soft-delete the existing Question and create a new one. **Rationale:** Changing a Rating question to Text (or vice versa) would make existing answers semantically invalid: a numeric "4" becomes meaningless as free text, and free text cannot be interpreted as a rating. Changing `QuestionEntity` from `"Event"` to `"Session"` or `"Speaker"` (or vice versa) would make existing answers reference a question targeting the wrong entity type, silently breaking the FK validation invariant (BR-128). Other Question fields (`QuestionText`, `Sort`, `IsRequired`) remain mutable. |
 
 ---
 
@@ -1393,17 +1629,17 @@ The spec defines CategoryItem.Name as required (BR-19) but does not specify uniq
 
 | # | Rule |
 |---|---|
-| BR-138 | **CategoryItem.Name must be unique within its parent Category** (case-insensitive). Two CategoryItems in the same Category cannot have the same Name. This is enforced during both manual creation/update and Sessionize import. During Sessionize import, items are matched by their Sessionize-assigned ID (BR-61), not by name — so name uniqueness violations from Sessionize are unlikely but would be logged as a warning without blocking the import. |
+| BR-138 | **CategoryItem.Name must be unique within its parent Category** (case-insensitive). Two CategoryItems in the same Category cannot have the same Name. This is enforced during both manual creation/update and Sessionize import. During Sessionize import, items are matched by their Sessionize-assigned ID (BR-61), not by name: so name uniqueness violations from Sessionize are unlikely but would be logged as a warning without blocking the import. |
 
 ---
 
 ### 10.24a Question ID Allocation for User-Created Questions (clarifies BR-61)
 
-BR-61 states that Question IDs use `ValueGeneratedNever` — they are explicitly assigned, not database-auto-generated. Sessionize-imported questions receive their Sessionize-assigned ID. But the spec does not address how IDs are allocated for manually created questions (via `POST /api/questions`).
+BR-61 states that Question IDs use `ValueGeneratedNever`, they are explicitly assigned, not database-auto-generated. Sessionize-imported questions receive their Sessionize-assigned ID. But the spec does not address how IDs are allocated for manually created questions (via `POST /api/questions`).
 
 | # | Rule |
 |---|---|
-| BR-141 | **User-created questions use a reserved ID range** (999,999,000–999,999,999) to avoid collisions with Sessionize-assigned IDs. The `CreateQuestionHandler` auto-allocates the next available ID within this range — any caller-provided ID is ignored. If the range is exhausted (1,000 manual questions), the create operation fails. This partition ensures that manual CRUD and Sessionize import never produce ID conflicts, regardless of the order in which questions are created. |
+| BR-141 | **User-created questions use a reserved ID range** (999,999,000-999,999,999) to avoid collisions with Sessionize-assigned IDs. The `CreateQuestionHandler` auto-allocates the next available ID within this range: any caller-provided ID is ignored. If the range is exhausted (1,000 manual questions), the create operation fails. This partition ensures that manual CRUD and Sessionize import never produce ID conflicts, regardless of the order in which questions are created. |
 
 ---
 
@@ -1429,14 +1665,14 @@ BR-216 describes logout behavior but no use case or endpoint is specified.
 
 1. System revokes the authenticated user's refresh token (marks as invalidated).
 2. For web clients: the HttpOnly cookie is cleared in the response.
-3. For MAUI clients: no server-side action is needed beyond token revocation — the client clears stored credentials from SecureStorage locally.
+3. For MAUI clients: no server-side action is needed beyond token revocation: the client clears stored credentials from SecureStorage locally.
 4. Returns HTTP 204 No Content.
 
 **Response codes:**
-- HTTP 204 — token revoked successfully (idempotent — returns 204 even if no active refresh token exists)
-- HTTP 401 — not authenticated
+- HTTP 204: token revoked successfully (idempotent: returns 204 even if no active refresh token exists)
+- HTTP 401: not authenticated
 
-**Note:** Access tokens cannot be server-side invalidated before expiry (BR-216). After logout, the access token remains valid until its 1-hour TTL expires. For security-critical scenarios (account compromise), the soft-deleted user JWT check (BR-133) provides a fallback — soft-deleting the account immediately blocks all requests.
+**Note:** Access tokens cannot be server-side invalidated before expiry (BR-216). After logout, the access token remains valid until its 1-hour TTL expires. For security-critical scenarios (account compromise), the soft-deleted user JWT check (BR-133) provides a fallback: soft-deleting the account immediately blocks all requests.
 
 ---
 
@@ -1446,7 +1682,7 @@ BR-49 prevents creating bookmarks for sessions with non-eligible statuses, but d
 
 | # | Rule |
 |---|---|
-| BR-139 | **Existing bookmarks are retained when a session's status changes to a non-eligible value (e.g., Declined, Waitlisted).** Active bookmarks for the session are not automatically soft-deleted. The personal schedule endpoint (`GET /api/bookmarks`) includes these bookmarks, and the associated session's `Status` field indicates the current status — clients should display these bookmarks with appropriate visual treatment (e.g., strikethrough, status badge). Attendees can manually remove the bookmark. **Rationale:** Automatically deleting bookmarks on status change would silently alter attendees' personal schedules without their knowledge. Retaining them with visible status information lets attendees decide how to adjust their plans. The same principle applies to sessions that become service sessions (`IsServiceSession` changed to true) — existing bookmarks are retained with updated session metadata. |
+| BR-139 | **Existing bookmarks are retained when a session's status changes to a non-eligible value (e.g., Declined, Waitlisted).** Active bookmarks for the session are not automatically soft-deleted. The personal schedule endpoint (`GET /api/bookmarks`) includes these bookmarks, and the associated session's `Status` field indicates the current status: clients should display these bookmarks with appropriate visual treatment (e.g., strikethrough, status badge). Attendees can manually remove the bookmark. **Rationale:** Automatically deleting bookmarks on status change would silently alter attendees' personal schedules without their knowledge. Retaining them with visible status information lets attendees decide how to adjust their plans. The same principle applies to sessions that become service sessions (`IsServiceSession` changed to true): existing bookmarks are retained with updated session metadata. |
 
 ---
 
@@ -1456,7 +1692,7 @@ The spec does not address whether a Session's `EventId` can be changed after cre
 
 | # | Rule |
 |---|---|
-| BR-140 | **Session.EventId is immutable after creation.** A session's parent event cannot be changed via `PUT`. Attempts to update a session with a different `EventId` than its current value return HTTP 422 with detail "Session cannot be moved between events." To reassign a session to a different event, soft-delete it and create a new session on the target event. **Rationale:** Changing `EventId` has cascading implications — room cross-event validation (BR-130), event visibility for feedback (BR-108), date range alignment (BR-86), and engagement data (bookmarks, feedback) that reference the session would need revalidation. Immutability avoids these complexities. Sessionize imports always create sessions within the correct event scope. |
+| BR-140 | **Session.EventId is immutable after creation.** A session's parent event cannot be changed via `PUT`. Attempts to update a session with a different `EventId` than its current value return HTTP 422 with detail "Session cannot be moved between events." To reassign a session to a different event, soft-delete it and create a new session on the target event. **Rationale:** Changing `EventId` has cascading implications: room cross-event validation (BR-130), event visibility for feedback (BR-108), date range alignment (BR-86), and engagement data (bookmarks, feedback) that reference the session would need revalidation. Immutability avoids these complexities. Sessionize imports always create sessions within the correct event scope. |
 
 ---
 
@@ -1464,9 +1700,9 @@ The spec does not address whether a Session's `EventId` can be changed after cre
 
 The domain model supports `SpeakerQuestionAnswer` as a child entity of the Speaker aggregate (with `AddSpeakerQuestionAnswer`, `UpdateSpeakerQuestionAnswer`, `RemoveSpeakerQuestionAnswer` methods). BR-107 mentions SpeakerQuestionAnswer alongside EventQuestionAnswer and SessionQuestionAnswer as a feedback submission mechanism.
 
-However, **no `SpeakerQuestionAnswersController` exists** — SpeakerQuestionAnswer CRUD is not exposed via REST API. Speaker question answers are currently populated only through Sessionize import (UC-6, which imports speaker survey responses from Sessionize). Manual speaker feedback submission by attendees is not yet available.
+However, **no `SpeakerQuestionAnswersController` exists**: SpeakerQuestionAnswer CRUD is not exposed via REST API. Speaker question answers are currently populated only through Sessionize import (UC-6, which imports speaker survey responses from Sessionize). Manual speaker feedback submission by attendees is not yet available.
 
-**Impact:** Actor-Action Matrix items 73a–73c (speaker question answer management) describe domain-layer capabilities that are not yet exposed as API endpoints. Attendees cannot submit speaker-level feedback through the API. This is a known gap — the domain is ready, but the API controller has not been implemented.
+**Impact:** Actor-Action Matrix items 73a-73c (speaker question answer management) describe domain-layer capabilities that are not yet exposed as API endpoints. Attendees cannot submit speaker-level feedback through the API. This is a known gap: the domain is ready, but the API controller has not been implemented.
 
 **To implement:** Create a `SpeakerQuestionAnswersController` following the same pattern as `EventQuestionAnswersController` and `SessionQuestionAnswersController`. The controller should use `RequireAuthenticated` authorization (matching the feedback pattern), apply user-scoping for reads (attendees see own answers only), and enforce BR-128 (`QuestionEntity = "Speaker"`) and BR-124 (answer validation) on submission.
 
@@ -1501,9 +1737,9 @@ All error responses use the **RFC 9457 ProblemDetails** format (the successor to
 | 409 Conflict | Duplicate operation (bookmark) | `"Conflict"` |
 | 422 Unprocessable Entity | FluentValidation failure | `"Validation failed"` |
 | 429 Too Many Requests | Sessionize refresh throttle (BR-63) exceeded, or login brute-force protection (BR-212), or registration abuse prevention (BR-213) | `"Too many requests"` |
-| 503 Service Unavailable | API rate limit exceeded (BR-20/BR-68) — ASP.NET Core fixed-window rate limiter rejects excess requests with 503 | *(framework default)* |
-| 502 Bad Gateway | External service (Sessionize API) unreachable — timeout, HTTP 5xx, or DNS failure (UC-6) | `"Sessionize API is unavailable. Try again later."` |
-| *(Client disconnection)* | Client disconnected before response completed — no HTTP response is sent. The server logs the cancellation at `Information` level for diagnostics. This is not an HTTP status code returned to the client. | *(N/A — logged server-side only)* |
+| 503 Service Unavailable | API rate limit exceeded (BR-20/BR-68): ASP.NET Core fixed-window rate limiter rejects excess requests with 503 | *(framework default)* |
+| 502 Bad Gateway | External service (Sessionize API) unreachable: timeout, HTTP 5xx, or DNS failure (UC-6) | `"Sessionize API is unavailable. Try again later."` |
+| *(Client disconnection)* | Client disconnected before response completed: no HTTP response is sent. The server logs the cancellation at `Information` level for diagnostics. This is not an HTTP status code returned to the client. | *(N/A: logged server-side only)* |
 | 500 Internal Server Error | Unhandled exception | `"An unexpected error occurred"` |
 
 **Validation errors** (422) include a field-level `errors` dictionary:
@@ -1528,7 +1764,7 @@ All error responses use the **RFC 9457 ProblemDetails** format (the successor to
 
 Paginated endpoints (`GET` with `pageNumber` and `pageSize` parameters) return:
 
-**Response body** — `PagedResult<T>`:
+**Response body**: `PagedResult<T>`:
 
 ```json
 {
@@ -1544,7 +1780,7 @@ Paginated endpoints (`GET` with `pageNumber` and `pageSize` parameters) return:
 }
 ```
 
-**Response header** — `X-Pagination` contains the same `PaginationMetadata` object serialized as JSON, for clients that prefer reading metadata from headers.
+**Response header**: `X-Pagination` contains the same `PaginationMetadata` object serialized as JSON, for clients that prefer reading metadata from headers.
 
 **Defaults and constraints:**
 - Default `pageSize`: 10
@@ -1588,7 +1824,7 @@ Paginated endpoints (`GET` with `pageNumber` and `pageSize` parameters) return:
 | EventQuestionAnswer | EventId, QuestionId |
 | SessionQuestionAnswer | SessionId, QuestionId |
 | SpeakerQuestionAnswer | SpeakerId, QuestionId |
-| UserSessionBookmark | UserId, EventId (derived via Session join — not a column on UserSessionBookmark; the filter translates to a JOIN on Session.EventId, BR-58) |
+| UserSessionBookmark | UserId, EventId (derived via Session join: not a column on UserSessionBookmark; the filter translates to a JOIN on Session.EventId, BR-58) |
 | User | Email, FirstName, LastName, Role |
 
 **Note:** `Speaker.FullName` and `Session.Duration` are computed properties with no database column and cannot be used for filtering or sorting. Clients should filter by `FirstName`/`LastName` or `StartsAt`/`EndsAt` instead.
@@ -1624,16 +1860,16 @@ Feedback answers are submitted via `POST` on the `EventQuestionAnswer` and `Sess
 **Authentication:** Required (BR-42)
 
 **Validation:**
-- `QuestionId` must reference an existing Question with the correct `QuestionEntity` — `"Event"` for EventQuestionAnswer, `"Session"` for SessionQuestionAnswer, `"Speaker"` for SpeakerQuestionAnswer (BR-128)
-- `AnswerValue` is validated against `QuestionType`: Rating (integer 1–5), Text (max 2000 chars), Email (valid `MailAddress` format) — see BR-124
+- `QuestionId` must reference an existing Question with the correct `QuestionEntity`, `"Event"` for EventQuestionAnswer, `"Session"` for SessionQuestionAnswer, `"Speaker"` for SpeakerQuestionAnswer (BR-128)
+- `AnswerValue` is validated against `QuestionType`: Rating (integer 1-5), Text (max 2000 chars), Email (valid `MailAddress` format): see BR-124
 - Session feedback (both `POST` and `PUT`): session must not be a service session (BR-91)
-- Event must be published (BR-108) — this applies to **all users including Organizers**. Feedback on unpublished events is rejected because the feedback flow assumes an event is live/accessible to attendees. Organizers who need to test feedback should publish the event first.
-- Event must be published for session feedback too — `SessionQuestionAnswer` submission validates that the session's parent Event has `IsPublished = true` (BR-108). Submitting session feedback for a session belonging to an unpublished event returns HTTP 400 with detail "Feedback cannot be submitted for sessions in unpublished events."
-- Session must have `Status` of `Accepted` or null (BR-49) — feedback is only accepted for sessions with eligible status
+- Event must be published (BR-108): this applies to **all users including Organizers**. Feedback on unpublished events is rejected because the feedback flow assumes an event is live/accessible to attendees. Organizers who need to test feedback should publish the event first.
+- Event must be published for session feedback too: `SessionQuestionAnswer` submission validates that the session's parent Event has `IsPublished = true` (BR-108). Submitting session feedback for a session belonging to an unpublished event returns HTTP 400 with detail "Feedback cannot be submitted for sessions in unpublished events."
+- Session must have `Status` of `Accepted` or null (BR-49): feedback is only accepted for sessions with eligible status
 
 **Upsert behavior:** `POST` creates (HTTP 201) or overwrites (HTTP 200) based on the (CreatedBy, QuestionId, EntityId) uniqueness key (BR-123). `PUT` updates an existing answer by its ID (standard update). `PUT` on session feedback is subject to the same service session (BR-91), event visibility (BR-108), and session status (BR-49) constraints as `POST`.
 
-**Soft-deleted Question handling:** If a Question referenced by a feedback answer is soft-deleted (BR-73), `PUT` on an existing answer that references that Question is still permitted — the answer retains its historical association. However, `POST` (new submission) referencing a soft-deleted Question is rejected with HTTP 422 ("Question not found or does not apply to this entity type") because soft-deleted questions are excluded from queries (BR-128 validation uses the active question set). This allows attendees to update previously submitted answers but not submit new answers to retired questions.
+**Soft-deleted Question handling:** If a Question referenced by a feedback answer is soft-deleted (BR-73), `PUT` on an existing answer that references that Question is still permitted: the answer retains its historical association. However, `POST` (new submission) referencing a soft-deleted Question is rejected with HTTP 422 ("Question not found or does not apply to this entity type") because soft-deleted questions are excluded from queries (BR-128 validation uses the active question set). This allows attendees to update previously submitted answers but not submit new answers to retired questions.
 
 ---
 
@@ -1643,7 +1879,7 @@ Lookup endpoints return lightweight Id + display name pairs for populating dropd
 
 **Endpoint pattern:** `GET /api/{entities}/lookup`
 
-**Response body** — array of `LookupItem`:
+**Response body**: array of `LookupItem`:
 
 ```json
 [
@@ -1660,7 +1896,7 @@ Lookup endpoints return lightweight Id + display name pairs for populating dropd
 | Category | `/api/conferencecategories/lookup` | `Title` |
 | Question | `/api/questions/lookup` | `QuestionText` |
 
-Lookup responses are **not paginated** — they return all non-deleted records. For entities with large cardinalities, prefer the paginated list endpoint with specific field filtering. Lookup responses respect event visibility (BR-108) — unpublished events are excluded for non-organizers.
+Lookup responses are **not paginated**: they return all non-deleted records. For entities with large cardinalities, prefer the paginated list endpoint with specific field filtering. Lookup responses respect event visibility (BR-108): unpublished events are excluded for non-organizers.
 
 ---
 
@@ -1677,6 +1913,47 @@ The `includeChildren=true` parameter is supported on both single-entity (`GET /a
 ### 11.9 Feedback Access
 
 Organizers retrieve raw, individual feedback records via the standard paginated `EventQuestionAnswer` and `SessionQuestionAnswer` list endpoints (filtered by EventId/SessionId and QuestionId; the `SpeakerQuestionAnswer` endpoint is deferred with the rest of the speaker-feedback capability, see §10.29). Each record includes `CreatedBy`, `AnswerValue`, and timestamps.
+
+---
+
+### 11.10 Schedule Convenience Reads
+
+Three anonymous, output-cached reads sit alongside the standard Conference list endpoints. They exist
+because a mobile client should not have to assemble them from the raw schedule.
+
+| Endpoint | Auth | Notes |
+|----------|------|-------|
+| `GET /api/events/{id}/ics` | Anonymous | The published event's full schedule as an iCalendar document, served as `text/calendar` named `event-{id}.ics`. Output-cached like every other anonymous Events read |
+| `GET /api/sessions/{id}/ics` | Anonymous | The same for a single session |
+| `GET /api/events/{id}/now-next` | Anonymous | The "happening now / up next" snapshot for one published event. Short-TTL cached, because the payload changes with the clock rather than with a write |
+| `GET /api/events/now-next` | Anonymous | The id-less form, resolving to the current event (live now, else next upcoming). This is what the home-screen widget calls |
+
+The two now-next variants share one query; passing no id simply means "let the server pick the current
+event". Their cache policy is deliberately separate from `EventsCache` so a short TTL does not force
+the whole Events surface to re-read.
+
+### 11.11 User Avatars
+
+| Endpoint | Auth | Notes |
+|----------|------|-------|
+| `GET /api/users/me/avatar` | Authenticated | The caller's avatar URL, or null when none is set |
+| `POST /api/users/me/avatar` | Authenticated | Uploads a photo; **2 MB** maximum accepted upload |
+| `DELETE /api/users/me/avatar` | Authenticated | Removes the photo. Idempotent |
+
+Storage and image processing follow [ADR-045](../adr/045-managed-file-storage-and-avatars.md); the
+stored URL is `[Pii]`-marked and nulled on anonymization.
+
+### 11.12 Session Selection (Organizer decision support)
+
+Organizer-only endpoints that support the accept/decline decision on submitted sessions.
+
+| Endpoint | Notes |
+|----------|-------|
+| `GET /api/sessionselection/dashboard/{eventId}` | The composite dashboard |
+| `GET /api/sessionselection/categories/{eventId}` | Category distribution across the event's sessions |
+| `GET /api/sessionselection/speaker-overlap/{eventId}` | Speakers with more than one submitted session |
+| `GET /api/sessionselection/content-similarity/{eventId}` | Pairs of sessions with similar content |
+| `POST /api/sessionselection/score/{eventId}` | Queues AI scoring; returns **202 Accepted**, or **409** when a run is already queued or in progress for that event (UC-27) |
 
 ---
 
@@ -1732,7 +2009,7 @@ A user is uniquely identified by their **email address**. Each email corresponds
 #### UC-30: User Registration
 
 **Actors:** Unauthenticated user (any platform)
-**Preconditions:** None (self-registration is open — BR-211)
+**Preconditions:** None (self-registration is open: BR-211)
 
 **Endpoint:** `POST /auth/register`
 
@@ -1763,7 +2040,7 @@ A user is uniquely identified by their **email address**. Each email corresponds
 2. System checks that no user exists with the given email
 3. System creates a new user record with hashed password (BR-204) and `Role = Attendee` (BR-45)
 4. If device fields are provided (MAUI client), they are stored on the user record
-5. System checks if a Speaker entity exists with `Email` matching the registered email (case-insensitive) — if match found and speaker is not already linked to a different user, sets `User.LinkedSpeakerId` and `Speaker.LinkedUserId` (BR-207)
+5. System checks if a Speaker entity exists with `Email` matching the registered email (case-insensitive): if match found and speaker is not already linked to a different user, sets `User.LinkedSpeakerId` and `Speaker.LinkedUserId` (BR-207)
 6. System generates a JWT containing `user_id`, `email`, `role`, `first_name`, `last_name`, and optionally `speaker_id` claims
 7. For web clients: system also generates a refresh token and sets it as an HttpOnly cookie (BR-205)
 8. Returns access token response
@@ -1779,9 +2056,9 @@ A user is uniquely identified by their **email address**. Each email corresponds
 ```
 
 **Response codes:**
-- HTTP 201 — user created, JWT returned
-- HTTP 409 — email already registered
-- HTTP 422 — validation failure (password too weak, invalid email format, missing required fields)
+- HTTP 201: user created, JWT returned
+- HTTP 409: email already registered
+- HTTP 422: validation failure (password too weak, invalid email format, missing required fields)
 
 **Alternate Flows:**
 - Email already registered → HTTP 409 Conflict with ProblemDetails: `"An account with this email already exists."`
@@ -1821,7 +2098,7 @@ A user is uniquely identified by their **email address**. Each email corresponds
 
 1. System validates email + password against stored credentials
 2. If device fields are provided (MAUI client), system updates the device metadata on the user record
-3. System checks speaker linking (in case a speaker was imported via Sessionize after the user registered) — same logic as registration step 5
+3. System checks speaker linking (in case a speaker was imported via Sessionize after the user registered): same logic as registration step 5
 4. System generates JWT with current claims
 5. For web clients: generates refresh token, sets HttpOnly cookie
 6. Returns access token response
@@ -1829,13 +2106,13 @@ A user is uniquely identified by their **email address**. Each email corresponds
 **Response body:** Same shape as registration (`accessToken`, `expiresIn`, `tokenType`).
 
 **Response codes:**
-- HTTP 200 — login successful
-- HTTP 401 — invalid email or password (generic message — do not reveal whether the email exists)
-- HTTP 429 — too many failed attempts (BR-212)
+- HTTP 200: login successful
+- HTTP 401: invalid email or password (generic message: do not reveal whether the email exists)
+- HTTP 429: too many failed attempts (BR-212)
 
 **Alternate Flows:**
 - Invalid credentials → HTTP 401 with ProblemDetails: `"Invalid email or password."` Failed attempt counter incremented (BR-212).
-- Account soft-deleted → HTTP 401 (same generic message — soft-deleted accounts cannot authenticate)
+- Account soft-deleted → HTTP 401 (same generic message: soft-deleted accounts cannot authenticate)
 
 **Postconditions:** User has a valid JWT. Device metadata updated if provided. Speaker link established if newly matched.
 
@@ -1861,8 +2138,8 @@ A user is uniquely identified by their **email address**. Each email corresponds
 **Response body:** Same shape as login (`accessToken`, `expiresIn`, `tokenType`).
 
 **Response codes:**
-- HTTP 200 — new tokens issued
-- HTTP 401 — refresh token invalid, expired, or revoked
+- HTTP 200: new tokens issued
+- HTTP 401: refresh token invalid, expired, or revoked
 
 **Alternate Flows:**
 - Revoked token presented (reuse detection) → all refresh tokens for the user are revoked (BR-206). Returns HTTP 401. User must re-login.
@@ -1898,12 +2175,12 @@ A user is uniquely identified by their **email address**. Each email corresponds
 5. Returns HTTP 204 No Content
 
 **Response codes:**
-- HTTP 204 — password changed successfully
-- HTTP 400 — current password incorrect
-- HTTP 401 — not authenticated
-- HTTP 422 — new password does not meet strength requirements (BR-203)
+- HTTP 204: password changed successfully
+- HTTP 400: current password incorrect
+- HTTP 401: not authenticated
+- HTTP 422: new password does not meet strength requirements (BR-203)
 
-**Postconditions:** User's password is updated. Existing JWT remains valid until expiry. Refresh token is not invalidated — the user stays logged in.
+**Postconditions:** User's password is updated. Existing JWT remains valid until expiry. Refresh token is not invalidated: the user stays logged in.
 
 ---
 
@@ -1916,7 +2193,7 @@ A user is uniquely identified by their **email address**. Each email corresponds
 | Format | JWT (RS256 in production via JWKS; HS256 only as a legacy / no-RSA-key fallback) |
 | Lifetime | 1 hour (BR-12, unchanged) |
 | Storage (MAUI) | SecureStorage |
-| Storage (Web) | In-memory (JavaScript variable). NOT localStorage — reduces XSS exposure. |
+| Storage (Web) | In-memory (JavaScript variable). NOT localStorage: reduces XSS exposure. |
 
 #### JWT Claims
 
@@ -1938,7 +2215,7 @@ A user is uniquely identified by their **email address**. Each email corresponds
 | Format | Opaque (cryptographically random string), not JWT |
 | Lifetime | 7 days |
 | Storage | HttpOnly, Secure, SameSite=Strict cookie |
-| Rotation | Rotated on each use — old token invalidated, new token issued |
+| Rotation | Rotated on each use: old token invalidated, new token issued |
 | Reuse detection | If a rotated (invalidated) token is presented, ALL refresh tokens for that user are revoked (indicates potential token theft) |
 
 ---
@@ -1973,7 +2250,7 @@ When a user has a `speaker_id` claim, they gain access to read-only views of the
 | View session bookmark counts | `GET /api/speakers/{speakerId}/sessions/{sessionId}/bookmarks/count` | Public (`AllowAnonymous`) | Number of attendees who bookmarked each of the speaker's sessions |
 | Update own speaker profile | `PUT /api/speakers/{speakerId}` | Authenticated | Speaker can update bio, tagline, social links on their own linked speaker record |
 
-**Authorization:** The feedback and bookmark count endpoints are **publicly accessible** (`AllowAnonymous`) — any user (including unauthenticated API consumers) can view aggregated session feedback and bookmark counts for any speaker. This enables public speaker/session quality metrics. The profile update endpoint requires authentication: the requesting user's `speaker_id` JWT claim must match the `{speakerId}` in the URL, or the user must have the Organizer role.
+**Authorization:** The feedback and bookmark count endpoints are **publicly accessible** (`AllowAnonymous`): any user (including unauthenticated API consumers) can view aggregated session feedback and bookmark counts for any speaker. This enables public speaker/session quality metrics. The profile update endpoint requires authentication: the requesting user's `speaker_id` JWT claim must match the `{speakerId}` in the URL, or the user must have the Organizer role.
 
 **Sessionize Conflict:** When Sessionize data is refreshed (UC-6), speaker profiles are overwritten per BR-48 (Sessionize is the source of truth). Local edits made by a speaker via the app are replaced. This is consistent with existing behavior and keeps the import logic simple. Speakers should be informed that their profile edits may be overwritten during a Sessionize refresh.
 
@@ -2038,8 +2315,8 @@ IAuthService (UI abstraction)
 | BR-201 | User identity is **email-based**. Users register with email + password + first name + last name. `DeviceId` is optional metadata captured from MAUI clients for analytics, not an authentication credential. |
 | BR-202 | Device migration is **implicit**. A user logs in from any device with their email + password. MAUI device metadata fields on the User record are updated to the latest device on each login. No explicit account linking or migration flow is needed. |
 | BR-203 | Passwords must meet minimum strength requirements: **minimum 8 characters**, containing at least one uppercase letter, one lowercase letter, one digit, and one special character. |
-| BR-204 | Passwords are stored as a **one-way hash** with a **per-user salt** — both stored as `byte[]` (`varbinary` in SQL Server) on the User entity (`PasswordHash` and `PasswordSalt` fields). Plaintext passwords are never stored, logged, returned in API responses, or included in error messages. |
-| BR-205 | **Refresh tokens** are issued to web clients only (via HttpOnly, Secure, SameSite=Strict cookie). Valid for **7 days**. Rotated on each use — the previous token is invalidated when a new one is issued. |
+| BR-204 | Passwords are stored as a **one-way hash** with a **per-user salt**: both stored as `byte[]` (`varbinary` in SQL Server) on the User entity (`PasswordHash` and `PasswordSalt` fields). Plaintext passwords are never stored, logged, returned in API responses, or included in error messages. |
+| BR-205 | **Refresh tokens** are issued to web clients only (via HttpOnly, Secure, SameSite=Strict cookie). Valid for **7 days**. Rotated on each use: the previous token is invalidated when a new one is issued. |
 | BR-206 | **Refresh token reuse detection:** If a previously-rotated (invalidated) refresh token is presented, **all** refresh tokens for that user are revoked immediately. This indicates potential token theft. The user must re-authenticate via login. |
 | BR-207 | **Speaker-user linking** is automatic at registration and login when `User.Email` matches `Speaker.Email` (case-insensitive). The link is stored bidirectionally (`User.LinkedSpeakerId`, `Speaker.LinkedUserId`). **Discovery limitation:** Speaker emails are not exposed via public API (BR-66), so attendees cannot verify which email their Speaker profile uses in Sessionize. Organizers should inform speakers of their Sessionize-registered email address before the conference so they register with the matching email. When automatic matching fails (e.g., speaker uses a different personal email), organizers can use manual linking (BR-209). |
 | BR-208 | A Speaker can be linked to **at most one User**, and a User can be linked to **at most one Speaker** (1:1 relationship). Enforced by unique constraints on both FK columns. |
@@ -2050,17 +2327,17 @@ IAuthService (UI abstraction)
 | BR-213 | Registration **abuse prevention:** Maximum **10 account registrations per IP address per hour**. Excess attempts return HTTP 429. |
 | BR-214 | Speakers can update their **own** speaker profile (bio, tagline, social links) when linked. The `speaker_id` in the JWT must match the target Speaker entity's ID. Organizers can update any speaker profile regardless of linking. |
 | BR-215 | Sessionize refresh (UC-6) **overwrites all speaker profile fields** including any local edits made by speakers via the app. Sessionize remains the source of truth (BR-48). |
-| BR-216 | **Logout** invalidates the user's current refresh token (web) or clears stored credentials (MAUI). Access tokens cannot be server-side invalidated before expiry — they remain valid until their 1-hour TTL expires. For immediate revocation needs (e.g., account deletion, role change), a token blacklist or short-lived tokens would be needed (out of scope). |
+| BR-216 | **Logout** invalidates the user's current refresh token (web) or clears stored credentials (MAUI). Access tokens cannot be server-side invalidated before expiry: they remain valid until their 1-hour TTL expires. For immediate revocation needs (e.g., account deletion, role change), a token blacklist or short-lived tokens would be needed (out of scope). |
 
 ---
 
 ### 12.7 Password Management
 
-**Password change** (UC-33) is supported via `PUT /auth/password` — authenticated users can change their own password by providing the current password and a new password.
+**Password change** (UC-33) is supported via `PUT /auth/password`, authenticated users can change their own password by providing the current password and a new password.
 
 **Password reset via email** is **out of scope for the initial implementation**. If an attendee forgets their password during the conference, they must contact an organizer to have their account deleted (UC-21) so they can re-register.
 
-**Rationale:** The conference engagement window is 1–2 days. Re-registration is low-cost (bookmarks can be recreated in minutes). Adding password reset requires email sending infrastructure (SMTP/SendGrid) and a secure token flow, which is disproportionate to the benefit for v1.
+**Rationale:** The conference engagement window is 1-2 days. Re-registration is low-cost (bookmarks can be recreated in minutes). Adding password reset requires email sending infrastructure (SMTP/SendGrid) and a secure token flow, which is disproportionate to the benefit for v1.
 
 **Planned flow (when implemented):**
 1. `POST /auth/forgot-password` with `{ "email": "..." }` → sends a reset code to the email (always returns HTTP 202 to prevent email enumeration)
@@ -2072,20 +2349,20 @@ IAuthService (UI abstraction)
 
 **Why email + password instead of device-based identity:**
 
-The original device-based registration model was designed for a mobile-only app where frictionless registration was paramount. With the addition of a web UI, device identity becomes untenable — browsers have no stable device identifier. Email is the natural cross-platform identity anchor: it works on both web and mobile, enables speaker linking (speakers already have email in Sessionize), and is familiar to all users.
+The original device-based registration model was designed for a mobile-only app where frictionless registration was paramount. With the addition of a web UI, device identity becomes untenable: browsers have no stable device identifier. Email is the natural cross-platform identity anchor: it works on both web and mobile, enables speaker linking (speakers already have email in Sessionize), and is familiar to all users.
 
 **Why email + password instead of magic link:**
 
-Magic link requires email delivery infrastructure for every login, not just for password resets. At a conference venue with spotty WiFi, waiting for an email to arrive is real friction. Email + password authentication works instantly once registered, requires no external email service for the core auth flow, and uses the same flow on both MAUI and web — simplifying the shared Razor library.
+Magic link requires email delivery infrastructure for every login, not just for password resets. At a conference venue with spotty WiFi, waiting for an email to arrive is real friction. Email + password authentication works instantly once registered, requires no external email service for the core auth flow, and uses the same flow on both MAUI and web: simplifying the shared Razor library.
 
 **Why speaker is a claim, not a role:**
 
-Roles (`Attendee`, `Organizer`) are permission tiers — each tier unlocks a set of endpoints. Speaker is an identity link — it means "this user is the same person as this Speaker entity." A speaker is also an attendee (they attend sessions, give feedback, bookmark talks). A speaker could also be an organizer. Making speaker a role would create awkward combinations (Attendee+Speaker? Organizer+Speaker?) and conflate identity with authorization. Keeping it as a JWT claim is orthogonal to the role system.
+Roles (`Attendee`, `Organizer`) are permission tiers: each tier unlocks a set of endpoints. Speaker is an identity link: it means "this user is the same person as this Speaker entity." A speaker is also an attendee (they attend sessions, give feedback, bookmark talks). A speaker could also be an organizer. Making speaker a role would create awkward combinations (Attendee+Speaker? Organizer+Speaker?) and conflate identity with authorization. Keeping it as a JWT claim is orthogonal to the role system.
 
 **Why refresh tokens for web but not MAUI:**
 
-MAUI can silently re-authenticate using credentials stored in SecureStorage — the user never sees a login prompt when their token expires. Web browsers have no equivalent secure credential store. A refresh token (7-day HttpOnly cookie) bridges this gap, keeping web users logged in for the conference duration without requiring email + password entry every hour.
+MAUI can silently re-authenticate using credentials stored in SecureStorage: the user never sees a login prompt when their token expires. Web browsers have no equivalent secure credential store. A refresh token (7-day HttpOnly cookie) bridges this gap, keeping web users logged in for the conference duration without requiring email + password entry every hour.
 
 **Why DeviceId is retained as metadata:**
 
-Even though DeviceId is no longer used for authentication, it remains useful for: (a) analytics — understanding which devices attendees use, (b) future push notification targeting, and (c) debugging — correlating support requests with specific device configurations.
+Even though DeviceId is no longer used for authentication, it remains useful for: (a) analytics: understanding which devices attendees use, (b) future push notification targeting, and (c) debugging: correlating support requests with specific device configurations.

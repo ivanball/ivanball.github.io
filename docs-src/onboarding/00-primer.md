@@ -150,7 +150,7 @@ chapter; here is the orientation so the vocabulary is familiar.
 
 ### The decision records (ADRs) this guide tags
 
-The *why* behind these patterns lives in **fifty accepted ADRs** (001-050; the Website repo's
+The *why* behind these patterns lives in the accepted ADRs (the Website repo's
 `docs-src/adr/README.md` owns the count and range), version-controlled in
 `Website/docs-src/adr/` and published at <https://ivanball.github.io/docs/adr/> (its `README.md` is the
 canonical index with one-line summaries). Group chapters tag the relevant one inline (e.g. "[ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)");
@@ -208,14 +208,22 @@ the full set, for orientation:
 | 048 | Primitive identifier type aliases: entity IDs are primitives behind per-module `global using {Entity}IdentifierType`, chosen over strongly-typed ID structs (readability + zero EF/serializer friction) | [g02](group-02-domain-building-blocks.md)/[g14](group-14-module-system-composition.md) |
 | 049 | Library-scoped `ConfigureAwait(false)` policy: packaged non-UI framework code is build-gated (CA2007 warning for `Source/**` in Common's `.editorconfig` delta, UI packages excluded); protects the MAUI head and any non-ASP.NET consumer from context-capture deadlocks | [devops-cicd](devops-cicd.md) |
 | 050 | JWT + single rotating refresh token: a short-lived stateless access token plus one server-stored opaque refresh token per user that rotates on every use (mismatch/expiry revokes + 401); the sliding expiry re-stamps on rotation, and single-token-per-user signs other devices out | [g08](group-08-auth.md) |
+| 051 | Client-side auth token lifecycle across render modes: one `ITokenRefresher` with two head strategies (browser heads refresh through the same-origin proxy per ADR-022; MAUI refreshes directly and persists the rotated pair in OS SecureStorage) | [g15](group-15-common-ui-framework.md)/[g25](group-25-adc-host-composition.md) |
+| 052 | Background job execution: work outliving a request runs as a bounded `Channel<T>` plus a `SingleReader` hosted drain, never an untracked `Task` from a controller, so the host can cancel and await it on shutdown; full mode encodes what the work is worth (`DropOldest` vs `Wait`) | [g23](group-23-engagement-live-layer.md) |
+| 053 | Dual-registry package publishing: one tag pushes the same nupkgs to nuget.org (the documented install path) and GitHub Packages (mirror), authenticated keylessly through GitHub OIDC trusted publishing rather than a stored API key | [devops-cicd](devops-cicd.md) |
+| 054 | Saga compensation + reconciliation backstop: each workflow step raises a domain event and its compensating action runs in its own handler and DI scope, committing after the originating transaction; idempotency is a persisted aggregate marker written by the same `SaveChanges` as the compensating writes | [g04](group-04-events-outbox.md) |
+| 055 | Repository + Specification contract: the read side is ISP-split into `IEntityReader` (id lookups) and `IEntityQuerier` (collections, projections, counts), and a fitness rule fails the build on raw `IQueryable` surfaces in Application code | [g03](group-03-querying-specifications.md)/[g07](group-07-persistence-ef-core.md) |
 
-ADRs 011–050 were authored after this guide's first build; their patterns were already documented here,
+ADRs 011 onward were authored after this guide's first build; their patterns were already documented here,
 and the chapters now cross-reference the ADR numbers. Recent framework additions include the
 **device capability abstraction layer** ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)/043/044/045: per-capability contracts with MAUI-native,
 browser, and inert-fallback adapters, mobile deep links, native OS push, managed file storage + user
 avatars), taught in the new [g26](group-26-device-capability-layer.md) chapter and cross-referenced in
-g07/g10/g12/g24; the newest records are the library-scoped `ConfigureAwait(false)` build policy ([ADR-049](https://ivanball.github.io/docs/adr/049-library-configureawait-policy.html))
-and the rotating-refresh-token auth workflow ([ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html)). The canonical index for the full set is the
+g07/g10/g12/g24. The newest records are the saga-compensation and reconciliation contract
+([ADR-054](https://ivanball.github.io/docs/adr/054-saga-compensation-and-reconciliation.html)) and the
+repository/specification contract ([ADR-055](https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html)),
+which together pin down how cross-boundary consistency and the data-access surface are expected to
+behave. The canonical index for the full set is the
 Website repo's `docs-src/adr/README.md` (published at <https://ivanball.github.io/docs/adr/>), which owns
 the count and range.
 
@@ -397,9 +405,9 @@ score them**, the filled scorecards live in `Architecture/ArchitectureEvaluation
 
 ### Two axes (so a tag can say "mature but mediocre" or vice-versa)
 
-- **Maturity (0–4)**: *process*: how consistently/automatically the pattern is governed
+- **Maturity (0–4)**, *process*: how consistently/automatically the pattern is governed
   (ad-hoc → enforced by CI).
-- **Implementation (0–10)**: *substance*: how good the implementation is right now, against the
+- **Implementation (0–10)**, *substance*: how good the implementation is right now, against the
   category's criteria and red flags.
 
 ### The categories, in three parts (quick index, full criteria in the rubric file)

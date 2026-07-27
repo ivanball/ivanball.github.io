@@ -1385,8 +1385,7 @@
           invoked by the <a href="#outboxprocessor"><code>OutboxProcessor</code></a> when draining <em>already-persisted</em> entries, or
           by paths that have already taken responsibility for outbox persistence, it is the in-process
           counterpart of <a href="#brokermessagebus"><code>BrokerMessageBus</code></a>, not a &quot;persist + dispatch&quot; bus. Code wanting
-          the persist-and-dispatch semantics uses <a href="#ieventbus"><code>IEventBus</code></a> /
-          <a href="#iintegrationeventpublisher"><code>IIntegrationEventPublisher</code></a> instead.</li>
+          the persist-and-dispatch semantics uses <a href="#ieventbus"><code>IEventBus</code></a> instead.</li>
           <li><strong>Why it&#39;s built this way</strong>: keeping the monolith path a single synchronous dispatcher call means
           integration tests need no broker container, and the common (monolith) deployment pays no broker
           latency. The outbox still provides the at-least-once safety net via the
@@ -1446,25 +1445,6 @@
           every integration event the service consumes (e.g. Conference consuming <code>UserRegistered</code>; Identity
           consuming <code>SpeakerLinkedToUser</code> / <code>SpeakerUnlinkedFromUser</code>).</li>
           </ul>
-          <h3 id="integrationeventpublisher">IntegrationEventPublisher</h3>
-          <blockquote>
-          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventPublisher.cs:12</code> · Level 3 · class (sealed)</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: implements <a href="#iintegrationeventpublisher"><code>IIntegrationEventPublisher</code></a> by delegating
-          straight to <a href="#ieventbus"><code>IEventBus</code></a>. A thin adapter preserving the older single-event publish
-          contract for callers that inject <code>IIntegrationEventPublisher</code> rather than <a href="#ieventbus"><code>IEventBus</code></a>.</li>
-          <li><strong>Depends on</strong>: <a href="#ieventbus"><code>IEventBus</code></a>, <a href="#iintegrationevent"><code>IIntegrationEvent</code></a>,
-          <a href="#iintegrationeventpublisher"><code>IIntegrationEventPublisher</code></a>.</li>
-          <li><strong>Concept reinforced, adapter for contract backward-compatibility.</strong> <code>[Rubric §1, SOLID]</code>
-          (Liskov / interface-segregation: the adapter lets the narrower <code>IIntegrationEventPublisher</code> contract
-          be satisfied by the same outbox-backed <a href="#ieventbus"><code>IEventBus</code></a> implementation). The single method
-          <code>PublishAsync</code> (line 15–16) is one expression-bodied delegation; the doc comment recommends new code
-          inject <a href="#ieventbus"><code>IEventBus</code></a> directly.</li>
-          <li><strong>Where it&#39;s used</strong>: handlers that publish an individual integration event inject
-          <code>IIntegrationEventPublisher</code> (e.g. ADC&#39;s <code>SpeakerDeletedHandler</code> publishing <code>SpeakerUnlinkedFromUser</code>),
-          ultimately routing through whichever <a href="#ieventbus"><code>IEventBus</code></a> is registered (in-process or broker).</li>
-          </ul>
           <h3 id="integrationeventconsumerextensions-1">IntegrationEventConsumerExtensions</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventConsumerExtensions.cs:11</code> · Level 4 · class (static)</p>
@@ -1499,8 +1479,8 @@
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Services</code> · Level 8 · class (sealed)</p>
           </blockquote>
           <p>These two <a href="#ieventbus"><code>IEventBus</code></a> implementations are the publish entry point that integration-event
-          producers (link handlers, <code>AuthenticationService</code>, republish handlers) call via
-          <a href="#iintegrationeventpublisher"><code>IIntegrationEventPublisher</code></a>. They are <strong>structurally parallel</strong>, both
+          producers (link handlers, <code>AuthenticationService</code>, republish handlers) inject directly. They are
+          <strong>structurally parallel</strong>, both
           persist an <a href="#outboxmessage"><code>OutboxMessage</code></a> to the outbox-owning data source in the <em>same</em> save, and
           differ <strong>only</strong> in what they do <em>after</em> persisting.</p>
           <div class="table-wrap"><table>
@@ -1564,8 +1544,7 @@
           service without touching any publishing code, <code>AddBrokerMessaging</code> simply swaps the registration,
           config-driven by <code>MessageBus:Provider</code> (see
           <a href="group-14-module-system-composition.html#messagebussettings"><code>MessageBusSettings</code></a>).</li>
-          <li><strong>Where they&#39;re used</strong>: <a href="#iintegrationeventpublisher"><code>IIntegrationEventPublisher</code></a> and direct
-          <a href="#ieventbus"><code>IEventBus</code></a> injections resolve one of these; called by ADC&#39;s link handlers,
+          <li><strong>Where they&#39;re used</strong>: every <a href="#ieventbus"><code>IEventBus</code></a> injection resolves one of these; called by ADC&#39;s link handlers,
           <code>UserRegisteredHandler</code>&#39;s republish, and <code>AuthenticationService</code>.</li>
           </ul>
           <hr>

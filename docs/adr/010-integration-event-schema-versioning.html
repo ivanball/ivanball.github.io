@@ -168,7 +168,7 @@
           are resolved by consumers solely by their type string: the outbox serializes the event to JSON keyed
           by <code>EventType</code> (<code>OutboxMessage.FromDomainEvent</code>), and the MassTransit broker path binds by .NET message
           type. Events carried only <code>MessageId</code> (idempotency) and <code>DateOccurred</code> (when the business action
-          happened) — <strong>no version signal</strong>. With database-per-service (ADR-006) and async integration over the
+          happened): <strong>no version signal</strong>. With database-per-service (ADR-006) and async integration over the
           outbox (ADR-003), a producer that reshapes an event&#39;s payload can silently break every consumer: there
           is nothing on the wire that says &quot;this is a different shape than you expect,&quot; and no agreed rule for how
           a shape may evolve. Rubric §6 flags this as the one substantive CQRS/event gap.</p>
@@ -184,7 +184,7 @@
           alongside two companion rules: every integration event inherits <code>BaseIntegrationEvent</code> and resides
           in a Shared-layer <code>*.IntegrationEvents</code> namespace.</li>
           <li><strong>Additive, optional changes keep the same version.</strong> Adding a nullable/optional field, or a field
-          with a safe default, is backward-compatible — consumers ignore unknown fields (System.Text.Json
+          with a safe default, is backward-compatible: consumers ignore unknown fields (System.Text.Json
           default) and old payloads deserialize with the default. No version bump required.</li>
           <li><strong>Breaking changes require a new type + an upcaster, never a silent reshape.</strong> Renaming, removing,
           or retyping a field is breaking. The producer introduces a NEW event type (e.g. <code>UserRegisteredV2</code>,
@@ -199,19 +199,19 @@
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>A signal, enforced.</strong> A version field plus a build-gating convention test turns &quot;remember the
-          contract&quot; into something the tooling checks — the same invariant-over-discipline approach as the layer
+          contract&quot; into something the tooling checks: the same invariant-over-discipline approach as the layer
           rules, the MassTransit-v8 pin, and ADR-009&#39;s resilience gate.</li>
           <li><strong>Non-breaking by construction.</strong> A <code>virtual</code> get-only default (<code>=&gt; 1</code>) means no existing event
           changes and no outbox row migrates: System.Text.Json tolerates the missing field on old payloads and
           the type supplies the default; new rows simply gain <code>&quot;schemaVersion&quot;:1</code>.</li>
           <li><strong>New-type-for-breaking-change</strong> is the only safe option when transport binds by type (MassTransit)
-          and consumers are independently deployed — an in-place reshape has no compatibility window.</li>
+          and consumers are independently deployed: an in-place reshape has no compatibility window.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><code>SchemaVersion</code> is a <strong>signal, not a mechanism</strong>: by itself it does not stop a consumer breaking on a
           real reshape. The load-bearing half is the discipline (new type + upcaster); the framework does not
-          yet ship an upcaster registration extension point — building one is follow-up work, and until then the policy is
+          yet ship an upcaster registration extension point: building one is follow-up work, and until then the policy is
           enforced by convention + review, not by an upcaster pipeline.</li>
           <li>The convention test is <strong>vacuous in MMCA.Common today</strong> (the framework ships no concrete integration
           event): <code>EventVersioningConventionTests</code> runs the shared base against <code>CommonArchitectureMap</code> but has
@@ -222,7 +222,7 @@
           <code>MMCA.Helpdesk.Architecture.Tests</code> (<code>ArchitectureTests.cs</code>) that gates the seed&#39;s
           <code>TicketOpenedIntegrationEvent</code>. The earlier Helpdesk gap (the rule was once subclassed only in ADC and
           Store) is <strong>closed</strong>: every concrete integration event across all three consumers is now enforced.</li>
-          <li>A get-only <code>SchemaVersion</code> is informational on the wire (it round-trips out, not back in) — intentional
+          <li>A get-only <code>SchemaVersion</code> is informational on the wire (it round-trips out, not back in): intentional
           (version is a property of the type, not per-instance data), but it means you read it off the concrete
           type/JSON, not by mutating it.</li>
           </ul>

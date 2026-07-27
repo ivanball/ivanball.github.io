@@ -9,9 +9,9 @@ so *something* must apply pending migrations on every deploy. The framework's
 `DatabaseInitializationExtensions` offers three strategies via `ApplicationSettings.DatabaseInitStrategy`,
 acting per physical SQL Server source:
 
-- `"Migrate"` — auto-apply pending EF Core migrations (the code documents this as **development/testing**).
-- `"EnsureCreated"` — legacy `EnsureCreated` for every source in use.
-- `"None"` — the **production** guard: validate that no SQL Server source has unapplied migrations and
+- `"Migrate"`: auto-apply pending EF Core migrations (the code documents this as **development/testing**).
+- `"EnsureCreated"`: legacy `EnsureCreated` for every source in use.
+- `"None"`, the **production** guard: validate that no SQL Server source has unapplied migrations and
   throw a per-source breakdown if any is behind.
 
 The framework's own comments mark `"None"` as the production strategy and `"Migrate"` as dev/test. Both
@@ -20,7 +20,7 @@ it deserves to be recorded.
 
 ## Decision
 In Azure Container Apps, **every service host runs `ApplicationSettings__DatabaseInitStrategy = Migrate`
-in production and is the sole migrator of its own database** — it applies its pending EF Core migrations
+in production and is the sole migrator of its own database**: it applies its pending EF Core migrations
 at startup, before the new revision serves traffic. There is deliberately **no** separate deploy-step
 migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
 
@@ -37,7 +37,7 @@ migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
   `sqlcmd` that *is* installed in the pipeline is a connectivity/readiness probe, not a migration apply.
 - **Build-time drift gate, not a runtime apply.** CI runs
   `dotnet ef migrations has-pending-model-changes` (Store `deploy.yml:166`, ADC `deploy.yml:233`) so a
-  model that has drifted from its migrations fails the build — but that gate only *detects*; it never
+  model that has drifted from its migrations fails the build, but that gate only *detects*; it never
   applies anything. The container does the applying.
 - **This overrides the framework's documented "None for production" default**, accepting auto-migrate-on-
   boot in prod as the price of one fewer moving part.
@@ -48,7 +48,7 @@ migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
 
 ## Rationale
 - **One migrator, one mechanism.** The code that owns the schema applies the schema; there is no second
-  tool to keep in lockstep and no ordering race between a deploy step and container boot — exactly the
+  tool to keep in lockstep and no ordering race between a deploy step and container boot: exactly the
   failure the incident exposed.
 - **Database-per-service keeps each migration small and scoped.** A boot-time apply touches only one
   service's database, so it is fast and its blast radius is one service.
@@ -60,7 +60,7 @@ migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
   migration would ship itself on the next deploy. The apps accept this; the build-time model-drift gate
   is the compensating control, and the per-service blast radius bounds the damage.
 - **A failed startup migration fails the new revision.** ACA keeps traffic on the previous revision
-  (readiness gating, ADR-025), but a *half-applied* migration still needs manual recovery — there is no
+  (readiness gating, ADR-025), but a *half-applied* migration still needs manual recovery: there is no
   automated down-migration.
 - **Rolling updates briefly overlap two revisions.** `minReplicas: 1` keeps it to one applier per
   revision, but during a rollout the old and new revisions coexist for a window; a long migration can

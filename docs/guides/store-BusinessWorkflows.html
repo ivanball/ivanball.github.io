@@ -352,11 +352,65 @@
           <td><code>PUT /inventoryitems/{id}/setinventory</code></td>
           <td>Sales</td>
           </tr>
+          <tr>
+          <td>38</td>
+          <td>Bulk Set Inventory</td>
+          <td><code>PUT /inventoryitems/bulk-setinventory</code></td>
+          <td>Sales</td>
+          </tr>
+          <tr>
+          <td>39</td>
+          <td>Verify Payment (webhook backstop)</td>
+          <td><code>PUT /orders/{id}/verify-payment</code></td>
+          <td>Sales</td>
+          </tr>
+          <tr>
+          <td>40</td>
+          <td>Upload Product Image</td>
+          <td><code>POST /products/{productId}/images</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>41</td>
+          <td>Delete Product Image</td>
+          <td><code>DELETE /products/{productId}/images/{imageId}</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>42</td>
+          <td>Reorder Product Images</td>
+          <td><code>PUT /products/{productId}/images/order</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>43</td>
+          <td>Read Product Image</td>
+          <td><code>GET /products/{productId}/images/{imageId}</code></td>
+          <td>Catalog</td>
+          </tr>
+          <tr>
+          <td>44</td>
+          <td>Change UI Preferences</td>
+          <td><code>PUT /auth/preferences</code></td>
+          <td>Identity</td>
+          </tr>
+          <tr>
+          <td>45</td>
+          <td>Export Personal Data</td>
+          <td><code>GET /users/{userId}/export</code></td>
+          <td>Identity</td>
+          </tr>
+          <tr>
+          <td>46</td>
+          <td>Erase User Account</td>
+          <td><code>DELETE /users/{userId}</code></td>
+          <td>Identity</td>
+          </tr>
           </tbody></table></div>
           <hr>
           <h2 id="1-identity-module-workflows">1. Identity Module Workflows</h2>
           <h3 id="11-user-registration">1.1 User Registration</h3>
-          <p><strong>Entry Point:</strong> <code>POST /auth/register</code> — <code>AuthController.RegisterAsync()</code> — AllowAnonymous</p>
+          <p><strong>Entry Point:</strong> <code>POST /auth/register</code>, <code>AuthController.RegisterAsync()</code>, AllowAnonymous</p>
           <p><strong>Execution Path:</strong></p>
           <pre class="doc-pre"><code class="">AuthController.RegisterAsync()
             -&gt; AuthenticationService.RegisterAsync()
@@ -374,7 +428,7 @@
           <li>Check email is not already registered</li>
           <li>Hash password with PBKDF2-HMAC-SHA512 (600,000 iterations, per-user salt)</li>
           <li>Create User aggregate (IsActive=true, Role=&quot;Customer&quot;)</li>
-          <li>Persist user — triggers <code>UserRegistered</code> domain event</li>
+          <li>Persist user: triggers <code>UserRegistered</code> domain event</li>
           <li>Domain event handler creates Customer profile and links it to User</li>
           <li>Generate access token (15 min, JWT with claims: sub, jti, iat, user_id, email, role, customer_id) + refresh token (7 days, 64-byte random)</li>
           <li>Return authentication response with tokens</li>
@@ -392,7 +446,7 @@
           <p><strong>Domain Events:</strong> <code>UserRegistered</code> -&gt; triggers <code>CustomerCreated</code></p>
           <hr>
           <h3 id="12-user-login">1.2 User Login</h3>
-          <p><strong>Entry Point:</strong> <code>POST /auth/login</code> — <code>AuthController.LoginAsync()</code> — AllowAnonymous</p>
+          <p><strong>Entry Point:</strong> <code>POST /auth/login</code>, <code>AuthController.LoginAsync()</code>, AllowAnonymous</p>
           <p><strong>Execution Path:</strong></p>
           <pre class="doc-pre"><code class="">AuthController.LoginAsync()
             -&gt; AuthenticationService.LoginAsync()
@@ -420,7 +474,7 @@
           <p><strong>State Changes:</strong> <code>User.RefreshToken</code> and <code>User.RefreshTokenExpiry</code> updated</p>
           <hr>
           <h3 id="13-token-refresh">1.3 Token Refresh</h3>
-          <p><strong>Entry Point:</strong> <code>POST /auth/refresh</code> — AllowAnonymous</p>
+          <p><strong>Entry Point:</strong> <code>POST /auth/refresh</code>, AllowAnonymous</p>
           <p><strong>Execution Path:</strong></p>
           <pre class="doc-pre"><code class="">AuthController.RefreshAsync()
             -&gt; TokenService.GetPrincipalFromExpiredToken() (validates structure, allows expired)
@@ -436,11 +490,11 @@
           <p><strong>State Changes:</strong> Refresh token rotated on User entity</p>
           <hr>
           <h3 id="14-token-revocation">1.4 Token Revocation</h3>
-          <p><strong>Entry Point:</strong> <code>POST /auth/revoke</code> — Requires Authorization</p>
+          <p><strong>Entry Point:</strong> <code>POST /auth/revoke</code>, Requires Authorization</p>
           <p><strong>Business Steps:</strong> Clears <code>User.RefreshToken</code> and <code>User.RefreshTokenExpiry</code> to null.</p>
           <hr>
           <h3 id="15-change-password">1.5 Change Password</h3>
-          <p><strong>Entry Point:</strong> <code>PUT /auth/password</code> — Requires Authorization</p>
+          <p><strong>Entry Point:</strong> <code>PUT /auth/password</code>, Requires Authorization</p>
           <p><strong>Execution Path:</strong></p>
           <pre class="doc-pre"><code class="">AuthController.ChangePasswordAsync()
             -&gt; ChangePasswordHandler.Handle()
@@ -493,27 +547,95 @@
           <tbody><tr>
           <td>Create Customer</td>
           <td><code>POST /customers</code></td>
-          <td>Authenticated</td>
+          <td>Admin</td>
           <td>Idempotent via <code>[Idempotent]</code> attribute</td>
           </tr>
           <tr>
           <td>Delete Customer</td>
           <td><code>DELETE /customers/{id}</code></td>
-          <td>Authenticated</td>
+          <td>Admin</td>
           <td>Soft delete (IsDeleted=true), publishes <code>CustomerDeleted</code></td>
           </tr>
           <tr>
           <td>Get Customer</td>
           <td><code>GET /customers/{id}</code></td>
           <td>Authenticated</td>
-          <td>Only GetById exposed; GetAll/Paged/Lookup not exposed</td>
+          <td>Owner or admin</td>
+          </tr>
+          <tr>
+          <td>List Customers</td>
+          <td><code>GET /customers</code></td>
+          <td>Admin</td>
+          <td>All customers</td>
+          </tr>
+          <tr>
+          <td>List Customers (paged)</td>
+          <td><code>GET /customers/paged</code></td>
+          <td>Admin</td>
+          <td>Paged</td>
+          </tr>
+          <tr>
+          <td>Customer Lookup</td>
+          <td><code>GET /customers/lookup</code></td>
+          <td>Admin</td>
+          <td>Id/name pairs for pickers</td>
+          </tr>
+          </tbody></table></div>
+          <p>The controller is <code>[Authorize(RequireAuthenticated)]</code> with the collection reads and the create/delete
+          actions individually raised to <code>[Authorize(RequireAdmin)]</code>.</p>
+          <h3 id="18-ui-preferences">1.8 UI Preferences</h3>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Workflow</th>
+          <th>Endpoint</th>
+          <th>Auth</th>
+          <th>Notes</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Read preferences</td>
+          <td><code>GET /auth/preferences</code></td>
+          <td>Authenticated</td>
+          <td>Stored UI culture/theme, read at login so the choice follows the account across devices</td>
+          </tr>
+          <tr>
+          <td>Change preferences</td>
+          <td><code>PUT /auth/preferences</code></td>
+          <td>Authenticated</td>
+          <td>Persists culture (<a href="../adr/027-multi-locale-i18n.html">ADR-027</a>) and theme (<a href="../adr/028-dark-theme-mode.html">ADR-028</a>)</td>
+          </tr>
+          </tbody></table></div>
+          <h3 id="19-data-subject-rights-gdprccpa">1.9 Data Subject Rights (GDPR/CCPA)</h3>
+          <p>Both endpoints authorize the account owner <strong>or</strong> an Admin, enforced in the handlers rather than by a
+          controller-wide policy (<a href="../adr/005-soft-delete-vs-erasure.html">ADR-005</a>).</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Workflow</th>
+          <th>Endpoint</th>
+          <th>Auth</th>
+          <th>Notes</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Export personal data</td>
+          <td><code>GET /users/{userId}/export</code></td>
+          <td>Owner or Admin</td>
+          <td>Portable JSON of the personal data held for the user (access/portability)</td>
+          </tr>
+          <tr>
+          <td>Erase account</td>
+          <td><code>DELETE /users/{userId}</code></td>
+          <td>Owner or Admin</td>
+          <td>Deletes the account and irreversibly anonymizes its personal data; distinct from the soft-delete used for ordinary lifecycle</td>
           </tr>
           </tbody></table></div>
           <hr>
           <h2 id="2-catalog-module-workflows">2. Catalog Module Workflows</h2>
           <h3 id="21-category-management">2.1 Category Management</h3>
           <h4 id="create-category">Create Category</h4>
-          <p><strong>Entry Point:</strong> <code>POST /categories</code> — Admin only, <code>[Idempotent]</code></p>
+          <p><strong>Entry Point:</strong> <code>POST /categories</code>, Admin only, <code>[Idempotent]</code></p>
           <pre class="doc-pre"><code class="">CategoriesController.CreateAsync()
             -&gt; CreateCategoryHandler
               -&gt; CategoryCreateRequestValidator (name: required, max 255)
@@ -521,7 +643,7 @@
               -&gt; Repository.AddAsync() + SaveChangesAsync()</code></pre>
           <p><strong>Response:</strong> 201 Created with <code>CategoryDTO</code></p>
           <h4 id="rename-category">Rename Category</h4>
-          <p><strong>Entry Point:</strong> <code>PUT /categories/{id}/name</code> — Admin only</p>
+          <p><strong>Entry Point:</strong> <code>PUT /categories/{id}/name</code>, Admin only</p>
           <pre class="doc-pre"><code class="">CategoriesController.RenameAsync()
             -&gt; RenameCategoryHandler
               -&gt; Validate name (max 255)
@@ -530,10 +652,10 @@
               -&gt; Publishes CategoryNameChanged if changed
               -&gt; Cache invalidation</code></pre>
           <h4 id="assign-parent-category">Assign Parent Category</h4>
-          <p><strong>Entry Point:</strong> <code>PUT /categories/{id}/parentcategory</code> — Admin only</p>
+          <p><strong>Entry Point:</strong> <code>PUT /categories/{id}/parentcategory</code>, Admin only</p>
           <p>Sets or clears <code>ParentCategoryId</code> to establish hierarchy. No domain event raised.</p>
           <h4 id="delete-category">Delete Category</h4>
-          <p><strong>Entry Point:</strong> <code>DELETE /categories/{id}</code> — Admin only</p>
+          <p><strong>Entry Point:</strong> <code>DELETE /categories/{id}</code>, Admin only</p>
           <p>Soft delete (<code>IsDeleted=true</code>). Publishes <code>CategoryDeleted</code>.</p>
           <h4 id="query-endpoints">Query Endpoints</h4>
           <div class="table-wrap"><table>
@@ -568,7 +690,7 @@
           <hr>
           <h3 id="22-product-management">2.2 Product Management</h3>
           <h4 id="create-product">Create Product</h4>
-          <p><strong>Entry Point:</strong> <code>POST /products</code> — Admin only, <code>[Idempotent]</code></p>
+          <p><strong>Entry Point:</strong> <code>POST /products</code>, Admin only, <code>[Idempotent]</code></p>
           <pre class="doc-pre"><code class="">ProductsController.CreateAsync()
             -&gt; CreateProductHandler
               -&gt; Validate: name (required, max 100), description (max 4000), brand (max 100, no whitespace if provided)
@@ -610,7 +732,7 @@
           </tr>
           </tbody></table></div>
           <h4 id="delete-product">Delete Product</h4>
-          <p><strong>Entry Point:</strong> <code>DELETE /products/{id}</code> — Admin only. Soft delete, publishes <code>ProductDeleted</code>.</p>
+          <p><strong>Entry Point:</strong> <code>DELETE /products/{id}</code>, Admin only. Soft delete, publishes <code>ProductDeleted</code>.</p>
           <h4 id="query-endpoints-1">Query Endpoints</h4>
           <div class="table-wrap"><table>
           <thead>
@@ -636,6 +758,11 @@
           <td>Returns ID + name pairs for dropdowns</td>
           </tr>
           <tr>
+          <td><code>GET /products/variant-lookup</code></td>
+          <td>AllowAnonymous</td>
+          <td>Returns <code>ProductVariantCartInfoDTO</code> rows: the variant detail the cart UI needs without a per-variant round trip</td>
+          </tr>
+          <tr>
           <td><code>GET /products/{id}</code></td>
           <td>AllowAnonymous</td>
           <td>Single product with optional FK/children includes</td>
@@ -644,7 +771,7 @@
           <hr>
           <h3 id="23-product-variant-management">2.3 Product Variant Management</h3>
           <h4 id="add-product-variant">Add Product Variant</h4>
-          <p><strong>Entry Point:</strong> <code>POST /products/{id}/productvariants</code> — Admin only</p>
+          <p><strong>Entry Point:</strong> <code>POST /products/{id}/productvariants</code>, Admin only</p>
           <pre class="doc-pre"><code class="">ProductVariantsController.CreateAsync()
             -&gt; AddVariantHandler
               -&gt; Validate: SKU (max 50), Price (positive Money)
@@ -656,19 +783,76 @@
               -&gt; SaveChangesAsync()</code></pre>
           <p><strong>Cross-Module:</strong> SKU uniqueness checked via <code>IProductVariantService</code></p>
           <h4 id="change-variant-sku">Change Variant SKU</h4>
-          <p><strong>Entry Point:</strong> <code>PUT /products/{id}/productvariants/{variantId}/sku</code> — Admin only</p>
+          <p><strong>Entry Point:</strong> <code>PUT /products/{id}/productvariants/{variantId}/sku</code>, Admin only</p>
           <p>SKU uniqueness verified globally (excluding current variant). Publishes <code>ProductVariantSkuChanged</code> if changed.</p>
           <h4 id="change-variant-price">Change Variant Price</h4>
-          <p><strong>Entry Point:</strong> <code>PUT /products/{id}/productvariants/{variantId}/price</code> — Admin only</p>
+          <p><strong>Entry Point:</strong> <code>PUT /products/{id}/productvariants/{variantId}/price</code>, Admin only</p>
           <p>Price must be positive. Publishes <code>ProductVariantPriceChanged</code> if changed.</p>
           <h4 id="remove-product-variant">Remove Product Variant</h4>
-          <p><strong>Entry Point:</strong> <code>DELETE /products/{id}/productvariants/{variantId}</code> — Admin only</p>
+          <p><strong>Entry Point:</strong> <code>DELETE /products/{id}/productvariants/{variantId}</code>, Admin only</p>
           <p>Soft delete on variant. Publishes <code>ProductVariantRemoved</code>.</p>
+          <h3 id="24-product-image-management">2.4 Product Image Management</h3>
+          <p>Behind the <code>CatalogFeatures.ProductImages</code> feature gate (<a href="../adr/031-feature-flag-management.html">ADR-031</a>),
+          storage per <a href="../adr/045-managed-file-storage-and-avatars.html">ADR-045</a>. Mutations require Admin;
+          retrieval is anonymous and output-cached for 300 seconds to keep repeated BLOB reads off the database.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Workflow</th>
+          <th>Endpoint</th>
+          <th>Auth</th>
+          <th>Notes</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Read primary image</td>
+          <td><code>GET /products/{id}/image</code></td>
+          <td>Anonymous</td>
+          <td>Lowest display order; 300s response + output cache</td>
+          </tr>
+          <tr>
+          <td>Read image by id</td>
+          <td><code>GET /products/{productId}/images/{imageId}</code></td>
+          <td>Anonymous</td>
+          <td>Same caching</td>
+          </tr>
+          <tr>
+          <td>Upload image</td>
+          <td><code>POST /products/{productId}/images</code></td>
+          <td>Admin</td>
+          <td>201 Created with <code>ProductImageDTO</code> and a Location header; 6 MB request limit covering the 5 MB domain constraint plus multipart overhead</td>
+          </tr>
+          <tr>
+          <td>Upload image (legacy)</td>
+          <td><code>PUT /products/{id}/image</code></td>
+          <td>Admin</td>
+          <td>The pre-collection single-image route, kept for backward compatibility; same handler as the POST above</td>
+          </tr>
+          <tr>
+          <td>Delete primary image</td>
+          <td><code>DELETE /products/{id}/image</code></td>
+          <td>Admin</td>
+          <td>Legacy single-image route</td>
+          </tr>
+          <tr>
+          <td>Delete image by id</td>
+          <td><code>DELETE /products/{productId}/images/{imageId}</code></td>
+          <td>Admin</td>
+          <td>Collection route</td>
+          </tr>
+          <tr>
+          <td>Reorder images</td>
+          <td><code>PUT /products/{productId}/images/order</code></td>
+          <td>Admin</td>
+          <td>Reassigns display order from the supplied id list; the first id becomes the primary image (order 0)</td>
+          </tr>
+          </tbody></table></div>
+          <p>Every mutation evicts the products cache so the next read reflects the change.</p>
           <hr>
           <h2 id="3-sales-module-workflows">3. Sales Module Workflows</h2>
           <h3 id="31-shopping-cart">3.1 Shopping Cart</h3>
           <h4 id="add-item-to-cart">Add Item to Cart</h4>
-          <p><strong>Entry Point:</strong> <code>POST /shoppingcarts/{customerId}/shoppingcartitems</code> — Authenticated (owner or admin via <code>OwnerOrAdminFilter</code>)</p>
+          <p><strong>Entry Point:</strong> <code>POST /shoppingcarts/{customerId}/shoppingcartitems</code>, Authenticated (owner or admin via <code>OwnerOrAdminFilter</code>)</p>
           <pre class="doc-pre"><code class="">ShoppingCartsController.CreateShoppingCartItemAsync()
             -&gt; AddItemHandler
               -&gt; Validate quantity &gt; 0
@@ -695,49 +879,86 @@
           <h4 id="clear-cart">Clear Cart</h4>
           <p><strong>Entry Point:</strong> <code>PUT /shoppingcarts/{id}/clear</code></p>
           <p>Deletes all items. Publishes <code>ShoppingCartCleared</code>.</p>
-          <h4 id="get-cart">Get Cart</h4>
-          <p><strong>Entry Point:</strong> <code>GET /shoppingcarts/{id}</code> — Authenticated + OwnerOrAdmin</p>
-          <p>Returns the customer&#39;s cart with optional children (items). Returns an empty DTO (not 404) if no cart exists (lazy cart pattern).</p>
+          <h4 id="cart-query-endpoints">Cart Query Endpoints</h4>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Endpoint</th>
+          <th>Auth</th>
+          <th>Notes</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>GET /shoppingcarts/{id}</code></td>
+          <td>Authenticated + OwnerOrAdmin</td>
+          <td>The customer&#39;s cart with optional children (items). Returns an empty DTO (not 404) when no cart exists yet (lazy cart pattern)</td>
+          </tr>
+          <tr>
+          <td><code>GET /shoppingcarts</code></td>
+          <td>Authenticated</td>
+          <td>Row-scoped by the ownership specification: a customer sees only their own cart, an admin sees every cart (<a href="../adr/033-resource-ownership-authorization.html">ADR-033</a>)</td>
+          </tr>
+          <tr>
+          <td><code>GET /shoppingcarts/paged</code></td>
+          <td>Authenticated</td>
+          <td>Paged, same row-scoping</td>
+          </tr>
+          <tr>
+          <td><code>GET /shoppingcarts/lookup</code></td>
+          <td>Admin</td>
+          <td>Id/name pairs for pickers</td>
+          </tr>
+          </tbody></table></div>
+          <p>Ownership on the collection reads is enforced <strong>in the query</strong>, not against a route value: there is no
+          owner parameter to compare, so the specification narrows the rows before they are read.</p>
           <h4 id="shopping-cart-status-state-machine">Shopping Cart Status State Machine</h4>
           <pre class="doc-pre"><code class="">Active --(MarkAsCheckedOut)--&gt; CheckedOut
             ^                                |
             +----(Reactivate on AddItem)-----+
                   (clears all items)</code></pre>
           <hr>
-          <h3 id="32-checkout-cart-to-order--primary-business-workflow">3.2 Checkout (Cart to Order) — Primary Business Workflow</h3>
-          <p><strong>Entry Point:</strong> <code>PUT /shoppingcarts/{customerId}/checkout</code> — Authenticated, marked <code>ITransactional</code> and <code>ICacheInvalidating</code></p>
+          <h3 id="32-checkout-cart-to-order-primary-business-workflow">3.2 Checkout (Cart to Order): Primary Business Workflow</h3>
+          <p><strong>Entry Point:</strong> <code>PUT /shoppingcarts/{customerId}/checkout</code>, authenticated, marked <code>ICacheInvalidating</code>.
+          <code>CheckOutCommand</code> is <strong>deliberately NOT <code>ITransactional</code></strong> (<code>CheckOutCommand.cs:9</code>): the handler opens its
+          own transaction around the write phase only, so the cross-module price fetch never holds database locks.</p>
           <pre class="doc-pre"><code class="">ShoppingCartsController.CheckOutAsync()
             -&gt; CheckOutHandler
-              -&gt; Fetch ShoppingCart with items
+              -&gt; Fetch ShoppingCart with items (tracking)
               -&gt; Collect productVariantIds from cart items
-              -&gt; IProductVariantService.GetUnitPricesAsync(ids) [cross-module: Catalog]
+              -&gt; IProductVariantService.GetUnitPricesAsync(ids) [cross-module: Catalog, OUTSIDE the transaction]
+              -&gt; Reject any variant missing from the price map (soft-deleted between add and checkout)
               -&gt; Fetch InventoryItems for all variants
               -&gt; CheckOutDomainService.Execute():
                   1. Validate cart not empty
                   2. Validate inventory exists for all items
-                  3. For each item: inventoryItem.DecreaseInventory(quantity)
-                     -&gt; Validates sufficient stock
-                     -&gt; Publishes InventoryAdjusted
+                  3. Fail-fast sufficiency check per item against the point-in-time snapshot
+                     (NOT the oversell guard: that is the atomic decrement below)
                   4. Build order items (variant + price + quantity)
                   5. Order.Create(customerId, items) -&gt; publishes OrderPlaced
                   6. shoppingCart.MarkAsCheckedOut() -&gt; publishes ShoppingCartCheckedOut
-              -&gt; Repository.AddAsync(order)
-              -&gt; SaveChangesAsync()
+              -&gt; orderRepository.AddAsync(order)
+              -&gt; unitOfWork.ExecuteInTransactionAsync:            &lt;-- the whole write phase, one transaction
+                   -&gt; IInventoryAllocationService.DecrementAsync(decrements)
+                        atomic conditional UPDATE per variant (ExecuteUpdateAsync); a row that no longer has
+                        enough stock matches zero rows and fails the Result, rolling the transaction back
+                   -&gt; unitOfWork.SaveChangesAsync()               &lt;-- order insert + cart transition
               -&gt; Return OrderDTO</code></pre>
           <p><strong>Business Steps:</strong></p>
           <ol>
           <li>Validate cart exists and has items</li>
-          <li>Fetch current prices from Catalog module</li>
-          <li>Validate and decrement inventory for all items</li>
+          <li>Fetch current prices from Catalog module, and reject variants that no longer exist</li>
+          <li>Fail-fast inventory sufficiency check against the loaded snapshot</li>
           <li>Create Order aggregate with OrderLines (price snapshot at time of purchase)</li>
           <li>Transition cart to CheckedOut status</li>
-          <li>Persist everything in a single transaction (<code>ITransactional</code>)</li>
+          <li>Commit the write phase in one explicit transaction: atomic inventory decrements, then the order
+          insert and cart transition</li>
           </ol>
           <p><strong>Decision Points:</strong></p>
           <ul>
           <li>Cart empty -&gt; Validation error</li>
-          <li>Product variant price not found -&gt; Error</li>
-          <li>Insufficient inventory -&gt; Invariant error</li>
+          <li>Product variant no longer exists in Catalog -&gt; <code>ProductVariant.NotFound</code>, naming the offending variant</li>
+          <li>Insufficient inventory at snapshot time -&gt; Invariant error (fail-fast)</li>
+          <li>Insufficient inventory at commit time -&gt; the conditional UPDATE matches no row, the transaction rolls back</li>
           <li>Inventory record missing -&gt; NotFound (specific missing variant ID reported)</li>
           </ul>
           <p><strong>State Changes:</strong></p>
@@ -746,7 +967,13 @@
           <li>Decrements <code>InventoryItem.AvailableQuantity</code> for each item</li>
           <li><code>ShoppingCart.Status</code> -&gt; CheckedOut</li>
           </ul>
-          <p><strong>Domain Events:</strong> <code>OrderPlaced</code>, <code>InventoryAdjusted</code> (per item), <code>ShoppingCartCheckedOut</code></p>
+          <p><strong>Domain Events:</strong> <code>OrderPlaced</code>, <code>ShoppingCartCheckedOut</code>.</p>
+          <blockquote>
+          <p><strong>No <code>InventoryAdjusted</code> on the checkout path.</strong> The decrement runs as <code>ExecuteUpdateAsync</code>, which
+          bypasses the save pipeline (and therefore the audit interceptor and domain-event dispatch) by design:
+          that is what makes it a single atomic statement and the real oversell guard. <code>InventoryAdjusted</code> is
+          still raised by the admin adjustment endpoints in 3.4, which go through the aggregate.</p>
+          </blockquote>
           <hr>
           <h3 id="33-order-lifecycle">3.3 Order Lifecycle</h3>
           <h4 id="order-status-state-machine">Order Status State Machine</h4>
@@ -767,7 +994,7 @@
           (from PendingPayment, PaymentInitiated, or PaymentFailed)</code></pre>
           <p><strong>Terminal States:</strong> Cancelled, Delivered</p>
           <h4 id="create-stripe-checkout-session">Create Stripe Checkout Session</h4>
-          <p><strong>Entry Point:</strong> <code>POST /orders/{id}/checkout</code> — Authenticated (owner or admin)</p>
+          <p><strong>Entry Point:</strong> <code>POST /orders/{id}/checkout</code>, Authenticated (owner or admin)</p>
           <pre class="doc-pre"><code class="">OrdersController.CreateCheckoutSessionAsync()
             -&gt; CreateCheckoutSessionHandler
               -&gt; Fetch Order with OrderLines
@@ -783,9 +1010,9 @@
                 -&gt; Publishes OrderPaymentInitiated
               -&gt; SaveChangesAsync()
               -&gt; Return sessionId + checkoutUri</code></pre>
-          <p><strong>External Interaction:</strong> Stripe API — creates payment session with order line items</p>
+          <p><strong>External Interaction:</strong> Stripe API: creates payment session with order line items</p>
           <h4 id="stripe-payment-webhook">Stripe Payment Webhook</h4>
-          <p><strong>Entry Point:</strong> <code>POST /payments/webhook</code> — AllowAnonymous, <code>ITransactional</code>, <code>ICacheInvalidating</code></p>
+          <p><strong>Entry Point:</strong> <code>POST /payments/webhook</code>, AllowAnonymous, <code>ITransactional</code>, <code>ICacheInvalidating</code></p>
           <pre class="doc-pre"><code class="">PaymentsController.HandleWebhookAsync()
             -&gt; ProcessPaymentWebhookHandler
               -&gt; IPaymentService.ParseWebhookEvent() (Stripe signature verification)
@@ -807,24 +1034,42 @@
           <p><strong>Idempotency:</strong> Already-paid or already-failed orders return success without modification.</p>
           <p><strong>Controller behavior:</strong> Returns 400 only for signature verification failures; returns 200 for all other cases (including handler errors) to prevent Stripe retries.</p>
           <h4 id="manual-admin-payment">Manual Admin Payment</h4>
-          <p><strong>Entry Point:</strong> <code>PUT /orders/{id}/pay</code> — Admin only</p>
+          <p><strong>Entry Point:</strong> <code>PUT /orders/{id}/pay</code>, Admin only</p>
           <p>Validates status allows manual payment (PendingPayment, PaymentInitiated, or PaymentFailed). Sets <code>StripePaymentIntentId = &quot;manual-admin-override&quot;</code>, status -&gt; Paid. Publishes <code>OrderPaid</code>.</p>
+          <h4 id="verify-payment-webhook-backstop">Verify Payment (webhook backstop)</h4>
+          <p><strong>Entry Point:</strong> <code>PUT /orders/{id}/verify-payment</code>, owner or Admin (ownership validated in the controller)</p>
+          <p>Polls Stripe directly for the order&#39;s checkout session instead of waiting on a webhook, for the case
+          where webhook delivery failed or is delayed. If Stripe reports the session paid, the order is marked
+          Paid exactly as the webhook would have marked it; if the order is already Paid or is not in a
+          verifiable state, the call succeeds without changes. This is the reconciliation half of
+          <a href="../adr/054-saga-compensation-and-reconciliation.html">ADR-054</a>: the webhook is the fast path, this is
+          the backstop that keeps a paid customer from sitting in <code>PaymentInitiated</code> forever.</p>
           <h4 id="deliver-order">Deliver Order</h4>
-          <p><strong>Entry Point:</strong> <code>PUT /orders/{id}/deliver</code> — Admin only</p>
+          <p><strong>Entry Point:</strong> <code>PUT /orders/{id}/deliver</code>, Admin only</p>
           <p>Validates status is Paid. Status -&gt; Delivered. Publishes <code>OrderDelivered</code>.</p>
           <h4 id="cancel-order">Cancel Order</h4>
-          <p><strong>Entry Point:</strong> <code>PUT /orders/{id}/cancel</code> — Owner or Admin</p>
+          <p><strong>Entry Point:</strong> <code>PUT /orders/{id}/cancel</code>, Owner or Admin</p>
           <pre class="doc-pre"><code class="">OrdersController.CancelAsync()
             -&gt; CancelOrderHandler
               -&gt; Fetch Order with OrderLines
               -&gt; order.MarkAsCancelled()
                 -&gt; Validates status is PendingPayment, PaymentInitiated, or PaymentFailed
                 -&gt; Status -&gt; Cancelled, publishes OrderCancelled
-              -&gt; For each OrderLine:
-                -&gt; IncreaseInventoryHandler restores stock
-                -&gt; Publishes InventoryAdjusted per item
-              -&gt; SaveChangesAsync()</code></pre>
-          <p><strong>Inventory Impact:</strong> All reserved inventory is restored on cancellation.</p>
+              -&gt; SaveChangesAsync()          &lt;-- cancellation commits here; no inventory work inline
+          
+            (then, after commit)
+            -&gt; OrderCancelledSagaHandler  [ADR-054 compensating action, own DI scope]
+              -&gt; Skip if order.InventoryRestored is already set (idempotent under redelivery)
+              -&gt; Restore stock for each OrderLine
+              -&gt; order.MarkInventoryRestored()
+              -&gt; ONE SaveChangesAsync commits the marker and the inventory increases together</code></pre>
+          <p><strong>Inventory Impact:</strong> All reserved inventory is restored on cancellation, by a <strong>compensating handler
+          that runs after</strong> the cancellation transaction, not inside it (<a href="../adr/054-saga-compensation-and-reconciliation.html">ADR-054</a>).
+          <code>Order.InventoryRestored</code> is the idempotency marker, committed by the same <code>SaveChangesAsync</code> as the
+          restoration, so an at-least-once redelivery cannot double-restore; the order&#39;s rowversion token makes
+          two concurrent deliveries mutually exclusive. The sibling <code>OrderPaymentFailedSagaHandler</code> compensates
+          the payment-failure path the same way. Splitting compensation out of <code>CancelOrderHandler</code> is what lets
+          further compensating actions (refund, notification) be added as new handlers rather than edits.</p>
           <h4 id="order-query-endpoints">Order Query Endpoints</h4>
           <div class="table-wrap"><table>
           <thead>
@@ -848,6 +1093,11 @@
           <td><code>GET /orders/{id}</code></td>
           <td>Authenticated</td>
           <td>Single order with optional includes</td>
+          </tr>
+          <tr>
+          <td><code>GET /orders/lookup</code></td>
+          <td>Authenticated</td>
+          <td>Id/name pairs for pickers, same ownership filter</td>
           </tr>
           </tbody></table></div>
           <hr>
@@ -880,20 +1130,40 @@
           <td>Absolute set (creates if not exists)</td>
           </tr>
           <tr>
+          <td>Bulk set</td>
+          <td><code>PUT /inventoryitems/bulk-setinventory</code></td>
+          <td>Admin</td>
+          <td>Sets inventory for many variants in one transaction, creating the ones that do not exist; returns a <code>BulkSetInventoryResultDTO</code></td>
+          </tr>
+          <tr>
+          <td>List</td>
+          <td><code>GET /inventoryitems</code></td>
+          <td>Admin</td>
+          <td>All inventory items</td>
+          </tr>
+          <tr>
+          <td>List (paged)</td>
+          <td><code>GET /inventoryitems/paged</code></td>
+          <td>Admin</td>
+          <td>Paged inventory items</td>
+          </tr>
+          <tr>
           <td>Get By ID</td>
           <td><code>GET /inventoryitems/{id}</code></td>
           <td>Admin</td>
           <td>Single inventory item</td>
           </tr>
           </tbody></table></div>
-          <p>All mutation operations validate product variant exists via <code>IProductVariantService.ExistsAsync()</code> and publish <code>InventoryAdjusted</code> events when quantity changes.</p>
-          <p><strong>Note:</strong> GetAll, GetPaged, and Lookup endpoints are not exposed on the InventoryItems controller (only GetById is overridden).</p>
+          <p>All mutation operations validate that the product variant exists via <code>IProductVariantService</code> and
+          publish <code>InventoryAdjusted</code> when the quantity actually changes. <code>IncreaseInventory</code> and
+          <code>DecreaseInventory</code> both route through <code>SetInventory</code>, which is the single place the event is raised.</p>
+          <p>The whole controller is <code>[Authorize(Policy = RequireAdmin)]</code>; there is no anonymous inventory read.</p>
           <hr>
           <h2 id="4-ui-workflows">4. UI Workflows</h2>
           <h3 id="41-customer-shopping-experience-ui-side">4.1 Customer Shopping Experience (UI-Side)</h3>
           <p>The UI provides a complete shopping experience through the CartDrawer component and Blazor pages.</p>
           <h4 id="cart-drawer-sole-cart-interface">Cart Drawer (Sole Cart Interface)</h4>
-          <p>The CartDrawer is the only cart UI — there is no dedicated cart page. It is a 380px right-side temporary drawer accessible from any page via the cart icon in the top app bar.</p>
+          <p>The CartDrawer is the only cart UI: there is no dedicated cart page. It is a 380px right-side temporary drawer accessible from any page via the cart icon in the top app bar.</p>
           <p><strong>Features:</strong></p>
           <ul>
           <li>View cart items with product name, SKU, and quantity</li>
@@ -906,16 +1176,16 @@
           <li>&quot;Continue Shopping&quot; navigation to catalog</li>
           <li>Empty cart state with &quot;Browse Products&quot; link</li>
           </ul>
-          <p><strong>State Management:</strong> <code>ICartStateService</code> singleton manages cart state centrally — all cart operations go through this service which refreshes the cart DTO after each mutation and notifies subscribers via <code>OnChange</code> event. Cart items are enriched with product names and SKUs from the Catalog API.</p>
+          <p><strong>State Management:</strong> <code>ICartStateService</code> singleton manages cart state centrally: all cart operations go through this service which refreshes the cart DTO after each mutation and notifies subscribers via <code>OnChange</code> event. Cart items are enriched with product names and SKUs from the Catalog API.</p>
           <h4 id="catalog-browse--product-detail">Catalog Browse &amp; Product Detail</h4>
           <ul>
-          <li><code>/catalog</code> — Product grid with name search, category filter, name/newest sort, quick &quot;Add to Cart&quot; per variant</li>
-          <li><code>/catalog/{id}</code> — Product detail with breadcrumbs, variant list, quantity selector, &quot;Add to Cart&quot; button, &quot;Buy Now&quot; (direct Stripe checkout)</li>
+          <li><code>/catalog</code>, Product grid with name search, category filter, name/newest sort, quick &quot;Add to Cart&quot; per variant</li>
+          <li><code>/catalog/{id}</code>, Product detail with breadcrumbs, variant list, quantity selector, &quot;Add to Cart&quot; button, &quot;Buy Now&quot; (direct Stripe checkout)</li>
           </ul>
           <h4 id="order-management">Order Management</h4>
           <ul>
-          <li><code>/orders</code> — MudDataGrid listing orders with ID, customer, total, status chips, item count</li>
-          <li><code>/orders/{id}</code> — Two-column layout: order summary (status, total, payment/delivery actions) + order lines</li>
+          <li><code>/orders</code>, MudDataGrid listing orders with ID, customer, total, status chips, item count</li>
+          <li><code>/orders/{id}</code>, Two-column layout: order summary (status, total, payment/delivery actions) + order lines</li>
           </ul>
           <h3 id="42-admin-ui-workflows">4.2 Admin UI Workflows</h3>
           <div class="table-wrap"><table>
@@ -1105,7 +1375,7 @@
           <tbody><tr>
           <td><strong>Stripe</strong></td>
           <td>Payment processing</td>
-          <td><code>StripePaymentService</code> — creates checkout sessions, handles webhooks</td>
+          <td><code>StripePaymentService</code>, creates checkout sessions, handles webhooks</td>
           </tr>
           <tr>
           <td><strong>SQL Server</strong></td>
@@ -1120,7 +1390,7 @@
           <tr>
           <td><strong>SMTP</strong></td>
           <td>Email infrastructure</td>
-          <td><code>SmtpEmailSender</code> — infrastructure exists but no domain event handlers trigger emails</td>
+          <td><code>SmtpEmailSender</code>, infrastructure exists but no domain event handlers trigger emails</td>
           </tr>
           </tbody></table></div>
           <hr>
@@ -1228,12 +1498,12 @@
           </tr>
           <tr>
           <td><strong>No post-payment cancellation</strong></td>
-          <td>Cancellation allowed from PendingPayment, PaymentInitiated, or PaymentFailed — cannot cancel after payment succeeds</td>
+          <td>Cancellation allowed from PendingPayment, PaymentInitiated, or PaymentFailed; cannot cancel after payment succeeds</td>
           <td>Verify if post-payment cancellation with Stripe refund is needed</td>
           </tr>
           <tr>
           <td><strong>No customer deactivation endpoint</strong></td>
-          <td><code>User.Deactivate()</code> method and <code>UserDeactivated</code> event exist in domain but no API endpoint exposes this</td>
+          <td><code>User.Deactivate()</code> method and <code>UserDeactivated</code> event exist in domain but no API endpoint exposes this. (Account <em>erasure</em> is exposed, see 1.9; deactivation is the separate reversible state.)</td>
           <td>May be an admin feature not yet implemented</td>
           </tr>
           <tr>
@@ -1242,13 +1512,8 @@
           <td>Products with deleted category may have orphaned CategoryId</td>
           </tr>
           <tr>
-          <td><strong>No InventoryItem list endpoint</strong></td>
-          <td>InventoryItemsController only exposes GetById, not GetAll/GetPaged</td>
-          <td>UI InventoryItemList page likely fetches data through a different mechanism or needs this endpoint</td>
-          </tr>
-          <tr>
           <td><strong>No partial fulfillment</strong></td>
-          <td>Orders are delivered as a whole — no concept of partial shipments or split deliveries</td>
+          <td>Orders are delivered as a whole: no concept of partial shipments or split deliveries</td>
           <td>Clarify if partial fulfillment is a future requirement</td>
           </tr>
           <tr>
@@ -1256,9 +1521,14 @@
           <td><code>MarkAsDelivered</code> is a binary admin action with no tracking number, carrier, or ETA</td>
           <td>Consider whether shipping/tracking details are needed</td>
           </tr>
+          <tr>
+          <td><strong>No refund compensation handler</strong></td>
+          <td><a href="../adr/054-saga-compensation-and-reconciliation.html">ADR-054</a> makes refunds a natural third saga handler alongside <code>OrderCancelledSagaHandler</code> and <code>OrderPaymentFailedSagaHandler</code>, but none exists</td>
+          <td>Add when post-payment cancellation lands</td>
+          </tr>
           </tbody></table></div>
           <hr>
-          <p><em>This document is derived from source code analysis. All workflows, decisions, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-03-18.</em></p>
+          <p><em>This document is derived from source code analysis. All workflows, decisions, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-07-27 (re-verified against MMCA.Store HEAD <code>1dfdc991</code>).</em></p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>

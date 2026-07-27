@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Resilience &amp; Business Continuity (rubric §29) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="MMCA.Common is a library, so it cannot operate a deployment — restores, RTO/RPO, and SLO alerting are executed in the consumer apps&#39; IaC (e.g.…">
+  <meta name="description" content="MMCA.Common is a library, so it cannot operate a deployment: restores, RTO/RPO, and SLO alerting are executed in the consumer apps&#39; IaC (e.g.…">
   <link rel="canonical" href="https://ivanball.github.io/docs/guides/common-RESILIENCE.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Resilience &amp; Business Continuity (rubric §29)">
-  <meta property="og:description" content="MMCA.Common is a library, so it cannot operate a deployment — restores, RTO/RPO, and SLO alerting are executed in the consumer apps&#39; IaC (e.g.…">
+  <meta property="og:description" content="MMCA.Common is a library, so it cannot operate a deployment: restores, RTO/RPO, and SLO alerting are executed in the consumer apps&#39; IaC (e.g.…">
   <meta property="og:url" content="https://ivanball.github.io/docs/guides/common-RESILIENCE.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Resilience &amp; Business Continuity (rubric §29)">
-  <meta name="twitter:description" content="MMCA.Common is a library, so it cannot operate a deployment — restores, RTO/RPO, and SLO alerting are executed in the consumer apps&#39; IaC (e.g.…">
+  <meta name="twitter:description" content="MMCA.Common is a library, so it cannot operate a deployment: restores, RTO/RPO, and SLO alerting are executed in the consumer apps&#39; IaC (e.g.…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Common · Resilience & Business Continuity (rubric §29)","item":"https://ivanball.github.io/docs/guides/common-RESILIENCE.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -120,7 +120,7 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
           <h1 id="resilience--business-continuity-rubric-29">Resilience &amp; Business Continuity (rubric §29)</h1>
-          <p>MMCA.Common is a library, so it cannot <em>operate</em> a deployment — restores, RTO/RPO, and SLO alerting
+          <p>MMCA.Common is a library, so it cannot <em>operate</em> a deployment: restores, RTO/RPO, and SLO alerting
           are executed in the consumer apps&#39; IaC (e.g. MMCA.ADC&#39;s <code>infra/DISASTER-RECOVERY.md</code>,
           <code>scripts/dr-restore-drill.ps1</code>, <code>dr-drill.yml</code>, and the SLO metric-alerts in <code>infra/main.bicep</code>).
           What the framework <em>can</em> do is (1) ship the failure-isolation and graceful-startup mechanisms, tested
@@ -129,7 +129,7 @@
           so the recovery <em>procedure</em> itself is demonstrated in CI rather than only described, and (3) give
           consumers a baseline SLO/error-budget template and a restore-drill runbook so the recovery story is
           defined once and adopted, not reinvented per app. This complements
-          <a href="../adr/009-resilience-and-recovery-objectives.html"><code>ADRs/009-resilience-and-recovery-objectives.md</code></a>
+          <a href="../adr/009-resilience-and-recovery-objectives.html">ADR-009</a>
           (the <em>decision</em>); this file is the <em>operational reference</em>.</p>
           <h2 id="what-the-framework-provides-and-verifies-in-repo">What the framework provides (and verifies in-repo)</h2>
           <div class="table-wrap"><table>
@@ -157,19 +157,19 @@
           </tr>
           <tr>
           <td>Warm-up / readiness gate: holds <code>/health/ready</code> closed until startup warm-up runs, opens <strong>even on task failure</strong> (availability over warmth), pre-warms OIDC discovery to kill ACA cold-start</td>
-          <td><code>Aspire/Warmup/</code> (<code>WarmupHostedService</code>, <code>WarmupReadinessGate</code>, <code>WarmupReadinessHealthCheck</code>, <code>OpenIdConnectMetadataWarmupTask</code>) — wired by <code>AddServiceDefaults</code></td>
+          <td><code>Aspire/Warmup/</code> (<code>WarmupHostedService</code>, <code>WarmupReadinessGate</code>, <code>WarmupReadinessHealthCheck</code>, <code>OpenIdConnectMetadataWarmupTask</code>): wired by <code>AddServiceDefaults</code></td>
           <td><code>WarmupReadinessGateTests</code>, <code>WarmupReadinessHealthCheckTests</code>, <code>WarmupHostedServiceTests</code> (ADR-025)</td>
           </tr>
           <tr>
           <td><strong>Restore drill (central, in-repo)</strong>: seed a database → take a backup → simulate catastrophic data loss → restore from the backup → verify zero data loss, timing the recovery (RTO)</td>
-          <td><code>Tests/Core/MMCA.Common.Infrastructure.Tests/Resilience/DatabaseRestoreDrillTests.cs</code> (ephemeral SQLite via the SQLite online-backup API — the same primitive a real backup/restore uses)</td>
+          <td><code>Tests/Core/MMCA.Common.Infrastructure.Tests/Resilience/DatabaseRestoreDrillTests.cs</code> (ephemeral SQLite via the SQLite online-backup API, the same primitive a real backup/restore uses)</td>
           <td><code>DatabaseRestoreDrillTests</code> (recovers every row after simulated loss; completes within a bounded RTO ceiling; emits the measured restore time to test output)</td>
           </tr>
           </tbody></table></div>
           <p>Failure isolation, graceful degradation, graceful startup, <strong>and the restore procedure itself</strong> are
-          therefore demonstrated and tested centrally — the framework drills backup→restore against an ephemeral
-          DB and records a baseline restore time (see below). The gaps a library structurally cannot fill —
-          production RTO/RPO against real cloud backups and measured production SLOs — remain the consumer&#39;s, with
+          therefore demonstrated and tested centrally: the framework drills backup→restore against an ephemeral
+          DB and records a baseline restore time (see below). The gaps a library structurally cannot fill
+          (production RTO/RPO against real cloud backups and measured production SLOs) remain the consumer&#39;s, with
           the templates below.</p>
           <h3 id="in-repo-restore-drill-baseline-measured-automatically-gated">In-repo restore-drill baseline (measured, automatically gated)</h3>
           <p><code>DatabaseRestoreDrillTests</code> runs on <strong>every CI build</strong> (it lives in the in-solution unit tier, so the
@@ -227,13 +227,13 @@
           <tr>
           <td>Latency (server response time)</td>
           <td>p95 &lt; 1 s (read), &lt; 3 s (write)</td>
-          <td>—</td>
+          <td>-</td>
           <td>App Insights <code>requests/duration</code> alert</td>
           </tr>
           <tr>
           <td>Dependency success</td>
           <td>99.5%</td>
-          <td>—</td>
+          <td>-</td>
           <td>App Insights <code>dependencies/failed</code> alert</td>
           </tr>
           <tr>
@@ -268,13 +268,13 @@
           <td>≤ 4 h</td>
           </tr>
           </tbody></table></div>
-          <p>A conscious, documented acceptance of single-region risk is a valid §29 posture — state it explicitly
+          <p>A conscious, documented acceptance of single-region risk is a valid §29 posture: state it explicitly
           (as ADC does) rather than leaving it implicit.</p>
           <h2 id="restore-drill-runbook-reference">Restore-drill runbook (reference)</h2>
           <p>The only evidence backups actually restore is a periodic <strong>drill</strong>: restore a throwaway copy, confirm
           it comes back Online, record the measured restore time, then delete the copy. The live databases are
           never touched. Run it <strong>per release train</strong> and after any backup/retention change.</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-comment"># PITR restore of a throwaway COPY (Azure SQL example — adapt to your store)</span>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-comment"># PITR restore of a throwaway COPY (Azure SQL example: adapt to your store)</span>
           az sql db restore -g &lt;rg&gt; -s &lt;sqlServer&gt; -n &lt;Db&gt; --dest-name &lt;Db&gt;-drill --<span class="hljs-keyword">time</span> <span class="hljs-string">&quot;&lt;recent-utc&gt;&quot;</span>
           <span class="hljs-comment"># verify status Online (and a row/table spot-check for a deeper check), record elapsed minutes, then:</span>
           az sql db delete -g &lt;rg&gt; -s &lt;sqlServer&gt; -n &lt;Db&gt;-drill --<span class="hljs-built_in">yes</span></code></pre>
@@ -292,7 +292,7 @@
           <tbody><tr>
           <td><em>yyyy-mm-dd</em></td>
           <td><em>Db (PITR)</em></td>
-          <td><em>PASS — restored in N min (RTO target …); status Online</em></td>
+          <td><em>PASS: restored in N min (RTO target …); status Online</em></td>
           </tr>
           </tbody></table></div>
           

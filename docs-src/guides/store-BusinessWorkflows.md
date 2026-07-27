@@ -41,6 +41,15 @@
 | 35 | Increase Inventory | `PUT /inventoryitems/{id}/increaseinventory` | Sales |
 | 36 | Decrease Inventory | `PUT /inventoryitems/{id}/decreaseinventory` | Sales |
 | 37 | Set Inventory | `PUT /inventoryitems/{id}/setinventory` | Sales |
+| 38 | Bulk Set Inventory | `PUT /inventoryitems/bulk-setinventory` | Sales |
+| 39 | Verify Payment (webhook backstop) | `PUT /orders/{id}/verify-payment` | Sales |
+| 40 | Upload Product Image | `POST /products/{productId}/images` | Catalog |
+| 41 | Delete Product Image | `DELETE /products/{productId}/images/{imageId}` | Catalog |
+| 42 | Reorder Product Images | `PUT /products/{productId}/images/order` | Catalog |
+| 43 | Read Product Image | `GET /products/{productId}/images/{imageId}` | Catalog |
+| 44 | Change UI Preferences | `PUT /auth/preferences` | Identity |
+| 45 | Export Personal Data | `GET /users/{userId}/export` | Identity |
+| 46 | Erase User Account | `DELETE /users/{userId}` | Identity |
 
 ---
 
@@ -48,7 +57,7 @@
 
 ### 1.1 User Registration
 
-**Entry Point:** `POST /auth/register` — `AuthController.RegisterAsync()` — AllowAnonymous
+**Entry Point:** `POST /auth/register`, `AuthController.RegisterAsync()`, AllowAnonymous
 
 **Execution Path:**
 
@@ -71,7 +80,7 @@ AuthController.RegisterAsync()
 2. Check email is not already registered
 3. Hash password with PBKDF2-HMAC-SHA512 (600,000 iterations, per-user salt)
 4. Create User aggregate (IsActive=true, Role="Customer")
-5. Persist user — triggers `UserRegistered` domain event
+5. Persist user: triggers `UserRegistered` domain event
 6. Domain event handler creates Customer profile and links it to User
 7. Generate access token (15 min, JWT with claims: sub, jti, iat, user_id, email, role, customer_id) + refresh token (7 days, 64-byte random)
 8. Return authentication response with tokens
@@ -92,7 +101,7 @@ AuthController.RegisterAsync()
 
 ### 1.2 User Login
 
-**Entry Point:** `POST /auth/login` — `AuthController.LoginAsync()` — AllowAnonymous
+**Entry Point:** `POST /auth/login`, `AuthController.LoginAsync()`, AllowAnonymous
 
 **Execution Path:**
 
@@ -128,7 +137,7 @@ AuthController.LoginAsync()
 
 ### 1.3 Token Refresh
 
-**Entry Point:** `POST /auth/refresh` — AllowAnonymous
+**Entry Point:** `POST /auth/refresh`, AllowAnonymous
 
 **Execution Path:**
 
@@ -152,7 +161,7 @@ AuthController.RefreshAsync()
 
 ### 1.4 Token Revocation
 
-**Entry Point:** `POST /auth/revoke` — Requires Authorization
+**Entry Point:** `POST /auth/revoke`, Requires Authorization
 
 **Business Steps:** Clears `User.RefreshToken` and `User.RefreshTokenExpiry` to null.
 
@@ -160,7 +169,7 @@ AuthController.RefreshAsync()
 
 ### 1.5 Change Password
 
-**Entry Point:** `PUT /auth/password` — Requires Authorization
+**Entry Point:** `PUT /auth/password`, Requires Authorization
 
 **Execution Path:**
 
@@ -191,9 +200,32 @@ Email change includes uniqueness check across customers.
 
 | Workflow | Endpoint | Auth | Notes |
 |----------|----------|------|-------|
-| Create Customer | `POST /customers` | Authenticated | Idempotent via `[Idempotent]` attribute |
-| Delete Customer | `DELETE /customers/{id}` | Authenticated | Soft delete (IsDeleted=true), publishes `CustomerDeleted` |
-| Get Customer | `GET /customers/{id}` | Authenticated | Only GetById exposed; GetAll/Paged/Lookup not exposed |
+| Create Customer | `POST /customers` | Admin | Idempotent via `[Idempotent]` attribute |
+| Delete Customer | `DELETE /customers/{id}` | Admin | Soft delete (IsDeleted=true), publishes `CustomerDeleted` |
+| Get Customer | `GET /customers/{id}` | Authenticated | Owner or admin |
+| List Customers | `GET /customers` | Admin | All customers |
+| List Customers (paged) | `GET /customers/paged` | Admin | Paged |
+| Customer Lookup | `GET /customers/lookup` | Admin | Id/name pairs for pickers |
+
+The controller is `[Authorize(RequireAuthenticated)]` with the collection reads and the create/delete
+actions individually raised to `[Authorize(RequireAdmin)]`.
+
+### 1.8 UI Preferences
+
+| Workflow | Endpoint | Auth | Notes |
+|----------|----------|------|-------|
+| Read preferences | `GET /auth/preferences` | Authenticated | Stored UI culture/theme, read at login so the choice follows the account across devices |
+| Change preferences | `PUT /auth/preferences` | Authenticated | Persists culture ([ADR-027](../adr/027-multi-locale-i18n.md)) and theme ([ADR-028](../adr/028-dark-theme-mode.md)) |
+
+### 1.9 Data Subject Rights (GDPR/CCPA)
+
+Both endpoints authorize the account owner **or** an Admin, enforced in the handlers rather than by a
+controller-wide policy ([ADR-005](../adr/005-soft-delete-vs-erasure.md)).
+
+| Workflow | Endpoint | Auth | Notes |
+|----------|----------|------|-------|
+| Export personal data | `GET /users/{userId}/export` | Owner or Admin | Portable JSON of the personal data held for the user (access/portability) |
+| Erase account | `DELETE /users/{userId}` | Owner or Admin | Deletes the account and irreversibly anonymizes its personal data; distinct from the soft-delete used for ordinary lifecycle |
 
 ---
 
@@ -203,7 +235,7 @@ Email change includes uniqueness check across customers.
 
 #### Create Category
 
-**Entry Point:** `POST /categories` — Admin only, `[Idempotent]`
+**Entry Point:** `POST /categories`, Admin only, `[Idempotent]`
 
 ```
 CategoriesController.CreateAsync()
@@ -217,7 +249,7 @@ CategoriesController.CreateAsync()
 
 #### Rename Category
 
-**Entry Point:** `PUT /categories/{id}/name` — Admin only
+**Entry Point:** `PUT /categories/{id}/name`, Admin only
 
 ```
 CategoriesController.RenameAsync()
@@ -231,13 +263,13 @@ CategoriesController.RenameAsync()
 
 #### Assign Parent Category
 
-**Entry Point:** `PUT /categories/{id}/parentcategory` — Admin only
+**Entry Point:** `PUT /categories/{id}/parentcategory`, Admin only
 
 Sets or clears `ParentCategoryId` to establish hierarchy. No domain event raised.
 
 #### Delete Category
 
-**Entry Point:** `DELETE /categories/{id}` — Admin only
+**Entry Point:** `DELETE /categories/{id}`, Admin only
 
 Soft delete (`IsDeleted=true`). Publishes `CategoryDeleted`.
 
@@ -256,7 +288,7 @@ Soft delete (`IsDeleted=true`). Publishes `CategoryDeleted`.
 
 #### Create Product
 
-**Entry Point:** `POST /products` — Admin only, `[Idempotent]`
+**Entry Point:** `POST /products`, Admin only, `[Idempotent]`
 
 ```
 ProductsController.CreateAsync()
@@ -277,7 +309,7 @@ ProductsController.CreateAsync()
 
 #### Delete Product
 
-**Entry Point:** `DELETE /products/{id}` — Admin only. Soft delete, publishes `ProductDeleted`.
+**Entry Point:** `DELETE /products/{id}`, Admin only. Soft delete, publishes `ProductDeleted`.
 
 #### Query Endpoints
 
@@ -286,6 +318,7 @@ ProductsController.CreateAsync()
 | `GET /products` | AllowAnonymous | Returns all products (capped at MaxPageSize) |
 | `GET /products/paged` | AllowAnonymous | Paginated with filters, sorting, field projection |
 | `GET /products/lookup` | AllowAnonymous | Returns ID + name pairs for dropdowns |
+| `GET /products/variant-lookup` | AllowAnonymous | Returns `ProductVariantCartInfoDTO` rows: the variant detail the cart UI needs without a per-variant round trip |
 | `GET /products/{id}` | AllowAnonymous | Single product with optional FK/children includes |
 
 ---
@@ -294,7 +327,7 @@ ProductsController.CreateAsync()
 
 #### Add Product Variant
 
-**Entry Point:** `POST /products/{id}/productvariants` — Admin only
+**Entry Point:** `POST /products/{id}/productvariants`, Admin only
 
 ```
 ProductVariantsController.CreateAsync()
@@ -312,21 +345,39 @@ ProductVariantsController.CreateAsync()
 
 #### Change Variant SKU
 
-**Entry Point:** `PUT /products/{id}/productvariants/{variantId}/sku` — Admin only
+**Entry Point:** `PUT /products/{id}/productvariants/{variantId}/sku`, Admin only
 
 SKU uniqueness verified globally (excluding current variant). Publishes `ProductVariantSkuChanged` if changed.
 
 #### Change Variant Price
 
-**Entry Point:** `PUT /products/{id}/productvariants/{variantId}/price` — Admin only
+**Entry Point:** `PUT /products/{id}/productvariants/{variantId}/price`, Admin only
 
 Price must be positive. Publishes `ProductVariantPriceChanged` if changed.
 
 #### Remove Product Variant
 
-**Entry Point:** `DELETE /products/{id}/productvariants/{variantId}` — Admin only
+**Entry Point:** `DELETE /products/{id}/productvariants/{variantId}`, Admin only
 
 Soft delete on variant. Publishes `ProductVariantRemoved`.
+
+### 2.4 Product Image Management
+
+Behind the `CatalogFeatures.ProductImages` feature gate ([ADR-031](../adr/031-feature-flag-management.md)),
+storage per [ADR-045](../adr/045-managed-file-storage-and-avatars.md). Mutations require Admin;
+retrieval is anonymous and output-cached for 300 seconds to keep repeated BLOB reads off the database.
+
+| Workflow | Endpoint | Auth | Notes |
+|----------|----------|------|-------|
+| Read primary image | `GET /products/{id}/image` | Anonymous | Lowest display order; 300s response + output cache |
+| Read image by id | `GET /products/{productId}/images/{imageId}` | Anonymous | Same caching |
+| Upload image | `POST /products/{productId}/images` | Admin | 201 Created with `ProductImageDTO` and a Location header; 6 MB request limit covering the 5 MB domain constraint plus multipart overhead |
+| Upload image (legacy) | `PUT /products/{id}/image` | Admin | The pre-collection single-image route, kept for backward compatibility; same handler as the POST above |
+| Delete primary image | `DELETE /products/{id}/image` | Admin | Legacy single-image route |
+| Delete image by id | `DELETE /products/{productId}/images/{imageId}` | Admin | Collection route |
+| Reorder images | `PUT /products/{productId}/images/order` | Admin | Reassigns display order from the supplied id list; the first id becomes the primary image (order 0) |
+
+Every mutation evicts the products cache so the next read reflects the change.
 
 ---
 
@@ -336,7 +387,7 @@ Soft delete on variant. Publishes `ProductVariantRemoved`.
 
 #### Add Item to Cart
 
-**Entry Point:** `POST /shoppingcarts/{customerId}/shoppingcartitems` — Authenticated (owner or admin via `OwnerOrAdminFilter`)
+**Entry Point:** `POST /shoppingcarts/{customerId}/shoppingcartitems`, Authenticated (owner or admin via `OwnerOrAdminFilter`)
 
 ```
 ShoppingCartsController.CreateShoppingCartItemAsync()
@@ -376,11 +427,17 @@ Validates cart is Active. Soft-deletes item. Publishes `ShoppingCartItemRemoved`
 
 Deletes all items. Publishes `ShoppingCartCleared`.
 
-#### Get Cart
+#### Cart Query Endpoints
 
-**Entry Point:** `GET /shoppingcarts/{id}` — Authenticated + OwnerOrAdmin
+| Endpoint | Auth | Notes |
+|----------|------|-------|
+| `GET /shoppingcarts/{id}` | Authenticated + OwnerOrAdmin | The customer's cart with optional children (items). Returns an empty DTO (not 404) when no cart exists yet (lazy cart pattern) |
+| `GET /shoppingcarts` | Authenticated | Row-scoped by the ownership specification: a customer sees only their own cart, an admin sees every cart ([ADR-033](../adr/033-resource-ownership-authorization.md)) |
+| `GET /shoppingcarts/paged` | Authenticated | Paged, same row-scoping |
+| `GET /shoppingcarts/lookup` | Admin | Id/name pairs for pickers |
 
-Returns the customer's cart with optional children (items). Returns an empty DTO (not 404) if no cart exists (lazy cart pattern).
+Ownership on the collection reads is enforced **in the query**, not against a route value: there is no
+owner parameter to compare, so the specification narrows the rows before they are read.
 
 #### Shopping Cart Status State Machine
 
@@ -393,45 +450,53 @@ Active --(MarkAsCheckedOut)--> CheckedOut
 
 ---
 
-### 3.2 Checkout (Cart to Order) — Primary Business Workflow
+### 3.2 Checkout (Cart to Order): Primary Business Workflow
 
-**Entry Point:** `PUT /shoppingcarts/{customerId}/checkout` — Authenticated, marked `ITransactional` and `ICacheInvalidating`
+**Entry Point:** `PUT /shoppingcarts/{customerId}/checkout`, authenticated, marked `ICacheInvalidating`.
+`CheckOutCommand` is **deliberately NOT `ITransactional`** (`CheckOutCommand.cs:9`): the handler opens its
+own transaction around the write phase only, so the cross-module price fetch never holds database locks.
 
 ```
 ShoppingCartsController.CheckOutAsync()
   -> CheckOutHandler
-    -> Fetch ShoppingCart with items
+    -> Fetch ShoppingCart with items (tracking)
     -> Collect productVariantIds from cart items
-    -> IProductVariantService.GetUnitPricesAsync(ids) [cross-module: Catalog]
+    -> IProductVariantService.GetUnitPricesAsync(ids) [cross-module: Catalog, OUTSIDE the transaction]
+    -> Reject any variant missing from the price map (soft-deleted between add and checkout)
     -> Fetch InventoryItems for all variants
     -> CheckOutDomainService.Execute():
         1. Validate cart not empty
         2. Validate inventory exists for all items
-        3. For each item: inventoryItem.DecreaseInventory(quantity)
-           -> Validates sufficient stock
-           -> Publishes InventoryAdjusted
+        3. Fail-fast sufficiency check per item against the point-in-time snapshot
+           (NOT the oversell guard: that is the atomic decrement below)
         4. Build order items (variant + price + quantity)
         5. Order.Create(customerId, items) -> publishes OrderPlaced
         6. shoppingCart.MarkAsCheckedOut() -> publishes ShoppingCartCheckedOut
-    -> Repository.AddAsync(order)
-    -> SaveChangesAsync()
+    -> orderRepository.AddAsync(order)
+    -> unitOfWork.ExecuteInTransactionAsync:            <-- the whole write phase, one transaction
+         -> IInventoryAllocationService.DecrementAsync(decrements)
+              atomic conditional UPDATE per variant (ExecuteUpdateAsync); a row that no longer has
+              enough stock matches zero rows and fails the Result, rolling the transaction back
+         -> unitOfWork.SaveChangesAsync()               <-- order insert + cart transition
     -> Return OrderDTO
 ```
 
 **Business Steps:**
 
 1. Validate cart exists and has items
-2. Fetch current prices from Catalog module
-3. Validate and decrement inventory for all items
+2. Fetch current prices from Catalog module, and reject variants that no longer exist
+3. Fail-fast inventory sufficiency check against the loaded snapshot
 4. Create Order aggregate with OrderLines (price snapshot at time of purchase)
 5. Transition cart to CheckedOut status
-6. Persist everything in a single transaction (`ITransactional`)
+6. Commit the write phase in one explicit transaction: atomic inventory decrements, then the order
+   insert and cart transition
 
 **Decision Points:**
 
 - Cart empty -> Validation error
-- Product variant price not found -> Error
-- Insufficient inventory -> Invariant error
+- Product variant no longer exists in Catalog -> `ProductVariant.NotFound`, naming the offending variant
+- Insufficient inventory at snapshot time -> Invariant error (fail-fast)
+- Insufficient inventory at commit time -> the conditional UPDATE matches no row, the transaction rolls back
 - Inventory record missing -> NotFound (specific missing variant ID reported)
 
 **State Changes:**
@@ -440,7 +505,12 @@ ShoppingCartsController.CheckOutAsync()
 - Decrements `InventoryItem.AvailableQuantity` for each item
 - `ShoppingCart.Status` -> CheckedOut
 
-**Domain Events:** `OrderPlaced`, `InventoryAdjusted` (per item), `ShoppingCartCheckedOut`
+**Domain Events:** `OrderPlaced`, `ShoppingCartCheckedOut`.
+
+> **No `InventoryAdjusted` on the checkout path.** The decrement runs as `ExecuteUpdateAsync`, which
+> bypasses the save pipeline (and therefore the audit interceptor and domain-event dispatch) by design:
+> that is what makes it a single atomic statement and the real oversell guard. `InventoryAdjusted` is
+> still raised by the admin adjustment endpoints in 3.4, which go through the aggregate.
 
 ---
 
@@ -470,7 +540,7 @@ PendingPayment --> PaymentInitiated --> Paid -----------> Delivered
 
 #### Create Stripe Checkout Session
 
-**Entry Point:** `POST /orders/{id}/checkout` — Authenticated (owner or admin)
+**Entry Point:** `POST /orders/{id}/checkout`, Authenticated (owner or admin)
 
 ```
 OrdersController.CreateCheckoutSessionAsync()
@@ -490,11 +560,11 @@ OrdersController.CreateCheckoutSessionAsync()
     -> Return sessionId + checkoutUri
 ```
 
-**External Interaction:** Stripe API — creates payment session with order line items
+**External Interaction:** Stripe API: creates payment session with order line items
 
 #### Stripe Payment Webhook
 
-**Entry Point:** `POST /payments/webhook` — AllowAnonymous, `ITransactional`, `ICacheInvalidating`
+**Entry Point:** `POST /payments/webhook`, AllowAnonymous, `ITransactional`, `ICacheInvalidating`
 
 ```
 PaymentsController.HandleWebhookAsync()
@@ -523,19 +593,30 @@ PaymentsController.HandleWebhookAsync()
 
 #### Manual Admin Payment
 
-**Entry Point:** `PUT /orders/{id}/pay` — Admin only
+**Entry Point:** `PUT /orders/{id}/pay`, Admin only
 
 Validates status allows manual payment (PendingPayment, PaymentInitiated, or PaymentFailed). Sets `StripePaymentIntentId = "manual-admin-override"`, status -> Paid. Publishes `OrderPaid`.
 
+#### Verify Payment (webhook backstop)
+
+**Entry Point:** `PUT /orders/{id}/verify-payment`, owner or Admin (ownership validated in the controller)
+
+Polls Stripe directly for the order's checkout session instead of waiting on a webhook, for the case
+where webhook delivery failed or is delayed. If Stripe reports the session paid, the order is marked
+Paid exactly as the webhook would have marked it; if the order is already Paid or is not in a
+verifiable state, the call succeeds without changes. This is the reconciliation half of
+[ADR-054](../adr/054-saga-compensation-and-reconciliation.md): the webhook is the fast path, this is
+the backstop that keeps a paid customer from sitting in `PaymentInitiated` forever.
+
 #### Deliver Order
 
-**Entry Point:** `PUT /orders/{id}/deliver` — Admin only
+**Entry Point:** `PUT /orders/{id}/deliver`, Admin only
 
 Validates status is Paid. Status -> Delivered. Publishes `OrderDelivered`.
 
 #### Cancel Order
 
-**Entry Point:** `PUT /orders/{id}/cancel` — Owner or Admin
+**Entry Point:** `PUT /orders/{id}/cancel`, Owner or Admin
 
 ```
 OrdersController.CancelAsync()
@@ -544,13 +625,23 @@ OrdersController.CancelAsync()
     -> order.MarkAsCancelled()
       -> Validates status is PendingPayment, PaymentInitiated, or PaymentFailed
       -> Status -> Cancelled, publishes OrderCancelled
-    -> For each OrderLine:
-      -> IncreaseInventoryHandler restores stock
-      -> Publishes InventoryAdjusted per item
-    -> SaveChangesAsync()
+    -> SaveChangesAsync()          <-- cancellation commits here; no inventory work inline
+
+  (then, after commit)
+  -> OrderCancelledSagaHandler  [ADR-054 compensating action, own DI scope]
+    -> Skip if order.InventoryRestored is already set (idempotent under redelivery)
+    -> Restore stock for each OrderLine
+    -> order.MarkInventoryRestored()
+    -> ONE SaveChangesAsync commits the marker and the inventory increases together
 ```
 
-**Inventory Impact:** All reserved inventory is restored on cancellation.
+**Inventory Impact:** All reserved inventory is restored on cancellation, by a **compensating handler
+that runs after** the cancellation transaction, not inside it ([ADR-054](../adr/054-saga-compensation-and-reconciliation.md)).
+`Order.InventoryRestored` is the idempotency marker, committed by the same `SaveChangesAsync` as the
+restoration, so an at-least-once redelivery cannot double-restore; the order's rowversion token makes
+two concurrent deliveries mutually exclusive. The sibling `OrderPaymentFailedSagaHandler` compensates
+the payment-failure path the same way. Splitting compensation out of `CancelOrderHandler` is what lets
+further compensating actions (refund, notification) be added as new handlers rather than edits.
 
 #### Order Query Endpoints
 
@@ -559,6 +650,7 @@ OrdersController.CancelAsync()
 | `GET /orders` | Authenticated | Customers see only own orders (OrdersByCustomerSpecification); admins see all |
 | `GET /orders/paged` | Authenticated | Paginated with same ownership filter |
 | `GET /orders/{id}` | Authenticated | Single order with optional includes |
+| `GET /orders/lookup` | Authenticated | Id/name pairs for pickers, same ownership filter |
 
 ---
 
@@ -569,11 +661,16 @@ OrdersController.CancelAsync()
 | Increase | `PUT /inventoryitems/{id}/increaseinventory` | Admin | Adds quantity, validates > 0 |
 | Decrease | `PUT /inventoryitems/{id}/decreaseinventory` | Admin | Subtracts, validates sufficient stock |
 | Set | `PUT /inventoryitems/{id}/setinventory` | Admin | Absolute set (creates if not exists) |
+| Bulk set | `PUT /inventoryitems/bulk-setinventory` | Admin | Sets inventory for many variants in one transaction, creating the ones that do not exist; returns a `BulkSetInventoryResultDTO` |
+| List | `GET /inventoryitems` | Admin | All inventory items |
+| List (paged) | `GET /inventoryitems/paged` | Admin | Paged inventory items |
 | Get By ID | `GET /inventoryitems/{id}` | Admin | Single inventory item |
 
-All mutation operations validate product variant exists via `IProductVariantService.ExistsAsync()` and publish `InventoryAdjusted` events when quantity changes.
+All mutation operations validate that the product variant exists via `IProductVariantService` and
+publish `InventoryAdjusted` when the quantity actually changes. `IncreaseInventory` and
+`DecreaseInventory` both route through `SetInventory`, which is the single place the event is raised.
 
-**Note:** GetAll, GetPaged, and Lookup endpoints are not exposed on the InventoryItems controller (only GetById is overridden).
+The whole controller is `[Authorize(Policy = RequireAdmin)]`; there is no anonymous inventory read.
 
 ---
 
@@ -585,7 +682,7 @@ The UI provides a complete shopping experience through the CartDrawer component 
 
 #### Cart Drawer (Sole Cart Interface)
 
-The CartDrawer is the only cart UI — there is no dedicated cart page. It is a 380px right-side temporary drawer accessible from any page via the cart icon in the top app bar.
+The CartDrawer is the only cart UI: there is no dedicated cart page. It is a 380px right-side temporary drawer accessible from any page via the cart icon in the top app bar.
 
 **Features:**
 - View cart items with product name, SKU, and quantity
@@ -598,17 +695,17 @@ The CartDrawer is the only cart UI — there is no dedicated cart page. It is a 
 - "Continue Shopping" navigation to catalog
 - Empty cart state with "Browse Products" link
 
-**State Management:** `ICartStateService` singleton manages cart state centrally — all cart operations go through this service which refreshes the cart DTO after each mutation and notifies subscribers via `OnChange` event. Cart items are enriched with product names and SKUs from the Catalog API.
+**State Management:** `ICartStateService` singleton manages cart state centrally: all cart operations go through this service which refreshes the cart DTO after each mutation and notifies subscribers via `OnChange` event. Cart items are enriched with product names and SKUs from the Catalog API.
 
 #### Catalog Browse & Product Detail
 
-- `/catalog` — Product grid with name search, category filter, name/newest sort, quick "Add to Cart" per variant
-- `/catalog/{id}` — Product detail with breadcrumbs, variant list, quantity selector, "Add to Cart" button, "Buy Now" (direct Stripe checkout)
+- `/catalog`, Product grid with name search, category filter, name/newest sort, quick "Add to Cart" per variant
+- `/catalog/{id}`, Product detail with breadcrumbs, variant list, quantity selector, "Add to Cart" button, "Buy Now" (direct Stripe checkout)
 
 #### Order Management
 
-- `/orders` — MudDataGrid listing orders with ID, customer, total, status chips, item count
-- `/orders/{id}` — Two-column layout: order summary (status, total, payment/delivery actions) + order lines
+- `/orders`, MudDataGrid listing orders with ID, customer, total, status chips, item count
+- `/orders/{id}`, Two-column layout: order summary (status, total, payment/delivery actions) + order lines
 
 ### 4.2 Admin UI Workflows
 
@@ -683,10 +780,10 @@ The CartDrawer is the only cart UI — there is no dedicated cart page. It is a 
 
 | System | Purpose | Integration Point |
 |--------|---------|-------------------|
-| **Stripe** | Payment processing | `StripePaymentService` — creates checkout sessions, handles webhooks |
+| **Stripe** | Payment processing | `StripePaymentService`, creates checkout sessions, handles webhooks |
 | **SQL Server** | Primary persistence | Via EF Core + Aspire container orchestration |
 | **SQLite / Cosmos DB** | Alternative persistence | Configurable via `IDbContextFactory` strategy |
-| **SMTP** | Email infrastructure | `SmtpEmailSender` — infrastructure exists but no domain event handlers trigger emails |
+| **SMTP** | Email infrastructure | `SmtpEmailSender`, infrastructure exists but no domain event handlers trigger emails |
 
 ---
 
@@ -736,13 +833,13 @@ The CartDrawer is the only cart UI — there is no dedicated cart page. It is a 
 | **No email notifications** | `SmtpEmailSender` infrastructure exists but no domain event handlers trigger email sending | Verify if notifications are planned (order confirmation, shipment, etc.) |
 | **No full-text search** | Catalog browse offers a name-contains search box (E2E-covered); there is no full-text/fuzzy search | Consider full-text search for larger catalogs |
 | **Inventory not checked during cart add** | Inventory validation only happens at checkout, not when adding to cart | Could lead to poor UX if items go out of stock between add and checkout |
-| **No post-payment cancellation** | Cancellation allowed from PendingPayment, PaymentInitiated, or PaymentFailed — cannot cancel after payment succeeds | Verify if post-payment cancellation with Stripe refund is needed |
-| **No customer deactivation endpoint** | `User.Deactivate()` method and `UserDeactivated` event exist in domain but no API endpoint exposes this | May be an admin feature not yet implemented |
+| **No post-payment cancellation** | Cancellation allowed from PendingPayment, PaymentInitiated, or PaymentFailed; cannot cancel after payment succeeds | Verify if post-payment cancellation with Stripe refund is needed |
+| **No customer deactivation endpoint** | `User.Deactivate()` method and `UserDeactivated` event exist in domain but no API endpoint exposes this. (Account *erasure* is exposed, see 1.9; deactivation is the separate reversible state.) | May be an admin feature not yet implemented |
 | **Category deletion has no cascade check** | Deleting a category doesn't check for assigned products | Products with deleted category may have orphaned CategoryId |
-| **No InventoryItem list endpoint** | InventoryItemsController only exposes GetById, not GetAll/GetPaged | UI InventoryItemList page likely fetches data through a different mechanism or needs this endpoint |
-| **No partial fulfillment** | Orders are delivered as a whole — no concept of partial shipments or split deliveries | Clarify if partial fulfillment is a future requirement |
+| **No partial fulfillment** | Orders are delivered as a whole: no concept of partial shipments or split deliveries | Clarify if partial fulfillment is a future requirement |
 | **No delivery tracking** | `MarkAsDelivered` is a binary admin action with no tracking number, carrier, or ETA | Consider whether shipping/tracking details are needed |
+| **No refund compensation handler** | [ADR-054](../adr/054-saga-compensation-and-reconciliation.md) makes refunds a natural third saga handler alongside `OrderCancelledSagaHandler` and `OrderPaymentFailedSagaHandler`, but none exists | Add when post-payment cancellation lands |
 
 ---
 
-*This document is derived from source code analysis. All workflows, decisions, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-03-18.*
+*This document is derived from source code analysis. All workflows, decisions, and behaviors described above are confirmed implementations traceable to the referenced source files. Last updated: 2026-07-27 (re-verified against MMCA.Store HEAD `1dfdc991`).*

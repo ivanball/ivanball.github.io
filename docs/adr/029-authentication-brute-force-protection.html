@@ -169,8 +169,8 @@
           read-modify-write, and the native-counter window claim was dropped).</p>
           <h2 id="context">Context</h2>
           <p>ADR-019&#39;s global rate limiter is <strong>authenticated-only</strong>: it caps requests per authenticated principal
-          and deliberately <em>exempts</em> anonymous traffic. That leaves the highest-value anonymous attack surface —
-          the login and registration endpoints — uncovered by the limiter (credential stuffing, password
+          and deliberately <em>exempts</em> anonymous traffic. That leaves the highest-value anonymous attack
+          surface (the login and registration endpoints) uncovered by the limiter (credential stuffing, password
           spraying, registration spam). Two of those defences also cannot live in a per-principal limiter at all:
           at login time there is <strong>no principal yet</strong>, so account lockout must key on the <em>submitted</em> identity
           (email) and the client IP, not on an authenticated user. We needed a small, always-available service
@@ -220,7 +220,7 @@
           staying anchored to the first attempt, which only ever tightens the limit.</li>
           <li><strong>Counters are cache-scoped and TTL-bounded.</strong> They live in the same swappable <code>ICacheService</code>
           substrate as ADR-026 (in-process memory in the monolith, distributed/Redis when wired) and self-expire
-          via cache TTL — a lockout is inherently ephemeral, so expiry <em>is</em> the reset.</li>
+          via cache TTL: a lockout is inherently ephemeral, so expiry <em>is</em> the reset.</li>
           <li><strong>Returns <code>Result</code> (ADR-013)</strong>, so the HTTP edge maps every failure to a uniform <code>401</code> without the
           endpoint special-casing it.</li>
           <li><strong>Centralized in the shared authentication base.</strong> The call sequence lives once in

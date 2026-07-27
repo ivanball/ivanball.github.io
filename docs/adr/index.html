@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Architecture Decision Records · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted ADRs explaining why the core cross-cutting patterns exist. Read these before changing a pattern they describe — they capture context and…">
+  <meta name="description" content="Accepted ADRs explaining why the core cross-cutting patterns exist. Read these before changing a pattern they describe: they capture context and…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/index.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Architecture Decision Records">
-  <meta property="og:description" content="Accepted ADRs explaining why the core cross-cutting patterns exist. Read these before changing a pattern they describe — they capture context and…">
+  <meta property="og:description" content="Accepted ADRs explaining why the core cross-cutting patterns exist. Read these before changing a pattern they describe: they capture context and…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/index.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Architecture Decision Records">
-  <meta name="twitter:description" content="Accepted ADRs explaining why the core cross-cutting patterns exist. Read these before changing a pattern they describe — they capture context and…">
+  <meta name="twitter:description" content="Accepted ADRs explaining why the core cross-cutting patterns exist. Read these before changing a pattern they describe: they capture context and…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"Overview","item":"https://ivanball.github.io/docs/adr/index.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -162,7 +162,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="architecture-decision-records">Architecture Decision Records</h1>
           <p>Accepted ADRs explaining <em>why</em> the core cross-cutting patterns exist. Read these before changing a
-          pattern they describe — they capture context and trade-offs that aren&#39;t obvious from the code.</p>
+          pattern they describe: they capture context and trade-offs that aren&#39;t obvious from the code.</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -279,7 +279,7 @@
           <tr>
           <td><a href="022-browser-session-cookie-auth.html">022</a></td>
           <td>Browser session-cookie auth (Blazor SSR)</td>
-          <td>HttpOnly <code>mmca_auth_access</code> / <code>mmca_auth_refresh</code> cookies carry the session; <code>SessionCookieAuthenticationHandler</code> reads claims during SSR prerender (no signature check — the API stays the boundary, ADR-004) so <code>[Authorize]</code> passes on fresh GETs; refresh token stays server-side, hydrated via <code>/auth/session/token</code>. BFF-style, SameSite=Lax with a Sec-Fetch-Site check on the refresh endpoint.</td>
+          <td>HttpOnly <code>mmca_auth_access</code> / <code>mmca_auth_refresh</code> cookies carry the session; <code>SessionCookieAuthenticationHandler</code> reads claims during SSR prerender (no signature check: the API stays the boundary, ADR-004) so <code>[Authorize]</code> passes on fresh GETs; refresh token stays server-side, hydrated via <code>/auth/session/token</code>. BFF-style, SameSite=Lax with a Sec-Fetch-Site check on the refresh endpoint.</td>
           </tr>
           <tr>
           <td><a href="023-security-response-headers.html">023</a></td>
@@ -319,7 +319,7 @@
           <tr>
           <td><a href="030-startup-sole-migrator.html">030</a></td>
           <td>Startup sole-migrator</td>
-          <td>Each service self-applies its EF migrations at boot (<code>DatabaseInitStrategy=Migrate</code>, <code>minReplicas:1</code>) and is the sole migrator — no deploy-step <code>sqlcmd</code> backstop — deliberately overriding the framework&#39;s <code>None</code>-for-prod default after a startup-race incident.</td>
+          <td>Each service self-applies its EF migrations at boot (<code>DatabaseInitStrategy=Migrate</code>, <code>minReplicas:1</code>) and is the sole migrator (no deploy-step <code>sqlcmd</code> backstop) deliberately overriding the framework&#39;s <code>None</code>-for-prod default after a startup-race incident.</td>
           </tr>
           <tr>
           <td><a href="031-feature-flag-management.html">031</a></td>
@@ -448,7 +448,7 @@
           </tr>
           </tbody></table></div>
           <h2 id="writing-a-new-adr">Writing a new ADR</h2>
-          <p>Copy the structure of an existing record: <strong>Status</strong> (Proposed / Accepted / Superseded — date and
+          <p>Copy the structure of an existing record: <strong>Status</strong> (Proposed / Accepted / Superseded, date and
           link when superseding), <strong>Context</strong> (the forces and the problem), <strong>Decision</strong> (what we chose, in
           enough detail to implement), <strong>Rationale</strong> (why this over the alternatives), <strong>Trade-offs</strong> (what it
           costs). Number sequentially (<code>NNN-kebab-title.md</code>) and add a row above. Keep ADRs short and
