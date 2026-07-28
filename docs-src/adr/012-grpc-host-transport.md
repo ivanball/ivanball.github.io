@@ -1,7 +1,7 @@
 # ADR-012: gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)
 
 ## Status
-Accepted (re-verified against source 2026-07-25).
+Accepted (re-verified against source 2026-07-28).
 
 ## Update (2026-06-22): Store converged to Profile A
 Store originally chose Profile B, but its cross-service gRPC failed in Azure Container Apps. With
@@ -14,8 +14,11 @@ under Profile B.
 
 Fixed in commit 49b7283 (deployed green) by adopting **Profile A** for Store:
 - Catalog + Identity run `Http2`-only on cleartext (`Kestrel:EndpointDefaults:Protocols=Http2`), ACA
-  ingress `transport: 'http2'`, with **TCP** startup/liveness probes (Http2-only Kestrel rejects the
-  kubelet's HTTP/1.1 `httpGet` probes with GOAWAY).
+  ingress `transport: 'http2'`, and shipped at the time with **TCP** startup/liveness probes
+  (Http2-only Kestrel rejects the kubelet's HTTP/1.1 `httpGet` probes with GOAWAY).
+  *(The TCP-probe half of this bullet was superseded on 2026-07-27: Store replaced those probes with
+  the dedicated Http1-only probe listener. The Kestrel and ingress halves still hold. See the
+  2026-07-28 update below.)*
 - Gateway forwards HTTP/2 (`ForwardHttp2=true`, `VersionPolicy=RequestVersionExact`); Catalog/Identity
   routes carry HTTP/2, Sales routes stay HTTP/1.1.
 - Sales (no gRPC server) stays `Http1AndHttp2` with `transport: 'http'`.
@@ -74,7 +77,7 @@ and is only worth it when both constraints genuinely meet in one host.
 
 Two claims above were written from an earlier state of the code and no longer describe either app.
 
-**1. ADC probes never touch the traffic endpoint; TCP probes are Store-only.** Every ADC service now
+**1. ADC probes never touch the traffic endpoint; TCP probes were then Store-only.** Every ADC service now
 adds a dedicated `Http1`-only Kestrel listener whose only job is to answer the platform's HTTP/1.1
 `httpGet` probes, on a port that is never exposed via ingress:
 
@@ -82,7 +85,7 @@ adds a dedicated `Http1`-only Kestrel listener whose only job is to answer the p
   `HealthProbe__Port=8081` (`MMCA.ADC/infra/main.bicep:957`, `:1126`, `:1235`) and points startup,
   liveness, and readiness at it (`main.bicep:1045-1070` for Identity). The listener is added by
   `KestrelConfiguration.ConfigureHttp2WithHealthProbe`, called from each service's
-  `Program.cs` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:80`).
+  `Program.cs` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:79`).
 - The mixed-endpoint host (Notification) listens on **8082**, one port above its `grpc` endpoint:
   `HealthProbe__Port=8082` at `main.bicep:1367`, with all three probes on 8082 at
   `main.bicep:1414-1439`. The listener is added by
@@ -93,11 +96,12 @@ adds a dedicated `Http1`-only Kestrel listener whose only job is to answer the p
 
 So Notification's default endpoint no longer serves the probes either, and the parenthetical
 contrast with "full Profile A hosts" was backwards: those hosts use the same dedicated-listener
-pattern, not TCP probes. **`tcpSocket` probes survive only in MMCA.Store**, on Identity
-(`MMCA.Store/infra/main.bicep:733-734`) and Catalog (`:814-815`), where the Http2-only default
-endpoint would answer an HTTP/1.1 `httpGet` with GOAWAY `HTTP_1_1_REQUIRED`. The trade is real: a
-TCP probe only proves the listener is bound, while the dedicated listener lets readiness run the
-actual `/health/ready` check (warmup gate plus the DB-aware check), which is why ADC moved.
+pattern, not TCP probes. As of this update `tcpSocket` probes were still in use in **MMCA.Store**,
+on Identity and Catalog, whose Http2-only default endpoint would answer an HTTP/1.1 `httpGet` with
+GOAWAY `HTTP_1_1_REQUIRED`. The trade is real: a TCP probe only proves the listener is bound, while
+the dedicated listener lets readiness run the actual `/health/ready` check (warmup gate plus the
+DB-aware check), which is why ADC moved, and (two days later) why Store followed: see the
+2026-07-28 update below.
 
 **2. `WithJwksDiscovery(identity, gateway)` is local Aspire wiring, not ADC's production rule.**
 The two-argument call sites are all in the AppHost
@@ -111,6 +115,37 @@ container. That is exactly the arrangement the Store update above describes, so 
 through the gateway locally and use the direct in-cluster authority in production. Read the Profile A
 JWKS bullet below as the local-development rule plus the reason the direct authority cannot be used
 from a default backchannel outside ACA.
+
+## Update (2026-07-28): the probe listener is the single pattern in both apps (no TCP probes anywhere)
+
+Store PR #55 (commit `297064bb`, merged 2026-07-27) ported ADC's dedicated probe listener to Store,
+so the Store-only `tcpSocket` exception recorded in the 2026-07-25 update above is gone. **Neither
+production Bicep file contains a `tcpSocket` probe: every container app in both apps is probed over
+HTTP/1.1 `httpGet`.** The pattern is now uniform:
+
+- **Each `Http2`-only host adds a dedicated `Http1`-only Kestrel listener** whose only job is to
+  answer the platform's HTTP/1.1 probes, on a port that is never exposed via ingress. It is added by
+  `KestrelConfiguration.ConfigureHttp2WithHealthProbe` when `HealthProbe:Port` is set, and that
+  method is now identical in both apps: it re-declares the h2c traffic endpoint on 8080 and opens the
+  probe port as `Http1`
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/KestrelConfiguration.cs:27-41`,
+  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/KestrelConfiguration.cs:27-41`). Store's
+  call sites are `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:50` and
+  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:45`.
+- **Bicep injects the port and points startup, liveness, and readiness at it.** Store sets
+  `HealthProbe__Port=8081` on Identity (`MMCA.Store/infra/main.bicep:732`) and Catalog (`:824`), with
+  `/alive` for startup and liveness and `/health/ready` for readiness on 8081 (`main.bicep:744-747`
+  and `:835-838`). ADC is unchanged (8081 for the three Profile A hosts, 8082 for Notification): the
+  anchors in the 2026-07-25 update above still hold.
+- **Hosts that never went Http2-only keep probing their traffic port.** Store's Sales, Gateway, and
+  UI probe 8080 directly (`MMCA.Store/infra/main.bicep:939-941`, `:1004-1006`, `:1079-1081`), because
+  an `Http1AndHttp2` endpoint answers the HTTP/1.1 probe on its own.
+
+Rule: the dedicated probe listener is part of Profile A, not an app-specific workaround. A host that
+goes `Http2`-only on cleartext gets the extra `Http1` listener plus `HealthProbe__Port` in its Bicep
+in the same change. A TCP probe is not the answer: it only proves the socket is bound and never
+reaches the readiness pipeline (the warmup gate plus the DB-aware check), so a replica that cannot
+reach its database keeps serving traffic.
 
 ## Context
 Once modules were extracted into separate service hosts (ADR-008) that call each other synchronously

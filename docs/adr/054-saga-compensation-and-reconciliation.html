@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-054: Choreographed Saga Compensation with a Reconciliation Backstop · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-25).">
+  <meta name="description" content="Accepted (2026-07-25). Amended (2026-07-28): Store&#39;s reconciliation sweep now derives from PeriodicBackgroundService, so the shared-loop and adoption…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/054-saga-compensation-and-reconciliation.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-054: Choreographed Saga Compensation with a Reconciliation Backstop">
-  <meta property="og:description" content="Accepted (2026-07-25).">
+  <meta property="og:description" content="Accepted (2026-07-25). Amended (2026-07-28): Store&#39;s reconciliation sweep now derives from PeriodicBackgroundService, so the shared-loop and adoption…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/054-saga-compensation-and-reconciliation.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-054: Choreographed Saga Compensation with a Reconciliation Backstop">
-  <meta name="twitter:description" content="Accepted (2026-07-25).">
+  <meta name="twitter:description" content="Accepted (2026-07-25). Amended (2026-07-28): Store&#39;s reconciliation sweep now derives from PeriodicBackgroundService, so the shared-loop and adoption…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"054 · Choreographed Saga Compensation with a Reconciliation Backstop","item":"https://ivanball.github.io/docs/adr/054-saga-compensation-and-reconciliation.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 55 ADRs</summary>
+        <summary>All 60 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -154,6 +154,11 @@
         <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
         <li><a href="054-saga-compensation-and-reconciliation.html" aria-current="page">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
         <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
           </ol>
         </nav>
       </details>
@@ -162,7 +167,10 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-054-choreographed-saga-compensation-with-a-reconciliation-backstop">ADR-054: Choreographed Saga Compensation with a Reconciliation Backstop</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-25).</p>
+          <p>Accepted (2026-07-25). Amended (2026-07-28): Store&#39;s reconciliation sweep now derives from
+          <code>PeriodicBackgroundService</code>, so the shared-loop and adoption paragraphs are rewritten and the
+          duplicated-scaffolding trade-off is dropped; the scope/<code>IUnitOfWork</code> and <code>maxReplicas</code> citations
+          are corrected.</p>
           <h2 id="context">Context</h2>
           <p>Checkout spans a boundary no transaction covers. <code>CheckOutHandler</code> commits the order insert, the cart
           transition and the atomic conditional stock decrements in one local transaction
@@ -195,11 +203,15 @@
           A new compensating action is a new handler, not an edit to the command.</li>
           <li><strong>Each handler runs in its own DI scope.</strong> Domain-event handlers are registered as singletons
           (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:117-122</code>), so every one
-          opens a scope through <code>IServiceScopeFactory</code> and resolves its own <code>IUnitOfWork</code>
-          (<code>OrderCancelledSagaHandler.cs:41-42</code>, <code>OrderPaymentFailedSagaHandler.cs:29-31</code>,
-          <code>.../Infrastructure/Services/PaymentReconciliationService.cs:93,136</code>). Compensation therefore
-          commits on its own, after the originating save, rather than joining the transaction it is
-          compensating for.</li>
+          opens its own scope through <code>IServiceScopeFactory</code> (<code>OrderCancelledSagaHandler.cs:41</code>,
+          <code>OrderPaymentFailedSagaHandler.cs:29</code>,
+          <code>.../Infrastructure/Services/PaymentReconciliationService.cs:89,132</code>), and the ones that persist
+          resolve their own <code>IUnitOfWork</code> inside it (<code>OrderCancelledSagaHandler.cs:42</code>,
+          <code>PaymentReconciliationService.cs:91,133</code>). <code>OrderPaymentFailedSagaHandler</code> is the exception that
+          shows the rule: it resolves only <code>ICustomerService</code> and <code>IEmailSender</code>
+          (<code>OrderPaymentFailedSagaHandler.cs:30-31</code>) and persists nothing, because its compensation is a
+          notification. Compensation that does write therefore commits on its own, after the originating
+          save, rather than joining the transaction it is compensating for.</li>
           <li><strong>Idempotency is a persisted marker committed by the SAME <code>SaveChanges</code> as the compensating
           writes.</strong> <code>Order.InventoryRestored</code> (<code>.../Domain/Orders/Order.cs:42-48</code>) is the marker;
           <code>MarkInventoryRestored</code> refuses a second call and refuses a non-cancelled order
@@ -244,15 +256,20 @@
           that won the race is logged and skipped, not retried
           (<code>PaymentReconciliationService.cs:171-176</code>).</li>
           </ul>
-          <p>The loop shape is deliberate and shared: an enablement gate, a startup delay, a per-cycle <code>try</code>/<code>catch</code>
-          that never kills the loop, and every wait through <code>TimeProvider</code>
-          (<code>PaymentReconciliationService.cs:41-80</code>). MMCA.Common ships exactly that shape as a base class,
-          <code>PeriodicBackgroundService</code>
-          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PeriodicBackgroundService.cs:20-87</code>),
-          but <strong>nothing derives from it yet</strong>: its only subclass in any of the four repos is the test double in
-          its own unit tests
-          (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Services/PeriodicBackgroundServiceTests.cs:104</code>),
-          and Store&#39;s sweep hand-rolls the equivalent loop.</p>
+          <p>The loop shape is deliberate and shared, and it lives in the framework rather than in the sweep.
+          MMCA.Common ships it as an abstract base class, <code>PeriodicBackgroundService</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PeriodicBackgroundService.cs:20-42</code>),
+          whose <code>ExecuteAsync</code> owns the enablement gate, the startup delay, the per-cycle <code>try</code>/<code>catch</code> that
+          never kills the loop, and every wait through <code>TimeProvider</code>
+          (<code>PeriodicBackgroundService.cs:45-87</code>). <code>PaymentReconciliationService</code> derives from it
+          (<code>PaymentReconciliationService.cs:39</code>) and overrides only the three parts that are its own:
+          <code>Interval</code>, read from configuration (<code>PaymentReconciliationService.cs:46</code>); <code>IsEnabled</code>, which
+          distinguishes &quot;the toggle is off&quot; from &quot;Stripe is not configured&quot; before refusing to run
+          (<code>PaymentReconciliationService.cs:54-72</code>); and <code>ExecuteCycleAsync</code>, which delegates to the
+          internally visible <code>ReconcileOnceAsync</code> so one cycle is testable without the timer
+          (<code>PaymentReconciliationService.cs:75-76</code>). It is the base class&#39;s <strong>only</strong> subclass in any of the
+          four repos, apart from the test double in <code>PeriodicBackgroundService</code>&#39;s own unit tests
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Services/PeriodicBackgroundServiceTests.cs:104</code>).</p>
           <p><strong>Adoption is one module.</strong> This pattern lives in MMCA.Store&#39;s Sales module only: the two saga
           handlers and the one reconciliation sweep above. MMCA.ADC and MMCA.Helpdesk have no compensating saga
           handler and no reconciliation sweep today. The record exists because the mechanism (compensate, mark,
@@ -299,14 +316,12 @@
           shared event must be idempotent or must swallow.</li>
           <li><strong>The sweep is not replica-leased.</strong> The outbox processor claims rows with a lease before working
           them (ADR-003); the sweep takes no such claim, so at the configured <code>maxReplicas: 2</code>
-          (<code>MMCA.Store/infra/main.bicep:922</code>) two replicas can pick the same stuck order and each spend a
+          (<code>MMCA.Store/infra/main.bicep:945</code>) two replicas can pick the same stuck order and each spend a
           Stripe status call. Correctness holds through the concurrency token; the duplicated external call
           does not deduplicate.</li>
           <li><strong>Every compensating action needs its own marker.</strong> There is no generic mechanism: the ADR-021
           inbox dedups broker messages between services, not in-process handler re-runs. A second compensating
           action means a second persisted marker or a naturally idempotent operation, decided by the author.</li>
-          <li><strong>The loop scaffolding is duplicated.</strong> Store&#39;s sweep reimplements what <code>PeriodicBackgroundService</code>
-          packages, so the two can drift until the sweep is rebased onto the base class.</li>
           </ul>
           <h2 id="related">Related</h2>
           <p>ADR-003 (the outbox delivery and retry this leans on for compensation redelivery; this record says

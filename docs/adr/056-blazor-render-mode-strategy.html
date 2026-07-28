@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-056: Blazor Render-Mode Strategy for the Web Heads · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-07-28).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/056-blazor-render-mode-strategy.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-056: Blazor Render-Mode Strategy for the Web Heads">
+  <meta property="og:description" content="Accepted (2026-07-28).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/056-blazor-render-mode-strategy.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-056: Blazor Render-Mode Strategy for the Web Heads">
+  <meta name="twitter:description" content="Accepted (2026-07-28).">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"056 · Blazor Render-Mode Strategy for the Web Heads","item":"https://ivanball.github.io/docs/adr/056-blazor-render-mode-strategy.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">056 · Blazor Render-Mode Strategy for the Web Heads</span>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 60 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html" aria-current="page">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-056-blazor-render-mode-strategy-for-the-web-heads">ADR-056: Blazor Render-Mode Strategy for the Web Heads</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-07-28).</p>
+          <h2 id="context">Context</h2>
+          <p>Both web applications are Blazor Web Apps: a static server-rendered (SSR) prerender pass produces the
+          first HTML, then an interactive runtime takes over, either a Blazor Server SignalR circuit or a
+          WebAssembly runtime downloaded into the browser. Which of those runtimes takes over, and whether the
+          prerender pass happens at all, is a per-application choice with consequences that reach into
+          authentication, localization, theming, data fetching, and the test suite.</p>
+          <p>Four accepted ADRs already reason about that transition and each treats it as <strong>given context</strong> rather
+          than deciding it: ADR-022 solves <code>[Authorize]</code> on fresh GETs by reading an HttpOnly cookie &quot;during SSR
+          prerender&quot; (<code>022-browser-session-cookie-auth.md:7-15</code>); ADR-027 states that its hard part is flowing one
+          culture decision through &quot;a Blazor <code>InteractiveAuto</code> app (SSR prerender, InteractiveServer circuit,
+          InteractiveWebAssembly client)&quot; (<code>027-multi-locale-i18n.md:13-16</code>); ADR-028 repeats the same three-phase
+          premise for the theme and records that &quot;there is no free no-flash for InteractiveAuto&quot;
+          (<code>028-dark-theme-mode.md:11-15</code>, <code>028-dark-theme-mode.md:64-66</code>); ADR-051 builds the whole client token
+          lifecycle around three heads with three storage stories and ends with &quot;UI code never branches on render
+          mode&quot; (<code>051-client-auth-token-lifecycle.md:13-28</code>, <code>051-client-auth-token-lifecycle.md:34</code>). ADR-042
+          covers the MAUI head and never mentions render modes at all. So four decisions depend on a render-mode
+          policy that no ADR states, and the policy itself is only discoverable by reading two <code>App.razor</code> files,
+          two AppHosts, two CI workflows, and one framework base class. This ADR states it.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Run <strong>one render mode for the entire routable component tree</strong>, chosen at the application root, default
+          <code>InteractiveAuto</code>, with prerendering left on and the resulting double fetch removed at the data-fetch
+          layer rather than by weakening the render mode.</p>
+          <ul>
+          <li><strong>The mode is set once, at the root, on the shared router.</strong> Each app&#39;s <code>App.razor</code> applies the same
+          mode expression to <code>HeadOutlet</code> and to <code>Routes</code>
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Components/App.razor:16</code>, <code>App.razor:20</code>;
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Components/App.razor:17</code>, <code>App.razor:21</code>), and <code>Routes</code>
+          is the single framework-owned router shared by both apps
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Routes.razor:7</code>). <strong>No page or component in either app
+          declares its own <code>@rendermode</code></strong>: the only <code>@rendermode</code> attributes in the workspace are those four plus
+          the two in each <code>InteractiveServer</code>-only host, and no <code>[RenderModeInteractive*]</code> attribute exists
+          anywhere.</li>
+          <li><strong><code>InteractiveAuto</code> is the default for both web heads.</strong> Each <code>App.razor</code> resolves an <code>AppRenderMode</code>
+          property that returns <code>InteractiveAuto</code> unless an E2E flag is set
+          (<code>MMCA.ADC/.../App.razor:41-52</code>, <code>MMCA.Store/.../App.razor:39-42</code>). Both hosts register both runtimes on
+          both sides of the pipeline: <code>AddInteractiveServerComponents()</code> + <code>AddInteractiveWebAssemblyComponents()</code>
+          at service registration and <code>AddInteractiveServerRenderMode()</code> + <code>AddInteractiveWebAssemblyRenderMode()</code>
+          on <code>MapRazorComponents&lt;App&gt;()</code>
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:33-35</code>, <code>Program.cs:183-186</code>;
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:61-63</code>, <code>Program.cs:180-188</code>).</li>
+          <li><strong>Prerendering stays enabled.</strong> No host anywhere in the workspace passes <code>prerender: false</code> or
+          constructs a render mode with prerendering disabled; every render mode in use is the stock static
+          instance. Prerender is what ADR-022&#39;s SSR cookie scheme exists to serve, so it is kept and its cost is
+          paid down elsewhere.</li>
+          <li><strong>The SSR/interactive double fetch is removed once, in the shared list-page base.</strong>
+          <code>DataGridListPageBase&lt;TDto&gt;</code> injects <code>PersistentComponentState</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DataGridListPageBase.cs:29</code>), restores a
+          per-page-type key <code>grid:{TypeFullName}</code> in <code>OnInitialized</code> (<code>DataGridListPageBase.cs:136-140</code>), and
+          registers a persist callback so the prerender pass hands its rows forward
+          (<code>DataGridListPageBase.cs:149-159</code>). The first interactive <code>ServerData</code> call returns that snapshot and
+          clears it instead of issuing a redundant API round-trip (<code>DataGridListPageBase.cs:444-458</code>), which the
+          base&#39;s own comment records as the fix for the visible cancel-retry cycle caused by the
+          SSR to Server to WASM transition (<code>DataGridListPageBase.cs:132-135</code>). The payload is a
+          <code>PersistedGridState</code> record of items plus total (<code>DataGridListPageBase.cs:788-791</code>). <strong>Sixteen list
+          pages inherit this base</strong> (ten in ADC, six in Store), so the policy is written once and adopted by
+          inheritance.</li>
+          <li><strong>The persist callback declares <code>InteractiveAuto</code> explicitly.</strong> The base passes
+          <code>RenderMode.InteractiveAuto</code> as the second argument to <code>RegisterOnPersisting</code>
+          (<code>DataGridListPageBase.cs:159</code>) because a page that inherits its mode from
+          <code>&lt;Routes @rendermode=&quot;...&quot;&gt;</code> declares none of its own, and the callback would otherwise fail render-mode
+          inference during the static prerender pass; the reasoning is recorded inline
+          (<code>DataGridListPageBase.cs:142-148</code>).</li>
+          <li><strong>The prerender fetch is time-bounded so a cold backend cannot block the page.</strong> <code>CreateFetchCts</code> links
+          to the request token and, when <code>RendererInfo.IsInteractive</code> is false, cancels after
+          <code>PrerenderFetchTimeoutMs</code> (5000 ms) (<code>DataGridListPageBase.cs:82</code>, <code>DataGridListPageBase.cs:520-529</code>).
+          On timeout the page returns an empty grid that the first interactive call refills
+          (<code>DataGridListPageBase.cs:493-500</code>).</li>
+          <li><strong>Detail and dashboard pages take the other route: they skip the prerender fetch entirely.</strong> An early
+          <code>if (!RendererInfo.IsInteractive) return;</code> guard in <code>OnParametersSetAsync</code> / <code>OnInitializedAsync</code> appears
+          across both apps, with two different stated reasons: avoiding the doubled reads under <code>InteractiveAuto</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicSessionDetail.razor.cs:81-90</code>,
+          <code>.../Pages/Public/PublicSpeakerDetail.razor.cs:59</code>, <code>.../Pages/Home/ADCHome.razor.cs:85</code>,
+          <code>.../Pages/Speaker/SpeakerDashboard.razor.cs:62</code>,
+          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLive.razor.cs:69</code>,
+          <code>.../Pages/SessionLive/PresenterView.razor.cs:56</code>) and the fact that no auth token can be read at
+          prerender time so every authenticated call would 401
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.UI/Pages/Order/OrderDetail.razor.cs:68-77</code>,
+          <code>.../Pages/ShoppingCart/ShoppingCartDetail.razor.cs:63</code>).</li>
+          <li><strong>One page outside the grid family repeats the persistence pattern by hand.</strong> Store&#39;s <code>CatalogBrowse</code>
+          persists its prerendered products, categories and filter tuple and rehydrates them when the interactive
+          pass starts on the same filter combination
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.UI/Pages/Catalog/CatalogBrowse.razor.cs:66-72</code>,
+          <code>CatalogBrowse.razor.cs:92-105</code>, <code>CatalogBrowse.razor.cs:124-139</code>, <code>CatalogBrowse.razor.cs:155-168</code>),
+          using the single-argument <code>RegisterOnPersisting</code> overload (<code>CatalogBrowse.razor.cs:94</code>) rather than the
+          explicit-render-mode form the base needs. It is a copy of the policy, not an instance of it.</li>
+          <li><strong>Because any page may run in either runtime, both runtimes register the same services.</strong> Each WASM
+          client <code>Program.cs</code> mirrors its server host&#39;s registrations (MudBlazor, <code>AddUIShared</code>, browser device
+          capabilities, the auth trio, the same conditional per-module UI registrations)
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Program.cs:31-68</code> against
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:33-83</code>;
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/Program.cs:30-63</code> against
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:61-108</code>), and each client bootstraps its thread
+          culture from the same cookie before running so hydration does not disagree with the prerender
+          (<code>MMCA.ADC/.../MMCA.ADC.UI.Web.Client/Program.cs:74</code>,
+          <code>MMCA.Store/.../MMCA.Store.UI.Web.Client/Program.cs:69</code>, ADR-027).</li>
+          <li><strong>A build-time layer rule is what keeps the shared UI package runnable in the browser.</strong>
+          <code>MMCA.Common.UI</code> may not reference Domain, Application, Infrastructure or API, and the enforcement
+          target says so in its failure text: &quot;UI depends only on Shared for Blazor WASM compatibility&quot;
+          (<code>MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:75-88</code>). Server-only components are
+          hoisted out into <code>MMCA.Common.UI.Web</code> for exactly that reason, for example the shared <code>/Error</code> page,
+          whose <code>HttpContext</code> cascading parameter cannot exist in the WASM-safe package
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Components/Pages/Error.razor:9-14</code>).</li>
+          <li><strong><code>InteractiveServer</code> is pinned only under E2E configuration flags, never in production or local dev.</strong>
+          <code>E2E:ForceServer</code> returns <code>InteractiveServer</code>; ADC additionally honors <code>E2E:ForceWebAssembly</code>, which
+          returns <code>InteractiveWebAssembly</code> and wins if both are set (<code>MMCA.ADC/.../App.razor:41-52</code>,
+          <code>MMCA.Store/.../App.razor:39-42</code>). Those config keys are injected only by the AppHosts, and only when the
+          matching environment variable is present (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:307-322</code>,
+          <code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:262-270</code>). In CI only <code>E2E_FORCE_SERVER</code> is
+          exported (<code>MMCA.ADC/.github/workflows/e2e.yml:199-205</code>, <code>MMCA.Store/.github/workflows/e2e.yml:192-198</code>);
+          ADC&#39;s workflow deliberately does <strong>not</strong> set <code>E2E_FORCE_WASM</code> and records why
+          (<code>MMCA.ADC/.github/workflows/e2e.yml:190-197</code>). Both <code>App.razor</code> comments cite the same trace evidence:
+          under <code>InteractiveAuto</code> each test&#39;s second page load switched to the background-downloaded WASM bundle,
+          whose runtime boot on a shared 2-core runner exceeded every suite wait while the download starved the
+          live circuits.</li>
+          <li><strong>Adoption is not uniform: two hosts are <code>InteractiveServer</code>-only and hardcode it.</strong> MMCA.Helpdesk pins
+          the literal mode on <code>HeadOutlet</code> and <code>Routes</code>
+          (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Components/App.razor:10</code>, <code>App.razor:14</code>) and
+          registers only the server render mode
+          (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:74-78</code>). It has <strong>no <code>.Client</code> project at
+          all</strong>, so <code>InteractiveAuto</code> is not available to it, and its two ticket pages use <code>MudTable</code> directly
+          rather than the shared list-page base
+          (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Components/Pages/Tickets.razor:30</code>), so none of the
+          persistence machinery above applies there. The framework&#39;s own component gallery is likewise
+          <code>InteractiveServer</code>-only (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/Components/App.razor:22</code>,
+          <code>App.razor:26</code>, <code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/GalleryHost.cs:123-124</code>). ADR-028
+          already noted Helpdesk&#39;s status (&quot;As an <code>InteractiveServer</code>-only host it has no WASM boundary&quot;,
+          <code>028-dark-theme-mode.md:52</code>); this ADR makes it part of the record rather than an aside.</li>
+          </ul>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong><code>InteractiveAuto</code> gets both halves without asking page authors to choose.</strong> The first visit gets the
+          Server circuit&#39;s immediate interactivity while the WASM bundle downloads in the background; return
+          visits run client-side and stop consuming a server circuit. Because the mode is applied at the root
+          router, no page has to opt in or know which runtime it is in, which is the same posture ADR-051 takes
+          for tokens (<code>051-client-auth-token-lifecycle.md:34</code>).</li>
+          <li><strong>Keeping prerender is not negotiable, so the double fetch had to be fixed instead.</strong> Prerender is the
+          entire reason ADR-022&#39;s SSR cookie scheme exists, and it is what makes public browse pages render
+          without waiting on a runtime boot. Disabling it would have removed the duplicate fetch by removing the
+          feature; persisting the prerender result keeps both.</li>
+          <li><strong>Encoding the policy in a base class beats documenting it.</strong> Sixteen list pages inherit the
+          persist/restore path, the explicit render-mode registration, and the bounded prerender fetch by
+          inheriting one type; the alternative was the same 30 lines repeated per page, which is what
+          <code>CatalogBrowse</code> shows happening the moment a page falls outside the family.</li>
+          <li><strong>Two anti-double-fetch mechanisms, matched to two page shapes.</strong> A list page has data worth carrying
+          across the transition (the grid would otherwise flash empty), so it persists. A detail page behind
+          <code>[Authorize]</code> cannot even fetch at prerender time without a token, so it skips and renders its loading
+          state. Persisting where skipping would do would only inflate the HTML.</li>
+          <li><strong>The E2E pin is a runner concession, not a product decision.</strong> Pinning <code>InteractiveServer</code> is confined
+          to a config flag that only the AppHost sets and only CI exports, so the production and local-dev path
+          is unchanged by it, and the flag&#39;s justification (with run ids) lives next to the code that reads it.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Everything shared has to run in both runtimes.</strong> The WASM-compatibility layer rule
+          (<code>MMCA.Common.LayerEnforcement.targets:75-88</code>) forbids the shared UI package from touching Domain,
+          Application, Infrastructure or API, so anything server-only needs a second package
+          (<code>MMCA.Common.UI.Web</code>) and an explicit <code>AddAdditionalAssemblies</code> entry in every host.</li>
+          <li><strong>Service registration is duplicated per head and can drift.</strong> The WASM client and the server host
+          register the same MudBlazor, <code>AddUIShared</code>, capability and per-module services in two separate
+          <code>Program.cs</code> files; nothing checks that the two lists agree, so a service added to one and not the other
+          fails only in the runtime that missed it.</li>
+          <li><strong>The double-fetch fix is opt-in per page, not a framework guarantee.</strong> Only pages that inherit
+          <code>DataGridListPageBase</code> or hand-roll the pattern (<code>CatalogBrowse</code>) or take the
+          <code>RendererInfo.IsInteractive</code> guard avoid the duplicate work; a new page that does none of the three
+          silently fetches twice on every load. No test or analyzer flags that.</li>
+          <li><strong>Persisting grid rows inflates the prerendered HTML.</strong> The full page of DTOs is serialized into the
+          response so the interactive pass can reuse it (<code>DataGridListPageBase.cs:154</code>), trading response size for
+          one fewer API round-trip; a large page size makes that trade worse.</li>
+          <li><strong>The deploy-gating E2E suite measures a mode production does not run.</strong> Because CI pins
+          <code>InteractiveServer</code>, the chromium e2e-gate never exercises the <code>InteractiveAuto</code> transition it was pinned
+          away from, so a regression specific to the WASM handover cannot be caught by that gate. The Core Web
+          Vitals numbers carry the same caveat in their own remarks: they &quot;reflect Server-mode
+          prerender-then-hydrate under runner contention, not production&#39;s InteractiveAuto on real hardware&quot;
+          (<code>MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/WebVitalsTests.cs:10-13</code>). The pseudo-localization
+          suite likewise had to route its activation through the culture cookie because the pinned circuit reads
+          cookies but not the original query string
+          (<code>MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/PseudoLocalizationTests.cs:22-31</code>).</li>
+          <li><strong>Nothing enforces the root render mode.</strong> There is no fitness test asserting that <code>Routes</code> carries
+          <code>InteractiveAuto</code>, so a new host picks whatever it picks; Helpdesk and the gallery already differ
+          (deliberately), and a fourth host could differ by accident.</li>
+          <li><strong>A first-paint flash remains for anything restored after hydration.</strong> ADR-028&#39;s theme read runs in
+          <code>OnAfterRenderAsync</code> and deliberately not during prerender, so <code>InteractiveAuto</code> still permits a brief
+          wrong-theme paint (<code>028-dark-theme-mode.md:33-40</code>, <code>028-dark-theme-mode.md:64-66</code>); the render-mode
+          choice does not close that gap, it defines it.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p>ADR-022 (reads the HttpOnly session cookie during the SSR prerender pass this decision keeps enabled),
+          ADR-027 (flows one culture through the SSR to Server to WASM sequence this decision establishes, and owns
+          the WASM-side culture bootstrap both clients run), ADR-028 (the theme faces the same three-phase agreement
+          problem and records the residual <code>InteractiveAuto</code> flash), ADR-051 (the client token lifecycle whose three
+          storage stories exist because of this split, and whose &quot;UI code never branches on render mode&quot; invariant
+          this root-level choice makes possible), ADR-042 (the MAUI head, which hosts the same components in a
+          BlazorWebView and therefore sits outside the render-mode model entirely).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/056-blazor-render-mode-strategy.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

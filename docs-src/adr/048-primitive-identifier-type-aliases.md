@@ -2,7 +2,9 @@
 
 ## Status
 Accepted (2026-07-15). Revised 2026-07-21 (corrected the empty-placeholder-folder inventory and the
-`Directory.Build.props` and ADC `User` source citations).
+`Directory.Build.props` and ADC `User` source citations). Revised 2026-07-28 (refreshed the Common
+`Directory.Build.props` alias-block line range and corrected the framing of what Common's
+`UserIdentifierType` alias types).
 
 ## Context
 Every entity needs an identity type. The framework's base entity is generic over that type:
@@ -30,10 +32,17 @@ Model every identifier as a **primitive named through a global-using alias**, de
 not as a wrapper struct.
 
 - **Identity is a primitive behind an alias.** Each module declares
-  `global using {Entity}IdentifierType = <primitive>;` in its `.Shared` project. Common's own
-  aggregate root uses `UserIdentifierType = int`
+  `global using {Entity}IdentifierType = <primitive>;` in its `.Shared` project. Common declares
+  `UserIdentifierType = int` for itself
   (`Source/Core/MMCA.Common.Domain/GlobalUsings.IdentifierType.cs:1`), with the push-notification
   aliases alongside it (`Source/Core/MMCA.Common.Shared/GlobalUsings.NotificationIdentifierType.cs:1-2`).
+  Common owns no `User` aggregate of its own: that alias types the audit fields every auditable
+  entity inherits, `CreatedBy` and `LastModifiedBy` on `AuditableBaseEntity`
+  (`Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:27,31`), and constrains the user
+  type parameter of `AuthenticationServiceBase<TUser>`
+  (`where TUser : AuditableAggregateRootEntity<UserIdentifierType>, IAuthUser`,
+  `Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:41`), with each consuming
+  app supplying the concrete `User` entity that satisfies it.
   Consumers follow the same pattern: ADC Identity
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2`),
   ADC Conference with fifteen aliases
@@ -48,7 +57,7 @@ not as a wrapper struct.
 - **Aliases are linked solution-wide via `Directory.Build.props`.** Each `GlobalUsings.*.cs` file is
   pulled into every project with a `<Compile Include ... Link=... />` block, so the alias is visible
   everywhere without a project reference: Common
-  (`MMCA.Common/Directory.Build.props:80-84`), ADC
+  (`MMCA.Common/Directory.Build.props:86-96`), ADC
   (`MMCA.ADC/Directory.Build.props:77-87`), Store (`MMCA.Store/Directory.Build.props:75-86`). Adding a
   solution-wide alias is a new `GlobalUsings.*.cs` plus a matching `<Compile Include>` line, nothing more.
 - **The alias flows unchanged through every layer.** Tracing the ADC `User` aggregate: the domain

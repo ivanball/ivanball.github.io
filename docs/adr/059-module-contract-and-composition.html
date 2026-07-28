@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-059: The IModule Contract and Reflection-Based Module Composition · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-07-28).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/059-module-contract-and-composition.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-059: The IModule Contract and Reflection-Based Module Composition">
+  <meta property="og:description" content="Accepted (2026-07-28).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/059-module-contract-and-composition.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-059: The IModule Contract and Reflection-Based Module Composition">
+  <meta name="twitter:description" content="Accepted (2026-07-28).">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"059 · The IModule Contract and Reflection-Based Module Composition","item":"https://ivanball.github.io/docs/adr/059-module-contract-and-composition.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">059 · The IModule Contract and Reflection-Based Module Composition</span>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 60 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html" aria-current="page">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-059-the-imodule-contract-and-reflection-based-module-composition">ADR-059: The IModule Contract and Reflection-Based Module Composition</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-07-28).</p>
+          <h2 id="context">Context</h2>
+          <p>The framework&#39;s headline claim is that an application is built as a modular monolith and later
+          extracted into services without rewriting business logic. ADR-008 states the extracted shape in one
+          sentence, &quot;Each service is the monolith with one module enabled&quot;, and it treats <code>ModuleLoader</code> and
+          the <code>Disabled*</code> stubs as <strong>pre-existing context</strong> before deciding the extraction topology
+          (<code>Website/docs-src/adr/008-service-extraction-topology.md:29-31</code>). ADR-006 decides the database axis
+          of the same split. Neither records the composition model itself: how a module declares itself, how a
+          host finds it, in what order registrations run, what &quot;disabled&quot; does to the container, and what a
+          dependent resolves when its peer is not in the process. That mechanism is what makes the ADR-008
+          sentence true, and it had no decision record of its own. This ADR is that record.</p>
+          <p>Composition has to answer for the monolith case as well as the extracted one. MMCA.Helpdesk runs a
+          single module in a single host; Store and ADC run one module per service host today, and the same
+          module code ran in a combined host before extraction. One contract has to cover all three without
+          the module code knowing which shape it is running in.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Make <code>IModule</code> the single composition contract, discover implementations by reflection, register
+          them in topological dependency order, and represent a disabled module by <strong>stub registrations</strong>
+          rather than by absence.</p>
+          <ul>
+          <li><strong><code>IModule</code> is five members, three of which have defaults.</strong> <code>Name</code> and
+          <code>Register(IServiceCollection, IConfigurationBuilder, ApplicationSettings)</code> are the only members a
+          module must supply; <code>Dependencies</code> defaults to an empty list, <code>RequiresDependencies</code> to <code>false</code>,
+          and <code>RegisterDisabledStubs(IServiceCollection)</code> to a no-op
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/IModule.cs:7,12,17,23,28,34</code>). A leaf
+          module is therefore two members: <code>TicketsModule</code> implements exactly <code>Name</code> and <code>Register</code>
+          (<code>MMCA.Helpdesk/Source/Modules/Tickets/MMCA.Helpdesk.Tickets.API/TicketsModule.cs:13-19</code>).</li>
+          <li><strong>Discovery is a reflection scan that defaults to the whole AppDomain.</strong> <code>ModuleLoader</code> scans
+          <code>moduleAssemblies ?? AppDomain.CurrentDomain.GetAssemblies()</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:86</code>), keeps every
+          concrete non-abstract, non-interface <code>IModule</code> type and instantiates each through
+          <code>Activator.CreateInstance</code> (<code>ModuleLoader.cs:101-104</code>), and does the same for <code>IModuleSeeder</code>,
+          keyed case-insensitively by <code>ModuleName</code> (<code>ModuleLoader.cs:106-109</code>,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Application/Modules/IModuleSeeder.cs:8-19</code>). An assembly that
+          throws from <code>GetTypes()</code> is logged and skipped, not fatal (<code>ModuleLoader.cs:89-98,353-354</code>). An
+          overload taking the assemblies explicitly exists and its own documentation calls it the preferred
+          host call (<code>ModuleLoader.cs:61-79</code>), but <strong>every host today uses the AppDomain overload</strong>: Store
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:206</code>,
+          <code>MMCA.Store.Identity.Service/Program.cs:181</code>, <code>MMCA.Store.Sales.Service/Program.cs:173</code>), ADC
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:225</code>,
+          <code>MMCA.ADC.Conference.Service/Program.cs:270</code>, <code>MMCA.ADC.Engagement.Service/Program.cs:175</code>,
+          <code>MMCA.ADC.Notification.Service/Program.cs:184</code>) and Helpdesk
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:81</code>). Only the unit tests pass assemblies
+          explicitly (<code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Modules/ModuleLoaderTests.cs:41-48</code>).</li>
+          <li><strong>Registration order is a Kahn topological sort over the declared names.</strong> The loader sorts before
+          it registers anything (<code>ModuleLoader.cs:112</code>); the sort builds an in-degree map plus a reverse
+          adjacency list, seeds a queue with the zero-in-degree modules, and drains it
+          (<code>ModuleLoader.cs:286-336</code>), so a dependency&#39;s DI registrations are always in the container before
+          a dependent&#39;s <code>Register</code> runs. A declared name that no discovered module supplies is skipped while
+          building the graph and never blocks the sort (<code>ModuleLoader.cs:301-302</code>).</li>
+          <li><strong>A cycle is a startup failure that names the cycle.</strong> If fewer modules come out of the sort than
+          went in, the remainder is circular and the loader throws <code>InvalidOperationException</code> listing them
+          (<code>ModuleLoader.cs:328-333</code>); <code>ModuleLoaderTests.cs:71-83</code> asserts both the message and the member
+          names.</li>
+          <li><strong>Enablement is configuration, and absence means off.</strong> <code>ModulesSettings</code> binds the <code>Modules</code>
+          section as a name-to-<code>ModuleSettings</code> dictionary
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Settings/ModulesSettings.cs:7,10</code>), and
+          <code>IsModuleEnabled</code> returns true only when the key exists <strong>and</strong> <code>Enabled</code> is true
+          (<code>ModulesSettings.cs:18-19</code>). A module missing from configuration is therefore treated as disabled,
+          even though <code>ModuleSettings.Enabled</code> itself defaults to <code>true</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Settings/ModuleSettings.cs:9</code>); <code>ModuleLoaderTests.cs:238-244</code>
+          pins that behavior.</li>
+          <li><strong>Disabled means stubs, not absence.</strong> For a disabled module the loader calls
+          <code>RegisterDisabledStubs</code> and never calls <code>Register</code>, snapshots the descriptors that call appended so
+          they can be validated later, and records the name (<code>ModuleLoader.cs:116-128</code>). The stubs are
+          null-object implementations of the owning module&#39;s cross-module contracts, shipped in that module&#39;s
+          <code>*.Shared</code> project: <code>DisabledProductVariantService</code> answers <code>false</code> for existence checks, <code>null</code> for
+          the SKU lookup and an empty dictionary for the batch price query
+          (<code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/Products/DisabledProductVariantService.cs:10-40</code>);
+          <code>DisabledCustomerService</code> returns <code>null</code>
+          (<code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Shared/Customers/DisabledCustomerService.cs:8-15</code>);
+          <code>DisabledSessionBookmarkValidationService</code> returns <code>Result.Success()</code> plus an empty session-id
+          collection, which deliberately skips the BR-49 / BR-91 eligibility checks
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Sessions/DisabledSessionBookmarkValidationService.cs:30-39</code>);
+          <code>DisabledEventLiveValidationService</code> fails open with an always-open live window
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/DisabledEventLiveValidationService.cs:22-43</code>).
+          The dependent&#39;s code path does not branch on &quot;is the module here&quot;: it resolves the interface and
+          gets a documented degraded answer.</li>
+          <li><strong><code>Dependencies</code> declares the graph; <code>RequiresDependencies</code> decides whether a gap is fatal.</strong> The
+          loader computes the module&#39;s disabled dependencies, then narrows them to &quot;unsatisfied&quot; by removing
+          any name the consumer listed under <code>Modules:{Module}:RemoteDependencies</code>
+          (<code>ModuleLoader.cs:146-152</code>, <code>ModulesSettings.cs:30-32</code>,
+          <code>ModuleSettings.cs:38</code>). With <code>RequiresDependencies = true</code> an unsatisfied dependency throws at
+          startup with remediation text naming the three options (<code>ModuleLoader.cs:154-162</code>); with the
+          default <code>false</code> the loader logs a warning and the module runs against the stub
+          (<code>ModuleLoader.cs:164-167,347-348</code>). Both branches are covered
+          (<code>ModuleLoaderTests.cs:87-97,118-128</code>).</li>
+          <li><strong>Per-module configuration arrives by naming convention.</strong> Immediately before <code>Register</code>, the
+          loader adds <code>modules.{name}.json</code> and, when the host passes an environment name,
+          <code>modules.{name}.{environment}.json</code>, both optional and reload-on-change
+          (<code>ModuleLoader.cs:186-193</code>), so a module can carry its own configuration file without a host edit.</li>
+          <li><strong>Composition also shapes the HTTP surface, seeding and health.</strong> <code>AddAPI(modulesSettings)</code>
+          installs <code>ModuleControllerFeatureProvider</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:42,52-56</code>), which removes
+          from MVC discovery any controller whose assembly name or namespace contains a <code>.{ModuleName}.</code>
+          token for a disabled module, so those endpoints are never mapped instead of mapping and then
+          failing with a 500
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/ModuleControllerFeatureProvider.cs:33-53,60-82</code>).
+          Seeders run only for enabled modules and in registration order (<code>ModuleLoader.cs:133-136,270-276</code>),
+          invoked from startup database initialization
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:28-31,87</code>).
+          <code>AddModuleHealthChecks</code> publishes one <code>module-{Name}</code> check per module, Healthy when enabled and
+          Degraded when disabled (<code>DependencyInjection.cs:169-188</code>).</li>
+          <li><strong>A remote-dependency validator exists but is not wired.</strong> <code>ValidateRemoteDependencies</code> re-resolves
+          every service type a disabled dependency&#39;s stub registered, throwing when it no longer resolves and
+          warning when it still resolves to the stub type (<code>ModuleLoader.cs:216-261</code>). It is exercised only by
+          unit tests (<code>ModuleLoaderTests.cs:132-177</code>); <strong>no host calls it today</strong>, so a forgotten gRPC client
+          registration is still a silent stub at the first request rather than a startup failure.</li>
+          </ul>
+          <p>The module inventory is small and explicit. <strong>MMCA.Store has three:</strong> <code>CatalogModule</code> (leaf, stubs
+          <code>IProductVariantService</code>,
+          <code>MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.API/CatalogModule.cs:13-30</code>), <code>IdentityModule</code>
+          (leaf, stubs <code>ICustomerService</code>,
+          <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.API/IdentityModule.cs:14-31</code>) and
+          <code>SalesModule</code>, which declares <code>[&quot;Catalog&quot;, &quot;Identity&quot;]</code> with <code>RequiresDependencies = true</code> and
+          publishes no cross-module contract of its own
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:17-46</code>). <strong>MMCA.ADC has four:</strong>
+          <code>IdentityModule</code> (leaf, stubs <code>IAttendeeQueryService</code>,
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/IdentityModule.cs:13-25</code>), <code>ConferenceModule</code>
+          (no declared dependencies, two stubs,
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/ConferenceModule.cs:15-30</code>),
+          <code>EngagementModule</code> (<code>[&quot;Conference&quot;]</code>, strict, two stubs,
+          <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/EngagementModule.cs:14-35</code>) and
+          <code>NotificationModule</code> (<code>[&quot;Identity&quot;]</code>, strict, one stub,
+          <code>MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.API/NotificationModule.cs:15-36</code>).
+          <strong>MMCA.Helpdesk has exactly one, <code>TicketsModule</code></strong>: the single-module seed, a leaf that overrides
+          none of the three defaulted members, ships no <code>Disabled*</code> stub and no <code>IModuleSeeder</code>, and is enabled
+          by the one host with <code>&quot;Tickets&quot;: { &quot;Enabled&quot;: true }</code>
+          (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/appsettings.json:13-15</code>). Seeders exist for five of
+          the eight modules (Store Catalog, Identity, Sales; ADC Identity, Conference).</p>
+          <p>The per-service configuration is where &quot;the monolith with one module enabled&quot; becomes literal. Store
+          Catalog enables <code>Catalog</code> and disables both peers with no remote declarations
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/appsettings.json:20-24</code>); Store Sales enables
+          <code>Sales</code> and declares <code>[&quot;Catalog&quot;, &quot;Identity&quot;]</code> as <code>RemoteDependencies</code>
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:20-27</code>), then replaces the two
+          stubs with typed gRPC clients after the loader returns
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:176-183</code>). ADC Engagement declares
+          <code>[&quot;Conference&quot;]</code> remote (<code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/appsettings.json:22-30</code>)
+          and ADC Notification declares <code>[&quot;Identity&quot;]</code> remote
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/appsettings.json:27-35</code>), while ADC
+          Conference enables one module and declares nothing remote
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:20-25</code>) even though it wires
+          Engagement&#39;s <code>IBookmarkCountService</code> as a gRPC client
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:274-281</code>), because
+          <code>ConferenceModule</code> never declares Engagement in <code>Dependencies</code>.</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Reflection discovery keeps hosts out of the module registry business.</strong> A host calls one method
+          and gets whatever modules its assembly graph contains; adding a module is a project reference plus
+          a configuration entry, not an edit to a hand-maintained list in every host
+          (<code>ModuleLoader.cs:86,101-104</code>).</li>
+          <li><strong>Topological order replaces registration luck.</strong> Cross-module registration depends on ordering,
+          and declaring <code>Dependencies</code> makes that ordering explicit and machine-checked instead of implicit
+          in the order the host happens to call things (<code>ModuleLoader.cs:112,286-336</code>).</li>
+          <li><strong>Null-object stubs are what make extraction a hosting change.</strong> Because a disabled module still
+          puts its contract type in the container, the dependent module&#39;s Application and Domain code has no
+          branch for &quot;peer not present&quot;, which is precisely why a module&#39;s non-hosting layers are identical
+          in-process and extracted (<code>ModuleLoader.cs:123</code>, <code>CatalogModule.cs:24-25</code>). The host then
+          overwrites the stub with a real cross-process adapter (<code>Sales.Service/Program.cs:176-183</code>).</li>
+          <li><strong>Two strictness levels, chosen per module.</strong> A module that genuinely cannot function without a
+          peer opts into <code>RequiresDependencies = true</code> and fails fast (<code>SalesModule.cs:30</code>,
+          <code>EngagementModule.cs:23</code>, <code>NotificationModule.cs:24</code>); everything else tolerates a missing peer and
+          degrades, which is the safer default for a module whose cross-module call is advisory.</li>
+          <li><strong><code>RemoteDependencies</code> keeps strictness usable after extraction.</strong> Without it, every strict module
+          would have to be relaxed to run in its own service, losing the check in the very topology that
+          needs it most; instead the operator states the dependency is satisfied out of process
+          (<code>ModuleSettings.cs:11-38</code>, <code>ModuleLoader.cs:150-152</code>).</li>
+          <li><strong>Composition lives in configuration, so one build serves N deployments.</strong> The same assemblies run
+          as a combined host or as a set of single-module services with no code change; the only difference
+          is the <code>Modules</code> section each host reads (<code>ModulesSettings.cs:10</code>, plus the per-service
+          <code>appsettings.json</code> blocks cited above).</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>The AppDomain scan is the fragile default and the one everybody uses.</strong> The loader&#39;s own
+          documentation warns that the AppDomain scan sees only assemblies already loaded, so a referenced
+          but untouched module assembly is silently absent from discovery (<code>ModuleLoader.cs:61-65</code>), and no
+          host passes assemblies explicitly today. A missing module surfaces as &quot;disabled&quot; (absence equals
+          disabled, <code>ModulesSettings.cs:18-19</code>), not as an error.</li>
+          <li><strong>Stubs degrade silently by design.</strong> A stub answers success-shaped defaults: an always-open live
+          window (<code>DisabledEventLiveValidationService.cs:26,35-42</code>), a passing bookmark validation
+          (<code>DisabledSessionBookmarkValidationService.cs:33-34</code>), zero counts
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/UserSessionBookmarks/DisabledBookmarkCountService.cs:7-18</code>),
+          empty exports
+          (<code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Shared/Exports/DisabledUserEngagementExportService.cs:7-12</code>,
+          <code>MMCA.ADC/Source/Modules/Notification/MMCA.ADC.Notification.Shared/UserNotifications/DisabledUserNotificationExportService.cs:7-12</code>,
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/DisabledAttendeeQueryService.cs:7-12</code>).
+          A wrongly disabled module therefore produces plausible wrong answers rather than an error, and the
+          only startup signal is a Degraded <code>module-{Name}</code> health check plus a log line
+          (<code>DependencyInjection.cs:181-188</code>, <code>ModuleLoader.cs:338-339,347-348</code>).</li>
+          <li><strong>The dependency graph is a hand-written declaration, not a derived fact.</strong> ADC Conference consumes
+          Engagement&#39;s <code>IBookmarkCountService</code> over gRPC without listing Engagement in <code>Dependencies</code>
+          (<code>ConferenceModule.cs:15-30</code> versus <code>Conference.Service/Program.cs:274-281</code>), so neither the
+          topological sort nor the <code>RequiresDependencies</code> check knows about that edge. Nothing enforces that
+          <code>Dependencies</code> matches the interfaces a module actually resolves.</li>
+          <li><strong>The one guard against a forgotten cross-process rewire is unadopted.</strong> <code>ValidateRemoteDependencies</code>
+          was written for exactly the &quot;typo&#39;d or forgotten <code>AddTypedGrpcClient</code>&quot; failure
+          (<code>ModuleLoader.cs:202-215</code>), and no host calls it, so that failure still shows up as a stub no-op at
+          request time.</li>
+          <li><strong>Names are strings, matched case-insensitively across three places.</strong> The module dictionary, the
+          configuration lookup and the seeder lookup all key on <code>Name</code>
+          (<code>ModuleLoader.cs:20,109,288-294</code>), so renaming a module without updating every dependent&#39;s
+          <code>Dependencies</code> list and every host&#39;s <code>Modules</code> section yields a module treated as disabled with, at
+          worst, a warning.</li>
+          <li><strong>Controller filtering is coupled to assembly and namespace naming.</strong> A disabled module&#39;s
+          controllers are found by a <code>.{ModuleName}.</code> substring test on the assembly name or namespace
+          (<code>ModuleControllerFeatureProvider.cs:60-82</code>), so a project that does not follow the
+          <code>MMCA.{Repo}.{Module}.{Layer}</code> convention keeps its endpoints mapped while its services are absent.</li>
+          <li><strong>Every module is constructed by <code>Activator.CreateInstance</code></strong> (<code>ModuleLoader.cs:103</code>), so a module
+          type needs a public parameterless constructor and cannot take injected dependencies; anything a
+          module needs at registration time has to arrive through the <code>Register</code> parameters.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p>ADR-008 (the extraction topology that consumes this model: &quot;a service is the monolith with one module
+          enabled&quot; is a statement about <code>ModuleLoader</code> plus the <code>Disabled*</code> stubs, cited there as pre-existing
+          context), ADR-006 (the database axis of the same split; a module&#39;s data source is orthogonal to its
+          composition), ADR-007 (the typed gRPC clients that replace a disabled module&#39;s stubs at the host
+          level), ADR-014 (<code>AddApplicationDecorators()</code> must run after every module&#39;s handler scan, which is why
+          module registration is a distinct, ordered startup step), ADR-015 (the module-isolation fitness
+          functions that keep cross-module traffic on the <code>*.Shared</code> contracts this model registers,
+          <code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/ModuleIsolationTestsBase.cs:8-16</code>).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/059-module-contract-and-composition.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-053: Dual-Registry Package Publishing (nuget.org plus GitHub Packages) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-25). Amended (2026-07-25) to put the pre-decision Context statements in the past tense, to restate the MMCA. ID prefix reservation as…">
+  <meta name="description" content="Accepted (2026-07-25). Amended (2026-07-25) to put the pre-decision Context statements in the past tense, to record the MMCA. ID prefix reservation as…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/053-dual-registry-package-publishing.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-053: Dual-Registry Package Publishing (nuget.org plus GitHub Packages)">
-  <meta property="og:description" content="Accepted (2026-07-25). Amended (2026-07-25) to put the pre-decision Context statements in the past tense, to restate the MMCA. ID prefix reservation as…">
+  <meta property="og:description" content="Accepted (2026-07-25). Amended (2026-07-25) to put the pre-decision Context statements in the past tense, to record the MMCA. ID prefix reservation as…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/053-dual-registry-package-publishing.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-053: Dual-Registry Package Publishing (nuget.org plus GitHub Packages)">
-  <meta name="twitter:description" content="Accepted (2026-07-25). Amended (2026-07-25) to put the pre-decision Context statements in the past tense, to restate the MMCA. ID prefix reservation as…">
+  <meta name="twitter:description" content="Accepted (2026-07-25). Amended (2026-07-25) to put the pre-decision Context statements in the past tense, to record the MMCA. ID prefix reservation as…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)","item":"https://ivanball.github.io/docs/adr/053-dual-registry-package-publishing.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 55 ADRs</summary>
+        <summary>All 60 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -154,6 +154,11 @@
         <li><a href="053-dual-registry-package-publishing.html" aria-current="page">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
         <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
         <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
           </ol>
         </nav>
       </details>
@@ -163,9 +168,10 @@
           <h1 id="adr-053-dual-registry-package-publishing-nugetorg-plus-github-packages">ADR-053: Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</h1>
           <h2 id="status">Status</h2>
           <p>Accepted (2026-07-25). Amended (2026-07-25) to put the pre-decision Context statements in the past
-          tense, to restate the <code>MMCA.</code> ID prefix reservation as pending rather than done, to scope the
+          tense, to record the <code>MMCA.</code> ID prefix reservation as then-pending, to scope the
           &quot;documented install path&quot; claim to what is actually updated, and to split the packaging metadata
-          between <code>Directory.Build.props</code> and the per-package csproj files.</p>
+          between <code>Directory.Build.props</code> and the per-package csproj files. Amended (2026-07-28): that
+          reservation has been granted, so the Decision now records it as done rather than pending.</p>
           <h2 id="context">Context</h2>
           <p>The fifteen <code>MMCA.Common.*</code> packages have shipped to GitHub Packages since the first release. That
           was the right default while the framework had exactly one consumer group (this account&#39;s own
@@ -211,12 +217,12 @@
           single-use and cannot cross a job boundary.</li>
           <li>The nuget.org steps are guarded by <code>github.repository_owner == &#39;ivanball&#39;</code>, so a fork completes a
           full GitHub Packages release instead of failing on an exchange it can never satisfy.</li>
-          <li><strong>An <code>MMCA.</code> ID prefix reservation is requested and still pending</strong>, so the ids are not yet
-          protected from being taken by anyone else: the published ids report <code>verified: false</code> in the
-          nuget.org search index as of 2026-07-25. Reservation is a manual account-level action (see
-          Trade-offs), which is why it cannot be closed out from this repository. API keys remain available
-          for a manual push from a command line, which trusted publishing does not cover, but no automated
-          path uses one.</li>
+          <li><strong>The <code>MMCA.</code> ID prefix reservation has been granted</strong> (2026-07-28), so the ids are protected from
+          being taken by anyone else: every published <code>MMCA.Common.*</code> id reports <code>verified: true</code> in the
+          nuget.org search index, where it reported <code>verified: false</code> while the request was pending.
+          Reservation is a manual account-level action (see Trade-offs), which is why it could never be
+          closed out from this repository. API keys remain available for a manual push from a command line,
+          which trusted publishing does not cover, but no automated path uses one.</li>
           <li><strong>nuget.org is the documented install path.</strong> The README already installs with a plain
           <code>dotnet add package</code> and carries the nuget.org badges, and the getting-started guide is moved onto
           the same path in this change. GitHub Packages is retained as a mirror, not deprecated: it is where

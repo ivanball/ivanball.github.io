@@ -1,7 +1,10 @@
 # ADR-054: Choreographed Saga Compensation with a Reconciliation Backstop
 
 ## Status
-Accepted (2026-07-25).
+Accepted (2026-07-25). Amended (2026-07-28): Store's reconciliation sweep now derives from
+`PeriodicBackgroundService`, so the shared-loop and adoption paragraphs are rewritten and the
+duplicated-scaffolding trade-off is dropped; the scope/`IUnitOfWork` and `maxReplicas` citations
+are corrected.
 
 ## Context
 Checkout spans a boundary no transaction covers. `CheckOutHandler` commits the order insert, the cart
@@ -36,11 +39,15 @@ saga-timeout backstop for steps that depend on an external system.
   A new compensating action is a new handler, not an edit to the command.
 - **Each handler runs in its own DI scope.** Domain-event handlers are registered as singletons
   (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:117-122`), so every one
-  opens a scope through `IServiceScopeFactory` and resolves its own `IUnitOfWork`
-  (`OrderCancelledSagaHandler.cs:41-42`, `OrderPaymentFailedSagaHandler.cs:29-31`,
-  `.../Infrastructure/Services/PaymentReconciliationService.cs:93,136`). Compensation therefore
-  commits on its own, after the originating save, rather than joining the transaction it is
-  compensating for.
+  opens its own scope through `IServiceScopeFactory` (`OrderCancelledSagaHandler.cs:41`,
+  `OrderPaymentFailedSagaHandler.cs:29`,
+  `.../Infrastructure/Services/PaymentReconciliationService.cs:89,132`), and the ones that persist
+  resolve their own `IUnitOfWork` inside it (`OrderCancelledSagaHandler.cs:42`,
+  `PaymentReconciliationService.cs:91,133`). `OrderPaymentFailedSagaHandler` is the exception that
+  shows the rule: it resolves only `ICustomerService` and `IEmailSender`
+  (`OrderPaymentFailedSagaHandler.cs:30-31`) and persists nothing, because its compensation is a
+  notification. Compensation that does write therefore commits on its own, after the originating
+  save, rather than joining the transaction it is compensating for.
 - **Idempotency is a persisted marker committed by the SAME `SaveChanges` as the compensating
   writes.** `Order.InventoryRestored` (`.../Domain/Orders/Order.cs:42-48`) is the marker;
   `MarkInventoryRestored` refuses a second call and refuses a non-cancelled order
@@ -85,15 +92,20 @@ saga-timeout backstop for steps that depend on an external system.
   that won the race is logged and skipped, not retried
   (`PaymentReconciliationService.cs:171-176`).
 
-The loop shape is deliberate and shared: an enablement gate, a startup delay, a per-cycle `try`/`catch`
-that never kills the loop, and every wait through `TimeProvider`
-(`PaymentReconciliationService.cs:41-80`). MMCA.Common ships exactly that shape as a base class,
-`PeriodicBackgroundService`
-(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PeriodicBackgroundService.cs:20-87`),
-but **nothing derives from it yet**: its only subclass in any of the four repos is the test double in
-its own unit tests
-(`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Services/PeriodicBackgroundServiceTests.cs:104`),
-and Store's sweep hand-rolls the equivalent loop.
+The loop shape is deliberate and shared, and it lives in the framework rather than in the sweep.
+MMCA.Common ships it as an abstract base class, `PeriodicBackgroundService`
+(`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/PeriodicBackgroundService.cs:20-42`),
+whose `ExecuteAsync` owns the enablement gate, the startup delay, the per-cycle `try`/`catch` that
+never kills the loop, and every wait through `TimeProvider`
+(`PeriodicBackgroundService.cs:45-87`). `PaymentReconciliationService` derives from it
+(`PaymentReconciliationService.cs:39`) and overrides only the three parts that are its own:
+`Interval`, read from configuration (`PaymentReconciliationService.cs:46`); `IsEnabled`, which
+distinguishes "the toggle is off" from "Stripe is not configured" before refusing to run
+(`PaymentReconciliationService.cs:54-72`); and `ExecuteCycleAsync`, which delegates to the
+internally visible `ReconcileOnceAsync` so one cycle is testable without the timer
+(`PaymentReconciliationService.cs:75-76`). It is the base class's **only** subclass in any of the
+four repos, apart from the test double in `PeriodicBackgroundService`'s own unit tests
+(`MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Services/PeriodicBackgroundServiceTests.cs:104`).
 
 **Adoption is one module.** This pattern lives in MMCA.Store's Sales module only: the two saga
 handlers and the one reconciliation sweep above. MMCA.ADC and MMCA.Helpdesk have no compensating saga
@@ -140,14 +152,12 @@ adopted.
   shared event must be idempotent or must swallow.
 - **The sweep is not replica-leased.** The outbox processor claims rows with a lease before working
   them (ADR-003); the sweep takes no such claim, so at the configured `maxReplicas: 2`
-  (`MMCA.Store/infra/main.bicep:922`) two replicas can pick the same stuck order and each spend a
+  (`MMCA.Store/infra/main.bicep:945`) two replicas can pick the same stuck order and each spend a
   Stripe status call. Correctness holds through the concurrency token; the duplicated external call
   does not deduplicate.
 - **Every compensating action needs its own marker.** There is no generic mechanism: the ADR-021
   inbox dedups broker messages between services, not in-process handler re-runs. A second compensating
   action means a second persisted marker or a naturally idempotent operation, decided by the author.
-- **The loop scaffolding is duplicated.** Store's sweep reimplements what `PeriodicBackgroundService`
-  packages, so the two can drift until the sweep is rebased onto the base class.
 
 ## Related
 ADR-003 (the outbox delivery and retry this leans on for compensation redelivery; this record says

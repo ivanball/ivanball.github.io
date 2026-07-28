@@ -1,25 +1,39 @@
 # ADR-043: Mobile Deep Links, App Association, and the Native OAuth Callback
 
 ## Status
-Accepted (2026-07-15). The framework leg is fully implemented in MMCA.Common: the OAuth
-custom-scheme returnUrl allowlist in `CompleteAsync`, the app-association endpoint helper
+Accepted (2026-07-15). Revised 2026-07-28 (the Android https App Links leg is recorded as shipped,
+the outstanding Android item is restated as the served certificate fingerprint, and the client-flow
+attribution is corrected; see Revision below). The framework leg is fully implemented in MMCA.Common:
+the OAuth custom-scheme returnUrl allowlist in `CompleteAsync`, the app-association endpoint helper
 `MapAppAssociationEndpoints`
 (`Source/Presentation/MMCA.Common.API/Startup/AppAssociationEndpointExtensions.cs:35`, with
 `AppAssociationOptions` alongside), and the MAUI `MauiExternalAuthBroker`
 (`Source/Presentation/MMCA.Common.UI.Maui/Capabilities/MauiExternalAuthBroker.cs:19`). The ADC
 consumer's deep-link wave has shipped: `MMCA.ADC.UI.Web` serves the two well-known association
 documents through the shared helper
-(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:162`), the Identity service allow-lists the
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:159`), the Identity service allow-lists the
 `atldevcon` scheme (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:37`), and
 the native heads register the callback: iOS carries both the custom-scheme URL type
 (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/iOS/Info.plist:16`) and the associated-domains
 entitlement (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/iOS/Entitlements.plist:11`), while
 Android registers the custom-scheme `WebAuthenticatorCallbackActivity`
 (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/WebAuthenticatorCallbackActivity.cs:14`).
-Android's AutoVerify https App Links intent filter is not yet in
-`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/AndroidManifest.xml` (which today carries
-only package-visibility queries), so the Android https app-link leg is still outstanding. MMCA.Store
-has not adopted the wave: no association endpoints, allowlist config, or platform callback
+Android's `AutoVerify` https App Links intent filter is in place too, declared as a C# attribute on
+`MainActivity` rather than in XML
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:21-26`, with the public web
+host constant at `:31` and the verified link reduced to path plus query and published to
+`IDeepLinkDispatcher` at `:60-61`). The checked-in
+`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/AndroidManifest.xml` carries seven
+`uses-permission` entries (`:4-16`) above the package-visibility `queries` block (`:19-32`);
+activities and their intent filters are attributes in code, which .NET for Android merges into the
+generated manifest at build time. What is still outstanding on the Android leg is the SERVED
+fingerprint: `AppAssociation:AndroidCertFingerprints` holds the placeholder
+`"REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT"`
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:29`), which the helper copies verbatim
+into the document's `sha256_cert_fingerprints`
+(`Source/Presentation/MMCA.Common.API/Startup/AppAssociationEndpointExtensions.cs:63`), and no other
+override of that key exists in the ADC repo, so the served `assetlinks.json` cannot verify yet.
+MMCA.Store has not adopted the wave: no association endpoints, allowlist config, or platform callback
 registrations exist there yet.
 
 ## Context
@@ -32,10 +46,10 @@ Three mobile flows all need a URL to leave the web world and land inside the MAU
    `IDeepLinkDispatcher` boundary (ADR-042).
 3. **External OAuth on a native head.** Google and GitHub reject OAuth inside embedded WebViews, so
    the MAUI head must run the provider flow in the system browser (`WebAuthenticator`) and needs
-   the API to redirect its completion BACK to the app. Today `OAuthControllerBase.CompleteAsync`
-   redirects only to the config-pinned `OAuth:UIBaseUrl`
+   the API to redirect its completion BACK to the app. Before this decision,
+   `OAuthControllerBase.CompleteAsync` redirected only to the config-pinned `OAuth:UIBaseUrl`
    (`Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs`), which a native app
-   cannot intercept.
+   could not intercept.
 
 The completion redirect design (ADR-036 lineage) has a hard security property worth preserving:
 tokens never ride a redirect URL. `CompleteAsync` stashes the token pair server-side under a
@@ -52,9 +66,16 @@ single-use code and the UI exchanges it out-of-band via POST.
   destinations always flow through the pinned base URL and the allowlist cannot become an open
   redirect. An empty allowlist reproduces the previous behavior byte for byte.
 - **Client flow.** The MAUI head calls
-  `WebAuthenticator` with `{gateway}/auth/oauth/{provider}?returnUrl={scheme}://oauth-complete`,
-  captures `code` from the callback, POSTs the existing anonymous `/auth/oauth/exchange`, and
-  stores the pair via `ITokenStorageService`. This rides behind the `IExternalAuthBroker` contract
+  `WebAuthenticator` with `{gateway}/auth/oauth/{provider}?returnUrl={scheme}://oauth-complete` and
+  captures `code` from the custom-scheme callback
+  (`Source/Presentation/MMCA.Common.UI.Maui/Capabilities/MauiExternalAuthBroker.cs:71-76`), then
+  hands the code to the shared `/auth/oauth-complete` page by navigating to it (`:80`). That page
+  owns the rest, exactly as it does on web heads:
+  `Source/Presentation/MMCA.Common.UI/Pages/Auth/OAuthComplete.razor:64` calls
+  `IAuthUIService.ExchangeOAuthCodeAsync`, which POSTs the existing anonymous
+  `auth/oauth/exchange` (`Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:128`)
+  and stores the pair via `ITokenStorageService` (`:156`), so the single-use-code contract lives in
+  exactly one place. This rides behind the `IExternalAuthBroker` contract
   (ADR-042); the default broker is unavailable, which keeps the shared Login page on its anchor
   flow for web heads.
 - **Association files are served by each app's UI.Web host**, not the gateway: the shared web URLs
@@ -87,3 +108,43 @@ single-use code and the UI exchanges it out-of-band via POST.
   custom schemes anywhere.
 - Completion failures that occur before authentication properties exist cannot know the native
   callback and still land on the web login page; the broker times out and the user retries.
+
+## Revision (2026-07-28)
+Correction pass from an ADR audit. No decision or behavior changed; the Status section had the
+Android leg backwards and the Decision section attributed the token exchange to the wrong component.
+
+1. **The Android https App Links intent filter is present, not outstanding.** The Status section
+   looked for it in `Platforms/Android/AndroidManifest.xml` and, not finding it there, called the
+   leg unshipped. It is declared in code instead: an `[IntentFilter]` attribute on `MainActivity`
+   with `AutoVerify = true`, `DataScheme = "https"`, and `DataHost` bound to the public web host
+   constant (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/MainActivity.cs:21-26`,
+   constant at `:31`), and a verified link arrives through `OnCreate` / `OnNewIntent`, is reduced to
+   path plus query, and is published to `IDeepLinkDispatcher` (`:60-61`). The checked-in manifest
+   carries more than package visibility as well: seven `uses-permission` entries (`:4-16`) sit above
+   the `queries` block (`:19-32`).
+2. **What is outstanding is the served fingerprint, not the platform registration.**
+   `AppAssociation:AndroidCertFingerprints` still holds the literal
+   `"REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT"`
+   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:29`), and the mapper serializes that
+   array straight into `sha256_cert_fingerprints`
+   (`Source/Presentation/MMCA.Common.API/Startup/AppAssociationEndpointExtensions.cs:63`). No other
+   setting of that key exists in the ADC repo; the only other mention is the rotation procedure in
+   `MMCA.ADC/Docs/MobileReleaseRunbook.md`. Until the real Play App Signing fingerprint is supplied,
+   the served document names a certificate no build carries and Android cannot auto-verify the
+   filter that is already shipped.
+3. **The completion page performs the exchange, not the broker.** The Decision's client-flow bullet
+   read as if the MAUI broker POSTed the exchange and stored the tokens. The broker captures the
+   code from the `WebAuthenticator` result
+   (`Source/Presentation/MMCA.Common.UI.Maui/Capabilities/MauiExternalAuthBroker.cs:71-76`) and then
+   navigates to `/auth/oauth-complete?code=...` (`:80`); `OAuthComplete.razor:64` calls
+   `IAuthUIService.ExchangeOAuthCodeAsync`, which POSTs `auth/oauth/exchange`
+   (`Source/Presentation/MMCA.Common.UI/Services/Auth/AuthUIService.cs:128`) and calls
+   `ITokenStorageService.SetTokensAsync` (`:156`). The net effect is what the ADR described; the
+   division of labor is not, and it matters because the native path reuses the web completion page
+   rather than duplicating it.
+4. **Anchor and tense maintenance.** `MapAppAssociationEndpoints` is called at
+   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:159` (the previously cited `:162` is the
+   `AndroidCertFingerprints` line inside the options initializer). The Context statement about
+   `CompleteAsync` redirecting only to `OAuth:UIBaseUrl` is now past tense, since the decision
+   shipped: `BuildSuccessRedirectUrl` targets the allow-listed native URL whenever one is in play
+   (`Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:123-126`).

@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-060: Performance-Regression Gate (Committed Benchmark Baseline in CI) · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-07-28).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/060-performance-regression-gate.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-060: Performance-Regression Gate (Committed Benchmark Baseline in CI)">
+  <meta property="og:description" content="Accepted (2026-07-28).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/060-performance-regression-gate.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-060: Performance-Regression Gate (Committed Benchmark Baseline in CI)">
+  <meta name="twitter:description" content="Accepted (2026-07-28).">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)","item":"https://ivanball.github.io/docs/adr/060-performance-regression-gate.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</span>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 60 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html" aria-current="page">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-060-performance-regression-gate-committed-benchmark-baseline-in-ci">ADR-060: Performance-Regression Gate (Committed Benchmark Baseline in CI)</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-07-28).</p>
+          <h2 id="context">Context</h2>
+          <p>Rubric section 12 asks for hot-path efficiency that is <strong>measured, not assumed</strong>
+          (<code>Website/docs-src/governance/ArchitectureEvaluationCriteria.md:355</code>). MMCA.Common has a
+          BenchmarkDotNet harness for its DB-free hot paths, but a harness a maintainer runs by hand proves
+          nothing about the pull request in front of them. The first CI wiring only proved the benchmarked
+          code paths still compile and execute; it asserted nothing about the numbers they produced.</p>
+          <p>Turning that into a real gate runs into the environment it has to run in. CI runs on shared,
+          GitHub-hosted Ubuntu runners, where wall-clock timings move run to run by more than most regressions
+          worth catching. An absolute latency assertion (<code>IsSatisfiedBy</code> must stay under N nanoseconds) on that
+          hardware is either tight enough to go red on a noisy neighbour or loose enough never to fire at all.
+          A gate that cries wolf gets muted, and a gate that never fires was never a gate. That is the design
+          problem this record answers.</p>
+          <p>No existing ADR covers it. ADR-015&#39;s fitness functions assert <strong>structure and registration</strong>, and
+          say so explicitly: they are &quot;not runtime behavior&quot;
+          (<code>Website/docs-src/adr/015-architecture-fitness-functions.md:48</code>). ADR-038 gates the supply chain
+          (SBOM, lock files, vulnerability audit), which is provenance, not cost. ADR-041 instruments
+          production, so it observes a regression <strong>after</strong> it deploys rather than failing the PR that
+          introduced it. Nothing owned the statement &quot;a performance regression must fail the merge.&quot;</p>
+          <h2 id="decision">Decision</h2>
+          <p>Measure the hot-path suite on every code PR and verify the results against a <strong>committed</strong> baseline
+          that carries two rule kinds: absolute allocation ceilings where the measurement is deterministic, and
+          benchmark-to-benchmark ratio floors where it is not.</p>
+          <ul>
+          <li><p><strong>A dedicated CI job measures, then verifies.</strong> The <code>performance-smoke</code> job, named
+          <code>Performance gate (BenchmarkDotNet Short + baseline verify)</code>
+          (<code>MMCA.Common/.github/workflows/ci.yml:330-331</code>), runs the suite with <code>--filter &quot;*&quot; --job Short --exporters json</code> (<code>ci.yml:354-360</code>) and then runs the verifier over the exported artifacts
+          (<code>ci.yml:362-369</code>). <code>--job Short</code> (3 warmup plus 3 iterations) is chosen to produce real
+          measurements inside the job&#39;s 15-minute budget (<code>ci.yml:334,358-359</code>); <code>--filter &quot;*&quot;</code> is required
+          because BenchmarkDotNet otherwise prompts for a selection and would hang the runner
+          (<code>ci.yml:357-358</code>).</p>
+          </li>
+          <li><p><strong>The baseline is a committed JSON file, not a stored previous run.</strong>
+          <code>MMCA.Common/Tests/Performance/perf-baseline.json:1-20</code> holds an <code>allocationCeilingsBytes</code> object
+          and a <code>ratioFloors</code> array, and its own header states the rule: update it deliberately, in the same
+          PR as the change that moves the numbers (<code>perf-baseline.json:2</code>).</p>
+          </li>
+          <li><p><strong>Allocations are gated absolutely.</strong> Each ceiling is per-operation managed bytes, and the verifier
+          fails the run when the measured value is strictly greater
+          (<code>MMCA.Common/build/perfgate/Program.cs:67-70</code>). Eight ceilings are committed today, one per
+          benchmark (<code>perf-baseline.json:4-11</code>), from <code>IsSatisfiedBy_CachedCompile</code> at <code>0</code> B/op to
+          <code>ApplyFilters_ThreeMixedOperators</code> at <code>87000</code> B/op. They carry roughly 25% headroom over the
+          measured value (<code>perf-baseline.json:2</code>).</p>
+          </li>
+          <li><p><strong>Latency is gated only as a ratio between two benchmarks in the same run.</strong> A <code>ratioFloors</code> rule
+          names a slow and a fast benchmark and a <code>minRatio</code>; the verifier divides
+          <code>mean(slowBenchmark) / mean(fastBenchmark)</code> and fails when the quotient drops below the floor
+          (<code>Program.cs:74-93</code>). One floor is committed today: <code>IsSatisfiedBy_RecompileEachCall</code> over
+          <code>IsSatisfiedBy_CachedCompile</code> must stay at or above <code>1000</code> (<code>perf-baseline.json:14-18</code>), against a
+          measured value of roughly 120,000x (<code>perf-baseline.json:2</code>). <strong>No absolute latency threshold exists
+          anywhere in the gate</strong>: means are read (<code>Program.cs:43</code>) and printed for the run log
+          (<code>Program.cs:96-99</code>), but they are only ever compared to each other.</p>
+          </li>
+          <li><p><strong>A missing measurement fails, it does not pass.</strong> Every benchmark named by a rule must be present
+          in the results, or the verifier reports that &quot;the gate would be vacuous&quot; and fails: once for
+          allocation ceilings (<code>Program.cs:59-62</code>) and once for either side of a ratio floor
+          (<code>Program.cs:82-86</code>). Two neighbouring holes are closed the same way: zero exported artifacts is a
+          failure rather than an empty pass (<code>Program.cs:29-33</code>), and a benchmark that reports no allocation
+          data fails with an instruction to keep <code>[MemoryDiagnoser]</code> on the suite (<code>Program.cs:63-66</code>). All
+          violations are listed together and the process exits 1 (<code>Program.cs:101-110</code>).</p>
+          </li>
+          <li><p><strong>The verifier is a dependency-free local tool.</strong> <code>build/perfgate</code> has no <code>PackageReference</code> at all
+          (BCL plus <code>System.Text.Json</code>), no lock file, no NuGet audit surface and no analyzer pass
+          (<code>MMCA.Common/build/perfgate/perfgate.csproj:2-21</code>), so the gate itself cannot become a restore or
+          supply-chain problem. It reads BenchmarkDotNet&#39;s <code>*-report-full-compressed.json</code> exports from the
+          results directory it is handed (<code>Program.cs:26-33</code>), which CI points at
+          <code>BenchmarkDotNet.Artifacts/results</code> (<code>ci.yml:369</code>).</p>
+          </li>
+          <li><p><strong>The job is a required merge gate, not advisory.</strong> It is listed among the eight required contexts
+          in <code>MMCA.Common/CONTRIBUTING.md:68-71</code> and in the reproducible ruleset payload there
+          (<code>CONTRIBUTING.md:179</code>), and the live branch protection on <code>ivanball/MMCA.Common</code> returns the same
+          context (read 2026-07-28 via
+          <code>gh api repos/ivanball/MMCA.Common/branches/main/protection --jq &#39;.required_status_checks.contexts[]&#39;</code>).
+          Moving a number therefore requires editing the baseline in the same PR, and raising a ceiling to
+          silence a red gate is called out as defeating it (<code>CONTRIBUTING.md:70-71</code>).</p>
+          </li>
+          </ul>
+          <p>The suite the gate measures is eight <code>[MemoryDiagnoser]</code> benchmarks in two classes
+          (<code>Tests/Performance/MMCA.Common.Benchmarks/SpecificationBenchmarks.cs:13</code>,
+          <code>QueryPipelineBenchmarks.cs:16</code>): the specification compiled-delegate path and its recompile
+          anti-pattern plus criteria composition (<code>SpecificationBenchmarks.cs:37-52</code>), and the per-request read
+          pipeline, two filter shapes, dynamic sorting, and full-field versus sparse-field shaping of a
+          100-row page (<code>QueryPipelineBenchmarks.cs:53-86</code>). Every one of the eight is named by a ceiling, so
+          the vacuity check covers the whole suite. The benchmark project references only Application, Domain
+          and Shared and sits deliberately outside <code>MMCA.Common.slnx</code> so the unit-test loop stays fast
+          (<code>MMCA.Common.Benchmarks.csproj:3-6,20-24</code>).</p>
+          <p><strong>This gate is MMCA.Common only.</strong> The harness, the baseline and the verifier exist in that repo and
+          nowhere else. MMCA.ADC and MMCA.Store have no benchmark suite and no perfgate; their performance
+          artifact is a k6 load test against deployed read endpoints, which runs monthly on a schedule and on
+          demand, not on a pull request (<code>MMCA.ADC/.github/workflows/load-test.yml:1-18</code>,
+          <code>MMCA.Store/.github/workflows/load-test.yml:8-18</code>). MMCA.Helpdesk has neither.</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>A ratio is a property of the code; an absolute nanosecond count is a property of the runner.</strong>
+          Both benchmarks in a floor run in the same process, on the same machine, in the same run, under the
+          same JIT and the same noise from whatever else that hosted runner is doing. Whatever slows one
+          slows the other, so the machine cancels out of the quotient. That is what makes a latency assertion
+          valid on hardware nobody controls: the gate never claims to know how fast the runner is, only that
+          one path stayed enormously faster than the other.</li>
+          <li><strong>The ratio encodes the invariant that actually matters.</strong> <code>Specification&lt;TEntity, TId&gt;</code> caches its
+          compiled delegate per instance (<code>MMCA.Common/Source/Core/MMCA.Common.Domain/Specifications/Specification.cs:27,32</code>),
+          and the two benchmarks are exactly the production path (one instance reused) and the anti-pattern
+          the cache exists to avoid (a fresh instance per evaluation, recompiling every call)
+          (<code>SpecificationBenchmarks.cs:36-42</code>). If someone deletes the cache field, moves the compile into
+          the property, or makes the specification transient per call, the ratio collapses toward 1 and no
+          amount of runner noise can hide it. The gate asks &quot;does the cache still exist,&quot; which survives a
+          noisy measurement, instead of &quot;is the cache exactly this fast,&quot; which does not.</li>
+          <li><strong>The floor is set three orders of magnitude below the measurement on purpose.</strong> 1000 against a
+          measured 120,000 (<code>perf-baseline.json:2,17</code>) is not a weak threshold, it is the threshold matched
+          to the claim. Anything that keeps the cache intact stays far above it; anything that breaks the
+          cache falls far below it. There is no band of ambiguity for CI noise to land in.</li>
+          <li><strong>Allocations are the deterministic half, so they get absolute numbers.</strong> Bytes per operation do
+          not depend on how busy the runner is, which is precisely why ceilings are legitimate there and
+          ratios are not needed. Splitting the baseline by measurement stability (absolute where
+          deterministic, relative where noisy) is what lets one gate assert both kinds of cost without
+          either half being a lie.</li>
+          <li><strong>Vacuity is the failure mode a benchmark gate actually has.</strong> A renamed method, a dropped
+          <code>[MemoryDiagnoser]</code>, or a filter that selects nothing would all leave a gate that passes while
+          measuring nothing, which is worse than no gate because it reads as evidence. Failing on absence
+          (<code>Program.cs:59-62,63-66,82-86,29-33</code>) is the difference between a check and a decoration.</li>
+          <li><strong>A committed baseline makes a cost change reviewable.</strong> The number lives in a file in the diff, so
+          deliberately paying more allocation is a line a reviewer sees and questions in the same PR as the
+          code that spends it. A gate that compared against the previous run instead would ratchet silently:
+          every PR is only slightly worse than the last, and the sum is invisible.</li>
+          <li><strong>Same posture as the rest of the repo&#39;s gates.</strong> Turning a discipline (&quot;remember to check the hot
+          paths&quot;) into a build invariant is the lever ADR-015 applies to layer rules and ADR-038 applies to
+          supply-chain provenance; this record applies it to runtime cost.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>The Short job cannot see small latency regressions.</strong> Three warmup and three iterations
+          (<code>ci.yml:358-359</code>) give wide confidence intervals: enough for a 1000x floor and for counting bytes,
+          useless for detecting a 5% slowdown. Detecting that would need a longer job and a dedicated runner,
+          which the 15-minute budget (<code>ci.yml:334</code>) deliberately does not buy.</li>
+          <li><strong>Only one ratio floor exists today</strong> (<code>perf-baseline.json:13-19</code>), so the machine-independent
+          latency half of the gate protects exactly one invariant. The other seven benchmarks are gated on
+          allocations alone, which catches a new allocation but not a pure CPU regression.</li>
+          <li><strong>The ceilings have roughly 25% headroom</strong> (<code>perf-baseline.json:2</code>), so a regression smaller than
+          that passes. The headroom is what keeps the gate stable across BenchmarkDotNet and runtime
+          revisions; the cost is that it is a ratchet with slack, not a tripwire.</li>
+          <li><strong>Nothing stops a ceiling being raised to make a red gate green.</strong> <code>CONTRIBUTING.md:70-71</code> names
+          that as defeating the gate, but it is enforced by review, not by the tool.</li>
+          <li><strong>Coverage is the DB-free hot paths only.</strong> The suite references just Application, Domain and
+          Shared (<code>MMCA.Common.Benchmarks.csproj:20-24</code>), so EF translation, HTTP, serialization and the
+          outbox are outside it. The published <code>ApplyFilters</code> ceilings are tens of KB per call precisely
+          because System.Linq.Dynamic.Core re-parses the predicate on each request
+          (<code>perf-baseline.json:2</code>): the gate bounds that cost, it does not remove it.</li>
+          <li><strong>The gate runs on pull requests only.</strong> CI has no <code>push: main</code> trigger
+          (<code>MMCA.Common/.github/workflows/ci.yml:14-16</code>), and <code>release.yml</code> does not run <code>build/perfgate</code> (it
+          only mentions the project in a NuGet cache-key comment,
+          <code>MMCA.Common/.github/workflows/release.yml:26,109</code>), so a release tag is not re-verified against
+          the baseline.</li>
+          <li><strong>A green context does not always mean the benchmarks ran.</strong> On a documentation-only PR the heavy
+          steps are skipped by the <code>changes</code> classifier while all required contexts still post green, which
+          is what keeps branch protection satisfiable (<code>ci.yml:32-35,355,363</code>).</li>
+          <li><strong>Consumers inherit the numbers, not the gate.</strong> MMCA.ADC, MMCA.Store and MMCA.Helpdesk get the
+          framework&#39;s bounded hot paths through the released packages, but none of them gates their own
+          application code this way.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p>ADR-015 (structural fitness functions, which explicitly stop at structure and registration; this is
+          their runtime-cost counterpart), ADR-038 (the other build-gating control set, applied to supply-chain
+          provenance rather than cost), ADR-041 (production telemetry, which observes cost after deploy where
+          this fails it before merge), ADR-055 (the specification contract whose per-instance compiled-delegate
+          cache the ratio floor protects), ADR-034 (the generic query layer whose per-request filter, sort and
+          shaping cost the allocation ceilings bound).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/060-performance-regression-gate.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

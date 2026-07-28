@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-048: Primitive Identifier Type Aliases over Strongly-Typed ID Structs · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-15). Revised 2026-07-21 (corrected the empty-placeholder-folder inventory and the Directory.Build.props and ADC User source citations).">
+  <meta name="description" content="Accepted (2026-07-15). Revised 2026-07-21 (corrected the empty-placeholder-folder inventory and the Directory.Build.props and ADC User source…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/048-primitive-identifier-type-aliases.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-048: Primitive Identifier Type Aliases over Strongly-Typed ID Structs">
-  <meta property="og:description" content="Accepted (2026-07-15). Revised 2026-07-21 (corrected the empty-placeholder-folder inventory and the Directory.Build.props and ADC User source citations).">
+  <meta property="og:description" content="Accepted (2026-07-15). Revised 2026-07-21 (corrected the empty-placeholder-folder inventory and the Directory.Build.props and ADC User source…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/048-primitive-identifier-type-aliases.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-048: Primitive Identifier Type Aliases over Strongly-Typed ID Structs">
-  <meta name="twitter:description" content="Accepted (2026-07-15). Revised 2026-07-21 (corrected the empty-placeholder-folder inventory and the Directory.Build.props and ADC User source citations).">
+  <meta name="twitter:description" content="Accepted (2026-07-15). Revised 2026-07-21 (corrected the empty-placeholder-folder inventory and the Directory.Build.props and ADC User source…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs","item":"https://ivanball.github.io/docs/adr/048-primitive-identifier-type-aliases.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 55 ADRs</summary>
+        <summary>All 60 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -154,6 +154,11 @@
         <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
         <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
         <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
           </ol>
         </nav>
       </details>
@@ -163,7 +168,9 @@
           <h1 id="adr-048-primitive-identifier-type-aliases-over-strongly-typed-id-structs">ADR-048: Primitive Identifier Type Aliases over Strongly-Typed ID Structs</h1>
           <h2 id="status">Status</h2>
           <p>Accepted (2026-07-15). Revised 2026-07-21 (corrected the empty-placeholder-folder inventory and the
-          <code>Directory.Build.props</code> and ADC <code>User</code> source citations).</p>
+          <code>Directory.Build.props</code> and ADC <code>User</code> source citations). Revised 2026-07-28 (refreshed the Common
+          <code>Directory.Build.props</code> alias-block line range and corrected the framing of what Common&#39;s
+          <code>UserIdentifierType</code> alias types).</p>
           <h2 id="context">Context</h2>
           <p>Every entity needs an identity type. The framework&#39;s base entity is generic over that type:
           <code>BaseEntity&lt;TIdentifierType&gt;</code> constrains it to <code>notnull</code> and exposes a single <code>required init Id</code>
@@ -189,10 +196,17 @@
           not as a wrapper struct.</p>
           <ul>
           <li><strong>Identity is a primitive behind an alias.</strong> Each module declares
-          <code>global using {Entity}IdentifierType = &lt;primitive&gt;;</code> in its <code>.Shared</code> project. Common&#39;s own
-          aggregate root uses <code>UserIdentifierType = int</code>
+          <code>global using {Entity}IdentifierType = &lt;primitive&gt;;</code> in its <code>.Shared</code> project. Common declares
+          <code>UserIdentifierType = int</code> for itself
           (<code>Source/Core/MMCA.Common.Domain/GlobalUsings.IdentifierType.cs:1</code>), with the push-notification
           aliases alongside it (<code>Source/Core/MMCA.Common.Shared/GlobalUsings.NotificationIdentifierType.cs:1-2</code>).
+          Common owns no <code>User</code> aggregate of its own: that alias types the audit fields every auditable
+          entity inherits, <code>CreatedBy</code> and <code>LastModifiedBy</code> on <code>AuditableBaseEntity</code>
+          (<code>Source/Core/MMCA.Common.Domain/Entities/AuditableBaseEntity.cs:27,31</code>), and constrains the user
+          type parameter of <code>AuthenticationServiceBase&lt;TUser&gt;</code>
+          (<code>where TUser : AuditableAggregateRootEntity&lt;UserIdentifierType&gt;, IAuthUser</code>,
+          <code>Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:41</code>), with each consuming
+          app supplying the concrete <code>User</code> entity that satisfies it.
           Consumers follow the same pattern: ADC Identity
           (<code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2</code>),
           ADC Conference with fifteen aliases
@@ -207,7 +221,7 @@
           <li><strong>Aliases are linked solution-wide via <code>Directory.Build.props</code>.</strong> Each <code>GlobalUsings.*.cs</code> file is
           pulled into every project with a <code>&lt;Compile Include ... Link=... /&gt;</code> block, so the alias is visible
           everywhere without a project reference: Common
-          (<code>MMCA.Common/Directory.Build.props:80-84</code>), ADC
+          (<code>MMCA.Common/Directory.Build.props:86-96</code>), ADC
           (<code>MMCA.ADC/Directory.Build.props:77-87</code>), Store (<code>MMCA.Store/Directory.Build.props:75-86</code>). Adding a
           solution-wide alias is a new <code>GlobalUsings.*.cs</code> plus a matching <code>&lt;Compile Include&gt;</code> line, nothing more.</li>
           <li><strong>The alias flows unchanged through every layer.</strong> Tracing the ADC <code>User</code> aggregate: the domain
