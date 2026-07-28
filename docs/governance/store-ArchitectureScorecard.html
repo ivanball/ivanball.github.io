@@ -204,7 +204,7 @@
           <td>4</td>
           <td>8</td>
           <td>12/24</td>
-          <td>Per-aggregate tx, soft-delete + filtered indexes, central audit (Common), RowVersion concurrency, versioned per-service migrations with a model-drift CI gate, LTR backups. Evidence: <code>ConcurrencyConventionTests.cs</code> + <code>AddRowVersionToAllEntities</code>; <code>deploy.yml:86-99</code>; <code>main.bicep:383-394</code></td>
+          <td>Per-aggregate tx, soft-delete + filtered indexes, central audit (Common), RowVersion concurrency, versioned per-service migrations with a model-drift CI gate, LTR backups. Evidence: <code>ConcurrencyConventionTests.cs</code>; API-level round-trip proof in <code>Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Concurrency/StaleRowVersionConflictTests.cs</code> and <code>Tests/Integration/MMCA.Store.Sales.IntegrationTests/Concurrency/OrderTransitionConcurrencyTests.cs</code> + <code>AddRowVersionToAllEntities</code>; <code>deploy.yml:86-99</code>; <code>main.bicep:383-394</code></td>
           </tr>
           <tr>
           <td>9</td>
@@ -222,7 +222,7 @@
           <td>4</td>
           <td>8</td>
           <td>8/16</td>
-          <td>Pipeline decorators, typed <code>ValidateOnStart</code> options, CORS/versioning/rate-limit/output-cache/compression, shared Polly: none copy-pasted. Evidence: <code>Sales.Service/Program.cs:73-76,88-96,171</code></td>
+          <td>Pipeline decorators, typed <code>ValidateOnStart</code> options, CORS/versioning/rate-limit/output-cache/compression, shared Polly: none copy-pasted. Evidence: <code>Sales.Service/Program.cs</code>; the same IsFailure-guarded cache-eviction pattern ADR-001 describes and the ADC scorecard credits is present here too (<code>Catalog.API/Controllers/ProductsController.cs:151,172</code>)</td>
           </tr>
           <tr>
           <td>11</td>
@@ -330,7 +330,7 @@
           <td>4</td>
           <td>8</td>
           <td>8/16</td>
-          <td>Fluid layouts, grid→mobile-card reflow, defined+Playwright-verified chromium/firefox/webkit matrix. <strong>↑ Maturity 3→4 (2026-07-17):</strong> the 2026-07-16 gate flip verified live: <code>continue-on-error</code> is scoped to <code>github.event_name == &#39;schedule&#39; &amp;&amp; matrix.browser != &#39;chromium&#39;</code>, the <code>e2e-gate</code> invoked all three engines, and it sits in <code>deploy.yml</code>&#39;s <code>needs</code>, so a firefox/webkit red blocked a deploy (nightly non-chromium legs stay advisory). <strong>DRIFT (recorded 2026-07-23, score frozen as-granted):</strong> the 2026-07-18 Actions-minute reduction (commit <code>777348ec</code>) cut the <code>e2e-gate</code> to chromium only (<code>deploy.yml:417-423</code>, <code>browsers: &#39;[&quot;chromium&quot;]&#39;</code>); firefox/webkit now run only on the nightly matrix (<code>e2e.yml:117</code>), so the granted basis no longer holds; expect a maturity reopen at the next re-score. Evidence as of 07-17: <code>e2e.yml:69,76</code> (now <code>:117</code>); <code>deploy.yml:315,429</code> (now <code>:417-423,:634</code>); <code>ProductList.razor:24</code>; <code>CatalogBrowse.razor:86</code></td>
+          <td>Fluid layouts, grid→mobile-card reflow, defined+Playwright-verified chromium/firefox/webkit matrix. <strong>↑ Maturity 3→4 (2026-07-17):</strong> the 2026-07-16 gate flip verified live: <code>continue-on-error</code> is scoped to <code>github.event_name == &#39;schedule&#39; &amp;&amp; matrix.browser != &#39;chromium&#39;</code>, the <code>e2e-gate</code> invoked all three engines, and it sits in <code>deploy.yml</code>&#39;s <code>needs</code>, so a firefox/webkit red blocked a deploy (nightly non-chromium legs stay advisory). <strong>DRIFT (recorded 2026-07-23, score frozen as-granted):</strong> the 2026-07-18 Actions-minute reduction (commit <code>777348ec</code>) cut the <code>e2e-gate</code> to chromium only (<code>deploy.yml:482</code>, <code>browsers: &#39;[&quot;chromium&quot;]&#39;</code>); firefox/webkit now run only on the nightly matrix (<code>e2e.yml:117</code>), so the granted basis no longer holds; expect a maturity reopen at the next re-score. Evidence as of 07-17: <code>e2e.yml:69,76</code> (now <code>:117</code>); <code>deploy.yml:315,429</code> (now <code>:417-423,:634</code>); <code>ProductList.razor:24</code>; <code>CatalogBrowse.razor:86</code></td>
           </tr>
           <tr>
           <td>23</td>
