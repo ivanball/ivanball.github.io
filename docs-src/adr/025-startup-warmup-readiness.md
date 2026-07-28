@@ -1,7 +1,9 @@
 # ADR-025: Startup Warm-Up and Readiness Gating for Cold-Start Mitigation
 
 ## Status
-Accepted (2026-06-27).
+Accepted (2026-06-27). Revised 2026-07-28: `/health/ready` now excludes `optional`-tagged checks as well
+as `live`-tagged ones (see Decision), and the absence of a warm-up timeout is recorded as a known gap
+(see Trade-offs).
 
 ## Context
 On the Azure Container Apps Consumption plan a replica that has been idle is CPU-throttled, and a
@@ -21,9 +23,16 @@ gets it.
 
 - **A readiness gate that starts closed.** `WarmupReadinessGate` (singleton) begins not-ready;
   `WarmupReadinessHealthCheck` is registered tagged `ready` and reports `Unhealthy` until the gate opens.
-  `MapDefaultEndpoints()` maps `/health/ready` to every non-`live` check, so while warm-up is running the
-  replica's readiness endpoint reports not-ready and the platform keeps traffic off it. (`/alive` maps
-  only the `live`-tagged self check, so liveness is unaffected and the container is not restarted.)
+  `MapDefaultEndpoints()` maps `/health/ready` to every check tagged neither `live` nor `optional`
+  (`Source/Hosting/MMCA.Common.Aspire/Extensions.cs:348`), so while warm-up is running the replica's
+  readiness endpoint reports not-ready and the platform keeps traffic off it. (`/alive` maps only the
+  `live`-tagged self check, `Extensions.cs:332`, so liveness is unaffected and the container is not
+  restarted.) The second exclusion, `optional` (`HealthCheckTags.cs:32`), covers a dependency the app
+  degrades gracefully without: a distributed cache sitting behind an in-memory fallback, a broker behind
+  a retrying outbox. Those checks are still reported on `/health`, so the degradation stays visible, but
+  they do not gate readiness, because making them readiness-fatal converts a partial degradation into a
+  total outage (every replica goes unready at once and the app stops serving traffic it could still
+  serve). A check is left untagged only when the app genuinely cannot answer correctly without it.
 - **A background runner that opens the gate once warm-up has had its chance.** `WarmupHostedService`
   runs every registered `IWarmupTask` exactly once, in parallel, then opens the gate. Critically the gate
   is opened in a `finally`, so it **opens even if tasks fail**: a stuck dependency must not keep a replica
@@ -59,10 +68,21 @@ gets it.
   without JwtBearer pays nothing.
 
 ## Trade-offs
-- **A replica can enter rotation not fully warm.** Because the gate opens on failure (or timeout), the
-  first request to such a replica still pays the lazy cost; the resilience pipeline mitigates this but
-  does not eliminate it. This is deliberate (availability over warmth) but means the gate is a
-  best-effort warm-up signal, not a guarantee.
+- **A replica can enter rotation not fully warm.** The gate is opened in a `finally` once the
+  `Task.WhenAll` over every registered task returns, that is, once each task has completed or thrown
+  (`Source/Hosting/MMCA.Common.Aspire/Warmup/WarmupHostedService.cs:25`, `:30`); a thrown task is caught
+  and logged rather than retried, so a failed warm-up still admits the replica and its first request pays
+  the lazy cost. The resilience pipeline mitigates this but does not eliminate it. This is deliberate
+  (availability over warmth) but means the gate is a best-effort warm-up signal, not a guarantee.
+- **Known gap: there is no warm-up-level timeout.** The `Task.WhenAll` is unbounded
+  (`WarmupHostedService.cs:25`), no per-task deadline exists anywhere in the warm-up subsystem, and the
+  only token in play is the host's `stoppingToken`, which trips at shutdown rather than after a warm-up
+  budget. A task that fails fast is handled; a task that HANGS holds the readiness gate closed for as
+  long as the host runs, which is exactly the outcome the Decision above says must not happen (the
+  `finally` guards against a throwing task, not a hanging one). The built-in OIDC task is bounded only
+  incidentally, because its HTTP call inherits the shared Polly total-request timeout
+  (`Extensions.cs:62`) and therefore surfaces as a thrown task; a host-registered task doing non-HTTP
+  work has no such bound.
 - **The gate does not surface a broken dependency.** Since it opens regardless, a persistently failing
   warm-up task is visible only in logs and (for dependencies that have their own health checks) through
   the separate untagged readiness checks, not through the warm-up gate itself.

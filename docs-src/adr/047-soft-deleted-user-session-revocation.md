@@ -68,7 +68,7 @@ by a short cache so the account-status lookup is not paid on every request.
   (`SoftDeletedUserMiddleware.cs:54-61`): Identity is the source of truth and already validated the
   token upstream. Resolving it as a constructor/parameter dependency would instead 500 every request
   in those services. MMCA.Helpdesk wires the same pipeline
-  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:96`) but hosts only a Tickets module and
+  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:98`) but hosts only a Tickets module and
   registers no validator, so it takes the same no-op path.
 
 `SoftDeletedUserMiddlewareTests`

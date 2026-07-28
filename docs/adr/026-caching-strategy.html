@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 55 ADRs</summary>
+        <summary>All 60 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -154,6 +154,11 @@
         <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
         <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
         <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
           </ol>
         </nav>
       </details>
@@ -231,7 +236,7 @@
           that served the mutation. Both adopters now register a shared store inside the same
           redis-connection-string conditional that wires Tier 1: ADC Conference
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:129</code>) and Store Catalog
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:88</code>) both call
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:90</code>) both call
           <code>builder.Services.AddStackExchangeRedisOutputCache(...)</code>. <code>AddOutputCache</code> registers its store with
           <code>TryAdd</code>, so the explicit registration wins regardless of call order, and with no Redis configured the
           in-memory store still applies, which is correct at a single replica. ADR-040&#39;s 2026-07-25 amendment
@@ -268,10 +273,10 @@
           <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:113,118</code>, Notification
           <code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:99,104</code>, Engagement
           <code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:88,93</code>, Identity
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:109,114</code>; Store Catalog
-          <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:73,78</code>, Sales
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:108,113</code>; Store Catalog
+          <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:75,80</code>, Sales
           <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:76,81</code>, Identity
-          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:77,82</code>). So whenever Redis is
+          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:79,84</code>). So whenever Redis is
           configured, prefix-based invalidation against Redis is live and cached entries are evicted on write; the
           30s TTL is now the backstop only for the no-Redis case (memory mode), where prefix removal self-heals
           within seconds instead. Single-key <code>RemoveAsync</code> is unaffected in either mode.</li>
@@ -342,7 +347,27 @@
           <li><strong>Tier 2 now records the output-cache store, not just the policies.</strong> ADC Conference and Store
           Catalog back the output cache with Redis when Redis is configured, so tag eviction crosses replicas;
           the in-memory store remains the single-replica case. This tracks ADR-040&#39;s 2026-07-25 amendment.</li>
-          <li><strong>Refreshed line anchors</strong> for <code>AddCaching</code> and for the two adopters&#39; paired Redis registrations.</li>
+          <li><strong>Refreshed line anchors</strong> for <code>AddCaching</code> and for the two adopters&#39; paired Redis registrations.
+          That refresh did not hold: four of the per-service citations it covered no longer matched the code
+          when the ADR was next swept, so read this item as the state on 2026-07-25 only. The 2026-07-28
+          entry below re-anchored them.</li>
+          </ol>
+          <h2 id="revision-2026-07-28">Revision (2026-07-28)</h2>
+          <p>Line anchors only, re-verified against the current source. No decision, no behavior, and no
+          substantive prose changed.</p>
+          <ol>
+          <li><strong>Tier 2.</strong> Store Catalog&#39;s <code>AddStackExchangeRedisOutputCache(...)</code> is at <code>Program.cs:90</code>; the
+          previously cited <code>:88</code> had become a line inside the comment above the call. ADC Conference&#39;s
+          <code>Program.cs:129</code> was re-checked and still holds.</li>
+          <li><strong>Trade-offs, the seven paired Redis registrations.</strong> Three moved: ADC Identity to
+          <code>Program.cs:108,113</code> (from <code>:109,114</code>), Store Catalog to <code>Program.cs:75,80</code> (from <code>:73,78</code>), and
+          Store Identity to <code>Program.cs:79,84</code> (from <code>:77,82</code>). The other four were re-checked and are
+          unchanged: ADC Conference <code>:113,118</code>, ADC Notification <code>:99,104</code>, ADC Engagement <code>:88,93</code>, Store
+          Sales <code>:76,81</code>. <code>AddCaching</code> at <code>MMCA.Common.Infrastructure/DependencyInjection.cs:149</code> is also
+          unchanged, as are the Tier 2 policy anchors in <code>MMCA.Common.API</code> and the counter anchors in
+          <code>ICacheService</code> / <code>DistributedCacheService</code>.</li>
+          <li><strong>The 2026-07-25 anchor claim is annotated rather than removed</strong>, so the history stays readable
+          without asserting an accuracy it no longer had.</li>
           </ol>
           
         <div class="doc-foot btn-row">
@@ -362,6 +387,7 @@
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-07-24">Revision (2026-07-24)</a></li>
             <li><a href="#revision-2026-07-25">Revision (2026-07-25)</a></li>
+            <li><a href="#revision-2026-07-28">Revision (2026-07-28)</a></li>
             </ul>
           </nav>
         </aside>

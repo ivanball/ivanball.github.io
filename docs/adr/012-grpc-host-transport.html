@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-012: gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (re-verified against source 2026-07-25).">
+  <meta name="description" content="Accepted (re-verified against source 2026-07-28).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/012-grpc-host-transport.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-012: gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)">
-  <meta property="og:description" content="Accepted (re-verified against source 2026-07-25).">
+  <meta property="og:description" content="Accepted (re-verified against source 2026-07-28).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/012-grpc-host-transport.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-012: gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)">
-  <meta name="twitter:description" content="Accepted (re-verified against source 2026-07-25).">
+  <meta name="twitter:description" content="Accepted (re-verified against source 2026-07-28).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)","item":"https://ivanball.github.io/docs/adr/012-grpc-host-transport.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 55 ADRs</summary>
+        <summary>All 60 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -154,6 +154,11 @@
         <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
         <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
         <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
           </ol>
         </nav>
       </details>
@@ -162,7 +167,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-012-grpc-host-transport-convention-http2-only-h2c-vs-http1andhttp2--alpn">ADR-012: gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (re-verified against source 2026-07-25).</p>
+          <p>Accepted (re-verified against source 2026-07-28).</p>
           <h2 id="update-2026-06-22-store-converged-to-profile-a">Update (2026-06-22): Store converged to Profile A</h2>
           <p>Store originally chose Profile B, but its cross-service gRPC failed in Azure Container Apps. With
           <code>Http1AndHttp2</code> Kestrel + <code>transport: &#39;auto&#39;</code> ingress on a <strong>cleartext</strong> endpoint there is no ALPN, so
@@ -174,8 +179,11 @@
           <p>Fixed in commit 49b7283 (deployed green) by adopting <strong>Profile A</strong> for Store:</p>
           <ul>
           <li>Catalog + Identity run <code>Http2</code>-only on cleartext (<code>Kestrel:EndpointDefaults:Protocols=Http2</code>), ACA
-          ingress <code>transport: &#39;http2&#39;</code>, with <strong>TCP</strong> startup/liveness probes (Http2-only Kestrel rejects the
-          kubelet&#39;s HTTP/1.1 <code>httpGet</code> probes with GOAWAY).</li>
+          ingress <code>transport: &#39;http2&#39;</code>, and shipped at the time with <strong>TCP</strong> startup/liveness probes
+          (Http2-only Kestrel rejects the kubelet&#39;s HTTP/1.1 <code>httpGet</code> probes with GOAWAY).
+          <em>(The TCP-probe half of this bullet was superseded on 2026-07-27: Store replaced those probes with
+          the dedicated Http1-only probe listener. The Kestrel and ingress halves still hold. See the
+          2026-07-28 update below.)</em></li>
           <li>Gateway forwards HTTP/2 (<code>ForwardHttp2=true</code>, <code>VersionPolicy=RequestVersionExact</code>); Catalog/Identity
           routes carry HTTP/2, Sales routes stay HTTP/1.1.</li>
           <li>Sales (no gRPC server) stays <code>Http1AndHttp2</code> with <code>transport: &#39;http&#39;</code>.</li>
@@ -229,7 +237,7 @@
           and is only worth it when both constraints genuinely meet in one host.</p>
           <h2 id="update-2026-07-25-probe-listeners-are-adcs-answer-not-tcp-probes-and-gateway-routed-jwks-is-a-local-only-rule">Update (2026-07-25): probe listeners are ADC&#39;s answer, not TCP probes; and gateway-routed JWKS is a local-only rule</h2>
           <p>Two claims above were written from an earlier state of the code and no longer describe either app.</p>
-          <p><strong>1. ADC probes never touch the traffic endpoint; TCP probes are Store-only.</strong> Every ADC service now
+          <p><strong>1. ADC probes never touch the traffic endpoint; TCP probes were then Store-only.</strong> Every ADC service now
           adds a dedicated <code>Http1</code>-only Kestrel listener whose only job is to answer the platform&#39;s HTTP/1.1
           <code>httpGet</code> probes, on a port that is never exposed via ingress:</p>
           <ul>
@@ -237,7 +245,7 @@
           <code>HealthProbe__Port=8081</code> (<code>MMCA.ADC/infra/main.bicep:957</code>, <code>:1126</code>, <code>:1235</code>) and points startup,
           liveness, and readiness at it (<code>main.bicep:1045-1070</code> for Identity). The listener is added by
           <code>KestrelConfiguration.ConfigureHttp2WithHealthProbe</code>, called from each service&#39;s
-          <code>Program.cs</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:80</code>).</li>
+          <code>Program.cs</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:79</code>).</li>
           <li>The mixed-endpoint host (Notification) listens on <strong>8082</strong>, one port above its <code>grpc</code> endpoint:
           <code>HealthProbe__Port=8082</code> at <code>main.bicep:1367</code>, with all three probes on 8082 at
           <code>main.bicep:1414-1439</code>. The listener is added by
@@ -248,11 +256,12 @@
           </ul>
           <p>So Notification&#39;s default endpoint no longer serves the probes either, and the parenthetical
           contrast with &quot;full Profile A hosts&quot; was backwards: those hosts use the same dedicated-listener
-          pattern, not TCP probes. <strong><code>tcpSocket</code> probes survive only in MMCA.Store</strong>, on Identity
-          (<code>MMCA.Store/infra/main.bicep:733-734</code>) and Catalog (<code>:814-815</code>), where the Http2-only default
-          endpoint would answer an HTTP/1.1 <code>httpGet</code> with GOAWAY <code>HTTP_1_1_REQUIRED</code>. The trade is real: a
-          TCP probe only proves the listener is bound, while the dedicated listener lets readiness run the
-          actual <code>/health/ready</code> check (warmup gate plus the DB-aware check), which is why ADC moved.</p>
+          pattern, not TCP probes. As of this update <code>tcpSocket</code> probes were still in use in <strong>MMCA.Store</strong>,
+          on Identity and Catalog, whose Http2-only default endpoint would answer an HTTP/1.1 <code>httpGet</code> with
+          GOAWAY <code>HTTP_1_1_REQUIRED</code>. The trade is real: a TCP probe only proves the listener is bound, while
+          the dedicated listener lets readiness run the actual <code>/health/ready</code> check (warmup gate plus the
+          DB-aware check), which is why ADC moved, and (two days later) why Store followed: see the
+          2026-07-28 update below.</p>
           <p><strong>2. <code>WithJwksDiscovery(identity, gateway)</code> is local Aspire wiring, not ADC&#39;s production rule.</strong>
           The two-argument call sites are all in the AppHost
           (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:273-275</code>), which configures the local
@@ -265,6 +274,35 @@
           through the gateway locally and use the direct in-cluster authority in production. Read the Profile A
           JWKS bullet below as the local-development rule plus the reason the direct authority cannot be used
           from a default backchannel outside ACA.</p>
+          <h2 id="update-2026-07-28-the-probe-listener-is-the-single-pattern-in-both-apps-no-tcp-probes-anywhere">Update (2026-07-28): the probe listener is the single pattern in both apps (no TCP probes anywhere)</h2>
+          <p>Store PR #55 (commit <code>297064bb</code>, merged 2026-07-27) ported ADC&#39;s dedicated probe listener to Store,
+          so the Store-only <code>tcpSocket</code> exception recorded in the 2026-07-25 update above is gone. <strong>Neither
+          production Bicep file contains a <code>tcpSocket</code> probe: every container app in both apps is probed over
+          HTTP/1.1 <code>httpGet</code>.</strong> The pattern is now uniform:</p>
+          <ul>
+          <li><strong>Each <code>Http2</code>-only host adds a dedicated <code>Http1</code>-only Kestrel listener</strong> whose only job is to
+          answer the platform&#39;s HTTP/1.1 probes, on a port that is never exposed via ingress. It is added by
+          <code>KestrelConfiguration.ConfigureHttp2WithHealthProbe</code> when <code>HealthProbe:Port</code> is set, and that
+          method is now identical in both apps: it re-declares the h2c traffic endpoint on 8080 and opens the
+          probe port as <code>Http1</code>
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/KestrelConfiguration.cs:27-41</code>,
+          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/KestrelConfiguration.cs:27-41</code>). Store&#39;s
+          call sites are <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:50</code> and
+          <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:45</code>.</li>
+          <li><strong>Bicep injects the port and points startup, liveness, and readiness at it.</strong> Store sets
+          <code>HealthProbe__Port=8081</code> on Identity (<code>MMCA.Store/infra/main.bicep:732</code>) and Catalog (<code>:824</code>), with
+          <code>/alive</code> for startup and liveness and <code>/health/ready</code> for readiness on 8081 (<code>main.bicep:744-747</code>
+          and <code>:835-838</code>). ADC is unchanged (8081 for the three Profile A hosts, 8082 for Notification): the
+          anchors in the 2026-07-25 update above still hold.</li>
+          <li><strong>Hosts that never went Http2-only keep probing their traffic port.</strong> Store&#39;s Sales, Gateway, and
+          UI probe 8080 directly (<code>MMCA.Store/infra/main.bicep:939-941</code>, <code>:1004-1006</code>, <code>:1079-1081</code>), because
+          an <code>Http1AndHttp2</code> endpoint answers the HTTP/1.1 probe on its own.</li>
+          </ul>
+          <p>Rule: the dedicated probe listener is part of Profile A, not an app-specific workaround. A host that
+          goes <code>Http2</code>-only on cleartext gets the extra <code>Http1</code> listener plus <code>HealthProbe__Port</code> in its Bicep
+          in the same change. A TCP probe is not the answer: it only proves the socket is bound and never
+          reaches the readiness pipeline (the warmup gate plus the DB-aware check), so a replica that cannot
+          reach its database keeps serving traffic.</p>
           <h2 id="context">Context</h2>
           <p>Once modules were extracted into separate service hosts (ADR-008) that call each other synchronously
           over gRPC (ADR-007), each service&#39;s Kestrel had to serve <strong>both</strong> REST traffic (HTTP/1.1 from the
@@ -386,6 +424,7 @@
             <li><a href="#update-2026-06-22-store-converged-to-profile-a">Update (2026-06-22): Store converged to Profile A</a></li>
             <li><a href="#update-2026-07-09-adc-notification-adds-a-mixed-endpoint-profile-per-endpoint-protocols">Update (2026-07-09): ADC Notification adds a mixed-endpoint profile (per-endpoint protocols)</a></li>
             <li><a href="#update-2026-07-25-probe-listeners-are-adcs-answer-not-tcp-probes-and-gateway-routed-jwks-is-a-local-only-rule">Update (2026-07-25): probe listeners are ADC&#39;s answer, not TCP probes; and gateway-routed JWKS is a local-only rule</a></li>
+            <li><a href="#update-2026-07-28-the-probe-listener-is-the-single-pattern-in-both-apps-no-tcp-probes-anywhere">Update (2026-07-28): the probe listener is the single pattern in both apps (no TCP probes anywhere)</a></li>
             <li><a href="#context">Context</a></li>
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>

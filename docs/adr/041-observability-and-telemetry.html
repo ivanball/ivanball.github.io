@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 55 ADRs</summary>
+        <summary>All 60 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -154,6 +154,11 @@
         <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
         <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
         <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
           </ol>
         </nav>
       </details>
@@ -166,7 +171,9 @@
           <code>Telemetry:DisableRuntimeMetrics</code> cost knobs and to correct the meter/activity-source literal
           citations. Amended (2026-07-25) to describe how the CQRS logging decorators actually record duration
           (a per-path <code>RecordDuration</code> helper, not a <code>finally</code>) and to rebase the decorator outcome-tag, outbox
-          poll-span, and <code>OutboxProcess</code> parent-context citations onto their current lines.</p>
+          poll-span, and <code>OutboxProcess</code> parent-context citations onto their current lines. Amended
+          (2026-07-28) to rebase the Aspire service-defaults citations (the sampling and cost-knob helpers, the
+          two exporter reads) and the outbox dead-letter increment onto their current lines.</p>
           <h2 id="context">Context</h2>
           <p>The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
           the same telemetry has to make sense whether a request stays in one process or crosses a gateway and
@@ -212,7 +219,7 @@
           <li><p><strong>An outbox dead-letter counter.</strong> The outbox processor owns a meter <code>MMCA.Common.Outbox</code>
           (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:62</code>) and a counter
           <code>outbox.dead_letter.count</code> (<code>OutboxProcessor.cs:63</code>), incremented with an <code>event_type</code> tag whenever
-          a message is dead-lettered because its type cannot be resolved (<code>OutboxProcessor.cs:348</code>). The same
+          a message is dead-lettered because its type cannot be resolved (<code>OutboxProcessor.cs:351</code>). The same
           source emits outbox spans (<code>OutboxProcessor.cs:61</code>); both the meter and the trace source are
           registered by literal name in the Aspire defaults (<code>Extensions.cs:157</code>, <code>Extensions.cs:163</code>).</p>
           </li>
@@ -233,18 +240,18 @@
           instrumentation at <code>Extensions.cs:143</code>), and .NET runtime metrics (<code>dotnet.gc.*</code>, <code>jit.*</code>,
           <code>thread_pool.*</code>) only when <code>Telemetry:DisableRuntimeMetrics</code> is unset or false (<code>Extensions.cs:150</code>,
           adding at <code>Extensions.cs:152</code>). Both keys are read by <code>IsInstrumentationDisabled</code>
-          (<code>Extensions.cs:350</code>), which drops the family only when the value parses as boolean <code>true</code>; absent,
+          (<code>Extensions.cs:384</code>), which drops the family only when the value parses as boolean <code>true</code>; absent,
           blank, or unparseable falls back to keeping the instrumentation, so a typo cannot silently blind a
           whole metric family. A deployed host sets one or both to <code>true</code> to cut ingestion cost; outbound
           dependency latency is still captured as traces when <code>HttpClient</code> metrics are dropped.</p>
           </li>
           <li><p><strong>Head-based sampling as a cost knob, off by default.</strong> <code>Telemetry:TracesSampleRatio</code>
-          (<code>Extensions.cs:179</code>, parsed by <code>TryGetTraceSampleRatio</code> at <code>Extensions.cs:327</code>) is unset by
+          (<code>Extensions.cs:179</code>, parsed by <code>TryGetTraceSampleRatio</code> at <code>Extensions.cs:361</code>) is unset by
           default, so a host samples everything and behavior does not change. A deployed host sets a ratio in
           the open interval (0,1) to keep that fraction of traces; the value wraps a <code>TraceIdRatioBasedSampler</code>
           in a <code>ParentBasedSampler</code> (<code>Extensions.cs:180</code>) so a sampled-in request keeps its whole trace across
           service boundaries. A key that is absent, unparseable, or outside (0,1) falls back to sample-all
-          (<code>Extensions.cs:331</code>), so a typo can never silently drop all telemetry.</p>
+          (<code>Extensions.cs:365</code>-<code>Extensions.cs:369</code>), so a typo can never silently drop all telemetry.</p>
           </li>
           <li><p><strong>Outbox poll spans are filtered out of export.</strong> <code>OutboxPollFilterProcessor</code>
           (<code>Source/Hosting/MMCA.Common.Aspire/Telemetry/OutboxPollFilterProcessor.cs:15</code>), registered before
@@ -258,11 +265,11 @@
           poll span.</p>
           </li>
           <li><p><strong>Dual exporters, either or both.</strong> <code>AddOpenTelemetryExporters</code> enables OTLP when
-          <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is present (<code>Extensions.cs:250</code>, the Aspire dashboard sets it) and
-          Azure Monitor via <code>UseAzureMonitor</code> when <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> is present
-          (<code>Extensions.cs:258</code>, set by the cloud deployment). Both can be active at once
-          (<code>Extensions.cs:245</code>), so local development ships to the Aspire dashboard and production ships to
-          workspace-based Application Insights with no code change.</p>
+          <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is present (<code>Extensions.cs:277</code>, the Aspire dashboard sets it) and
+          Azure Monitor via <code>UseAzureMonitor</code> (<code>Extensions.cs:289</code>) when
+          <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> is present (<code>Extensions.cs:285</code>, set by the cloud
+          deployment). Both can be active at once (<code>Extensions.cs:272</code>), so local development ships to the
+          Aspire dashboard and production ships to workspace-based Application Insights with no code change.</p>
           </li>
           </ul>
           <h2 id="rationale">Rationale</h2>

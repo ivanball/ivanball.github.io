@@ -5,7 +5,9 @@ Accepted (2026-07-10). Amended (2026-07-23) to document the `Telemetry:DisableHt
 `Telemetry:DisableRuntimeMetrics` cost knobs and to correct the meter/activity-source literal
 citations. Amended (2026-07-25) to describe how the CQRS logging decorators actually record duration
 (a per-path `RecordDuration` helper, not a `finally`) and to rebase the decorator outcome-tag, outbox
-poll-span, and `OutboxProcess` parent-context citations onto their current lines.
+poll-span, and `OutboxProcess` parent-context citations onto their current lines. Amended
+(2026-07-28) to rebase the Aspire service-defaults citations (the sampling and cost-knob helpers, the
+two exporter reads) and the outbox dead-letter increment onto their current lines.
 
 ## Context
 The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
@@ -54,7 +56,7 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
 - **An outbox dead-letter counter.** The outbox processor owns a meter `MMCA.Common.Outbox`
   (`Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:62`) and a counter
   `outbox.dead_letter.count` (`OutboxProcessor.cs:63`), incremented with an `event_type` tag whenever
-  a message is dead-lettered because its type cannot be resolved (`OutboxProcessor.cs:348`). The same
+  a message is dead-lettered because its type cannot be resolved (`OutboxProcessor.cs:351`). The same
   source emits outbox spans (`OutboxProcessor.cs:61`); both the meter and the trace source are
   registered by literal name in the Aspire defaults (`Extensions.cs:157`, `Extensions.cs:163`).
 
@@ -75,18 +77,18 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
   instrumentation at `Extensions.cs:143`), and .NET runtime metrics (`dotnet.gc.*`, `jit.*`,
   `thread_pool.*`) only when `Telemetry:DisableRuntimeMetrics` is unset or false (`Extensions.cs:150`,
   adding at `Extensions.cs:152`). Both keys are read by `IsInstrumentationDisabled`
-  (`Extensions.cs:350`), which drops the family only when the value parses as boolean `true`; absent,
+  (`Extensions.cs:384`), which drops the family only when the value parses as boolean `true`; absent,
   blank, or unparseable falls back to keeping the instrumentation, so a typo cannot silently blind a
   whole metric family. A deployed host sets one or both to `true` to cut ingestion cost; outbound
   dependency latency is still captured as traces when `HttpClient` metrics are dropped.
 
 - **Head-based sampling as a cost knob, off by default.** `Telemetry:TracesSampleRatio`
-  (`Extensions.cs:179`, parsed by `TryGetTraceSampleRatio` at `Extensions.cs:327`) is unset by
+  (`Extensions.cs:179`, parsed by `TryGetTraceSampleRatio` at `Extensions.cs:361`) is unset by
   default, so a host samples everything and behavior does not change. A deployed host sets a ratio in
   the open interval (0,1) to keep that fraction of traces; the value wraps a `TraceIdRatioBasedSampler`
   in a `ParentBasedSampler` (`Extensions.cs:180`) so a sampled-in request keeps its whole trace across
   service boundaries. A key that is absent, unparseable, or outside (0,1) falls back to sample-all
-  (`Extensions.cs:331`), so a typo can never silently drop all telemetry.
+  (`Extensions.cs:365`-`Extensions.cs:369`), so a typo can never silently drop all telemetry.
 
 - **Outbox poll spans are filtered out of export.** `OutboxPollFilterProcessor`
   (`Source/Hosting/MMCA.Common.Aspire/Telemetry/OutboxPollFilterProcessor.cs:15`), registered before
@@ -100,11 +102,11 @@ for the CQRS and outbox paths, and expose cost knobs with fail-safe defaults.
   poll span.
 
 - **Dual exporters, either or both.** `AddOpenTelemetryExporters` enables OTLP when
-  `OTEL_EXPORTER_OTLP_ENDPOINT` is present (`Extensions.cs:250`, the Aspire dashboard sets it) and
-  Azure Monitor via `UseAzureMonitor` when `APPLICATIONINSIGHTS_CONNECTION_STRING` is present
-  (`Extensions.cs:258`, set by the cloud deployment). Both can be active at once
-  (`Extensions.cs:245`), so local development ships to the Aspire dashboard and production ships to
-  workspace-based Application Insights with no code change.
+  `OTEL_EXPORTER_OTLP_ENDPOINT` is present (`Extensions.cs:277`, the Aspire dashboard sets it) and
+  Azure Monitor via `UseAzureMonitor` (`Extensions.cs:289`) when
+  `APPLICATIONINSIGHTS_CONNECTION_STRING` is present (`Extensions.cs:285`, set by the cloud
+  deployment). Both can be active at once (`Extensions.cs:272`), so local development ships to the
+  Aspire dashboard and production ships to workspace-based Application Insights with no code change.
 
 ## Rationale
 - **Instrument only where auto-instrumentation is blind.** The CQRS RED histograms and the outbox

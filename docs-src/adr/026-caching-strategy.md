@@ -73,7 +73,7 @@ Cache in two tiers, each with its own substrate.
   that served the mutation. Both adopters now register a shared store inside the same
   redis-connection-string conditional that wires Tier 1: ADC Conference
   (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:129`) and Store Catalog
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:88`) both call
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:90`) both call
   `builder.Services.AddStackExchangeRedisOutputCache(...)`. `AddOutputCache` registers its store with
   `TryAdd`, so the explicit registration wins regardless of call order, and with no Redis configured the
   in-memory store still applies, which is correct at a single replica. ADR-040's 2026-07-25 amendment
@@ -108,10 +108,10 @@ Cache in two tiers, each with its own substrate.
   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:113,118`, Notification
   `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:99,104`, Engagement
   `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:88,93`, Identity
-  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:109,114`; Store Catalog
-  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:73,78`, Sales
+  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:108,113`; Store Catalog
+  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:75,80`, Sales
   `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:76,81`, Identity
-  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:77,82`). So whenever Redis is
+  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:79,84`). So whenever Redis is
   configured, prefix-based invalidation against Redis is live and cached entries are evicted on write; the
   30s TTL is now the backstop only for the no-Redis case (memory mode), where prefix removal self-heals
   within seconds instead. Single-key `RemoveAsync` is unaffected in either mode.
@@ -185,3 +185,23 @@ An audit against the code. No behavior changed; the ADR text did.
    Catalog back the output cache with Redis when Redis is configured, so tag eviction crosses replicas;
    the in-memory store remains the single-replica case. This tracks ADR-040's 2026-07-25 amendment.
 3. **Refreshed line anchors** for `AddCaching` and for the two adopters' paired Redis registrations.
+   That refresh did not hold: four of the per-service citations it covered no longer matched the code
+   when the ADR was next swept, so read this item as the state on 2026-07-25 only. The 2026-07-28
+   entry below re-anchored them.
+
+## Revision (2026-07-28)
+Line anchors only, re-verified against the current source. No decision, no behavior, and no
+substantive prose changed.
+
+1. **Tier 2.** Store Catalog's `AddStackExchangeRedisOutputCache(...)` is at `Program.cs:90`; the
+   previously cited `:88` had become a line inside the comment above the call. ADC Conference's
+   `Program.cs:129` was re-checked and still holds.
+2. **Trade-offs, the seven paired Redis registrations.** Three moved: ADC Identity to
+   `Program.cs:108,113` (from `:109,114`), Store Catalog to `Program.cs:75,80` (from `:73,78`), and
+   Store Identity to `Program.cs:79,84` (from `:77,82`). The other four were re-checked and are
+   unchanged: ADC Conference `:113,118`, ADC Notification `:99,104`, ADC Engagement `:88,93`, Store
+   Sales `:76,81`. `AddCaching` at `MMCA.Common.Infrastructure/DependencyInjection.cs:149` is also
+   unchanged, as are the Tier 2 policy anchors in `MMCA.Common.API` and the counter anchors in
+   `ICacheService` / `DistributedCacheService`.
+3. **The 2026-07-25 anchor claim is annotated rather than removed**, so the history stays readable
+   without asserting an accuracy it no longer had.

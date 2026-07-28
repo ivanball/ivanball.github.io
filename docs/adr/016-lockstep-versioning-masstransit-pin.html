@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-016: Lockstep Package Versioning and the MassTransit-v8 Pin · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-15).">
+  <meta name="description" content="Accepted (2026-07-15). Amended (2026-07-28): the fitness function now gates two commercial-license majors (MassTransit and SixLabors.ImageSharp), so…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/016-lockstep-versioning-masstransit-pin.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-016: Lockstep Package Versioning and the MassTransit-v8 Pin">
-  <meta property="og:description" content="Accepted (2026-07-15).">
+  <meta property="og:description" content="Accepted (2026-07-15). Amended (2026-07-28): the fitness function now gates two commercial-license majors (MassTransit and SixLabors.ImageSharp), so…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/016-lockstep-versioning-masstransit-pin.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-016: Lockstep Package Versioning and the MassTransit-v8 Pin">
-  <meta name="twitter:description" content="Accepted (2026-07-15).">
+  <meta name="twitter:description" content="Accepted (2026-07-15). Amended (2026-07-28): the fitness function now gates two commercial-license majors (MassTransit and SixLabors.ImageSharp), so…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"016 · Lockstep Package Versioning and the MassTransit-v8 Pin","item":"https://ivanball.github.io/docs/adr/016-lockstep-versioning-masstransit-pin.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 55 ADRs</summary>
+        <summary>All 60 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -154,6 +154,11 @@
         <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
         <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
         <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
           </ol>
         </nav>
       </details>
@@ -162,7 +167,11 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-016-lockstep-package-versioning-and-the-masstransit-v8-pin">ADR-016: Lockstep Package Versioning and the MassTransit-v8 Pin</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-15).</p>
+          <p>Accepted (2026-07-15). Amended (2026-07-28): the fitness function now gates two commercial-license
+          majors (MassTransit and SixLabors.ImageSharp), so the decision is restated as the pattern rather than
+          the single pin; the consumer framing is corrected (Store and ADC each declare a
+          <code>MassTransit.Azure.ServiceBus.Core</code> entry of their own for the Service Bus emulator test tier), as is
+          the claim that framework-to-app (<code>[C-&gt;A]</code>) changes are non-breaking.</p>
           <h2 id="context">Context</h2>
           <p>MMCA.Common publishes its <code>MMCA.Common.*</code> NuGet package set (see <code>FACTS.md</code> for the authoritative
           list and count) consumed by three downstream repos: the two
@@ -180,22 +189,46 @@
           </ol>
           <h2 id="decision">Decision</h2>
           <ol>
-          <li><strong>Version the whole <code>MMCA.Common.*</code> package set in lockstep.</strong> All packages share one version (MinVer, derived from
+          <li><p><strong>Version the whole <code>MMCA.Common.*</code> package set in lockstep.</strong> All packages share one version (MinVer, derived from
           a single <code>vX.Y.Z</code> git tag); a release tags every package (see <code>FACTS.md</code> for the authoritative list and count)
           at the same version. SemVer and the
-          breaking-change policy live in <code>common-VERSIONING.md</code> in <code>docs-src/guides/</code>.</li>
-          <li><strong>Sweep every consumer in one pass, with no phased rollout.</strong> A framework change ships and all
+          breaking-change policy live in <code>common-VERSIONING.md</code> in <code>docs-src/guides/</code>.</p>
+          </li>
+          <li><p><strong>Sweep every consumer in one pass, with no phased rollout.</strong> A framework change ships and all
           consumers bump every <code>MMCA.Common.*</code> entry in their <code>Directory.Packages.props</code> together.
           The two production apps (Store, ADC) now <strong>commit NuGet lock files</strong> (<code>RestorePackagesWithLockFile</code>,
           R7/TD-01), so each one&#39;s sweep is a version bump <strong>plus a restore that regenerates its lock files</strong>
           (the same <code>audit=all</code> / <code>--force-evaluate</code> mechanics Common already uses); Helpdesk, which defaults
-          to local-source mode, keeps no lock files. Framework-to-app (<code>[C-&gt;A]</code>) changes are designed to be
-          non-breaking so the one-pass sweep is safe.</li>
-          <li><strong>Pin MassTransit to v8 by policy, enforced by a fitness function.</strong> <code>DependencyVersionTests</code> parses
-          <code>Directory.Packages.props</code> and fails the build if the MassTransit major reaches 9 (ADR-015). The pin
-          is asserted only in MMCA.Common, where the version is actually declared; Store, ADC, and Helpdesk
-          inherit it transitively through <code>MMCA.Common.Infrastructure</code> and deliberately do <strong>not</strong> subclass the
-          test (the default rule would fail parsing a pin they do not declare).</li>
+          to local-source mode, keeps no lock files. What makes the one-pass sweep safe is not that
+          framework-to-app (<code>[C-&gt;A]</code>) changes are non-breaking: breaking changes ship deliberately, as
+          MINOR bumps, and the version number is therefore not a breakage signal on its own
+          (<code>Website/docs-src/guides/common-VERSIONING.md:43-50</code>). It is safe because every first-party
+          caller moves in the same change set, an API removal is proven against Helpdesk&#39;s source build
+          first (<code>common-VERSIONING.md:58-64</code>), and there is no <code>[Obsolete]</code> grace period to keep in step
+          (<code>common-VERSIONING.md:66-72</code>).</p>
+          </li>
+          <li><p><strong>Pin a commercial-license dependency below its paid major, enforced by a fitness function.</strong>
+          <code>DependencyVersionTestsBase</code> parses <code>Directory.Packages.props</code> and fails the build when a pinned
+          package reaches the major where its licensing changes (ADR-015). Two are gated today: MassTransit
+          below major 9 (v9 demands <code>MT_LICENSE</code> at startup, so every broker-enabled host crashes without
+          one) and <code>SixLabors.ImageSharp</code> below major 4 (v4 demands a Six Labors key at BUILD time, so its
+          MSBuild targets fail outright), each mirrored as a dependabot major-update ignore so the bump is
+          never even proposed
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/DependencyVersionTestsBase.cs:17-60</code>,
+          <code>MMCA.Common/Directory.Packages.props:54-56,66</code>, <code>MMCA.Common/.github/dependabot.yml:56-65</code>).
+          MassTransit is the original instance; ImageSharp is what showed the rule generalizes.</p>
+          <p>The assertions run in MMCA.Common only, the one repo that subclasses the base
+          (<code>MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/DependencyVersionTests.cs:9</code>).
+          Helpdesk declares neither package. Store and ADC take <code>MassTransit</code> and <code>MassTransit.RabbitMQ</code>
+          transitively through <code>MMCA.Common.Infrastructure</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:34-36</code>),
+          but each <strong>does</strong> declare one MassTransit entry of its own: <code>MassTransit.Azure.ServiceBus.Core</code>
+          8.5.5 for the Service Bus emulator test tier, carrying a comment that points back to Common&#39;s v8
+          pin (<code>MMCA.ADC/Directory.Packages.props:90-95</code>, <code>MMCA.Store/Directory.Packages.props:116-121</code>).
+          They still do not subclass the test: its default list also names the two package ids they do not
+          declare, and the rule fails on a pin it cannot find
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Governance.cs:42-45</code>).</p>
+          </li>
           </ol>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -203,20 +236,28 @@
           <code>vX.Y.Z</code>&quot; is the only supported combination, which is the right trade for a small team.</li>
           <li><strong>No skew.</strong> Sweeping all consumers at once keeps the framework and both apps converged rather than
           drifting across releases.</li>
-          <li><strong>The pin is a build gate, not a comment.</strong> A floating-version sweep would otherwise silently
-          reintroduce the licensed v9 and break startup; a fitness function is the only thing that reliably
-          stops it (which is exactly the invariant-over-discipline posture of ADR-015).</li>
+          <li><strong>A license pin is a build gate, not a comment.</strong> A blanket &quot;update all packages&quot; sweep does not
+          read license terms. It pulled MassTransit to v9 once already, and because CI never starts a broker
+          the build stayed green while every host was primed to crash at startup; ImageSharp v4 fails louder
+          (the build itself) but arrives by exactly the same route. What stops both is the pair: the
+          dependabot ignore keeps the proposal from being raised, and the fitness function catches it when a
+          hand edit raises it anyway (which is exactly the invariant-over-discipline posture of ADR-015).</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li>A consumer cannot adopt a single package in isolation: it takes the whole set at the new version.</li>
           <li>Lockstep will bump a package whose code did not change (acceptable: the version means &quot;compatible
           with this set,&quot; not &quot;this package changed&quot;).</li>
-          <li>The v8 pin forgoes MassTransit v9 features until a licensing decision is made; bumping it is a
-          deliberate, multi-step change, not a one-line version edit.</li>
+          <li>Each pin forgoes the newer major (MassTransit v9, ImageSharp v4) until a licensing decision is
+          made; bumping one is a deliberate, multi-step change, not a one-line version edit.</li>
+          <li>The gate reads MMCA.Common&#39;s <code>Directory.Packages.props</code> and nothing else, so the
+          <code>MassTransit.Azure.ServiceBus.Core</code> entry Store and ADC each declare for their emulator tier sits
+          outside its reach. What holds those two at v8 is that neither repo lets dependabot touch NuGet at
+          all (ADC says so explicitly and cites this ADR, <code>MMCA.ADC/.github/dependabot.yml:1-4</code>; Store has
+          no dependabot config), plus review.</li>
           </ul>
           <h2 id="related">Related</h2>
-          <p>ADR-015 (the fitness function that enforces the pin), ADR-003 / ADR-006 (MassTransit is the broker
+          <p>ADR-015 (the fitness function that enforces the pins), ADR-003 / ADR-006 (MassTransit is the broker
           transport behind the outbox and database-per-service flows).</p>
           
         <div class="doc-foot btn-row">

@@ -2,9 +2,10 @@
 
 ## Status
 Accepted (2026-07-25). Amended (2026-07-25) to put the pre-decision Context statements in the past
-tense, to restate the `MMCA.` ID prefix reservation as pending rather than done, to scope the
+tense, to record the `MMCA.` ID prefix reservation as then-pending, to scope the
 "documented install path" claim to what is actually updated, and to split the packaging metadata
-between `Directory.Build.props` and the per-package csproj files.
+between `Directory.Build.props` and the per-package csproj files. Amended (2026-07-28): that
+reservation has been granted, so the Decision now records it as done rather than pending.
 
 ## Context
 The fifteen `MMCA.Common.*` packages have shipped to GitHub Packages since the first release. That
@@ -53,12 +54,12 @@ Every release publishes to **both** registries, from the same tag, in the same w
   single-use and cannot cross a job boundary.
 - The nuget.org steps are guarded by `github.repository_owner == 'ivanball'`, so a fork completes a
   full GitHub Packages release instead of failing on an exchange it can never satisfy.
-- **An `MMCA.` ID prefix reservation is requested and still pending**, so the ids are not yet
-  protected from being taken by anyone else: the published ids report `verified: false` in the
-  nuget.org search index as of 2026-07-25. Reservation is a manual account-level action (see
-  Trade-offs), which is why it cannot be closed out from this repository. API keys remain available
-  for a manual push from a command line, which trusted publishing does not cover, but no automated
-  path uses one.
+- **The `MMCA.` ID prefix reservation has been granted** (2026-07-28), so the ids are protected from
+  being taken by anyone else: every published `MMCA.Common.*` id reports `verified: true` in the
+  nuget.org search index, where it reported `verified: false` while the request was pending.
+  Reservation is a manual account-level action (see Trade-offs), which is why it could never be
+  closed out from this repository. API keys remain available for a manual push from a command line,
+  which trusted publishing does not cover, but no automated path uses one.
 - **nuget.org is the documented install path.** The README already installs with a plain
   `dotnet add package` and carries the nuget.org badges, and the getting-started guide is moved onto
   the same path in this change. GitHub Packages is retained as a mirror, not deprecated: it is where

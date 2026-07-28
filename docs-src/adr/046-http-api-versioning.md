@@ -23,20 +23,22 @@ host through a single registration call, and keep it exercised by a shared fitne
 proves two live versions coexist.
 
 - **One registration wires the whole policy.** `AddCommonApiVersioning`
-  (`Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:76`) sets the
+  (`Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:110`) sets the
   default version to `1.0`
-  (`WebApplicationBuilderExtensions.cs:80`), assumes it when a caller sends no version
-  (`AssumeDefaultVersionWhenUnspecified = true`, `WebApplicationBuilderExtensions.cs:81`), reports
+  (`WebApplicationBuilderExtensions.cs:114`), assumes it when a caller sends no version
+  (`AssumeDefaultVersionWhenUnspecified = true`, `WebApplicationBuilderExtensions.cs:115`), reports
   the supported/deprecated versions on every response (`ReportApiVersions = true`,
-  `WebApplicationBuilderExtensions.cs:82`), and selects the version from an `api-version` request
-  header (`new HeaderApiVersionReader("api-version")`, `WebApplicationBuilderExtensions.cs:83`). The
+  `WebApplicationBuilderExtensions.cs:116`), and selects the version from an `api-version` request
+  header (`new HeaderApiVersionReader("api-version")`, `WebApplicationBuilderExtensions.cs:117`). The
   reader is header-based deliberately: routes and query strings stay version-free, so a caller opts
   into a newer shape by adding one header rather than changing the URL.
 - **The API explorer is wired for versioned OpenAPI.** The same call chains `.AddMvc()` then
-  `.AddApiExplorer` (`WebApplicationBuilderExtensions.cs:84`), formatting version groups as `'v'VVV`
-  (`WebApplicationBuilderExtensions.cs:87`) and mirroring the default-version behavior for the
-  explorer (`WebApplicationBuilderExtensions.cs:89`). That group format feeds the `v1` OpenAPI
-  document `AddCommonOpenApi` registers (`WebApplicationBuilderExtensions.cs:166`), which
+  `.AddApiExplorer` (`WebApplicationBuilderExtensions.cs:118`,
+  `WebApplicationBuilderExtensions.cs:119`), formatting version groups as `'v'VVV`
+  (`WebApplicationBuilderExtensions.cs:121`) and mirroring the default-version behavior for the
+  explorer (`WebApplicationBuilderExtensions.cs:123`, `WebApplicationBuilderExtensions.cs:124`). That
+  group format feeds the `v1` OpenAPI document `AddCommonOpenApi` registers
+  (`WebApplicationBuilderExtensions.cs:225`), which
   `MapCommonOpenApi` serves at `/openapi/v1.json` outside Production only
   (`Source/Presentation/MMCA.Common.API/Startup/OpenApiEndpointExtensions.cs:28`,
   `OpenApiEndpointExtensions.cs:30`).
@@ -72,11 +74,11 @@ proves two live versions coexist.
   asserted rather than proven.
 - **Every REST host adopts it the same way.** The extracted services call `AddCommonApiVersioning`
   in their startup: ADC's Conference
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:151`) and Identity
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:136`) hosts, Store's Catalog host
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:110`), and the same call is made
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:153`) and Identity
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:137`) hosts, Store's Catalog host
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:114`), and the same call is made
   by the other extracted hosts and by the monolith reference host
-  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:31`).
+  (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:33`).
 
 Application controllers beyond `ServiceInfo` declare `[ApiVersion("1.0")]` today: the second version
 exists on the discovery endpoint to keep the versioning path honest, not because any business

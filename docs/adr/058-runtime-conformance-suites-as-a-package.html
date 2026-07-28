@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-058: Runtime Conformance Suites Shipped as a Package · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-07-28).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-058: Runtime Conformance Suites Shipped as a Package">
+  <meta property="og:description" content="Accepted (2026-07-28).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-058: Runtime Conformance Suites Shipped as a Package">
+  <meta name="twitter:description" content="Accepted (2026-07-28).">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"058 · Runtime Conformance Suites Shipped as a Package","item":"https://ivanball.github.io/docs/adr/058-runtime-conformance-suites-as-a-package.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">058 · Runtime Conformance Suites Shipped as a Package</span>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 60 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html" aria-current="page">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-058-runtime-conformance-suites-shipped-as-a-package">ADR-058: Runtime Conformance Suites Shipped as a Package</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-07-28).</p>
+          <h2 id="context">Context</h2>
+          <p>ADR-015 turned the architecture invariants into build-gating tests, and drew its own boundary
+          explicitly: the fitness suite asserts &quot;<strong>structure / registration</strong>, not runtime behavior&quot;
+          (<code>015-architecture-fitness-functions.md:48</code>). NetArchTest can prove a controller lives in the right
+          assembly and that an outbound client <em>wires</em> resilience. It cannot prove that a booted host answers a
+          bad page number with an RFC 9457 problem document, emits HSTS on a liveness probe, drains within a
+          bounded stop, serves the OpenAPI document it claims to serve, answers two API versions, or nests the
+          ADR-014 decorators in the documented order. Those are runtime contracts of the framework, and every
+          one of them is only true if the consuming host wired it correctly: the framework ships the middleware,
+          the controller base, and the decorator registrations, but the host composes them.</p>
+          <p>The gap is visible in the ADR set. ADR-046 names exactly one of these checks in passing (a &quot;shared
+          fitness contract&quot; for versioning, <code>046-http-api-versioning.md:62</code>), and ADR-013 defines the RFC 9457
+          edge contract that another one guards, but neither decides the layer itself. The runtime-conformance
+          tier has been referenced repeatedly and never recorded on its own.</p>
+          <h2 id="decision">Decision</h2>
+          <p>Ship the runtime conformance suites in the <strong><code>MMCA.Common.Testing</code></strong> package as abstract behavioral
+          bases that each consuming host subclasses, and run every one of them against a host that was actually
+          booted.</p>
+          <ul>
+          <li><strong>Six contract bases, one per runtime contract.</strong> <code>ProblemDetailsContractTestsBase&lt;TFixture&gt;</code>
+          (<code>Source/Hosting/MMCA.Common.Testing/ProblemDetailsContractTestsBase.cs:21</code>) asserts the two
+          error-shaping paths, ASP.NET Core model validation (400, <code>application/problem+json</code> with
+          <code>type</code>/<code>traceId</code>/<code>errors</code>, <code>ProblemDetailsContractTestsBase.cs:30</code>) and the framework&#39;s
+          <code>HandleFailure</code> Result mapping (404, <code>ProblemDetailsContractTestsBase.cs:42</code>), against the shared
+          shape check <code>AssertProblemDetailsShapeAsync</code> (<code>ProblemDetailsContractTestsBase.cs:67</code>).
+          <code>OpenApiContractTestsBase&lt;TFixture&gt;</code> (<code>OpenApiContractTestsBase.cs:21</code>) asserts the live
+          <code>/openapi/v1.json</code> document is OpenAPI 3.x and still describes the pinned public resources
+          (<code>OpenApiContractTestsBase.cs:53</code>, <code>OpenApiContractTestsBase.cs:68</code>).
+          <code>ServiceInfoVersioningContractTestsBase&lt;TFixture&gt;</code> (<code>ServiceInfoVersioningContractTestsBase.cs:19</code>)
+          drives <code>/ServiceInfo</code> at <code>api-version: 1.0</code> and <code>2.0</code> and checks the deprecated/supported reporting
+          headers (<code>ServiceInfoVersioningContractTestsBase.cs:38</code>, <code>:54</code>). <code>SecurityHeadersTestsBase</code>
+          (<code>SecurityHeadersTestsBase.cs:16</code>) probes <code>/alive</code> and pins six response headers, including
+          <code>Content-Security-Policy: frame-ancestors &#39;none&#39;</code> and an HSTS <code>max-age</code>
+          (<code>SecurityHeadersTestsBase.cs:29-35</code>). <code>GracefulShutdownTestsBase&lt;TEntryPoint&gt;</code>
+          (<code>GracefulShutdownTestsBase.cs:24</code>) calls a real <code>IHost.StopAsync</code> under a bounded token and asserts
+          <code>ApplicationStopping</code> then <code>ApplicationStopped</code> fired (<code>GracefulShutdownTestsBase.cs:56</code>, <code>:58</code>,
+          <code>:60</code>). <code>DecoratorPipelineOrderTestsBase&lt;TCommand, TCommandResult, TQuery, TQueryResult&gt;</code>
+          (<code>DecoratorPipelineOrderTestsBase.cs:36</code>) asserts the ADR-014 nesting.</li>
+          <li><strong>The host is really booted; nothing is inferred from registrations.</strong> The five HTTP-facing suites
+          reach the host through <code>IIntegrationTestFixture</code> (<code>IIntegrationTestFixture.cs:8</code>) and
+          <code>IntegrationTestBase&lt;TFixture&gt;</code> (<code>IntegrationTestBase.cs:13</code>), whose <code>Client</code> comes from the
+          fixture&#39;s <code>WebApplicationFactory</code>. Two boot paths ship. Service hosts use
+          <code>SqlServerIntegrationTestFixtureBase&lt;TEntryPoint&gt;</code> (<code>SqlServerIntegrationTestFixtureBase.cs:27</code>):
+          it creates a GUID-named throwaway SQL Server database, pushes the connection string and
+          <code>ASPNETCORE_ENVIRONMENT=Testing</code> as process environment variables <em>before</em> the host is built
+          (<code>SqlServerIntegrationTestFixtureBase.cs:75</code>, <code>:76</code>), lets the host&#39;s own <code>DatabaseInitStrategy=Migrate</code>
+          apply the schema when the first client forces the build
+          (<code>SqlServerIntegrationTestFixtureBase.cs:83</code>), resets data between tests with Respawn
+          (<code>SqlServerIntegrationTestFixtureBase.cs:99</code>), and drops the database on disposal
+          (<code>SqlServerIntegrationTestFixtureBase.cs:127</code>). Database-free hosts use
+          <code>ProductionHostApplicationFactory&lt;TEntryPoint&gt;</code> (<code>ProductionHostApplicationFactory.cs:22</code>), which
+          pins <code>UseEnvironment(&quot;Production&quot;)</code> (<code>ProductionHostApplicationFactory.cs:36</code>) so the
+          production-only branches (restrictive CORS, HSTS emission) are the ones under test, and captures the
+          started <code>IHost</code> (<code>ProductionHostApplicationFactory.cs:29</code>) because <code>StopAsync</code> is not reachable
+          through the <code>WebApplicationFactory</code> surface.</li>
+          <li><strong>The consumer supplies its host and its host-specific facts, nothing else.</strong> The abstract surface
+          is deliberately small: two probe requests for problem details
+          (<code>ProblemDetailsContractTestsBase.cs:54</code>, <code>:60</code>), a route-count floor and a pinned resource list for
+          OpenAPI (<code>OpenApiContractTestsBase.cs:37</code>, <code>:50</code>), a client factory for security headers
+          (<code>SecurityHeadersTestsBase.cs:42</code>), a service-collection configurator for the decorator pipeline
+          (<code>DecoratorPipelineOrderTestsBase.cs:44</code>), and for versioning and graceful shutdown nothing at all
+          beyond the fixture or entry point. The two shutdown subclasses are one-line declarations with no body
+          (<code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/GracefulShutdownTests.cs:9</code>,
+          <code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/GracefulShutdownTests.cs:9</code>), and so is the ADC
+          versioning subclass (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/ApiVersioningTests.cs:14</code>).</li>
+          <li><strong>The decorator suite is the one non-HTTP conformance check, and it inspects the object graph, not
+          the registration list.</strong> It builds a <code>ServiceCollection</code>, runs the repo&#39;s own real registration
+          sequence through the subclass, resolves the closed handler interface from the built provider, then
+          walks outermost to innermost by reading each decorator&#39;s private inner-handler field
+          (<code>DecoratorPipelineOrderTestsBase.cs:98</code>) and compares the names against the ADR-014 order
+          (<code>DecoratorPipelineOrderTestsBase.cs:47</code>, <code>:57</code>). That is what makes it a runtime check: Scrutor
+          <code>TryDecorate</code> applies decorators in reverse registration order, so a reordered
+          <code>AddApplicationDecorators()</code> or a module scan that ran after it changes the constructed pipeline
+          while every registration still exists.</li>
+          <li><strong>No committed snapshots.</strong> The OpenAPI guard asserts against the live document rather than a
+          checked-in file (<code>OpenApiContractTestsBase.cs:16</code>), so a new controller can never leave a stale
+          snapshot behind, and the assertions are deliberately coarse: a path-count floor plus presence (not
+          exact casing) of the pinned resources (<code>OpenApiContractTestsBase.cs:79</code>).</li>
+          <li><strong>Hosts extend the base where they have more to prove.</strong> ADC Conference adds a 409
+          stale-<code>RowVersion</code> conflict test on top of the inherited 400/404 facts, reusing the inherited shape
+          assertion (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/ProblemDetailsContractTests.cs:39</code>,
+          <code>:67</code>).</li>
+          </ul>
+          <p>Adoption today is real but <strong>partial, and uneven per suite</strong>. The OpenAPI guard is the only one with
+          full coverage of the extracted REST hosts: all four ADC services
+          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/OpenApiContractTests.cs:14</code>,
+          <code>MMCA.ADC.Engagement.IntegrationTests/Contract/OpenApiContractTests.cs:14</code>,
+          <code>MMCA.ADC.Identity.IntegrationTests/Contract/OpenApiContractTests.cs:15</code>,
+          <code>MMCA.ADC.Notification.IntegrationTests/Contract/OpenApiContractTests.cs:16</code>) and all three Store
+          services (<code>MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/OpenApiContractTests.cs:14</code>,
+          <code>MMCA.Store.Identity.IntegrationTests/Contract/OpenApiContractTests.cs:14</code>,
+          <code>MMCA.Store.Sales.IntegrationTests/Contract/OpenApiContractTests.cs:14</code>). The problem-details guard
+          covers all three Store services
+          (<code>MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/ProblemDetailsContractTests.cs:19</code>,
+          <code>MMCA.Store.Identity.IntegrationTests/Contract/ProblemDetailsContractTests.cs:15</code>,
+          <code>MMCA.Store.Sales.IntegrationTests/Contract/ProblemDetailsContractTests.cs:15</code>) and three of the four
+          ADC services (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Contract/ProblemDetailsContractTests.cs:19</code>,
+          <code>MMCA.ADC.Engagement.IntegrationTests/Contract/ProblemDetailsContractTests.cs:16</code>,
+          <code>MMCA.ADC.Identity.IntegrationTests/Contract/ProblemDetailsContractTests.cs:16</code>): <strong>ADC Notification
+          has no problem-details subclass</strong>. The versioning contract is subclassed once per repo, on ADC
+          Conference (<code>ApiVersioningTests.cs:14</code>) and Store Catalog
+          (<code>MMCA.Store/Tests/Integration/MMCA.Store.Catalog.IntegrationTests/Contract/ApiVersioningTests.cs:15</code>),
+          which is enough to keep the machinery exercised but leaves the other five REST hosts unguarded. The
+          security-headers and graceful-shutdown suites are subclassed <strong>only on the two Gateway hosts</strong>
+          (<code>MMCA.Store/Tests/Hosts/MMCA.Store.Gateway.Tests/SecurityHeadersTests.cs:11</code>,
+          <code>MMCA.ADC/Tests/Hosts/MMCA.ADC.Gateway.Tests/SecurityHeadersTests.cs:11</code>, plus the two
+          <code>GracefulShutdownTests</code> above); no service host asserts either today. The decorator suite is
+          subclassed once per consumer, both against the Identity module&#39;s <code>ChangePreferencesCommand</code> /
+          <code>GetUserPreferencesQuery</code> pair (<code>MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:25</code>,
+          <code>MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/DecoratorPipelineOrderTests.cs:25</code>).
+          MMCA.Common dogfoods the only base it can, since it ships no host of its own: a synthetic
+          <code>PingCommand</code>/<code>PingQuery</code> pair driven through the framework&#39;s own registration sequence
+          (<code>Tests/Hosting/MMCA.Common.Testing.Tests/DecoratorPipelineOrderTests.cs:20</code>).</p>
+          <p><strong>MMCA.Helpdesk adopts none of them.</strong> It carries a <code>MMCA.Common.Testing</code> package reference in its
+          domain-test project (<code>MMCA.Helpdesk/Tests/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain.Tests/MMCA.Helpdesk.Tickets.Domain.Tests.csproj:8</code>),
+          but no file in the repo imports the namespace and no conformance base is subclassed: its three test
+          projects are the Tickets domain and application suites plus the ADR-015 architecture suite, which does
+          subclass the structural bases from the separate <code>MMCA.Common.Testing.Architecture</code> package
+          (<code>MMCA.Helpdesk/Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/GlobalUsings.cs:3</code>). The reference
+          app therefore demonstrates the structural tier and not the runtime tier.</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>Runtime conformance is the half ADR-015 excluded.</strong> Structural rules answer &quot;is the code shaped
+          correctly&quot;; these suites answer &quot;does the composed host behave correctly&quot;. A host that registers
+          everything the framework asks for can still drop a security header in a middleware reorder, wedge a
+          rolling deploy with a hosted service that will not drain, or silently invert the decorator pipeline.
+          None of that is reachable by reflection over assemblies.</li>
+          <li><strong>The failure this catches does not announce itself in production.</strong> A non-draining host looks
+          healthy until a deploy waits out its termination grace period; a missing HSTS header looks healthy
+          until an audit; a reordered decorator pipeline looks healthy until a validation runs inside a
+          transaction that should never have opened.</li>
+          <li><strong>Write the body once, subclass thin.</strong> Same lever as ADR-015: the assertions live in the package,
+          so a new invariant reaches every consumer that already subclassed the base. The gateway shutdown
+          subclasses are single lines with no body, which is the intended cost of adoption.</li>
+          <li><strong>Booting the host is what makes it honest.</strong> Pinning <code>Production</code> exercises the branches a default
+          <code>Development</code> boot skips, and a throwaway migrated database means the schema under test is the one
+          the host&#39;s own init strategy produced, not a fixture&#39;s guess.</li>
+          <li><strong>A live document beats a snapshot.</strong> Asserting against the served OpenAPI document removes the
+          class of failure where the guard passes because the snapshot was regenerated along with the
+          regression.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Opt-in per host, exactly like ADR-015.</strong> The framework ships the suites; a host gets the gate only
+          once someone writes the subclass. That is the same audit-the-inventory caveat, and the adoption
+          inventory above is the current answer to it, not a claim of completeness.</li>
+          <li><strong>Coverage is uneven by suite.</strong> Security headers and graceful shutdown are Gateway-only, versioning
+          is one host per repo, ADC Notification has no problem-details guard, and Helpdesk has none of it.
+          Every one of those is an unguarded host for that contract, not a decision that the contract does not
+          apply.</li>
+          <li><strong>Most of the suites need a real SQL Server.</strong> The five fixture-driven suites live in the per-service
+          integration tier and cannot run in a database-free test pass; only the Gateway pair (no DbContext, no
+          broker) and the decorator suite run in the fast tier. That splits the runtime gate across two CI
+          jobs with different prerequisites.</li>
+          <li><strong>The assertions are coarse by construction.</strong> <code>MinimumPathCount</code> is a floor, <code>CorePublicResources</code>
+          checks presence rather than schema, and the problem-details base checks shape (<code>status</code>, <code>title</code>, a
+          diagnostic extension) rather than message content. These catch wholesale regressions, not subtle
+          ones.</li>
+          <li><strong>The decorator check reads private fields.</strong> Unwrapping the chain depends on each decorator holding
+          its inner handler in a field that implements the same closed interface
+          (<code>DecoratorPipelineOrderTestsBase.cs:105-108</code>); a decorator that stored it differently would silently
+          end the walk early rather than fail loudly.</li>
+          <li><strong>A new contract base only reaches consumers at the next lockstep bump.</strong> The suites ship inside the
+          package set, so adding one is a framework release plus a consumer sweep (ADR-016), not a local edit
+          in the repo that needs the guard.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p>ADR-015 (the structural / registration fitness layer this complements; its stated non-goal, &quot;not
+          runtime behavior&quot;, is exactly this ADR&#39;s scope, and the two tiers ship as two separate packages),
+          ADR-014 (the decorator execution order <code>DecoratorPipelineOrderTestsBase</code> proves at runtime), ADR-013
+          (the RFC 9457 ProblemDetails edge contract <code>ProblemDetailsContractTestsBase</code> guards), ADR-046 (HTTP
+          API versioning, whose &quot;shared fitness contract&quot; is one of these bases), ADR-016 (lockstep versioning:
+          a new conformance base reaches consumers only through a release and a full sweep). Package inventory
+          for the framework lives in <code>MMCA.Common/FACTS.md</code>.
+          &lt;/content&gt;
+          &lt;/invoke&gt;</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/058-runtime-conformance-suites-as-a-package.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>
