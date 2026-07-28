@@ -2,14 +2,50 @@
 
 Derived from `ArchitectureScorecard.md` (canonical two-axis scoring: **Maturity 96.9% / Implementation 84.6%**, framework v1.128.0; the 2026-07-25 twenty-third-wave two-pass re-score at HEAD `3dff29b`, working tree clean, moved **no scores**: all 34 categories re-confirmed at their twenty-first-wave values, the third consecutive steady-state cycle. Five first-pass proposals were refuted on adversarial re-verification and held at prior: four lifts (§17 Maturity 3→4 and Implementation 8→9, §30 Maturity 3→4, §31 Maturity 2→3, §34 Implementation 8→9) and one downgrade (§23 Maturity 4→3 / Implementation 8→7). **Categories still below Maturity 4: #9, #17, #30 (M3) and #31 (M2)**, so 30 of 34 sit at Maturity 4, and the ranking is unchanged (#31 at priority 4; #9, #17 and #30 at priority 2 each). The cycle's only new work is doc hygiene under #34: this backlog and the scorecard had drifted five minor versions behind the CI-gated `FACTS.md`. The prior twenty-second-wave entry, retained for provenance: the 2026-07-23 re-score at HEAD `c911480` also moved no scores, refuting three lifts (§9, §10, §30) and two downgrades (§23, §24). The twenty-first-wave entry, likewise retained: the 2026-07-21 re-score at HEAD `4a4fc05` moved exactly one score, **§12 Performance & Scalability Maturity 3→4**, because the `Performance gate (BenchmarkDotNet Short + baseline verify)` context is present in live `required_status_checks` on `main` (8 required contexts), refuting the twentieth wave's sole basis for holding it at 3; seven first-pass lifts (§4, §9, §11, §19, §20, §26, §29) were refuted and the remaining 26 categories re-confirmed.)
 The wave-by-wave priority ranking below is the **historical single-axis review** (index 80%, 218/272, 2026-06-08/09); it is retained for provenance and is **superseded by the in-repo two-axis scorecard**, which is the live source of scores.
-Tasks are every applicable category scoring **< 4**, ranked by **priority = (4 − score) × weight**.
-Higher priority = bigger weighted gap = more index points per unit of effort.
+Tasks are ranked on **both scorecard axes**, one band per axis (two-axis policy adopted 2026-07-28):
+- **Maturity band:** every applicable category scoring **maturity < 4**, ranked by **priority = (4 − maturity) × weight**.
+- **Implementation band:** every applicable category scoring **implementation <= 8**, ranked by **implPriority = max(0, 9 − implementation) × weight**. The target is **9, not 10**: the rubric defines 10 as "perfectly implemented: nothing left to improve" and no category in any repo has ever scored it, so ranking against 10 would schedule work that can never close.
+
+Higher priority = bigger weighted gap = more index points per unit of effort. A category leaves each band independently and reaches the protect list only at **maturity 4 AND implementation >= 9**. The indices keep their `× 4` and `× 10` denominators, so the trend line stays comparable across all twenty-three waves; the 9-target governs scheduling only.
 
 **Scope:** the single-axis item counts below are historical (the wave-by-wave ranking is superseded by the two-axis scorecard, per the note above). Under the live two-axis scorecard there are **no N/A categories** (§27 i18n is now scored after ADR-027) and **30 categories sit at Maturity 4** (#1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 32, 33, 34; **#22 and #23 joined 2026-07-15** on the nineteenth-wave re-score, **#25 and #33 joined 2026-07-17** on the twentieth-wave re-score, and **#12 rejoined 2026-07-21** on the twenty-first-wave re-score when its perf gate became a required check); the open work is the **4 categories still below Maturity 4**. Ranked by two-axis priority = (4 − maturity) × weight: **#31** FinOps (Maturity 2, weight 2, computed priority 4) is the highest weighted gap but a documented accepted cap (see *Deliberate / accepted* below), not scheduled work; then the weight-2 Maturity-3 pack at **priority 2** (#9, #17, #30).
 
 > **Two fixes each clear multiple items: do them once:**
 > - **MassTransit v8 guard** closes the medium red flags in **#32** *and* **#16**.
 > - **bUnit component tests** lift **#28** *and* **#18** (and cover the #19 guard bug).
+
+## Implementation band (implementation <= 8, ranked by implPriority)
+
+Added 2026-07-28 when the ledger gained its second ranked axis. Until then implementation gaps were
+never ranked or scheduled, which is why three consecutive steady-state cycles moved neither index
+and the gap between them (96.9% vs 84.6%) looked like neglect. Ranked from the current scorecard
+(2026-07-25 twenty-third wave, no score moves): **18 categories, 44 gap points**. Against the
+attainable ceiling of 90% (implementation 9 across the board) Common is at **94.0%** of attainable.
+
+Levers are cited only where the ledger or scorecard already records one; an unnamed lever is named
+at the next re-score, never invented here. Three of these categories (#17, #30, #31) also sit in the
+maturity band and keep their entries there; this band records only their implementation half.
+
+| implPriority | # | Category | w | Impl | Recorded lever |
+|---|---|---|---|---|---|
+| 4 | #31 | Cost Efficiency / FinOps | 2 | 7 | **Documented accepted cap, not scheduled work** (see *Deliberate / accepted*: held at Maturity 2 / Implementation 7 by acceptance). It ranks first on both axes and is deliberately not worked; leaving it visible is the point |
+| 3 | #4 | Domain-Driven Design | 3 | 8 | not yet identified (a first-pass lift was refuted on the twenty-first wave) |
+| 3 | #8 | Data Architecture | 3 | 8 | not yet identified |
+| 3 | #11 | Security | 3 | 8 | not yet identified (a first-pass lift was refuted on the twenty-first wave) |
+| 3 | #19 | State Management & Data Flow | 3 | 8 | not yet identified (a first-pass lift was refuted on the twenty-first wave) |
+| 3 | #26 | Front-End Security | 3 | 8 | the CSP `script-src`/`style-src` gap recorded as the unclosed 8→9 reason |
+| 3 | #29 | Resilience & Business Continuity | 3 | 8 | not yet identified (a first-pass lift was refuted on the twenty-first wave) |
+| 2 | #5 | Vertical Slice Architecture | 2 | 8 | not yet identified |
+| 2 | #10 | Cross-Cutting Concerns | 2 | 8 | not yet identified (a first-pass lift was refuted on the twenty-second wave) |
+| 2 | #12 | Performance & Scalability | 2 | 8 | not yet identified |
+| 2 | #13 | Observability & Operability | 2 | 8 | not yet identified |
+| 2 | #16 | Maintainability & Evolvability | 2 | 8 | not yet identified |
+| 2 | #17 | DevOps & Deployment | 2 | 8 | the bicep job is a compile check and is not among the required contexts (the recorded reason the 8→9 lift was refuted on the twenty-third wave) |
+| 2 | #23 | Front-End Performance | 2 | 8 | not yet identified (a proposed 8→7 downgrade was also refuted; the score is contested in both directions) |
+| 2 | #24 | Forms, Validation & UX Safety | 2 | 8 | not yet identified (a proposed downgrade was refuted on the twenty-second wave) |
+| 2 | #25 | Navigation & Information Arch | 2 | 8 | not yet identified |
+| 2 | #30 | Compliance, Privacy & Governance | 2 | 8 | not yet identified (#30 is also in the maturity band) |
+| 2 | #34 | Architecture Governance & Docs | 2 | 8 | the uncommittable workspace-root `ArchitecturalAnalysis.md` cap, recorded as unresolved (the 8→9 lift was refuted on the twenty-third wave) |
 
 ---
 

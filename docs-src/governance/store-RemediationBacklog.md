@@ -1,8 +1,15 @@
 # MMCA.Store: Architecture Remediation Backlog
 
 Derived from [`ArchitectureScorecard.md`](../governance/store-ArchitectureScorecard.md) (two-axis: **Maturity 98.4% / Implementation 83.6%**, full re-score 2026-07-17, framework pin v1.117.0).
-Items are categories scoring below 4 (maturity) or with a notable implementation gap, ranked by
-**priority = (4 − maturity) × weight** (and impl-gap items called out separately). This is Store's first
+Items are ranked on **both scorecard axes**, one band per axis (two-axis policy adopted 2026-07-28,
+replacing the previous "or a notable implementation gap" wording, which had no number behind it and
+so never scheduled anything):
+- **Maturity band:** categories scoring **maturity < 4**, ranked by **priority = (4 − maturity) × weight**.
+- **Implementation band:** categories scoring **implementation <= 8**, ranked by **implPriority = max(0, 9 − implementation) × weight**. The target is **9, not 10**: the rubric defines 10 as "perfectly implemented: nothing left to improve" and no category in any repo has ever scored it.
+
+A category leaves each band independently and reaches the protect list only at **maturity 4 AND
+implementation >= 9**. The indices keep their `× 4` and `× 10` denominators, so the trend line stays
+comparable; the 9-target governs scheduling only. This is Store's first
 in-repo remediation ledger; the scorecard is the source of truth for scores, [`../MMCA.Common/FACTS.md`](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md)
 for framework-wide facts, and the workspace-internal `Docs/Architecture/ArchitectureRemediation.md` (not published)
 for the cross-repo `[C→A]` roll-up.
@@ -19,6 +26,40 @@ The former single biggest maturity lever: #28 cleared 2026-07-03; #22 cleared on
 - [~] **#22 Responsive & Cross-Browser, maturity 3 → 4 GRANTED on the 2026-07-17 re-score; basis went STALE the next day (drift recorded on the 2026-07-23 verification pass).** The 2026-07-18 Actions-minute reduction (commit `777348ec`, mirroring ADC's) cut the deploy `e2e-gate` to **chromium only** (`deploy.yml:417-423`, `browsers: '["chromium"]'`, rationale comment `:410-416`), so firefox/webkit now run only on the nightly matrix (where `e2e.yml:117` keeps them `continue-on-error`) and the granted basis, "all three engines the gate invokes CAN fail a deploy", no longer holds. Scorecard §22 stays M4/I8 as the frozen 2026-07-17 point-in-time score; expect a §22 maturity 4→3 reopen at the next re-score unless the trade-off is re-adjudicated (ADC's twenty-second cycle reopened its §22 on identical evidence). Grant provenance with anchors as of 2026-07-17: `e2e.yml:76` scoped `continue-on-error` to scheduled non-chromium runs (now `:117`), `deploy.yml:315` invoked all three engines (gate now `:417-423`), `deploy.yml:429` put `e2e-gate` in deploy `needs` (now `:634`). History of the reopen-and-fix below. The wave-5 change passed `browsers: ["chromium", "firefox", "webkit"]` into the `e2e-gate` call, so all three engines RUN in the gate, but the non-chromium legs cannot FAIL it: `e2e.yml:71` still sets `continue-on-error: ${{ matrix.browser != 'chromium' }}`, and `deploy.yml:433`'s own inline comment describes e2e-gate as chromium-only. The 2026-07-16 re-score held maturity 3 on exactly this evidence and the candidacy was declined. The green-soak history (2026-07-09 through 2026-07-11, plus the `d057afc` three-engine catch) still stands as soak evidence. _Maturity 3 → 4 lever:_ remove the `continue-on-error` conditional for the gate-invoked firefox/webkit legs (or gate them behind their own required jobs) once the soak is judged sufficient; nightly-matrix legs may stay advisory. **Lever SHIPPED same day (2026-07-16):** `continue-on-error` is now `github.event_name == 'schedule' && matrix.browser != 'chromium'`, so all three engines the gate invokes (`deploy.yml:315`) CAN fail a deploy while nightly non-chromium legs stay advisory flake alarms; the stale chromium-only comments in `e2e.yml`/`deploy.yml` corrected. Soak judged sufficient: job-level green nightly matrices 2026-07-09 through 2026-07-16, with the sole 2026-07-12 red being the all-three-engines product defect fixed in `d057afc` (a true positive, not flake). Maturity 3 → 4 candidacy recorded for the next re-score.
 
 ## 🟠 Priority: execution-quality gaps (impl, not maturity)
+
+### Implementation band (implementation <= 8, ranked by implPriority)
+
+Ranked 2026-07-28 when the ledger gained its second ranked axis. Until then the items in this
+section were closed history plus two open levers, with no ranking and no inclusion rule, which is
+why maturity reached 98.4% while implementation sat at 83.6%. Computed from the current scorecard
+(2026-07-17 full re-score, pin v1.117.0): **21 categories, 51 gap points**, the largest of the three
+repos. Against the attainable ceiling of 90% (implementation 9 across the board) Store is at
+**92.9%** of attainable. Levers are cited only where this ledger or the scorecard already records
+one; an unnamed lever is named at the next re-score, never invented here.
+
+| implPriority | # | Category | w | Impl | Recorded lever |
+|---|---|---|---|---|---|
+| 4 | #20 | Design System & UI Consistency | 2 | 7 | **OPEN, recorded below:** MudBlazor `Style=`/`CellStyle=` residuals that CSS isolation cannot target without a DOM-changing wrapper (`ProductList.razor:23,95,104`) |
+| 3 | #7 | Microservices Readiness | 3 | 8 | not yet identified (all per-service DBs on one physical server is a recorded accepted cap) |
+| 3 | #8 | Data Architecture | 3 | 8 | not yet identified |
+| 3 | #11 | Security | 3 | 8 | not yet identified |
+| 3 | #18 | UI Architecture & Components | 3 | 8 | residual inline-style logic (the basis on which the 2026-07-16 impl bump to 9 was rejected) |
+| 3 | #19 | State Management & Data Flow | 3 | 8 | not yet identified (the 2026-07-16 impl bump to 9 was rejected as an enforcement gain, not substance) |
+| 3 | #21 | Accessibility (a11y) | 3 | 8 | not yet identified (the dated SR pass is the maturity half; #21 is also in the maturity band) |
+| 3 | #28 | Front-End Testing & Quality | 3 | 8 | not yet identified |
+| 2 | #5 | Vertical Slice Architecture | 2 | 8 | the layered-by-project hybrid, recorded as a deliberate design choice capping impl at 8 |
+| 2 | #6 | CQRS & Event-Driven | 2 | 8 | not yet identified |
+| 2 | #10 | Cross-Cutting Concerns | 2 | 8 | not yet identified |
+| 2 | #12 | Performance & Scalability | 2 | 8 | not yet identified |
+| 2 | #15 | Best Practices & Code Quality | 2 | 8 | not yet identified |
+| 2 | #16 | Maintainability & Evolvability | 2 | 8 | not yet identified |
+| 2 | #22 | Responsive & Cross-Browser | 2 | 8 | not yet identified (the chromium-only gate is the maturity question, tracked above) |
+| 2 | #23 | Front-End Performance | 2 | 8 | not yet identified |
+| 2 | #24 | Forms, Validation & UX Safety | 2 | 8 | **OPEN, recorded below:** client validation stays MudForm-level, not full FluentValidation parity with the server rules |
+| 2 | #25 | Navigation & Information Arch | 2 | 8 | not yet identified |
+| 2 | #30 | Compliance, Privacy & Governance | 2 | 8 | not yet identified |
+| 2 | #31 | Cost Efficiency / FinOps | 2 | 8 | not yet identified |
+| 2 | #33 | Developer Experience & Inner Loop | 2 | 8 | the §33 I8→9 candidacy recorded 2026-07-16 on the Service Bus emulator tier (see Deliberate / accepted) |
 
 - [x] **#14 Testability, impl 6 → 9. DONE (2026-07-01 wave, re-scored 2026-07-02).** The floor step now measures Store's own code (reportgenerator `+MMCA.Store.*;-*.Tests`) at floor 42.0 with ~46% actual (`deploy.yml:82-86`), the ADC-parity self-filtered gate; bUnit page-level breadth reached ADC parity (8 files). **Unit-coverage program (2026-07-05):** floor ratcheted 42.0 to 51.6 (~54% measured) after Stripe money-path, Sales UI, and GDPR-handler unit tests. **Integration-coverage expansion (2026-07-06):** ~100 new integration tests over real SQL closed the money-path gaps (Stripe webhook signature contract, order state machine, deliberate 404-not-403 order ownership), GDPR erasure/export end-state, refresh-token rotation, preferences, cross-service `ProductVariantChanged` consistency, checkout concurrency, contract guards (OpenAPI + RFC 9457) for Sales/Identity, and the ProductImages/PUT leftovers; `[Idempotent]` was wired onto the Sales money POSTs with a replay contract test. The Catalog+Sales fixtures were consolidated onto `SqlServerIntegrationTestFixtureBase`. **Cross-service broker tier (2026-07-11, drift plan D5):** a non-gating nightly `MMCA.Store.CrossService.IntegrationTests` (Testcontainers RabbitMQ + SQL, `cross-service-tests.yml`) now exercises the genuine outbox-to-broker-to-consumer round-trip (Catalog `ProductVariantChanged` to Sales' zero-stock `InventoryItem`); the first run needs a manual `workflow_dispatch` (done 2026-07-11, green). **Gated by recency same day (remediation wave 6):** a `cross-service-freshness` job in `deploy.needs` fails a deploy when the latest successful nightly is older than 3 days (mirrors ADC TD-02; the Testcontainers workflow itself stays out of the deploy chain). **Deliberately skipped:** dedicated rate-limit fixtures (the WAFs neutralize the limiter; a tight-limit variant is low value for the volume, revisit only if abuse is observed).
 - [x] **#23 Front-End Performance, impl 6 → 8. DONE (2026-07-03, drift plan D4 + D10).** Public `CatalogBrowse` moved to server-side paging (`GetPagedAsync` + bounded `MobileInfiniteScrollList`); cart enrichment resolves names via the targeted `products/variant-lookup` batch endpoint (`CartStateService.cs:282-296`); Core Web Vitals (LCP/CLS/TTFB/FCP) are measured per E2E run and uploaded as CI artifacts (`Workflows/WebVitalsTests.cs`). Accepted trade-offs (2026-07-02 approval): price sorts fall back to Newest; search is Name-contains.

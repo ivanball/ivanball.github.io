@@ -114,8 +114,12 @@
           <p class="eyebrow doc-kicker">Architecture governance</p>
           <h1 id="mmcaadc-architecture-remediation-backlog">MMCA.ADC: Architecture Remediation Backlog</h1>
           <p>Derived from <code>ArchitectureScorecard.md</code> (single-axis 0-4, baseline <strong>75%</strong>, 241/320, dated 2026-06-08). <strong>Current authoritative two-axis scores (twenty-third-cycle full re-score, 2026-07-23, pin v1.123.0): Maturity 97.2% (311/320) / Implementation 85.9% (687/800), no score moves (all 34 categories re-confirmed at their prior scores; two proposed maturity lifts, §12 and §21, adversarially rejected as verified non-moves).</strong> See the Index note for the cycle record.
-          Tasks are every category scoring <strong>&lt; 4</strong>, ranked by <strong>priority = (4 − score) × weight</strong>.
-          Higher priority = bigger weighted gap = more index points per unit of effort.</p>
+          Tasks are ranked on <strong>both scorecard axes</strong>, one band per axis (two-axis policy adopted 2026-07-28):</p>
+          <ul>
+          <li><strong>Maturity band:</strong> every category scoring <strong>maturity &lt; 4</strong>, ranked by <strong>priority = (4 − maturity) × weight</strong>.</li>
+          <li><strong>Implementation band:</strong> every category scoring <strong>implementation &lt;= 8</strong>, ranked by <strong>implPriority = max(0, 9 − implementation) × weight</strong>. The target is <strong>9, not 10</strong>: the rubric defines 10 as &quot;perfectly implemented: nothing left to improve&quot; and no category in any repo has ever scored it, so ranking against 10 would schedule work that can never close.</li>
+          </ul>
+          <p>Higher priority = bigger weighted gap = more index points per unit of effort. A category leaves each band independently and reaches the protect list only at <strong>maturity 4 AND implementation &gt;= 9</strong>. The indices themselves are unchanged (still <code>× 4</code> and <code>× 10</code>), so the trend line stays comparable across every prior cycle; the 9-target governs scheduling only.</p>
           <blockquote>
           <p><strong>This is the single remediation ledger.</strong> The former <code>TECHDEBT.md</code> tactical register is <strong>folded in here</strong> (2026-06-26): each deferred sub-item keeps its <code>TD-NN</code> ID and lives under its <code>#NN</code> category with its blocker, resolution path, and effort estimate; the recorded-but-not-scheduled choices live in the <strong>Deliberate / accepted</strong> section below. There is no separate tech-debt file (matching MMCA.Common and MMCA.Store). <strong>Effort key:</strong> <strong>S</strong> ≈ hours · <strong>M</strong> ≈ ~1 day · <strong>L</strong> ≈ multi-day.</p>
           </blockquote>
@@ -438,6 +442,149 @@
           <li><input checked="" disabled="" type="checkbox"> <strong>Close (not just record) the local-vs-prod broker parity gap</strong> → the gap is <strong>recorded, mitigated, and referenced</strong> (the README&#39;s parity section documents RabbitMQ-local vs Service-Bus-prod and points at the nightly Testcontainers broker round-trip whose recency gates deploys, TD-02), but closing it needs either a local Service Bus surface (e.g. the Service Bus emulator in the Aspire AppHost, or an opt-in cloud-broker local profile) or an automated Service-Bus-behavior test tier; documentation alone holds §33 at M3/I8. <strong>CLOSED 2026-07-16 via the automated Service-Bus-behavior test tier:</strong> <code>Tests/Integration/MMCA.ADC.ServiceBusEmulator.IntegrationTests</code> runs MassTransit v8 against the official Service Bus emulator (pinned 2.0.1, the first line with the admin plane MassTransit&#39;s topology provisioning needs) with ADC&#39;s REAL integration-event contracts, proving admin-plane topology creation + the AMQP publish-to-consume round-trip nightly in <code>cross-service-tests.yml</code> (a new job in the same workflow, so its result rides the existing <code>cross-service-freshness</code> deploy gate). Design notes: MassTransit v8 has no vendor emulator mode (v9-only; excluded by the v8 policy pin), so the tier uses the public custom-clients <code>Host()</code> overload, its own test process (the emulator&#39;s 1h TTL quota requires overriding process-global MassTransit defaults), and one warm container (10-connection + admin-throttle quotas). Deliberately a smoke, not a port of the 9 RabbitMQ round-trips: the RabbitMQ tier keeps the outbox/inbox pipeline coverage; this pins the transport. §33 M3→4 + I8→9 candidacy recorded for the next re-score.</li>
           </ul>
           <hr>
+          <h2 id="implementation-band-implementation--8-ranked-by-implpriority">🔵 Implementation band (implementation &lt;= 8, ranked by implPriority)</h2>
+          <p>Added 2026-07-28 when the ledger gained its second ranked axis. Until then implementation gaps
+          appeared only as unranked sub-bullets inside maturity items, so they were never scheduled against
+          each other: the maturity index reached 97.2% while implementation sat at 85.9%. Ranked from the
+          current scorecard (2026-07-23 twenty-third cycle, no score moves): <strong>15 categories, 33 gap points</strong>.
+          Measured against the attainable ceiling of 90% (implementation 9 across the board), ADC is at
+          <strong>95.4%</strong> of attainable, so this is a bounded polish list, not a neglected backlog.</p>
+          <p>Four of these categories (§12, §21, §22, §33) also sit in the maturity band above and keep their
+          existing item there; this band records only their implementation half. Levers are cited only where
+          the ledger or scorecard already records one: an unnamed lever is named at the next re-score, never
+          invented here.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>implPriority</th>
+          <th>#</th>
+          <th>Category</th>
+          <th>w</th>
+          <th>Impl</th>
+          <th>Recorded lever</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>3</td>
+          <td>§7</td>
+          <td>Microservices Readiness</td>
+          <td>3</td>
+          <td>8</td>
+          <td>not yet identified</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td>§18</td>
+          <td>UI Architecture &amp; Components</td>
+          <td>3</td>
+          <td>8</td>
+          <td><strong>TD-16</strong> under #18 above: the largest code-behind sits flush at the enforced 400-line cap with zero headroom, <code>HappeningNow.razor.cs:400</code>, plus six files in the 360-379 band. Effort S</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td>§21</td>
+          <td>Accessibility (a11y)</td>
+          <td>3</td>
+          <td>8</td>
+          <td>not yet identified (the recorded SR-pass lever is the maturity half)</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td>§28</td>
+          <td>Front-End Testing &amp; Quality</td>
+          <td>3</td>
+          <td>8</td>
+          <td>not yet identified</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>§5</td>
+          <td>Vertical Slice Architecture</td>
+          <td>2</td>
+          <td>8</td>
+          <td>not yet identified</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>§12</td>
+          <td>Performance &amp; Scalability</td>
+          <td>2</td>
+          <td>8</td>
+          <td>see the open #12 item above (Notification pinned <code>maxReplicas: 1</code>, <code>infra/main.bicep:1424</code>)</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>§15</td>
+          <td>Best Practices &amp; Code Quality</td>
+          <td>2</td>
+          <td>8</td>
+          <td>not yet identified</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>§16</td>
+          <td>Maintainability &amp; Evolvability</td>
+          <td>2</td>
+          <td>8</td>
+          <td>not yet identified</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>§22</td>
+          <td>Responsive &amp; Cross-Browser</td>
+          <td>2</td>
+          <td>8</td>
+          <td>not yet identified (the chromium-only gate is the maturity half)</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>§23</td>
+          <td>Front-End Performance</td>
+          <td>2</td>
+          <td>8</td>
+          <td>the WASM code-split / image sub-item recorded under #23</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>§24</td>
+          <td>Forms, Validation &amp; UX Safety</td>
+          <td>2</td>
+          <td>8</td>
+          <td>not yet identified (TD-14 closed 2026-07-11)</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>§25</td>
+          <td>Navigation &amp; Information Arch</td>
+          <td>2</td>
+          <td>8</td>
+          <td>not yet identified</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>§31</td>
+          <td>Cost Efficiency / FinOps</td>
+          <td>2</td>
+          <td>8</td>
+          <td>not yet identified</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>§33</td>
+          <td>Developer Experience &amp; Inner Loop</td>
+          <td>2</td>
+          <td>8</td>
+          <td>see the open #33 item above (emulator tier is nightly-plus-recency, not in-band)</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td>§27</td>
+          <td>Internationalization (i18n)</td>
+          <td>1</td>
+          <td>8</td>
+          <td>pseudo-loc breadth: <code>PseudoLocalizationTests.cs:51</code> covers 3 public pages of 36. <strong>Proposed and rejected in three consecutive cycles</strong> (21st, 22nd, 23rd) as a partial extension; treat as a real lever only if the breadth actually lands</td>
+          </tr>
+          </tbody></table></div>
           <h2 id="resolved-2026-07-25-performance-program-2">🟢 Resolved 2026-07-25 (performance program 2)</h2>
           <p>Second evidence-led performance pass over Common/ADC/Store. ADC&#39;s share shipped as three PRs plus
           the v1.127.0 framework sweep.</p>
@@ -520,6 +667,7 @@
             <li><a href="#priority-4">🟠 Priority 4</a></li>
             <li><a href="#priority-3-score-3-weight-3-one-rung-from-a-4">🟡 Priority 3: score 3, weight 3 (one rung from a 4)</a></li>
             <li><a href="#priority-2-score-3-weight-2-polish--hardening">🟢 Priority 2: score 3, weight 2 (polish / hardening)</a></li>
+            <li><a href="#implementation-band-implementation--8-ranked-by-implpriority">🔵 Implementation band (implementation &lt;= 8, ranked by implPriority)</a></li>
             <li><a href="#resolved-2026-07-25-performance-program-2">🟢 Resolved 2026-07-25 (performance program 2)</a></li>
             <li><a href="#deliberate--accepted-recorded-decisions-not-scheduled-work">Deliberate / accepted (recorded decisions, not scheduled work)</a></li>
             <li><a href="#already-at-level-4-protect-dont-regress">✅ Already at level 4: protect, don&#39;t regress</a></li>
