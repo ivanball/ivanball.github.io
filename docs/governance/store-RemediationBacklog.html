@@ -170,6 +170,41 @@
           <li><input checked="" disabled="" type="checkbox"> <strong>#12 · Performance &amp; Scalability · maturity 3 → 4 (weight 2). DONE (2026-07-11, remediation wave 3).</strong> Both halves of the lever are now enforced deploy preconditions: (a) a <code>load-freshness</code> job in <code>deploy.yml</code>&#39;s <code>needs</code> fails the deploy when the latest successful monthly <code>load-test.yml</code> run is older than 35 days (the dr-freshness pattern; latest run 2026-07-01, green), and (b) the WebVitals budgets were tightened from catastrophic-only (LCP 8000) to the Core Web Vitals &quot;good&quot; band (LCP 2500 / FCP 1800 / TTFB 800 / CLS 0.1 / INP 500), calibrated against measured CI maxima (LCP 172ms, 10-30x headroom), asserted inside the deploy-gating chromium <code>e2e-gate</code>. <strong>Maturity candidacy DECLINED on the 2026-07-16 re-score</strong>: the k6 load test itself runs monthly/on-demand, so it is capacity-planning evidence rather than a merge gate; the freshness gate bounds staleness but does not gate regressions. §12 stays M3/I8, lever OPEN: either record the monthly cadence as the accepted posture (ADC&#39;s stance) or add a latency-regression check to the merge path. <strong>§23 split out and RESOLVED same day (drift-analysis fold, adversarially verified):</strong> its CWV budget assertions are per-deploy enforcement independent of k6&#39;s cadence, the identical evidence ADC&#39;s twentieth cycle credited, so scorecard §23 is M4/I8 and moves to the protect list.</li>
           <li><input checked="" disabled="" type="checkbox"> <strong>#13 · Observability &amp; Operability · maturity 3 → 4 (weight 2). DONE (2026-07-11, remediation wave 6).</strong> The dashboard half already existed (the saved <code>store-slo-workbook</code> Azure Monitor workbook mirrors the three SLO alerts per service); the missing runbook half landed as <code>infra/OPERATIONS.md</code>: each provisioned alert (<code>failed-requests</code>, <code>server-response-time</code>, <code>dependency-failures</code>) mapped to concrete triage steps (workbook pane, App Insights drill path, container logs, the Stripe/gRPC/outbox failure classes) plus fast-reference recovery moves (revision rollback, PITR restore, the freshness gates) and a pair-with-<code>sloAlertSpecs</code> governance note. <strong>Split verdict on the 2026-07-16 re-score:</strong> Implementation 8 → 9 GRANTED (both prior deductions closed: workbook <code>infra/main.bicep:274</code> + runbook <code>infra/OPERATIONS.md</code>), but the maturity candidacy was DECLINED: dashboards/runbooks are IaC/review-enforced, and nothing in CI fails when an alert loses its runbook pairing. §13 stays M3/I9, lever OPEN: add a CI gate asserting the <code>sloAlertSpecs</code>-to-<code>OPERATIONS.md</code> pairing (mirrors ADC&#39;s reopened #13; one shared gate design can serve both repos). <strong>Gate SHIPPED same day (2026-07-16):</strong> <code>Tests/Architecture/MMCA.Store.Architecture.Tests/ObservabilityConventionTests.cs</code> (mirror of ADC&#39;s) machine-enforces the pairing in the CI.slnf arch gate: every <code>sloAlertSpecs</code> key needs a <code>### ...-alert-&lt;key&gt;</code> runbook section carrying the alert&#39;s current <code>(sev N)</code>, orphans fail, 3-spec non-vacuity floor, both files embedded. Verified red on a seeded severity drift, green on the real files. Maturity 3 → 4 candidacy recorded for the next re-score. <strong>Maturity 4 GRANTED on the 2026-07-17 re-score</strong> (<code>ObservabilityConventionTests.cs:24,34</code> verified live in the CI.slnf arch gate, <code>MMCA.Store.CI.slnf:52</code>): §13 is <strong>M4/I9</strong>; moved to the protect list.</li>
           </ul>
+          <h2 id="resolved-this-cycle-2026-07-28-drift-wave-d1d2d5d6d7--e2e4e7e8">🟢 Resolved this cycle (2026-07-28, drift wave: D1/D2/D5/D6/D7 + E2/E4/E7/E8)</h2>
+          <ul>
+          <li><strong>[x] #29 Resilience: the DR drill was restoring a RETIRED database.</strong> The weekly <code>dr-drill.yml</code>
+          had no rotation and fell through to its input default <code>MMCAStore</code>, the legacy archive no app
+          references. Every Store drill on record, scheduled and dispatched alike, hit it, so
+          <code>Store_Catalog</code> / <code>Store_Sales</code> / <code>Store_Identity</code> had <strong>never</strong> had a restore proven while the
+          scorecard credited §29 M4/I9 on &quot;a drilled restore&quot; and the rubric&#39;s #1 red flag is backups that
+          have never been restored. Fixed: ISO-week rotation across the three live DBs (MMCAStore is absent
+          from the rotation array and can only be dispatched), drill timeout 30 -&gt; 60 min (a run was killed
+          at 30m16s on 2026-07-20 and recorded no proof), and ADC&#39;s break-glass
+          (<code>skip_freshness_gates</code> + mandatory justification) ported to all three freshness gates, since
+          Store had no escape hatch at all. All three live DBs dispatch-drilled before landing:
+          Catalog 3.6 min, Sales 2.1 min, Identity 1.3 min, all PASS.</li>
+          <li><strong>[x] #15/#17/#34 Http2-only services had no readiness probe.</strong> Catalog and Identity run h2c-only
+          for cross-service gRPC, which rejects HTTP/1.1 probes, so both fell back to <code>tcpSocket</code> with no
+          readiness probe: a replica that could not reach its database stayed in rotation serving 500s.
+          Ported ADC&#39;s dedicated Http1 probe listener on <code>HealthProbe:Port</code> 8081 plus the three-probe
+          httpGet form. Verified on the deployed revisions.</li>
+          <li><strong>[x] #31 SLO and budget alerts were notifying NOBODY.</strong> <code>alertEmailAddress</code> defaulted to <code>&#39;&#39;</code>
+          with <code>empty()</code> guards on every consumer, and the <code>ALERT_EMAIL</code> repo variable was unset, so every
+          alert routed to an action group with zero receivers. The parameter is now required and
+          <code>deploy.yml</code> fails fast naming the missing variable.</li>
+          <li><strong>[x] #33 README</strong> expanded from a two-line stub into a getting-started path.</li>
+          <li><strong>[x] ADR-055 raw-queryable rule adopted</strong> with an EMPTY <code>AllowedFiles</code>: Store&#39;s Application layer
+          had zero raw-queryable uses, so it starts with no exemptions to ratchet down. Plus
+          <code>DecoratorPipelineOrderTests</code> and <code>HandlerResultConventionTests</code>.</li>
+          <li><strong>[x] Password-spray protection (D3) closed with no Store code change.</strong> MMCA.Common v1.130.0 put
+          the per-IP anti-spray throttle on <code>AuthControllerBase.LoginAsync</code>/<code>RegisterAsync</code> by default;
+          Store inherits both actions and had never attached the attribute, so it had none. <strong>Watch the 429
+          rate:</strong> Blazor Server issues the login call server-side, so every Server-circuit user shares the
+          UI host&#39;s IP against a 30/min window. Tune with <code>AddCommonRateLimiting(authIpPermitLimit: N)</code>.</li>
+          <li><strong>[x] E2/E4/E7/E8 adopted</strong>: <code>PaymentReconciliationService</code> on <code>PeriodicBackgroundService</code> (its
+          first adopter), the shared SQL readiness check, and the observability and graceful-shutdown test
+          bases (118-line and factory+test files collapsed to subclasses).</li>
+          </ul>
           <h2 id="resolved-this-cycle-2026-07-25-performance-program-2">🟢 Resolved this cycle (2026-07-25, performance program 2)</h2>
           <p>Second evidence-led performance pass over Common/ADC/Store. Store&#39;s share shipped as two PRs plus
           the v1.127.0 framework sweep.</p>
@@ -218,6 +253,7 @@
             <li><a href="#defect-fix-wave-2026-07-05">🐞 Defect-fix wave (2026-07-05)</a></li>
             <li><a href="#deliberate--accepted-record-the-choice-dont-silently-leave-low">Deliberate / accepted (record the choice; don&#39;t silently leave low)</a></li>
             <li><a href="#below-maturity-4-tracking-inclusion-policy-categories-scoring--4-maturity">🟠 Below-maturity-4 tracking (inclusion policy: categories scoring &lt; 4 maturity)</a></li>
+            <li><a href="#resolved-this-cycle-2026-07-28-drift-wave-d1d2d5d6d7--e2e4e7e8">🟢 Resolved this cycle (2026-07-28, drift wave: D1/D2/D5/D6/D7 + E2/E4/E7/E8)</a></li>
             <li><a href="#resolved-this-cycle-2026-07-25-performance-program-2">🟢 Resolved this cycle (2026-07-25, performance program 2)</a></li>
             <li><a href="#resolved-this-cycle-2026-07-11-drift-convergence-drift-plan-d1-d13">🟢 Resolved this cycle (2026-07-11 drift-convergence, drift plan D1-D13)</a></li>
             <li><a href="#already-at-level-4-protect-dont-regress">✅ Already at level 4 (protect, don&#39;t regress)</a></li>

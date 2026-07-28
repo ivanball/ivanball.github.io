@@ -699,8 +699,12 @@
           <hr>
           <h3 id="310-product-images">3.10 Product Images</h3>
           <p><strong>Trigger:</strong> An administrator manages the image collection on a product; any visitor views one.</p>
-          <p>Behind the <code>CatalogFeatures.ProductImages</code> feature gate, with storage per
-          <a href="../adr/045-managed-file-storage-and-avatars.html">ADR-045</a>. Uploads are capped at 6 MB of request body
+          <p>Behind the <code>CatalogFeatures.ProductImages</code> feature gate. Image binaries are stored as rows in the
+          Catalog database (<code>ProductImageData</code>, written through <code>ProductImageStorageService</code>), NOT in managed
+          blob storage: <a href="../adr/045-managed-file-storage-and-avatars.html">ADR-045</a> records the BR-116 amendment
+          for MMCA.ADC avatars and MMCA.Store does not adopt it here. <code>IProductImageStorageService</code> is
+          deliberately storage-agnostic, so moving to blob storage later is an infrastructure swap rather than
+          a handler change. Uploads are capped at 6 MB of request body
           (the 5 MB domain constraint plus multipart overhead). Reads are anonymous and output-cached for 300
           seconds; every mutation evicts the products cache. Both a legacy single-image route set (<code>/image</code>) and
           the current collection route set (<code>/images</code>) are exposed, sharing one upload handler. Reordering

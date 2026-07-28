@@ -84,13 +84,17 @@ keeps the raw `IQueryable` surfaces out of Application code.
   principal keys with `GetProjectedAsync` (`:55-56`) and returns an `InlineSpecification` of
   `FK IN (keys)` ANDed with the local predicate (`:62-63`, `:74-90`).
 
-Enforcement of the queryable ban is **opt-in per repository, by subclassing the base**, and today two
-repositories opt in. MMCA.Common scans its own framework Application project
-(`Tests/Architecture/MMCA.Common.Architecture.Tests/RawQueryableConventionTests.cs:18-22`) and
+Enforcement of the queryable ban is **opt-in per repository, by subclassing the base**, and today
+three repositories opt in. MMCA.Common scans its own framework Application project
+(`Tests/Architecture/MMCA.Common.Architecture.Tests/RawQueryableConventionTests.cs:18-22`),
 MMCA.ADC scans its mapped Identity/Conference/Engagement Application projects plus the thin
 Notification module appended by hand
-(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/RawQueryableConventionTests.cs:21-30`).
-MMCA.Store and MMCA.Helpdesk have no subclass, so their Application code is not scanned today. The
+(`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/RawQueryableConventionTests.cs:21-30`),
+and MMCA.Store scans its Catalog/Sales/Identity Application projects
+(`MMCA.Store/Tests/Architecture/MMCA.Store.Architecture.Tests/RawQueryableConventionTests.cs`).
+Store adopted on the 2026-07-28 drift wave with an **empty** `AllowedFiles`: its Application layer
+had zero raw-queryable uses at adoption, so unlike the other two it starts with no exemptions to
+ratchet down. MMCA.Helpdesk has no subclass, so its Application code is not scanned today. The
 rule also ships with a documented exemption list, `AllowedFiles`
 (`RawQueryableConventionTestsBase.cs:38`), used as an adoption ratchet (`:24-27`): MMCA.Common
 exempts six files, the generic query pipeline itself (`EntityQueryService.cs`, which builds its base
@@ -139,8 +143,8 @@ dependency shape any handler currently has.
   `//` comments, so a match inside a string literal or a trailing comment is a false positive, and it
   cannot see through variable indirection or an interface alias that re-exposes a queryable
   (`RawQueryableConventionTestsBase.cs:17-22`).
-- **Coverage is partial by construction.** Two of the four repositories run the rule; MMCA.Store and
-  MMCA.Helpdesk currently do not, so their Application layers rely on review alone.
+- **Coverage is partial by construction.** Three of the four repositories run the rule; MMCA.Helpdesk
+  currently does not, so its Application layer relies on review alone.
 - **The exemptions are real coupling, not paperwork.** The fourteen allowlisted files across
   MMCA.Common and MMCA.ADC are EF-coupled on purpose (aggregations and projections the focused
   surface cannot express); each is intra-module or framework-owned, but every one of them would need

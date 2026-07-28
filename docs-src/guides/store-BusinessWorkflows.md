@@ -363,8 +363,10 @@ Soft delete on variant. Publishes `ProductVariantRemoved`.
 
 ### 2.4 Product Image Management
 
-Behind the `CatalogFeatures.ProductImages` feature gate ([ADR-031](../adr/031-feature-flag-management.md)),
-storage per [ADR-045](../adr/045-managed-file-storage-and-avatars.md). Mutations require Admin;
+Behind the `CatalogFeatures.ProductImages` feature gate ([ADR-031](../adr/031-feature-flag-management.md)).
+Image binaries live as rows in the Catalog database (`ProductImageData`), not in managed blob storage:
+[ADR-045](../adr/045-managed-file-storage-and-avatars.md) is the MMCA.ADC avatar amendment and is not
+adopted here, which is why the output cache below exists. Mutations require Admin;
 retrieval is anonymous and output-cached for 300 seconds to keep repeated BLOB reads off the database.
 
 | Workflow | Endpoint | Auth | Notes |

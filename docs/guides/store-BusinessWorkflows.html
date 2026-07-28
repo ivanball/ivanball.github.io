@@ -792,8 +792,10 @@
           <p><strong>Entry Point:</strong> <code>DELETE /products/{id}/productvariants/{variantId}</code>, Admin only</p>
           <p>Soft delete on variant. Publishes <code>ProductVariantRemoved</code>.</p>
           <h3 id="24-product-image-management">2.4 Product Image Management</h3>
-          <p>Behind the <code>CatalogFeatures.ProductImages</code> feature gate (<a href="../adr/031-feature-flag-management.html">ADR-031</a>),
-          storage per <a href="../adr/045-managed-file-storage-and-avatars.html">ADR-045</a>. Mutations require Admin;
+          <p>Behind the <code>CatalogFeatures.ProductImages</code> feature gate (<a href="../adr/031-feature-flag-management.html">ADR-031</a>).
+          Image binaries live as rows in the Catalog database (<code>ProductImageData</code>), not in managed blob storage:
+          <a href="../adr/045-managed-file-storage-and-avatars.html">ADR-045</a> is the MMCA.ADC avatar amendment and is not
+          adopted here, which is why the output cache below exists. Mutations require Admin;
           retrieval is anonymous and output-cached for 300 seconds to keep repeated BLOB reads off the database.</p>
           <div class="table-wrap"><table>
           <thead>
