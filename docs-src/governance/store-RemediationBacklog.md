@@ -60,6 +60,41 @@ These categories score maturity 3; the ledger records them per its own line-4 in
 - [x] **#12 · Performance & Scalability · maturity 3 → 4 (weight 2). DONE (2026-07-11, remediation wave 3).** Both halves of the lever are now enforced deploy preconditions: (a) a `load-freshness` job in `deploy.yml`'s `needs` fails the deploy when the latest successful monthly `load-test.yml` run is older than 35 days (the dr-freshness pattern; latest run 2026-07-01, green), and (b) the WebVitals budgets were tightened from catastrophic-only (LCP 8000) to the Core Web Vitals "good" band (LCP 2500 / FCP 1800 / TTFB 800 / CLS 0.1 / INP 500), calibrated against measured CI maxima (LCP 172ms, 10-30x headroom), asserted inside the deploy-gating chromium `e2e-gate`. **Maturity candidacy DECLINED on the 2026-07-16 re-score**: the k6 load test itself runs monthly/on-demand, so it is capacity-planning evidence rather than a merge gate; the freshness gate bounds staleness but does not gate regressions. §12 stays M3/I8, lever OPEN: either record the monthly cadence as the accepted posture (ADC's stance) or add a latency-regression check to the merge path. **§23 split out and RESOLVED same day (drift-analysis fold, adversarially verified):** its CWV budget assertions are per-deploy enforcement independent of k6's cadence, the identical evidence ADC's twentieth cycle credited, so scorecard §23 is M4/I8 and moves to the protect list.
 - [x] **#13 · Observability & Operability · maturity 3 → 4 (weight 2). DONE (2026-07-11, remediation wave 6).** The dashboard half already existed (the saved `store-slo-workbook` Azure Monitor workbook mirrors the three SLO alerts per service); the missing runbook half landed as `infra/OPERATIONS.md`: each provisioned alert (`failed-requests`, `server-response-time`, `dependency-failures`) mapped to concrete triage steps (workbook pane, App Insights drill path, container logs, the Stripe/gRPC/outbox failure classes) plus fast-reference recovery moves (revision rollback, PITR restore, the freshness gates) and a pair-with-`sloAlertSpecs` governance note. **Split verdict on the 2026-07-16 re-score:** Implementation 8 → 9 GRANTED (both prior deductions closed: workbook `infra/main.bicep:274` + runbook `infra/OPERATIONS.md`), but the maturity candidacy was DECLINED: dashboards/runbooks are IaC/review-enforced, and nothing in CI fails when an alert loses its runbook pairing. §13 stays M3/I9, lever OPEN: add a CI gate asserting the `sloAlertSpecs`-to-`OPERATIONS.md` pairing (mirrors ADC's reopened #13; one shared gate design can serve both repos). **Gate SHIPPED same day (2026-07-16):** `Tests/Architecture/MMCA.Store.Architecture.Tests/ObservabilityConventionTests.cs` (mirror of ADC's) machine-enforces the pairing in the CI.slnf arch gate: every `sloAlertSpecs` key needs a `### ...-alert-<key>` runbook section carrying the alert's current `(sev N)`, orphans fail, 3-spec non-vacuity floor, both files embedded. Verified red on a seeded severity drift, green on the real files. Maturity 3 → 4 candidacy recorded for the next re-score. **Maturity 4 GRANTED on the 2026-07-17 re-score** (`ObservabilityConventionTests.cs:24,34` verified live in the CI.slnf arch gate, `MMCA.Store.CI.slnf:52`): §13 is **M4/I9**; moved to the protect list.
 
+## 🟢 Resolved this cycle (2026-07-28, drift wave: D1/D2/D5/D6/D7 + E2/E4/E7/E8)
+
+- **[x] #29 Resilience: the DR drill was restoring a RETIRED database.** The weekly `dr-drill.yml`
+  had no rotation and fell through to its input default `MMCAStore`, the legacy archive no app
+  references. Every Store drill on record, scheduled and dispatched alike, hit it, so
+  `Store_Catalog` / `Store_Sales` / `Store_Identity` had **never** had a restore proven while the
+  scorecard credited §29 M4/I9 on "a drilled restore" and the rubric's #1 red flag is backups that
+  have never been restored. Fixed: ISO-week rotation across the three live DBs (MMCAStore is absent
+  from the rotation array and can only be dispatched), drill timeout 30 -> 60 min (a run was killed
+  at 30m16s on 2026-07-20 and recorded no proof), and ADC's break-glass
+  (`skip_freshness_gates` + mandatory justification) ported to all three freshness gates, since
+  Store had no escape hatch at all. All three live DBs dispatch-drilled before landing:
+  Catalog 3.6 min, Sales 2.1 min, Identity 1.3 min, all PASS.
+- **[x] #15/#17/#34 Http2-only services had no readiness probe.** Catalog and Identity run h2c-only
+  for cross-service gRPC, which rejects HTTP/1.1 probes, so both fell back to `tcpSocket` with no
+  readiness probe: a replica that could not reach its database stayed in rotation serving 500s.
+  Ported ADC's dedicated Http1 probe listener on `HealthProbe:Port` 8081 plus the three-probe
+  httpGet form. Verified on the deployed revisions.
+- **[x] #31 SLO and budget alerts were notifying NOBODY.** `alertEmailAddress` defaulted to `''`
+  with `empty()` guards on every consumer, and the `ALERT_EMAIL` repo variable was unset, so every
+  alert routed to an action group with zero receivers. The parameter is now required and
+  `deploy.yml` fails fast naming the missing variable.
+- **[x] #33 README** expanded from a two-line stub into a getting-started path.
+- **[x] ADR-055 raw-queryable rule adopted** with an EMPTY `AllowedFiles`: Store's Application layer
+  had zero raw-queryable uses, so it starts with no exemptions to ratchet down. Plus
+  `DecoratorPipelineOrderTests` and `HandlerResultConventionTests`.
+- **[x] Password-spray protection (D3) closed with no Store code change.** MMCA.Common v1.130.0 put
+  the per-IP anti-spray throttle on `AuthControllerBase.LoginAsync`/`RegisterAsync` by default;
+  Store inherits both actions and had never attached the attribute, so it had none. **Watch the 429
+  rate:** Blazor Server issues the login call server-side, so every Server-circuit user shares the
+  UI host's IP against a 30/min window. Tune with `AddCommonRateLimiting(authIpPermitLimit: N)`.
+- **[x] E2/E4/E7/E8 adopted**: `PaymentReconciliationService` on `PeriodicBackgroundService` (its
+  first adopter), the shared SQL readiness check, and the observability and graceful-shutdown test
+  bases (118-line and factory+test files collapsed to subclasses).
+
 ## 🟢 Resolved this cycle (2026-07-25, performance program 2)
 
 Second evidence-led performance pass over Common/ADC/Store. Store's share shipped as two PRs plus

@@ -437,8 +437,12 @@ arrived, typically from a "Retry / check payment" affordance on the order.
 
 **Trigger:** An administrator manages the image collection on a product; any visitor views one.
 
-Behind the `CatalogFeatures.ProductImages` feature gate, with storage per
-[ADR-045](../adr/045-managed-file-storage-and-avatars.md). Uploads are capped at 6 MB of request body
+Behind the `CatalogFeatures.ProductImages` feature gate. Image binaries are stored as rows in the
+Catalog database (`ProductImageData`, written through `ProductImageStorageService`), NOT in managed
+blob storage: [ADR-045](../adr/045-managed-file-storage-and-avatars.md) records the BR-116 amendment
+for MMCA.ADC avatars and MMCA.Store does not adopt it here. `IProductImageStorageService` is
+deliberately storage-agnostic, so moving to blob storage later is an infrastructure swap rather than
+a handler change. Uploads are capped at 6 MB of request body
 (the 5 MB domain constraint plus multipart overhead). Reads are anonymous and output-cached for 300
 seconds; every mutation evicts the products cache. Both a legacy single-image route set (`/image`) and
 the current collection route set (`/images`) are exposed, sharing one upload handler. Reordering
