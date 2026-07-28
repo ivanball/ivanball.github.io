@@ -1,8 +1,11 @@
 # MMCA.ADC: Architecture Remediation Backlog
 
 Derived from `ArchitectureScorecard.md` (single-axis 0-4, baseline **75%**, 241/320, dated 2026-06-08). **Current authoritative two-axis scores (twenty-third-cycle full re-score, 2026-07-23, pin v1.123.0): Maturity 97.2% (311/320) / Implementation 85.9% (687/800), no score moves (all 34 categories re-confirmed at their prior scores; two proposed maturity lifts, §12 and §21, adversarially rejected as verified non-moves).** See the Index note for the cycle record.
-Tasks are every category scoring **< 4**, ranked by **priority = (4 − score) × weight**.
-Higher priority = bigger weighted gap = more index points per unit of effort.
+Tasks are ranked on **both scorecard axes**, one band per axis (two-axis policy adopted 2026-07-28):
+- **Maturity band:** every category scoring **maturity < 4**, ranked by **priority = (4 − maturity) × weight**.
+- **Implementation band:** every category scoring **implementation <= 8**, ranked by **implPriority = max(0, 9 − implementation) × weight**. The target is **9, not 10**: the rubric defines 10 as "perfectly implemented: nothing left to improve" and no category in any repo has ever scored it, so ranking against 10 would schedule work that can never close.
+
+Higher priority = bigger weighted gap = more index points per unit of effort. A category leaves each band independently and reaches the protect list only at **maturity 4 AND implementation >= 9**. The indices themselves are unchanged (still `× 4` and `× 10`), so the trend line stays comparable across every prior cycle; the 9-target governs scheduling only.
 
 > **This is the single remediation ledger.** The former `TECHDEBT.md` tactical register is **folded in here** (2026-06-26): each deferred sub-item keeps its `TD-NN` ID and lives under its `#NN` category with its blocker, resolution path, and effort estimate; the recorded-but-not-scheduled choices live in the **Deliberate / accepted** section below. There is no separate tech-debt file (matching MMCA.Common and MMCA.Store). **Effort key:** **S** ≈ hours · **M** ≈ ~1 day · **L** ≈ multi-day.
 
@@ -288,6 +291,38 @@ Strong in-app resilience (Polly, SQL retry, outbox, health probes), now with a f
 - [x] **Close (not just record) the local-vs-prod broker parity gap** → the gap is **recorded, mitigated, and referenced** (the README's parity section documents RabbitMQ-local vs Service-Bus-prod and points at the nightly Testcontainers broker round-trip whose recency gates deploys, TD-02), but closing it needs either a local Service Bus surface (e.g. the Service Bus emulator in the Aspire AppHost, or an opt-in cloud-broker local profile) or an automated Service-Bus-behavior test tier; documentation alone holds §33 at M3/I8. **CLOSED 2026-07-16 via the automated Service-Bus-behavior test tier:** `Tests/Integration/MMCA.ADC.ServiceBusEmulator.IntegrationTests` runs MassTransit v8 against the official Service Bus emulator (pinned 2.0.1, the first line with the admin plane MassTransit's topology provisioning needs) with ADC's REAL integration-event contracts, proving admin-plane topology creation + the AMQP publish-to-consume round-trip nightly in `cross-service-tests.yml` (a new job in the same workflow, so its result rides the existing `cross-service-freshness` deploy gate). Design notes: MassTransit v8 has no vendor emulator mode (v9-only; excluded by the v8 policy pin), so the tier uses the public custom-clients `Host()` overload, its own test process (the emulator's 1h TTL quota requires overriding process-global MassTransit defaults), and one warm container (10-connection + admin-throttle quotas). Deliberately a smoke, not a port of the 9 RabbitMQ round-trips: the RabbitMQ tier keeps the outbox/inbox pipeline coverage; this pins the transport. §33 M3→4 + I8→9 candidacy recorded for the next re-score.
 
 ---
+
+## 🔵 Implementation band (implementation <= 8, ranked by implPriority)
+
+Added 2026-07-28 when the ledger gained its second ranked axis. Until then implementation gaps
+appeared only as unranked sub-bullets inside maturity items, so they were never scheduled against
+each other: the maturity index reached 97.2% while implementation sat at 85.9%. Ranked from the
+current scorecard (2026-07-23 twenty-third cycle, no score moves): **15 categories, 33 gap points**.
+Measured against the attainable ceiling of 90% (implementation 9 across the board), ADC is at
+**95.4%** of attainable, so this is a bounded polish list, not a neglected backlog.
+
+Four of these categories (§12, §21, §22, §33) also sit in the maturity band above and keep their
+existing item there; this band records only their implementation half. Levers are cited only where
+the ledger or scorecard already records one: an unnamed lever is named at the next re-score, never
+invented here.
+
+| implPriority | # | Category | w | Impl | Recorded lever |
+|---|---|---|---|---|---|
+| 3 | §7 | Microservices Readiness | 3 | 8 | not yet identified |
+| 3 | §18 | UI Architecture & Components | 3 | 8 | **TD-16** under #18 above: the largest code-behind sits flush at the enforced 400-line cap with zero headroom, `HappeningNow.razor.cs:400`, plus six files in the 360-379 band. Effort S |
+| 3 | §21 | Accessibility (a11y) | 3 | 8 | not yet identified (the recorded SR-pass lever is the maturity half) |
+| 3 | §28 | Front-End Testing & Quality | 3 | 8 | not yet identified |
+| 2 | §5 | Vertical Slice Architecture | 2 | 8 | not yet identified |
+| 2 | §12 | Performance & Scalability | 2 | 8 | see the open #12 item above (Notification pinned `maxReplicas: 1`, `infra/main.bicep:1424`) |
+| 2 | §15 | Best Practices & Code Quality | 2 | 8 | not yet identified |
+| 2 | §16 | Maintainability & Evolvability | 2 | 8 | not yet identified |
+| 2 | §22 | Responsive & Cross-Browser | 2 | 8 | not yet identified (the chromium-only gate is the maturity half) |
+| 2 | §23 | Front-End Performance | 2 | 8 | the WASM code-split / image sub-item recorded under #23 |
+| 2 | §24 | Forms, Validation & UX Safety | 2 | 8 | not yet identified (TD-14 closed 2026-07-11) |
+| 2 | §25 | Navigation & Information Arch | 2 | 8 | not yet identified |
+| 2 | §31 | Cost Efficiency / FinOps | 2 | 8 | not yet identified |
+| 2 | §33 | Developer Experience & Inner Loop | 2 | 8 | see the open #33 item above (emulator tier is nightly-plus-recency, not in-band) |
+| 1 | §27 | Internationalization (i18n) | 1 | 8 | pseudo-loc breadth: `PseudoLocalizationTests.cs:51` covers 3 public pages of 36. **Proposed and rejected in three consecutive cycles** (21st, 22nd, 23rd) as a partial extension; treat as a real lever only if the breadth actually lands |
 
 ## 🟢 Resolved 2026-07-25 (performance program 2)
 

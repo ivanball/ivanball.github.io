@@ -115,8 +115,12 @@
           <h1 id="mmcacommon-architecture-remediation-backlog">MMCA.Common: Architecture Remediation Backlog</h1>
           <p>Derived from <code>ArchitectureScorecard.md</code> (canonical two-axis scoring: <strong>Maturity 96.9% / Implementation 84.6%</strong>, framework v1.128.0; the 2026-07-25 twenty-third-wave two-pass re-score at HEAD <code>3dff29b</code>, working tree clean, moved <strong>no scores</strong>: all 34 categories re-confirmed at their twenty-first-wave values, the third consecutive steady-state cycle. Five first-pass proposals were refuted on adversarial re-verification and held at prior: four lifts (§17 Maturity 3→4 and Implementation 8→9, §30 Maturity 3→4, §31 Maturity 2→3, §34 Implementation 8→9) and one downgrade (§23 Maturity 4→3 / Implementation 8→7). <strong>Categories still below Maturity 4: #9, #17, #30 (M3) and #31 (M2)</strong>, so 30 of 34 sit at Maturity 4, and the ranking is unchanged (#31 at priority 4; #9, #17 and #30 at priority 2 each). The cycle&#39;s only new work is doc hygiene under #34: this backlog and the scorecard had drifted five minor versions behind the CI-gated <code>FACTS.md</code>. The prior twenty-second-wave entry, retained for provenance: the 2026-07-23 re-score at HEAD <code>c911480</code> also moved no scores, refuting three lifts (§9, §10, §30) and two downgrades (§23, §24). The twenty-first-wave entry, likewise retained: the 2026-07-21 re-score at HEAD <code>4a4fc05</code> moved exactly one score, <strong>§12 Performance &amp; Scalability Maturity 3→4</strong>, because the <code>Performance gate (BenchmarkDotNet Short + baseline verify)</code> context is present in live <code>required_status_checks</code> on <code>main</code> (8 required contexts), refuting the twentieth wave&#39;s sole basis for holding it at 3; seven first-pass lifts (§4, §9, §11, §19, §20, §26, §29) were refuted and the remaining 26 categories re-confirmed.)
           The wave-by-wave priority ranking below is the <strong>historical single-axis review</strong> (index 80%, 218/272, 2026-06-08/09); it is retained for provenance and is <strong>superseded by the in-repo two-axis scorecard</strong>, which is the live source of scores.
-          Tasks are every applicable category scoring <strong>&lt; 4</strong>, ranked by <strong>priority = (4 − score) × weight</strong>.
-          Higher priority = bigger weighted gap = more index points per unit of effort.</p>
+          Tasks are ranked on <strong>both scorecard axes</strong>, one band per axis (two-axis policy adopted 2026-07-28):</p>
+          <ul>
+          <li><strong>Maturity band:</strong> every applicable category scoring <strong>maturity &lt; 4</strong>, ranked by <strong>priority = (4 − maturity) × weight</strong>.</li>
+          <li><strong>Implementation band:</strong> every applicable category scoring <strong>implementation &lt;= 8</strong>, ranked by <strong>implPriority = max(0, 9 − implementation) × weight</strong>. The target is <strong>9, not 10</strong>: the rubric defines 10 as &quot;perfectly implemented: nothing left to improve&quot; and no category in any repo has ever scored it, so ranking against 10 would schedule work that can never close.</li>
+          </ul>
+          <p>Higher priority = bigger weighted gap = more index points per unit of effort. A category leaves each band independently and reaches the protect list only at <strong>maturity 4 AND implementation &gt;= 9</strong>. The indices keep their <code>× 4</code> and <code>× 10</code> denominators, so the trend line stays comparable across all twenty-three waves; the 9-target governs scheduling only.</p>
           <p><strong>Scope:</strong> the single-axis item counts below are historical (the wave-by-wave ranking is superseded by the two-axis scorecard, per the note above). Under the live two-axis scorecard there are <strong>no N/A categories</strong> (§27 i18n is now scored after ADR-027) and <strong>30 categories sit at Maturity 4</strong> (#1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 32, 33, 34; <strong>#22 and #23 joined 2026-07-15</strong> on the nineteenth-wave re-score, <strong>#25 and #33 joined 2026-07-17</strong> on the twentieth-wave re-score, and <strong>#12 rejoined 2026-07-21</strong> on the twenty-first-wave re-score when its perf gate became a required check); the open work is the <strong>4 categories still below Maturity 4</strong>. Ranked by two-axis priority = (4 − maturity) × weight: <strong>#31</strong> FinOps (Maturity 2, weight 2, computed priority 4) is the highest weighted gap but a documented accepted cap (see <em>Deliberate / accepted</em> below), not scheduled work; then the weight-2 Maturity-3 pack at <strong>priority 2</strong> (#9, #17, #30).</p>
           <blockquote>
           <p><strong>Two fixes each clear multiple items: do them once:</strong></p>
@@ -125,6 +129,171 @@
           <li><strong>bUnit component tests</strong> lift <strong>#28</strong> <em>and</em> <strong>#18</strong> (and cover the #19 guard bug).</li>
           </ul>
           </blockquote>
+          <h2 id="implementation-band-implementation--8-ranked-by-implpriority">Implementation band (implementation &lt;= 8, ranked by implPriority)</h2>
+          <p>Added 2026-07-28 when the ledger gained its second ranked axis. Until then implementation gaps were
+          never ranked or scheduled, which is why three consecutive steady-state cycles moved neither index
+          and the gap between them (96.9% vs 84.6%) looked like neglect. Ranked from the current scorecard
+          (2026-07-25 twenty-third wave, no score moves): <strong>18 categories, 44 gap points</strong>. Against the
+          attainable ceiling of 90% (implementation 9 across the board) Common is at <strong>94.0%</strong> of attainable.</p>
+          <p>Levers are cited only where the ledger or scorecard already records one; an unnamed lever is named
+          at the next re-score, never invented here. Three of these categories (#17, #30, #31) also sit in the
+          maturity band and keep their entries there; this band records only their implementation half.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>implPriority</th>
+          <th>#</th>
+          <th>Category</th>
+          <th>w</th>
+          <th>Impl</th>
+          <th>Recorded lever</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>4</td>
+          <td>#31</td>
+          <td>Cost Efficiency / FinOps</td>
+          <td>2</td>
+          <td>7</td>
+          <td><strong>Documented accepted cap, not scheduled work</strong> (see <em>Deliberate / accepted</em>: held at Maturity 2 / Implementation 7 by acceptance). It ranks first on both axes and is deliberately not worked; leaving it visible is the point</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td>#4</td>
+          <td>Domain-Driven Design</td>
+          <td>3</td>
+          <td>8</td>
+          <td>not yet identified (a first-pass lift was refuted on the twenty-first wave)</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td>#8</td>
+          <td>Data Architecture</td>
+          <td>3</td>
+          <td>8</td>
+          <td>not yet identified</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td>#11</td>
+          <td>Security</td>
+          <td>3</td>
+          <td>8</td>
+          <td>not yet identified (a first-pass lift was refuted on the twenty-first wave)</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td>#19</td>
+          <td>State Management &amp; Data Flow</td>
+          <td>3</td>
+          <td>8</td>
+          <td>not yet identified (a first-pass lift was refuted on the twenty-first wave)</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td>#26</td>
+          <td>Front-End Security</td>
+          <td>3</td>
+          <td>8</td>
+          <td>the CSP <code>script-src</code>/<code>style-src</code> gap recorded as the unclosed 8→9 reason</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td>#29</td>
+          <td>Resilience &amp; Business Continuity</td>
+          <td>3</td>
+          <td>8</td>
+          <td>not yet identified (a first-pass lift was refuted on the twenty-first wave)</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>#5</td>
+          <td>Vertical Slice Architecture</td>
+          <td>2</td>
+          <td>8</td>
+          <td>not yet identified</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>#10</td>
+          <td>Cross-Cutting Concerns</td>
+          <td>2</td>
+          <td>8</td>
+          <td>not yet identified (a first-pass lift was refuted on the twenty-second wave)</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>#12</td>
+          <td>Performance &amp; Scalability</td>
+          <td>2</td>
+          <td>8</td>
+          <td>not yet identified</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>#13</td>
+          <td>Observability &amp; Operability</td>
+          <td>2</td>
+          <td>8</td>
+          <td>not yet identified</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>#16</td>
+          <td>Maintainability &amp; Evolvability</td>
+          <td>2</td>
+          <td>8</td>
+          <td>not yet identified</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>#17</td>
+          <td>DevOps &amp; Deployment</td>
+          <td>2</td>
+          <td>8</td>
+          <td>the bicep job is a compile check and is not among the required contexts (the recorded reason the 8→9 lift was refuted on the twenty-third wave)</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>#23</td>
+          <td>Front-End Performance</td>
+          <td>2</td>
+          <td>8</td>
+          <td>not yet identified (a proposed 8→7 downgrade was also refuted; the score is contested in both directions)</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>#24</td>
+          <td>Forms, Validation &amp; UX Safety</td>
+          <td>2</td>
+          <td>8</td>
+          <td>not yet identified (a proposed downgrade was refuted on the twenty-second wave)</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>#25</td>
+          <td>Navigation &amp; Information Arch</td>
+          <td>2</td>
+          <td>8</td>
+          <td>not yet identified</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>#30</td>
+          <td>Compliance, Privacy &amp; Governance</td>
+          <td>2</td>
+          <td>8</td>
+          <td>not yet identified (#30 is also in the maturity band)</td>
+          </tr>
+          <tr>
+          <td>2</td>
+          <td>#34</td>
+          <td>Architecture Governance &amp; Docs</td>
+          <td>2</td>
+          <td>8</td>
+          <td>the uncommittable workspace-root <code>ArchitecturalAnalysis.md</code> cap, recorded as unresolved (the 8→9 lift was refuted on the twenty-third wave)</td>
+          </tr>
+          </tbody></table></div>
           <hr>
           <h2 id="progress-first-wave-2026-06-08">Progress: first wave (2026-06-08)</h2>
           <p>Implemented in MMCA.Common, ✅ <strong>verified 2026-06-09</strong>: <code>dotnet build -c Release</code> is clean (0 warnings / 0 errors, all analyzers) and all 9 test projects pass (~1,611 tests, 0 failures), including 28 architecture tests (3 new MassTransit fitness cases) and 90 UI tests (6 new bUnit tests). <em>No <code>GITHUB_TOKEN</code> is needed: MMCA.Common restores entirely from nuget.org.</em></p>
@@ -1200,6 +1369,7 @@
           <nav class="doc-toc" aria-label="On this page">
             <p class="doc-toc-title">On this page</p>
             <ul>
+            <li><a href="#implementation-band-implementation--8-ranked-by-implpriority">Implementation band (implementation &lt;= 8, ranked by implPriority)</a></li>
             <li><a href="#progress-first-wave-2026-06-08">Progress: first wave (2026-06-08)</a></li>
             <li><a href="#progress-second-wave-2026-06-09">Progress: second wave (2026-06-09)</a></li>
             <li><a href="#progress-third-wave-front-end-2026-06-09">Progress: third wave (front-end, 2026-06-09)</a></li>
