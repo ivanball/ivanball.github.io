@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Phase 1b - Functional Group Taxonomy · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="This is the primary axis of the guide. Every one of the 2,637 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
+  <meta name="description" content="This is the primary axis of the guide. Every one of the 2,645 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
   <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/00-group-taxonomy.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Phase 1b - Functional Group Taxonomy">
-  <meta property="og:description" content="This is the primary axis of the guide. Every one of the 2,637 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
+  <meta property="og:description" content="This is the primary axis of the guide. Every one of the 2,645 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
   <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/00-group-taxonomy.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Phase 1b - Functional Group Taxonomy">
-  <meta name="twitter:description" content="This is the primary axis of the guide. Every one of the 2,637 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
+  <meta name="twitter:description" content="This is the primary axis of the guide. Every one of the 2,645 distinct first-party type nodes from 00-inventory.md is assigned to exactly one…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"Phase 1b - Functional Group Taxonomy","item":"https://ivanball.github.io/docs/onboarding/00-group-taxonomy.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -144,7 +144,7 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Onboarding guide</p>
           <h1 id="phase-1b---functional-group-taxonomy">Phase 1b - Functional Group Taxonomy</h1>
-          <p>This is the <strong>primary axis</strong> of the guide. Every one of the <strong>2,637</strong> distinct first-party type
+          <p>This is the <strong>primary axis</strong> of the guide. Every one of the <strong>2,645</strong> distinct first-party type
           nodes from <a href="00-inventory.html"><code>00-inventory.md</code></a> is assigned to <strong>exactly one</strong> functional group -
           its primary <em>home</em>: the capability or cross-cutting concern it most exists to serve. A type used
           across many groups (e.g. <code>Result&lt;T&gt;</code>, the entity base) lives in the one foundational group that
@@ -309,7 +309,7 @@
           <tr>
           <td>G16</td>
           <td><strong>Aspire Orchestration &amp; Service Defaults</strong><br/>group-16-aspire-orchestration.md</td>
-          <td>16</td>
+          <td>17</td>
           <td>L0-L3</td>
           <td>The Aspire AppHost wiring, ServiceDefaults, warmup, telemetry and security helpers that compose and run the distributed app locally and in Azure.</td>
           </tr>
@@ -351,7 +351,7 @@
           <tr>
           <td>G22</td>
           <td><strong>ADC Engagement Module (Session Bookmarks)</strong><br/>group-22-engagement-module.md</td>
-          <td>73</td>
+          <td>74</td>
           <td>L0-L11</td>
           <td>The Engagement bounded context end-to-end: bookmark aggregate, use cases, persistence, API/contracts/service, and feedback UI.</td>
           </tr>
@@ -365,7 +365,7 @@
           <tr>
           <td>G23</td>
           <td><strong>ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</strong><br/>group-24-identity-module.md</td>
-          <td>82</td>
+          <td>83</td>
           <td>L0-L11</td>
           <td>The Identity bounded context end-to-end: the User aggregate, change-password/delete/export use cases, persistence, API/contracts/service, and profile/user UI.</td>
           </tr>
@@ -386,12 +386,12 @@
           <tr>
           <td>G25</td>
           <td><strong>Testing &amp; Quality Infrastructure</strong><br/>group-27-testing-infrastructure.md</td>
-          <td>1270</td>
+          <td>1275</td>
           <td>L0-L17</td>
           <td>All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).</td>
           </tr>
           </tbody></table></div>
-          <p><strong>Reconciliation:</strong> 1367 production types across 26 groups + 1270 test/testing types in G25 = <strong>2637</strong> (matches the inventory&#39;s distinct-node count). No type appears twice; none dropped.</p>
+          <p><strong>Reconciliation:</strong> 1370 production types across 26 groups + 1275 test/testing types in G25 = <strong>2645</strong> (matches the inventory&#39;s distinct-node count). No type appears twice; none dropped.</p>
           <hr>
           <h2 id="group-membership">Group membership</h2>
           <h3 id="g01---result--error-handling">G01 - Result &amp; Error Handling</h3>
@@ -3828,7 +3828,7 @@
           </tbody></table></div>
           <h3 id="g16---aspire-orchestration--service-defaults">G16 - Aspire Orchestration &amp; Service Defaults</h3>
           <blockquote>
-          <p><code>group-16-aspire-orchestration.md</code> | 16 types | The Aspire AppHost wiring, ServiceDefaults, warmup, telemetry and security helpers that compose and run the distributed app locally and in Azure.</p>
+          <p><code>group-16-aspire-orchestration.md</code> | 17 types | The Aspire AppHost wiring, ServiceDefaults, warmup, telemetry and security helpers that compose and run the distributed app locally and in Azure.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -3854,6 +3854,12 @@
           <tr>
           <td>0</td>
           <td><code>GatewayCorsExtensions</code></td>
+          <td>class</td>
+          <td>MMCA.Common.Aspire</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>HealthCheckTags</code></td>
           <td>class</td>
           <td>MMCA.Common.Aspire</td>
           </tr>
@@ -6768,7 +6774,7 @@
           </tbody></table></div>
           <h3 id="g22---adc-engagement-module-session-bookmarks">G22 - ADC Engagement Module (Session Bookmarks)</h3>
           <blockquote>
-          <p><code>group-22-engagement-module.md</code> | 73 types | The Engagement bounded context end-to-end: bookmark aggregate, use cases, persistence, API/contracts/service, and feedback UI.</p>
+          <p><code>group-22-engagement-module.md</code> | 74 types | The Engagement bounded context end-to-end: bookmark aggregate, use cases, persistence, API/contracts/service, and feedback UI.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -6825,13 +6831,13 @@
           <td>0</td>
           <td><code>ClassReference</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.Domain</td>
+          <td>MMCA.ADC.Engagement.Infrastructure</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>ClassReference</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Engagement.Infrastructure</td>
+          <td>MMCA.ADC.Engagement.Domain</td>
           </tr>
           <tr>
           <td>0</td>
@@ -6934,6 +6940,12 @@
           <td><code>LifecycleTransitionRequest</code></td>
           <td>record</td>
           <td>MMCA.ADC.Engagement.Shared</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>SelfHttpWarmupTask</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Engagement.Service</td>
           </tr>
           <tr>
           <td>1</td>
@@ -7798,7 +7810,7 @@
           </tbody></table></div>
           <h3 id="g23---adc-identity-module-users-profiles-gdpr-exporterasure">G23 - ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</h3>
           <blockquote>
-          <p><code>group-24-identity-module.md</code> | 82 types | The Identity bounded context end-to-end: the User aggregate, change-password/delete/export use cases, persistence, API/contracts/service, and profile/user UI.</p>
+          <p><code>group-24-identity-module.md</code> | 83 types | The Identity bounded context end-to-end: the User aggregate, change-password/delete/export use cases, persistence, API/contracts/service, and profile/user UI.</p>
           </blockquote>
           <div class="table-wrap"><table>
           <thead>
@@ -7813,7 +7825,7 @@
           <td>0</td>
           <td><code>AssemblyReference</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Identity.Application</td>
+          <td>MMCA.ADC.Identity.Infrastructure</td>
           </tr>
           <tr>
           <td>0</td>
@@ -7825,13 +7837,13 @@
           <td>0</td>
           <td><code>AssemblyReference</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Identity.Infrastructure</td>
+          <td>MMCA.ADC.Identity.Domain</td>
           </tr>
           <tr>
           <td>0</td>
           <td><code>AssemblyReference</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Identity.Domain</td>
+          <td>MMCA.ADC.Identity.Application</td>
           </tr>
           <tr>
           <td>0</td>
@@ -7843,12 +7855,6 @@
           <td>0</td>
           <td><code>ClassReference</code></td>
           <td>class</td>
-          <td>MMCA.ADC.Identity.API</td>
-          </tr>
-          <tr>
-          <td>0</td>
-          <td><code>ClassReference</code></td>
-          <td>class</td>
           <td>MMCA.ADC.Identity.Infrastructure</td>
           </tr>
           <tr>
@@ -7856,6 +7862,12 @@
           <td><code>ClassReference</code></td>
           <td>class</td>
           <td>MMCA.ADC.Identity.Domain</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>ClassReference</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Identity.API</td>
           </tr>
           <tr>
           <td>0</td>
@@ -8006,6 +8018,12 @@
           <td><code>IUserUIService</code></td>
           <td>interface</td>
           <td>MMCA.ADC.Identity.UI.Services</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>SelfHttpWarmupTask</code></td>
+          <td>class</td>
+          <td>MMCA.ADC.Identity.Service</td>
           </tr>
           <tr>
           <td>1</td>
@@ -8962,7 +8980,7 @@
           </tbody></table></div>
           <h3 id="g25---testing--quality-infrastructure">G25 - Testing &amp; Quality Infrastructure</h3>
           <blockquote>
-          <p><code>group-27-testing-infrastructure.md</code> | 1270 types | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).</p>
+          <p><code>group-27-testing-infrastructure.md</code> | 1275 types | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).</p>
           </blockquote>
           <p>Rolled up by project (individual <code>[Fact]</code>s not sectioned - logged exception). Reusable test
           infrastructure assemblies (sectioned in full in the chapter) are marked <strong>(infra)</strong>.</p>
@@ -8978,7 +8996,7 @@
           <tbody><tr>
           <td><code>MMCA.ADC.Architecture.Tests</code> <strong>(infra)</strong></td>
           <td>30</td>
-          <td>L0-L10</td>
+          <td>L1-L10</td>
           <td></td>
           </tr>
           <tr>
@@ -9079,7 +9097,7 @@
           </tr>
           <tr>
           <td><code>MMCA.ADC.Gateway.Tests</code></td>
-          <td>6</td>
+          <td>5</td>
           <td>L0-L13</td>
           <td></td>
           </tr>
@@ -9151,7 +9169,7 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.API.Tests</code></td>
-          <td>65</td>
+          <td>66</td>
           <td>L0-L12</td>
           <td></td>
           </tr>
@@ -9163,13 +9181,13 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.Architecture.Tests</code> <strong>(infra)</strong></td>
-          <td>25</td>
+          <td>26</td>
           <td>L1-L8</td>
           <td></td>
           </tr>
           <tr>
           <td><code>MMCA.Common.Aspire.Tests</code></td>
-          <td>11</td>
+          <td>12</td>
           <td>L0-L3</td>
           <td></td>
           </tr>
@@ -9211,13 +9229,13 @@
           </tr>
           <tr>
           <td><code>MMCA.Common.Testing</code> <strong>(infra)</strong></td>
-          <td>12</td>
+          <td>14</td>
           <td>L0-L9</td>
           <td></td>
           </tr>
           <tr>
           <td><code>MMCA.Common.Testing.Architecture</code> <strong>(infra)</strong></td>
-          <td>38</td>
+          <td>39</td>
           <td>L0-L4</td>
           <td></td>
           </tr>

@@ -41,19 +41,23 @@ Level(C) = 1 + max(Level(D)) over all first-party D that C depends on
 
 When a type must reference a first-party type whose home group appears **later**, that forward
 reference is allowed (functional cohesion can outrank strict progressive disclosure) and is
-cross-linked. Eighteen dependency **cycles** exist (mutually-dependent types, e.g. an aggregate root and
+cross-linked. Nineteen dependency **cycles** exist (mutually-dependent types, e.g. an aggregate root and
 its child entity with bidirectional EF navigations); each is kept whole within a single group and
 called out where it occurs. They are listed in the
-[dependency manifest](00-dependency-manifest.md#cycles-scc-size--1-18).
+[dependency manifest](00-dependency-manifest.md#cycles-scc-size--1-19). One of the nineteen is an
+extraction artifact rather than a real dependency: the two identically-named `SelfHttpWarmupTask`
+classes (`MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:19` and
+`MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:19`) are distinct types in different services, and the
+globally-unique-name fallback described below cannot tell them apart, so each resolves to the other.
 
 ### How the inventory & leveling were computed
 
 The type inventory and dependency graph are produced **mechanically** by a small Roslyn syntactic
 parser (`Tools/invtool/`), so the type list, namespaces, and `file:line` are exact and reproducible. Edges
 are resolved by **namespace-aware name matching**; ~96% bind by namespace visibility, the rest by a
-globally-unique-name fallback (335 edges), and 28 references are dropped as ambiguous. The functional grouping is
+globally-unique-name fallback (338 edges), and 28 references are dropped as ambiguous. The functional grouping is
 then applied mechanically (`Tools/invtool/classify.ps1` → `00-group-taxonomy.md`), so every one of the
-**2,637** distinct type nodes maps to exactly one group with no silent drops. See the
+**2,645** distinct type nodes maps to exactly one group with no silent drops. See the
 [manifest's accuracy note](00-dependency-manifest.md#edge-resolution--accuracy) for residual caveats.
 
 ---
@@ -64,8 +68,8 @@ then applied mechanically (`Tools/invtool/classify.ps1` → `00-group-taxonomy.m
 | File | Contents |
 |------|----------|
 | [`00-primer.md`](00-primer.md) | Cross-cutting concepts, the BCL/NuGet stack, build/language conventions, and the 34-category rubric, taught **once** |
-| [`00-inventory.md`](00-inventory.md) | Phase 0, every in-scope type (2,637 distinct), mechanically extracted, with `file:line` |
-| [`00-dependency-manifest.md`](00-dependency-manifest.md) | Phase 1a, per-type first-party deps + computed Level; the 18 cycles |
+| [`00-inventory.md`](00-inventory.md) | Phase 0, every in-scope type (2,645 distinct), mechanically extracted, with `file:line` |
+| [`00-dependency-manifest.md`](00-dependency-manifest.md) | Phase 1a, per-type first-party deps + computed Level; the 19 cycles |
 | [`00-group-taxonomy.md`](00-group-taxonomy.md) | Phase 1b, the ordered groups + every type's group assignment (the primary axis) |
 
 ### Group chapters (primary axis)
@@ -86,18 +90,18 @@ then applied mechanically (`Tools/invtool/classify.ps1` → `00-group-taxonomy.m
 | 13 | [gRPC & Inter-Service Contracts](group-13-grpc-contracts.md) | 6 | Typed gRPC clients/servers, interceptors, Result-over-the-wire ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)) |
 | 14 | [Module System, Composition & Configuration](group-14-module-system-composition.md) | 34 | `IModule` + Kahn-ordered loader, DI composition roots, data-source attributes, options binding |
 | 15 | [Common UI Framework](group-15-common-ui-framework.md) | 82 | Reusable MudBlazor building blocks: data-grid list page base, theme, common pages/services, i18n culture bootstrap + day/dark `ThemeService`, user-preference readers/writers, pseudo-localization gate, OAuth UI settings + token storage (Web/WASM), hub-channel subscriptions ([ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html)) |
-| 16 | [Aspire Orchestration & Service Defaults](group-16-aspire-orchestration.md) | 16 | AppHost wiring, ServiceDefaults, warmup, telemetry, security helpers, the shared `HttpResilienceDefaults` Polly source of truth |
+| 16 | [Aspire Orchestration & Service Defaults](group-16-aspire-orchestration.md) | 17 | AppHost wiring, ServiceDefaults, warmup, telemetry, security helpers, the shared `HttpResilienceDefaults` Polly source of truth, the shared `HealthCheckTags` liveness/readiness vocabulary |
 | 17 | [ADC Conference, Domain Model & Module Contracts](group-17-conference-domain.md) | 86 | Event/Session/Speaker/Category/Question aggregates + domain events + invariants + Shared contracts (incl. `ConferencePermissions`, the current/next-event selector + live-validation contracts) |
 | 18 | [ADC Conference, Application & Use Cases](group-18-conference-application.md) | 216 | Conference CQRS handlers, validators (incl. the per-field session validation-rule family), DTOs, specs, Sessionize import, decision-support analytics, batch bookmark-count query, event-filtering-by-role handlers, calendar (.ics) export slice ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)) |
 | 19 | [ADC Conference, Infrastructure & Persistence](group-19-conference-infrastructure.md) | 28 | Conference DbContext registration, EF configs, seeding, infra services |
 | 20 | [ADC Conference, API, gRPC Contracts & Service Host](group-20-conference-api-grpc.md) | 41 | REST controllers, `.Contracts` gRPC, the extractable service host (incl. its Kestrel config), the gRPC adapters (incl. cross-service live-validation), localized error resources |
 | 21 | [ADC Conference, UI](group-21-conference-ui.md) | 89 | Conference Blazor pages + UI services, the single canonical ADC Home page + its view models, the AI-scoring poll recovery tracker, calendar/QR export UI, OfflineBanner, PresenterLayout on Common theme providers |
-| 22 | [ADC Engagement Module (Session Bookmarks)](group-22-engagement-module.md) | 73 | The async session-bookmarking slice of the Engagement bounded context: bookmark aggregate, use cases, persistence, API/contracts/service, feedback UI, the durable live-channel publish queue ([ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html)), the cross-service user-engagement export slice (gRPC) |
+| 22 | [ADC Engagement Module (Session Bookmarks)](group-22-engagement-module.md) | 74 | The async session-bookmarking slice of the Engagement bounded context: bookmark aggregate, use cases, persistence, API/contracts/service, feedback UI, the durable live-channel publish queue ([ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html)), the cross-service user-engagement export slice (gRPC) |
 | 23 | [ADC Engagement Live Layer (Real-Time Polls & Session Q&A)](group-23-engagement-live-layer.md) | 94 | Event-wide live polls with voting + moderated per-session Q&A with upvoting, over the [ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html) hub-channel transport and the cross-service gRPC live-channel adapter (HappeningNow / SessionLive / PresenterView) |
-| 24 | [ADC Identity Module (Users, Profiles, GDPR Export/Erasure)](group-24-identity-module.md) | 82 | The Identity bounded context end-to-end (incl. `IdentityPermissions`, user culture/theme preferences, the [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html) user-avatar photo slice end to end, the external-login email verifier + extractable-host Kestrel config; `AuthenticationService` now extends Common's shared base) |
+| 24 | [ADC Identity Module (Users, Profiles, GDPR Export/Erasure)](group-24-identity-module.md) | 83 | The Identity bounded context end-to-end (incl. `IdentityPermissions`, user culture/theme preferences, the [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html) user-avatar photo slice end to end, the external-login email verifier + extractable-host Kestrel config; `AuthenticationService` now extends Common's shared base) |
 | 25 | [ADC Application Host, UI Shell & Cross-Module Composition](group-25-adc-host-composition.md) | 18 | Blazor Web/WASM/WinUI shells, host pages/services, security, app composition, device-capability DI wiring, one-time preference migrator (the shared ADC Home page + its view models now live in the Conference UI chapter) |
 | 26 | [Device Capability Abstraction Layer (Native Contracts, MAUI, Browser & Fallback Adapters)](group-26-device-capability-layer.md) | 87 | Per-capability interface contracts (biometric, geolocation, speech, push registration, clipboard/share/haptics, external auth/links, connectivity/battery, deep links) + their MAUI-native, browser-JS-interop, and inert-fallback implementations, selected per host at DI composition time ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)/043/044/045) |
-| 27 | [Testing & Quality Infrastructure](group-27-testing-infrastructure.md) | 1270 | All test projects + reusable Testing/Testing.E2E/Testing.UI/**Testing.Architecture** bases (incl. the handler + decorator-pipeline test bases and the Gallery auth stubs) + architecture-fitness tests + Gallery + the BenchmarkDotNet perf-smoke suite |
+| 27 | [Testing & Quality Infrastructure](group-27-testing-infrastructure.md) | 1275 | All test projects + reusable Testing/Testing.E2E/Testing.UI/**Testing.Architecture** bases (incl. the handler + decorator-pipeline test bases, the shared production-host/graceful-shutdown bases, the observability-convention fitness base, and the Gallery auth stubs) + architecture-fitness tests + Gallery + the BenchmarkDotNet perf-smoke suite |
 
 ### DevOps & operations chapters
 | File | Contents |

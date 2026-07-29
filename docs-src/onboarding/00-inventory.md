@@ -3,16 +3,16 @@
 Generated mechanically by a Roslyn syntactic parse of every in-scope `.cs` file under
 `MMCA.Common/Source`, `MMCA.Common/Tests`, `MMCA.ADC/Source`, `MMCA.ADC/Tests`.
 
-- Files scanned: **2252** (in-scope **2164**, generated/excluded **88**)
-- Type declaration rows (including partial-class fragments): **2727**
-- Distinct type nodes (partials collapsed): **2637**
+- Files scanned: **2260** (in-scope **2172**, generated/excluded **88**)
+- Type declaration rows (including partial-class fragments): **2735**
+- Distinct type nodes (partials collapsed): **2645**
 - `extension(T)` blocks: **70**
 
 ## Counts by kind
 
 | Kind | Count (declarations) |
 |------|------|
-| class | 2131 |
+| class | 2139 |
 | record | 394 |
 | interface | 169 |
 | enum | 18 |
@@ -52,12 +52,12 @@ Generated mechanically by a Roslyn syntactic parse of every in-scope `.cs` file 
 | MMCA.ADC.Engagement.Infrastructure | 11 |
 | MMCA.ADC.Engagement.Infrastructure.Tests | 4 |
 | MMCA.ADC.Engagement.IntegrationTests | 13 |
-| MMCA.ADC.Engagement.Service | 3 |
+| MMCA.ADC.Engagement.Service | 4 |
 | MMCA.ADC.Engagement.Shared | 34 |
 | MMCA.ADC.Engagement.Shared.Tests | 2 |
 | MMCA.ADC.Engagement.UI | 37 |
 | MMCA.ADC.Engagement.UI.Tests | 19 |
-| MMCA.ADC.Gateway.Tests | 6 |
+| MMCA.ADC.Gateway.Tests | 5 |
 | MMCA.ADC.Identity.API | 11 |
 | MMCA.ADC.Identity.API.Tests | 7 |
 | MMCA.ADC.Identity.Application | 32 |
@@ -68,7 +68,7 @@ Generated mechanically by a Roslyn syntactic parse of every in-scope `.cs` file 
 | MMCA.ADC.Identity.Infrastructure | 6 |
 | MMCA.ADC.Identity.Infrastructure.Tests | 4 |
 | MMCA.ADC.Identity.IntegrationTests | 33 |
-| MMCA.ADC.Identity.Service | 2 |
+| MMCA.ADC.Identity.Service | 3 |
 | MMCA.ADC.Identity.Shared | 14 |
 | MMCA.ADC.Identity.Shared.Tests | 3 |
 | MMCA.ADC.Identity.UI | 8 |
@@ -85,13 +85,13 @@ Generated mechanically by a Roslyn syntactic parse of every in-scope `.cs` file 
 | MMCA.ADC.UI | 17 |
 | MMCA.ADC.UI.Web.Client | 1 |
 | MMCA.Common.API | 74 |
-| MMCA.Common.API.Tests | 65 |
+| MMCA.Common.API.Tests | 66 |
 | MMCA.Common.Application | 143 |
 | MMCA.Common.Application.Tests | 164 |
-| MMCA.Common.Architecture.Tests | 25 |
-| MMCA.Common.Aspire | 14 |
+| MMCA.Common.Architecture.Tests | 26 |
+| MMCA.Common.Aspire | 15 |
 | MMCA.Common.Aspire.Hosting | 1 |
-| MMCA.Common.Aspire.Tests | 11 |
+| MMCA.Common.Aspire.Tests | 12 |
 | MMCA.Common.Benchmarks | 6 |
 | MMCA.Common.Domain | 35 |
 | MMCA.Common.Domain.Tests | 43 |
@@ -102,8 +102,8 @@ Generated mechanically by a Roslyn syntactic parse of every in-scope `.cs` file 
 | MMCA.Common.Infrastructure.Tests | 185 |
 | MMCA.Common.Shared | 53 |
 | MMCA.Common.Shared.Tests | 23 |
-| MMCA.Common.Testing | 12 |
-| MMCA.Common.Testing.Architecture | 38 |
+| MMCA.Common.Testing | 14 |
+| MMCA.Common.Testing.Architecture | 39 |
 | MMCA.Common.Testing.E2E | 21 |
 | MMCA.Common.Testing.Tests | 9 |
 | MMCA.Common.Testing.UI | 15 |
@@ -122,7 +122,7 @@ Generated mechanically by a Roslyn syntactic parse of every in-scope `.cs` file 
 | `AdcArchitectureMap` | class | MMCA.ADC.Architecture.Tests | `MMCA.ADC.Architecture.Tests` | `MMCA.ADC.Architecture.Tests/AdcArchitectureMap.cs:8` |
 | `BrandColorTokenTests` | class | MMCA.ADC.Architecture.Tests | `MMCA.ADC.Architecture.Tests` | `MMCA.ADC.Architecture.Tests/BrandColorTokenTests.cs:12` |
 | `ConcurrencyConventionTests` | class | MMCA.ADC.Architecture.Tests | `MMCA.ADC.Architecture.Tests` | `MMCA.ADC.Architecture.Tests/ConcurrencyConventionTests.cs:3` |
-| `ConstructorDependencyCountTests` | class | MMCA.ADC.Architecture.Tests | `MMCA.ADC.Architecture.Tests` | `MMCA.ADC.Architecture.Tests/ConstructorDependencyCountTests.cs:11` |
+| `ConstructorDependencyCountTests` | class | MMCA.ADC.Architecture.Tests | `MMCA.ADC.Architecture.Tests` | `MMCA.ADC.Architecture.Tests/ConstructorDependencyCountTests.cs:17` |
 | `ControllerConventionTests` | class | MMCA.ADC.Architecture.Tests | `MMCA.ADC.Architecture.Tests` | `MMCA.ADC.Architecture.Tests/ControllerConventionTests.cs:3` |
 | `DataResidencyTests` | class | MMCA.ADC.Architecture.Tests | `MMCA.ADC.Architecture.Tests` | `MMCA.ADC.Architecture.Tests/DataResidencyTests.cs:12` |
 | `DecoratorPipelineOrderTests` | class | MMCA.ADC.Architecture.Tests | `MMCA.ADC.Architecture.Tests` | `MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:25` |
@@ -140,7 +140,7 @@ Generated mechanically by a Roslyn syntactic parse of every in-scope `.cs` file 
 | `MicroserviceExtractionTests` | class | MMCA.ADC.Architecture.Tests | `MMCA.ADC.Architecture.Tests` | `MMCA.ADC.Architecture.Tests/MicroserviceExtractionTests.cs:3` |
 | `ModuleIsolationTests` | class | MMCA.ADC.Architecture.Tests | `MMCA.ADC.Architecture.Tests` | `MMCA.ADC.Architecture.Tests/ModuleIsolationTests.cs:3` |
 | `NamingConventionTests` | class | MMCA.ADC.Architecture.Tests | `MMCA.ADC.Architecture.Tests` | `MMCA.ADC.Architecture.Tests/NamingConventionTests.cs:3` |
-| `ObservabilityConventionTests` | class | MMCA.ADC.Architecture.Tests | `MMCA.ADC.Architecture.Tests` | `MMCA.ADC.Architecture.Tests/ObservabilityConventionTests.cs:17` |
+| `ObservabilityConventionTests` | class | MMCA.ADC.Architecture.Tests | `MMCA.ADC.Architecture.Tests` | `MMCA.ADC.Architecture.Tests/ObservabilityConventionTests.cs:7` |
 | `PiiConventionTests` | class | MMCA.ADC.Architecture.Tests | `MMCA.ADC.Architecture.Tests` | `MMCA.ADC.Architecture.Tests/PiiConventionTests.cs:3` |
 | `RawQueryableConventionTests` | class | MMCA.ADC.Architecture.Tests | `MMCA.ADC.Architecture.Tests` | `MMCA.ADC.Architecture.Tests/RawQueryableConventionTests.cs:11` |
 | `SharedLayerTests` | class | MMCA.ADC.Architecture.Tests | `MMCA.ADC.Architecture.Tests` | `MMCA.ADC.Architecture.Tests/SharedLayerTests.cs:3` |
@@ -1104,6 +1104,7 @@ Generated mechanically by a Roslyn syntactic parse of every in-scope `.cs` file 
 | `OrganizerLivePollLifecycleTests` | class | MMCA.ADC.Engagement.IntegrationTests | `MMCA.ADC.Engagement.IntegrationTests.LivePolls` | `MMCA.ADC.Engagement.IntegrationTests/LivePolls/OrganizerLivePollLifecycleTests.cs:18` |
 | `SessionQuestionLifecycleTests` | class | MMCA.ADC.Engagement.IntegrationTests | `MMCA.ADC.Engagement.IntegrationTests.SessionQuestions` | `MMCA.ADC.Engagement.IntegrationTests/SessionQuestions/SessionQuestionLifecycleTests.cs:18` |
 | `KestrelConfiguration` | class | MMCA.ADC.Engagement.Service | `MMCA.ADC.Engagement.Service` | `MMCA.ADC.Engagement.Service/KestrelConfiguration.cs:11` |
+| `SelfHttpWarmupTask` | class | MMCA.ADC.Engagement.Service | `MMCA.ADC.Engagement.Service` | `MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:19` |
 | `BookmarkCountsGrpcService` | class | MMCA.ADC.Engagement.Service | `MMCA.ADC.Engagement.Service.Grpc` | `MMCA.ADC.Engagement.Service/Grpc/BookmarkCountsGrpcService.cs:12` |
 | `UserEngagementExportGrpcService` | class | MMCA.ADC.Engagement.Service | `MMCA.ADC.Engagement.Service.Grpc` | `MMCA.ADC.Engagement.Service/Grpc/UserEngagementExportGrpcService.cs:16` |
 | `EngagementFeatures` | class | MMCA.ADC.Engagement.Shared | `MMCA.ADC.Engagement.Shared` | `MMCA.ADC.Engagement.Shared/EngagementFeatures.cs:8` |
@@ -1199,8 +1200,7 @@ Generated mechanically by a Roslyn syntactic parse of every in-scope `.cs` file 
 | `SessionQuestionUIServiceTests` | class | MMCA.ADC.Engagement.UI.Tests | `MMCA.ADC.Engagement.UI.Tests.Services` | `MMCA.ADC.Engagement.UI.Tests/Services/SessionQuestionUIServiceTests.cs:14` |
 | `SessionReminderCoordinatorTests` | class | MMCA.ADC.Engagement.UI.Tests | `MMCA.ADC.Engagement.UI.Tests.Services` | `MMCA.ADC.Engagement.UI.Tests/Services/SessionReminderCoordinatorTests.cs:16` |
 | `SessionReminderPlannerTests` | class | MMCA.ADC.Engagement.UI.Tests | `MMCA.ADC.Engagement.UI.Tests.Services` | `MMCA.ADC.Engagement.UI.Tests/Services/SessionReminderPlannerTests.cs:11` |
-| `GatewayApplicationFactory` | class | MMCA.ADC.Gateway.Tests | `MMCA.ADC.Gateway.Tests` | `MMCA.ADC.Gateway.Tests/GatewayApplicationFactory.cs:12` |
-| `GracefulShutdownTests` | class | MMCA.ADC.Gateway.Tests | `MMCA.ADC.Gateway.Tests` | `MMCA.ADC.Gateway.Tests/GracefulShutdownTests.cs:14` |
+| `GracefulShutdownTests` | class | MMCA.ADC.Gateway.Tests | `MMCA.ADC.Gateway.Tests` | `MMCA.ADC.Gateway.Tests/GracefulShutdownTests.cs:9` |
 | `RecordingHttpForwarder` | class | MMCA.ADC.Gateway.Tests | `MMCA.ADC.Gateway.Tests` | `MMCA.ADC.Gateway.Tests/RouteMapTests.cs:120` |
 | `RouteMapApplicationFactory` | class | MMCA.ADC.Gateway.Tests | `MMCA.ADC.Gateway.Tests` | `MMCA.ADC.Gateway.Tests/RouteMapTests.cs:99` |
 | `RouteMapTests` | class | MMCA.ADC.Gateway.Tests | `MMCA.ADC.Gateway.Tests` | `MMCA.ADC.Gateway.Tests/RouteMapTests.cs:19` |
@@ -1211,7 +1211,7 @@ Generated mechanically by a Roslyn syntactic parse of every in-scope `.cs` file 
 | `IdentityModule` | class | MMCA.ADC.Identity.API | `MMCA.ADC.Identity.API` | `MMCA.ADC.Identity.API/IdentityModule.cs:13` |
 | `IdentityModuleSeeder` | class | MMCA.ADC.Identity.API | `MMCA.ADC.Identity.API` | `MMCA.ADC.Identity.API/IdentityModuleSeeder.cs:14` |
 | `HttpContextExternalLoginEmailVerifier` | class | MMCA.ADC.Identity.API | `MMCA.ADC.Identity.API.Authentication` | `MMCA.ADC.Identity.API/Authentication/HttpContextExternalLoginEmailVerifier.cs:17` |
-| `AuthController` | class | MMCA.ADC.Identity.API | `MMCA.ADC.Identity.API.Controllers` | `MMCA.ADC.Identity.API/Controllers/AuthController.cs:25` |
+| `AuthController` | class | MMCA.ADC.Identity.API | `MMCA.ADC.Identity.API.Controllers` | `MMCA.ADC.Identity.API/Controllers/AuthController.cs:26` |
 | `OAuthController` | class | MMCA.ADC.Identity.API | `MMCA.ADC.Identity.API.Controllers` | `MMCA.ADC.Identity.API/Controllers/OAuthController.cs:20` |
 | `UserClaimsController` | class | MMCA.ADC.Identity.API | `MMCA.ADC.Identity.API.Controllers` | `MMCA.ADC.Identity.API/Controllers/UserClaimsController.cs:16` |
 | `UsersController` | class | MMCA.ADC.Identity.API | `MMCA.ADC.Identity.API.Controllers` | `MMCA.ADC.Identity.API/Controllers/UsersController.cs:30` |
@@ -1334,6 +1334,7 @@ Generated mechanically by a Roslyn syntactic parse of every in-scope `.cs` file 
 | `PiiLogCapture` | class | MMCA.ADC.Identity.IntegrationTests | `MMCA.ADC.Identity.IntegrationTests.Infrastructure` | `MMCA.ADC.Identity.IntegrationTests/Infrastructure/PiiLogCapture.cs:12` |
 | `OrganizerUserTests` | class | MMCA.ADC.Identity.IntegrationTests | `MMCA.ADC.Identity.IntegrationTests.Organizer` | `MMCA.ADC.Identity.IntegrationTests/Organizer/OrganizerUserTests.cs:10` |
 | `KestrelConfiguration` | class | MMCA.ADC.Identity.Service | `MMCA.ADC.Identity.Service` | `MMCA.ADC.Identity.Service/KestrelConfiguration.cs:11` |
+| `SelfHttpWarmupTask` | class | MMCA.ADC.Identity.Service | `MMCA.ADC.Identity.Service` | `MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:19` |
 | `AttendeesGrpcService` | class | MMCA.ADC.Identity.Service | `MMCA.ADC.Identity.Service.Grpc` | `MMCA.ADC.Identity.Service/Grpc/AttendeesGrpcService.cs:19` |
 | `IdentitySettings` | class | MMCA.ADC.Identity.Shared | `MMCA.ADC.Identity.Shared` | `MMCA.ADC.Identity.Shared/IdentitySettings.cs:7` |
 | `IdentityPermissions` | class | MMCA.ADC.Identity.Shared | `MMCA.ADC.Identity.Shared.Authorization` | `MMCA.ADC.Identity.Shared/Authorization/IdentityPermissions.cs:8` |
@@ -1437,7 +1438,7 @@ Generated mechanically by a Roslyn syntactic parse of every in-scope `.cs` file 
 | `PublicEndpointOutputCachePolicy` | class | MMCA.Common.API | `MMCA.Common.API.Caching` | `MMCA.Common.API/Caching/PublicEndpointOutputCachePolicy.cs:35` |
 | `AggregateRootEntityControllerBase<TEntity, TEntityDTO, TIdentifierType, TCreateRequest>` | class | MMCA.Common.API | `MMCA.Common.API.Controllers` | `MMCA.Common.API/Controllers/AggregateRootEntityControllerBase.cs:27` |
 | `ApiControllerBase` | class | MMCA.Common.API | `MMCA.Common.API.Controllers` | `MMCA.Common.API/Controllers/ApiControllerBase.cs:16` |
-| `AuthControllerBase` | class | MMCA.Common.API | `MMCA.Common.API.Controllers` | `MMCA.Common.API/Controllers/AuthControllerBase.cs:16` |
+| `AuthControllerBase` | class | MMCA.Common.API | `MMCA.Common.API.Controllers` | `MMCA.Common.API/Controllers/AuthControllerBase.cs:40` |
 | `EntityControllerBase<TEntity, TEntityDTO, TIdentifierType>` | class | MMCA.Common.API | `MMCA.Common.API.Controllers` | `MMCA.Common.API/Controllers/EntityControllerBase.cs:28` |
 | `IAggregateRootEntityControllerBase<TEntityDTO, TIdentifierType, TCreateRequest>` | interface | MMCA.Common.API | `MMCA.Common.API.Controllers` | `MMCA.Common.API/Controllers/IAggregateRootEntityControllerBase.cs:15` |
 | `IEntityControllerBase<TEntityDTO, TIdentifierType>` | interface | MMCA.Common.API | `MMCA.Common.API.Controllers` | `MMCA.Common.API/Controllers/IEntityControllerBase.cs:14` |
@@ -1504,6 +1505,7 @@ Generated mechanically by a Roslyn syntactic parse of every in-scope `.cs` file 
 | `PublicEndpointOutputCachePolicyTests` | class | MMCA.Common.API.Tests | `MMCA.Common.API.Tests.Caching` | `MMCA.Common.API.Tests/Caching/PublicEndpointOutputCachePolicyTests.cs:9` |
 | `AggregateRootEntityControllerBaseTests` | class | MMCA.Common.API.Tests | `MMCA.Common.API.Tests.Controllers` | `MMCA.Common.API.Tests/Controllers/AggregateRootEntityControllerBaseTests.cs:17` |
 | `ApiControllerBaseTests` | class | MMCA.Common.API.Tests | `MMCA.Common.API.Tests.Controllers` | `MMCA.Common.API.Tests/Controllers/ApiControllerBaseTests.cs:9` |
+| `AuthControllerBaseRateLimitTests` | class | MMCA.Common.API.Tests | `MMCA.Common.API.Tests.Controllers` | `MMCA.Common.API.Tests/Controllers/AuthControllerBaseRateLimitTests.cs:16` |
 | `AuthControllerBaseTests` | class | MMCA.Common.API.Tests | `MMCA.Common.API.Tests.Controllers` | `MMCA.Common.API.Tests/Controllers/AuthControllerBaseTests.cs:13` |
 | `EntityControllerBaseTests` | class | MMCA.Common.API.Tests | `MMCA.Common.API.Tests.Controllers` | `MMCA.Common.API.Tests/Controllers/EntityControllerBaseTests.cs:18` |
 | `Mocks` | record | MMCA.Common.API.Tests | `MMCA.Common.API.Tests.Controllers` | `MMCA.Common.API.Tests/Controllers/OAuthControllerBaseTests.cs:32` |
@@ -1894,6 +1896,7 @@ Generated mechanically by a Roslyn syntactic parse of every in-scope `.cs` file 
 | `MicroserviceExtractionTests` | class | MMCA.Common.Architecture.Tests | `MMCA.Common.Architecture.Tests` | `MMCA.Common.Architecture.Tests/MicroserviceExtractionTests.cs:10` |
 | `NavigatingSpec` | class | MMCA.Common.Architecture.Tests | `MMCA.Common.Architecture.Tests` | `MMCA.Common.Architecture.Tests/SpecificationFitnessTests.cs:49` |
 | `NavigationContractTests` | class | MMCA.Common.Architecture.Tests | `MMCA.Common.Architecture.Tests` | `MMCA.Common.Architecture.Tests/NavigationContractTests.cs:17` |
+| `ObservabilityConventionTestsBaseTests` | class | MMCA.Common.Architecture.Tests | `MMCA.Common.Architecture.Tests` | `MMCA.Common.Architecture.Tests/ObservabilityConventionTestsBaseTests.cs:14` |
 | `PiiConventionTests` | class | MMCA.Common.Architecture.Tests | `MMCA.Common.Architecture.Tests` | `MMCA.Common.Architecture.Tests/PiiConventionTests.cs:13` |
 | `PiiErasureContractFitnessTests` | class | MMCA.Common.Architecture.Tests | `MMCA.Common.Architecture.Tests` | `MMCA.Common.Architecture.Tests/PiiErasureContractFitnessTests.cs:19` |
 | `RawQueryableConventionTests` | class | MMCA.Common.Architecture.Tests | `MMCA.Common.Architecture.Tests` | `MMCA.Common.Architecture.Tests/RawQueryableConventionTests.cs:13` |
@@ -1905,6 +1908,7 @@ Generated mechanically by a Roslyn syntactic parse of every in-scope `.cs` file 
 | `UIArchitectureConventionTests` | class | MMCA.Common.Architecture.Tests | `MMCA.Common.Architecture.Tests` | `MMCA.Common.Architecture.Tests/UIArchitectureConventionTests.cs:11` |
 | `Extensions` | class | MMCA.Common.Aspire | `MMCA.Common.Aspire` | `MMCA.Common.Aspire/Extensions.cs:28` |
 | `GatewayCorsExtensions` | class | MMCA.Common.Aspire | `MMCA.Common.Aspire` | `MMCA.Common.Aspire/GatewayCorsExtensions.cs:16` |
+| `HealthCheckTags` | class | MMCA.Common.Aspire | `MMCA.Common.Aspire` | `MMCA.Common.Aspire/HealthCheckTags.cs:6` |
 | `CspPolicy` | record | MMCA.Common.Aspire | `MMCA.Common.Aspire.Security` | `MMCA.Common.Aspire/Security/SecurityHeaders.cs:57` |
 | `ICspPolicyProvider` | interface | MMCA.Common.Aspire | `MMCA.Common.Aspire.Security` | `MMCA.Common.Aspire/Security/SecurityHeaders.cs:65` |
 | `SecurityHeadersExtensions` | class | MMCA.Common.Aspire | `MMCA.Common.Aspire.Security` | `MMCA.Common.Aspire/Security/SecurityHeaders.cs:154` |
@@ -1918,6 +1922,7 @@ Generated mechanically by a Roslyn syntactic parse of every in-scope `.cs` file 
 | `WarmupReadinessGate` | class | MMCA.Common.Aspire | `MMCA.Common.Aspire.Warmup` | `MMCA.Common.Aspire/Warmup/WarmupReadinessGate.cs:10` |
 | `WarmupReadinessHealthCheck` | class | MMCA.Common.Aspire | `MMCA.Common.Aspire.Warmup` | `MMCA.Common.Aspire/Warmup/WarmupReadinessHealthCheck.cs:9` |
 | `Extensions` | class | MMCA.Common.Aspire.Hosting | `MMCA.Common.Aspire.Hosting` | `MMCA.Common.Aspire.Hosting/Extensions.cs:22` |
+| `InfrastructureHealthChecksTests` | class | MMCA.Common.Aspire.Tests | `MMCA.Common.Aspire.Tests.Health` | `MMCA.Common.Aspire.Tests/Health/InfrastructureHealthChecksTests.cs:16` |
 | `SecurityHeadersMiddlewareTests` | class | MMCA.Common.Aspire.Tests | `MMCA.Common.Aspire.Tests.Security` | `MMCA.Common.Aspire.Tests/Security/SecurityHeadersMiddlewareTests.cs:16` |
 | `StubCspProvider` | class | MMCA.Common.Aspire.Tests | `MMCA.Common.Aspire.Tests.Security` | `MMCA.Common.Aspire.Tests/Security/SecurityHeadersMiddlewareTests.cs:102` |
 | `StubWebHostEnvironment` | class | MMCA.Common.Aspire.Tests | `MMCA.Common.Aspire.Tests.Security` | `MMCA.Common.Aspire.Tests/Security/SecurityHeadersMiddlewareTests.cs:107` |
@@ -2471,12 +2476,14 @@ Generated mechanically by a Roslyn syntactic parse of every in-scope `.cs` file 
 | `ValueObjectTests` | class | MMCA.Common.Shared.Tests | `MMCA.Common.Shared.Tests.ValueObjects` | `MMCA.Common.Shared.Tests/ValueObjects/ValueObjectTests.cs:6` |
 | `DecoratorPipelineOrderTestsBase<TCommand, TCommandResult, TQuery, TQueryResult>` | class | MMCA.Common.Testing | `MMCA.Common.Testing` | `MMCA.Common.Testing/DecoratorPipelineOrderTestsBase.cs:36` |
 | `FeatureManagementTestExtensions` | class | MMCA.Common.Testing | `MMCA.Common.Testing` | `MMCA.Common.Testing/FeatureManagementTestExtensions.cs:10` |
+| `GracefulShutdownTestsBase<TEntryPoint>` | class | MMCA.Common.Testing | `MMCA.Common.Testing` | `MMCA.Common.Testing/GracefulShutdownTestsBase.cs:24` |
 | `HandlerTestBase<THandler>` | class | MMCA.Common.Testing | `MMCA.Common.Testing` | `MMCA.Common.Testing/HandlerTestBase.cs:38` |
 | `IIntegrationTestFixture` | interface | MMCA.Common.Testing | `MMCA.Common.Testing` | `MMCA.Common.Testing/IIntegrationTestFixture.cs:8` |
 | `IntegrationTestBase<TFixture>` | class | MMCA.Common.Testing | `MMCA.Common.Testing` | `MMCA.Common.Testing/IntegrationTestBase.cs:13` |
 | `JwtTokenGenerator` | class | MMCA.Common.Testing | `MMCA.Common.Testing` | `MMCA.Common.Testing/JwtTokenGenerator.cs:29` |
 | `OpenApiContractTestsBase<TFixture>` | class | MMCA.Common.Testing | `MMCA.Common.Testing` | `MMCA.Common.Testing/OpenApiContractTestsBase.cs:21` |
 | `ProblemDetailsContractTestsBase<TFixture>` | class | MMCA.Common.Testing | `MMCA.Common.Testing` | `MMCA.Common.Testing/ProblemDetailsContractTestsBase.cs:21` |
+| `ProductionHostApplicationFactory<TEntryPoint>` | class | MMCA.Common.Testing | `MMCA.Common.Testing` | `MMCA.Common.Testing/ProductionHostApplicationFactory.cs:22` |
 | `SecurityHeadersTestsBase` | class | MMCA.Common.Testing | `MMCA.Common.Testing` | `MMCA.Common.Testing/SecurityHeadersTestsBase.cs:16` |
 | `ServiceInfoVersioningContractTestsBase<TFixture>` | class | MMCA.Common.Testing | `MMCA.Common.Testing` | `MMCA.Common.Testing/ServiceInfoVersioningContractTestsBase.cs:19` |
 | `SqlServerIntegrationTestFixtureBase<TEntryPoint>` | class | MMCA.Common.Testing | `MMCA.Common.Testing` | `MMCA.Common.Testing/SqlServerIntegrationTestFixtureBase.cs:27` |
@@ -2525,6 +2532,7 @@ Generated mechanically by a Roslyn syntactic parse of every in-scope `.cs` file 
 | `MicroserviceExtractionTestsBase` | class | MMCA.Common.Testing.Architecture | `MMCA.Common.Testing.Architecture` | `MMCA.Common.Testing.Architecture/Bases/MicroserviceExtractionTestsBase.cs:8` |
 | `ModuleIsolationTestsBase` | class | MMCA.Common.Testing.Architecture | `MMCA.Common.Testing.Architecture` | `MMCA.Common.Testing.Architecture/Bases/ModuleIsolationTestsBase.cs:8` |
 | `NamingConventionTestsBase` | class | MMCA.Common.Testing.Architecture | `MMCA.Common.Testing.Architecture` | `MMCA.Common.Testing.Architecture/Bases/NamingConventionTestsBase.cs:8` |
+| `ObservabilityConventionTestsBase` | class | MMCA.Common.Testing.Architecture | `MMCA.Common.Testing.Architecture` | `MMCA.Common.Testing.Architecture/Bases/ObservabilityConventionTestsBase.cs:30` |
 | `PiiConventionTestsBase` | class | MMCA.Common.Testing.Architecture | `MMCA.Common.Testing.Architecture` | `MMCA.Common.Testing.Architecture/Bases/PiiConventionTestsBase.cs:7` |
 | `RawQueryableConventionTestsBase` | class | MMCA.Common.Testing.Architecture | `MMCA.Common.Testing.Architecture` | `MMCA.Common.Testing.Architecture/Bases/RawQueryableConventionTestsBase.cs:30` |
 | `RouteAuthorizationTestsBase` | class | MMCA.Common.Testing.Architecture | `MMCA.Common.Testing.Architecture` | `MMCA.Common.Testing.Architecture/Bases/RouteAuthorizationTestsBase.cs:22` |
@@ -2884,13 +2892,13 @@ Generated mechanically by a Roslyn syntactic parse of every in-scope `.cs` file 
 | `IEndpointRouteBuilder endpoints` | MMCA.Common.API | `MMCA.Common.API/Startup/OidcDiscoveryEndpointExtensions.cs:49` |
 | `WebApplication app` | MMCA.Common.API | `MMCA.Common.API/Startup/OpenApiEndpointExtensions.cs:20` |
 | `WebApplication app` | MMCA.Common.API | `MMCA.Common.API/Startup/SignalRExtensions.cs:14` |
-| `IServiceCollection services` | MMCA.Common.API | `MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:71` |
+| `IServiceCollection services` | MMCA.Common.API | `MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:105` |
 | `WebApplication app` | MMCA.Common.API | `MMCA.Common.API/Startup/WebApplicationExtensions.cs:37` |
 | `IServiceCollection services` | MMCA.Common.Application | `MMCA.Common.Application/DependencyInjection.cs:22` |
 | `ValidationResult result` | MMCA.Common.Application | `MMCA.Common.Application/Extensions/ValidationFailureExtensions.cs:11` |
 | `IServiceCollection services` | MMCA.Common.Application | `MMCA.Common.Application/Notifications/DependencyInjection.cs:28` |
-| `IServiceCollection services` | MMCA.Common.Aspire | `MMCA.Common.Aspire/Extensions.cs:267` |
-| `WebApplication app` | MMCA.Common.Aspire | `MMCA.Common.Aspire/Extensions.cs:284` |
+| `IServiceCollection services` | MMCA.Common.Aspire | `MMCA.Common.Aspire/Extensions.cs:294` |
+| `WebApplication app` | MMCA.Common.Aspire | `MMCA.Common.Aspire/Extensions.cs:311` |
 | `IServiceCollection services` | MMCA.Common.Aspire | `MMCA.Common.Aspire/GatewayCorsExtensions.cs:18` |
 | `IServiceCollection services` | MMCA.Common.Aspire | `MMCA.Common.Aspire/Security/SecurityHeaders.cs:156` |
 | `IApplicationBuilder app` | MMCA.Common.Aspire | `MMCA.Common.Aspire/Security/SecurityHeaders.cs:186` |

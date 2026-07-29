@@ -16,10 +16,10 @@ candidate exists but the bare name is **globally unique** among first-party type
 is still linked (only one possible target). Names that are neither visible nor unique are
 dropped as unresolvable without full semantic binding.
 
-- Edges resolved by namespace visibility: **9038** (~96%)
-- Edges resolved by globally-unique name (fallback): **335**
+- Edges resolved by namespace visibility: **9050** (~96%)
+- Edges resolved by globally-unique name (fallback): **338**
 - References dropped as ambiguous (matched >1 type, none visible): **28**
-- Sensitivity: **398 / 2637** type levels would change if the globally-unique fallback
+- Sensitivity: **398 / 2645** type levels would change if the globally-unique fallback
   were excluded; the fallback is retained because a globally-unique first-party name is
   unambiguous, so excluding it would under-count real dependencies.
 
@@ -32,10 +32,10 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 
 | Level | Distinct types |
 |-------|------|
-| 0 | 527 |
-| 1 | 318 |
+| 0 | 529 |
+| 1 | 323 |
 | 2 | 208 |
-| 3 | 211 |
+| 3 | 212 |
 | 4 | 261 |
 | 5 | 166 |
 | 6 | 153 |
@@ -43,18 +43,19 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 8 | 255 |
 | 9 | 124 |
 | 10 | 141 |
-| 11 | 19 |
-| 12 | 20 |
-| 13 | 8 |
+| 11 | 20 |
+| 12 | 21 |
+| 13 | 6 |
 | 14 | 6 |
 | 15 | 14 |
 | 16 | 53 |
 | 17 | 1 |
 
-## Cycles (SCC size > 1): 18
+## Cycles (SCC size > 1): 19
 
 | Level | Size | Members |
 |-------|------|---------|
+| 1 | 2 | Service:SelfHttpWarmupTask, Service:SelfHttpWarmupTask |
 | 2 | 3 | Shared:Result, Shared:ResultJsonConverterFactory, Shared:ResultConverter |
 | 2 | 2 | API:SessionCookieEndpoints, API:SessionCookieJar |
 | 2 | 2 | UI:NotificationHubService, UI:ChannelSubscription |
@@ -78,7 +79,6 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 
 | Level | Type | Assembly | #Deps | First-party dependencies |
 |-------|------|----------|-------|--------------------------|
-| 0 | `ObservabilityConventionTests` | MMCA.ADC.Architecture.Tests | 0 | (none) |
 | 0 | `AddCategoryItemRequest` | MMCA.ADC.Conference.API | 0 | (none) |
 | 0 | `AddEventQuestionAnswerRequest` | MMCA.ADC.Conference.API | 0 | (none) |
 | 0 | `AddEventSpeakerRequest` | MMCA.ADC.Conference.API | 0 | (none) |
@@ -411,6 +411,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 0 | `Widget` | MMCA.Common.Application.Tests | 0 | (none) |
 | 0 | `CspPolicy` | MMCA.Common.Aspire | 0 | (none) |
 | 0 | `GatewayCorsExtensions` | MMCA.Common.Aspire | 0 | (none) |
+| 0 | `HealthCheckTags` | MMCA.Common.Aspire | 0 | (none) |
 | 0 | `IWarmupTask` | MMCA.Common.Aspire | 0 | (none) |
 | 0 | `OutboxPollFilterProcessor` | MMCA.Common.Aspire | 0 | (none) |
 | 0 | `SecurityHeadersSettings` | MMCA.Common.Aspire | 0 | (none) |
@@ -515,11 +516,13 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 0 | `FeatureManagementTestExtensions` | MMCA.Common.Testing | 0 | (none) |
 | 0 | `IIntegrationTestFixture` | MMCA.Common.Testing | 0 | (none) |
 | 0 | `JwtTokenGenerator` | MMCA.Common.Testing | 0 | (none) |
+| 0 | `ProductionHostApplicationFactory<TEntryPoint>` | MMCA.Common.Testing | 0 | (none) |
 | 0 | `SecurityHeadersTestsBase` | MMCA.Common.Testing | 0 | (none) |
 | 0 | `ArchitectureAssert` | MMCA.Common.Testing.Architecture | 0 | (none) |
 | 0 | `BrandColorTokenTestsBase` | MMCA.Common.Testing.Architecture | 0 | (none) |
 | 0 | `CrossEntityNavigationFinder` | MMCA.Common.Testing.Architecture | 0 | (none) |
 | 0 | `Layer` | MMCA.Common.Testing.Architecture | 0 | (none) |
+| 0 | `ObservabilityConventionTestsBase` | MMCA.Common.Testing.Architecture | 0 | (none) |
 | 0 | `RouteAuthorizationTestsBase` | MMCA.Common.Testing.Architecture | 0 | (none) |
 | 0 | `RuleHelpers` | MMCA.Common.Testing.Architecture | 0 | (none) |
 | 0 | `AccessibilityViolationException` | MMCA.Common.Testing.E2E | 0 | (none) |
@@ -606,6 +609,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 0 | `StubHttpClientFactory` | MMCA.Common.UI.Tests | 0 | (none) |
 | 0 | `WidgetRow` | MMCA.Common.UI.Tests | 0 | (none) |
 | 1 | `BrandColorTokenTests` | MMCA.ADC.Architecture.Tests | 1 | BrandColorTokenTestsBase |
+| 1 | `ObservabilityConventionTests` | MMCA.ADC.Architecture.Tests | 1 | ObservabilityConventionTestsBase |
 | 1 | `ConferenceErrorResourcesTests` | MMCA.ADC.Conference.API.Tests | 2 | ConferenceErrorResources, IErrorLocalizer |
 | 1 | `ConferencePermissionGrantsTests` | MMCA.ADC.Conference.API.Tests | 3 | ConferencePermissions, IPermissionRegistry, RoleNames |
 | 1 | `ConferenceCategoryUpdateRequest` | MMCA.ADC.Conference.Application | 1 | IConcurrencyAware |
@@ -659,6 +663,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 1 | `ToggleUpvoteCommandValidator` | MMCA.ADC.Engagement.Application | 1 | ToggleUpvoteCommand |
 | 1 | `InMemoryQueryableExecutor` | MMCA.ADC.Engagement.Application.Tests | 1 | IQueryableExecutor |
 | 1 | `RecordingPublisher` | MMCA.ADC.Engagement.Infrastructure.Tests | 2 | ILiveChannelPublisher, LiveChannelPublishWorkItem |
+| 1 | `SelfHttpWarmupTask` | MMCA.ADC.Engagement.Service | 2 | IWarmupTask, SelfHttpWarmupTask |
 | 1 | `DisabledBookmarkCountService` | MMCA.ADC.Engagement.Shared | 1 | IBookmarkCountService |
 | 1 | `LifecycleTransitionRequest` | MMCA.ADC.Engagement.Shared | 1 | IConcurrencyAware |
 | 1 | `LivePollDTO` | MMCA.ADC.Engagement.Shared | 4 | IBaseDTO<TIdentifierType>, IConcurrencyAware, LivePollOptionDTO, LivePollStatus |
@@ -674,6 +679,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 1 | `IdentityErrorResourcesTests` | MMCA.ADC.Identity.API.Tests | 2 | IdentityErrorResources, IErrorLocalizer |
 | 1 | `ChangePasswordRequestValidator` | MMCA.ADC.Identity.Application | 2 | ChangePasswordRequest, StrongPasswordRules<T> |
 | 1 | `PiiCaptureLogger` | MMCA.ADC.Identity.IntegrationTests | 1 | PiiLogCapture |
+| 1 | `SelfHttpWarmupTask` | MMCA.ADC.Identity.Service | 2 | IWarmupTask, SelfHttpWarmupTask |
 | 1 | `DisabledAttendeeQueryService` | MMCA.ADC.Identity.Shared | 1 | IAttendeeQueryService |
 | 1 | `UserDataExportEngagementSectionDTO` | MMCA.ADC.Identity.Shared | 2 | UserDataExportBookmarkDTO, UserDataExportSubmittedQuestionDTO |
 | 1 | `UserDataExportNotificationSectionDTO` | MMCA.ADC.Identity.Shared | 1 | UserDataExportNotificationDTO |
@@ -758,6 +764,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 1 | `TransactionalPipelineTestCommand` | MMCA.Common.Application.Tests | 1 | ITransactional |
 | 1 | `ValidationFailureExtensionsTests` | MMCA.Common.Application.Tests | 1 | ErrorType |
 | 1 | `NavigationContractTests` | MMCA.Common.Architecture.Tests | 1 | UISharedAssemblyReference |
+| 1 | `ObservabilityConventionTestsBaseTests` | MMCA.Common.Architecture.Tests | 1 | ObservabilityConventionTestsBase |
 | 1 | `ICspPolicyProvider` | MMCA.Common.Aspire | 1 | CspPolicy |
 | 1 | `OpenIdConnectMetadataWarmupTask` | MMCA.Common.Aspire | 1 | IWarmupTask |
 | 1 | `WarmupHostedService` | MMCA.Common.Aspire | 2 | IWarmupTask, WarmupReadinessGate |
@@ -832,6 +839,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 1 | `PaginationMetadataTests` | MMCA.Common.Shared.Tests | 1 | PaginationMetadata |
 | 1 | `TestValueObject` | MMCA.Common.Shared.Tests | 1 | ValueObject |
 | 1 | `DecoratorPipelineOrderTestsBase<TCommand, TCommandResult, TQuery, TQueryResult>` | MMCA.Common.Testing | 2 | ICommandHandler<in TCommand, TResult>, IQueryHandler<in TQuery, TResult> |
+| 1 | `GracefulShutdownTestsBase<TEntryPoint>` | MMCA.Common.Testing | 1 | ProductionHostApplicationFactory<TEntryPoint> |
 | 1 | `IntegrationTestBase<TFixture>` | MMCA.Common.Testing | 1 | IIntegrationTestFixture |
 | 1 | `SqlServerIntegrationTestFixtureBase<TEntryPoint>` | MMCA.Common.Testing | 1 | IIntegrationTestFixture |
 | 1 | `LayerRef` | MMCA.Common.Testing.Architecture | 1 | Layer |
@@ -1029,7 +1037,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 2 | `RefreshTokenRequestValidatorTests` | MMCA.Common.Application.Tests | 2 | RefreshTokenRequest, RefreshTokenRequestValidator |
 | 2 | `TestEvent` | MMCA.Common.Application.Tests | 1 | BaseDomainEvent |
 | 2 | `TestSafeDomainEvent` | MMCA.Common.Application.Tests | 1 | BaseDomainEvent |
-| 2 | `Extensions` | MMCA.Common.Aspire | 7 | HttpResilienceDefaults, IWarmupTask, OpenIdConnectMetadataWarmupTask, OutboxPollFilterProcessor, WarmupHostedService, WarmupReadinessGate, WarmupReadinessHealthCheck |
+| 2 | `Extensions` | MMCA.Common.Aspire | 8 | HealthCheckTags, HttpResilienceDefaults, IWarmupTask, OpenIdConnectMetadataWarmupTask, OutboxPollFilterProcessor, WarmupHostedService, WarmupReadinessGate, WarmupReadinessHealthCheck |
 | 2 | `SecurityHeadersMiddleware` | MMCA.Common.Aspire | 2 | ICspPolicyProvider, SecurityHeadersSettings |
 | 2 | `StaticCspPolicyProvider` | MMCA.Common.Aspire | 3 | CspPolicy, ICspPolicyProvider, SecurityHeadersSettings |
 | 2 | `StubCspProvider` | MMCA.Common.Aspire.Tests | 2 | CspPolicy, ICspPolicyProvider |
@@ -1242,6 +1250,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 3 | `TestIntegrationEvent` | MMCA.Common.Application.Tests | 3 | BaseDomainEvent, BaseIntegrationEvent, IIntegrationEvent |
 | 3 | `TestSafeDomainEventHandler` | MMCA.Common.Application.Tests | 2 | SafeDomainEventHandler<TDomainEvent>, TestSafeDomainEvent |
 | 3 | `SecurityHeadersExtensions` | MMCA.Common.Aspire | 4 | ICspPolicyProvider, SecurityHeadersMiddleware, SecurityHeadersSettings, StaticCspPolicyProvider |
+| 3 | `InfrastructureHealthChecksTests` | MMCA.Common.Aspire.Tests | 2 | Extensions, HealthCheckTags |
 | 3 | `MetricsInstrumentationToggleTests` | MMCA.Common.Aspire.Tests | 1 | Extensions |
 | 3 | `SecurityHeadersMiddlewareTests` | MMCA.Common.Aspire.Tests | 6 | CspPolicy, ICspPolicyProvider, SecurityHeadersMiddleware, SecurityHeadersSettings, StubCspProvider, StubWebHostEnvironment |
 | 3 | `TracesSampleRatioTests` | MMCA.Common.Aspire.Tests | 1 | Extensions |
@@ -2574,7 +2583,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 10 | `App` | MMCA.ADC.UI | 1 | MauiProgram |
 | 10 | `AppDelegate` | MMCA.ADC.UI | 2 | IDeepLinkDispatcher, MauiProgram |
 | 10 | `MainApplication` | MMCA.ADC.UI | 1 | MauiProgram |
-| 10 | `AuthControllerBase` | MMCA.Common.API | 9 | ApiControllerBase, AuthenticationResponse, AuthenticationService, CurrentUserService, IAuthenticationService, ICurrentUserService, LoginRequest, RefreshTokenRequest, RegisterRequest |
+| 10 | `AuthControllerBase` | MMCA.Common.API | 10 | ApiControllerBase, AuthenticationResponse, AuthenticationService, CurrentUserService, IAuthenticationService, ICurrentUserService, LoginRequest, RefreshTokenRequest, RegisterRequest, WebApplicationBuilderExtensions |
 | 10 | `DependencyInjection` | MMCA.Common.API | 21 | CookieSessionRefresher, CookieTokenReader, CurrencyJsonConverter, DbUpdateExceptionHandler, DisabledFeatureHandler, DomainExceptionHandler, ErrorLocalizer, ErrorResources, ErrorResourceSource, GlobalExceptionHandler, ICookieSessionRefresher, IdempotencyFilter, IdempotencySettings, IErrorLocalizer, ModuleControllerFeatureProvider, ModuleLoader, ModulesSettings, OperationCanceledExceptionHandler, OwnerOrAdminFilter, UnhandledResultFailureFilter …(+1) |
 | 10 | `DependencyInjectionTests` | MMCA.Common.API.Tests | 11 | DbUpdateExceptionHandler, DisabledFeatureHandler, DomainExceptionHandler, GlobalExceptionHandler, IdempotencyFilter, IdempotencySettings, IModule, ModuleLoader, OperationCanceledExceptionHandler, OwnerOrAdminFilter, ValidationExceptionHandler |
 | 10 | `OwnerOrAdminFilterTests` | MMCA.Common.API.Tests | 4 | AllowMissingOwnerAttribute, ICurrentUserService, OwnerOrAdminFilter, OwnerOrAdminFilterOptions |
@@ -2607,8 +2616,9 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 11 | `SpeakerSyncStrategyTests` | MMCA.ADC.Conference.Application.Tests | 1 | SpeakerSyncStrategy |
 | 11 | `BookmarksControllerTests` | MMCA.ADC.Engagement.API.Tests | 17 | BookmarksController, ControllerMocks, CreateBookmarkRequest, DeleteEntityCommand<TEntity, TIdentifierType>, Error, GetBookmarkedSessionIdsQuery, GetUserBookmarksQuery, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, IQueryHandler<in TQuery, TResult>, OwnerOrAdminFilter, PagedCollectionResult<T>, PaginationMetadata, Result, UserSessionBookmark, UserSessionBookmarkDTO |
 | 11 | `DependencyInjection` | MMCA.ADC.Engagement.Application | 29 | ApplicationSettings, BookmarkCountService, BookmarkManagementDomainService, ClassReference, ClassReference, DeleteEntityCommand<TEntity, TIdentifierType>, DeleteEntityHandler<TEntity, TIdentifierType>, EntityQueryService<TEntity, TEntityDTO, TIdentifierType>, IBookmarkCountService, IBookmarkManagementDomainService, ICommandHandler<in TCommand, TResult>, IEntityQueryService<TEntity, TEntityDTO, TIdentifierType>, ILiveChannelPublishQueue, INavigationPopulator<in TEntity>, IUserEngagementExportService, LiveChannelPublishQueue, LivePoll, LivePollDTO, LivePollNavigationPopulator, LivePollResultsBuilder …(+9) |
-| 11 | `AuthController` | MMCA.ADC.Identity.API | 18 | AuthControllerBase, AuthenticationResponse, AuthenticationService, ChangePasswordCommand, ChangePasswordRequest, ChangePreferencesCommand, ChangePreferencesRequest, CurrentUserService, GetUserPreferencesQuery, IAuthenticationService, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IQueryHandler<in TQuery, TResult>, LoginRequest, RegisterRequest, Result, Route, UserPreferencesResponse |
+| 11 | `AuthController` | MMCA.ADC.Identity.API | 19 | AuthControllerBase, AuthenticationResponse, AuthenticationService, ChangePasswordCommand, ChangePasswordRequest, ChangePreferencesCommand, ChangePreferencesRequest, CurrentUserService, GetUserPreferencesQuery, IAuthenticationService, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IQueryHandler<in TQuery, TResult>, LoginRequest, RegisterRequest, Result, Route, UserPreferencesResponse, WebApplicationBuilderExtensions |
 | 11 | `Program` | MMCA.ADC.UI | 1 | AppDelegate |
+| 11 | `AuthControllerBaseRateLimitTests` | MMCA.Common.API.Tests | 2 | AuthControllerBase, WebApplicationBuilderExtensions |
 | 11 | `TestAuthController` | MMCA.Common.API.Tests | 3 | AuthControllerBase, IAuthenticationService, ICurrentUserService |
 | 11 | `EntityDataSourceRegistryTests` | MMCA.Common.Infrastructure.Tests | 15 | ConnectionStringSettings, DataSource, DataSourceEntrySettings, DataSourceKey, DataSourceResolver, DataSourcesSettings, EntityDataSourceRegistry, FixedAssemblyProvider, NamespaceConventions, PushNotification, RegistryDuplicate, RegistryInvoice, RegistryOrder, RegistrySqlServerEntity, RegistryUnattributed |
 | 11 | `OutboxProcessorExecuteAsyncTests` | MMCA.Common.Infrastructure.Tests | 9 | DataSource, DataSourceKey, DependencyInjection, FakeTimeProvider, IDataSourceResolver, IEntityDataSourceRegistry, IOutboxSignal, OutboxProcessor, OutboxSettings |
@@ -2619,8 +2629,9 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 12 | `EngagementCrossServiceFactory` | MMCA.ADC.CrossService.IntegrationTests | 3 | InProcessJwtBearer, Program, RateLimiterNeutralizer |
 | 12 | `IdentityCrossServiceFactory` | MMCA.ADC.CrossService.IntegrationTests | 2 | Program, RateLimiterNeutralizer |
 | 12 | `EngagementTestWebApplicationFactory` | MMCA.ADC.Engagement.IntegrationTests | 8 | FakeEventLiveValidationService, FakeSessionBookmarkValidationService, IEventLiveValidationService, ILiveChannelPublisher, ISessionBookmarkValidationService, JwtTokenGenerator, NullLiveChannelPublisher, Program |
-| 12 | `GatewayApplicationFactory` | MMCA.ADC.Gateway.Tests | 1 | Program |
+| 12 | `GracefulShutdownTests` | MMCA.ADC.Gateway.Tests | 2 | GracefulShutdownTestsBase<TEntryPoint>, Program |
 | 12 | `RouteMapApplicationFactory` | MMCA.ADC.Gateway.Tests | 2 | Program, RecordingHttpForwarder |
+| 12 | `SecurityHeadersTests` | MMCA.ADC.Gateway.Tests | 3 | ProductionHostApplicationFactory<TEntryPoint>, Program, SecurityHeadersTestsBase |
 | 12 | `AuthControllerTests` | MMCA.ADC.Identity.API.Tests | 17 | AuthController, AuthenticationResponse, ChangePasswordCommand, ChangePasswordRequest, ChangePreferencesCommand, Error, ErrorType, GetUserPreferencesQuery, IAuthenticationService, ICommandHandler<in TCommand, TResult>, ICurrentUserService, IQueryHandler<in TQuery, TResult>, LoginRequest, RefreshTokenRequest, RegisterRequest, Result, UserPreferencesResponse |
 | 12 | `IdentityTestWebApplicationFactory` | MMCA.ADC.Identity.IntegrationTests | 6 | FakeUserEngagementExportService, FakeUserNotificationExportService, IUserEngagementExportService, IUserNotificationExportService, PiiCaptureLoggerProvider, Program |
 | 12 | `NotificationTestWebApplicationFactory` | MMCA.ADC.Notification.IntegrationTests | 4 | FakeAttendeeQueryService, IAttendeeQueryService, JwtTokenGenerator, Program |
@@ -2636,9 +2647,7 @@ alias `using`s name a target whose bare name already matches (so they resolve re
 | 13 | `ConferenceIntegrationTestFixture` | MMCA.ADC.Conference.IntegrationTests | 4 | ConferenceTestWebApplicationFactory, JwtTokenGenerator, Program, SqlServerIntegrationTestFixtureBase<TEntryPoint> |
 | 13 | `CrossServiceFixture` | MMCA.ADC.CrossService.IntegrationTests | 4 | ConferenceCrossServiceFactory, EngagementCrossServiceFactory, IdentityCrossServiceFactory, JwtTokenGenerator |
 | 13 | `EngagementIntegrationTestFixture` | MMCA.ADC.Engagement.IntegrationTests | 4 | EngagementTestWebApplicationFactory, JwtTokenGenerator, Program, SqlServerIntegrationTestFixtureBase<TEntryPoint> |
-| 13 | `GracefulShutdownTests` | MMCA.ADC.Gateway.Tests | 1 | GatewayApplicationFactory |
 | 13 | `RouteMapTests` | MMCA.ADC.Gateway.Tests | 1 | RouteMapApplicationFactory |
-| 13 | `SecurityHeadersTests` | MMCA.ADC.Gateway.Tests | 2 | GatewayApplicationFactory, SecurityHeadersTestsBase |
 | 13 | `IdentityIntegrationTestFixture` | MMCA.ADC.Identity.IntegrationTests | 4 | IdentityTestWebApplicationFactory, JwtTokenGenerator, Program, SqlServerIntegrationTestFixtureBase<TEntryPoint> |
 | 13 | `NotificationIntegrationTestFixture` | MMCA.ADC.Notification.IntegrationTests | 4 | JwtTokenGenerator, NotificationTestWebApplicationFactory, Program, SqlServerIntegrationTestFixtureBase<TEntryPoint> |
 | 14 | `ConferenceIntegrationTestCollection` | MMCA.ADC.Conference.IntegrationTests | 1 | ConferenceIntegrationTestFixture |
