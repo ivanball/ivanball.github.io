@@ -1,7 +1,7 @@
 # ADR-027: Multi-Locale Internationalization (Supersedes ADR-011)
 
 ## Status
-Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, and 2026-07-09). **Supersedes [ADR-011](011-single-locale-i18n.md)** (single-locale by design).
+Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, and 2026-07-29). **Supersedes [ADR-011](011-single-locale-i18n.md)** (single-locale by design).
 
 ## Context
 ADR-011 recorded single-locale (en-US) as a deliberate, *revisitable* non-goal and sketched what
@@ -52,7 +52,8 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
    `CultureInfo.DefaultThreadCurrent[UI]Culture` before `RunAsync()`, so prerender and hydration agree.
    The UI forwards the active culture to the API as `Accept-Language` (`CultureDelegatingHandler` on the
    `"APIClient"`), because the cross-origin Gateway does not carry the cookie to the services: that header
-   is what makes backend errors come back localized.
+   is what makes backend errors come back localized. **This decision covers Blazor Web heads only**; a MAUI
+   Blazor Hybrid head has no request pipeline for any of it to run in, which is Decision 10.
 
 6. **A user's chosen culture is persisted to the Identity profile (`User.PreferredCulture`).** The DB value
    is the cross-device source of truth; the cookie is the runtime channel. On login the cookie is set from
@@ -128,6 +129,38 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
    `ResxMudLocalizer` over the `MudTranslations` resource pair (all built-in keys of the pinned
    MudBlazor version, en + es), registered in `AddUIShared` and covered by the same completeness gate.
 
+10. **Applying a culture is host-specific, behind `ICultureApplier`; a hybrid head switches in process
+    (amended 2026-07-29).** Decisions 5 and 6 are written around a request pipeline: a cookie, request
+    localization, an SSR re-render. A MAUI Blazor Hybrid head has none of them. Its `BlazorWebView`
+    serves the app off a local scheme and every path is resolved by the Blazor `Router`, so the shared
+    culture switcher's navigation to `/culture/set` matched no page and rendered the **not-found page**:
+    the switcher was inert on Android, and the login path (which routes through the same endpoint to
+    apply a stored `User.PreferredCulture`) dropped the user on that page right after a successful
+    sign-in. Nothing on a hybrid head reads a culture cookie, so writing one could not have helped.
+
+    The mechanism is therefore an extension point, not a hard-coded URL. `ICultureApplier`
+    (`MMCA.Common.UI`) is what the switcher and the login page call; `AddUIShared` `TryAdd`s the web
+    implementation (`EndpointCultureApplier`, the Decision 5 endpoint round trip, unchanged), and
+    `MMCA.Common.UI.Maui` registers `MauiCultureApplier` after it. The hybrid applier sets
+    `CultureInfo.DefaultThreadCurrent[UI]Culture` **and** the calling thread's culture (the MAUI UI
+    thread is the Blazor renderer's dispatcher thread and has already materialized one), persists the
+    choice to device preferences, then force-loads the return path: resource strings resolve from
+    `CurrentUICulture` at render time and Blazor has no API to re-render a whole tree in place, so
+    re-booting the Blazor app inside the WebView (the .NET process, and the culture, survive) is what
+    makes the switch visible. `MauiCultureInitializer` (an `IMauiInitializeService`, so it runs inside
+    `MauiAppBuilder.Build()` before any window exists) restores the persisted culture at startup, the
+    hybrid counterpart to the WASM `MmcaCultureBootstrap`. Both are wired by
+    `UseMauiDeviceCapabilities()` so no head can be left half-configured, with `UseMauiCulture()`
+    separately callable.
+
+    Precedence mirrors the web deliberately: the persisted choice (the cookie's analogue), then the
+    device locale (`Accept-Language`'s analogue), then `SupportedCultures.Default`. Matching a device
+    locale needs the same language fallback request localization does, so
+    `SupportedCultures.ResolveClosest` now owns it for both (`es-MX` resolves to `es`), and it never
+    returns the pseudo locale. The active culture still reaches the services as `Accept-Language`: the
+    hybrid head already shares `CultureDelegatingHandler` through `AddUIShared`, so once
+    `CurrentUICulture` is right, localized backend errors follow with no extra wiring.
+
 ## Rationale
 - **Keying error localization on the existing `Error.Code` is the cheapest correct extension point.** The codes are
   already stable and already cross the wire; localizing at the edge keeps the Result pattern pure and means
@@ -136,6 +169,11 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
   only state both can read before first paint is a non-HttpOnly cookie, so it is the source of truth.
 - **Co-located `.resx` with no `ResourcesPath`** makes the resource base name predictable (the full type
   name) and packs cleanly through the lockstep NuGet pipeline (ADR-016) without per-project MSBuild tweaks.
+- **A shared component may not assume a shared host.** The switcher looked correct and worked in every
+  web head, which is exactly why the hybrid gap survived: the mechanism was a string literal in a
+  component, so nothing in the type system or the tests could notice that one head does not serve that
+  URL. Putting the mechanism behind an interface the head supplies makes the difference explicit, the
+  same argument ADR-042 makes for device capabilities.
 
 ## Trade-offs
 - **Every view and every user-facing message is touched**: a large, mostly mechanical sweep, accepted as
@@ -144,6 +182,11 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
   on the client bundle.
 - **Mixed-language responses are possible during rollout**: an untranslated code falls back to English by
   design, so coverage is incremental rather than all-or-nothing within a release.
+- **A hybrid culture switch costs a WebView reload** (Decision 10), where a web head costs an HTTP round
+  trip. It re-boots the Blazor app rather than re-rendering in place, so client-side page state is lost,
+  accepted because switching language is rare and deliberate. The reload cannot be exercised by the
+  bUnit or E2E tiers (neither runs a `BlazorWebView`), so the coverage here is the delegation and the
+  resolution order; the reload itself is verified on a device.
 - **MudBlazor's own built-in component text** may need a `MudLocalizer` for full coverage; tracked as a
   follow-up rather than blocking. **Closed 2026-07-03:** `ResxMudLocalizer` + the `MudTranslations`
   resource pair now localize the MudBlazor chrome (Decision 9); unknown keys still fall back to
@@ -155,5 +198,8 @@ this localizes on), [ADR-015](015-architecture-fitness-functions.md) (the i18n g
 formatting build gate and the `ResourceTranslationsAreComplete` translation-coverage fitness rule),
 [ADR-016](016-lockstep-versioning-masstransit-pin.md) (satellite assemblies ship in the lockstep release),
 [ADR-022](022-browser-session-cookie-auth.md) (the SSR cookie pattern this mirrors),
-[ADR-028](028-dark-theme-mode.md) (the theme toggle that shares this cookie/profile/bootstrap machinery).
+[ADR-028](028-dark-theme-mode.md) (the theme toggle that shares this cookie/profile/bootstrap machinery,
+and which needs no hybrid equivalent: it persists through JS localStorage, which a `BlazorWebView` has),
+[ADR-042](042-device-capability-abstraction.md) (the head-supplies-the-implementation pattern Decision 10
+follows).
 ```
