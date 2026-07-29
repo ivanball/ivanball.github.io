@@ -23,15 +23,15 @@ jobs:
     name: Generated output is current
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # <lastmod> in sitemap.xml comes from each file's last commit date, so a
           # shallow clone would rewrite every entry and fail the diff for no reason.
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: tools/package-lock.json
 
@@ -58,11 +58,11 @@ jobs:
     name: Internal links resolve
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
 
       # http-server rather than a simpler static server: linkinator crawls
       # concurrently and a single-threaded server drops connections, which is
@@ -89,11 +89,11 @@ jobs:
     name: Accessibility (WCAG 2.1 AA)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: tools/package-lock.json
 
