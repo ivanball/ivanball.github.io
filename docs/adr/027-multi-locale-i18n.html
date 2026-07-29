@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-027: Multi-Locale Internationalization (Supersedes ADR-011) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, and 2026-07-09). Supersedes ADR-011 (single-locale by design).">
+  <meta name="description" content="Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, and 2026-07-29). Supersedes ADR-011 (single-locale by design).">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-027: Multi-Locale Internationalization (Supersedes ADR-011)">
-  <meta property="og:description" content="Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, and 2026-07-09). Supersedes ADR-011 (single-locale by design).">
+  <meta property="og:description" content="Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, and 2026-07-29). Supersedes ADR-011 (single-locale by design).">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-027: Multi-Locale Internationalization (Supersedes ADR-011)">
-  <meta name="twitter:description" content="Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, and 2026-07-09). Supersedes ADR-011 (single-locale by design).">
+  <meta name="twitter:description" content="Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, and 2026-07-29). Supersedes ADR-011 (single-locale by design).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"027 · Multi-Locale Internationalization (Supersedes ADR-011)","item":"https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -167,7 +167,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-027-multi-locale-internationalization-supersedes-adr-011">ADR-027: Multi-Locale Internationalization (Supersedes ADR-011)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, and 2026-07-09). <strong>Supersedes <a href="011-single-locale-i18n.html">ADR-011</a></strong> (single-locale by design).</p>
+          <p>Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, and 2026-07-29). <strong>Supersedes <a href="011-single-locale-i18n.html">ADR-011</a></strong> (single-locale by design).</p>
           <h2 id="context">Context</h2>
           <p>ADR-011 recorded single-locale (en-US) as a deliberate, <em>revisitable</em> non-goal and sketched what
           re-introducing i18n would entail. That revisit has now happened: the framework adds first-class
@@ -215,7 +215,8 @@
           <code>CultureInfo.DefaultThreadCurrent[UI]Culture</code> before <code>RunAsync()</code>, so prerender and hydration agree.
           The UI forwards the active culture to the API as <code>Accept-Language</code> (<code>CultureDelegatingHandler</code> on the
           <code>&quot;APIClient&quot;</code>), because the cross-origin Gateway does not carry the cookie to the services: that header
-          is what makes backend errors come back localized.</p>
+          is what makes backend errors come back localized. <strong>This decision covers Blazor Web heads only</strong>; a MAUI
+          Blazor Hybrid head has no request pipeline for any of it to run in, which is Decision 10.</p>
           </li>
           <li><p><strong>A user&#39;s chosen culture is persisted to the Identity profile (<code>User.PreferredCulture</code>).</strong> The DB value
           is the cross-device source of truth; the cookie is the runtime channel. On login the cookie is set from
@@ -286,6 +287,36 @@
           <code>ResxMudLocalizer</code> over the <code>MudTranslations</code> resource pair (all built-in keys of the pinned
           MudBlazor version, en + es), registered in <code>AddUIShared</code> and covered by the same completeness gate.</p>
           </li>
+          <li><p><strong>Applying a culture is host-specific, behind <code>ICultureApplier</code>; a hybrid head switches in process
+          (amended 2026-07-29).</strong> Decisions 5 and 6 are written around a request pipeline: a cookie, request
+          localization, an SSR re-render. A MAUI Blazor Hybrid head has none of them. Its <code>BlazorWebView</code>
+          serves the app off a local scheme and every path is resolved by the Blazor <code>Router</code>, so the shared
+          culture switcher&#39;s navigation to <code>/culture/set</code> matched no page and rendered the <strong>not-found page</strong>:
+          the switcher was inert on Android, and the login path (which routes through the same endpoint to
+          apply a stored <code>User.PreferredCulture</code>) dropped the user on that page right after a successful
+          sign-in. Nothing on a hybrid head reads a culture cookie, so writing one could not have helped.</p>
+          <p>The mechanism is therefore an extension point, not a hard-coded URL. <code>ICultureApplier</code>
+          (<code>MMCA.Common.UI</code>) is what the switcher and the login page call; <code>AddUIShared</code> <code>TryAdd</code>s the web
+          implementation (<code>EndpointCultureApplier</code>, the Decision 5 endpoint round trip, unchanged), and
+          <code>MMCA.Common.UI.Maui</code> registers <code>MauiCultureApplier</code> after it. The hybrid applier sets
+          <code>CultureInfo.DefaultThreadCurrent[UI]Culture</code> <strong>and</strong> the calling thread&#39;s culture (the MAUI UI
+          thread is the Blazor renderer&#39;s dispatcher thread and has already materialized one), persists the
+          choice to device preferences, then force-loads the return path: resource strings resolve from
+          <code>CurrentUICulture</code> at render time and Blazor has no API to re-render a whole tree in place, so
+          re-booting the Blazor app inside the WebView (the .NET process, and the culture, survive) is what
+          makes the switch visible. <code>MauiCultureInitializer</code> (an <code>IMauiInitializeService</code>, so it runs inside
+          <code>MauiAppBuilder.Build()</code> before any window exists) restores the persisted culture at startup, the
+          hybrid counterpart to the WASM <code>MmcaCultureBootstrap</code>. Both are wired by
+          <code>UseMauiDeviceCapabilities()</code> so no head can be left half-configured, with <code>UseMauiCulture()</code>
+          separately callable.</p>
+          <p>Precedence mirrors the web deliberately: the persisted choice (the cookie&#39;s analogue), then the
+          device locale (<code>Accept-Language</code>&#39;s analogue), then <code>SupportedCultures.Default</code>. Matching a device
+          locale needs the same language fallback request localization does, so
+          <code>SupportedCultures.ResolveClosest</code> now owns it for both (<code>es-MX</code> resolves to <code>es</code>), and it never
+          returns the pseudo locale. The active culture still reaches the services as <code>Accept-Language</code>: the
+          hybrid head already shares <code>CultureDelegatingHandler</code> through <code>AddUIShared</code>, so once
+          <code>CurrentUICulture</code> is right, localized backend errors follow with no extra wiring.</p>
+          </li>
           </ol>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -296,6 +327,11 @@
           only state both can read before first paint is a non-HttpOnly cookie, so it is the source of truth.</li>
           <li><strong>Co-located <code>.resx</code> with no <code>ResourcesPath</code></strong> makes the resource base name predictable (the full type
           name) and packs cleanly through the lockstep NuGet pipeline (ADR-016) without per-project MSBuild tweaks.</li>
+          <li><strong>A shared component may not assume a shared host.</strong> The switcher looked correct and worked in every
+          web head, which is exactly why the hybrid gap survived: the mechanism was a string literal in a
+          component, so nothing in the type system or the tests could notice that one head does not serve that
+          URL. Putting the mechanism behind an interface the head supplies makes the difference explicit, the
+          same argument ADR-042 makes for device capabilities.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
@@ -305,6 +341,11 @@
           on the client bundle.</li>
           <li><strong>Mixed-language responses are possible during rollout</strong>: an untranslated code falls back to English by
           design, so coverage is incremental rather than all-or-nothing within a release.</li>
+          <li><strong>A hybrid culture switch costs a WebView reload</strong> (Decision 10), where a web head costs an HTTP round
+          trip. It re-boots the Blazor app rather than re-rendering in place, so client-side page state is lost,
+          accepted because switching language is rare and deliberate. The reload cannot be exercised by the
+          bUnit or E2E tiers (neither runs a <code>BlazorWebView</code>), so the coverage here is the delegation and the
+          resolution order; the reload itself is verified on a device.</li>
           <li><strong>MudBlazor&#39;s own built-in component text</strong> may need a <code>MudLocalizer</code> for full coverage; tracked as a
           follow-up rather than blocking. <strong>Closed 2026-07-03:</strong> <code>ResxMudLocalizer</code> + the <code>MudTranslations</code>
           resource pair now localize the MudBlazor chrome (Decision 9); unknown keys still fall back to
@@ -316,7 +357,10 @@
           formatting build gate and the <code>ResourceTranslationsAreComplete</code> translation-coverage fitness rule),
           <a href="016-lockstep-versioning-masstransit-pin.html">ADR-016</a> (satellite assemblies ship in the lockstep release),
           <a href="022-browser-session-cookie-auth.html">ADR-022</a> (the SSR cookie pattern this mirrors),
-          <a href="028-dark-theme-mode.html">ADR-028</a> (the theme toggle that shares this cookie/profile/bootstrap machinery).</p>
+          <a href="028-dark-theme-mode.html">ADR-028</a> (the theme toggle that shares this cookie/profile/bootstrap machinery,
+          and which needs no hybrid equivalent: it persists through JS localStorage, which a <code>BlazorWebView</code> has),
+          <a href="042-device-capability-abstraction.html">ADR-042</a> (the head-supplies-the-implementation pattern Decision 10
+          follows).</p>
           <pre class="doc-pre"><code class=""></code></pre>
           
         <div class="doc-foot btn-row">
