@@ -158,10 +158,10 @@
           is still linked (only one possible target). Names that are neither visible nor unique are
           dropped as unresolvable without full semantic binding.</p>
           <ul>
-          <li>Edges resolved by namespace visibility: <strong>9038</strong> (~96%)</li>
-          <li>Edges resolved by globally-unique name (fallback): <strong>335</strong></li>
+          <li>Edges resolved by namespace visibility: <strong>9050</strong> (~96%)</li>
+          <li>Edges resolved by globally-unique name (fallback): <strong>338</strong></li>
           <li>References dropped as ambiguous (matched &gt;1 type, none visible): <strong>28</strong></li>
-          <li>Sensitivity: <strong>398 / 2637</strong> type levels would change if the globally-unique fallback
+          <li>Sensitivity: <strong>398 / 2645</strong> type levels would change if the globally-unique fallback
           were excluded; the fallback is retained because a globally-unique first-party name is
           unambiguous, so excluding it would under-count real dependencies.</li>
           </ul>
@@ -179,11 +179,11 @@
           </thead>
           <tbody><tr>
           <td>0</td>
-          <td>527</td>
+          <td>529</td>
           </tr>
           <tr>
           <td>1</td>
-          <td>318</td>
+          <td>323</td>
           </tr>
           <tr>
           <td>2</td>
@@ -191,7 +191,7 @@
           </tr>
           <tr>
           <td>3</td>
-          <td>211</td>
+          <td>212</td>
           </tr>
           <tr>
           <td>4</td>
@@ -223,15 +223,15 @@
           </tr>
           <tr>
           <td>11</td>
-          <td>19</td>
-          </tr>
-          <tr>
-          <td>12</td>
           <td>20</td>
           </tr>
           <tr>
+          <td>12</td>
+          <td>21</td>
+          </tr>
+          <tr>
           <td>13</td>
-          <td>8</td>
+          <td>6</td>
           </tr>
           <tr>
           <td>14</td>
@@ -250,7 +250,7 @@
           <td>1</td>
           </tr>
           </tbody></table></div>
-          <h2 id="cycles-scc-size--1-18">Cycles (SCC size &gt; 1): 18</h2>
+          <h2 id="cycles-scc-size--1-19">Cycles (SCC size &gt; 1): 19</h2>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -260,6 +260,11 @@
           </tr>
           </thead>
           <tbody><tr>
+          <td>1</td>
+          <td>2</td>
+          <td>Service:SelfHttpWarmupTask, Service:SelfHttpWarmupTask</td>
+          </tr>
+          <tr>
           <td>2</td>
           <td>3</td>
           <td>Shared:Result, Shared:ResultJsonConverterFactory, Shared:ResultConverter</td>
@@ -362,13 +367,6 @@
           </tr>
           </thead>
           <tbody><tr>
-          <td>0</td>
-          <td><code>ObservabilityConventionTests</code></td>
-          <td>MMCA.ADC.Architecture.Tests</td>
-          <td>0</td>
-          <td>(none)</td>
-          </tr>
-          <tr>
           <td>0</td>
           <td><code>AddCategoryItemRequest</code></td>
           <td>MMCA.ADC.Conference.API</td>
@@ -2694,6 +2692,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>HealthCheckTags</code></td>
+          <td>MMCA.Common.Aspire</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>IWarmupTask</code></td>
           <td>MMCA.Common.Aspire</td>
           <td>0</td>
@@ -3422,6 +3427,13 @@
           </tr>
           <tr>
           <td>0</td>
+          <td><code>ProductionHostApplicationFactory&lt;TEntryPoint&gt;</code></td>
+          <td>MMCA.Common.Testing</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
           <td><code>SecurityHeadersTestsBase</code></td>
           <td>MMCA.Common.Testing</td>
           <td>0</td>
@@ -3451,6 +3463,13 @@
           <tr>
           <td>0</td>
           <td><code>Layer</code></td>
+          <td>MMCA.Common.Testing.Architecture</td>
+          <td>0</td>
+          <td>(none)</td>
+          </tr>
+          <tr>
+          <td>0</td>
+          <td><code>ObservabilityConventionTestsBase</code></td>
           <td>MMCA.Common.Testing.Architecture</td>
           <td>0</td>
           <td>(none)</td>
@@ -4059,6 +4078,13 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>ObservabilityConventionTests</code></td>
+          <td>MMCA.ADC.Architecture.Tests</td>
+          <td>1</td>
+          <td>ObservabilityConventionTestsBase</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>ConferenceErrorResourcesTests</code></td>
           <td>MMCA.ADC.Conference.API.Tests</td>
           <td>2</td>
@@ -4430,6 +4456,13 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>SelfHttpWarmupTask</code></td>
+          <td>MMCA.ADC.Engagement.Service</td>
+          <td>2</td>
+          <td>IWarmupTask, SelfHttpWarmupTask</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>DisabledBookmarkCountService</code></td>
           <td>MMCA.ADC.Engagement.Shared</td>
           <td>1</td>
@@ -4532,6 +4565,13 @@
           <td>MMCA.ADC.Identity.IntegrationTests</td>
           <td>1</td>
           <td>PiiLogCapture</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>SelfHttpWarmupTask</code></td>
+          <td>MMCA.ADC.Identity.Service</td>
+          <td>2</td>
+          <td>IWarmupTask, SelfHttpWarmupTask</td>
           </tr>
           <tr>
           <td>1</td>
@@ -5123,6 +5163,13 @@
           </tr>
           <tr>
           <td>1</td>
+          <td><code>ObservabilityConventionTestsBaseTests</code></td>
+          <td>MMCA.Common.Architecture.Tests</td>
+          <td>1</td>
+          <td>ObservabilityConventionTestsBase</td>
+          </tr>
+          <tr>
+          <td>1</td>
           <td><code>ICspPolicyProvider</code></td>
           <td>MMCA.Common.Aspire</td>
           <td>1</td>
@@ -5638,6 +5685,13 @@
           <td>MMCA.Common.Testing</td>
           <td>2</td>
           <td>ICommandHandler&lt;in TCommand, TResult&gt;, IQueryHandler&lt;in TQuery, TResult&gt;</td>
+          </tr>
+          <tr>
+          <td>1</td>
+          <td><code>GracefulShutdownTestsBase&lt;TEntryPoint&gt;</code></td>
+          <td>MMCA.Common.Testing</td>
+          <td>1</td>
+          <td>ProductionHostApplicationFactory&lt;TEntryPoint&gt;</td>
           </tr>
           <tr>
           <td>1</td>
@@ -7022,8 +7076,8 @@
           <td>2</td>
           <td><code>Extensions</code></td>
           <td>MMCA.Common.Aspire</td>
-          <td>7</td>
-          <td>HttpResilienceDefaults, IWarmupTask, OpenIdConnectMetadataWarmupTask, OutboxPollFilterProcessor, WarmupHostedService, WarmupReadinessGate, WarmupReadinessHealthCheck</td>
+          <td>8</td>
+          <td>HealthCheckTags, HttpResilienceDefaults, IWarmupTask, OpenIdConnectMetadataWarmupTask, OutboxPollFilterProcessor, WarmupHostedService, WarmupReadinessGate, WarmupReadinessHealthCheck</td>
           </tr>
           <tr>
           <td>2</td>
@@ -8508,6 +8562,13 @@
           <td>MMCA.Common.Aspire</td>
           <td>4</td>
           <td>ICspPolicyProvider, SecurityHeadersMiddleware, SecurityHeadersSettings, StaticCspPolicyProvider</td>
+          </tr>
+          <tr>
+          <td>3</td>
+          <td><code>InfrastructureHealthChecksTests</code></td>
+          <td>MMCA.Common.Aspire.Tests</td>
+          <td>2</td>
+          <td>Extensions, HealthCheckTags</td>
           </tr>
           <tr>
           <td>3</td>
@@ -17837,8 +17898,8 @@
           <td>10</td>
           <td><code>AuthControllerBase</code></td>
           <td>MMCA.Common.API</td>
-          <td>9</td>
-          <td>ApiControllerBase, AuthenticationResponse, AuthenticationService, CurrentUserService, IAuthenticationService, ICurrentUserService, LoginRequest, RefreshTokenRequest, RegisterRequest</td>
+          <td>10</td>
+          <td>ApiControllerBase, AuthenticationResponse, AuthenticationService, CurrentUserService, IAuthenticationService, ICurrentUserService, LoginRequest, RefreshTokenRequest, RegisterRequest, WebApplicationBuilderExtensions</td>
           </tr>
           <tr>
           <td>10</td>
@@ -18068,8 +18129,8 @@
           <td>11</td>
           <td><code>AuthController</code></td>
           <td>MMCA.ADC.Identity.API</td>
-          <td>18</td>
-          <td>AuthControllerBase, AuthenticationResponse, AuthenticationService, ChangePasswordCommand, ChangePasswordRequest, ChangePreferencesCommand, ChangePreferencesRequest, CurrentUserService, GetUserPreferencesQuery, IAuthenticationService, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IQueryHandler&lt;in TQuery, TResult&gt;, LoginRequest, RegisterRequest, Result, Route, UserPreferencesResponse</td>
+          <td>19</td>
+          <td>AuthControllerBase, AuthenticationResponse, AuthenticationService, ChangePasswordCommand, ChangePasswordRequest, ChangePreferencesCommand, ChangePreferencesRequest, CurrentUserService, GetUserPreferencesQuery, IAuthenticationService, ICommandHandler&lt;in TCommand, TResult&gt;, ICurrentUserService, IQueryHandler&lt;in TQuery, TResult&gt;, LoginRequest, RegisterRequest, Result, Route, UserPreferencesResponse, WebApplicationBuilderExtensions</td>
           </tr>
           <tr>
           <td>11</td>
@@ -18077,6 +18138,13 @@
           <td>MMCA.ADC.UI</td>
           <td>1</td>
           <td>AppDelegate</td>
+          </tr>
+          <tr>
+          <td>11</td>
+          <td><code>AuthControllerBaseRateLimitTests</code></td>
+          <td>MMCA.Common.API.Tests</td>
+          <td>2</td>
+          <td>AuthControllerBase, WebApplicationBuilderExtensions</td>
           </tr>
           <tr>
           <td>11</td>
@@ -18150,10 +18218,10 @@
           </tr>
           <tr>
           <td>12</td>
-          <td><code>GatewayApplicationFactory</code></td>
+          <td><code>GracefulShutdownTests</code></td>
           <td>MMCA.ADC.Gateway.Tests</td>
-          <td>1</td>
-          <td>Program</td>
+          <td>2</td>
+          <td>GracefulShutdownTestsBase&lt;TEntryPoint&gt;, Program</td>
           </tr>
           <tr>
           <td>12</td>
@@ -18161,6 +18229,13 @@
           <td>MMCA.ADC.Gateway.Tests</td>
           <td>2</td>
           <td>Program, RecordingHttpForwarder</td>
+          </tr>
+          <tr>
+          <td>12</td>
+          <td><code>SecurityHeadersTests</code></td>
+          <td>MMCA.ADC.Gateway.Tests</td>
+          <td>3</td>
+          <td>ProductionHostApplicationFactory&lt;TEntryPoint&gt;, Program, SecurityHeadersTestsBase</td>
           </tr>
           <tr>
           <td>12</td>
@@ -18269,24 +18344,10 @@
           </tr>
           <tr>
           <td>13</td>
-          <td><code>GracefulShutdownTests</code></td>
-          <td>MMCA.ADC.Gateway.Tests</td>
-          <td>1</td>
-          <td>GatewayApplicationFactory</td>
-          </tr>
-          <tr>
-          <td>13</td>
           <td><code>RouteMapTests</code></td>
           <td>MMCA.ADC.Gateway.Tests</td>
           <td>1</td>
           <td>RouteMapApplicationFactory</td>
-          </tr>
-          <tr>
-          <td>13</td>
-          <td><code>SecurityHeadersTests</code></td>
-          <td>MMCA.ADC.Gateway.Tests</td>
-          <td>2</td>
-          <td>GatewayApplicationFactory, SecurityHeadersTestsBase</td>
           </tr>
           <tr>
           <td>13</td>

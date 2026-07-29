@@ -180,17 +180,21 @@
           Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pre>
           <p>When a type must reference a first-party type whose home group appears <strong>later</strong>, that forward
           reference is allowed (functional cohesion can outrank strict progressive disclosure) and is
-          cross-linked. Eighteen dependency <strong>cycles</strong> exist (mutually-dependent types, e.g. an aggregate root and
+          cross-linked. Nineteen dependency <strong>cycles</strong> exist (mutually-dependent types, e.g. an aggregate root and
           its child entity with bidirectional EF navigations); each is kept whole within a single group and
           called out where it occurs. They are listed in the
-          <a href="00-dependency-manifest.html#cycles-scc-size--1-18">dependency manifest</a>.</p>
+          <a href="00-dependency-manifest.html#cycles-scc-size--1-19">dependency manifest</a>. One of the nineteen is an
+          extraction artifact rather than a real dependency: the two identically-named <code>SelfHttpWarmupTask</code>
+          classes (<code>MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:19</code> and
+          <code>MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:19</code>) are distinct types in different services, and the
+          globally-unique-name fallback described below cannot tell them apart, so each resolves to the other.</p>
           <h3 id="how-the-inventory--leveling-were-computed">How the inventory &amp; leveling were computed</h3>
           <p>The type inventory and dependency graph are produced <strong>mechanically</strong> by a small Roslyn syntactic
           parser (<code>Tools/invtool/</code>), so the type list, namespaces, and <code>file:line</code> are exact and reproducible. Edges
           are resolved by <strong>namespace-aware name matching</strong>; ~96% bind by namespace visibility, the rest by a
-          globally-unique-name fallback (335 edges), and 28 references are dropped as ambiguous. The functional grouping is
+          globally-unique-name fallback (338 edges), and 28 references are dropped as ambiguous. The functional grouping is
           then applied mechanically (<code>Tools/invtool/classify.ps1</code> → <code>00-group-taxonomy.md</code>), so every one of the
-          <strong>2,637</strong> distinct type nodes maps to exactly one group with no silent drops. See the
+          <strong>2,645</strong> distinct type nodes maps to exactly one group with no silent drops. See the
           <a href="00-dependency-manifest.html#edge-resolution--accuracy">manifest&#39;s accuracy note</a> for residual caveats.</p>
           <hr>
           <h2 id="chapters">Chapters</h2>
@@ -208,11 +212,11 @@
           </tr>
           <tr>
           <td><a href="00-inventory.html"><code>00-inventory.md</code></a></td>
-          <td>Phase 0, every in-scope type (2,637 distinct), mechanically extracted, with <code>file:line</code></td>
+          <td>Phase 0, every in-scope type (2,645 distinct), mechanically extracted, with <code>file:line</code></td>
           </tr>
           <tr>
           <td><a href="00-dependency-manifest.html"><code>00-dependency-manifest.md</code></a></td>
-          <td>Phase 1a, per-type first-party deps + computed Level; the 18 cycles</td>
+          <td>Phase 1a, per-type first-party deps + computed Level; the 19 cycles</td>
           </tr>
           <tr>
           <td><a href="00-group-taxonomy.html"><code>00-group-taxonomy.md</code></a></td>
@@ -322,8 +326,8 @@
           <tr>
           <td>16</td>
           <td><a href="group-16-aspire-orchestration.html">Aspire Orchestration &amp; Service Defaults</a></td>
-          <td>16</td>
-          <td>AppHost wiring, ServiceDefaults, warmup, telemetry, security helpers, the shared <code>HttpResilienceDefaults</code> Polly source of truth</td>
+          <td>17</td>
+          <td>AppHost wiring, ServiceDefaults, warmup, telemetry, security helpers, the shared <code>HttpResilienceDefaults</code> Polly source of truth, the shared <code>HealthCheckTags</code> liveness/readiness vocabulary</td>
           </tr>
           <tr>
           <td>17</td>
@@ -358,7 +362,7 @@
           <tr>
           <td>22</td>
           <td><a href="group-22-engagement-module.html">ADC Engagement Module (Session Bookmarks)</a></td>
-          <td>73</td>
+          <td>74</td>
           <td>The async session-bookmarking slice of the Engagement bounded context: bookmark aggregate, use cases, persistence, API/contracts/service, feedback UI, the durable live-channel publish queue (<a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>), the cross-service user-engagement export slice (gRPC)</td>
           </tr>
           <tr>
@@ -370,7 +374,7 @@
           <tr>
           <td>24</td>
           <td><a href="group-24-identity-module.html">ADC Identity Module (Users, Profiles, GDPR Export/Erasure)</a></td>
-          <td>82</td>
+          <td>83</td>
           <td>The Identity bounded context end-to-end (incl. <code>IdentityPermissions</code>, user culture/theme preferences, the <a href="https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html" target="_blank" rel="noopener">ADR-045</a> user-avatar photo slice end to end, the external-login email verifier + extractable-host Kestrel config; <code>AuthenticationService</code> now extends Common&#39;s shared base)</td>
           </tr>
           <tr>
@@ -388,8 +392,8 @@
           <tr>
           <td>27</td>
           <td><a href="group-27-testing-infrastructure.html">Testing &amp; Quality Infrastructure</a></td>
-          <td>1270</td>
-          <td>All test projects + reusable Testing/Testing.E2E/Testing.UI/<strong>Testing.Architecture</strong> bases (incl. the handler + decorator-pipeline test bases and the Gallery auth stubs) + architecture-fitness tests + Gallery + the BenchmarkDotNet perf-smoke suite</td>
+          <td>1275</td>
+          <td>All test projects + reusable Testing/Testing.E2E/Testing.UI/<strong>Testing.Architecture</strong> bases (incl. the handler + decorator-pipeline test bases, the shared production-host/graceful-shutdown bases, the observability-convention fitness base, and the Gallery auth stubs) + architecture-fitness tests + Gallery + the BenchmarkDotNet perf-smoke suite</td>
           </tr>
           </tbody></table></div>
           <h3 id="devops--operations-chapters">DevOps &amp; operations chapters</h3>

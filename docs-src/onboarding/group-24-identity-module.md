@@ -2,347 +2,439 @@
 
 **What this chapter covers.** This is the **Identity bounded context** of MMCA.ADC, the module that
 owns *who a person is* across every ADC surface: web, WebAssembly, and MAUI. It is a leaf context (no
-upstream module dependencies) but it touches every layer end to end, so this chapter doubles as a
-compact tour of a full vertical slice built on the framework taught in groups 1 through 15. The single
-aggregate is the [User](#user), and around it sit the credential and refresh-token lifecycle, the role
-vocabulary, the change-password / change-preferences / avatar use cases, the two privacy use cases that
-make ADC compliant (data-subject **export** and **erasure**), the persistence and EF configuration, the
-REST controllers, the gRPC contract that lets a peer service ask Identity a question, the integration
-events that keep the User-to-Speaker link consistent across the service split, and the Blazor profile
-and user-list UI. The per-type sections follow; this overview shows how the pieces fit and how a
-request flows through them.
+module dependencies of its own) but it touches every layer end to end, so this chapter doubles as a
+compact tour of one full vertical slice built on the framework taught in groups 1 through 15. The
+single aggregate is [`User`](#user), and around it sit the credential and refresh-token lifecycle, the
+role vocabulary, the change-password / change-preferences / avatar use cases, the two privacy use
+cases that make ADC compliant (data-subject **export** and **erasure**), the persistence and EF
+configuration, the REST controllers, the gRPC contract that lets a peer service ask Identity a
+question, the integration events that keep the User-to-Speaker link consistent across the service
+split, and the Blazor profile and user-list UI. The per-type sections follow; this overview shows how
+the pieces fit and how a request flows through them.
 
 Almost everything here is an *instantiation* of upstream framework machinery, cross-referenced rather
-than re-taught: the [Result](group-01-result-error-handling.md#result) pattern (G01), the
-[AuditableAggregateRootEntity<TIdentifierType>](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype)
-entity chain plus the [IAnonymizable](group-02-domain-building-blocks.md#ianonymizable) and
-[PiiAttribute](group-02-domain-building-blocks.md#piiattribute) governance markers (G02), the outbox
-spine and [BaseIntegrationEvent](group-04-events-outbox.md#baseintegrationevent) /
-[BaseDomainEvent](group-04-events-outbox.md#basedomainevent) (G04), the CQRS command/query handler
+than re-taught: the [`Result`](group-01-result-error-handling.md#result) pattern (G01), the
+[`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype)
+entity chain plus the [`IAnonymizable`](group-02-domain-building-blocks.md#ianonymizable) and
+[`PiiAttribute`](group-02-domain-building-blocks.md#piiattribute) governance markers (G02), the outbox
+spine with [`BaseIntegrationEvent`](group-04-events-outbox.md#baseintegrationevent) and
+[`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent) (G04), the CQRS command/query handler
 pipeline (G05), the auth base classes
-([AuthenticationServiceBase<TUser>](group-08-auth.md#authenticationservicebasetuser), JWKS,
-[RoleValue](group-08-auth.md#rolevalue),
-[HasPermissionAttribute](group-08-auth.md#haspermissionattribute)) from the shared auth group (G08),
-and the [IModule](group-14-module-system-composition.md#imodule) composition system (G14). The lenses
-this chapter most strongly embodies are [Rubric §4, Domain-Driven Design] (a behavior-rich aggregate
-that guards its own invariants), [Rubric §11, Security] (credential handling, RS256 JWTs,
-permission-based authorization, a fail-closed OAuth link gate), and [Rubric §30, Compliance / Privacy /
-Data Governance] (the export and erasure flows). The `// BR-NN` markers referenced below are catalogued
-in the ADC business-requirements guide; the privacy promises live in `MMCA.ADC/PRIVACY.md`.
+([`AuthenticationServiceBase<TUser>`](group-08-auth.md#authenticationservicebasetuser),
+[`RoleValue`](group-08-auth.md#rolevalue),
+[`HasPermissionAttribute`](group-08-auth.md#haspermissionattribute)) from the shared auth group (G08),
+and the [`IModule`](group-14-module-system-composition.md#imodule) composition system (G14). The
+lenses this chapter most strongly embodies are [Rubric §4, Domain-Driven Design] (a behavior-rich
+aggregate that guards its own invariants), [Rubric §11, Security] (credential handling, RS256 JWTs,
+permission-based authorization, a fail-closed OAuth link gate), and [Rubric §30, Compliance / Privacy
+/ Data Governance] (the export and erasure flows). The `// BR-NN` markers quoted below are the
+in-code business-requirement references, catalogued in the ADC business-requirements guide; the
+privacy promises they implement live in `MMCA.ADC/PRIVACY.md`.
 
 ## Projects, one bounded context
 
 The module is split along the standard Clean Architecture layering ([Rubric §3, Clean Architecture]),
-each project pinned by a trivial [AssemblyReference](#assemblyreference) /
-[ClassReference](#classreference) anchor pair that Scrutor scanning and the architecture-fitness tests
-use to *name* the assembly. **`MMCA.ADC.Identity.Domain`** holds the [User](#user) aggregate
+each project pinned by a trivial [`AssemblyReference`](#assemblyreference) /
+[`ClassReference`](#classreference) anchor pair (`MMCA.ADC.Identity.Domain/AssemblyReference.cs:5`,
+`:11`) that Scrutor scanning and the architecture-fitness tests use to *name* the assembly.
+**`MMCA.ADC.Identity.Domain`** holds the [`User`](#user) aggregate
 (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:18`), the
-[UserRole](#userrole) value type (`UserRole.cs:17`), the [UserInvariants](#userinvariants) rule class
-(`UserInvariants.cs:10`), and the [UserDeleted](#userdeleted) /
-[UserPasswordChanged](#userpasswordchanged) domain events; it depends only on `MMCA.Common.Domain` and
-`MMCA.Common.Shared` and knows nothing of EF or ASP.NET. **`MMCA.ADC.Identity.Application`** holds the
-use-case handlers, the DTO mappers and validators, and the cross-module service implementations.
+[`UserRole`](#userrole) value type (`UserRole.cs:17`), the [`UserInvariants`](#userinvariants) rule
+class (`UserInvariants.cs:10`), and the [`UserDeleted`](#userdeleted) (`UserDeleted.cs:10`) /
+[`UserPasswordChanged`](#userpasswordchanged) (`UserPasswordChanged.cs:9`) domain events; it depends
+only on `MMCA.Common.Domain` and `MMCA.Common.Shared` and knows nothing of EF or ASP.NET.
+**`MMCA.ADC.Identity.Application`** holds the use-case handlers, the Mapperly-generated
+[`UserDTOMapper`](#userdtomapper) (`MMCA.ADC.Identity.Application/Users/DTOs/UserDTOMapper.cs:13-14`,
+[ADR-001](https://ivanball.github.io/docs/adr/001-manual-dto-mapping.html)), the FluentValidation
+validators, and the cross-module service implementations; its
+[`DependencyInjection`](#dependencyinjection) registers the four named services explicitly and leaves
+handlers, mappers, validators, and domain-event handlers to
+`ScanModuleApplicationServices<ClassReference>()`
+(`MMCA.ADC.Identity.Application/DependencyInjection.cs:30-33`, `:37`).
 **`MMCA.ADC.Identity.Infrastructure`** holds the
-[ModuleApplicationDbContext](#moduleapplicationdbcontext)
+[`ModuleApplicationDbContext`](#moduleapplicationdbcontext)
 (`MMCA.ADC.Identity.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs:15`), the
-[UserConfiguration](#userconfiguration) EF mapping, and the
-[IdentityModuleDbSeeder](#identitymoduledbseeder). **`MMCA.ADC.Identity.API`** holds the REST
-controllers, the [IdentityModule](#identitymodule) descriptor
+[`UserConfiguration`](#userconfiguration) EF mapping, and the
+[`IdentityModuleDbSeeder`](#identitymoduledbseeder); its own registration hook is deliberately a
+no-op, kept only so every module has the same shape
+(`MMCA.ADC.Identity.Infrastructure/DependencyInjection.cs:20`). **`MMCA.ADC.Identity.API`** holds the
+REST controllers, the [`IdentityModule`](#identitymodule) descriptor
 (`MMCA.ADC.Identity.API/IdentityModule.cs:13`), and the
-[IdentityErrorResources](#identityerrorresources) anchor whose `.resx` siblings translate domain error
-codes into the supported languages (`IdentityErrorResources.cs:11`, [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
+[`IdentityErrorResources`](#identityerrorresources) anchor whose `.resx` siblings translate domain
+error codes into the supported languages (`IdentityErrorResources.cs:11`,
+[ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
 **`MMCA.ADC.Identity.Shared`** is the contract package every other layer (including the WebAssembly
 client) can reference without dragging in the domain: it carries the DTOs, the
-[IAttendeeQueryService](#iattendeequeryservice) cross-module interface, the
-[UserRegistered](#userregistered) integration event, and the
-[IdentityPermissions](#identitypermissions) / [IdentitySettings](#identitysettings) constants. Three
-more projects sit outside the module folder: **`MMCA.ADC.Identity.Contracts`** (the gRPC adapter),
-**`MMCA.ADC.Identity.Service`** (the extracted process host), and **`MMCA.ADC.Identity.UI`** (the
-Blazor pages). The identifier alias for this context is `UserIdentifierType = int` (a
-database-generated identity), while the cross-context `LinkedSpeakerId` uses
-`SpeakerIdentifierType = System.Guid`.
+[`IAttendeeQueryService`](#iattendeequeryservice) cross-module interface
+(`MMCA.ADC.Identity.Shared/Users/IAttendeeQueryService.cs:8`), the
+[`UserRegistered`](#userregistered) integration event, and the
+[`IdentityPermissions`](#identitypermissions) / [`IdentitySettings`](#identitysettings) constants
+(the latter carrying the BR-213 registration budget, `MaxRegistrationsPerIpPerHour = 10`,
+`IdentitySettings.cs:15`). Three more projects sit outside the module folder:
+**`MMCA.ADC.Identity.Contracts`** (the gRPC adapter), **`MMCA.ADC.Identity.Service`** (the extracted
+process host), and **`MMCA.ADC.Identity.UI`** (the Blazor pages). The identifier alias for this
+context is `UserIdentifierType = int`, a database-generated identity
+(`MMCA.ADC.Identity.Shared/MMCA.ADC.Identity.GlobalUsings.IdentifierType.cs:2`), while the
+cross-context `LinkedSpeakerId` uses `SpeakerIdentifierType = System.Guid`
+(`MMCA.ADC.Conference.Shared/MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:18`,
+[ADR-048](https://ivanball.github.io/docs/adr/048-primitive-identifier-type-aliases.html)).
 
 ## The User aggregate: credentials, profile, and cross-context links in one root
 
-[User](#user) (`MMCA.ADC.Identity.Domain/Users/User.cs:18`) is the only aggregate root in the module,
-and it carries more responsibility than most: it is the credential store (`PasswordHash` plus a
-per-user `PasswordSalt`, both `byte[]` mapped to `varbinary(max)`, `User.cs:34,37`), the refresh-token
-holder (`RefreshToken` / `RefreshTokenExpiry`, rotated by `UpdateRefreshToken` and cleared by
-`RevokeRefreshToken`, `User.cs:234,243`), the profile (`Email`, `FirstName`, `LastName`, each marked
-[[Pii]](group-02-domain-building-blocks.md#piiattribute), `User.cs:22,26,30`), the preference store
-(`PreferredCulture` / `PreferredTheme`, `User.cs:84,87`, [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) / [ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html)), the avatar URL holder
-(`User.cs:96`, BR-116a, [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html)), the optional MAUI device-metadata bag (`User.cs:57-75`), the
-external-OAuth link (`LoginProvider` / `ProviderKey`, `User.cs:78,81`), and the 1:1 cross-context
-`LinkedSpeakerId` pointing at a Conference speaker (`User.cs:54`, BR-207 / BR-208 / BR-209). Every
-property has a private setter, so state changes only through the aggregate's own methods: encapsulation
-as a compile-time guarantee ([Rubric §4, Domain-Driven Design], [Rubric §1, SOLID]).
+[`User`](#user) (`MMCA.ADC.Identity.Domain/Users/User.cs:18`) is the only aggregate root in the
+module, and it carries more responsibility than most: it is the credential store (`PasswordHash` plus
+a per-user `PasswordSalt`, both `byte[]` mapped to `varbinary(max)`, `User.cs:34`, `:37`), the
+refresh-token holder (`RefreshToken` / `RefreshTokenExpiry`, rotated by `UpdateRefreshToken` at
+`User.cs:234` and cleared by `RevokeRefreshToken` at `User.cs:243`), the profile (`Email`,
+`FirstName`, `LastName`, each marked
+[`[Pii]`](group-02-domain-building-blocks.md#piiattribute), `User.cs:22`, `:26`, `:30`), the
+preference store (`PreferredCulture` / `PreferredTheme`, `User.cs:84`, `:87`,
+[ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) /
+[ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html)), the avatar URL holder
+(`User.cs:96`, BR-116a,
+[ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html)), the
+optional MAUI device-metadata bag (`User.cs:57-75`), the external-OAuth link (`LoginProvider` /
+`ProviderKey`, `User.cs:78`, `:81`), and the 1:1 cross-context `LinkedSpeakerId` pointing at a
+Conference speaker (`User.cs:54`, BR-207 / BR-208 / BR-209). Every property has a private setter, so
+state changes only through the aggregate's own methods: encapsulation as a compile-time guarantee
+([Rubric §4, Domain-Driven Design], [Rubric §1, SOLID]).
 
 It follows the standard framework shape: a private EF constructor (`User.cs:104`), a private state
 constructor (`User.cs:114`), and static factory methods returning
-[Result<T>](group-01-result-error-handling.md#result). `Create` (`User.cs:147`) validates every
-invariant with `Result.Combine(...)` *before* constructing anything (`User.cs:156-163`), so an invalid
-user is unrepresentable; `CreateExternal` (`User.cs:189`) builds an OAuth account with empty credential
-arrays (`User.cs:207`). A subtlety worth carrying forward: the factory deliberately does **not** raise a
-registration event. The `Id` is database-generated (`[IdValueGenerated]` at `User.cs:17`, `Id` set to
-`default` at `User.cs:171`), so the cross-module [UserRegistered](#userregistered) is raised by the
-application layer only after the insert has executed and a real id exists. The behavior methods each
+[`Result<T>`](group-01-result-error-handling.md#result). `Create` (`User.cs:147`) validates every
+invariant with `Result.Combine(...)` *before* constructing anything (`User.cs:156-163`), so an
+invalid user is unrepresentable; `CreateExternal` (`User.cs:189`) builds an OAuth account with empty
+credential arrays (`User.cs:207`). A subtlety worth carrying forward: the factory deliberately does
+**not** raise a registration event. The `Id` is database-generated (`[IdValueGenerated]` at
+`User.cs:17`, `Id` set to `default` at `User.cs:171`), so the cross-module
+[`UserRegistered`](#userregistered) is raised by the application layer only after the insert has
+executed and a real id exists (`User.cs:130-139` records exactly that). The behavior methods each
 guard their own rule: `ChangePassword` re-validates and raises
-[UserPasswordChanged](#userpasswordchanged) (`User.cs:302-316`); `UpdatePreferences` validates against
-the supported-culture allowlist and the light/dark theme values (`User.cs:272-285`); the `Delete()`
-override revokes the refresh token as a security measure, calls the G02 soft-delete, and raises
-[UserDeleted](#userdeleted) (`User.cs:348-358`).
+[`UserPasswordChanged`](#userpasswordchanged) (`User.cs:302-316`); `UpdatePreferences` validates
+against the supported-culture allowlist and the light/dark theme values (`User.cs:272-285`); the
+`Delete()` override revokes the refresh token as a security measure, calls the G02 soft-delete, and
+raises [`UserDeleted`](#userdeleted) (`User.cs:348-358`).
 
-[UserInvariants](#userinvariants) (`UserInvariants.cs:10`) is the co-located static rule class whose
-methods each return a [Result](group-01-result-error-handling.md#result), several of them delegating to
-the shared [CommonInvariants](group-02-domain-building-blocks.md#commoninvariants). Centralizing each
-rule as a named, side-effect-free method is what makes the domain exhaustively unit-testable ([Rubric
-§14, Testability]), and its `const` length limits (`FirstNameMaxLength = 100`,
-`LastNameMaxLength = 100`, `EmailMaxLength = 100`, `DeviceFieldMaxLength = 256`,
-`UserInvariants.cs:13-22`) are the *same* constants [UserConfiguration](#userconfiguration) uses for the
-EF column widths (`UserConfiguration.cs:24,29,34`), so the domain rule and the schema cannot drift.
-[UserRole](#userrole) (`UserRole.cs:17`) is a value object over the shared
-[RoleValue](group-08-auth.md#rolevalue) base that fixes the ADC role set to three members: `Organizer`,
-`Attendee` (the registration default), and `ContentEditor`, a strict capability subset that curates the
-session catalog but cannot change event structure, run session selection, or read the user list
-(`UserRole.cs:20-30`). Its `IsOrganizer(string?)` helper (`UserRole.cs:76`) does a case-insensitive
-compare, because raw JWT role claims may carry any casing, and it is the exact check the delete and
-export authorization gates use.
+[`UserInvariants`](#userinvariants) (`UserInvariants.cs:10`) is the co-located static rule class whose
+methods each return a [`Result`](group-01-result-error-handling.md#result), several of them delegating
+to the shared [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants)
+(`UserInvariants.cs:46-60`). Centralizing each rule as a named, side-effect-free method is what makes
+the domain exhaustively unit-testable ([Rubric §14, Testability]), and its `const` length limits
+(`FirstNameMaxLength = 100`, `LastNameMaxLength = 100`, `EmailMaxLength = 100`,
+`DeviceFieldMaxLength = 256`, `UserInvariants.cs:13-22`) are the *same* constants
+[`UserConfiguration`](#userconfiguration) uses for the EF column widths (`UserConfiguration.cs:24`,
+`:29`, `:34`) and [`RegisterRequestValidator`](#registerrequestvalidator) uses for the request-shape
+rules (`MMCA.ADC.Identity.Application/Users/Validation/RegisterRequestValidator.cs:16-19`), so the
+domain rule, the request contract, and the schema cannot drift apart. [`UserRole`](#userrole)
+(`UserRole.cs:17`) is a value object over the shared [`RoleValue`](group-08-auth.md#rolevalue) base
+that fixes the ADC role set to three members: `Organizer`, `Attendee` (the registration default), and
+`ContentEditor`, a strict capability subset that curates the session catalog but cannot change event
+structure, run session selection, or read the user list (`UserRole.cs:20-30`). Its
+`IsOrganizer(string?)` helper (`UserRole.cs:76`) does a case-insensitive compare, because raw JWT role
+claims may carry any casing, and it is the exact check the delete and export authorization gates use.
 
 ## Authentication: a thin subclass over the shared engine
 
 The login / registration / refresh / revocation workflow is *not* re-implemented here. It lives in
-[AuthenticationServiceBase<TUser>](group-08-auth.md#authenticationservicebasetuser) (G08), which owns
-the validate-first flow, the [ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html) lockout and rate-limit protection, and the BR-205 / BR-206
-refresh-token rotation with reuse detection. [AuthenticationService](#authenticationservice)
-(`MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:35`) is the ADC subclass that fills in
-only the context-specific pieces: `CreateUser` supplies the `Attendee` default role (BR-45,
-`AuthenticationService.cs:82-89`), `CreateAccessToken` attaches the `speaker_id` claim when the user is
-linked to a speaker (BR-209, `AuthenticationService.cs:92-93` via the `SpeakerClaims` helper at `:228`),
-`OnUserRegisteredAsync` raises the [UserRegistered](#userregistered) integration event
+[`AuthenticationServiceBase<TUser>`](group-08-auth.md#authenticationservicebasetuser) (G08), which owns
+the validate-first flow, the lockout and rate-limit protection
+([ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html)), and
+the BR-205 / BR-206 refresh-token rotation with reuse detection
+([ADR-050](https://ivanball.github.io/docs/adr/050-jwt-refresh-token-rotation.html)); the ADC subclass
+documents that division of labor at
+`MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:12-20`.
+[`AuthenticationService`](#authenticationservice) (`AuthenticationService.cs:35`) fills in only the
+context-specific pieces: `CreateUser` supplies the `Attendee` default role (BR-45,
+`AuthenticationService.cs:82-89`), `CreateAccessToken` attaches the `speaker_id` claim when the user
+is linked to a speaker (BR-209, `AuthenticationService.cs:92-93` via the `SpeakerClaims` helper at
+`:244`), `OnUserRegisteredAsync` raises the [`UserRegistered`](#userregistered) integration event
 (`AuthenticationService.cs:105-110`), and `ExternalLoginAsync` drives the OAuth find-by-provider, else
-link-by-email, else create flow (`AuthenticationService.cs:123`). The `EmailExistsAsync` override
-deliberately passes `ignoreQueryFilters: true` (`AuthenticationService.cs:78-79`) so an erased
-(soft-deleted) account's email cannot be re-registered.
+link-by-email, else create flow (`AuthenticationService.cs:123`,
+[ADR-036](https://ivanball.github.io/docs/adr/036-external-oauth-login.html)). The `EmailExistsAsync`
+override deliberately passes `ignoreQueryFilters: true` (`AuthenticationService.cs:78-79`) so an
+erased (soft-deleted) account's email cannot be re-registered.
 
 Two details in that class are worth reading closely. First, **atomicity**: `RegisterAsync` wraps the
-whole base workflow in `UnitOfWork.ExecuteInTransactionAsync` (`AuthenticationService.cs:57-63`), so the
-user insert (first save) and the outbox row for `UserRegistered` (raised in `OnUserRegisteredAsync` once
-the id exists at `:107`, then a second save at `:108`) commit together. The event is not fire-and-forget
-after the fact, it is captured by the outbox inside the same transaction ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)). The external-login
-path does the same through `ExternalLoginAsync` (`:123-132`, with the event raised at `:213`). Second,
-**the link-by-email gate**: linking an external identity to an existing local account on nothing but an
-email match would be an account-takeover path through any provider that hands out unverified emails, so
-the flow consults [IExternalLoginEmailVerifier](#iexternalloginemailverifier)
-(`MMCA.ADC.Identity.Application/Users/IExternalLoginEmailVerifier.cs:11`). Its implementation
-[HttpContextExternalLoginEmailVerifier](#httpcontextexternalloginemailverifier)
+whole base workflow in `UnitOfWork.ExecuteInTransactionAsync` (`AuthenticationService.cs:57-63`), so
+the user insert (first save) and the outbox row for `UserRegistered` (raised in
+`OnUserRegisteredAsync` once the id exists at `:107`, then a second save at `:108`) commit together.
+The event is not fire-and-forget after the fact, it is captured by the outbox inside the same
+transaction ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)). The
+external-login path does the same through `ExternalLoginAsync` (`:130-132`, with the event raised at
+`:229` only for a brand-new account). Second, **the link-by-email gate**: linking an external identity
+to an existing local account on nothing but an email match would be an account-takeover path through
+any provider that hands out unverified emails, so the flow consults
+[`IExternalLoginEmailVerifier`](#iexternalloginemailverifier)
+(`MMCA.ADC.Identity.Application/Users/IExternalLoginEmailVerifier.cs:11`) and returns
+`Auth.ExternalEmailNotVerified` when the answer is no (`AuthenticationService.cs:189-198`). Its
+implementation [`HttpContextExternalLoginEmailVerifier`](#httpcontextexternalloginemailverifier)
 (`MMCA.ADC.Identity.API/Authentication/HttpContextExternalLoginEmailVerifier.cs:17`) lives at the API
 edge because the assertion lives in the short-lived `ExternalLogin` cookie principal: it
 re-authenticates that scheme and reads the `email_verified` claim (`:32-35`), and an absent claim,
 absent principal, or non-request context all report unverified. It fails closed, which means GitHub
-logins (whose OAuth payload carries no such assertion) never auto-link by design. Identity signs its
-tokens with **RS256** and publishes the public key at `/.well-known/jwks.json`; peer services validate
-tokens by fetching that document through the Gateway rather than sharing a secret ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html), [Rubric §11,
+logins (whose OAuth payload carries no such assertion) never auto-link by design; the host maps
+Google's `email_verified` and legacy `verified_email` payload keys onto that one claim
+(`MMCA.ADC.Identity.Service/Program.cs:188-192`). Identity signs its tokens with **RS256** and
+publishes the public key at `/.well-known/jwks.json`; peer services validate tokens by fetching that
+document through the Gateway rather than sharing a secret (`Program.cs:32-36`, `:172`,
+[ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html), [Rubric §11,
 Security]).
 
-The HTTP surface is equally thin. [AuthController](#authcontroller)
-(`MMCA.ADC.Identity.API/Controllers/AuthController.cs:25`) extends the shared
-[AuthControllerBase](group-12-api-hosting-mapping.md#authcontrollerbase) (G12) and adds only what ADC
-needs: a `register` override that captures the client IP for registration rate limiting (BR-213,
-`AuthController.cs:48`), plus `PUT password`, `PUT preferences`, and `GET preferences`
-(`AuthController.cs:77,104,129`) that dispatch [ChangePasswordCommand](#changepasswordcommand),
-[ChangePreferencesCommand](#changepreferencescommand), and
-[GetUserPreferencesQuery](#getuserpreferencesquery) straight through the
-[G05 decorator pipeline](group-05-cqrs-pipeline.md). [OAuthController](#oauthcontroller)
+The HTTP surface is equally thin. [`AuthController`](#authcontroller)
+(`MMCA.ADC.Identity.API/Controllers/AuthController.cs:26`) extends the shared
+[`AuthControllerBase`](group-12-api-hosting-mapping.md#authcontrollerbase) (G12) and adds only what
+ADC needs: a `register` override that captures the client IP for registration rate limiting (BR-213,
+`AuthController.cs:49`), plus `PUT password`, `PUT preferences`, and `GET preferences`
+(`AuthController.cs:78`, `:104`, `:130`) that dispatch [`ChangePasswordCommand`](#changepasswordcommand),
+[`ChangePreferencesCommand`](#changepreferencescommand), and
+[`GetUserPreferencesQuery`](#getuserpreferencesquery) straight through the
+[G05 decorator pipeline](group-05-cqrs-pipeline.md), where the preferences write declares
+`ICacheInvalidating` with a `User`-typed cache prefix so a stale cached read cannot mask a preference
+change (`ChangePreferencesCommand.cs:12-15`). [`OAuthController`](#oauthcontroller)
 (`OAuthController.cs:20`) is a body-less subclass of
-[OAuthControllerBase](group-12-api-hosting-mapping.md#oauthcontrollerbase) (G12) that drives the
+[`OAuthControllerBase`](group-12-api-hosting-mapping.md#oauthcontrollerbase) (G12) that drives the
 Google/GitHub challenge, callback, complete, single-use-code-exchange flow (tokens never ride the
 redirect URL); it is an ADC-only feature, since MMCA.Store uses local credentials only.
-[UserClaimsController](#userclaimscontroller) (`UserClaimsController.cs:16`) reflects the authenticated
-JWT's claims back to the client, grouped by claim type (UC-10, `:26-38`).
-[UsersController](#userscontroller) (`UsersController.cs:30`) hosts the rest: the three avatar
-endpoints, the organizer user list, the data export, and the account delete. Its list endpoint is gated
-by capability rather than by role name, `[HasPermission(IdentityPermissions.UsersRead)]`
-(`UsersController.cs:123`), and the `identity:users:read` grant
-(`MMCA.ADC.Identity.Shared/Authorization/IdentityPermissions.cs:11`) is handed to Organizer and Admin in
-`AddModuleIdentityAPI` (`MMCA.ADC.Identity.API/DependencyInjection.cs:44-48`, [ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html)).
+[`UserClaimsController`](#userclaimscontroller) (`UserClaimsController.cs:16`) reflects the
+authenticated JWT's claims back to the client, grouped by claim type (UC-10, `:27-37`).
+[`UsersController`](#userscontroller) (`UsersController.cs:30`) hosts the rest: the three avatar
+endpoints, the organizer user list, the data export, and the account delete. Its list endpoint is
+gated by capability rather than by role name, `[HasPermission(IdentityPermissions.UsersRead)]`
+(`UsersController.cs:124`), and the `identity:users:read` grant
+(`MMCA.ADC.Identity.Shared/Authorization/IdentityPermissions.cs:11`) is handed to Organizer and Admin
+in `AddModuleIdentityAPI` (`MMCA.ADC.Identity.API/DependencyInjection.cs:44-48`,
+[ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html)). That list
+itself is served by [`GetUsersHandler`](#getusershandler)
+(`MMCA.ADC.Identity.Application/Users/UseCases/GetUsers/GetUsersHandler.cs:15`), which caps the page
+size at 500 before touching the database (`:25`, BR-11) and pushes filtering, `COUNT`, ordering,
+OFFSET/FETCH paging, and the projection into SQL (`:31-57`), so the credential columns are never
+materialized ([Rubric §12, Performance and Scalability]).
 
 ## The privacy pair: export and erasure
 
 Two use cases make this module the codebase's clearest [Rubric §30, Compliance / Privacy / Data
-Governance] story. [DeleteUserHandler](#deleteuserhandler)
+Governance] story. [`DeleteUserHandler`](#deleteuserhandler)
 (`MMCA.ADC.Identity.Application/Users/UseCases/DeleteUser/DeleteUserHandler.cs:15`) satisfies the
 PRIVACY.md §5 "delete within 30 days" erasure promise. After an owner-or-Organizer authorization check
 (`:26-33`) it soft-deletes the row (`:41`), then calls `user.Anonymize()` (`:52`, implemented at
-`User.cs:371`), which irreversibly overwrites the personal fields with placeholders **in place** rather
-than hard-deleting the record. Keeping the row lets cross-context scalar references (bookmarks,
+`User.cs:371`), which irreversibly overwrites the personal fields with placeholders **in place**
+rather than hard-deleting the record. Keeping the row lets cross-context scalar references (bookmarks,
 notifications) and the audit trail survive; the replacement email embeds the user id
-(`deleted-{Id}@anonymized.invalid`, `User.cs:376`) so the unique-email invariant still holds across many
-erased accounts, and the operation is idempotent (an already-anonymized user short-circuits at
-`User.cs:383-386`). This is the anonymize-in-place model of [ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html), backed by the
-[IAnonymizable](group-02-domain-building-blocks.md#ianonymizable) marker. Because the avatar photo is
-also personal data, the handler captures its blob name *before* `Anonymize` nulls the URL and deletes it
-from storage *after* the erasure is persisted (`DeleteUserHandler.cs:47,56-61`).
+(`deleted-{Id}@anonymized.invalid`, `User.cs:376`) so the unique-email invariant still holds across
+many erased accounts, and the operation is idempotent (an already-anonymized user short-circuits at
+`User.cs:383-386`). This is the anonymize-in-place model of
+[ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html), backed by the
+[`IAnonymizable`](group-02-domain-building-blocks.md#ianonymizable) marker. Because the avatar photo is
+also personal data, the handler captures its blob name *before* `Anonymize` nulls the URL and deletes
+it from storage *after* the erasure is persisted (`DeleteUserHandler.cs:47`, `:58-61`).
 
-[ExportUserDataHandler](#exportuserdatahandler)
+[`ExportUserDataHandler`](#exportuserdatahandler)
 (`MMCA.ADC.Identity.Application/Users/UseCases/ExportUserData/ExportUserDataHandler.cs:26`) is the
-data-subject *access* request (PRIVACY.md §7). It is a query handler (it never calls `SaveChanges`), it
-applies the same owner-or-Organizer rule (`:38-45`), and it projects the user's Identity-owned data into
-a [UserDataExportDTO](#userdataexportdto) (`:61-84`), **deliberately excluding** credentials: no
-password hash, no salt, no refresh token, no provider key. What makes it instructive is the
-cross-service aggregation: it also gathers the Engagement section (bookmarks and submitted session
-questions, through
-[IUserEngagementExportService](group-22-engagement-module.md#iuserengagementexportservice), `:58`) and
-the Notifications section (inbox rows, through
-[IUserNotificationExportService](group-10-notifications.md#iusernotificationexportservice), `:59`), and
-it does so **best-effort per section**. If a peer stays unreachable after the standard Polly resilience
-pipeline, the catch block returns a section marked `Available = false` (`:115-121`, and the same shape
-in the notification twin) and the export still succeeds, so one peer outage never fails the whole
-request. That is [Rubric §29, Resilience] and [Rubric §7, Microservices Readiness] applied to a
-compliance workflow.
+data-subject *access* request (PRIVACY.md §7). It is a query handler (it never calls `SaveChanges`),
+it applies the same owner-or-Organizer rule (`:38-45`), and it projects the user's Identity-owned data
+into a [`UserDataExportDTO`](#userdataexportdto) (`:61-84`), **deliberately excluding** credentials:
+no password hash, no salt, no refresh token, no provider key (`UserDataExportDTO.cs:3-8`). What makes
+it instructive is the cross-service aggregation: it also gathers the Engagement section (bookmarks and
+submitted session questions, through
+[`IUserEngagementExportService`](group-22-engagement-module.md#iuserengagementexportservice), `:58`)
+and the Notifications section (inbox rows, through
+[`IUserNotificationExportService`](group-10-notifications.md#iusernotificationexportservice), `:59`),
+and it does so **best-effort per section**. If a peer stays unreachable after the standard Polly
+resilience pipeline, the catch block logs a warning and returns a section marked `Available = false`
+(`:115-121`, and the same shape in the notification twin at `:147-153`) and the export still succeeds,
+so one peer outage never fails the whole request. That is [Rubric §29, Resilience] and [Rubric §7,
+Microservices Readiness] applied to a compliance workflow.
 
 ## Avatars: the third mutating slice
 
 The avatar trio is a small but complete example of a file-handling slice ([Rubric §11, Security] at the
-content boundary, [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html)). [UsersController](#userscontroller) caps the multipart upload at 2 MB in two
-places, declaratively via `[RequestSizeLimit(MaxAvatarBytes)]` and imperatively via an explicit length
-check that returns an `Avatar.InvalidUpload` validation error (`UsersController.cs:39-40,66,77-83`,
-BR-116a). [SetUserAvatarHandler](#setuseravatarhandler)
+content boundary,
+[ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html)).
+[`UsersController`](#userscontroller) caps the multipart upload at 2 MB in two places, declaratively
+via `[RequestSizeLimit(MaxAvatarBytes)]` and imperatively via an explicit length check that returns an
+`Avatar.InvalidUpload` validation error (`UsersController.cs:40`, `:66`, `:77-83`, BR-116a).
+[`SetUserAvatarHandler`](#setuseravatarhandler)
 (`MMCA.ADC.Identity.Application/Users/UseCases/SetUserAvatar/SetUserAvatarHandler.cs:16`) never trusts
 the client-declared content type: it sniffs magic bytes through the shared
-[ImageContentSniffer](group-07-persistence-ef-core.md#imagecontentsniffer) (`:32`), re-encodes to a
-canonical 256x256 JPEG via [IImageProcessor](group-07-persistence-ef-core.md#iimageprocessor)
-(`:23,52`), uploads under a randomized blob name through
-[IFileStorageService](group-07-persistence-ef-core.md#ifilestorageservice) (`:60-66`), and only then
-persists the new URL, deleting the replaced blob *after* the save so a failure leaks one orphaned image
-rather than breaking a live avatar (`:74-82`). [RemoveUserAvatarHandler](#removeuseravatarhandler) and
-[GetUserAvatarHandler](#getuseravatarhandler) are the trivial siblings on the same resource.
+[`ImageContentSniffer`](group-07-persistence-ef-core.md#imagecontentsniffer) (`:32`), re-encodes to a
+canonical 256x256 JPEG via [`IImageProcessor`](group-07-persistence-ef-core.md#iimageprocessor)
+(`:18`, `:23`, `:52`), uploads under a randomized blob name through
+[`IFileStorageService`](group-07-persistence-ef-core.md#ifilestorageservice) (`:60-66`), and only then
+persists the new URL, deleting the replaced blob *after* the save so a failure leaks one orphaned
+image rather than breaking a live avatar (`:74-83`).
+[`RemoveUserAvatarHandler`](#removeuseravatarhandler) and
+[`GetUserAvatarHandler`](#getuseravatarhandler) are the trivial siblings on the same resource.
 
 ## Persistence, seeding, and the disabled stub
 
-[ModuleApplicationDbContext](#moduleapplicationdbcontext) (`ModuleApplicationDbContext.cs:15`) is the
+[`ModuleApplicationDbContext`](#moduleapplicationdbcontext) (`ModuleApplicationDbContext.cs:15`) is the
 abstract, engine-agnostic context declaring the single `Users` set (`:22`); the concrete per-engine
 class (`SQLServerDbContext` today) inherits it, and the base
-[ApplicationDbContext](group-07-persistence-ef-core.md#applicationdbcontext) supplies audit stamping,
-soft-delete query filters, and outbox / domain-event dispatch via interceptors. Identity owns its own
-`ADC_Identity` database with its own `dbo.OutboxMessages`, so it never races another service's outbox
-(database-per-service, [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)). [UserConfiguration](#userconfiguration)
+[`ApplicationDbContext`](group-07-persistence-ef-core.md#applicationdbcontext) supplies audit stamping,
+soft-delete query filters, and outbox / domain-event dispatch via interceptors
+(`ModuleApplicationDbContext.cs:9-13`, `:20`). Identity owns its own `ADC_Identity` database with its
+own `dbo.OutboxMessages`, so it never races another service's outbox (database-per-service,
+[ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)).
+[`UserConfiguration`](#userconfiguration)
 (`MMCA.ADC.Identity.Infrastructure/Persistence/EntityConfiguration/UserConfiguration.cs:12`) maps the
-[Email](group-02-domain-building-blocks.md#email) value object through a value converter (`:20-26`),
+[`Email`](group-02-domain-building-blocks.md#email) value object through a value converter (`:20-26`),
 mirrors the invariant length constants onto the columns, ignores the computed `FullName` and
 `IsExternalLogin` members (`:114-115`), and pins four indexes that encode business rules as schema
 ([Rubric §8, Data Architecture]): unique `Email` (`:117`), a filtered index on `RefreshToken` for the
 refresh lookup (`:119-120`), a filtered **unique** index on `LinkedSpeakerId` that enforces the 1:1
 User-to-Speaker relationship of BR-208 (`:122-124`), and a filtered unique composite on
 `(LoginProvider, ProviderKey)` for external accounts (`:126-128`).
-[SoftDeletedUserValidator](#softdeleteduservalidator)
+[`SoftDeletedUserValidator`](#softdeleteduservalidator)
 (`MMCA.ADC.Identity.Application/Users/SoftDeletedUserValidator.cs:10`) implements the shared
-[ISoftDeletedUserValidator](group-08-auth.md#isoftdeleteduservalidator) (G08) with a single
+[`ISoftDeletedUserValidator`](group-08-auth.md#isoftdeleteduservalidator) (G08) with a single
 filter-bypassing `ExistsAsync` (`:21-24`), so the request pipeline's soft-deleted-user middleware can
-reject tokens belonging to erased accounts (BR-133).
+reject tokens belonging to erased accounts (BR-133,
+[ADR-047](https://ivanball.github.io/docs/adr/047-soft-deleted-user-session-revocation.html)).
 
-Seeding is gated, not ambient. [IdentityModuleSeeder](#identitymoduleseeder)
+Seeding is gated, not ambient. [`IdentityModuleSeeder`](#identitymoduleseeder)
 (`MMCA.ADC.Identity.API/IdentityModuleSeeder.cs:14`) returns immediately unless
 `Seeding:IncludeSampleUsers` is set (`:28-30`, defaulting to false so a production service that sets
-nothing seeds nothing), and only then runs [IdentityModuleDbSeeder](#identitymoduledbseeder)
-(`MMCA.ADC.Identity.Infrastructure/Persistence/DbContexts/Seeding/IdentityModuleDbSeeder.cs:16`), whose
-deliberately weak development credentials are documented in its own remarks (`:11-15`) and whose three
-seed steps each check for an existing email first, making the seeder idempotent (`:27-29,37-41`). When
-the Identity module is *disabled* in a host, the [IdentityModule](#identitymodule) descriptor registers
-the [DisabledAttendeeQueryService](#disabledattendeequeryservice) null-object stub through
-`RegisterDisabledStubs` (`IdentityModule.cs:19-20`), so a consumer that only needs the attendee list
-still composes.
+nothing seeds nothing), and only then runs [`IdentityModuleDbSeeder`](#identitymoduledbseeder)
+(`MMCA.ADC.Identity.Infrastructure/Persistence/DbContexts/Seeding/IdentityModuleDbSeeder.cs:16`),
+whose deliberately weak development credentials are documented in its own remarks (`:11-15`) and whose
+three seed steps each check for an existing email first, making the seeder idempotent (`:27-29`,
+`:37-42`). When the Identity module is *disabled* in a host, the [`IdentityModule`](#identitymodule)
+descriptor registers the [`DisabledAttendeeQueryService`](#disabledattendeequeryservice) null-object
+stub through `RegisterDisabledStubs` (`IdentityModule.cs:19-20`), so a consumer that only needs the
+attendee list still composes.
 
 ## Crossing the service boundary: gRPC and integration events
 
 Identity talks to its peers two ways, and both live in `Shared` and `Contracts` so neither side reaches
 into the other's domain ([Rubric §7, Microservices Readiness]). **Synchronously**, the Notification
 service needs the set of active attendee user ids; it depends on the
-[IAttendeeQueryService](#iattendeequeryservice) interface, implemented in-process by
-[AttendeeQueryService](#attendeequeryservice)
-(`MMCA.ADC.Identity.Application/Users/AttendeeQueryService.cs:11`), a projected read of ids for users in
-the `Attendee` role (`:17-20`). Once Identity runs as its own process, the composition root swaps in
-[AttendeeQueryServiceGrpcAdapter](#attendeequeryservicegrpcadapter)
+[`IAttendeeQueryService`](#iattendeequeryservice) interface, implemented in-process by
+[`AttendeeQueryService`](#attendeequeryservice)
+(`MMCA.ADC.Identity.Application/Users/AttendeeQueryService.cs:11`), a projected read of ids for users
+in the `Attendee` role (`:17-20`). Once Identity runs as its own process, the composition root swaps in
+[`AttendeeQueryServiceGrpcAdapter`](#attendeequeryservicegrpcadapter)
 (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Contracts/AttendeeQueryServiceGrpcAdapter.cs:14`), which
-implements the *same* C# interface over a generated client and pins a 5-second per-call deadline (`:20`)
-far tighter than the shared resilience budget so a hung peer fails fast rather than stalling a broadcast
-notification; [AttendeesGrpcService](#attendeesgrpcservice)
-(`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Grpc/AttendeesGrpcService.cs:19`) serves the other
-end by delegating to the in-process implementation. The swap itself is the Contracts-layer
-`AddIdentityAttendeeClient` (`MMCA.ADC.Identity.Contracts/DependencyInjection.cs:14`), which uses
-`Replace` rather than `TryAdd` so it overwrites both the real service and the disabled stub, and which
-must run after `ModuleLoader.DiscoverAndRegister`. Consumer code never changes, only the registration
-does ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html), [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)). The extracted host itself runs h2c-only for cross-service gRPC, with an
-optional HTTP/1.1-only health-probe listener added by [KestrelConfiguration](#kestrelconfiguration) when
-`HealthProbe:Port` is configured (`MMCA.ADC.Identity.Service/KestrelConfiguration.cs:31-40`, [ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html)).
+implements the *same* C# interface over a generated client and pins a 5-second per-call deadline
+(`:20`) far tighter than the shared resilience budget so a hung peer fails fast rather than stalling a
+broadcast notification; [`AttendeesGrpcService`](#attendeesgrpcservice)
+(`MMCA.ADC.Identity.Service/Grpc/AttendeesGrpcService.cs:19`) serves the other end by delegating to
+the in-process implementation, and the host maps it at `Program.cs:297`. The swap itself is the
+Contracts-layer [`DependencyInjection`](#dependencyinjection)`.AddIdentityAttendeeClient`
+(`MMCA.ADC.Identity.Contracts/DependencyInjection.cs:14`, `:41`), which uses `Replace` rather than
+`TryAdd` so it overwrites both the real service and the disabled stub (`:47`), and which must run
+after `ModuleLoader.DiscoverAndRegister`. Consumer code never changes, only the registration does
+([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html),
+[ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)). The extracted
+host itself runs h2c-only for cross-service gRPC, with an optional HTTP/1.1-only health-probe listener
+added by [`KestrelConfiguration`](#kestrelconfiguration) when `HealthProbe:Port` is configured
+(`MMCA.ADC.Identity.Service/KestrelConfiguration.cs:11`, `:35-39`,
+[ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html)), and it primes its own
+request pipeline at startup: [`SelfHttpWarmupTask`](#selfhttpwarmuptask)
+(`MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:19`) replays the organizer user-list read against
+its own Kestrel endpoint over forced HTTP/2 (`:30-33`, `:59-60`) and holds `/health/ready` not-ready
+until it has had its chance, deliberately ignoring the expected 401 because the JIT cost lives in the
+traversal, not the response (`:63-70`,
+[ADR-025](https://ivanball.github.io/docs/adr/025-startup-warmup-readiness.html), [Rubric §12,
+Performance and Scalability]).
 
 **Asynchronously**, the User-to-Speaker link is kept consistent by events, not by a cross-database
-foreign key. When a user registers, [AuthenticationService](#authenticationservice) raises
-[UserRegistered](#userregistered)
+foreign key. When a user registers, [`AuthenticationService`](#authenticationservice) raises
+[`UserRegistered`](#userregistered)
 (`MMCA.ADC.Identity.Shared/Users/IntegrationEvents/UserRegistered.cs:23`, a
-[BaseIntegrationEvent](group-04-events-outbox.md#baseintegrationevent)) on the aggregate, and the outbox
-carries it to Conference, whose
-[UserRegisteredHandler](group-18-conference-application.md#userregisteredhandler) runs the speaker
+[`BaseIntegrationEvent`](group-04-events-outbox.md#baseintegrationevent)) on the aggregate, and the
+outbox carries it to Conference, whose
+[`UserRegisteredHandler`](group-18-conference-application.md#userregisteredhandler) runs the speaker
 email-match auto-link (BR-207). Conference then publishes
-[SpeakerLinkedToUser](group-17-conference-domain.md#speakerlinkedtouser) /
-[SpeakerUnlinkedFromUser](group-17-conference-domain.md#speakerunlinkedfromuser) back, which
-[SpeakerLinkedToUserHandler](#speakerlinkedtouserhandler)
-(`MMCA.ADC.Identity.Application/Speakers/IntegrationEventHandlers/SpeakerLinkedToUserHandler.cs:20`) and
-[SpeakerUnlinkedFromUserHandler](#speakerunlinkedfromuserhandler) consume to set or clear
+[`SpeakerLinkedToUser`](group-17-conference-domain.md#speakerlinkedtouser) /
+[`SpeakerUnlinkedFromUser`](group-17-conference-domain.md#speakerunlinkedfromuser) back, which
+[`SpeakerLinkedToUserHandler`](#speakerlinkedtouserhandler)
+(`MMCA.ADC.Identity.Application/Speakers/IntegrationEventHandlers/SpeakerLinkedToUserHandler.cs:20`)
+and [`SpeakerUnlinkedFromUserHandler`](#speakerunlinkedfromuserhandler) consume to set or clear
 `User.LinkedSpeakerId`, so the `speaker_id` claim appears on the *next* token issued (eventual
 consistency, BR-209). These handlers open their own DI scope (`SpeakerLinkedToUserHandler.cs:31`), are
 idempotent (they return early when the link already matches, `:43-46`), and log-and-swallow every
-non-cancellation exception (`:53-56`), because re-delivery over the broker is expected. This
-event-carried link is what lets the bidirectional User-to-Speaker relationship survive the service split
-([Rubric §6, CQRS and Event-Driven], [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) / [ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)).
+non-cancellation exception (`:53-56`), because re-delivery over the broker is expected; the host
+registers both as broker consumers (`Program.cs:258-262`). This event-carried link is what lets the
+bidirectional User-to-Speaker relationship survive the service split ([Rubric §6, CQRS and
+Event-Driven], [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) /
+[ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)).
 
 ## The UI edge
 
-The Blazor surface is registered as an [IdentityUIModule](#identityuimodule)
+The Blazor surface is registered as an [`IdentityUIModule`](#identityuimodule)
 (`MMCA.ADC.Identity.UI/IdentityUIModule.cs:13`) descriptor that contributes two
-[NavItem](group-15-common-ui-framework.md#navitem)s as resource keys, "My Profile" for every signed-in
-user and "Users" for Organizers (`IdentityUIModule.cs:16-19`, [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)), their routes coming from the
-[IdentityRoutePaths](#identityroutepaths) constants `/profile` and `/users`
-(`IdentityRoutePaths.cs:8-9`). The [Profile](#profile) page
+[`NavItem`](group-15-common-ui-framework.md#navitem)s as resource keys, "My Profile" for every
+signed-in user and "Users" for Organizers (`IdentityUIModule.cs:15-19`,
+[ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)), their routes coming from
+the [`IdentityRoutePaths`](#identityroutepaths) constants `/profile` and `/users`
+(`IdentityRoutePaths.cs:8-9`), with the UI-layer
+[`DependencyInjection`](#dependencyinjection) wiring the services and the module descriptor
+(`MMCA.ADC.Identity.UI/DependencyInjection.cs:22-32`). The [`Profile`](#profile) page
 (`MMCA.ADC.Identity.UI/Pages/Profile/Profile.razor.cs:15`) lets an authenticated user change their
 password, manage their avatar, and delete their account. It mirrors the server's 2 MB cap client-side
-before any upload starts (`Profile.razor.cs:25,125`), and it accepts an image from either a browser file
-input or, on MAUI, the camera and gallery through
-[IMediaPickerService](group-26-device-capability-layer.md#imediapickerservice)
-(`Profile.razor.cs:19,86,88`). It talks to the API through the [IUserUIService](#iuseruiservice)
-abstraction implemented by [UserService](#userservice)
+before any upload starts (`Profile.razor.cs:25`, `:125`), validates the new password inline for length
+and confirmation match so the form error summary carries the message rather than a server round-trip
+(`:43-49`, `:200-209`), and accepts an image from either a browser file input or, on MAUI, the camera
+and gallery through
+[`IMediaPickerService`](group-26-device-capability-layer.md#imediapickerservice)
+(`Profile.razor.cs:19`, `:86`, `:88`). It talks to the API through the
+[`IUserUIService`](#iuseruiservice) abstraction implemented by [`UserService`](#userservice)
 (`MMCA.ADC.Identity.UI/Services/UserService.cs:14`), an
-[AuthenticatedServiceBase](group-15-common-ui-framework.md#authenticatedservicebase) subclass that
-attaches the bearer token and calls the REST `users` resource. [UserList](#userlist)
-(`MMCA.ADC.Identity.UI/Pages/User/UserList.razor.cs:16`) is the Organizer-only management grid: a
-`DataGridListPageBase<UserListDTO>` with server-side filtering, sorting, and paging on a desktop data
-grid, plus a card-based infinite-scroll layout on mobile viewports, the two kept in sync by the shared
-[ListPageActions](#listpageactions) helper (`UserList.razor.cs:39,76`). The whole UI targets WCAG 2.1
-AA, and the login, register, and profile flows are covered by axe-core scans in the deploy-gating E2E
-suite ([Rubric §21, Accessibility], [Rubric §22, Responsive and Cross-Browser]).
+[`AuthenticatedServiceBase`](group-15-common-ui-framework.md#authenticatedservicebase) subclass that
+attaches the bearer token and calls the REST `users` resource (`:17`), and which deliberately skips
+the retry policy on the avatar upload because a picker stream is single-shot and cannot rewind
+(`:103-109`). [`UserList`](#userlist) (`MMCA.ADC.Identity.UI/Pages/User/UserList.razor.cs:16`) is the
+Organizer-only management grid: a `DataGridListPageBase<UserListDTO>` with server-side filtering,
+sorting, and paging on a desktop data grid, plus a card-based infinite-scroll layout on mobile
+viewports, the two kept in sync by the shared [`ListPageActions`](#listpageactions) helper
+(`UserList.razor.cs:39`, `:76`), which lives in Identity.UI because that project is the root of the
+ADC module-UI reference chain (`MMCA.ADC.Identity.UI/Common/ListPageActions.cs:6-12`). The UI targets
+WCAG 2.1 AA; the login and register flows are scanned by the shared `MMCA.Common.Testing.E2E` workflow
+bases and the profile page has its own axe-core scan in ADC's suite
+(`MMCA.ADC/Tests/E2E/MMCA.ADC.E2E.Tests/Workflows/AccessibilityTests.cs:215`, with the rationale for
+not inheriting the Common profile base at `:217-218`), all of it running in the deploy-gating chromium
+E2E leg ([Rubric §21, Accessibility], [Rubric §22, Responsive and Cross-Browser]).
 
 ## End-to-end: one registration
 
-To see the chapter cooperate, follow a new attendee signing up. [AuthController](#authcontroller)
-receives the `register` POST, captures the client IP for BR-213 rate limiting (`AuthController.cs:48`),
-and calls `RegisterAsync` on [AuthenticationService](#authenticationservice), which opens one
+To see the chapter cooperate, follow a new attendee signing up. [`AuthController`](#authcontroller)
+receives the `register` POST, captures the client IP for BR-213 rate limiting (`AuthController.cs:49`),
+and calls `RegisterAsync` on [`AuthenticationService`](#authenticationservice), which opens one
 transaction (`AuthenticationService.cs:61`) and hands off to the shared G08 engine. The request shape
-was already checked by [RegisterRequestValidator](#registerrequestvalidator)
-(`MMCA.ADC.Identity.Application/Users/Validation/RegisterRequestValidator.cs:12`) in the pipeline, so
-the engine only has to confirm the email is not taken (query-filter-bypassed, so an erased address stays
-reserved), call `User.Create(...)` with the `Attendee` role, hash the password, add the aggregate, and
-save. Only *after* that first save, when the EF identity id exists, does `OnUserRegisteredAsync` raise
-[UserRegistered](#userregistered) and save again (`AuthenticationService.cs:105-110`); both saves sit
-inside the one transaction, so the user row and its outbox row commit atomically ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)). The first
-token returned does not yet carry `speaker_id`. Asynchronously, Conference matches the email to a
-speaker and publishes `SpeakerLinkedToUser`; [SpeakerLinkedToUserHandler](#speakerlinkedtouserhandler)
-sets `User.LinkedSpeakerId`, and the attendee's *next* token carries the claim. No password left the
+was already checked by [`RegisterRequestValidator`](#registerrequestvalidator)
+(`RegisterRequestValidator.cs:12`) in the pipeline, so the engine only has to confirm the email is not
+taken (query-filter-bypassed, so an erased address stays reserved, `AuthenticationService.cs:78-79`),
+call `User.Create(...)` with the `Attendee` role (`:82-89`), hash the password through the shared
+`IPasswordHasher` ([ADR-032](https://ivanball.github.io/docs/adr/032-password-hashing.html)), add the
+aggregate, and save. Only *after* that first save, when the EF identity id exists, does
+`OnUserRegisteredAsync` raise [`UserRegistered`](#userregistered) and save again
+(`AuthenticationService.cs:105-110`); both saves sit inside the one transaction, so the user row and
+its outbox row commit atomically
+([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)). The first token
+returned does not yet carry `speaker_id`. Asynchronously, Conference matches the email to a speaker and
+publishes `SpeakerLinkedToUser`; [`SpeakerLinkedToUserHandler`](#speakerlinkedtouserhandler) sets
+`User.LinkedSpeakerId` (`:48`), and the attendee's *next* token carries the claim. No password left the
 domain in plaintext, no cross-database foreign key was written, no event was hand-dispatched, and the
 same code path behaves identically whether Identity runs inside the monolith or as its own service,
 which is exactly the property the framework groups (G01 through G15) exist to provide. For the *why*
-behind each choice, [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html) (outbox), [ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html) (JWKS), [ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html) (soft-delete versus erasure),
-[ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) / 007 / 008 (database-per-service, gRPC extraction, service topology), [ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html) (mixed Kestrel
-endpoint profile), [ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html) (permission registry), [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) / [ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html) (culture and theme), [ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html) (login
-protection), and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html) (file storage and avatars) are the primary references.
+behind each choice, [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)
+(outbox), [ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html) (JWKS),
+[ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html) (soft-delete versus
+erasure), [ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html) /
+[ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html) /
+[ADR-008](https://ivanball.github.io/docs/adr/008-service-extraction-topology.html)
+(database-per-service, gRPC extraction, service topology),
+[ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html) (mixed Kestrel endpoint
+profile), [ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html)
+(permission registry), [ADR-025](https://ivanball.github.io/docs/adr/025-startup-warmup-readiness.html)
+(startup warm-up and readiness),
+[ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) /
+[ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html) (culture and theme),
+[ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html) (login
+protection), [ADR-036](https://ivanball.github.io/docs/adr/036-external-oauth-login.html) (external
+OAuth login), and
+[ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html) (file storage
+and avatars) are the primary references.
 
 ### AssemblyReference
 > MMCA.ADC.Identity.{API,Application} · `MMCA.ADC.Identity.{API,Application}` · `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/AssemblyReference.cs:5` · Level 0 · class (static)
@@ -742,7 +834,7 @@ protection), and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-
 - **Concept**: cross-reference the marker idiom taught under [`AssemblyReference`](#assemblyreference) and first introduced in [G17, Conference Domain](group-17-conference-domain.md#classreference). The companion exists because helpers such as `ScanModuleApplicationServices<TAssemblyMarker>()` constrain their type parameter to a reference type; the Identity Application layer's own copy is passed that way at `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:37`. `[Rubric §33, Developer Experience]` assesses how much ceremony the inner loop demands: one conventional token per layer is the entire registration ritual.
 - **Walkthrough**: `public class ClassReference { }` (`AssemblyReference.cs:11`), no members. Its only meaningful property is the assembly it belongs to, read by a scanner via `typeof(ClassReference).Assembly`.
 - **Why it's built this way**: keeping the instantiable anchor separate sidesteps the static-class generic-argument restriction while leaving [`AssemblyReference`](#assemblyreference) impossible to instantiate by accident. Each layer defines its own copy so it can scan itself by passing its local token.
-- **Where it's used**: no call site in ADC currently passes this Infrastructure copy as a type argument; the type-argument scans in the Identity module use the Application-layer copy (`MMCA.ADC.Identity.Application/DependencyInjection.cs:37`) and the architecture-fitness suite uses it too (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:40`). The Infrastructure copy is present for structural symmetry across layers.
+- **Where it's used**: no call site in ADC currently passes this Infrastructure copy as a type argument; the type-argument scans in the Identity module use the Application-layer copy (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/DependencyInjection.cs:37`), and the architecture-fitness suite passes that same Application copy explicitly (`MMCA.ADC/Tests/Architecture/MMCA.ADC.Architecture.Tests/DecoratorPipelineOrderTests.cs:40`). The Infrastructure copy is present for structural symmetry across layers.
 - **Caveats / not-in-source**: whether an Infrastructure-layer generic scan is planned is `Not determinable from source`; today the copy is declared and unreferenced.
 
 ---
@@ -755,7 +847,7 @@ protection), and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-
 - **Concept**: the `extension(IServiceCollection)` registration idiom, taught once in the [primer](00-primer.md#c-extensiont-types-read-this-once). C# preview extension members let a layer contribute an `AddModule{Name}{Layer}()` method that reads like a built-in `IServiceCollection` API. `[Rubric §16, Maintainability]` assesses uniform, predictable structure: shipping the method even when it registers nothing means the composition root never special-cases Identity, and the empty body is honest about "nothing to register here yet" rather than absent and surprising. `[Rubric §3, Clean Architecture]` assesses layer discipline: the Infrastructure layer owns its own registration surface, and the API layer composes it rather than reaching into persistence details.
 - **Walkthrough**: a single `extension(IServiceCollection services)` block (`DependencyInjection.cs:13`) exposing `public IServiceCollection AddModuleIdentityInfrastructure() => services;` (`DependencyInjection.cs:20`), an expression body that returns the collection for chaining. The XML doc (`DependencyInjection.cs:5-10`) records *why* it is empty: Identity has no module-specific infrastructure services beyond the EF configurations and the seeder, and those are discovered by assembly scanning. That claim matches the layer's contents, which are exactly [`ModuleApplicationDbContext`](#moduleapplicationdbcontext), [`IdentityModuleDbSeeder`](#identitymoduledbseeder), and [`UserConfiguration`](#userconfiguration) alongside the two marker types above.
 - **Why it's built this way**: keeping the method present even when empty means the module-registration pipeline stays uniform across every module and layer; when Identity later needs a typed infrastructure service (a key store, a read-model query service) it is added here and no caller changes.
-- **Where it's used**: invoked from the API layer's `AddIdentityModule(...)` at `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/DependencyInjection.cs:30`, between `AddModuleIdentityApplication(applicationSettings)` (`:29`) and `AddModuleIdentityAPI()` (`:31`); that composite is in turn called by [`IdentityModule`](#identitymodule)'s registration, the [`IModule`](group-14-module-system-composition.md#imodule) contract from G14.
+- **Where it's used**: invoked from the API layer's `AddIdentityModule(...)` at `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/DependencyInjection.cs:30`, between `AddModuleIdentityApplication(applicationSettings)` (`:29`) and `AddModuleIdentityAPI()` (`:31`); that composite is called in turn by [`IdentityModule`](#identitymodule)`.Register` (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/IdentityModule.cs:24`), the [`IModule`](group-14-module-system-composition.md#imodule) contract from G14.
 - **Caveats / not-in-source**: the Identity module ships one `DependencyInjection` class per layer (this Infrastructure one plus the API, Application, and UI copies covered in sibling parts of this chapter). They all slug to the bare `dependencyinjection` anchor, which resolves to the first occurrence in the assembled chapter, so cross-references disambiguate by layer in prose.
 
 ---
@@ -780,7 +872,7 @@ protection), and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-
 - **Concept, module-scoped options with an in-code default.** `[Rubric §10, Cross-Cutting Concerns]` assesses how configuration is surfaced and layered: an options class turns a business rule into an environment-overridable knob while still carrying a sane value when the configuration file omits the section. `[Rubric §15, Best Practices and Code Quality]` also applies here in the negative sense described under Caveats: an options type with no binder and no reader is dead configuration surface, and the live knob is elsewhere.
 - **Walkthrough**: `public const string SectionName = "Identity"` (`IdentitySettings.cs:9`) is the section key an `IConfiguration.GetSection(...)` call would use. The single property `public int MaxRegistrationsPerIpPerHour { get; init; } = 10` (`IdentitySettings.cs:15`) caps registrations per IP per hour, with the doc comment (`IdentitySettings.cs:11-14`) attributing it to BR-213 and noting it is set higher in development/test so E2E runs are not rate-limited. `init`-only keeps a bound instance immutable after startup. The class-level doc comment (`IdentitySettings.cs:3-6`) says the values come from `modules.identity.json` or its `Development` overlay.
 - **Why it's built this way**: keeping the `= 10` default in code rather than only in JSON means a missing configuration section still yields an enforceable limit, and `sealed` plus `init` make the options object a safe singleton to share.
-- **Where it's used**: **nowhere in ADC source today.** A repository-wide search for `IdentitySettings` across `MMCA.ADC` returns only the declaration itself: there is no `Configure<IdentitySettings>(...)` binding and no injection of `IOptions<IdentitySettings>`. The registration throttle that actually runs is the framework's `LoginProtectionSettings` in `MMCA.Common.Infrastructure`, which declares the same property name and the same default (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionSettings.cs:37`) and is read by [`LoginProtectionService`](group-08-auth.md#loginprotectionservice) (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:82`). The AppHost raises that framework knob, not this one, for the Identity service: `identityService.WithEnvironment("LoginProtection__MaxRegistrationsPerIpPerHour", "1000")` (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:327`, with the BR-213 rationale at `:303`).
+- **Where it's used**: **nowhere in ADC source today.** A repository-wide search for `IdentitySettings` across `MMCA.ADC` returns only the declaration itself: there is no `Configure<IdentitySettings>(...)` binding and no injection of `IOptions<IdentitySettings>`. The registration throttle that actually runs is the framework's `LoginProtectionSettings` in `MMCA.Common.Infrastructure`, which declares the same property name and the same default (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionSettings.cs:37`) and is read by [`LoginProtectionService`](group-08-auth.md#loginprotectionservice) inside `CheckRegistrationRateLimitAsync` (declared at `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:101`, comparing the cached per-IP count against `_settings.MaxRegistrationsPerIpPerHour` at `:111`). The AppHost raises that framework knob, not this one, for the Identity service: `identityService.WithEnvironment("LoginProtection__MaxRegistrationsPerIpPerHour", "1000")` (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:327`, with the BR-213 rationale at `:303`); the integration fixtures set the same environment variable (`MMCA.ADC/Tests/Integration/MMCA.ADC.Identity.IntegrationTests/Infrastructure/IdentityIntegrationTestFixture.cs:49`).
 - **Caveats / not-in-source**: treat this type as an unwired duplicate of [`LoginProtectionSettings`](group-08-auth.md#loginprotectionsettings), not as the effective configuration. Changing `MaxRegistrationsPerIpPerHour` here has no runtime effect; the `Identity:MaxRegistrationsPerIpPerHour` configuration key is not read anywhere. Whether it is a leftover from before the throttle moved into MMCA.Common or a placeholder for a future module-owned setting is `Not determinable from source`.
 
 ---
@@ -790,11 +882,34 @@ protection), and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-
 
 - **What it is**: the Kestrel endpoint wiring for the standalone Identity service host. It forces HTTP/2-only on cleartext (h2c) for every endpoint and, when the platform injects a health-probe port, adds a second HTTP/1.1-only listener that the Azure Container Apps `httpGet` probes can actually talk to.
 - **Depends on**: no first-party types. Externals: `Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols` (`KestrelConfiguration.cs:1`), `WebApplicationBuilder`, and `IConfiguration.GetValue<int?>`.
-- **Concept, the transport profile of a cleartext gRPC host.** On a cleartext endpoint there is no TLS, therefore no ALPN negotiation, so `Http1AndHttp2` effectively degrades to HTTP/1.1 and Kestrel answers gRPC frames with `GOAWAY HTTP_1_1_REQUIRED`. Setting `HttpProtocols.Http2` selects h2c prior knowledge, which is what lets cross-service typed gRPC clients (`http://identity`) connect at all. This is [ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html) (gRPC-host transport convention) applied to the three REST services; the mixed-endpoint variant used by Notification, where a default `Http1AndHttp2` endpoint must survive a WebSocket upgrade, is covered in [G10](group-10-notifications.md#kestrelconfiguration). `[Rubric §13, Observability and Operability]` assesses whether the platform can genuinely observe the app: the probe listener is what allows the ACA probes to reach the real, DB-aware `/alive` and `/health/ready` pipeline instead of a bare TCP check (`KestrelConfiguration.cs:16-24`). `[Rubric §7, Microservices Readiness]` assesses whether a service is independently deployable: the transport profile is declared by the service host itself, not by a shared ambient default.
+- **Concept, the transport profile of a cleartext gRPC host.** On a cleartext endpoint there is no TLS, therefore no ALPN negotiation, so `Http1AndHttp2` effectively degrades to HTTP/1.1 and Kestrel answers gRPC frames with `GOAWAY HTTP_1_1_REQUIRED`. Setting `HttpProtocols.Http2` selects h2c prior knowledge, which is what lets cross-service typed gRPC clients (`http://identity`) connect at all. This is [ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html) (gRPC host transport) applied to the three REST services; the mixed-endpoint variant used by Notification, where a default `Http1AndHttp2` endpoint must survive a WebSocket upgrade, is covered in [G10](group-10-notifications.md#kestrelconfiguration). `[Rubric §13, Observability and Operability]` assesses whether the platform can genuinely observe the app: the probe listener is what allows the ACA probes to reach the real, DB-aware `/alive` and `/health/ready` pipeline instead of a bare TCP check (`KestrelConfiguration.cs:16-24`). `[Rubric §7, Microservices Readiness]` assesses whether a service is independently deployable: the transport profile is declared by the service host itself, not by a shared ambient default.
 - **Walkthrough**: one static method, `ConfigureHttp2WithHealthProbe(WebApplicationBuilder builder)` (`KestrelConfiguration.cs:27`). It null-guards its argument (`:29`), then calls `builder.WebHost.ConfigureKestrel` (`:31`). Inside, `k.ConfigureEndpointDefaults(o => o.Protocols = HttpProtocols.Http2)` (`:33`) makes h2c the default for every endpoint, including the container's `ASPNETCORE_HTTP_PORTS` binding. Then a pattern-match on configuration, `builder.Configuration.GetValue<int?>("HealthProbe:Port") is int probePort` (`:35`), gates the probe path: only when the key is present does it re-declare the main endpoint explicitly with `k.ListenAnyIP(8080, o => o.Protocols = HttpProtocols.Http2)` (`:37`) and add `k.ListenAnyIP(probePort, o => o.Protocols = HttpProtocols.Http1)` (`:38`). The re-declaration is required because any explicit `Listen` call overrides the container's default binding, so 8080 has to be restated alongside the probe port (`:20-23`).
-- **Why it's built this way**: the doc comment (`KestrelConfiguration.cs:14-25`) is the rationale of record. The `HealthProbe:Port` key is injected by `infra/main.bicep` as `HealthProbe__Port` and is deliberately absent locally, so Aspire's dynamic ports keep working and co-hosted services cannot collide on a fixed port on one developer machine. `MapDefaultEndpoints` maps `/health`, `/alive` and `/health/ready` on every listener (called at `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:296`), so the extra HTTP/1.1 listener serves the real health pipeline, and the probe port stays off the ACA ingress because the platform probes target it directly. The class also exists as a separate file, per its own doc comment (`:8-9`), so `Program.cs` stays inside the S1541 cyclomatic-complexity budget the analyzers enforce.
-- **Where it's used**: called as the first configuration step of the Identity service host, `KestrelConfiguration.ConfigureHttp2WithHealthProbe(builder)` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:80`, with the transport rationale repeated in the comment at `:70-79`). The Conference and Engagement service hosts ship a byte-identical copy of this class and call it the same way (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/KestrelConfiguration.cs:27` from `Program.cs:83`, and `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/KestrelConfiguration.cs:27` from `Program.cs:59`); see [G20](group-20-conference-api-grpc.md#kestrelconfiguration) and [G22](group-22-engagement-module.md#kestrelconfiguration).
-- **Caveats / not-in-source**: the `8080` literal and the `HealthProbe__Port` value are set outside this file (the container image's default port and `infra/main.bicep` respectively); only the listener declarations are verified here.
+- **Why it's built this way**: the doc comment (`KestrelConfiguration.cs:14-25`) is the rationale of record. The `HealthProbe:Port` key is injected by `infra/main.bicep` as `HealthProbe__Port` (value `8081` for this service, `MMCA.ADC/infra/main.bicep:957`, with the probe wiring that consumes it at `MMCA.ADC/infra/main.bicep:1038-1040`) and is deliberately absent locally, so Aspire's dynamic ports keep working and co-hosted services cannot collide on a fixed port on one developer machine. `MapDefaultEndpoints` maps `/health`, `/alive` and `/health/ready` on every listener (called at `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:282`), so the extra HTTP/1.1 listener serves the real health pipeline, and the probe port stays off the ACA ingress because the platform probes target it directly. The class also exists as a separate file, per its own doc comment (`:8-9`), so `Program.cs` stays inside the S1541 cyclomatic-complexity budget the analyzers enforce.
+- **Where it's used**: called as the first configuration step of the Identity service host, `KestrelConfiguration.ConfigureHttp2WithHealthProbe(builder)` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:79`, with the transport rationale in the comment block at `:69-78`). The Conference and Engagement service hosts ship a same-shaped copy of this class and call it the same way (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/KestrelConfiguration.cs:27` from `Program.cs:83`, and `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/KestrelConfiguration.cs:27` from `Program.cs:59`); see [G20](group-20-conference-api-grpc.md#kestrelconfiguration) and [G22](group-22-engagement-module.md#kestrelconfiguration).
+- **Caveats / not-in-source**: the `8080` literal is the container's own default port and the ACA ingress transport setting in front of this container is not visible here; only the listener declarations are verified in this file.
+
+---
+
+### SelfHttpWarmupTask
+> MMCA.ADC.Identity.Service · `MMCA.ADC.Identity.Service` · `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:19` · Level 1 · class (sealed, internal, partial)
+
+- **What it is**: a startup warm-up task that, once this host's Kestrel has started listening, sends one HTTP/2 request to the host's *own* endpoint so the connection to the platform proxy is primed and the routing, authentication and middleware pipeline is JIT-compiled before the first real user arrives. The request it replays is the hot Users read, and it is expected to come back `401`.
+- **Depends on**: [`IWarmupTask`](group-16-aspire-orchestration.md#iwarmuptask) from `MMCA.Common.Aspire.Warmup` (`SelfHttpWarmupTask.cs:4`, implemented at `:24`); injected `IServer`, `IConfiguration`, `IHostEnvironment`, `IHostApplicationLifetime` and `ILogger<SelfHttpWarmupTask>` as primary-constructor parameters (`:19-24`); `IServerAddressesFeature` (`Microsoft.AspNetCore.Hosting.Server.Features`, `:3`); BCL `SocketsHttpHandler` / `HttpClient` / `UriBuilder` / `TaskCompletionSource`; source-generated `[LoggerMessage]` logging (`:106-112`).
+- **Concept, warm-up-gated readiness with a deliberately unauthorized probe ([ADR-025](https://ivanball.github.io/docs/adr/025-startup-warmup-readiness.html)).** The framework's warm-up contract is one method plus a name: implementations are registered as singletons by `AddWarmupTask<T>()` (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Extensions.cs:303-308`) and run by `WarmupHostedService`, which executes every registered task in parallel (`MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Warmup/WarmupHostedService.cs:25`) and then opens the readiness gate in a `finally` block (`:30`), so a failing task cannot wedge the replica permanently out of rotation. That runner, the gate, and a `warmup` health check tagged `ready` are wired by `AddWarmupReadiness()` (`Extensions.cs:101-112`), which `AddServiceDefaults()` calls (`Extensions.cs:43`). The Identity-specific twist is in the class doc comment (`SelfHttpWarmupTask.cs:8-18`): unlike Conference's cache-priming variant, this task populates no output cache, because [`UsersController`](#userscontroller) is `[Authorize]` at the class level (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/UsersController.cs:29`) and `[HasPermission(IdentityPermissions.UsersRead)]` on the list endpoint (`:124`), so an unauthenticated self-request is refused by design. The refusal still traverses Kestrel, routing, authentication and the middleware pipeline, which is exactly where the cold-start JIT cost lives. `[Rubric §12, Performance and Scalability]` assesses cold-start behavior under scale-out: a new replica pays the JIT cost before it is advertised as ready, not on a user's request. `[Rubric §13, Observability and Operability]` assesses readiness signaling: warm-up completion is tied to `/health/ready` rather than left to chance. `[Rubric §14, Testability]` assesses whether production wiring stays runnable under test: the task detects the `Testing` environment and opts out rather than failing inside `WebApplicationFactory`.
+- **Walkthrough**: members in execution order.
+  - `DefaultPort = 8080` (`:26`) is the last-resort port, and `WarmupPaths` (`:30-33`) holds the single path `"users?pageNumber=1&pageSize=10"` (`:32`). The comment above it (`:28-29`) records that this is exactly the shape [`UserService`](#userservice)`.GetPagedAsync` builds for the Organizer user list (BR-51): that method drops null or whitespace query values before joining them (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/Services/UserService.cs:42-44`), so with no filters and no sort only the paging pair survives.
+  - `Name => "SelfHttpWarmup"` (`:35`) is the stable identifier the runner logs and times against.
+  - `ExecuteAsync(CancellationToken)` (`:37`) first short-circuits when the environment is `Testing` (`:41-44`): the integration tests boot this host through `WebApplicationFactory`, whose in-memory `TestServer` never opens a real Kestrel port, so a self-HTTP call cannot work (`:39-40`).
+  - It then awaits `WaitForServerStartedAsync` (`:48`), builds a `localhost` base URL on the resolved port with `UriBuilder` (`:50`), and constructs an `HttpClient` over a `SocketsHttpHandler` with `disposeHandler: false` (`:51-61`).
+  - The client is pinned to HTTP/2 exactly: `DefaultRequestVersion = HttpVersion.Version20` (`:59`) and `DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact` (`:60`). The inline comment (`:55-58`) explains the coupling to [KestrelConfiguration](#kestrelconfiguration): the endpoint is h2c-only ([ADR-012](https://ivanball.github.io/docs/adr/012-grpc-host-transport.html) Profile A), so `RequestVersionOrLower` would silently downgrade to HTTP/1.1 and be rejected with a 400, failing the warm-up on every startup.
+  - The loop over `WarmupPaths` (`:63-70`) issues `httpClient.GetAsync(...)` (`:69`) and deliberately ignores the status code. The comment (`:65-68`) is the design record: a `401` is the correct outcome here, and `GetStringAsync` would have thrown on it, logged a spurious failure, and skipped the remaining paths.
+  - Success logs through `LogWarmupCompleted` (`:72`). A genuine cancellation is re-thrown (`:74-77`); any other exception is swallowed and logged as a warning via `LogWarmupFailed` (`:78-81`), so a warm-up failure degrades to lazy warm-up on the first real request instead of taking the host down.
+  - `WaitForServerStartedAsync` (`:86-91`): the warm-up runner is a hosted service that starts *before* Kestrel begins listening (the web host is the last hosted service), so the task parks on a `TaskCompletionSource` (`:88`) registered against `lifetime.ApplicationStarted` (`:89`) and awaits it with the cancellation token (`:90`).
+  - `ResolveWarmupPort` (`:95-104`): prefers the server's actual bound cleartext address from `IServerAddressesFeature` (`:97-98`), which is what makes this correct under Aspire's dynamic ports, then falls back to parsing `ASPNETCORE_URLS` (`:99`) and finally to `DefaultPort` (`:101-103`).
+  - The two `[LoggerMessage]` partials close the file: `LogWarmupCompleted` at Information (`:106-108`) and `LogWarmupFailed` at Warning with the exception attached (`:110-112`).
+- **Why it's built this way**: [ADR-025](https://ivanball.github.io/docs/adr/025-startup-warmup-readiness.html) (startup warm-up and readiness) makes warm-up a first-class, uniform host concern whose outcome feeds the readiness endpoint, instead of a hand-rolled loop in each `Program.cs`. Choosing a protected endpoint as the probe is the point rather than a compromise: the goal is JIT coverage of the request pipeline, and a 401 exercises Kestrel, routing, authentication and the middleware chain without needing a credential, a seeded user, or any cache-warming side effect on a service whose base output-cache policy is `NoCache` anyway (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:150`).
+- **Where it's used**: registered by the Identity service host at `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:156` (`services.AddWarmupTask<SelfHttpWarmupTask>()`, with the rationale comment at `:152-155`), and executed by the `AddWarmupReadiness()` runner that `AddServiceDefaults()` wires. The Engagement service ships the same-shaped task under the same type name, differing only in the replayed path (`bookmarks?pageNumber=1&pageSize=10`) and the authorization note (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:19`, path at `:32`); see [G22](group-22-engagement-module.md#selfhttpwarmuptask). Conference instead runs the cache-priming [SelfHttpOutputCacheWarmupTask](group-20-conference-api-grpc.md#selfhttpoutputcachewarmuptask).
+- **Caveats / not-in-source**: the class is `partial` only to host the source-generated `[LoggerMessage]` methods; that generated half is not in this file. The "envoy connection" the doc comment (`:9`) says is primed refers to the proxy in front of the container in the deployed environment, which is not configured anywhere in this file.
 
 ### IAttendeeQueryService
 > MMCA.ADC.Identity.Shared · `MMCA.ADC.Identity.Shared.Users` · `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/IAttendeeQueryService.cs:8` · Level 0 · interface
@@ -969,7 +1084,7 @@ protection), and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-
   - Constructor (`ChangePasswordRequestValidator.cs:13`): the whole type is rules declared in a constructor, which is the FluentValidation idiom.
   - `CurrentPassword` (lines 15-16): `NotEmpty()` with the message "Current password is required." and, importantly, an explicit `WithErrorCode("User.CurrentPassword.Required")`. The stable error code (not the human message) is what the API surfaces and what a client can branch on.
   - `NewPassword` (line 18): `Include(new StrongPasswordRules<ChangePasswordRequest>(x => x.NewPassword))` applies the shared complexity policy by passing a property selector.
-- **Why it's built this way**: the *current* password gets only a presence check because proving it is correct is a cryptographic operation, not a shape check: [`ChangePasswordHandler`](#changepasswordhandler) verifies it against the stored hash and salt. Validation stays about the shape of the request; authorization and proof-of-knowledge stay in the handler.
+- **Why it's built this way**: the *current* password gets only a presence check because proving it is correct is a cryptographic operation, not a shape check. [`ChangePasswordHandler`](#changepasswordhandler) runs `passwordHasher.VerifyPassword(command.Request.CurrentPassword, user.PasswordHash, user.PasswordSalt)` and returns `Error.Unauthorized("Auth.InvalidCurrentPassword", ...)` when it fails (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/ChangePassword/ChangePasswordHandler.cs:28-31`). Validation stays about the shape of the request; proof-of-knowledge stays in the handler, where the stored hash and salt are available.
 - **Where it's used**: resolved by the validating decorator when [`ChangePasswordCommand`](#changepasswordcommand) is dispatched from [`AuthController.ChangePasswordAsync`](#authcontroller).
 
 ### IUserUIService
@@ -977,7 +1092,7 @@ protection), and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-
 > MMCA.ADC.Identity.UI · `MMCA.ADC.Identity.UI.Services` · `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/Services/IUserUIService.cs:11` · Level 1 · interface
 
 - **What it is**: the client-side contract the Blazor/MAUI UI uses to talk to the Identity `users` API: a paginated organizer user list, account deletion, and the three current-user avatar operations.
-- **Depends on**: [`UserListDTO`](#userlistdto) and the `UserIdentifierType` alias (`= int`), both from `MMCA.ADC.Identity.Shared.Users`.
+- **Depends on**: [`UserListDTO`](#userlistdto) and the `UserIdentifierType` alias (`= int`), both reached through `MMCA.ADC.Identity.Shared.Users` (`IUserUIService.cs:1`).
 - **Concept introduced, the hand-written UI service contract (versus the generic CRUD base).** `[Rubric §18, UI Architecture]` assesses whether pages depend on abstractions rather than on `HttpClient` directly. Most ADC list pages ride a generic framework CRUD service, but the doc comment (`IUserUIService.cs:5-10`) states exactly why this one cannot: the users API returns [`UserListDTO`](#userlistdto), which does not implement `IBaseDTO<TIdentifierType>`, and the resource exposes only list plus delete, not the standard create/update/get-by-id set. Rather than widen the generic base to fit an outlier, the module declares a purpose-built interface. `[Rubric §1, SOLID]`: this is interface segregation applied to the client layer, the UI depends only on the five operations that actually exist.
 - **Walkthrough**
   - `GetPagedAsync` (`IUserUIService.cs:16-25`): every filter (`email`, `firstName`, `lastName`, `role`) and every paging/sorting argument is optional with a default (`pageNumber = 1`, `pageSize = 10`), and the return type is a tuple `(IReadOnlyList<UserListDTO> Items, int TotalItems)`, exactly the shape a MudBlazor server-side grid needs (BR-51).
@@ -1006,11 +1121,11 @@ protection), and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-
 
 - **What it is**: the in-process domain event raised when a user account is soft-deleted (BR-56). It carries only the user id.
 - **Depends on**: [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent) (base) and the `UserIdentifierType` alias.
-- **Concept reinforced, the domain event as a fact, not a command.** `[Rubric §6, CQRS & Event-Driven]` assesses whether state changes are announced rather than orchestrated inline. The record is past tense and carries the minimum payload; the doc comment (`UserDeleted.cs:5-7`) frames it as a hook so other bounded contexts can react (cascade cleanup, audit logging) without the aggregate knowing who listens. Domain events (this) differ from integration events ([`UserRegistered`](#userregistered)): domain events are dispatched in-process during `SaveChangesAsync`, integration events go through the outbox to the broker ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)).
+- **Concept reinforced, the domain event as a fact, not a command.** `[Rubric §6, CQRS & Event-Driven]` assesses whether state changes are announced rather than orchestrated inline. The record is past tense and carries the minimum payload; the doc comment (`UserDeleted.cs:5-8`) frames it as a hook so other bounded contexts can react (cascade cleanup, audit logging) without the aggregate knowing who listens. Domain events (this) and integration events ([`UserRegistered`](#userregistered)) are both collected by `AddDomainEvent` and both get an `OutboxMessage` row written during save (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:177`); the split happens on the way out. A pure domain event dispatches in-process and its row is marked processed, while an event that also implements `IIntegrationEvent` (line 180) is left for the `OutboxProcessor` to publish through `IMessageBus` (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:362-364`, [ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)).
 - **Walkthrough**: a one-line `sealed record class` with a single positional parameter `UserId` (`UserDeleted.cs:10-12`), inheriting [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent) which supplies the event id and occurrence timestamp. There is no body: everything a handler needs beyond the id it must load itself.
 - **Why it's built this way**: shipping only the id (rather than a snapshot of the user) keeps a personal-data-bearing aggregate out of the event stream, which matters because the very next thing that happens to this user is erasure (see [`User.Anonymize`](#user), [ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html)).
-- **Where it's used**: added by `User.Delete()` (`User.cs:354`) and dispatched by the framework `ApplicationDbContext` during save.
-- **Caveats / not-in-source**: no handler for this event is registered in the Identity module today; it is a published extension point, not an active flow.
+- **Where it's used**: added by `User.Delete()` (`User.cs:354`) and dispatched by the framework save pipeline.
+- **Caveats / not-in-source**: a repo-wide search for the type name finds only the declaration and that single raise site, so no handler for this event exists in ADC today; it is a published extension point, not an active flow.
 
 ### UserPasswordChanged
 
@@ -1018,11 +1133,11 @@ protection), and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-
 
 - **What it is**: the in-process domain event raised when a user's credentials are replaced. Structurally identical to [`UserDeleted`](#userdeleted).
 - **Depends on**: [`BaseDomainEvent`](group-04-events-outbox.md#basedomainevent) and the `UserIdentifierType` alias.
-- **Concept reinforced, minimal-payload domain events** (introduced at [`UserDeleted`](#userdeleted)). `[Rubric §11, Security]`: the payload is the user id and nothing else. No hash, no salt, no old or new password ever enters an event, so credential material cannot leak through a logging or auditing subscriber.
+- **Concept reinforced, minimal-payload domain events** (introduced at [`UserDeleted`](#userdeleted)). `[Rubric §11, Security]`: the payload is the user id and nothing else. No hash, no salt, no old or new password ever enters an event, so credential material cannot leak through a logging or auditing subscriber, nor through the serialized outbox row the save pipeline writes for it.
 - **Walkthrough**: `sealed record class UserPasswordChanged(UserIdentifierType UserId) : BaseDomainEvent` (`UserPasswordChanged.cs:9-11`). One parameter, no body.
 - **Why it's built this way**: password change is exactly the kind of event a security-audit or "notify the account owner" feature would subscribe to later, so the aggregate raises it now even without a consumer; adding a subscriber later requires no change to the domain.
 - **Where it's used**: raised inside `User.ChangePassword` only after the invariant checks pass (`User.cs:316`).
-- **Caveats / not-in-source**: as with [`UserDeleted`](#userdeleted), no subscriber is registered in the Identity module today.
+- **Caveats / not-in-source**: as with [`UserDeleted`](#userdeleted), the only references in the repo are the declaration and the one raise site; no subscriber exists today.
 
 ### UserRegistered
 
@@ -1030,11 +1145,11 @@ protection), and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-
 
 - **What it is**: the cross-module integration event announcing that a new user registered. It is the one message that lets Conference react to a registration without referencing anything in Identity.
 - **Depends on**: [`BaseIntegrationEvent`](group-04-events-outbox.md#baseintegrationevent) (base) and the `UserIdentifierType` alias.
-- **Concept introduced, the integration event and why it lives in `.Shared`.** `[Rubric §7, Microservices Readiness]` assesses whether modules coordinate through published contracts instead of direct references. Note the assembly: this record is in `Identity.Shared`, not `Identity.Domain`. Domain events ([`UserDeleted`](#userdeleted)) stay private to the aggregate's assembly; an integration event is a *published contract*, so it lives in the thin `Shared` project that other modules are allowed to reference. `[Rubric §6, CQRS & Event-Driven]`: it flows Identity to Conference through the outbox and MassTransit broker ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)), so the two services stay decoupled at runtime and each can be down without failing the other's write.
+- **Concept introduced, the integration event and why it lives in `.Shared`.** `[Rubric §7, Microservices Readiness]` assesses whether modules coordinate through published contracts instead of direct references. Note the assembly: this record is in `Identity.Shared`, not `Identity.Domain`. Domain events ([`UserDeleted`](#userdeleted)) stay private to the aggregate's assembly; an integration event is a *published contract*, so it lives in the thin `Shared` project that other modules are allowed to reference. `[Rubric §6, CQRS & Event-Driven]`: it flows Identity to Conference through the outbox and the MassTransit broker ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)), so the two services stay decoupled at runtime and each can be down without failing the other's write.
 - **Walkthrough**: `sealed record class UserRegistered(UserIdentifierType UserId, string Email, string FirstName, string LastName, string Role) : BaseIntegrationEvent` (`UserRegistered.cs:23-29`). Unlike the domain events, this one carries a payload: `Email`, `FirstName`, and `LastName` are present because the subscriber needs them for identity matching across a database boundary (there is no cross-database join to fall back on). `Role` records what the account was assigned at registration time.
-- **Why it's built this way**: the doc comment (`UserRegistered.cs:5-16`) is unusually explicit about two decisions. First, publication happens *after* the unit-of-work commit so `UserId` is the database-generated identity, not a placeholder zero (see the override in [`AuthenticationService`](#authenticationservice)). Second, it replaced a direct cross-module call (`ISpeakerLinkingService.TryAutoLinkSpeakerAsync` from Identity into Conference); the event inverts that dependency so Identity stays a leaf module. The Conference-side subscriber [`UserRegisteredHandler`](group-18-conference-application.md#userregisteredhandler) runs the speaker email-match auto-link (BR-207). Note that ADC deliberately diverges from Store here, which models the same concept as an in-process domain event.
-- **Where it's used**: published by [`AuthenticationService`](#authenticationservice) (both local registration and first-time external OAuth account creation); consumed by Conference's [`UserRegisteredHandler`](group-18-conference-application.md#userregisteredhandler).
-- **Caveats / not-in-source**: the payload includes PII (email and names) crossing the broker. The retention and encryption posture of the broker itself is infrastructure configuration, not visible in this file.
+- **Why it's built this way**: the id problem drives the whole design and both doc comments spell it out. `UserId` is a database-generated identity column, so raising the event before the first save would serialize `UserId = 0` into the outbox row, and the cross-service Conference consumer cannot repair that (it has no access to the Identity database to re-match by email; `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:21-33`). The resolution is a two-save unit inside one transaction: [`AuthenticationService.RegisterAsync`](#authenticationservice) wraps the whole base registration workflow in `UnitOfWork.ExecuteInTransactionAsync` (`AuthenticationService.cs:57-63`), and the `OnUserRegisteredAsync` override then calls `user.AddDomainEvent(new UserRegistered(...))` and saves a second time so the outbox row is captured (`AuthenticationService.cs:105-110`). One commit covers both saves, so a crash before commit rolls back the user and the event together, and after commit the `OutboxProcessor` guarantees delivery. The doc records what this replaced twice over: a second-commit `IEventBus` publish whose crash window lost the link permanently (`AuthenticationService.cs:30-32`), and before that a direct cross-module call (`ISpeakerLinkingService.TryAutoLinkSpeakerAsync`) from Identity into Conference, which the event inverts so Identity stays a leaf module (`UserRegistered.cs:11-16`). Note that ADC deliberately diverges from Store here, which models the same concept as an in-process domain event.
+- **Where it's used**: raised by [`AuthenticationService`](#authenticationservice) on both registration paths (local, `AuthenticationService.cs:107`; first-time external OAuth account creation, `AuthenticationService.cs:229`), published by the `OutboxProcessor`, and consumed by Conference's [`UserRegisteredHandler`](group-18-conference-application.md#userregisteredhandler) for the BR-207 speaker email-match auto-link.
+- **Caveats / not-in-source**: the payload includes PII (email and names) crossing the broker. The retention and encryption posture of the broker itself is infrastructure configuration, not visible in this file. Delivery is eventually consistent by design: the token returned from registration does not yet carry the `speaker_id` claim (`AuthenticationService.cs:102-103`).
 
 ### UserService
 
@@ -1045,10 +1160,10 @@ protection), and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-
 - **Concept introduced, the authenticated UI HTTP service.** `[Rubric §18, UI Architecture]` and `[Rubric §26, Front-End Security]`. The class is a primary-constructor `sealed class` forwarding both dependencies to [`AuthenticatedServiceBase`](group-15-common-ui-framework.md#authenticatedservicebase) (`UserService.cs:14-15`), which supplies two things every call reuses: `CreateAuthenticatedClientAsync()` (a client with the stored JWT already attached, so no page ever handles a raw token) and `RetryPolicy` (a shared transient-fault policy). Every method follows the same four beats: create the authenticated client, execute through the retry policy, translate a non-success response into a domain exception via `ServiceExceptionHelper.ThrowIfDomainExceptionAsync`, then deserialize.
 - **Walkthrough**
   - `Endpoint = "users"` (`UserService.cs:17`): a relative path. All URLs are built with `UriKind.Relative`, so the base address (the Gateway) is configured once at registration.
-  - `GetPagedAsync` (lines 19-63): assembles a `Dictionary<string, string?>` of every filter and paging argument (lines 30-40), then filters out blank values and URL-encodes each one with `Uri.EscapeDataString` before joining with `&` (lines 42-44). Skipping blanks keeps the query string minimal; encoding is what makes an email or a name with a space safe. The response is read as [`PagedCollectionResult<UserListDTO>`](group-01-result-error-handling.md#pagedcollectionresultt) and flattened to the tuple the grid wants, defaulting to an empty list and `0` when the body is null (lines 57-62).
-  - `DeleteAsync` (lines 65-80): builds `users/{id}` with `string.Create(CultureInfo.InvariantCulture, ...)`, which is the culture-safe way to format an id (an analyzer-enforced convention across the codebase), and returns `true` after `EnsureSuccessStatusCode`.
-  - `GetMyAvatarUrlAsync` (lines 82-93): the one method that does *not* throw on failure. A non-success status returns `null` (lines 88-89), because "no avatar" and "could not fetch it" both render the same fallback and neither is worth an error toast.
-  - `UploadMyAvatarAsync` (lines 95-118): deliberately bypasses `RetryPolicy` with an explicit comment (line 103): the content stream is single-shot, and picker or file-input streams do not rewind, so a retry would post an empty body. It builds a `MultipartFormDataContent` with a single `file` part carrying the caller-supplied content type (lines 104-107).
+  - `GetPagedAsync` (lines 19-63): assembles a `Dictionary<string, string?>` of every filter and paging argument (lines 30-40), then filters out blank values and URL-encodes each one with `Uri.EscapeDataString` before joining with `&` (lines 42-44). Skipping blanks keeps the query string minimal; encoding is what makes an email or a name with a space safe. The response is read as [`PagedCollectionResult<UserListDTO>`](group-01-result-error-handling.md#pagedcollectionresultt) and flattened to the tuple the grid wants, defaulting to an empty list and `0` when the body is null (lines 60-62).
+  - `DeleteAsync` (lines 65-80): builds `users/{id}` with `string.Create(CultureInfo.InvariantCulture, ...)` (line 69), which is the culture-safe way to format an id (an analyzer-enforced convention across the codebase), and returns `true` after `EnsureSuccessStatusCode`.
+  - `GetMyAvatarUrlAsync` (lines 82-93): the one method that does *not* surface a failure. A non-success status returns `null` (lines 88-89), because "no avatar" and "could not fetch it" both render the same fallback and neither is worth an error toast.
+  - `UploadMyAvatarAsync` (lines 95-118): deliberately bypasses `RetryPolicy` with an explicit comment (line 103): the content stream is single-shot, and picker or file-input streams do not rewind, so a retry would post an empty body. It builds a `MultipartFormDataContent` with a single `file` part carrying the caller-supplied content type (lines 104-107), and on a non-success response calls `ThrowIfDomainExceptionAsync` first, falling through to `return null` only for a failure the helper does not translate (lines 110-114).
   - `RemoveMyAvatarAsync` (lines 120-131): delete through the retry policy, returning the success flag.
 - **Why it's built this way**: `[Rubric §29, Resilience]`: retry is applied where it is safe (idempotent GET and DELETE) and withheld where it is not (a stream-backed POST), which is the correct discrimination rather than a blanket policy. Using `IHttpClientFactory` plus a per-call `using var httpClient` keeps handler lifetimes managed by the factory.
 - **Where it's used**: registered as the [`IUserUIService`](#iuseruiservice) implementation in the Identity UI DI extension and injected into [`UserList`](#userlist) and the profile/avatar components.
@@ -1070,17 +1185,17 @@ protection), and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-
 
 - **What it is**: the code-behind for the organizer user list page: a server-paged, server-sorted, per-column-filterable grid on desktop and an infinite-scroll card list on mobile, with delete (BR-51, UC-21).
 - **Depends on**: [`DataGridListPageBase<TDto>`](group-15-common-ui-framework.md#datagridlistpagebasetdto) (base), [`IUserUIService`](#iuseruiservice), [`ListPageActions`](#listpageactions), [`UserListDTO`](#userlistdto), [`MobileInfiniteScrollList<TItem>`](group-15-common-ui-framework.md#mobileinfinitescrolllisttitem), the `DeleteConfirmation` component, and MudBlazor's `MudDataGrid<T>`/`GridState<T>`/`GridData<T>`.
-- **Concept introduced, the code-behind list page over a framework base.** `[Rubric §18, UI Architecture]` assesses separation of markup from behavior and reuse of page scaffolding. The page is split into a `.razor` markup file and this `partial class`, and the class inherits [`DataGridListPageBase<UserListDTO>`](group-15-common-ui-framework.md#datagridlistpagebasetdto), which supplies the localizer `L`, `Snackbar`, `IsMobile`, filter persistence, and the `LoadServerDataAsync` adapter. The subclass therefore contains only what is genuinely user-specific: which service to call, which four columns are filterable, and what to do on delete. `[Rubric §23, Front-End Performance]`: nothing is loaded client-side and filtered in the browser; paging, sorting, and filtering are all pushed to the API.
+- **Concept introduced, the code-behind list page over a framework base.** `[Rubric §18, UI Architecture]` assesses separation of markup from behavior and reuse of page scaffolding. The page is split into a `.razor` markup file and this `partial class`, and the class inherits [`DataGridListPageBase<UserListDTO>`](group-15-common-ui-framework.md#datagridlistpagebasetdto) (`UserList.razor.cs:16`), which supplies the localizer `L`, `Snackbar`, `IsMobile`, filter persistence, and the `LoadServerDataAsync` adapter. The subclass therefore contains only what is genuinely user-specific: which service to call, which four columns are filterable, and what to do on delete. `[Rubric §23, Front-End Performance]`: nothing is loaded client-side and filtered in the browser; paging, sorting, and filtering are all pushed to the API.
 - **Walkthrough**
-  - Base contract (`UserList.razor.cs:18-24`): `Title` and `EntityName` read from the localizer `L`, and `GridRef` exposes the `_dataGrid` field so the base can drive reloads.
+  - Base contract (`UserList.razor.cs:18-19`, `24`): `EntityName` and the overridden `Title` read from the localizer `L`, and `GridRef` exposes the `_dataGrid` field so the base can drive reloads.
   - Injected service (line 21): `[Inject] private IUserUIService UserService`, the interface, never a concrete HTTP type.
   - Component references (lines 23-29): the desktop grid, the mobile infinite list, and the `DeleteConfirmation` dialog. `_dataGrid` and `_infiniteList` are nullable (only one layout renders), `_deleteConfirm` is `default!` because the dialog is always in the markup.
   - `RetryLoadAsync` (line 27): the retry action offered by the base's inline error state, a null-safe `ReloadServerData()`.
   - `SaveFilters`/`RestoreFilters` (lines 32-36): the two overrides that persist the free-text `_searchString` across navigation, so returning to the list keeps the operator's search.
+  - `ReloadActiveLayoutAsync` (lines 38-39) and `OnSearchChanged` (lines 41-45): the first is one line delegating to [`ListPageActions`](#listpageactions); the second records the new search text and reloads through it, so typing in the toolbar drives whichever layout is live.
   - `LoadServerData` (lines 47-64): the desktop fetch. It hands the base a lambda that pulls the four per-column filter values out of MudBlazor's filter dictionary by `nameof(UserListDTO.X)` (lines 52-55) and forwards them plus page, size, and sort to `UserService.GetPagedAsync`. The second lambda (lines 60-64) injects the toolbar search box as a `contains` filter on `Email`, so the free-text search and the column filters use one code path.
   - `FetchMobilePage` (lines 67-72): the mobile fetch, simplified to search-on-email only and fixed `"Email"` ascending sort, because the card layout has no column headers to sort by.
   - `DeleteUserAsync` (lines 75-83): delegates the whole flow to [`ListPageActions.DeleteWithConfirmationAsync`](#listpageactions), passing the user's email as the confirmation subject, the delete call, and two localized messages (`Snackbar.UserDeleted`, `Snackbar.DeleteUserFailed`).
-  - `ReloadActiveLayoutAsync` (lines 38-39): one line delegating to [`ListPageActions`](#listpageactions).
 - **Why it's built this way**: `nameof(UserListDTO.Email)` rather than a `"Email"` literal ties the filter key to the DTO property, so a rename is a compile error rather than a silently dead filter. Delegating delete and reload to [`ListPageActions`](#listpageactions) means the cancellation-swallowing and confirm-first behavior is identical on every ADC list page, which is a `[Rubric §24, Forms, Validation & UX Safety]` concern: destructive actions always confirm.
 - **Where it's used**: routed as the organizer user-management page in the ADC web and MAUI UI; the server side it calls is [`UsersController.GetAllAsync`](#userscontroller), which is gated on the `UsersRead` permission.
 
@@ -1089,18 +1204,19 @@ protection), and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-
 > MMCA.ADC.Identity.Domain · `MMCA.ADC.Identity.Domain.Users` · `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/UserRole.cs:17` · Level 4 · class (sealed)
 
 - **What it is**: the value object for an ADC user role. It fixes the valid role set (Organizer, Attendee, ContentEditor), parses strings safely, and provides the case-insensitive comparisons every authorization check needs.
-- **Depends on**: [`RoleValue`](group-08-auth.md#rolevalue) (the framework base in `MMCA.Common.Shared.Auth`), `RoleNames` (the shared canonical name constants), [`Result`](group-01-result-error-handling.md#result)/[`Error`](group-01-result-error-handling.md#error), and `System.Collections.Frozen.FrozenDictionary`.
+- **Depends on**: [`RoleValue`](group-08-auth.md#rolevalue) (the framework base in `MMCA.Common.Shared.Auth`), [`RoleNames`](group-08-auth.md#rolenames) (the shared canonical name constants), [`Result`](group-01-result-error-handling.md#result)/[`Error`](group-01-result-error-handling.md#error), and `System.Collections.Frozen.FrozenDictionary`.
 - **Concept introduced, the closed-set value object over a bare string.** `[Rubric §4, DDD]` assesses whether domain concepts get types instead of primitives. A role is stored as a plain string in the database (that is what EF maps), but inside the domain it is a `UserRole`: the type is the only place the valid set is written down, and `FromString` is the only supported way in. The base [`RoleValue`](group-08-auth.md#rolevalue) supplies value equality, hashing, and validation (`UserRole.cs:14-15`); this subclass supplies the ADC-specific set. `[Rubric §11, Security]`: role comparison is a security decision, and getting the case sensitivity wrong is a real vulnerability class, which is why this type provides `IsOrganizer` rather than letting callers write `==`.
 - **Walkthrough**
   - The three canonical instances (`UserRole.cs:20`, `23`, `30`): `Organizer` (manages conference master data, BR-41), `Attendee` (the default for new registrations, BR-45), and `ContentEditor`. The `ContentEditor` doc comment (lines 25-29) defines it precisely as a strict capability subset of Organizer: it curates sessions, speakers, and categories, but cannot change event structure, rooms, feedback questions, run session selection, or read the user list.
   - `AllByValue` (lines 32-33): a `FrozenDictionary<string, UserRole>` built once by the base's `BuildLookup`. `FrozenDictionary` is the BCL's read-optimized dictionary: built once at type initialization, then faster to read than a regular dictionary for the life of the process, which fits a lookup consulted on many requests and never mutated.
   - Private constructor (lines 35-38): no caller can invent a fourth role.
-  - `FromString` (lines 51-58): a dictionary probe returning [`Result<UserRole>`](group-01-result-error-handling.md#result), with a failure carrying `Error.Invariant` code `"User.Role.Invalid"`. Note `role ?? string.Empty`, so a null input is a clean validation failure rather than an exception.
+  - `All` (line 44): the public enumeration, exposed as `AllByValue.Values` so there is no second list to keep in sync.
+  - `FromString` (lines 51-58): a dictionary probe returning [`Result<UserRole>`](group-01-result-error-handling.md#result), with a failure carrying `Error.Invariant` code `"User.Role.Invalid"`. Note `role ?? string.Empty` (line 52), so a null input is a clean validation failure rather than an exception.
   - `IsValid` (line 65): the boolean form, used by [`UserInvariants.EnsureRoleIsValid`](#userinvariants).
   - `IsOrganizer(string?)` (line 76): `string.Equals(role, Organizer, StringComparison.OrdinalIgnoreCase)`. The doc comment (lines 67-73) states the trap it exists to prevent: because of the implicit `string` conversion, a plain `==` against `Organizer` compiles but compares *ordinally*, so a claim of `"organizer"` would silently fail the check. Raw JWT claim strings can carry any casing, so authorization on a claim must go through this method.
-  - Equality members (lines 78-90) and the implicit `string` conversion plus the `ToString()` named alternate required by analyzer CA2225 (lines 94-98).
+  - Equality members (lines 78-90), the implicit `string` conversion (line 94), and the `ToString()` named alternate required by analyzer CA2225 (line 98).
 - **Why it's built this way**: the lookup is the single source of truth, so adding a role is one line plus one `BuildLookup` argument, and every validator, parser, and check picks it up. Keeping the implicit string conversion preserves compatibility with the string-typed `User.Role` column and with claim-based code, at the cost of the ordinal-comparison trap that `IsOrganizer` closes.
-- **Where it's used**: [`UserInvariants.EnsureRoleIsValid`](#userinvariants), [`User.Create`](#user) and `CreateExternal` (the BR-45 Attendee default), [`AuthenticationService`](#authenticationservice), [`DeleteUserHandler`](#deleteuserhandler) and [`ExportUserDataHandler`](#exportuserdatahandler) for the owner-or-organizer checks, and [`IdentityModuleDbSeeder`](#identitymoduledbseeder).
+- **Where it's used**: [`UserInvariants.EnsureRoleIsValid`](#userinvariants), [`User.Create`](#user) and `CreateExternal` (the BR-45 Attendee default, `User.cs:207`), [`AuthenticationService`](#authenticationservice) (`AuthenticationService.cs:89`), [`DeleteUserHandler`](#deleteuserhandler) and [`ExportUserDataHandler`](#exportuserdatahandler) for the owner-or-organizer checks, and [`IdentityModuleDbSeeder`](#identitymoduledbseeder).
 
 ### UserInvariants
 
@@ -1111,14 +1227,14 @@ protection), and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-
 - **Concept reinforced, invariants as a separate static companion.** `[Rubric §4, DDD]` assesses whether business rules live in the domain rather than in handlers or controllers. Pulling the checks out of the entity into a static companion keeps [`User`](#user) readable (its factory is a `Result.Combine` of named rules) and makes each rule independently unit-testable. Every method returns a [`Result`](group-01-result-error-handling.md#result), never throws, which is what lets the aggregate accumulate *all* validation failures in one pass instead of surfacing the first one.
 - **Walkthrough**
   - Constants (`UserInvariants.cs:13-22`): `FirstNameMaxLength = 100`, `LastNameMaxLength = 100`, `EmailMaxLength = 100`, `DeviceFieldMaxLength = 256`. These are the same constants the EF configuration reads for its column widths, so the schema and the domain cannot drift apart.
-  - `EnsureEmailIsValid` (lines 24-44): the one rule written with early returns rather than `Result.Combine`, because the three checks are ordered: not empty, then within `EmailMaxLength`, then a real address per `MailAddress.TryCreate` (line 34). Running the format parse on an empty string would produce a confusing second error, so it short-circuits. Failure code `"User.Email.InvalidFormat"`.
+  - `EnsureEmailIsValid` (lines 24-44): the one rule written with early returns rather than `Result.Combine`, because the three checks are ordered: not empty, then within `EmailMaxLength`, then a real address per `MailAddress.TryCreate` (line 34). Running the format parse on an empty string would produce a confusing second error, so it short-circuits. Failure code `"User.Email.InvalidFormat"` (line 37).
   - `EnsureFirstNameIsValid` / `EnsureLastNameIsValid` (lines 46-54): `Result.Combine` of a not-empty and a max-length check, each with its own stable error code (`User.FirstName.Empty`, `User.FirstName.TooLong`, and the LastName equivalents).
   - `EnsurePasswordHashIsValid` / `EnsurePasswordSaltIsValid` (lines 56-60): delegate to `CommonInvariants.EnsureBytesAreNotEmpty`. Note what they do *not* check: no length, no algorithm. The domain knows credentials must be present, not how they were derived, which stays behind [`IPasswordHasher`](group-08-auth.md#ipasswordhasher).
   - `EnsureRoleIsValid` (lines 65-72): defers the set membership question to [`UserRole.IsValid`](#userrole).
   - `EnsurePreferredCultureIsValid` (lines 77-84): `null` is valid (meaning "follow the request default"), otherwise the value must pass the `SupportedCultures.IsSupported` allowlist ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)). An allowlist, not a format check, is the security-relevant choice here.
   - `EnsurePreferredThemeIsValid` (lines 89-98): `null`, `"light"`, or `"dark"`, compared `OrdinalIgnoreCase` ([ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html)).
 - **Why it's built this way**: every rule takes a `source` string that is passed as `nameof(Create)` or `nameof(ChangePassword)` by the caller, so a failure carries which operation produced it, which is what makes an aggregated error list diagnosable. Sharing the length constants with the EF configuration is the practical mechanism that keeps a 101-character name from being a domain success and a database truncation.
-- **Where it's used**: [`User.Create`](#user), `User.CreateExternal`, `User.UpdatePreferences`, `User.ChangePassword`, and the Identity EF entity configuration (for the column widths).
+- **Where it's used**: [`User.Create`](#user) (`User.cs:158-162`), `User.CreateExternal` (`User.cs:199-200`), `User.UpdatePreferences` (`User.cs:275-276`), `User.ChangePassword` (`User.cs:305-306`), [`RegisterRequestValidator`](#registerrequestvalidator) (for the length constants), and the Identity EF entity configuration (for the column widths).
 
 ### RegisterRequestValidator
 
@@ -1147,26 +1263,27 @@ protection), and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-
   `[Rubric §30, Compliance, Privacy & Data Governance]`: the `[Pii]` attribute (`User.cs:21`, `25`, `29`, `94`) tags `Email`, `FirstName`, `LastName`, and `AvatarUrl` as personal data. The attribute is declarative metadata: it lets tooling and reviewers see the PII inventory on the type itself instead of in a separate document.
 - **Walkthrough**
   - `[IdValueGenerated]` (line 17): declares that the id is database-generated, which the EF configuration honors.
-  - Identity and profile (lines 22-30): `Email` is the [`Email`](group-02-domain-building-blocks.md#email) value object (not a string), and is the canonical identity across all platforms per BR-200.
+  - Identity and profile (lines 20-30): `Email` is the [`Email`](group-02-domain-building-blocks.md#email) value object (not a string), and is the canonical identity across all platforms per BR-200.
   - Credentials (lines 34-37): `byte[] PasswordHash` and `byte[] PasswordSalt`, mapped to `varbinary(max)`, with an explicit `#pragma warning disable CA1819` (lines 32, 38) documenting that the array-returning properties exist for EF mapping.
   - `Role` (line 41): stored as `string` for EF mapping even though the domain concept is [`UserRole`](#userrole).
   - Refresh-token state (lines 44-47): token plus UTC expiry, both nullable, `null` meaning revoked or never issued (BR-205: 7 days).
   - `LinkedSpeakerId` (line 54): a nullable `SpeakerIdentifierType` (a `Guid`), the Identity half of the 1:1 bidirectional User-to-Speaker link (BR-207/208/209). It is a scalar column, not a foreign key, because Speaker lives in a different database ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)).
-  - Device metadata (lines 57-75): seven nullable MAUI-only fields; the doc comment is explicit that they are analytics metadata and are *not* used for authentication (BR-201).
-  - External login (lines 78-81) and the computed `IsExternalLogin` (line 99); UI preferences (lines 84-87, [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)/028); `AvatarUrl` (line 96, BR-116a/[ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html)) with a CA1056 suppression explaining it stays a string because EF maps a varchar and DTOs serialize it verbatim; computed `FullName` (line 102).
-  - Two private constructors (lines 104-128): the parameterless one is EF's materialization constructor (it assigns non-null defaults to satisfy nullability), and the parameterized one is what the factories call.
-  - `Create` (lines 147-175): the local-account factory. It builds the [`Email`](group-02-domain-building-blocks.md#email) value object and then `Result.Combine`s six invariant checks (lines 156-163) so *all* validation failures come back together, returning `Result.Failure<User>(result.Errors)` on any failure. Its `<remarks>` (lines 133-139) records a decision worth internalizing: it does **not** raise a registration domain event, because [`UserRegistered`](#userregistered) must be published after `SaveChangesAsync` so subscribers receive the real database-generated id.
-  - `CreateExternal` (lines 189-215): the OAuth factory. It validates only email and names (there is no password to check), sets `PasswordHash`/`PasswordSalt` to empty arrays, defaults the role to `UserRole.Attendee`, and records `LoginProvider`/`ProviderKey`.
+  - Device metadata (lines 56-75): seven nullable MAUI-only fields; the doc comment is explicit that they are analytics metadata and are *not* used for authentication (BR-201).
+  - External login (lines 77-81) and the computed `IsExternalLogin` (line 99); UI preferences (lines 83-87, [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)/028); `AvatarUrl` (lines 94-96, BR-116a/[ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html)) with a CA1056 suppression explaining it stays a string because EF maps a varchar and DTOs serialize it verbatim; computed `FullName` (line 102).
+  - Two private constructors (lines 104-128): the parameterless one is EF's materialization constructor (it assigns non-null defaults to satisfy nullability, including `Role = UserRole.Attendee` at line 111), and the parameterized one is what the factories call.
+  - `Create` (lines 147-175): the local-account factory. It builds the [`Email`](group-02-domain-building-blocks.md#email) value object and then `Result.Combine`s six invariant checks (lines 156-163) so *all* validation failures come back together, returning `Result.Failure<User>(result.Errors)` on any failure. Its `<remarks>` (lines 133-139) records a decision worth internalizing: it does **not** raise a registration event, because [`UserRegistered`](#userregistered) must be raised after the first `SaveChangesAsync` so subscribers receive the real database-generated id.
+  - `CreateExternal` (lines 189-215): the OAuth factory. It validates only email and names (there is no password to check), sets `PasswordHash`/`PasswordSalt` to empty arrays, defaults the role to `UserRole.Attendee`, and records `LoginProvider`/`ProviderKey` (lines 207-212).
   - `LinkExternalProvider` (lines 223-227): attaches an OAuth identity to an existing local account, the "same email logged in via Google" path.
   - `UpdateRefreshToken` / `RevokeRefreshToken` (lines 234-247): the rotation and revocation pair (BR-205, BR-216).
   - `LinkSpeaker` / `UnlinkSpeaker` (lines 254-262): one-line setters, but named domain operations so the event handlers that call them read as intent (BR-207/209, BR-70).
   - `UpdatePreferences` (lines 272-285): combines the culture and theme invariants, and only assigns both fields once both pass, so a rejected theme never leaves a half-applied culture.
   - `SetAvatarUrl` (line 294): deliberately dumb. The doc comment (lines 287-291) states that size, format, and re-encoding validation happen in the upload use case; the domain only records the resulting URL.
   - `ChangePassword` (lines 302-319): validates the new hash and salt, assigns them, and raises [`UserPasswordChanged`](#userpasswordchanged) (line 316) only on success.
-  - `Delete` (lines 348-358): `new`-shadows the base soft-delete. It revokes the refresh token *first* (line 350), then calls `base.Delete()`, then raises [`UserDeleted`](#userdeleted) only if the base succeeded. Revoking first is the security point: a deleted account's outstanding sessions must die immediately, not at token expiry (BR-56).
-  - `Anonymize` (lines 371-406): the erasure operation. It builds a placeholder email `deleted-{Id}@anonymized.invalid` using `string.Create(CultureInfo.InvariantCulture, ...)` (line 376), and the id is embedded precisely so the unique-email invariant (BR-200) still holds across many erased accounts. It is idempotent: if `Email` already equals the placeholder there is nothing left to erase and it returns success (lines 383-386). Otherwise it overwrites the email and names with placeholders, empties both credential arrays, nulls all seven device fields, the external-login pair, and `AvatarUrl`, and revokes the refresh token (lines 388-403).
-- **Why it's built this way**: the split between `Delete` (soft-delete, `IsDeleted`) and `Anonymize` (destroy the personal data, keep the row) is [ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html)'s resolution of a real tension. The row must survive because other bounded contexts hold scalar references to `UserId` (bookmarks, notifications) and because the audit trail depends on it; the personal data must not survive, because PRIVACY.md promises erasure. Doing both, in that order, satisfies both constraints. The aggregate never touches storage or the blob store: `Anonymize` nulls `AvatarUrl` but the doc comment (lines 89-93) notes the blob itself is deleted by the owning use case, which is the layer that knows about storage (see [`DeleteUserHandler`](#deleteuserhandler)).
-- **Where it's used**: the single entity of the Identity module's DbContext; loaded and mutated by every Identity handler ([`ChangePasswordHandler`](#changepasswordhandler), [`DeleteUserHandler`](#deleteuserhandler), [`ExportUserDataHandler`](#exportuserdatahandler), [`SetUserAvatarHandler`](#setuseravatarhandler), [`GetUsersHandler`](#getusershandler)); projected by [`UserDTOMapper`](#userdtomapper); mapped by the Identity EF entity configuration; created by [`AuthenticationService`](#authenticationservice) and [`IdentityModuleDbSeeder`](#identitymoduledbseeder).
+  - `UpdateDeviceMetadata` (lines 325-341): a bulk setter for the seven MAUI fields, called at login when the client supplies them (BR-202). It runs no invariant checks: the fields are optional analytics metadata, and `DeviceFieldMaxLength` is enforced at the column, not here.
+  - `Delete` (lines 348-358): `new`-shadows the base soft-delete. It revokes the refresh token *first* (line 350), then calls `base.Delete()`, then raises [`UserDeleted`](#userdeleted) only if the base succeeded (lines 352-355). Revoking first is the security point: a deleted account's outstanding sessions must die immediately, not at token expiry (BR-56).
+  - `Anonymize` (lines 371-406): the erasure operation. It builds a placeholder email `deleted-{Id}@anonymized.invalid` using `string.Create(CultureInfo.InvariantCulture, ...)` (line 376), and the id is embedded precisely so the unique-email invariant (BR-200) still holds across many erased accounts. It is idempotent: if `Email` already equals the placeholder there is nothing left to erase and it returns success (lines 382-386). Otherwise it overwrites the email and names with placeholders, empties both credential arrays, nulls all seven device fields, the external-login pair, and `AvatarUrl`, and revokes the refresh token (lines 388-403).
+- **Why it's built this way**: the split between `Delete` (soft-delete, `IsDeleted`) and `Anonymize` (destroy the personal data, keep the row) is [ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html)'s resolution of a real tension, and the `Anonymize` doc comment (lines 360-369) states both halves. The row must survive because other bounded contexts hold scalar references to `UserId` (bookmarks, notifications) and because the audit trail depends on it; the personal data must not survive, because PRIVACY.md §5 promises erasure. Doing both, in that order, satisfies both constraints. The aggregate never touches storage or the blob store: `Anonymize` nulls `AvatarUrl` but the property doc (lines 89-93) notes the blob itself is deleted by the owning use case, which is the layer that knows about storage (see [`DeleteUserHandler`](#deleteuserhandler)).
+- **Where it's used**: the single entity of the Identity module's DbContext; loaded and mutated by every Identity handler ([`ChangePasswordHandler`](#changepasswordhandler), [`DeleteUserHandler`](#deleteuserhandler), [`ExportUserDataHandler`](#exportuserdatahandler), [`SetUserAvatarHandler`](#setuseravatarhandler), [`GetUsersHandler`](#getusershandler)); projected by [`UserDTOMapper`](#userdtomapper); mapped by the Identity EF entity configuration; created by [`AuthenticationService`](#authenticationservice) (`AuthenticationService.cs:82-89`) and [`IdentityModuleDbSeeder`](#identitymoduledbseeder).
 
 ### OAuthController
 
@@ -1176,7 +1293,7 @@ protection), and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-
 - **Depends on**: [`OAuthControllerBase`](group-12-api-hosting-mapping.md#oauthcontrollerbase) (base), [`IAuthenticationService`](group-08-auth.md#iauthenticationservice) (aliased at `OAuthController.cs:6` to disambiguate it from the ASP.NET Core type of the same name), [`ICacheService`](group-09-caching.md#icacheservice), and `IConfiguration`.
 - **Concept introduced, the thin derived controller.** `[Rubric §2, Design Patterns]` and `[Rubric §16, Maintainability]`. The class body is a single semicolon (`OAuthController.cs:23`): a primary-constructor declaration that forwards all three dependencies to the base and declares nothing else. All the endpoints, the challenge, the provider callback, the completion, and the single-use-code exchange, are inherited. The doc comment (lines 10-16) records two things that are not obvious: tokens never ride the redirect URL (they are exchanged for a short-lived single-use code instead, which is why [`ICacheService`](group-09-caching.md#icacheservice) is a dependency), and the class-level routing and versioning attributes are repeated here because they are not reliably inherited from the base.
 - **Walkthrough**: `[Route("auth/oauth")]` (line 18) is an explicit literal route, not the `[controller]` token the other controllers use, so the OAuth endpoints sit under the auth path rather than at `/OAuth`. `[ApiController]` and `[ApiVersion("1.0")]` (lines 17, 19) complete the standard stack. The primary constructor (lines 20-23) takes the authentication service, the cache service, and configuration, and passes them straight through.
-- **Why it's built this way**: `[Rubric §11, Security]`: an OAuth callback flow is easy to get subtly wrong (state handling, token leakage through the URL and therefore into browser history and referrer headers), so the algorithm lives once in MMCA.Common and every consuming app inherits the same hardened implementation. External OAuth is an ADC-only feature; Store is local-credential only, and this controller plus the host's `AddExternalAuthProviders` call is the entire ADC-side surface of that difference.
+- **Why it's built this way**: `[Rubric §11, Security]`: an OAuth callback flow is easy to get subtly wrong (state handling, token leakage through the URL and therefore into browser history and referrer headers), so the algorithm lives once in MMCA.Common and every consuming app inherits the same hardened implementation. External OAuth is an ADC-only feature; Store is local-credential only, and this controller plus the host's `AddExternalAuthProviders` call is the entire ADC-side surface of that difference (`OAuthController.cs:13-14`).
 - **Where it's used**: mapped in the Identity service host and exposed through the Gateway; it drives the same [`AuthenticationService.ExternalLoginAsync`](#authenticationservice) that creates or links external accounts.
 - **Caveats / not-in-source**: which providers are actually enabled, and their client ids and secrets, come from configuration read by the base and by `AddExternalAuthProviders`; nothing in this file determines them.
 
@@ -1187,7 +1304,7 @@ protection), and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-
 - **What it is**: the REST surface for user management and personal-data operations: avatar get/upload/remove for the current user, the organizer user list, the GDPR data export, and account deletion.
 - **Depends on**: [`ApiControllerBase`](group-12-api-hosting-mapping.md#apicontrollerbase) (base), six injected handlers ([`IQueryHandler<in TQuery, TResult>`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult) and [`ICommandHandler<in TCommand, TResult>`](group-05-cqrs-pipeline.md#icommandhandlerin-tcommand-tresult) closed over [`GetUsersQuery`](#getusersquery), [`DeleteUserCommand`](#deleteusercommand), [`ExportUserDataQuery`](#exportuserdataquery), [`SetUserAvatarCommand`](#setuseravatarcommand), [`RemoveUserAvatarCommand`](#removeuseravatarcommand), and [`GetUserAvatarQuery`](#getuseravatarquery)), [`ICurrentUserService`](group-08-auth.md#icurrentuserservice), [`HasPermissionAttribute`](group-08-auth.md#haspermissionattribute), [`IdentityPermissions`](#identitypermissions), and [`Result`](group-01-result-error-handling.md#result)/[`Error`](group-01-result-error-handling.md#error).
 - **Concept introduced, the controller as a thin dispatcher over the CQRS pipeline.** `[Rubric §6, CQRS & Event-Driven]` and `[Rubric §3, Clean Architecture]`. Every action follows one shape: read the current user id, build the query or command record, `await handler.HandleAsync(...)`, then `result.IsFailure ? HandleFailure(result.Errors) : <success>`. The controller injects *handler interfaces*, not an application service and not a mediator, so the dependency is visible in the constructor signature and the decorator pipeline (logging, caching, validation, transaction) wraps each one at registration. `HandleFailure` from [`ApiControllerBase`](group-12-api-hosting-mapping.md#apicontrollerbase) is the single place [`Error`](group-01-result-error-handling.md#error) codes become HTTP status codes plus `ProblemDetails`, which is why no action here writes a status code for a domain failure.
-  `[Rubric §11, Security]` shows up in three different mechanisms on one controller, which is worth studying together: class-level `[Authorize]` (line 29) as the baseline; declarative permission gating with `[HasPermission(IdentityPermissions.UsersRead)]` on the list endpoint (line 124, BR-51); and *in-handler* authorization for the export and delete endpoints, where the action passes `currentUserService.UserId` and `currentUserService.Role` down to the handler (lines 161, 183) because "owner or Organizer" is a rule about domain data that an attribute cannot evaluate.
+  `[Rubric §11, Security]` shows up in three different mechanisms on one controller, which is worth studying together: class-level `[Authorize]` (line 29) as the baseline; declarative permission gating with `[HasPermission(IdentityPermissions.UsersRead)]` on the list endpoint (line 124, BR-51), where the permission is the string constant `"identity:users:read"` (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Authorization/IdentityPermissions.cs:11`); and *in-handler* authorization for the export and delete endpoints, where the action passes `currentUserService.UserId` and `currentUserService.Role` down to the handler (lines 161, 183) because "owner or Organizer" is a rule about domain data that an attribute cannot evaluate.
 - **Walkthrough**
   - Constructor (`UsersController.cs:30-37`): six handlers plus [`ICurrentUserService`](group-08-auth.md#icurrentuserservice), primary-constructor style.
   - `MaxAvatarBytes = 2 * 1024 * 1024` (line 40): the 2 MB cap from BR-116a, expressed as an arithmetic constant.
@@ -1195,26 +1312,28 @@ protection), and [ADR-045](https://ivanball.github.io/docs/adr/045-managed-file-
   - `SetAvatarAsync` (`HttpPost("me/avatar")`, lines 65-101): the most involved action. `[RequestSizeLimit(MaxAvatarBytes)]` (line 66) rejects an oversized body at the Kestrel level *before* the handler runs; the in-action check (lines 77-83) then rejects a null, empty, or over-cap `IFormFile` with `Error.Validation("Avatar.InvalidUpload", ...)`. Belt and braces, cheap and correct. The stream is copied into a right-sized `MemoryStream` and passed to the handler as a `byte[]` (lines 85-92), with `await using` on both the request stream and the buffer. The doc comment (lines 60-64) records what the *handler* then does: sniff the real format (jpeg/png/webp) rather than trusting the declared content type, and re-encode to 256x256 JPEG, which is the defense against a disguised-payload upload.
   - `RemoveAvatarAsync` (`HttpDelete("me/avatar")`, lines 104-119): dispatches [`RemoveUserAvatarCommand`](#removeuseravatarcommand) and returns `204 NoContent`; documented as idempotent.
   - `GetAllAsync` (`HttpGet`, lines 123-144): the organizer list. `[HasPermission(IdentityPermissions.UsersRead)]` gates it, and the paging arguments carry `[Range(1, int.MaxValue)]` data annotations (lines 131-132) so `[ApiController]` rejects `pageNumber=0` or a negative page size with a 400 before any code runs. Returns [`PagedCollectionResult<UserListDTO>`](group-01-result-error-handling.md#pagedcollectionresultt).
-  - `ExportAsync` (`HttpGet("{userId}/export")`, lines 148-167): the data-subject access and portability endpoint (PRIVACY.md §7). It passes the target id *and* the caller's id and role into [`ExportUserDataQuery`](#exportuserdataquery), and declares 403 and 404 response types. `[Rubric §30, Compliance, Privacy & Data Governance]`: export and erasure are the two data-subject rights, and this controller is where both enter the system.
-  - `DeleteAsync` (`HttpDelete("{userId}")`, lines 170-189): builds [`DeleteUserCommand`](#deleteusercommand) with the same three-value authorization payload and returns `204 NoContent` on success.
+  - `ExportAsync` (`HttpGet("{userId}/export")`, lines 148-167): the data-subject access and portability endpoint (PRIVACY.md §7, cited at line 147). It passes the target id *and* the caller's id and role into [`ExportUserDataQuery`](#exportuserdataquery) (line 161), and declares 403 and 404 response types (lines 150-151). `[Rubric §30, Compliance, Privacy & Data Governance]`: export and erasure are the two data-subject rights, and this controller is where both enter the system.
+  - `DeleteAsync` (`HttpDelete("{userId}")`, lines 170-189): builds [`DeleteUserCommand`](#deleteusercommand) with the same three-value authorization payload (line 183) and returns `204 NoContent` on success.
 - **Why it's built this way**: keeping the "me" operations on a path with no id (rather than `users/{id}/avatar` with an ownership check) removes an entire class of ownership bug: there is no id to tamper with. Where an id *is* unavoidable (export, delete), the authorization subject travels on the command into the handler rather than being re-read from ambient context, which keeps the handler pure and unit-testable (`[Rubric §14, Testability]`). Every action is `async` with a `CancellationToken` defaulted, and every `await` uses `.ConfigureAwait(false)`, the codebase-wide analyzer-enforced convention ([ADR-049](https://ivanball.github.io/docs/adr/049-library-configureawait-policy.html)).
 - **Where it's used**: routed through the YARP Gateway to the Identity service; consumed by [`UserService`](#userservice) from the UI, which is what backs [`UserList`](#userlist) and the avatar components.
 
 ### AuthController
 
-> MMCA.ADC.Identity.API · `MMCA.ADC.Identity.API.Controllers` · `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/AuthController.cs:25` · Level 11 · class (sealed)
+> MMCA.ADC.Identity.API · `MMCA.ADC.Identity.API.Controllers` · `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.API/Controllers/AuthController.cs:26` · Level 11 · class (sealed)
 
-- **What it is**: the ADC authentication endpoint set. It inherits login, registration, refresh, and revocation from the framework [`AuthControllerBase`](group-12-api-hosting-mapping.md#authcontrollerbase), overrides two of them to add ADC-specific rate limiting, and adds three endpoints of its own (change password, get preferences, set preferences).
-- **Depends on**: [`AuthControllerBase`](group-12-api-hosting-mapping.md#authcontrollerbase) (base), [`IAuthenticationService`](group-08-auth.md#iauthenticationservice), [`ICurrentUserService`](group-08-auth.md#icurrentuserservice), three handlers ([`ChangePasswordCommand`](#changepasswordcommand), [`ChangePreferencesCommand`](#changepreferencescommand), [`GetUserPreferencesQuery`](#getuserpreferencesquery)), the request/response contracts [`RegisterRequest`](group-08-auth.md#registerrequest), [`LoginRequest`](group-08-auth.md#loginrequest), [`ChangePasswordRequest`](group-08-auth.md#changepasswordrequest), [`ChangePreferencesRequest`](#changepreferencesrequest), [`AuthenticationResponse`](group-08-auth.md#authenticationresponse), [`UserPreferencesResponse`](#userpreferencesresponse), and ASP.NET Core's `EnableRateLimiting`.
-- **Concept introduced, extending a framework controller by selective override.** `[Rubric §1, SOLID]` (Liskov and open-closed) and `[Rubric §11, Security]`. This is the richest example in the module of the inherit-then-specialize pattern: the base owns the shared auth endpoints, and ADC overrides exactly the two where its behavior genuinely differs, then adds three endpoints the framework has no opinion about. Two independent throttles guard the credential endpoints and they defend against different attacks: the per-email lockout in the authentication service (BR-212, [ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html)) stops brute force against *one* account, while `[EnableRateLimiting("auth-ip")]` (lines 39, 63) is a per-IP fixed window that stops password spraying. The comment at lines 57-60 states the reason plainly: the per-email lockout alone cannot throttle one source spraying one password across many emails.
+- **What it is**: the ADC authentication endpoint set. It inherits login, registration, refresh, and revocation from the framework [`AuthControllerBase`](group-12-api-hosting-mapping.md#authcontrollerbase), overrides two of them, and adds three endpoints of its own (change password, get preferences, set preferences).
+- **Depends on**: [`AuthControllerBase`](group-12-api-hosting-mapping.md#authcontrollerbase) (base), [`IAuthenticationService`](group-08-auth.md#iauthenticationservice), [`ICurrentUserService`](group-08-auth.md#icurrentuserservice), three handlers ([`ChangePasswordCommand`](#changepasswordcommand), [`ChangePreferencesCommand`](#changepreferencescommand), [`GetUserPreferencesQuery`](#getuserpreferencesquery)), the request/response contracts [`RegisterRequest`](group-08-auth.md#registerrequest), [`LoginRequest`](group-08-auth.md#loginrequest), [`ChangePasswordRequest`](group-08-auth.md#changepasswordrequest), [`ChangePreferencesRequest`](#changepreferencesrequest), [`AuthenticationResponse`](group-08-auth.md#authenticationresponse), [`UserPreferencesResponse`](#userpreferencesresponse), ASP.NET Core's `EnableRateLimiting`, and [`WebApplicationBuilderExtensions`](group-12-api-hosting-mapping.md#webapplicationbuilderextensions) for the policy-name constant.
+- **Concept introduced, extending a framework controller by selective override.** `[Rubric §1, SOLID]` (Liskov and open-closed) and `[Rubric §11, Security]`. This is the richest example in the module of the inherit-then-specialize pattern: the base owns the shared auth endpoints, and ADC overrides the two where its behavior differs, then adds three endpoints the framework has no opinion about. Two independent throttles guard the credential endpoints and they defend against different attacks: the per-email lockout in the authentication service (BR-212, [ADR-029](https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html)) stops brute force against *one* account, while the per-IP fixed window named by `WebApplicationBuilderExtensions.RateLimitPolicyAuthIp` (the string `"auth-ip"`, `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:38`) stops password spraying. The comment at `AuthController.cs:58-60` states the reason plainly: the per-email lockout alone cannot throttle one source spraying one password across many emails.
+  Worth knowing where that policy now lives: it is a framework **default**, not an ADC opt-in. [`AuthControllerBase`](group-12-api-hosting-mapping.md#authcontrollerbase) itself carries `[EnableRateLimiting(WebApplicationBuilderExtensions.RateLimitPolicyAuthIp)]` on both `LoginAsync` and `RegisterAsync` (`MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/AuthControllerBase.cs:55` and `76`), and its class doc records why (lines 17-26): the earlier arrangement shipped the policy in the framework but left each app to attach it, so an app that simply inherited these actions silently had no spray protection at all. `RefreshAsync` is deliberately left unthrottled (`AuthControllerBase.cs:27-33`), because refresh is periodic and server-issued and every Blazor Server circuit shares the UI host's IP. ADC's overrides re-declare the same attribute alongside their own response documentation.
 - **Walkthrough**
-  - Attributes and constructor (`AuthController.cs:22-31`): the standard `[ApiController]` / `[Route("[controller]")]` / `[ApiVersion("1.0")]` stack (no class-level `[Authorize]` here, since login and registration must be anonymous), and a primary constructor forwarding the authentication service and current-user service to the base while keeping the three handlers as its own.
-  - `RegisterAsync` (override, lines 43-54): the reason for the override is one line, `HttpContext.Connection.RemoteIpAddress?.ToString()` (line 48), passed into `AuthenticationService.RegisterAsync` for the BR-213 registration rate limit. Reading the client IP requires the `HttpContext`, which the application layer does not have, so the controller is the correct place to capture it. Returns `201 Created` with the [`AuthenticationResponse`](group-08-auth.md#authenticationresponse) and documents a `409 Conflict` for a duplicate email and `429` for the rate limit.
-  - `LoginAsync` (override, lines 67-70): overridden purely to attach `[EnableRateLimiting("auth-ip")]` and the `429` response documentation; the body just calls `base.LoginAsync`.
-  - `ChangePasswordAsync` (`HttpPut("password")`, lines 82-97): `[Authorize]`, reads `CurrentUserService.UserId` and returns `Unauthorized()` when null, then dispatches [`ChangePasswordCommand`](#changepasswordcommand) and returns `204 NoContent`. The doc comment (lines 72-76) records the design choice: the command goes *directly* to the handler through the decorator pipeline rather than being brokered by the authentication service, so it gets validation, transaction, and cache invalidation like any other command. Note that the user id comes from the token, never from the request body: a caller cannot change someone else's password by changing a field.
-  - `ChangePreferencesAsync` (`HttpPut("preferences")`, lines 108-123) and `GetPreferencesAsync` (`HttpGet("preferences")`, lines 133-146): the [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)/[ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html) culture and theme persistence pair, both scoped to the token's user id. The comments (lines 99-102, 125-128) explain the purpose: preferences follow the user across devices, and a null field leaves that preference unchanged.
-- **Why it's built this way**: keeping the login/refresh/revoke algorithm in MMCA.Common means the security-critical token dance is written once and hardened once; ADC's real differences are two rate-limit attributes and one IP capture, and those are the only things overridden. Persisting UI preferences server-side (rather than only in browser storage) is what makes them survive a device change, and routing them through the same CQRS pipeline as every other write means they get the same validation and audit treatment (`[Rubric §27, Internationalization]`, `[Rubric §19, State Management]`).
+  - Attributes and constructor (`AuthController.cs:23-32`): the standard `[ApiController]` / `[Route("[controller]")]` / `[ApiVersion("1.0")]` stack (no class-level `[Authorize]` here, since login and registration must be anonymous), and a primary constructor forwarding the authentication service and current-user service to the base (line 32) while keeping the three handlers as its own.
+  - `RegisterAsync` (override, lines 44-55): the substantive reason for this override is one line, `HttpContext.Connection.RemoteIpAddress?.ToString()` (line 49), passed into `AuthenticationService.RegisterAsync` for the BR-213 registration rate limit. Reading the client IP requires the `HttpContext`, which the application layer does not have, so the controller is the correct place to capture it. Its attributes (lines 38-43) re-declare `[HttpPost("register")]`, `[AllowAnonymous]`, the `auth-ip` policy, and the response types; it returns `201 Created` with the [`AuthenticationResponse`](group-08-auth.md#authenticationresponse) and documents a `409 Conflict` for a duplicate email and `429` for the rate limit.
+  - `LoginAsync` (override, lines 68-71): an expression body that just calls `base.LoginAsync`. Its own value is documentation: the attribute block (lines 62-67) restates the route, `[AllowAnonymous]`, the `auth-ip` policy, and the 401/429 response types, and the doc comment above it (lines 57-61) is where the password-spray rationale is written down.
+  - `ChangePasswordAsync` (`HttpPut("password")`, lines 83-98): `[Authorize]` (line 79), reads `CurrentUserService.UserId` and returns `Unauthorized()` when null (lines 87-89), then dispatches [`ChangePasswordCommand`](#changepasswordcommand) and returns `204 NoContent`. The doc comment (lines 73-77) records the design choice: the command goes *directly* to the handler through the decorator pipeline rather than being brokered by the authentication service, so it gets validation, transaction, and cache invalidation like any other command. Note that the user id comes from the token, never from the request body: a caller cannot change someone else's password by changing a field.
+  - `ChangePreferencesAsync` (`HttpPut("preferences")`, lines 109-124) and `GetPreferencesAsync` (`HttpGet("preferences")`, lines 134-147): the [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)/[ADR-028](https://ivanball.github.io/docs/adr/028-dark-theme-mode.html) culture and theme persistence pair, both scoped to the token's user id. The comments (lines 100-103, 126-129) explain the purpose: preferences follow the user across devices, a null field leaves that preference unchanged, and the getter is what the client calls at login to reapply a returning user's choice.
+- **Why it's built this way**: keeping the login/refresh/revoke algorithm in MMCA.Common means the security-critical token dance is written once and hardened once; ADC's real difference is the IP capture on registration, and the rest of the override surface is attribute and OpenAPI documentation. Persisting UI preferences server-side (rather than only in browser storage) is what makes them survive a device change, and routing them through the same CQRS pipeline as every other write means they get the same validation and audit treatment (`[Rubric §27, Internationalization]`, `[Rubric §19, State Management]`).
 - **Where it's used**: mapped in the Identity service host and fronted by the Gateway's `/Auth` route; the tokens it issues are validated by the other three ADC services through JWKS discovery, with no shared secret ([ADR-004](https://ivanball.github.io/docs/adr/004-authentication-dual-fetch.html)).
+- **Caveats / not-in-source**: the `auth-ip` policy must be registered by the host's `AddCommonRateLimiting()` call; a consumer that inherits this base without it fails at startup on an unregistered policy (`AuthControllerBase.cs:34-38`). Nothing in `AuthController.cs` itself registers or configures the window.
 
 
 ---

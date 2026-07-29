@@ -160,12 +160,12 @@
           </thead>
           <tbody><tr>
           <td><code>.cs</code> files scanned</td>
-          <td align="right">2,252</td>
+          <td align="right">2,260</td>
           <td><code>00-inventory.md</code></td>
           </tr>
           <tr>
           <td>, in-scope</td>
-          <td align="right">2,164</td>
+          <td align="right">2,172</td>
           <td></td>
           </tr>
           <tr>
@@ -175,33 +175,33 @@
           </tr>
           <tr>
           <td>Type declaration rows (incl. partial-class fragments)</td>
-          <td align="right">2,727</td>
+          <td align="right">2,735</td>
           <td><code>00-inventory.md</code></td>
           </tr>
           <tr>
           <td><strong>Distinct type nodes (partials collapsed)</strong></td>
-          <td align="right"><strong>2,637</strong></td>
+          <td align="right"><strong>2,645</strong></td>
           <td>the master checklist</td>
           </tr>
           <tr>
           <td>→ mapped to a functional group</td>
-          <td align="right">2,637</td>
+          <td align="right">2,645</td>
           <td><code>classify.ps1</code> (0 unmapped)</td>
           </tr>
           <tr>
           <td>→ individually sectioned (named in a chapter)</td>
-          <td align="right">1,517</td>
+          <td align="right">1,524</td>
           <td><code>verify.ps1</code></td>
           </tr>
           <tr>
           <td>→ rolled up by project (G25 test classes)</td>
-          <td align="right">1,120</td>
+          <td align="right">1,121</td>
           <td>logged exception §2.2</td>
           </tr>
           <tr>
           <td>Distinct <code>###</code> sections written across 27 chapters</td>
-          <td align="right">1,456</td>
-          <td>covering the 1,517 (sibling families share a section, §2.3)</td>
+          <td align="right">1,446</td>
+          <td>covering the 1,524 (sibling families share a section, §2.3)</td>
           </tr>
           <tr>
           <td>Chapter overviews written</td>
@@ -209,9 +209,9 @@
           <td>one per group</td>
           </tr>
           </tbody></table></div>
-          <p><strong>Cross-check result:</strong> <code>verify.ps1</code> confirms <strong>0</strong> of the 1,517 individually-sectioned types are
+          <p><strong>Cross-check result:</strong> <code>verify.ps1</code> confirms <strong>0</strong> of the 1,524 individually-sectioned types are
           missing from their group chapter, every one appears as a <code>###</code> heading or in a sibling-family
-          <code>File:Line</code> table. 2,637 = 1,517 individually-sectioned + 1,120 rolled-up. Nothing dropped, nothing
+          <code>File:Line</code> table. 2,645 = 1,524 individually-sectioned + 1,121 rolled-up. Nothing dropped, nothing
           double-counted (each type maps to exactly one group).</p>
           <blockquote>
           <p><strong>Regeneration note (re-verified against current source, polyglot-persistence update).</strong> This audit
@@ -747,6 +747,100 @@
           <code>:22</code>. Final run: <strong>0 missing, rubric 34/34</strong>.</li>
           </ul>
           </blockquote>
+          <blockquote>
+          <p><strong>Regeneration note (re-verified against current source, v1.131.0 full drift sweep).</strong> Regenerated
+          2026-07-28 at <strong>framework v1.131.0</strong> (MMCA.Common <code>2c52aa9</code>, clean, prior-documented <code>3dff29b</code>;
+          MMCA.ADC <code>2ec77796</code>, clean, prior-documented <code>ec7a0c4a</code>; <code>FACTS.md</code> remains the source of truth for
+          the version / package / ADR figures). Net change since the v1.128.0 pass: <strong>+8</strong> distinct nodes
+          (2,637 -&gt; <strong>2,645</strong>; declaration rows 2,727 -&gt; 2,735; files scanned 2,252 -&gt; 2,260, generated
+          exclusions unchanged at 88), individually-sectioned 1,517 -&gt; <strong>1,524</strong>, rolled-up 1,120 -&gt; <strong>1,121</strong>,
+          across the (unchanged) <strong>27</strong> chapters (<code>verify.ps1</code>: 0 missing; rubric 34/34). The change is
+          <strong>+7 individually-sectioned types added, 0 removed, 0 regrouped</strong>, plus a <strong>+1 net test-only rollup</strong>
+          (+2 added, -1 removed) and <strong>2 citation-line corrections</strong>. No new functional group was needed
+          (<code>classify.ps1</code>: <strong>0 unmapped</strong>). The whole delta traces to one change: ADC commit <code>01551f14</code>
+          (&quot;Bump MMCA.Common to v1.131.0 and adopt the shared health-check and test bases&quot;, #77) and the
+          framework work it consumes.</p>
+          <ul>
+          <li><strong>G16 +1 (16 -&gt; 17):</strong> <code>HealthCheckTags</code>
+          (<code>MMCA.Common.Aspire/HealthCheckTags.cs:6</code>), the shared liveness/readiness tag vocabulary the
+          service hosts now register against. The chapter repacked from one sections unit to two, which
+          relocated the existing <code>HttpResilienceDefaults</code> section into the new <code>p02</code> unit unchanged.</li>
+          <li><strong>G22 +1 (73 -&gt; 74)</strong> and <strong>G23 +1 (82 -&gt; 83):</strong> <code>SelfHttpWarmupTask</code>, one per extractable service
+          host (<code>MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:19</code> and
+          <code>MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:19</code>). They are two distinct classes that share a
+          name, taught in their own service chapters. The Conference service has no equivalent today.</li>
+          <li><strong>G25 +5 (1,270 -&gt; 1,275), of which +4 are individually sectioned:</strong> the shared host bases
+          <code>ProductionHostApplicationFactory&lt;TEntryPoint&gt;</code> (<code>MMCA.Common.Testing/ProductionHostApplicationFactory.cs:22</code>)
+          and <code>GracefulShutdownTestsBase&lt;TEntryPoint&gt;</code> (<code>MMCA.Common.Testing/GracefulShutdownTestsBase.cs:24</code>),
+          the fitness base <code>ObservabilityConventionTestsBase</code>
+          (<code>MMCA.Common.Testing.Architecture/Bases/ObservabilityConventionTestsBase.cs:30</code>) and its own
+          suite <code>ObservabilityConventionTestsBaseTests</code>
+          (<code>MMCA.Common.Architecture.Tests/ObservabilityConventionTestsBaseTests.cs:14</code>); plus two rolled-up
+          suites, <code>AuthControllerBaseRateLimitTests</code>
+          (<code>MMCA.Common.API.Tests/Controllers/AuthControllerBaseRateLimitTests.cs:16</code>) and
+          <code>InfrastructureHealthChecksTests</code> (<code>MMCA.Common.Aspire.Tests/Health/InfrastructureHealthChecksTests.cs:16</code>).
+          The one <strong>removal</strong> this pass is ADC&#39;s local <code>GatewayApplicationFactory</code>
+          (<code>MMCA.ADC.Gateway.Tests/GatewayApplicationFactory.cs:12</code>), deleted in <code>01551f14</code> and functionally
+          superseded by the shared generic base above; because the shapes differ (local concrete factory vs
+          shared generic base) it is tracked as remove + add, not a move, per the earlier
+          <code>AnonymousAuthenticationStateProvider</code> precedent. Reusable-infrastructure sections rose 150 -&gt; 154;
+          the per-project rollup table moved <code>MMCA.ADC.Gateway.Tests</code> 6 -&gt; 5, <code>MMCA.Common.API.Tests</code> 65 -&gt; 66
+          and <code>MMCA.Common.Aspire.Tests</code> 11 -&gt; 12.</li>
+          <li><strong>Citation-only corrections (no behavior change):</strong> <code>AuthControllerBase</code>
+          (<code>MMCA.Common.API/Controllers/AuthControllerBase.cs</code>) <code>:16 -&gt; :40</code> in
+          <a href="group-12-api-hosting-mapping.html">group-12</a>, and <code>AuthController</code>
+          (<code>MMCA.ADC.Identity.API/Controllers/AuthController.cs</code>) <code>:25 -&gt; :26</code> in
+          <a href="group-24-identity-module.html">group-24</a>. Three rolled-up test classes also shifted lines
+          (<code>ConstructorDependencyCountTests</code> <code>:11 -&gt; :17</code>, <code>GracefulShutdownTests</code> <code>:14 -&gt; :9</code>,
+          <code>ObservabilityConventionTests</code> <code>:17 -&gt; :7</code>); they are cited only in
+          <a href="00-inventory.html"><code>00-inventory.md</code></a>, which regenerates.</li>
+          <li><strong>Cycles 18 -&gt; 19, and the 19th is a phantom.</strong> The new SCC pairs the two <code>SelfHttpWarmupTask</code>
+          classes with each other. Neither references the other; they are unrelated types in different
+          services that the extractor&#39;s globally-unique-name fallback cannot tell apart. It is the first
+          cycle whose members sit in two different groups (<code>G22</code> and <code>G23</code>), and correctly so, since each
+          chapter teaches its own class. Recorded here rather than suppressed, because
+          <code>00-dependency-manifest.md</code> is generated and will keep reporting it until the fallback gains
+          namespace disambiguation or one class is renamed. Edge resolution: <strong>9,050</strong> namespace-visible
+          (~96%), <strong>338</strong> globally-unique fallback (335 -&gt; 338), <strong>28</strong> dropped ambiguous (unchanged).</li>
+          <li><strong>Correction to the prior pass&#39;s section count.</strong> The v1.128.0 note recorded <code>###</code> sections as
+          1,436 -&gt; 1,456. The assembled corpus at that commit actually held <strong>1,439</strong>, so the recorded figure
+          was overstated by 17; it appears to have been inferred rather than measured. This pass measures it
+          directly from <code>concat.ps1</code>&#39;s per-chapter output: <strong>1,439 -&gt; 1,446</strong>, exactly +7 for the seven new
+          individually-sectioned types (group-16 16 -&gt; 17, group-22 64 -&gt; 65, group-24 65 -&gt; 66, group-27
+          145 -&gt; 149; group-12 unchanged at 57, its edit being citation-only). Coverage was never affected:
+          <code>verify.ps1</code> checks names, not section totals, and reported 0 missing at both passes.</li>
+          <li><strong>Post-author verification record:</strong> the spot-check pass returned two DRIFTED verdicts on prose
+          this run authored, both confirmed against source and corrected before assembly. (1) The group-22
+          overview attributed the design-time migrations factory&#39;s configuration-assembly handle to the
+          Application-layer <code>AssemblyReference</code>; the factory actually uses
+          <code>MMCA.ADC.Engagement.Infrastructure.AssemblyReference</code>
+          (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer.Engagement/DesignTimeSQLServerDbContextFactory.cs:27</code>),
+          which is the correct layer because the <code>IEntityTypeConfiguration</code> classes live in Infrastructure.
+          (2) The group-12 <code>ApiControllerBase</code> section claimed the shared <code>internal static</code> <code>ErrorHttpMapping</code>
+          members let <code>UnhandledResultFailureFilter</code> produce a &quot;byte-identical&quot; body. Only the status code
+          and the <code>errors</code> extension are shared; <code>Title</code>/<code>Detail</code> deliberately differ (&quot;Unhandled result
+          failure&quot; / &quot;The action returned a Result.Failure that was not mapped to an HTTP error response.&quot;
+          at <code>MMCA.Common.API/Middleware/UnhandledResultFailureFilter.cs:41-42</code> against &quot;Operation failed&quot; /
+          &quot;One or more errors occurred.&quot; at <code>MMCA.Common.API/Controllers/ApiControllerBase.cs:43-44</code>), so a
+          response that fell through the filter stays distinguishable from one the controller mapped on
+          purpose. Final run after both corrections: <strong>0 missing, rubric 34/34</strong>.</li>
+          <li><strong>One code-side fix landed out of this sweep.</strong> Authoring the group-16 chapter surfaced a stale
+          in-code comment: <code>OutboxPollFilterProcessor</code> explained its duplicated activity-name literals with
+          &quot;the Aspire package has no project references by design&quot;, which stopped being true when
+          <code>MMCA.Common.Aspire</code> took a <code>ProjectReference</code> on <code>MMCA.Common.Shared</code> for <code>HttpResilienceDefaults</code>.
+          Corrected in MMCA.Common <code>006812e</code> (PR #167, merged after this sweep&#39;s extraction at <code>2c52aa9</code>):
+          the real reason is that the package does not reference <code>MMCA.Common.Infrastructure</code>, where
+          <code>OutboxProcessor</code> lives, so <code>AddServiceDefaults</code> stays usable from a host that does not take the
+          persistence stack. That commit lengthened the comment by three lines, shifting the citations inside
+          the type&#39;s body, so the group-16 overview and section were re-cited against <code>006812e</code>
+          (<code>OnEnd</code> <code>:24 -&gt; :27</code>, parent-chain walk <code>:34 -&gt; :37</code>, the both-names match <code>:36-37 -&gt; :39-40</code>, the
+          <code>Recorded</code> clear <code>:42 -&gt; :45</code>, the null guard <code>:26-30 -&gt; :29-33</code>, the two constants
+          <code>:20-21 -&gt; :23-24</code>, the comment itself <code>:17-19 -&gt; :17-22</code>). The type&#39;s own declaration line (<code>:15</code>)
+          is above the comment and did not move, so the generated inventory, taxonomy and node set are
+          unaffected and were not re-extracted. The chapter prose also repeated the false
+          &quot;no project references&quot; reason in two places; both now state the Infrastructure-specific one.</li>
+          </ul>
+          </blockquote>
           <hr>
           <h2 id="2-exceptions-log-every-deliberate-omission-with-reason">2. Exceptions log (every deliberate omission, with reason)</h2>
           <h3 id="21-generated--scaffolded-code-not-sectioned-88-files">2.1 Generated / scaffolded code, not sectioned (88 files)</h3>
@@ -756,21 +850,24 @@
           the <code>.proto</code>/gRPC contracts (see <a href="group-07-persistence-ef-core.html">group-07</a>,
           <a href="group-13-grpc-contracts.html">group-13</a>, and <a href="devops-testing.html">devops-testing</a>). The full file list is
           in <a href="00-inventory.html#generated--excluded-artifacts-no-type-sections-written"><code>00-inventory.md</code></a>.</p>
-          <h3 id="22-per-fact-test-classes-rolled-up-by-project-1120-types">2.2 Per-<code>[Fact]</code> test classes, rolled up by project (1,120 types)</h3>
+          <h3 id="22-per-fact-test-classes-rolled-up-by-project-1121-types">2.2 Per-<code>[Fact]</code> test classes, rolled up by project (1,121 types)</h3>
           <p>Per the guide&#39;s TESTS note, individual test classes are <strong>not</strong> given per-type sections. The
           <a href="group-27-testing-infrastructure.html">Testing chapter (group-27)</a> instead:</p>
           <ul>
-          <li>sections the <strong>reusable</strong> test infrastructure in full (the <strong>150</strong> types in <code>MMCA.Common.Testing</code>,
+          <li>sections the <strong>reusable</strong> test infrastructure in full (the <strong>154</strong> types in <code>MMCA.Common.Testing</code>,
           <code>.Testing.E2E</code>, <code>.Testing.UI</code>, the shared <strong><code>.Testing.Architecture</code></strong> rule library + bases, now
           including the six convention/fitness bases added since v1.93.0, the web-vitals collector, the
           localization resx-parity base, the slice-cohesion base, the markup-snapshot helper, the new
           contract/route-authorization bases (<code>RouteAuthorizationTestsBase</code>, the OpenAPI/ProblemDetails/
           ServiceInfo-versioning contract bases) and the shared <code>HttpTestDoubles</code> UI harness added since
-          v1.111.0, and the per-repo architecture-fitness test classes plus the <code>Gallery</code> harness), and</li>
-          <li>rolls the remaining <strong>1,120</strong> per-suite test classes (including the <code>MMCA.Common.Benchmarks</code>
+          v1.111.0, the shared <code>ProductionHostApplicationFactory&lt;TEntryPoint&gt;</code> /
+          <code>GracefulShutdownTestsBase&lt;TEntryPoint&gt;</code> host bases and the <code>ObservabilityConventionTestsBase</code>
+          fitness base added this pass, and the per-repo architecture-fitness test classes plus the <code>Gallery</code>
+          harness), and</li>
+          <li>rolls the remaining <strong>1,121</strong> per-suite test classes (including the <code>MMCA.Common.Benchmarks</code>
           perf-smoke project) into a <strong>per-project table</strong> (purpose + style:
           unit / integration / fitness / E2E / component / performance-smoke).
-          Every one of the 1,120 remains individually listed with <code>file:line</code> in
+          Every one of the 1,121 remains individually listed with <code>file:line</code> in
           <a href="00-inventory.html"><code>00-inventory.md</code></a>. This is the only category of first-party type not given its own
           prose section.</li>
           </ul>
@@ -778,19 +875,27 @@
           <p>Near-identical families (per-entity <code>Add*/Remove*/Update*</code> commands, <code>*DTOMapper</code>, <code>*CreateRequest</code>,
           <code>*Validator</code>, per-type filter strategies, etc.) are taught in one <code>### A, B, C</code> section that explains
           the shared shape once. <strong>Every</strong> grouped type is still named and cited individually via the section&#39;s
-          <code>File:Line</code> table, so citation coverage is complete (this is what <code>verify.ps1</code> checks). The 1,517
-          individually-sectioned types are covered by 1,456 <code>###</code> sections; the 61-type difference is family grouping.</p>
+          <code>File:Line</code> table, so citation coverage is complete (this is what <code>verify.ps1</code> checks). The 1,524
+          individually-sectioned types are covered by 1,446 <code>###</code> sections; the 78-type difference is family grouping.</p>
           <hr>
           <h2 id="3-grouping--ordering-verification">3. Grouping &amp; ordering verification</h2>
           <ul>
-          <li><strong>Every type in exactly one group.</strong> <code>classify.ps1</code> assigns all 2,637 nodes via name-level overrides
+          <li><strong>Every type in exactly one group.</strong> <code>classify.ps1</code> assigns all 2,645 nodes via name-level overrides
           (for the grab-bag <code>MMCA.Common.*Interfaces*/Services</code> namespaces) + ordered namespace-prefix rules;
-          it reports <strong>0 unmapped</strong> and the per-group counts sum to 2,637. See
+          it reports <strong>0 unmapped</strong> and the per-group counts sum to 2,645. See
           <a href="00-group-taxonomy.html"><code>00-group-taxonomy.md</code></a>.</li>
           <li><strong>Within-group ascending Level.</strong> Each chapter&#39;s sections were authored from a pre-sorted, Level-
           ascending unit table, so no section precedes a same-group type it depends on (ties broken by name).</li>
-          <li><strong>Cycles kept whole.</strong> All <strong>18</strong> dependency cycles (SCCs) sit inside a single group, never split
-          (re-verified for the two cycles new in the v1.128.0 pass, both test-only and both wholly in
+          <li><strong>Cycles kept whole.</strong> <strong>18 of the 19</strong> dependency cycles (SCCs) sit inside a single group, never
+          split. The one exception is the 19th, added this pass, and it is not a real cycle: the two
+          identically-named <code>SelfHttpWarmupTask</code> classes
+          (<code>MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:19</code>, <code>G22</code>, and
+          <code>MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:19</code>, <code>G23</code>) are unrelated types in different
+          services that neither references the other; the extractor&#39;s globally-unique-name fallback cannot
+          distinguish them and links each to the other, producing a phantom 2-node SCC whose members sit in
+          two different groups. Splitting it across the two service chapters is correct, since each chapter
+          teaches its own class. The real cycles were re-verified as whole
+          (including the two new in the v1.128.0 pass, both test-only and both wholly in
           <a href="group-27-testing-infrastructure.html">group-27</a>: <code>MidSaveContextCreatingDbContext</code> /
           <code>ReentrantSaveInterceptor</code> and <code>FailingSaveInterceptor</code> / <code>OutboxRoutingTestDbContext</code>, all four
           assigned <code>G25</code> in <code>out/00-assigned.csv</code>):

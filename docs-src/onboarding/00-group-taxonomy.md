@@ -1,6 +1,6 @@
 # Phase 1b - Functional Group Taxonomy
 
-This is the **primary axis** of the guide. Every one of the **2,637** distinct first-party type
+This is the **primary axis** of the guide. Every one of the **2,645** distinct first-party type
 nodes from [`00-inventory.md`](00-inventory.md) is assigned to **exactly one** functional group -
 its primary *home*: the capability or cross-cutting concern it most exists to serve. A type used
 across many groups (e.g. `Result<T>`, the entity base) lives in the one foundational group that
@@ -68,20 +68,20 @@ disclosure) and is cross-linked in the chapter.
 | G13 | **gRPC & Inter-Service Contracts**<br/>group-13-grpc-contracts.md | 6 | L0-L4 | Typed gRPC clients/servers, interceptors, Result-over-the-wire, and the ServiceContract marker for synchronous inter-service calls ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)). |
 | G14 | **Module System, Composition & Configuration**<br/>group-14-module-system-composition.md | 34 | L0-L10 | IModule discovery + Kahn-ordered ModuleLoader, the DI composition roots, assembly markers, data-source/database attributes, and options/settings binding. |
 | G15 | **Common UI Framework (MudBlazor components, theme, base pages)**<br/>group-15-common-ui-framework.md | 82 | L0-L7 | Reusable Blazor building blocks: the data-grid list page base, theme, common pages/services, and UI extensions shared by every consumer app. |
-| G16 | **Aspire Orchestration & Service Defaults**<br/>group-16-aspire-orchestration.md | 16 | L0-L3 | The Aspire AppHost wiring, ServiceDefaults, warmup, telemetry and security helpers that compose and run the distributed app locally and in Azure. |
+| G16 | **Aspire Orchestration & Service Defaults**<br/>group-16-aspire-orchestration.md | 17 | L0-L3 | The Aspire AppHost wiring, ServiceDefaults, warmup, telemetry and security helpers that compose and run the distributed app locally and in Azure. |
 | G17 | **ADC Conference - Domain Model & Module Contracts**<br/>group-17-conference-domain.md | 86 | L0-L8 | The Conference bounded context: Event/Session/Speaker/Category/Question aggregates, their domain events and invariants, plus the Shared identifiers/DTOs/integration-event contracts. |
 | G18 | **ADC Conference - Application & Use Cases**<br/>group-18-conference-application.md | 216 | L0-L11 | Conference CQRS handlers, validators, DTOs, specifications, the Sessionize import, and the session-selection decision-support analytics. |
 | G19 | **ADC Conference - Infrastructure & Persistence**<br/>group-19-conference-infrastructure.md | 28 | L0-L8 | The Conference module DbContext registration, EF entity configurations, database seeding, and infrastructure services. |
 | G20 | **ADC Conference - API, gRPC Contracts & Service Host**<br/>group-20-conference-api-grpc.md | 41 | L0-L10 | Conference REST controllers, the .Contracts gRPC surface, the extractable service host, and the gRPC adapter. |
 | G21 | **ADC Conference - UI**<br/>group-21-conference-ui.md | 89 | L0-L8 | The Conference Blazor pages (events, sessions, speakers, categories, questions, rooms, feedback, public, session-selection) and their UI services. |
-| G22 | **ADC Engagement Module (Session Bookmarks)**<br/>group-22-engagement-module.md | 73 | L0-L11 | The Engagement bounded context end-to-end: bookmark aggregate, use cases, persistence, API/contracts/service, and feedback UI. |
+| G22 | **ADC Engagement Module (Session Bookmarks)**<br/>group-22-engagement-module.md | 74 | L0-L11 | The Engagement bounded context end-to-end: bookmark aggregate, use cases, persistence, API/contracts/service, and feedback UI. |
 | G26 | **ADC Engagement Live Layer (Real-Time Polls & Session Q&A)**<br/>group-23-engagement-live-layer.md | 94 | L0-L10 | Real-time audience interaction in the Engagement bounded context: event-wide live polls with voting and moderated per-session Q&A with upvoting, over the SignalR hub-channel transport ([ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html)) and the cross-service gRPC live-channel adapter. |
-| G23 | **ADC Identity Module (Users, Profiles, GDPR Export/Erasure)**<br/>group-24-identity-module.md | 82 | L0-L11 | The Identity bounded context end-to-end: the User aggregate, change-password/delete/export use cases, persistence, API/contracts/service, and profile/user UI. |
+| G23 | **ADC Identity Module (Users, Profiles, GDPR Export/Erasure)**<br/>group-24-identity-module.md | 83 | L0-L11 | The Identity bounded context end-to-end: the User aggregate, change-password/delete/export use cases, persistence, API/contracts/service, and profile/user UI. |
 | G24 | **ADC Application Host, UI Shell & Cross-Module Composition**<br/>group-25-adc-host-composition.md | 18 | L0-L11 | The ADC host: the Blazor Web/WASM/WinUI shells, host pages/services, security, and the cross-module application composition. |
 | G27 | **Device Capability Abstraction Layer (Native Contracts, MAUI, Browser & Fallback Adapters)**<br/>group-26-device-capability-layer.md | 87 | L0-L4 | Per-capability interface contracts (biometric, geocoding/geolocation, speech, push registration, media/clipboard/screenshot, haptics, share, external auth/links, local cache/notifications, connectivity/battery/accessibility, deep links) plus their MAUI-native, browser-JS-interop, and inert fallback implementations, selected per host at DI composition time ([ADR-042](https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html)/043/044/045). |
-| G25 | **Testing & Quality Infrastructure**<br/>group-27-testing-infrastructure.md | 1270 | L0-L17 | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception). |
+| G25 | **Testing & Quality Infrastructure**<br/>group-27-testing-infrastructure.md | 1275 | L0-L17 | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception). |
 
-**Reconciliation:** 1367 production types across 26 groups + 1270 test/testing types in G25 = **2637** (matches the inventory's distinct-node count). No type appears twice; none dropped.
+**Reconciliation:** 1370 production types across 26 groups + 1275 test/testing types in G25 = **2645** (matches the inventory's distinct-node count). No type appears twice; none dropped.
 
 ---
 
@@ -731,13 +731,14 @@ disclosure) and is cross-linked in the chapter.
 
 ### G16 - Aspire Orchestration & Service Defaults
 
-> `group-16-aspire-orchestration.md` | 16 types | The Aspire AppHost wiring, ServiceDefaults, warmup, telemetry and security helpers that compose and run the distributed app locally and in Azure.
+> `group-16-aspire-orchestration.md` | 17 types | The Aspire AppHost wiring, ServiceDefaults, warmup, telemetry and security helpers that compose and run the distributed app locally and in Azure.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
 | 0 | `CspPolicy` | record | MMCA.Common.Aspire.Security |
 | 0 | `Extensions` | class | MMCA.Common.Aspire.Hosting |
 | 0 | `GatewayCorsExtensions` | class | MMCA.Common.Aspire |
+| 0 | `HealthCheckTags` | class | MMCA.Common.Aspire |
 | 0 | `HttpResilienceDefaults` | class | MMCA.Common.Shared.Resilience |
 | 0 | `IWarmupTask` | interface | MMCA.Common.Aspire.Warmup |
 | 0 | `OutboxPollFilterProcessor` | class | MMCA.Common.Aspire.Telemetry |
@@ -1249,7 +1250,7 @@ disclosure) and is cross-linked in the chapter.
 
 ### G22 - ADC Engagement Module (Session Bookmarks)
 
-> `group-22-engagement-module.md` | 73 types | The Engagement bounded context end-to-end: bookmark aggregate, use cases, persistence, API/contracts/service, and feedback UI.
+> `group-22-engagement-module.md` | 74 types | The Engagement bounded context end-to-end: bookmark aggregate, use cases, persistence, API/contracts/service, and feedback UI.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
@@ -1260,8 +1261,8 @@ disclosure) and is cross-linked in the chapter.
 | 0 | `AssemblyReference` | class | MMCA.ADC.Engagement.Infrastructure |
 | 0 | `ClassReference` | class | MMCA.ADC.Engagement.API |
 | 0 | `ClassReference` | class | MMCA.ADC.Engagement.Application |
-| 0 | `ClassReference` | class | MMCA.ADC.Engagement.Domain |
 | 0 | `ClassReference` | class | MMCA.ADC.Engagement.Infrastructure |
+| 0 | `ClassReference` | class | MMCA.ADC.Engagement.Domain |
 | 0 | `CreateBookmarkRequest` | record | MMCA.ADC.Engagement.Shared.UserSessionBookmarks |
 | 0 | `EngagementErrorResources` | class | MMCA.ADC.Engagement.API.Resources |
 | 0 | `EngagementFeatures` | class | MMCA.ADC.Engagement.Shared |
@@ -1279,6 +1280,7 @@ disclosure) and is cross-linked in the chapter.
 | 1 | `DisabledBookmarkCountService` | class | MMCA.ADC.Engagement.Shared.UserSessionBookmarks |
 | 1 | `ILiveChannelPublishQueue` | interface | MMCA.ADC.Engagement.Application.Live |
 | 1 | `LifecycleTransitionRequest` | record | MMCA.ADC.Engagement.Shared |
+| 1 | `SelfHttpWarmupTask` | class | MMCA.ADC.Engagement.Service |
 | 1 | `SessionReminderPlanner` | class | MMCA.ADC.Engagement.UI.Services |
 | 1 | `UserEngagementExportDTO` | record | MMCA.ADC.Engagement.Shared.Exports |
 | 1 | `UserSessionBookmarkDTO` | record | MMCA.ADC.Engagement.Shared.UserSessionBookmarks |
@@ -1430,18 +1432,18 @@ disclosure) and is cross-linked in the chapter.
 
 ### G23 - ADC Identity Module (Users, Profiles, GDPR Export/Erasure)
 
-> `group-24-identity-module.md` | 82 types | The Identity bounded context end-to-end: the User aggregate, change-password/delete/export use cases, persistence, API/contracts/service, and profile/user UI.
+> `group-24-identity-module.md` | 83 types | The Identity bounded context end-to-end: the User aggregate, change-password/delete/export use cases, persistence, API/contracts/service, and profile/user UI.
 
 | Level | Type | Kind | Namespace |
 |-------|------|------|-----------|
-| 0 | `AssemblyReference` | class | MMCA.ADC.Identity.Application |
-| 0 | `AssemblyReference` | class | MMCA.ADC.Identity.API |
 | 0 | `AssemblyReference` | class | MMCA.ADC.Identity.Infrastructure |
+| 0 | `AssemblyReference` | class | MMCA.ADC.Identity.API |
 | 0 | `AssemblyReference` | class | MMCA.ADC.Identity.Domain |
+| 0 | `AssemblyReference` | class | MMCA.ADC.Identity.Application |
 | 0 | `ChangePreferencesRequest` | record | MMCA.ADC.Identity.Application.Users.UseCases.ChangePreferences |
-| 0 | `ClassReference` | class | MMCA.ADC.Identity.API |
 | 0 | `ClassReference` | class | MMCA.ADC.Identity.Infrastructure |
 | 0 | `ClassReference` | class | MMCA.ADC.Identity.Domain |
+| 0 | `ClassReference` | class | MMCA.ADC.Identity.API |
 | 0 | `ClassReference` | class | MMCA.ADC.Identity.Application |
 | 0 | `DependencyInjection` | class | MMCA.ADC.Identity.Infrastructure |
 | 0 | `ExportUserDataQuery` | record | MMCA.ADC.Identity.Application.Users.UseCases.ExportUserData |
@@ -1467,6 +1469,7 @@ disclosure) and is cross-linked in the chapter.
 | 1 | `DisabledAttendeeQueryService` | class | MMCA.ADC.Identity.Shared.Users |
 | 1 | `HttpContextExternalLoginEmailVerifier` | class | MMCA.ADC.Identity.API.Authentication |
 | 1 | `IUserUIService` | interface | MMCA.ADC.Identity.UI.Services |
+| 1 | `SelfHttpWarmupTask` | class | MMCA.ADC.Identity.Service |
 | 1 | `UserDataExportEngagementSectionDTO` | record | MMCA.ADC.Identity.Shared.Users |
 | 1 | `UserDataExportNotificationSectionDTO` | record | MMCA.ADC.Identity.Shared.Users |
 | 1 | `UserDTO` | record | MMCA.ADC.Identity.Shared.Users |
@@ -1638,14 +1641,14 @@ disclosure) and is cross-linked in the chapter.
 
 ### G25 - Testing & Quality Infrastructure
 
-> `group-27-testing-infrastructure.md` | 1270 types | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).
+> `group-27-testing-infrastructure.md` | 1275 types | All test projects + the reusable Testing/Testing.E2E/Testing.UI bases, architecture-fitness tests, and the component Gallery harness; individual [Fact]s are rolled up by project (logged exception).
 
 Rolled up by project (individual `[Fact]`s not sectioned - logged exception). Reusable test
 infrastructure assemblies (sectioned in full in the chapter) are marked **(infra)**.
 
 | Test project (assembly) | Types | Levels | Kind |
 |--------------------------|-------|--------|------|
-| `MMCA.ADC.Architecture.Tests` **(infra)** | 30 | L0-L10 |  |
+| `MMCA.ADC.Architecture.Tests` **(infra)** | 30 | L1-L10 |  |
 | `MMCA.ADC.Conference.API.Tests`  | 16 | L1-L9 |  |
 | `MMCA.ADC.Conference.Application.Tests`  | 136 | L0-L12 |  |
 | `MMCA.ADC.Conference.Domain.Tests`  | 22 | L5-L9 |  |
@@ -1662,7 +1665,7 @@ infrastructure assemblies (sectioned in full in the chapter) are marked **(infra
 | `MMCA.ADC.Engagement.IntegrationTests`  | 13 | L4-L16 |  |
 | `MMCA.ADC.Engagement.Shared.Tests`  | 2 | L2-L2 |  |
 | `MMCA.ADC.Engagement.UI.Tests`  | 19 | L3-L7 |  |
-| `MMCA.ADC.Gateway.Tests`  | 6 | L0-L13 |  |
+| `MMCA.ADC.Gateway.Tests`  | 5 | L0-L13 |  |
 | `MMCA.ADC.Identity.API.Tests`  | 7 | L1-L12 |  |
 | `MMCA.ADC.Identity.Application.Tests`  | 21 | L2-L10 |  |
 | `MMCA.ADC.Identity.Domain.Tests`  | 4 | L7-L7 |  |
@@ -1674,18 +1677,18 @@ infrastructure assemblies (sectioned in full in the chapter) are marked **(infra
 | `MMCA.ADC.Notification.Application.Tests`  | 5 | L1-L10 |  |
 | `MMCA.ADC.Notification.IntegrationTests`  | 8 | L1-L16 |  |
 | `MMCA.ADC.ServiceBusEmulator.IntegrationTests`  | 3 | L0-L4 |  |
-| `MMCA.Common.API.Tests`  | 65 | L0-L12 |  |
+| `MMCA.Common.API.Tests`  | 66 | L0-L12 |  |
 | `MMCA.Common.Application.Tests`  | 164 | L0-L10 |  |
-| `MMCA.Common.Architecture.Tests` **(infra)** | 25 | L1-L8 |  |
-| `MMCA.Common.Aspire.Tests`  | 11 | L0-L3 |  |
+| `MMCA.Common.Architecture.Tests` **(infra)** | 26 | L1-L8 |  |
+| `MMCA.Common.Aspire.Tests`  | 12 | L0-L3 |  |
 | `MMCA.Common.Benchmarks`  | 6 | L0-L4 |  |
 | `MMCA.Common.Domain.Tests`  | 43 | L0-L6 |  |
 | `MMCA.Common.Grpc.Tests`  | 13 | L0-L4 |  |
 | `MMCA.Common.Infrastructure.Redis.Tests`  | 1 | L3-L3 |  |
 | `MMCA.Common.Infrastructure.Tests`  | 185 | L0-L11 |  |
 | `MMCA.Common.Shared.Tests`  | 23 | L0-L5 |  |
-| `MMCA.Common.Testing` **(infra)** | 12 | L0-L9 |  |
-| `MMCA.Common.Testing.Architecture` **(infra)** | 38 | L0-L4 |  |
+| `MMCA.Common.Testing` **(infra)** | 14 | L0-L9 |  |
+| `MMCA.Common.Testing.Architecture` **(infra)** | 39 | L0-L4 |  |
 | `MMCA.Common.Testing.E2E` **(infra)** | 21 | L0-L4 |  |
 | `MMCA.Common.Testing.Tests`  | 9 | L0-L10 |  |
 | `MMCA.Common.Testing.UI` **(infra)** | 15 | L0-L3 |  |
