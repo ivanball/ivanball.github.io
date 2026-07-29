@@ -414,7 +414,7 @@
           <tr>
           <td><a href="048-primitive-identifier-type-aliases.html">048</a></td>
           <td>Primitive identifier type aliases</td>
-          <td>Entity IDs are primitives behind per-module <code>global using {Entity}IdentifierType = ...</code> aliases, linked solution-wide via <code>Directory.Build.props</code>, chosen over DDD strongly-typed ID structs: readable signatures with zero EF/serializer/OpenAPI friction, at the cost of no compile-time protection against swapping two same-typed IDs. Wrapper structs were considered and deferred (empty <code>StronglyTypedIds</code> placeholder folders survive in five module <code>.Shared</code> projects).</td>
+          <td>Entity IDs are primitives behind per-module <code>global using {Entity}IdentifierType = ...</code> aliases, linked solution-wide via <code>Directory.Build.props</code>, chosen over DDD strongly-typed ID structs: readable signatures with zero EF/serializer/OpenAPI friction, at the cost of no compile-time protection against swapping two same-typed IDs. Wrapper structs were considered and deferred: no wrapper-struct identifier type exists in any repo.</td>
           </tr>
           <tr>
           <td><a href="049-library-configureawait-policy.html">049</a></td>

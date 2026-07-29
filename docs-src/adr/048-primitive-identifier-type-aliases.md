@@ -4,7 +4,9 @@
 Accepted (2026-07-15). Revised 2026-07-21 (corrected the empty-placeholder-folder inventory and the
 `Directory.Build.props` and ADC `User` source citations). Revised 2026-07-28 (refreshed the Common
 `Directory.Build.props` alias-block line range and corrected the framing of what Common's
-`UserIdentifierType` alias types).
+`UserIdentifierType` alias types). Revised 2026-07-29 (dropped the `StronglyTypedIds` placeholder-folder
+evidence and deleted the folders themselves: being empty, they were untracked by git and absent from
+every fresh clone, so the deferral now rests on the verifiable absence of any wrapper-struct type).
 
 ## Context
 Every entity needs an identity type. The framework's base entity is generic over that type:
@@ -18,14 +20,9 @@ generic parameter accepts either of the two common identity styles:
    prescribes, to make identifiers non-interchangeable at compile time.
 
 The codebase chose the first, but until now that choice lived only as a CLAUDE.md convention with no
-recorded trade-off. The wrapper-struct alternative was scaffolded, not written: an empty `StronglyTypedIds`
-folder survives in five module `.Shared` projects (Store Catalog, Sales, and Identity, plus ADC
-Conference and Engagement, for example
-`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/StronglyTypedIds` and
-`MMCA.Store/Source/Modules/Catalog/MMCA.Store.Catalog.Shared/StronglyTypedIds`), while no such folder
-exists under `MMCA.Common.Shared` or `MMCA.ADC.Identity.Shared`. Every surviving folder holds **no
-types**. This ADR records the primitive-alias decision and its cost so the deferral is deliberate and
-legible.
+recorded trade-off. The wrapper-struct alternative was considered and left unbuilt: **no wrapper-struct
+identifier type exists anywhere in the workspace**, in any repo or layer. This ADR records the
+primitive-alias decision and its cost so the deferral is deliberate and legible.
 
 ## Decision
 Model every identifier as a **primitive named through a global-using alias**, declared per module,
@@ -74,9 +71,9 @@ not as a wrapper struct.
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/IntegrationEvents/UserRegistered.cs:24`).
   No converter, serializer shim, or OpenAPI schema mapping appears at any hop: `int` and `Guid` are the
   values on the wire and in the store.
-- **The wrapper-struct alternative is deliberately deferred, not planned.** The `StronglyTypedIds`
-  folders exist as the location wrappers would occupy, and today they hold no types. That is the
-  current reality: a considered option left unbuilt, not scheduled work.
+- **The wrapper-struct alternative is deliberately deferred, not planned.** No wrapper-struct
+  identifier type exists in any repo. That is the current reality: a considered option left unbuilt,
+  not scheduled work.
 
 ## Rationale
 - **Readable signatures at zero runtime cost.** `GetRepository<User, UserIdentifierType>()` reads as
@@ -108,8 +105,8 @@ not as a wrapper struct.
   review.
 - **Revisiting the trade would be a broad change.** Adopting wrapper structs later would touch every
   generic call site plus add converters and JSON/OpenAPI handling, which is precisely the friction
-  being avoided. The empty `StronglyTypedIds` folders mark where they would live if that cost were ever
-  judged worth paying.
+  being avoided. Each module's `.Shared` project is where the wrappers would live if that cost were
+  ever judged worth paying.
 
 ## Related
 ADR-001 (the per-entity DTO mappers are parameterized by this identifier type, `IEntityDTOMapper<TEntity, TEntityDTO, TIdentifierType>`), ADR-034 (the generic entity controllers and query contract ride on the same identifier type parameter), ADR-006 (aliases are declared per module in the module's own `.Shared` project, matching database-per-service ownership), ADR-015 (the contrast: this convention is not fitness-enforced, unlike the invariants that gate the build).
