@@ -207,7 +207,7 @@
           </tr>
           <tr>
           <td>IsPublished</td>
-          <td>Whether the event is visible to all users (default: false). When false, the event is visible only to organizers. When true, the event is visible to all users via public endpoints.</td>
+          <td>Whether the event is visible to all users (default: false). When false, the event is visible only to privileged readers (<code>Organizer</code> or <code>ContentEditor</code>). When true, the event is visible to all users via public endpoints.</td>
           </tr>
           <tr>
           <td>LastSessionizeRefreshOn</td>
@@ -371,6 +371,7 @@
           <li>Owns many <strong>SpeakerQuestionAnswers</strong> (child feedback entities for speaker-level survey responses)</li>
           <li>May be linked to one <strong>User</strong> (via LinkedUserId: 1:1, see Section 12.4)</li>
           </ul>
+          <p><strong>Visibility:</strong> a speaker is publicly visible only with at least one visible session (BR-49 eligible, on a Published event) or an explicit <code>EventSpeaker</code> row on a Published event (BR-239). Hidden speakers are filtered from list, paged, lookup, and junction reads, and a GET by id returns HTTP 404 for non-privileged callers. Privileged readers (<code>Organizer</code> or <code>ContentEditor</code>) see every speaker. <code>Email</code> stays redacted from public reads regardless of visibility (BR-66).</p>
           <p><strong>Lifecycle:</strong> <code>Speaker.Create(id?, firstName, lastName, email?, bio?, tagLine?, profilePicture?, isTopSpeaker)</code> sets core identity fields. Social links (TwitterHandle, LinkedInUrl, GitHubUrl, WebsiteUrl) and LinkedUserId are set only via <code>Update()</code>, they are not accepted at creation time. This reflects the typical flow: speakers are created during Sessionize import with basic profile data, and social links are populated in a subsequent update pass.</p>
           <hr>
           <h4 id="category-aggregate-root">Category (Aggregate Root)</h4>
@@ -776,7 +777,7 @@
           </tr>
           <tr>
           <td>Role</td>
-          <td>The user&#39;s authorization role: <code>Attendee</code> (default) or <code>Organizer</code>. Determines access to administrative endpoints.</td>
+          <td>The user&#39;s authorization role: <code>Attendee</code> (default), <code>ContentEditor</code>, or <code>Organizer</code>. Determines access to administrative endpoints. <code>Organizer</code> and <code>ContentEditor</code> together form the <strong>privileged reader</strong> audience used by the visibility rules (BR-49, BR-108, BR-132, BR-239). ADC has no <code>Admin</code> role.</td>
           </tr>
           <tr>
           <td>LinkedSpeakerId</td>
@@ -1010,7 +1011,7 @@
           </tr>
           <tr>
           <td>BR-49</td>
-          <td><code>Session.Status</code> recognizes six Sessionize status values: <strong><code>Accepted</code></strong>: session is confirmed and appears on the public schedule; it is bookmarkable and eligible for feedback. <strong><code>Waitlisted</code></strong>: session is on the waitlist, pending a slot. <strong><code>Accept Queue</code></strong>: session is queued for acceptance review. <strong><code>Nominated</code></strong>: session has been nominated for consideration. <strong><code>Decline Queue</code></strong>: session is queued for decline review. <strong><code>Declined</code></strong>: session was rejected. Only <strong><code>Accepted</code></strong> sessions appear on the public schedule and are eligible for bookmarking and feedback. All other statuses (<code>Waitlisted</code>, <code>Accept Queue</code>, <code>Nominated</code>, <code>Decline Queue</code>, <code>Declined</code>) are excluded from public views (filtered from GET list responses for non-organizers) and cannot be bookmarked or receive feedback. Unknown values from Sessionize are stored as-is and treated as ineligible: they are excluded from public views and engagement actions. <strong>Null status</strong> (the default for manually created sessions) follows <code>Accepted</code> rules: the session is visible, bookmarkable, and eligible for feedback.</td>
+          <td><code>Session.Status</code> recognizes six Sessionize status values: <strong><code>Accepted</code></strong>: session is confirmed and appears on the public schedule; it is bookmarkable and eligible for feedback. <strong><code>Waitlisted</code></strong>: session is on the waitlist, pending a slot. <strong><code>Accept Queue</code></strong>: session is queued for acceptance review. <strong><code>Nominated</code></strong>: session has been nominated for consideration. <strong><code>Decline Queue</code></strong>: session is queued for decline review. <strong><code>Declined</code></strong>: session was rejected. Only <strong><code>Accepted</code></strong> sessions appear on the public schedule and are eligible for bookmarking and feedback. All other statuses (<code>Waitlisted</code>, <code>Accept Queue</code>, <code>Nominated</code>, <code>Decline Queue</code>, <code>Declined</code>) are excluded from public views (filtered from GET list responses for non-privileged readers) and cannot be bookmarked or receive feedback. Unknown values from Sessionize are stored as-is and treated as ineligible: they are excluded from public views and engagement actions. <strong>Null status</strong> (the default for manually created sessions) follows <code>Accepted</code> rules: the session is visible, bookmarkable, and eligible for feedback. <strong>Eligibility is an allow-list, not a deny-list:</strong> the test is &quot;status is null or <code>Accepted</code>&quot; (case-insensitive), so any value not on the list, including one Sessionize adds later, is ineligible by default. The allow-list gates the public list and by-id reads, the lookup and junction endpoints (BR-132), the calendar/ICS export, and the now-next view alike.</td>
           </tr>
           <tr>
           <td>BR-50</td>
@@ -1090,7 +1091,7 @@
           </tr>
           <tr>
           <td>BR-108</td>
-          <td><strong>Event visibility:</strong> <code>Event.IsPublished</code> controls public visibility. Unpublished events (default) are visible <strong>only to organizers</strong>: public read endpoints (BR-43) exclude them. Published events (<code>IsPublished = true</code>) are visible to all users. Only organizers can change event visibility via <code>POST /api/events/{id}/publish</code> and <code>POST /api/events/{id}/unpublish</code>. These are action endpoints (state transitions), not resource replacements, so they use POST rather than PUT. No request body is required.</td>
+          <td><strong>Event visibility:</strong> <code>Event.IsPublished</code> controls public visibility. Unpublished events (default) are visible <strong>only to privileged readers</strong> (<code>Organizer</code> or <code>ContentEditor</code>): public read endpoints (BR-43) exclude them. Published events (<code>IsPublished = true</code>) are visible to all users. Only organizers can change event visibility via <code>POST /api/events/{id}/publish</code> and <code>POST /api/events/{id}/unpublish</code>. These are action endpoints (state transitions), not resource replacements, so they use POST rather than PUT. No request body is required.</td>
           </tr>
           <tr>
           <td>BR-111</td>
@@ -1154,7 +1155,7 @@
           </tr>
           <tr>
           <td>BR-132</td>
-          <td><strong>Session visibility inherits event visibility:</strong> Sessions belonging to unpublished events are excluded from public list/lookup responses and single-entity GET responses for non-organizers. Organizers can see all sessions regardless of event visibility. This ensures consistency with the Event Lifecycle (Section 5) which states &quot;Unpublished events and their sessions are visible only to organizers.&quot; Non-accepted sessions (BR-49: any status other than <code>Accepted</code> or null) are also excluded from public responses.</td>
+          <td><strong>Session visibility inherits event visibility:</strong> Sessions belonging to unpublished events are excluded from public list/lookup responses and single-entity GET responses for non-privileged readers. Privileged readers (<code>Organizer</code> or <code>ContentEditor</code>) can see all sessions regardless of event visibility. This ensures consistency with the Event Lifecycle (Section 5) which states that unpublished events and their sessions are visible only to privileged readers. Non-accepted sessions (BR-49: any status other than <code>Accepted</code> or null) are also excluded from public responses. <strong>The junction read endpoints follow their parent entity&#39;s visibility</strong>: <code>SessionSpeakers</code>, <code>EventSpeakers</code>, <code>SessionCategoryItems</code>, and <code>SpeakerCategoryItems</code> list/paged/by-id reads, and every <code>/lookup</code> endpoint, apply the same filter as the parent Session, Event, or Speaker read. They are not an unfiltered side channel around BR-49, BR-108, or BR-239.</td>
           </tr>
           <tr>
           <td>BR-133</td>
@@ -1240,6 +1241,18 @@
           <td>BR-238</td>
           <td><strong>Questions display anonymously.</strong> The submitting <code>UserId</code> is never exposed on a DTO, and upvote broadcasts carry only the fresh count, never who voted.</td>
           </tr>
+          <tr>
+          <td></td>
+          <td></td>
+          </tr>
+          <tr>
+          <td><strong>Public visibility (companion to BR-49 / BR-108)</strong></td>
+          <td></td>
+          </tr>
+          <tr>
+          <td>BR-239</td>
+          <td><strong>Speaker visibility:</strong> a speaker is publicly visible only if the speaker has <strong>at least one visible session</strong> (a session eligible under BR-49 that belongs to a Published event) <strong>or</strong> an explicit <code>EventSpeaker</code> row on a Published event. Speakers meeting neither condition are excluded from public list, paged, lookup, and junction responses, and a GET by id returns <strong>HTTP 404</strong> for non-privileged callers rather than leaking existence. Privileged readers (<code>Organizer</code> or <code>ContentEditor</code>) see every speaker. The rule is evaluated as an id-list specification (the union of the two conditions), so an unscheduled or withdrawn speaker cannot be reached through any read path.</td>
+          </tr>
           </tbody></table></div>
           <h3 id="inferred-rules">Inferred Rules</h3>
           <div class="table-wrap"><table>
@@ -1297,7 +1310,7 @@
           <p><strong>Main Flow:</strong></p>
           <ol>
           <li>Consumer requests list of events (with optional pagination, filtering, sorting)</li>
-          <li>System returns only published events for unauthenticated/attendee users (BR-108). Organizers also see unpublished events.</li>
+          <li>System returns only published events for unauthenticated/attendee users (BR-108). Privileged readers (<code>Organizer</code> or <code>ContentEditor</code>) also see unpublished events.</li>
           <li>Response includes child data if requested (rooms, sessions, speakers, question answers)</li>
           </ol>
           <p><strong>Alternate Flows:</strong></p>
@@ -1316,8 +1329,9 @@
           <ol>
           <li>Consumer requests sessions with optional filtering/sorting</li>
           <li>Sessions can be filtered by <code>EventName</code> or <code>RoomName</code> (mapped to navigation properties)</li>
-          <li>System returns sessions with optional children (speakers, category items, question answers)</li>
+          <li>System returns sessions with optional children (speakers, category items, question answers), restricted for non-privileged readers to sessions with a BR-49-eligible status on a published event (BR-132); the speaker children are further restricted by BR-239</li>
           </ol>
+          <p><strong>Business Rules:</strong> BR-43, BR-49, BR-132, BR-239</p>
           <hr>
           <h3 id="uc-4-submit-event-feedback">UC-4: Submit Event Feedback</h3>
           <p><strong>Actors:</strong> Authenticated attendee
@@ -1746,7 +1760,7 @@
           <td><code>GET /api/speakers/{speakerId}/sessions/{sessionId}/bookmarks/count</code></td>
           </tr>
           <tr>
-          <td><strong>Constraints:</strong> Pagination capped at 500 items (BR-11). Rate limited at 100 req/min (BR-20). Only published events visible (BR-108).</td>
+          <td><strong>Constraints:</strong> Pagination capped at 500 items (BR-11). Rate limited at 100 req/min (BR-20). Only published events visible (BR-108), only BR-49-eligible sessions visible, and only speakers with a visible session or a published-event <code>EventSpeaker</code> row visible (BR-239). The same filters apply to the <code>/lookup</code> and junction endpoints (BR-132).</td>
           <td></td>
           <td></td>
           <td></td>
@@ -2449,7 +2463,7 @@
           <pre class="doc-pre"><code class="">Unpublished (default, IsPublished = false)
             → Published (IsPublished = true, visible to all users, engagement enabled)
             → Unpublished (IsPublished = false, hidden from public endpoints)</code></pre>
-          <p>Unpublished events and their sessions are visible <strong>only to organizers</strong>. Publishing an event makes it and its sessions visible to all users via public endpoints.</p>
+          <p>Unpublished events and their sessions are visible <strong>only to privileged readers</strong> (<code>Organizer</code> or <code>ContentEditor</code>). Publishing an event makes it and its BR-49-eligible sessions visible to all users via public endpoints.</p>
           <hr>
           <h3 id="soft-delete-lifecycle">Soft Delete Lifecycle</h3>
           <p>All entities follow: <strong>Active</strong> → (Delete action) → <strong>Soft-Deleted</strong> (IsDeleted = true)</p>
@@ -2761,11 +2775,15 @@
           </tr>
           <tr>
           <td>Event visibility</td>
-          <td>Unpublished events are visible only to organizers; published events are visible to all (BR-108). Visibility cascades to sessions: sessions belonging to unpublished events are excluded from public query results (consistent with Section 5 Event Lifecycle). Child entities within the Event aggregate (Rooms, EventSpeakers, EventQuestionAnswers) follow the same visibility as their parent event (BR-132).</td>
+          <td>Unpublished events are visible only to privileged readers (<code>Organizer</code> or <code>ContentEditor</code>); published events are visible to all (BR-108). Visibility cascades to sessions: sessions belonging to unpublished events are excluded from public query results (consistent with Section 5 Event Lifecycle). Child entities within the Event aggregate (Rooms, EventSpeakers, EventQuestionAnswers) follow the same visibility as their parent event (BR-132).</td>
           </tr>
           <tr>
           <td>Session visibility</td>
-          <td>Sessions belonging to unpublished events are excluded from public list endpoints (GET /api/sessions). A session can be retrieved by ID only if its parent event is published or the requester is an Organizer. See BR-132.</td>
+          <td>Sessions belonging to unpublished events are excluded from public list endpoints (GET /api/sessions). A session can be retrieved by ID only if its parent event is published or the requester is a privileged reader (<code>Organizer</code> or <code>ContentEditor</code>). Status gates the same paths: sessions whose <code>Status</code> is neither null nor <code>Accepted</code> (BR-49 is an allow-list, so <code>Waitlisted</code>, <code>Accept Queue</code>, <code>Nominated</code>, <code>Decline Queue</code>, <code>Declined</code>, and any unknown value are all excluded) are absent from public list and paged results and 404 on detail-by-id for non-privileged callers. The <code>/Sessions/lookup</code> endpoint and the junction read endpoints (SessionSpeakers, SessionCategoryItems) apply the identical filter. See BR-49, BR-132.</td>
+          </tr>
+          <tr>
+          <td>Speaker visibility</td>
+          <td>A speaker is publicly visible only with at least one visible session (BR-49 eligible, on a published event) or an explicit <code>EventSpeaker</code> row on a published event (BR-239). Hidden speakers are excluded from list, paged, <code>/Speakers/lookup</code>, and junction responses (SessionSpeakers, EventSpeakers, SpeakerCategoryItems), and detail-by-id returns HTTP 404 for non-privileged callers. Privileged readers see every speaker. <code>/Speakers/lookup</code> additionally restricts <code>nameProperty</code> to <code>FirstName</code> or <code>LastName</code> for non-privileged callers, so the lookup label cannot be used to read around the BR-66 email redaction.</td>
           </tr>
           <tr>
           <td>EventQuestionAnswer uniqueness</td>
@@ -2983,6 +3001,14 @@
           <td>The default user role assigned at registration. Grants access to engagement features (bookmarks, feedback) but not conference data management.</td>
           </tr>
           <tr>
+          <td><strong>Content Editor</strong></td>
+          <td>A user with <code>Role = ContentEditor</code>: holds content-management permissions and counts as a privileged reader, but is not an Organizer for the Organizer-gated write rules. ADC has no <code>Admin</code> role.</td>
+          </tr>
+          <tr>
+          <td><strong>Privileged Reader</strong></td>
+          <td>The read audience exempt from the public visibility filters: a user whose role is <code>Organizer</code> or <code>ContentEditor</code>. Privileged readers see unpublished events (BR-108), sessions outside the BR-49 allow-list, and speakers that are not publicly visible (BR-239), on list, by-id, lookup, and junction endpoints alike. The same role set bypasses the public output cache.</td>
+          </tr>
+          <tr>
           <td><strong>Service Session</strong></td>
           <td>A non-talk entry on the schedule (e.g., lunch break, registration, networking). Displayed on the schedule but excluded from engagement features (bookmarking, feedback). Identified by <code>IsServiceSession = true</code>. Keynotes are typically not service sessions.</td>
           </tr>
@@ -2992,7 +3018,7 @@
           </tr>
           <tr>
           <td><strong>Event Status</strong></td>
-          <td>Whether an event is published (visible to all users, engagement enabled) or unpublished (visible only to organizers, default). Controlled by <code>Event.IsPublished</code>.</td>
+          <td>Whether an event is published (visible to all users, engagement enabled) or unpublished (visible only to privileged readers, default). Controlled by <code>Event.IsPublished</code>.</td>
           </tr>
           <tr>
           <td><strong>SpeakerQuestionAnswer</strong></td>
@@ -3244,7 +3270,7 @@
           <p>Session is an aggregate root because it independently owns children (SessionSpeakers, SessionQuestionAnswers, SessionCategoryItems) and is the target of cross-context references (UserSessionBookmark). It has its own lifecycle for scheduling, feedback, and bookmarking. However, when an Event is soft-deleted, orphaning its Sessions would create inconsistency: sessions with no parent event are meaningless. BR-127 introduces a pragmatic cross-aggregate cascade: Event deletion cascades to Sessions. This violates the strict DDD principle that aggregate roots are only deleted through their own boundary, but the alternative (requiring organizers to manually delete every session before deleting an event) is operationally impractical. The cascade is implemented at the service layer (not database-level), so domain events and child cascades (BR-55) fire correctly.</p>
           <p><strong>Why Organizers can submit feedback:</strong> Organizers inherit all Attendee capabilities, including feedback submission. This is intentional: conference organizers typically attend sessions. The Organizer role grants write access to all Conference entities, making it impossible to define &quot;their&quot; sessions vs. others&#39;. Feedback is scoped to the authenticated user (BR-8, BR-9).</p>
           <p><strong>How role-based authorization works:</strong></p>
-          <p>The system has two user roles: <code>Attendee</code> (default) and <code>Organizer</code>, stored on the User entity. At login (UC-31), the role is included as a <code>role</code> claim in the JWT. Authorization is enforced at three levels:</p>
+          <p>The system has three user roles: <code>Attendee</code> (default), <code>ContentEditor</code>, and <code>Organizer</code>, stored on the User entity. There is no <code>Admin</code> role in ADC. At login (UC-31), the role is included as a <code>role</code> claim in the JWT. Authorization is enforced at four levels:</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -3257,24 +3283,31 @@
           <tbody><tr>
           <td><strong>Public</strong></td>
           <td>Anyone (no auth)</td>
-          <td>Read Conference entities (events, sessions, speakers, rooms, categories)</td>
+          <td>Read Conference entities (events, sessions, speakers, rooms, categories), filtered to publicly visible records (BR-49, BR-108, BR-239)</td>
           <td>No authentication required</td>
           </tr>
           <tr>
           <td><strong>Authenticated</strong></td>
-          <td>Any logged-in user (Attendee or Organizer)</td>
+          <td>Any logged-in user (Attendee, ContentEditor, or Organizer)</td>
           <td>Engagement writes (bookmarks, feedback), user claims</td>
           <td>Valid JWT required</td>
           </tr>
           <tr>
+          <td><strong>Privileged reader</strong></td>
+          <td>Users with <code>Role = Organizer</code> <strong>or</strong> <code>Role = ContentEditor</code></td>
+          <td>Unfiltered Conference reads: unpublished events, non-accepted sessions, non-visible speakers, and the unfiltered lookup and junction endpoints</td>
+          <td>Membership in the privileged-reader role set; the same set is the output-cache bypass list, so a privileged reader never gets a public-filtered cached response</td>
+          </tr>
+          <tr>
           <td><strong>Organizer</strong></td>
           <td>Users with <code>Role = Organizer</code></td>
-          <td>Conference writes (CRUD for events, sessions, speakers, rooms, categories, questions), Sessionize refresh, user management</td>
+          <td>Conference writes (CRUD for events, sessions, speakers, rooms, categories, questions), Sessionize refresh, publish/unpublish, user management</td>
           <td>Organizer role required</td>
           </tr>
           </tbody></table></div>
-          <p>The Organizer role is the system&#39;s administrator role. Organizers manage all conference master data. Initial organizer accounts are created via database seeding (BR-45).</p>
-          <p>This design keeps the User entity simple (a single <code>Role</code> field rather than a many-to-many role table) because the conference domain has only two authorization tiers. If more granular roles were needed in the future (e.g., separate &quot;Volunteer&quot; or &quot;Sponsor&quot; roles), the field could be migrated to a role collection.</p>
+          <p>The Organizer role is the system&#39;s administrator role. Organizers manage all conference master data. Initial organizer accounts are created via database seeding (BR-45). <code>ContentEditor</code> carries content-management permissions and reads content as an Organizer does, but it is <strong>not</strong> a write-equivalent: the Organizer-gated write rules (BR-41, BR-51, BR-53, BR-108 publish/unpublish) still say Organizer and mean it.</p>
+          <p>Read gating and write gating are therefore two different questions in this spec: where a rule concerns <strong>who can see</strong> unpublished or non-accepted content, the answer is the privileged reader set (Organizer or ContentEditor); where it concerns <strong>who can change</strong> it, the answer is Organizer alone.</p>
+          <p>This design keeps the User entity simple (a single <code>Role</code> field rather than a many-to-many role table) because the conference domain has few authorization tiers. If more granular roles were needed in the future (e.g., separate &quot;Volunteer&quot; or &quot;Sponsor&quot; roles), the field could be migrated to a role collection.</p>
           <p><strong>Why per-question feedback submission with POST-as-upsert:</strong></p>
           <p>Feedback answers are submitted individually via <code>POST</code> on EventQuestionAnswer and SessionQuestionAnswer endpoints. Unlike other entities where <code>POST</code> is create-only, feedback <code>POST</code> performs an <strong>upsert</strong>: it creates a new answer or overwrites an existing one for the same (CreatedBy, QuestionId, EntityId) key (BR-107, BR-123). This is a deliberate deviation from pure CRUD semantics that simplifies the client: attendees don&#39;t need to check whether they&#39;ve already answered a question before submitting. The <code>Question.IsRequired</code> flag is advisory: clients should enforce it in the UI but the server does not validate completeness across all questions.</p>
           <hr>
@@ -3337,7 +3370,7 @@
           </thead>
           <tbody><tr>
           <td>BR-66</td>
-          <td><code>Speaker.Email</code> is optional (speakers may not have their email published in Sessionize) and <strong>not unique</strong>: though duplicates would be unusual. Speaker email is <strong>not exposed</strong> via public API read endpoints (GET /api/speakers) because email is PII: it is not information attendees need. Social links (BR-99) are public because speakers intentionally share them for professional networking. Speaker email is visible to Organizers via the write/management endpoints. It follows the Sessionize source-of-truth rule (BR-48).</td>
+          <td><code>Speaker.Email</code> is optional (speakers may not have their email published in Sessionize) and <strong>not unique</strong>: though duplicates would be unusual. Speaker email is <strong>not exposed</strong> via public API read endpoints (GET /api/speakers) because email is PII: it is not information attendees need. Social links (BR-99) are public because speakers intentionally share them for professional networking. Speaker email is visible to Organizers via the write/management endpoints. It follows the Sessionize source-of-truth rule (BR-48). <strong>Redaction covers the lookup label too:</strong> <code>/api/speakers/lookup</code> restricts <code>nameProperty</code> to <code>FirstName</code> or <code>LastName</code> for non-privileged callers, so <code>nameProperty=Email</code> cannot be used to project the address the read DTO withholds (see Section 11.7).</td>
           </tr>
           </tbody></table></div>
           <hr>
@@ -4028,7 +4061,8 @@
           <td><code>QuestionText</code></td>
           </tr>
           </tbody></table></div>
-          <p>Lookup responses are <strong>not paginated</strong>: they return all non-deleted records. For entities with large cardinalities, prefer the paginated list endpoint with specific field filtering. Lookup responses respect event visibility (BR-108): unpublished events are excluded for non-organizers.</p>
+          <p>Lookup responses are <strong>not paginated</strong>: they return all non-deleted records <strong>that the caller may see</strong>. For entities with large cardinalities, prefer the paginated list endpoint with specific field filtering.</p>
+          <p><strong>Lookup is not a visibility bypass.</strong> For non-privileged callers (anyone other than an <code>Organizer</code> or <code>ContentEditor</code>) every lookup endpoint applies the same filter as its entity&#39;s list endpoint: unpublished events are excluded (BR-108), sessions outside the BR-49 allow-list or belonging to unpublished events are excluded (BR-132), and speakers that are not publicly visible are excluded (BR-239). <code>/api/speakers/lookup</code> additionally accepts only <code>FirstName</code> or <code>LastName</code> as the <code>nameProperty</code> for non-privileged callers; any other value (notably <code>Email</code>) is rejected with HTTP 400, because projecting an arbitrary property into the lookup label would otherwise read around the BR-66 email redaction. Privileged readers get the unfiltered lookup and the full <code>nameProperty</code> range.</p>
           <hr>
           <h3 id="118-includechildren-on-list-endpoints">11.8 <code>includeChildren</code> on List Endpoints</h3>
           <p>The <code>includeChildren=true</code> parameter is supported on both single-entity (<code>GET /api/{entities}/{id}</code>) and list (<code>GET /api/{entities}</code>) endpoints.</p>
