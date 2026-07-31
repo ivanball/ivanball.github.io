@@ -1229,6 +1229,41 @@
           clean, then expand) rather than repo-wide at once. <em>(Effort S per project, long tail.)</em></li>
           </ul>
           <hr>
+          <h2 id="recorded---2026-07-31-consumer-discovered-defect-not-scheduled">Recorded - 2026-07-31 consumer-discovered defect (not scheduled)</h2>
+          <blockquote>
+          <p>Found downstream while implementing MMCA.ADC BR-239 (public speaker visibility), which needed a
+          filtered lookup read. Recorded rather than fixed in place: the consumer already ships a working
+          route-around, and the correction belongs in a framework release plus lockstep sweep (ADR-016),
+          not in a consumer PR. IDs follow the C-1..C-7 / FR-1..FR-7 precedent (CD = consumer-discovered).</p>
+          </blockquote>
+          <ul>
+          <li><input disabled="" type="checkbox"> <strong>CD-1 (§9/§15) - <code>EntityQueryService.GetAllForLookupAsync</code> silently drops its <code>where</code> and
+          <code>orderBy</code> arguments.</strong> The service method declares both parameters
+          (<code>Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:278-283</code>) and forwards
+          neither: after validating <code>nameProperty</code> it delegates with only <code>nameProperty</code>, <code>asTracking</code> and
+          the cancellation token (<code>:299-302</code>). The two halves differ. <strong><code>where</code> is a genuine drop</strong>: the
+          repository overload accepts the predicate and applies it
+          (<code>Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:87-91</code>,
+          <code>Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:82-83</code>), so a
+          caller that passes a filter gets an unfiltered lookup back with no error and no log: a silently
+          ignored filter on a read path, which is the dangerous shape when the filter is the authorization
+          rule. <strong><code>orderBy</code> has no repository counterpart at all</strong>: the repository hard-codes
+          <code>OrderBy(l =&gt; l.Name)</code> (<code>EFReadRepository.cs:89</code>), so the parameter is inert by construction and
+          the signature advertises a capability the layer below never had. MMCA.ADC hit the <code>where</code> half
+          building its public-speaker lookup filter and routed around the Application layer entirely,
+          calling <code>IRepository.GetAllForLookupAsync</code> directly from
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/PublicLookupReader.cs:87-91</code>
+          with the defect cited in-file at <code>:17-24</code>: a consumer reaching past its own service layer to
+          reach a repository feature the service was supposed to expose. <strong>Proposed fix:</strong> forward <code>where</code>
+          to the existing repository parameter, and either thread <code>orderBy</code> down as a new optional
+          repository parameter or remove it from the service signature so the contract stops promising it;
+          pin the behavior with a regression test asserting a predicate actually filters the lookup result
+          (no such test exists today, which is why C-5&#39;s <code>nameProperty</code> fix passed over the same method
+          without surfacing this). <em>(Effort S: the <code>where</code> half is a one-line forward plus a test; the
+          <code>orderBy</code> half is a small contract decision, and removing the parameter is source-breaking for
+          any caller that passes it.)</em></li>
+          </ul>
+          <hr>
           <h2 id="priority-6-highest-leverage">🔴 Priority 6: highest leverage</h2>
           <h3 id="x-28--front-end-testing--quality-score-2--4-weight-3--resolved-2026-06-27">[x] #28 · Front-End Testing &amp; Quality: score 2 → 4 (weight 3) · <em>RESOLVED 2026-06-27</em></h3>
           <p>The package ships reusable Blazor primitives with <strong>no fast test tier</strong>.</p>
@@ -1460,6 +1495,7 @@
             <li><a href="#progress---twenty-third-wave-evidence-re-score-at-v11280-2026-07-25">Progress - twenty-third wave (evidence re-score at v1.128.0, 2026-07-25)</a></li>
             <li><a href="#progress---twenty-fourth-wave-evidence-re-score-at-v11310-2026-07-28">Progress - twenty-fourth wave (evidence re-score at v1.131.0, 2026-07-28)</a></li>
             <li><a href="#deferred---2026-07-19-full-review-recorded-not-scheduled">Deferred - 2026-07-19 full review (recorded, not scheduled)</a></li>
+            <li><a href="#recorded---2026-07-31-consumer-discovered-defect-not-scheduled">Recorded - 2026-07-31 consumer-discovered defect (not scheduled)</a></li>
             <li><a href="#priority-6-highest-leverage">🔴 Priority 6: highest leverage</a></li>
             <li><a href="#priority-3-score-3-weight-3-one-rung-from-a-4">🟠 Priority 3: score 3, weight 3 (one rung from a 4)</a></li>
             <li><a href="#priority-2-score-3-weight-2-polish--hardening">🟡 Priority 2: score 3, weight 2 (polish / hardening)</a></li>

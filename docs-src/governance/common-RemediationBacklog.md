@@ -977,6 +977,41 @@ package: `Microsoft.Extensions.TimeProvider.Testing` 10.7.0.
 
 ---
 
+## Recorded - 2026-07-31 consumer-discovered defect (not scheduled)
+
+> Found downstream while implementing MMCA.ADC BR-239 (public speaker visibility), which needed a
+> filtered lookup read. Recorded rather than fixed in place: the consumer already ships a working
+> route-around, and the correction belongs in a framework release plus lockstep sweep (ADR-016),
+> not in a consumer PR. IDs follow the C-1..C-7 / FR-1..FR-7 precedent (CD = consumer-discovered).
+
+- [ ] **CD-1 (§9/§15) - `EntityQueryService.GetAllForLookupAsync` silently drops its `where` and
+  `orderBy` arguments.** The service method declares both parameters
+  (`Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:278-283`) and forwards
+  neither: after validating `nameProperty` it delegates with only `nameProperty`, `asTracking` and
+  the cancellation token (`:299-302`). The two halves differ. **`where` is a genuine drop**: the
+  repository overload accepts the predicate and applies it
+  (`Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IRepository.cs:87-91`,
+  `Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:82-83`), so a
+  caller that passes a filter gets an unfiltered lookup back with no error and no log: a silently
+  ignored filter on a read path, which is the dangerous shape when the filter is the authorization
+  rule. **`orderBy` has no repository counterpart at all**: the repository hard-codes
+  `OrderBy(l => l.Name)` (`EFReadRepository.cs:89`), so the parameter is inert by construction and
+  the signature advertises a capability the layer below never had. MMCA.ADC hit the `where` half
+  building its public-speaker lookup filter and routed around the Application layer entirely,
+  calling `IRepository.GetAllForLookupAsync` directly from
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/PublicLookupReader.cs:87-91`
+  with the defect cited in-file at `:17-24`: a consumer reaching past its own service layer to
+  reach a repository feature the service was supposed to expose. **Proposed fix:** forward `where`
+  to the existing repository parameter, and either thread `orderBy` down as a new optional
+  repository parameter or remove it from the service signature so the contract stops promising it;
+  pin the behavior with a regression test asserting a predicate actually filters the lookup result
+  (no such test exists today, which is why C-5's `nameProperty` fix passed over the same method
+  without surfacing this). *(Effort S: the `where` half is a one-line forward plus a test; the
+  `orderBy` half is a small contract decision, and removing the parameter is source-breaking for
+  any caller that passes it.)*
+
+---
+
 ## 🔴 Priority 6: highest leverage
 
 ### [x] #28 · Front-End Testing & Quality: score 2 → 4 (weight 3) · *RESOLVED 2026-06-27*
