@@ -1010,6 +1010,23 @@ package: `Microsoft.Extensions.TimeProvider.Testing` 10.7.0.
   `orderBy` half is a small contract decision, and removing the parameter is source-breaking for
   any caller that passes it.)*
 
+- [ ] **CD-2 (§9/§15) - the lookup projection cannot translate value-object properties and throws
+  at runtime.** `GetOrBuildLookupSelector` maps the requested property into `BaseLookup.Name` by
+  appending a `ToString()` call whenever the property is not a `string`
+  (`Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/EFReadRepository.cs:113-117`).
+  For scalar CLR types SQL Server translates that, but for a value-object property (for example a
+  `MMCA.Common.Shared.ValueObjects.Email` member) EF cannot translate the call and the query throws
+  `InvalidOperationException` at compile time, which surfaces as an HTTP 500 on the lookup
+  endpoint. `QueryFieldService.Validate` happily approves the property name first, so the failure
+  is a runtime crash rather than a 400. Never observed before because no caller had ever executed
+  a lookup on a value-object property; MMCA.ADC's BR-239 integration coverage ran the first one
+  (`Speakers/lookup?nameProperty=email`) and had to switch the test to a plain-string property.
+  **Proposed fix:** translate value-object properties through their EF-mapped conversion or
+  backing member where one exists, and otherwise reject the property at validation time so the
+  caller gets a 400 instead of a 500; pin both paths with regression tests alongside the CD-1
+  filter test. *(Effort M: the validation half is small; the faithful-projection half needs a
+  decision about which conversions are supported.)*
+
 ---
 
 ## 🔴 Priority 6: highest leverage
