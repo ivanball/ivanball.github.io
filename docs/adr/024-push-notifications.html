@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 60 ADRs</summary>
+        <summary>All 64 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -159,6 +159,10 @@
         <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
         <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
         <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
           </ol>
         </nav>
       </details>
@@ -212,7 +216,7 @@
           (<code>SendPushNotificationHandler.cs:88-105</code>), an OS-level native-push channel that reaches devices the
           SignalR hub cannot (the app backgrounded or killed). It is best-effort by the same logic as the live
           push (a throw is logged, never fatal, and the SignalR leg has already decided the audit status), and it
-          defaults to <code>NullNativePushSender</code> (<code>MMCA.Common.Infrastructure</code>, <code>DependencyInjection.cs:212</code>), so it
+          defaults to <code>NullNativePushSender</code> (<code>MMCA.Common.Infrastructure</code>, <code>DependencyInjection.cs:233</code>), so it
           stays inert until a native hub is configured. The design of that channel is ADR-044&#39;s scope; this ADR
           keeps its own on the inbox and SignalR channels, so the &quot;Two-Channel&quot; title names the durable and
           transient channels this record governs, not a hard cap on the number of delivery legs.</li>

@@ -9,7 +9,7 @@ are corrected.
 ## Context
 Checkout spans a boundary no transaction covers. `CheckOutHandler` commits the order insert, the cart
 transition and the atomic conditional stock decrements in one local transaction
-(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:91-102`),
+(`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/ShoppingCarts/UseCases/CheckOut/CheckOutHandler.cs:94-136`),
 but the money moves at Stripe and the confirmation arrives later, as a webhook, from outside the
 database. Two failure shapes follow directly:
 
@@ -51,16 +51,16 @@ saga-timeout backstop for steps that depend on an external system.
 - **Idempotency is a persisted marker committed by the SAME `SaveChanges` as the compensating
   writes.** `Order.InventoryRestored` (`.../Domain/Orders/Order.cs:42-48`) is the marker;
   `MarkInventoryRestored` refuses a second call and refuses a non-cancelled order
-  (`Order.cs:262-285`). The handler checks the marker first
+  (`Order.cs:281-298`). The handler checks the marker first
   (`OrderCancelledSagaHandler.cs:56-62`), applies the increases through a pure domain service
   (`.../Domain/Services/InventoryRestorationDomainService.cs:14-27`), then one
   `SaveChangesAsync` commits the increases and the marker together
   (`OrderCancelledSagaHandler.cs:77-85`). Same database, one transaction: the marker cannot exist
   without the writes it guards, and the writes cannot land unmarked.
 - **Redelivery is the retry mechanism.** A failing in-process handler leaves its outbox row
-  unprocessed (`MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:255-277`) and the
+  unprocessed (`MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:301-329`) and the
   `OutboxProcessor` re-dispatches the pure domain event on a later cycle
-  (`MMCA.Common/.../Outbox/OutboxProcessor.cs:366-369`), with the bounded retries, backoff and
+  (`MMCA.Common/.../Outbox/OutboxProcessor.cs:419-426`), with the bounded retries, backoff and
   dead-lettering ADR-003 already defines. Handlers whose work is a pure side effect and must not
   force a redelivery swallow their own failures instead
   (`OrderPaymentFailedSagaHandler.cs:52-55`; the packaged form is
@@ -76,21 +76,21 @@ saga-timeout backstop for steps that depend on an external system.
   is registered as a hosted service by the Sales module's infrastructure
   (`.../Infrastructure/DependencyInjection.cs:34-36`). Each cycle selects the oldest orders that have
   sat in `PaymentInitiated` past a cutoff, ordered, bounded and projected to ids entirely in SQL
-  (`PaymentReconciliationService.cs:105-113`) over a dedicated filtered index
-  (`.../Persistence/EntityConfiguration/OrderConfiguration.cs:61-67`), asks Stripe for the session's
+  (`PaymentReconciliationService.cs:101-109`) over a dedicated filtered index
+  (`.../Persistence/EntityConfiguration/OrderConfiguration.cs:74-80`), asks Stripe for the session's
   authoritative status, and applies the matching transition: paid to `MarkAsPaid`, expired to
-  `MarkAsPaymentFailed`, still open to nothing (`PaymentReconciliationService.cs:184-206`). It is
+  `MarkAsPaymentFailed`, still open to nothing (`PaymentReconciliationService.cs:180-202`). It is
   configuration-gated (`.../Infrastructure/Settings/PaymentReconciliationSettings.cs:13-36`, defaults
   of a 10-minute interval, a 30-minute stuck age and a 50-order batch, carried in
   `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:49-54`).
 - **The sweep gets no private path into the aggregate, and loses races on purpose.** It calls the same
   guarded transitions as the webhook handler
-  (`.../Orders/UseCases/ProcessPaymentWebhook/ProcessPaymentWebhookHandler.cs:67,98`) and the
+  (`.../Orders/UseCases/ProcessPaymentWebhook/ProcessPaymentWebhookHandler.cs:97,128`) and the
   client-initiated check (`.../Orders/UseCases/VerifyPayment/VerifyPaymentHandler.cs:64`). It reloads
   each order tracked in its own scope and re-checks the status under the fresh load
-  (`PaymentReconciliationService.cs:147-151`), and a `DbUpdateConcurrencyException` from a webhook
+  (`PaymentReconciliationService.cs:136-147`), and a `DbUpdateConcurrencyException` from a webhook
   that won the race is logged and skipped, not retried
-  (`PaymentReconciliationService.cs:171-176`).
+  (`PaymentReconciliationService.cs:167-172`).
 
 The loop shape is deliberate and shared, and it lives in the framework rather than in the sweep.
 MMCA.Common ships it as an abstract base class, `PeriodicBackgroundService`
@@ -152,7 +152,7 @@ adopted.
   shared event must be idempotent or must swallow.
 - **The sweep is not replica-leased.** The outbox processor claims rows with a lease before working
   them (ADR-003); the sweep takes no such claim, so at the configured `maxReplicas: 2`
-  (`MMCA.Store/infra/main.bicep:945`) two replicas can pick the same stuck order and each spend a
+  (`MMCA.Store/infra/main.bicep:1025`) two replicas can pick the same stuck order and each spend a
   Stripe status call. Correctness holds through the concurrency token; the duplicated external call
   does not deduplicate.
 - **Every compensating action needs its own marker.** There is no generic mechanism: the ADR-021

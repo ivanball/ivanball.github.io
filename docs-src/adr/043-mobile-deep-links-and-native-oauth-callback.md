@@ -3,7 +3,9 @@
 ## Status
 Accepted (2026-07-15). Revised 2026-07-28 (the Android https App Links leg is recorded as shipped,
 the outstanding Android item is restated as the served certificate fingerprint, and the client-flow
-attribution is corrected; see Revision below). The framework leg is fully implemented in MMCA.Common:
+attribution is corrected; see Revision below). Revised 2026-08-01 (the served Android fingerprint is
+no longer a placeholder, which closes the last outstanding ADC item, and one `Program.cs` anchor is
+corrected). The framework leg is fully implemented in MMCA.Common:
 the OAuth custom-scheme returnUrl allowlist in `CompleteAsync`, the app-association endpoint helper
 `MapAppAssociationEndpoints`
 (`Source/Presentation/MMCA.Common.API/Startup/AppAssociationEndpointExtensions.cs:35`, with
@@ -26,15 +28,15 @@ host constant at `:31` and the verified link reduced to path plus query and publ
 `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/Android/AndroidManifest.xml` carries seven
 `uses-permission` entries (`:4-16`) above the package-visibility `queries` block (`:19-32`);
 activities and their intent filters are attributes in code, which .NET for Android merges into the
-generated manifest at build time. What is still outstanding on the Android leg is the SERVED
-fingerprint: `AppAssociation:AndroidCertFingerprints` holds the placeholder
-`"REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT"`
-(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:29`), which the helper copies verbatim
-into the document's `sha256_cert_fingerprints`
-(`Source/Presentation/MMCA.Common.API/Startup/AppAssociationEndpointExtensions.cs:63`), and no other
-override of that key exists in the ADC repo, so the served `assetlinks.json` cannot verify yet.
-MMCA.Store has not adopted the wave: no association endpoints, allowlist config, or platform callback
-registrations exist there yet.
+generated manifest at build time. The SERVED fingerprint has landed as well:
+`AppAssociation:AndroidCertFingerprints` now carries the production Play App Signing SHA-256
+fingerprint (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:29`) in place of the former
+`REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT` placeholder, and the helper copies that array
+verbatim into the document's `sha256_cert_fingerprints`
+(`Source/Presentation/MMCA.Common.API/Startup/AppAssociationEndpointExtensions.cs:63`), so the
+served `assetlinks.json` names a real certificate. No other setting of that key exists in the ADC
+repo. MMCA.Store has not adopted the wave: no association endpoints, allowlist config, or platform
+callback registrations exist there yet.
 
 ## Context
 Three mobile flows all need a URL to leave the web world and land inside the MAUI app:
@@ -131,7 +133,8 @@ Android leg backwards and the Decision section attributed the token exchange to 
    setting of that key exists in the ADC repo; the only other mention is the rotation procedure in
    `MMCA.ADC/Docs/MobileReleaseRunbook.md`. Until the real Play App Signing fingerprint is supplied,
    the served document names a certificate no build carries and Android cannot auto-verify the
-   filter that is already shipped.
+   filter that is already shipped. That item was closed hours later on the same day, so read it as
+   the state at the time of writing; the 2026-08-01 entry below records the replacement.
 3. **The completion page performs the exchange, not the broker.** The Decision's client-flow bullet
    read as if the MAUI broker POSTed the exchange and stored the tokens. The broker captures the
    code from the `WebAuthenticator` result
@@ -143,8 +146,30 @@ Android leg backwards and the Decision section attributed the token exchange to 
    division of labor is not, and it matters because the native path reuses the web completion page
    rather than duplicating it.
 4. **Anchor and tense maintenance.** `MapAppAssociationEndpoints` is called at
-   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:159` (the previously cited `:162` is the
-   `AndroidCertFingerprints` line inside the options initializer). The Context statement about
+   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:159` (the previously cited `:162` pointed at
+   the `AndroidCertFingerprints` line inside the options initializer, which now sits at `:166`; see
+   the 2026-08-01 entry). The Context statement about
    `CompleteAsync` redirecting only to `OAuth:UIBaseUrl` is now past tense, since the decision
    shipped: `BuildSuccessRedirectUrl` targets the allow-listed native URL whenever one is in play
    (`Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:123-126`).
+
+## Revision (2026-08-01)
+Status pass from an ADR audit. No decision and no behavior changed; the one item the previous
+revision left open is closed, and the anchor that revision itself introduced had already moved.
+
+1. **The served fingerprint is no longer a placeholder.**
+   `AppAssociation:AndroidCertFingerprints` now holds the production Play App Signing SHA-256
+   fingerprint (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/appsettings.json:29`), set by MMCA.ADC
+   commit `d5fd0e9` (PR #80, merged 2026-07-28), which landed after the previous revision was
+   written on the same day. The mapper still serializes that array straight into
+   `sha256_cert_fingerprints`
+   (`Source/Presentation/MMCA.Common.API/Startup/AppAssociationEndpointExtensions.cs:63`), so the
+   served `assetlinks.json` now names a real certificate and nothing in the ADC deep-link wave is
+   outstanding. One companion document lags the code: the rotation procedure in
+   `MMCA.ADC/Docs/MobileReleaseRunbook.md:32` still describes the checked-in value as a placeholder.
+2. **`Program.cs` anchor correction.** The same commit inserted a four-line comment above the
+   `AndroidPackageName` assignment (explaining that the Release Android head overrides
+   `ApplicationId`, so that is the package Digital Asset Links must name), which pushed the options
+   initializer down. `AndroidCertFingerprints` is now at
+   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:166`, not `:162`, and `:162` is now one line
+   of that comment. The `MapAppAssociationEndpoints` call site at `:159` was re-checked and holds.

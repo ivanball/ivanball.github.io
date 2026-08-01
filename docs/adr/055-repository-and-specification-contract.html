@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-055: Repository plus Specification as the Data-Access Contract · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-25).">
+  <meta name="description" content="Accepted (2026-07-25). Revised 2026-08-01 (qualified the &quot;referenced nowhere&quot; claim about IEntityReader / IEntityQuerier: an ADC doc comment now names…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-055: Repository plus Specification as the Data-Access Contract">
-  <meta property="og:description" content="Accepted (2026-07-25).">
+  <meta property="og:description" content="Accepted (2026-07-25). Revised 2026-08-01 (qualified the &quot;referenced nowhere&quot; claim about IEntityReader / IEntityQuerier: an ADC doc comment now names…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-055: Repository plus Specification as the Data-Access Contract">
-  <meta name="twitter:description" content="Accepted (2026-07-25).">
+  <meta name="twitter:description" content="Accepted (2026-07-25). Revised 2026-08-01 (qualified the &quot;referenced nowhere&quot; claim about IEntityReader / IEntityQuerier: an ADC doc comment now names…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"055 · Repository plus Specification as the Data-Access Contract","item":"https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 60 ADRs</summary>
+        <summary>All 64 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -159,6 +159,10 @@
         <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
         <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
         <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
           </ol>
         </nav>
       </details>
@@ -167,7 +171,11 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-055-repository-plus-specification-as-the-data-access-contract">ADR-055: Repository plus Specification as the Data-Access Contract</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-25).</p>
+          <p>Accepted (2026-07-25). Revised 2026-08-01 (qualified the &quot;referenced nowhere&quot; claim about
+          <code>IEntityReader</code> / <code>IEntityQuerier</code>: an ADC doc comment now names <code>IEntityQuerier</code>, though no code
+          depends on either as a type; refreshed the ADC <code>SessionsController</code> and MMCA.Common
+          <code>DependencyInjection</code> anchors, and the leak rationale, which now reads non-accepted sessions to
+          non-privileged callers rather than declined sessions).</p>
           <h2 id="context">Context</h2>
           <p>Every read an application handler performs has to come from somewhere, and the shape of that contract
           decides whether the module can still be lifted into its own service later (ADR-007, ADR-008). The
@@ -232,9 +240,9 @@
           <code>InlineSpecification</code> (<code>:45</code>) wraps a predicate that was assembled dynamically and has no
           hand-written class. Composition is used in production: ADC&#39;s paged session read ANDs the
           public-session specification with the speaker-scoped one rather than substituting, because dropping
-          the public filter would leak declined sessions
-          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:95</code>,
-          <code>:117</code>, rationale at <code>:90-92</code>).</li>
+          the public filter would leak non-accepted sessions to non-privileged callers
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:97</code>,
+          <code>:119</code>, rationale at <code>:92-94</code>).</li>
           <li><strong>The specification enters the same query pipeline, not a parallel one.</strong> <code>IEntityQueryService</code>
           takes an optional <code>Specification&lt;TEntity, TIdentifierType&gt;</code> on every read
           (<code>Source/Core/MMCA.Common.Application/Interfaces/IEntityQueryService.cs:40</code>, <code>:63</code>, <code>:106</code>,
@@ -268,10 +276,14 @@
           out only the composites (<code>IRepository</code> at
           <code>Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IUnitOfWork.cs:19</code>, <code>IReadRepository</code>
           at <code>:29</code>), and the container registers only the open generic <code>IRepository&lt;,&gt;</code>
-          (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:99</code>). <code>IEntityReader</code> and
-          <code>IEntityQuerier</code> are referenced nowhere outside their own declaration file across all four
-          repositories. So the ISP split is today the declared target that new handlers are pointed at, not the
-          dependency shape any handler currently has.</p>
+          (<code>Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:100</code>). <code>IEntityReader</code> and
+          <code>IEntityQuerier</code> have no type-level reference outside their own declaration file across all four
+          repositories. The one mention anywhere else is prose: an ADC doc comment explains that a public
+          lookup helper takes the composite because <code>GetAllForLookupAsync</code> is declared on <code>IEntityQuerier</code>
+          (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/PublicLookupReader.cs:33</code>),
+          while the parameter it actually declares is <code>IReadRepository&lt;TEntity, TIdentifierType&gt;</code> (<code>:66</code>),
+          matching what <code>IUnitOfWork.GetReadRepository</code> returns. So the ISP split is today the declared target
+          that new handlers are pointed at, not the dependency shape any handler currently has.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li><strong>A narrow interface is the enforcement, not a style preference.</strong> A handler that asks for
@@ -285,7 +297,7 @@
           in a query and compiled in memory by <code>IsSatisfiedBy</code> (<code>Specification.cs:9-11</code>, <code>:32</code>), so an
           authorization predicate can be asserted in a domain test with no database at all.</li>
           <li><strong>Composability keeps filters additive.</strong> ANDing an authorization scope onto a business filter is a
-          two-line construction (<code>SessionsController.cs:117</code>) instead of a second hand-written query path,
+          two-line construction (<code>SessionsController.cs:119</code>) instead of a second hand-written query path,
           which is what makes &quot;never substitute the public filter&quot; a cheap rule to follow.</li>
           <li><strong>A textual scan was chosen deliberately over IL analysis.</strong> NetArchTest and reflection cannot see
           member usage inside method bodies, and the testing package carries no IL or Roslyn dependency on

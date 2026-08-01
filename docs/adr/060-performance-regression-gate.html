@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-060: Performance-Regression Gate (Committed Benchmark Baseline in CI) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-28).">
+  <meta name="description" content="Accepted (2026-07-28). Revised 2026-08-01 (corrected the count in Trade-offs: the single ratio floor names two of the eight benchmarks, so six, not…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/060-performance-regression-gate.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-060: Performance-Regression Gate (Committed Benchmark Baseline in CI)">
-  <meta property="og:description" content="Accepted (2026-07-28).">
+  <meta property="og:description" content="Accepted (2026-07-28). Revised 2026-08-01 (corrected the count in Trade-offs: the single ratio floor names two of the eight benchmarks, so six, not…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/060-performance-regression-gate.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-060: Performance-Regression Gate (Committed Benchmark Baseline in CI)">
-  <meta name="twitter:description" content="Accepted (2026-07-28).">
+  <meta name="twitter:description" content="Accepted (2026-07-28). Revised 2026-08-01 (corrected the count in Trade-offs: the single ratio floor names two of the eight benchmarks, so six, not…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)","item":"https://ivanball.github.io/docs/adr/060-performance-regression-gate.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 60 ADRs</summary>
+        <summary>All 64 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -159,6 +159,10 @@
         <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
         <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
         <li><a href="060-performance-regression-gate.html" aria-current="page">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
           </ol>
         </nav>
       </details>
@@ -167,7 +171,9 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-060-performance-regression-gate-committed-benchmark-baseline-in-ci">ADR-060: Performance-Regression Gate (Committed Benchmark Baseline in CI)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-28).</p>
+          <p>Accepted (2026-07-28). Revised 2026-08-01 (corrected the count in Trade-offs: the single ratio floor
+          names two of the eight benchmarks, so six, not seven, are gated on allocations alone; refreshed the
+          <code>ci.yml</code> line anchors for the <code>performance-smoke</code> job, which had shifted by about two lines).</p>
           <h2 id="context">Context</h2>
           <p>Rubric section 12 asks for hot-path efficiency that is <strong>measured, not assumed</strong>
           (<code>Website/docs-src/governance/ArchitectureEvaluationCriteria.md:355</code>). MMCA.Common has a
@@ -193,11 +199,11 @@
           <ul>
           <li><p><strong>A dedicated CI job measures, then verifies.</strong> The <code>performance-smoke</code> job, named
           <code>Performance gate (BenchmarkDotNet Short + baseline verify)</code>
-          (<code>MMCA.Common/.github/workflows/ci.yml:330-331</code>), runs the suite with <code>--filter &quot;*&quot; --job Short --exporters json</code> (<code>ci.yml:354-360</code>) and then runs the verifier over the exported artifacts
-          (<code>ci.yml:362-369</code>). <code>--job Short</code> (3 warmup plus 3 iterations) is chosen to produce real
-          measurements inside the job&#39;s 15-minute budget (<code>ci.yml:334,358-359</code>); <code>--filter &quot;*&quot;</code> is required
+          (<code>MMCA.Common/.github/workflows/ci.yml:332-333</code>), runs the suite with <code>--filter &quot;*&quot; --job Short --exporters json</code> (<code>ci.yml:362</code>) and then runs the verifier over the exported artifacts
+          (<code>ci.yml:371</code>). <code>--job Short</code> (3 warmup plus 3 iterations) is chosen to produce real
+          measurements inside the job&#39;s 15-minute budget (<code>ci.yml:336,360</code>); <code>--filter &quot;*&quot;</code> is required
           because BenchmarkDotNet otherwise prompts for a selection and would hang the runner
-          (<code>ci.yml:357-358</code>).</p>
+          (<code>ci.yml:359-360</code>).</p>
           </li>
           <li><p><strong>The baseline is a committed JSON file, not a stored previous run.</strong>
           <code>MMCA.Common/Tests/Performance/perf-baseline.json:1-20</code> holds an <code>allocationCeilingsBytes</code> object
@@ -233,7 +239,7 @@
           (<code>MMCA.Common/build/perfgate/perfgate.csproj:2-21</code>), so the gate itself cannot become a restore or
           supply-chain problem. It reads BenchmarkDotNet&#39;s <code>*-report-full-compressed.json</code> exports from the
           results directory it is handed (<code>Program.cs:26-33</code>), which CI points at
-          <code>BenchmarkDotNet.Artifacts/results</code> (<code>ci.yml:369</code>).</p>
+          <code>BenchmarkDotNet.Artifacts/results</code> (<code>ci.yml:371</code>).</p>
           </li>
           <li><p><strong>The job is a required merge gate, not advisory.</strong> It is listed among the eight required contexts
           in <code>MMCA.Common/CONTRIBUTING.md:68-71</code> and in the reproducible ruleset payload there
@@ -298,12 +304,13 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>The Short job cannot see small latency regressions.</strong> Three warmup and three iterations
-          (<code>ci.yml:358-359</code>) give wide confidence intervals: enough for a 1000x floor and for counting bytes,
+          (<code>ci.yml:360</code>) give wide confidence intervals: enough for a 1000x floor and for counting bytes,
           useless for detecting a 5% slowdown. Detecting that would need a longer job and a dedicated runner,
-          which the 15-minute budget (<code>ci.yml:334</code>) deliberately does not buy.</li>
+          which the 15-minute budget (<code>ci.yml:336</code>) deliberately does not buy.</li>
           <li><strong>Only one ratio floor exists today</strong> (<code>perf-baseline.json:13-19</code>), so the machine-independent
-          latency half of the gate protects exactly one invariant. The other seven benchmarks are gated on
-          allocations alone, which catches a new allocation but not a pure CPU regression.</li>
+          latency half of the gate protects exactly one invariant. That floor names two of the eight
+          benchmarks (<code>perf-baseline.json:14-18</code>), so the remaining six are gated on allocations alone,
+          which catches a new allocation but not a pure CPU regression.</li>
           <li><strong>The ceilings have roughly 25% headroom</strong> (<code>perf-baseline.json:2</code>), so a regression smaller than
           that passes. The headroom is what keeps the gate stable across BenchmarkDotNet and runtime
           revisions; the cost is that it is a ratchet with slack, not a tripwire.</li>
@@ -321,7 +328,7 @@
           the baseline.</li>
           <li><strong>A green context does not always mean the benchmarks ran.</strong> On a documentation-only PR the heavy
           steps are skipped by the <code>changes</code> classifier while all required contexts still post green, which
-          is what keeps branch protection satisfiable (<code>ci.yml:32-35,355,363</code>).</li>
+          is what keeps branch protection satisfiable (<code>ci.yml:32-35,357,365</code>).</li>
           <li><strong>Consumers inherit the numbers, not the gate.</strong> MMCA.ADC, MMCA.Store and MMCA.Helpdesk get the
           framework&#39;s bounded hot paths through the released packages, but none of them gates their own
           application code this way.</li>

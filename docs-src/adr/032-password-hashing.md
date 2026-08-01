@@ -1,7 +1,7 @@
 # ADR-032: Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility
 
 ## Status
-Accepted (2026-06-29, adoption note revised 2026-07-06).
+Accepted (2026-06-29, adoption note revised 2026-07-06, registration note revised 2026-08-01).
 
 ## Context
 Identity stores a credential as a (salt, hash) pair, never plaintext. The framework needs one
@@ -20,9 +20,11 @@ factor, and comparison are decided once and not re-implemented per app. Two forc
 ## Decision
 Provide a single `IPasswordHasher` (`MMCA.Common.Application.Interfaces.Infrastructure`,
 `IPasswordHasher.cs:6`) with one implementation `PasswordHasher`
-(`Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:12`), registered unconditionally as
-a singleton (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:196`, in the `AddServices`
-helper that `AddInfrastructure` calls at `DependencyInjection.cs:139`). The type is stateless (only
+(`Source/Core/MMCA.Common.Infrastructure/Services/PasswordHasher.cs:12`), registered as a singleton via
+`TryAddSingleton` (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:217`, in the
+`AddServices` helper that `AddInfrastructure` calls at `DependencyInjection.cs:140`). The call site
+always runs, but `TryAdd` semantics mean a host that has already registered its own `IPasswordHasher`
+keeps it: the framework supplies the default hasher rather than forcing it. The type is stateless (only
 `const` parameters), so
 the singleton lifetime is safe.
 
@@ -52,14 +54,14 @@ the singleton lifetime is safe.
   sealed subclass of `AuthenticationServiceBase<TUser>`
   (`Source/Core/MMCA.Common.Application/Auth/AuthenticationServiceBase.cs:34`) that passes `IPasswordHasher`
   into the base constructor rather than calling the hasher itself. The login-time `VerifyPassword`
-  (`AuthenticationServiceBase.cs:112`) and the registration-time `HashPassword` (`AuthenticationServiceBase.cs:160`)
+  (`AuthenticationServiceBase.cs:112`) and the registration-time `HashPassword` (`AuthenticationServiceBase.cs:159`)
   both live once in that base, so a single hoisted call site verifies and hashes for both apps. ADC's subclass
   declares the `IPasswordHasher` parameter and forwards it to the base
   (`MMCA.ADC/.../Identity.Application/Users/AuthenticationService.cs:38`, forwarded at `AuthenticationService.cs:43`);
   Store's subclass does the same (`MMCA.Store/.../Identity.Application/Users/AuthenticationService.cs:23`,
   forwarded at `AuthenticationService.cs:30`). A handful of use cases still inject `IPasswordHasher` directly
   rather than through the base: both apps' `ChangePasswordHandler`
-  (`MMCA.ADC` and `MMCA.Store` `.../UseCases/ChangePassword/ChangePasswordHandler.cs:16`) verify the current
+  (`MMCA.ADC` and `MMCA.Store` `.../UseCases/ChangePassword/ChangePasswordHandler.cs:15`) verify the current
   password before hashing the new one, and both apps' `IdentityModuleDbSeeder`
   (`.../Persistence/DbContexts/Seeding/IdentityModuleDbSeeder.cs:18`) hash the seeded accounts' passwords.
 

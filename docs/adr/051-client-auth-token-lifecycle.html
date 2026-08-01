@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 60 ADRs</summary>
+        <summary>All 64 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -159,6 +159,10 @@
         <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
         <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
         <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
           </ol>
         </nav>
       </details>
@@ -228,9 +232,9 @@
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Services/ServerTokenStorageService.cs:17</code>,
           <code>ServerTokenStorageService.cs:32-35</code>, <code>ServerTokenStorageService.cs:38-52</code>). The MAUI implementation
           is app-local and backs onto <code>SecureStorage.Default</code> (platform secure enclaves)
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Services/MauiTokenStorageService.cs:9</code>,
-          <code>MauiTokenStorageService.cs:16</code>, <code>MauiTokenStorageService.cs:28</code>; Store registers its own equivalent
-          at <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:76</code>).</li>
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Services/MauiTokenStorageService.cs:47</code>,
+          <code>MauiTokenStorageService.cs:69</code>, <code>MauiTokenStorageService.cs:85</code>; Store registers its own equivalent
+          at <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:86</code>).</li>
           <li><strong>Login seeds the browser HttpOnly cookie through a JS fetch.</strong> <code>SetTokensAsync</code> on both browser
           storage services caches the access token in memory and calls <code>ISessionCookieSync.SyncAsync</code>, which
           fires a browser fetch to <code>/auth/session-cookie</code> so the resulting <code>Set-Cookie</code> lands in the user&#39;s
@@ -269,11 +273,11 @@
           registers <code>ServerTokenStorageService</code> via <code>AddCommonServerTokenStorage</code>
           (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:26-29</code>) plus the same
           proxy refresher and auth-state provider
-          (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:91-92</code>,
+          (<code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:97-98</code>,
           <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:64-65</code>); the MAUI host registers its
           SecureStorage-backed storage + <code>DirectApiTokenRefresher</code> + <code>JwtAuthenticationStateProvider</code>
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:98-100</code>,
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:76-78</code>).</li>
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:103-105</code>,
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:86-88</code>).</li>
           </ul>
           </li>
           </ul>

@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 60 ADRs</summary>
+        <summary>All 64 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -159,6 +159,10 @@
         <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
         <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
         <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
           </ol>
         </nav>
       </details>
@@ -242,13 +246,13 @@
           <code>httpGet</code> probes, on a port that is never exposed via ingress:</p>
           <ul>
           <li>The three Profile A hosts (Identity, Conference, Engagement) listen on <strong>8081</strong>. Bicep injects
-          <code>HealthProbe__Port=8081</code> (<code>MMCA.ADC/infra/main.bicep:957</code>, <code>:1126</code>, <code>:1235</code>) and points startup,
-          liveness, and readiness at it (<code>main.bicep:1045-1070</code> for Identity). The listener is added by
+          <code>HealthProbe__Port=8081</code> (<code>MMCA.ADC/infra/main.bicep:1037</code>, <code>:1207</code>, <code>:1317</code>) and points startup,
+          liveness, and readiness at it (<code>main.bicep:1125-1149</code> for Identity). The listener is added by
           <code>KestrelConfiguration.ConfigureHttp2WithHealthProbe</code>, called from each service&#39;s
           <code>Program.cs</code> (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:79</code>).</li>
           <li>The mixed-endpoint host (Notification) listens on <strong>8082</strong>, one port above its <code>grpc</code> endpoint:
-          <code>HealthProbe__Port=8082</code> at <code>main.bicep:1367</code>, with all three probes on 8082 at
-          <code>main.bicep:1414-1439</code>. The listener is added by
+          <code>HealthProbe__Port=8082</code> at <code>main.bicep:1450</code>, with all three probes on 8082 at
+          <code>main.bicep:1497-1522</code>. The listener is added by
           <code>KestrelConfiguration.ConfigureMixedEndpointsWithHealthProbe</code>
           (<code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/KestrelConfiguration.cs:23-35</code>), strictly
           additive on top of the config-declared 8080 and 8081 endpoints, explicitly so that all four
@@ -266,9 +270,9 @@
           The two-argument call sites are all in the AppHost
           (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:273-275</code>), which configures the local
           Aspire environment only. In production ACA, ADC&#39;s Bicep hardcodes the <strong>direct in-cluster authority</strong>
-          <code>http://${identityApp.name}</code> on every token-validating service: Conference (<code>main.bicep:1140</code>),
-          Engagement (<code>:1248</code>), and Notification (<code>:1382</code>). Identity&#39;s own ingress is <code>transport: &#39;http2&#39;</code>
-          (<code>main.bicep:921</code>), so envoy accepts the HTTP/1.1 JwtBearer metadata fetch and carries it to the
+          <code>http://${identityApp.name}</code> on every token-validating service: Conference (<code>main.bicep:1221</code>),
+          Engagement (<code>:1330</code>), and Notification (<code>:1465</code>). Identity&#39;s own ingress is <code>transport: &#39;http2&#39;</code>
+          (<code>main.bicep:1000</code>), so envoy accepts the HTTP/1.1 JwtBearer metadata fetch and carries it to the
           container. That is exactly the arrangement the Store update above describes, so the
           &quot;JWKS authority differs by environment&quot; nuance is <strong>not</strong> Store-specific: both apps route discovery
           through the gateway locally and use the direct in-cluster authority in production. Read the Profile A
@@ -290,12 +294,13 @@
           call sites are <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:50</code> and
           <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:45</code>.</li>
           <li><strong>Bicep injects the port and points startup, liveness, and readiness at it.</strong> Store sets
-          <code>HealthProbe__Port=8081</code> on Identity (<code>MMCA.Store/infra/main.bicep:732</code>) and Catalog (<code>:824</code>), with
-          <code>/alive</code> for startup and liveness and <code>/health/ready</code> for readiness on 8081 (<code>main.bicep:744-747</code>
-          and <code>:835-838</code>). ADC is unchanged (8081 for the three Profile A hosts, 8082 for Notification): the
-          anchors in the 2026-07-25 update above still hold.</li>
+          <code>HealthProbe__Port=8081</code> on Identity (<code>MMCA.Store/infra/main.bicep:810</code>) and Catalog (<code>:903</code>), with
+          <code>/alive</code> for startup and liveness and <code>/health/ready</code> for readiness on 8081 (<code>main.bicep:822-826</code>
+          and <code>:914-918</code>). ADC is unchanged (8081 for the three Profile A hosts, 8082 for Notification): its
+          Bicep line anchors in the 2026-07-25 update above have since shifted (unrelated observability
+          commits) and are corrected there.</li>
           <li><strong>Hosts that never went Http2-only keep probing their traffic port.</strong> Store&#39;s Sales, Gateway, and
-          UI probe 8080 directly (<code>MMCA.Store/infra/main.bicep:939-941</code>, <code>:1004-1006</code>, <code>:1079-1081</code>), because
+          UI probe 8080 directly (<code>MMCA.Store/infra/main.bicep:1019-1021</code>, <code>:1085-1087</code>, <code>:1161-1163</code>), because
           an <code>Http1AndHttp2</code> endpoint answers the HTTP/1.1 probe on its own.</li>
           </ul>
           <p>Rule: the dedicated probe listener is part of Profile A, not an app-specific workaround. A host that

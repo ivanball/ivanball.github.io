@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 60 ADRs</summary>
+        <summary>All 64 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -159,6 +159,10 @@
         <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
         <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
         <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
           </ol>
         </nav>
       </details>
@@ -176,7 +180,7 @@
           authentication, localization, theming, data fetching, and the test suite.</p>
           <p>Four accepted ADRs already reason about that transition and each treats it as <strong>given context</strong> rather
           than deciding it: ADR-022 solves <code>[Authorize]</code> on fresh GETs by reading an HttpOnly cookie &quot;during SSR
-          prerender&quot; (<code>022-browser-session-cookie-auth.md:7-15</code>); ADR-027 states that its hard part is flowing one
+          prerender&quot; (<code>022-browser-session-cookie-auth.md:18</code>); ADR-027 states that its hard part is flowing one
           culture decision through &quot;a Blazor <code>InteractiveAuto</code> app (SSR prerender, InteractiveServer circuit,
           InteractiveWebAssembly client)&quot; (<code>027-multi-locale-i18n.md:13-16</code>); ADR-028 repeats the same three-phase
           premise for the theme and records that &quot;there is no free no-flash for InteractiveAuto&quot;
@@ -206,8 +210,8 @@
           both sides of the pipeline: <code>AddInteractiveServerComponents()</code> + <code>AddInteractiveWebAssemblyComponents()</code>
           at service registration and <code>AddInteractiveServerRenderMode()</code> + <code>AddInteractiveWebAssemblyRenderMode()</code>
           on <code>MapRazorComponents&lt;App&gt;()</code>
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:33-35</code>, <code>Program.cs:183-186</code>;
-          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:61-63</code>, <code>Program.cs:180-188</code>).</li>
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:33-35</code>, <code>Program.cs:187-189</code>;
+          <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:67-69</code>, <code>Program.cs:180-188</code>).</li>
           <li><strong>Prerendering stays enabled.</strong> No host anywhere in the workspace passes <code>prerender: false</code> or
           constructs a render mode with prerendering disabled; every render mode in use is the stock static
           instance. Prerender is what ADR-022&#39;s SSR cookie scheme exists to serve, so it is kept and its cost is
@@ -239,8 +243,8 @@
           <code>if (!RendererInfo.IsInteractive) return;</code> guard in <code>OnParametersSetAsync</code> / <code>OnInitializedAsync</code> appears
           across both apps, with two different stated reasons: avoiding the doubled reads under <code>InteractiveAuto</code>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicSessionDetail.razor.cs:81-90</code>,
-          <code>.../Pages/Public/PublicSpeakerDetail.razor.cs:59</code>, <code>.../Pages/Home/ADCHome.razor.cs:85</code>,
-          <code>.../Pages/Speaker/SpeakerDashboard.razor.cs:62</code>,
+          <code>.../Pages/Public/PublicSpeakerDetail.razor.cs:59</code>, <code>.../Pages/Home/ADCHome.razor.cs:90</code>,
+          <code>.../Pages/Speaker/SpeakerDashboard.razor.cs:65</code>,
           <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLive.razor.cs:69</code>,
           <code>.../Pages/SessionLive/PresenterView.razor.cs:56</code>) and the fact that no auth token can be read at
           prerender time so every authenticated call would 401
@@ -276,9 +280,9 @@
           <code>MMCA.Store/.../App.razor:39-42</code>). Those config keys are injected only by the AppHosts, and only when the
           matching environment variable is present (<code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:307-322</code>,
           <code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:262-270</code>). In CI only <code>E2E_FORCE_SERVER</code> is
-          exported (<code>MMCA.ADC/.github/workflows/e2e.yml:199-205</code>, <code>MMCA.Store/.github/workflows/e2e.yml:192-198</code>);
+          exported (<code>MMCA.ADC/.github/workflows/e2e.yml:218</code>, <code>MMCA.Store/.github/workflows/e2e.yml:210</code>);
           ADC&#39;s workflow deliberately does <strong>not</strong> set <code>E2E_FORCE_WASM</code> and records why
-          (<code>MMCA.ADC/.github/workflows/e2e.yml:190-197</code>). Both <code>App.razor</code> comments cite the same trace evidence:
+          (<code>MMCA.ADC/.github/workflows/e2e.yml:203-210</code>). Both <code>App.razor</code> comments cite the same trace evidence:
           under <code>InteractiveAuto</code> each test&#39;s second page load switched to the background-downloaded WASM bundle,
           whose runtime boot on a shared 2-core runner exceeded every suite wait while the download starved the
           live circuits.</li>
@@ -286,7 +290,7 @@
           the literal mode on <code>HeadOutlet</code> and <code>Routes</code>
           (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Components/App.razor:10</code>, <code>App.razor:14</code>) and
           registers only the server render mode
-          (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:74-78</code>). It has <strong>no <code>.Client</code> project at
+          (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:14-15</code>, <code>Program.cs:85-86</code>). It has <strong>no <code>.Client</code> project at
           all</strong>, so <code>InteractiveAuto</code> is not available to it, and its two ticket pages use <code>MudTable</code> directly
           rather than the shared list-page base
           (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Components/Pages/Tickets.razor:30</code>), so none of the

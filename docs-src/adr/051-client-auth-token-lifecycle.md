@@ -65,9 +65,9 @@ UI code above them never branches on render mode.
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Services/ServerTokenStorageService.cs:17`,
   `ServerTokenStorageService.cs:32-35`, `ServerTokenStorageService.cs:38-52`). The MAUI implementation
   is app-local and backs onto `SecureStorage.Default` (platform secure enclaves)
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Services/MauiTokenStorageService.cs:9`,
-  `MauiTokenStorageService.cs:16`, `MauiTokenStorageService.cs:28`; Store registers its own equivalent
-  at `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:76`).
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Services/MauiTokenStorageService.cs:47`,
+  `MauiTokenStorageService.cs:69`, `MauiTokenStorageService.cs:85`; Store registers its own equivalent
+  at `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:86`).
 - **Login seeds the browser HttpOnly cookie through a JS fetch.** `SetTokensAsync` on both browser
   storage services caches the access token in memory and calls `ISessionCookieSync.SyncAsync`, which
   fires a browser fetch to `/auth/session-cookie` so the resulting `Set-Cookie` lands in the user's
@@ -106,11 +106,11 @@ UI code above them never branches on render mode.
   registers `ServerTokenStorageService` via `AddCommonServerTokenStorage`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:26-29`) plus the same
   proxy refresher and auth-state provider
-  (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:91-92`,
+  (`MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:97-98`,
   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:64-65`); the MAUI host registers its
   SecureStorage-backed storage + `DirectApiTokenRefresher` + `JwtAuthenticationStateProvider`
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:98-100`,
-  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:76-78`).
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:103-105`,
+  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI/MauiProgram.cs:86-88`).
 
 ## Rationale
 - **One application surface, three storage stories.** Pages, services, and the HTTP pipeline talk to

@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-057: Expand/Contract Schema Evolution Enforced as a CI Gate · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-28).">
+  <meta name="description" content="Accepted (2026-07-28). Revised 2026-08-01: the diff now fails closed in both repos (the || true is gone and MMCA.Store&#39;s build-and-test checkout sets…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/057-expand-contract-schema-evolution-gate.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-057: Expand/Contract Schema Evolution Enforced as a CI Gate">
-  <meta property="og:description" content="Accepted (2026-07-28).">
+  <meta property="og:description" content="Accepted (2026-07-28). Revised 2026-08-01: the diff now fails closed in both repos (the || true is gone and MMCA.Store&#39;s build-and-test checkout sets…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/057-expand-contract-schema-evolution-gate.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-057: Expand/Contract Schema Evolution Enforced as a CI Gate">
-  <meta name="twitter:description" content="Accepted (2026-07-28).">
+  <meta name="twitter:description" content="Accepted (2026-07-28). Revised 2026-08-01: the diff now fails closed in both repos (the || true is gone and MMCA.Store&#39;s build-and-test checkout sets…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"057 · Expand/Contract Schema Evolution Enforced as a CI Gate","item":"https://ivanball.github.io/docs/adr/057-expand-contract-schema-evolution-gate.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 60 ADRs</summary>
+        <summary>All 64 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -159,6 +159,10 @@
         <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
         <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
         <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
           </ol>
         </nav>
       </details>
@@ -167,24 +171,26 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-057-expandcontract-schema-evolution-enforced-as-a-ci-gate">ADR-057: Expand/Contract Schema Evolution Enforced as a CI Gate</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-28).</p>
+          <p>Accepted (2026-07-28). Revised 2026-08-01: the diff now fails <strong>closed</strong> in both repos (the <code>|| true</code>
+          is gone and MMCA.Store&#39;s <code>build-and-test</code> checkout sets <code>fetch-depth: 0</code>), so the fail-open trade-off
+          recorded on acceptance is now history rather than current behavior.</p>
           <h2 id="context">Context</h2>
           <p>ADR-030 decides <strong>who</strong> applies a migration: every service host runs <code>DatabaseInitStrategy = Migrate</code>
           and self-applies its pending EF Core migrations at startup as the sole migrator, with no deploy-step
-          <code>sqlcmd</code> backstop (<code>MMCA.Store/.github/workflows/deploy.yml:935-943</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:1015-1025</code>). It says nothing about what <strong>shape</strong> a migration
+          <code>sqlcmd</code> backstop (<code>MMCA.Store/.github/workflows/deploy.yml:1037-1046</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1078-1088</code>). It says nothing about what <strong>shape</strong> a migration
           may take.</p>
           <p>That gap is load-bearing because production rollback is <strong>revision-only</strong>. When the post-deploy smoke
           gate fails, the deploy rolls every container app back to its previous revision with
-          <code>az containerapp revision copy --from-revision</code> (<code>MMCA.Store/.github/workflows/deploy.yml:951,994-1002</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:1036,1088-1099</code>). That reverts the <strong>image</strong> and nothing else:
+          <code>az containerapp revision copy --from-revision</code> (<code>MMCA.Store/.github/workflows/deploy.yml:1053,1105-1120</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:1099,1156-1169</code>). That reverts the <strong>image</strong> and nothing else:
           the new revision already migrated the database on boot, and no down-migration runs. The previous
           release therefore keeps serving traffic against the <strong>new</strong> schema, which is exactly the statement
           both repos&#39; CONTRIBUTING makes (<code>MMCA.Store/CONTRIBUTING.md:57-60</code>, <code>MMCA.ADC/CONTRIBUTING.md:57-60</code>).
           A <code>DropColumn</code> shipped alongside the code that stopped reading it makes the rollback path a broken
           release rather than a recovery.</p>
           <p>The existing build-time gate does not cover this. <code>dotnet ef migrations has-pending-model-changes</code>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:168-182</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:223-237</code>)
+          (<code>MMCA.Store/.github/workflows/deploy.yml:211-225</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:262-276</code>)
           asserts a migration <strong>exists</strong> for every model change; it has no opinion on whether that migration is
           survivable one release back. The gate below is the shape rule that ADR-030 left open. It arrived in
           MMCA.ADC with the 2026-07-19 security/resilience/ops review batch (commit <code>adee5058</code>, PR #38) and was
@@ -198,32 +204,32 @@
           (<code>MMCA.Store/CONTRIBUTING.md:62-65</code>, <code>MMCA.ADC/CONTRIBUTING.md:62-65</code>).</li>
           <li><strong>A migration ADDED by a PR may not drop without a marker.</strong> The <code>Expand/contract migration guard (schema rollback safety)</code> step fails the build when a newly added migration&#39;s <code>Up()</code> matches
           <code>\.(DropColumn|DropTable|DropIndex)\s*(&lt;[^&gt;]*&gt;)?\s*\(</code> and the same <code>Up()</code> body does not carry the
-          override marker (<code>MMCA.Store/.github/workflows/deploy.yml:184-224</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:113-151</code>). Those three operations are the entire matched set.</li>
+          override marker (<code>MMCA.Store/.github/workflows/deploy.yml:227-273</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:138-184</code>). Those three operations are the entire matched set.</li>
           <li><strong>The marker&#39;s documented format is one comment line:</strong>
           <code>// EXPAND-CONTRACT-OVERRIDE: &lt;why this drop is safe one release back&gt;</code>
           (<code>MMCA.Store/CONTRIBUTING.md:73-75</code>, <code>MMCA.ADC/CONTRIBUTING.md:73-75</code>). What the step actually
           enforces is looser: <code>grep -q &#39;EXPAND-CONTRACT-OVERRIDE&#39;</code> over the <code>Up()</code> body
-          (<code>MMCA.Store/.github/workflows/deploy.yml:217</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:144</code>), so the
+          (<code>MMCA.Store/.github/workflows/deploy.yml:266</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:177</code>), so the
           token must appear inside <code>Up()</code>, but the <code>//</code> prefix, the colon and the reason text are convention,
           not validation.</li>
           <li><strong>&quot;Added by this PR&quot; means git-added, base-relative, path-scoped.</strong> The step fetches the PR base and
           runs <code>git diff --diff-filter=A --name-only &quot;origin/&lt;base_ref&gt;...HEAD&quot;</code> limited to
           <code>Source/Hosting/MMCA.Store.Migrations.SqlServer.*/Migrations/*.cs</code> (respectively
-          <code>MMCA.ADC.Migrations.SqlServer.*</code>) (<code>MMCA.Store/.github/workflows/deploy.yml:202-204</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:129-131</code>). <code>*.Designer.cs</code> files are skipped explicitly
-          (<code>MMCA.Store/.github/workflows/deploy.yml:212-214</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:139-141</code>),
+          <code>MMCA.ADC.Migrations.SqlServer.*</code>) (<code>MMCA.Store/.github/workflows/deploy.yml:249-250</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:160-161</code>). <code>*.Designer.cs</code> files are skipped explicitly
+          (<code>MMCA.Store/.github/workflows/deploy.yml:261-263</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:172-174</code>),
           the model snapshot is a modification rather than an addition so it never enters the list, and the
           frozen combined-archive projects (<code>MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer/</code>,
           <code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer/</code>) fall outside the pathspec.</li>
           <li><strong>Only the <code>Up()</code> body is scanned.</strong> The body is extracted with
           <code>awk &#39;/protected override void Up\(/{flag=1} /protected override void Down\(/{flag=0} flag&#39;</code>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:215</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:142</code>), because
+          (<code>MMCA.Store/.github/workflows/deploy.yml:264</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:175</code>), because
           every additive migration&#39;s <code>Down()</code> legitimately drops what <code>Up()</code> added and <code>Down()</code> never runs at
           startup: down-migration is explicit tooling only.</li>
           <li><strong>It is a merge gate, not a deploy gate.</strong> The step lives in the <code>build-and-test</code> job, which both
-          repos run only on <code>pull_request</code> (<code>MMCA.Store/.github/workflows/deploy.yml:96</code>,
-          <code>MMCA.ADC/.github/workflows/deploy.yml:104</code>) and document as a required merge check
+          repos run only on <code>pull_request</code> (<code>MMCA.Store/.github/workflows/deploy.yml:131</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:129</code>) and document as a required merge check
           (<code>MMCA.Store/CONTRIBUTING.md:38-39</code>, <code>MMCA.ADC/CONTRIBUTING.md:37-38</code>). Nothing re-checks the shape
           on the push to <code>main</code> that deploys.</li>
           <li><strong>The common legitimate override is an index rebuilt in place.</strong> Adding INCLUDE columns or a filter
@@ -277,14 +283,22 @@
           <li><strong>Added-only, and pull-request-only.</strong> A destructive statement appended to a migration file that is
           already on <code>main</code> is a modification, not an addition, and is never scanned; neither is anything that
           reaches <code>main</code> without a PR.</li>
-          <li><strong>The diff is fail-open.</strong> Both repos compute the added-file list as <code>$(git diff ... || true)</code>, and
-          an empty list prints &quot;No new migration files in this diff&quot; and exits 0
-          (<code>MMCA.Store/.github/workflows/deploy.yml:203-208</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:130-135</code>),
-          so a diff that cannot be computed passes rather than fails. MMCA.ADC checks out full history
-          explicitly for this step (<code>MMCA.ADC/.github/workflows/deploy.yml:108-111</code>); the MMCA.Store
-          <code>build-and-test</code> checkout sets no <code>fetch-depth</code>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:100</code>), so the two repos do not run the same step against
-          the same git object graph.</li>
+          <li><strong>The diff fails closed, and the checkout it depends on is elsewhere in the file.</strong> Neither repo
+          wraps the diff in <code>|| true</code> any more: an unresolvable diff prints an <code>::error::</code> and exits 1
+          (<code>MMCA.Store/.github/workflows/deploy.yml:246-253</code>,
+          <code>MMCA.ADC/.github/workflows/deploy.yml:155-164</code>), and only a diff that resolves to an empty added
+          list prints &quot;No new migration files in this diff: expand/contract guard passes.&quot; and exits 0
+          (<code>MMCA.Store/.github/workflows/deploy.yml:254-257</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:165-168</code>).
+          Both <code>build-and-test</code> checkouts now set <code>fetch-depth: 0</code>
+          (<code>MMCA.Store/.github/workflows/deploy.yml:135-141</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:133-136</code>),
+          so the two repos run the same step against the same git object graph. The residual cost is that the
+          gate&#39;s correctness lives in another step&#39;s <code>with:</code> block, directly above the guard in MMCA.ADC but
+          some ninety lines above it in MMCA.Store: drop the <code>fetch-depth</code> and every PR reds on a step that
+          has nothing to do with the change, which is the deliberate direction for that failure to point. As
+          accepted (2026-07-28) this record described the opposite. The diff was <code>$(git diff ... || true)</code> and
+          the MMCA.Store checkout was shallow, so the step passed vacuously on every run from 2026-07-25 to
+          2026-07-28, a three-day window in which a required check reported green without ever evaluating a
+          migration (<code>MMCA.Store/.github/workflows/deploy.yml:137-140</code>).</li>
           <li><strong>It gates the migration, not the application.</strong> Nothing verifies that the previous release&#39;s code
           tolerates the new schema; an expand migration that adds a required column the old revision never
           writes is invisible to the gate.</li>

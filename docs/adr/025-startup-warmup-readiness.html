@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 60 ADRs</summary>
+        <summary>All 64 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -159,6 +159,10 @@
         <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
         <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
         <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
           </ol>
         </nav>
       </details>
@@ -168,8 +172,10 @@
           <h1 id="adr-025-startup-warm-up-and-readiness-gating-for-cold-start-mitigation">ADR-025: Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</h1>
           <h2 id="status">Status</h2>
           <p>Accepted (2026-06-27). Revised 2026-07-28: <code>/health/ready</code> now excludes <code>optional</code>-tagged checks as well
-          as <code>live</code>-tagged ones (see Decision), and the absence of a warm-up timeout is recorded as a known gap
-          (see Trade-offs).</p>
+          as <code>live</code>-tagged ones (see Decision), and the absence of a warm-up timeout was recorded as a known gap
+          (see Trade-offs). Revised 2026-08-01: that gap is closed. Every warm-up task now runs under a
+          120-second per-task ceiling, so a task that hangs no longer holds the readiness gate closed (see
+          Decision and Trade-offs).</p>
           <h2 id="context">Context</h2>
           <p>On the Azure Container Apps Consumption plan a replica that has been idle is CPU-throttled, and a
           scale-from-zero or scaled-out replica starts cold. The first authenticated request on such a replica
@@ -200,18 +206,25 @@
           <li><strong>A background runner that opens the gate once warm-up has had its chance.</strong> <code>WarmupHostedService</code>
           runs every registered <code>IWarmupTask</code> exactly once, in parallel, then opens the gate. Critically the gate
           is opened in a <code>finally</code>, so it <strong>opens even if tasks fail</strong>: a stuck dependency must not keep a replica
-          out of rotation forever.</li>
+          out of rotation forever. Each task additionally runs under a 120-second ceiling (<code>TaskTimeoutSeconds</code>,
+          <code>Source/Hosting/MMCA.Common.Aspire/Warmup/WarmupHostedService.cs:42</code>, applied per task as
+          <code>.WaitAsync(_taskTimeout, _timeProvider, cancellationToken)</code> at <code>:69</code>), so a task that neither completes
+          nor throws cannot hold the gate closed either.</li>
           <li><strong>Per-task failure is logged, not fatal, and falls back to lazy retry.</strong> Each task runs in isolation; a
           thrown task is caught and logged at warning level (&quot;will retry lazily on first use&quot;), so the missed
-          warm-up simply happens on the first real request (absorbed by the Polly pipeline, ADR-009). The one
-          exception that is rethrown is an <code>OperationCanceledException</code> during host shutdown, so stopping the host
-          is not mistaken for a task failure.</li>
+          warm-up simply happens on the first real request (absorbed by the Polly pipeline, ADR-009). A task that
+          trips the 120-second ceiling takes the same route: the <code>TimeoutException</code> is caught and logged at
+          warning level (<code>WarmupHostedService.cs:77-82</code>, <code>:103-105</code>), the abandoned task keeps running detached,
+          and the dependency is retried lazily on first use. The one exception that is rethrown is an
+          <code>OperationCanceledException</code> during host shutdown, so stopping the host is not mistaken for a task
+          failure.</li>
           <li><strong>A built-in task that pre-warms OIDC discovery.</strong> <code>OpenIdConnectMetadataWarmupTask</code> fetches
           <code>{Authority}/.well-known/openid-configuration</code> over the shared <code>IHttpClientFactory</code>, warming DNS, TCP,
           TLS, and the connection pool (and the authority&#39;s own discovery cache). It no-ops when no
           <code>Authentication:JwtBearer:Authority</code> is configured. The JwtBearer middleware caches discovery
-          separately, so its own first fetch still runs, but over a now-warm connection it completes in
-          single-digit milliseconds.</li>
+          separately, so its own first fetch still runs; the intent recorded on the task itself
+          (<code>Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:14-20</code>) is that over a
+          now-warm connection that fetch completes in single-digit milliseconds.</li>
           <li><strong>Extensible per host.</strong> <code>AddWarmupReadiness()</code> registers the gate, the runner, the readiness health
           check, and the built-in OIDC task; a host adds its own pre-fetches (output cache, reference data) with
           <code>AddWarmupTask&lt;T&gt;()</code>.</li>
@@ -221,10 +234,10 @@
           <li><strong>Keep cold replicas out of rotation, briefly.</strong> Gating readiness on warm-up means the platform does
           not send a user request to a replica that is still doing its first handshakes, which is what turns a
           cold start into a visible 5xx.</li>
-          <li><strong>Availability over strict warmth.</strong> Opening the gate even when a task fails is the load-bearing choice:
-          a warm-up that depends on a temporarily unreachable dependency would otherwise pin the replica
-          out of service indefinitely. Falling back to lazy retry (covered by the resilience pipeline) trades a
-          possibly-slow first request for guaranteed eventual availability.</li>
+          <li><strong>Availability over strict warmth.</strong> Opening the gate even when a task fails or hangs is the
+          load-bearing choice: a warm-up that depends on a temporarily unreachable dependency would otherwise pin
+          the replica out of service indefinitely. Falling back to lazy retry (covered by the resilience
+          pipeline) trades a possibly-slow first request for guaranteed eventual availability.</li>
           <li><strong>Warm the path, not just the cache.</strong> The OIDC fetch is the specific cold-start failure we saw; even
           though the middleware re-fetches, warming the network path removes the timeout-sized first hit. This is
           the active half of the same cold-start story ADR-004 references from the auth side.</li>
@@ -235,20 +248,24 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>A replica can enter rotation not fully warm.</strong> The gate is opened in a <code>finally</code> once the
-          <code>Task.WhenAll</code> over every registered task returns, that is, once each task has completed or thrown
-          (<code>Source/Hosting/MMCA.Common.Aspire/Warmup/WarmupHostedService.cs:25</code>, <code>:30</code>); a thrown task is caught
-          and logged rather than retried, so a failed warm-up still admits the replica and its first request pays
-          the lazy cost. The resilience pipeline mitigates this but does not eliminate it. This is deliberate
-          (availability over warmth) but means the gate is a best-effort warm-up signal, not a guarantee.</li>
-          <li><strong>Known gap: there is no warm-up-level timeout.</strong> The <code>Task.WhenAll</code> is unbounded
-          (<code>WarmupHostedService.cs:25</code>), no per-task deadline exists anywhere in the warm-up subsystem, and the
-          only token in play is the host&#39;s <code>stoppingToken</code>, which trips at shutdown rather than after a warm-up
-          budget. A task that fails fast is handled; a task that HANGS holds the readiness gate closed for as
-          long as the host runs, which is exactly the outcome the Decision above says must not happen (the
-          <code>finally</code> guards against a throwing task, not a hanging one). The built-in OIDC task is bounded only
-          incidentally, because its HTTP call inherits the shared Polly total-request timeout
-          (<code>Extensions.cs:62</code>) and therefore surfaces as a thrown task; a host-registered task doing non-HTTP
-          work has no such bound.</li>
+          <code>Task.WhenAll</code> over every registered task returns, that is, once each task has completed, thrown, or
+          timed out (<code>Source/Hosting/MMCA.Common.Aspire/Warmup/WarmupHostedService.cs:53</code>, <code>:58</code>); a thrown or
+          timed-out task is caught and logged rather than retried, so a failed warm-up still admits the replica
+          and its first request pays the lazy cost. The resilience pipeline mitigates this but does not eliminate
+          it. This is deliberate (availability over warmth) but means the gate is a best-effort warm-up signal,
+          not a guarantee.</li>
+          <li><strong>The per-task ceiling is a backstop, not a latency budget.</strong> The gap recorded on 2026-07-28 (an
+          unbounded <code>Task.WhenAll</code> with no per-task deadline anywhere in the subsystem, so a task that HANGS held
+          the readiness gate closed for as long as the host ran) is closed: every task runs under a 120-second
+          ceiling (<code>WarmupHostedService.cs:42</code>, applied at <code>:69</code>), and a task that trips it surfaces as a
+          <code>TimeoutException</code>, is logged, and lets the gate open (<code>:77-82</code>). The number deliberately sits above the
+          90-second shared Polly total-request timeout that already bounds the built-in OIDC task&#39;s HTTP call
+          (<code>Extensions.cs:62</code>, <code>HttpResilienceDefaults.cs:19</code>), so a host-registered task doing non-HTTP work,
+          which previously had no bound at all, now inherits the same backstop. Two costs follow. A replica whose
+          warm-up hangs stays out of rotation for the full two minutes before it is admitted, so the ceiling
+          bounds the damage rather than making it cheap. And <code>WaitAsync</code> abandons rather than cancels, so the
+          stuck task keeps running detached for the life of the host; the only token that can stop it is still the
+          host&#39;s <code>stoppingToken</code> at shutdown.</li>
           <li><strong>The gate does not surface a broken dependency.</strong> Since it opens regardless, a persistently failing
           warm-up task is visible only in logs and (for dependencies that have their own health checks) through
           the separate untagged readiness checks, not through the warm-up gate itself.</li>
@@ -257,8 +274,10 @@
           up).</li>
           <li><strong>Middleware cache is separate.</strong> The warm-up warms the connection, not the JwtBearer
           <code>ConfigurationManager</code>&#39;s discovery cache, so the very first authenticated request still triggers the
-          middleware&#39;s own (now-fast) fetch; the optimization is on the network path, not on eliminating the
-          fetch.</li>
+          middleware&#39;s own fetch; the optimization is on the network path, not on eliminating the fetch. That the
+          remaining fetch is fast is the task&#39;s documented intent
+          (<code>Source/Hosting/MMCA.Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:14-20</code>), not a figure
+          measured or gated anywhere in the repo.</li>
           </ul>
           <h2 id="related">Related</h2>
           <p>ADR-004 (the OIDC discovery document the built-in task pre-fetches, and the auth-side view of the same

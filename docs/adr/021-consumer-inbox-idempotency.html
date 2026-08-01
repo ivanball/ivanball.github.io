@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 60 ADRs</summary>
+        <summary>All 64 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -159,6 +159,10 @@
         <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
         <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
         <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
           </ol>
         </nav>
       </details>
@@ -220,9 +224,9 @@
           (<code>MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260621192808_InitialCreate.cs:21,179</code>),
           because that per-service project postdates the frozen combined-archive lineage that added the ADC
           migration. Of the services carrying the flag, only ADC Identity and ADC Conference register a broker
-          consumer today (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:258-262</code>,
-          <code>MMCA.ADC.Conference.Service/Program.cs:298-299</code>), and Store Sales consumes <code>ProductVariantChanged</code>
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:194-195</code>); ADC Engagement and Notification
+          consumer today (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:264-268</code>,
+          <code>MMCA.ADC.Conference.Service/Program.cs:308-309</code>), and Store Sales consumes <code>ProductVariantChanged</code>
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:200-201</code>); ADC Engagement and Notification
           carry <code>EnableInbox: true</code> and the table but register no consumer today, so their inbox is provisioned
           and unused (functionally harmless).</p>
           <h2 id="rationale">Rationale</h2>

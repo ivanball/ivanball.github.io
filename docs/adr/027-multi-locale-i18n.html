@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-027: Multi-Locale Internationalization (Supersedes ADR-011) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, and 2026-07-29). Supersedes ADR-011 (single-locale by design).">
+  <meta name="description" content="Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, and 2026-07-29; corrected 2026-08-01: the pseudo-locale CI gate is required on all…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-027: Multi-Locale Internationalization (Supersedes ADR-011)">
-  <meta property="og:description" content="Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, and 2026-07-29). Supersedes ADR-011 (single-locale by design).">
+  <meta property="og:description" content="Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, and 2026-07-29; corrected 2026-08-01: the pseudo-locale CI gate is required on all…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-027: Multi-Locale Internationalization (Supersedes ADR-011)">
-  <meta name="twitter:description" content="Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, and 2026-07-29). Supersedes ADR-011 (single-locale by design).">
+  <meta name="twitter:description" content="Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, and 2026-07-29; corrected 2026-08-01: the pseudo-locale CI gate is required on all…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"027 · Multi-Locale Internationalization (Supersedes ADR-011)","item":"https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 60 ADRs</summary>
+        <summary>All 64 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -159,6 +159,10 @@
         <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
         <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
         <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
           </ol>
         </nav>
       </details>
@@ -167,7 +171,7 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-027-multi-locale-internationalization-supersedes-adr-011">ADR-027: Multi-Locale Internationalization (Supersedes ADR-011)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, and 2026-07-29). <strong>Supersedes <a href="011-single-locale-i18n.html">ADR-011</a></strong> (single-locale by design).</p>
+          <p>Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, and 2026-07-29; corrected 2026-08-01: the pseudo-locale CI gate is required on all three browser engines, and the hybrid applier sets only the thread defaults). <strong>Supersedes <a href="011-single-locale-i18n.html">ADR-011</a></strong> (single-locale by design).</p>
           <h2 id="context">Context</h2>
           <p>ADR-011 recorded single-locale (en-US) as a deliberate, <em>revisitable</em> non-goal and sketched what
           re-introducing i18n would entail. That revisit has now happened: the framework adds first-class
@@ -255,11 +259,14 @@
           decorator stays inert, so it is a build-and-test aid, not a production culture.</p>
           <p><strong>The pseudo pass is also a required CI gate (since 2026-07-03).</strong> The backend-less gallery host
           (test-only, never packaged) enables <code>qps-Ploc</code> unconditionally, and <code>PseudoLocalizationE2ETests</code>
-          (in the required chromium <code>ui-e2e</code> job) renders <code>/login</code>, <code>/register</code>, and <code>/components</code> under it,
-          asserting (a) the bracket sentinel appears (every displayed string made the resource round-trip)
-          and (b) the page does not overflow horizontally under the ~40% expansion (the layout-tolerance
-          criterion). A leak-guard test asserts the sentinel is absent under <code>en-US</code>. Production hosts are
-          unchanged: they keep <code>qps-Ploc</code> Development-only.</p>
+          renders <code>/login</code>, <code>/register</code>, and <code>/components</code> under it, asserting (a) the bracket sentinel
+          appears (every displayed string made the resource round-trip) and (b) the page does not overflow
+          horizontally under the ~40% expansion (the layout-tolerance criterion). The gate is <strong>required on
+          all three browser engines</strong>, not just one: <code>ui-e2e</code> is a <code>chromium, firefox, webkit</code> matrix whose
+          legs are each a required merge check, and the run step executes the whole E2E project on every leg
+          with no per-class or per-browser filter (only coverage collection is chromium-only). A leak-guard
+          test asserts the sentinel is absent under <code>en-US</code>. Production hosts are unchanged: they keep
+          <code>qps-Ploc</code> Development-only.</p>
           </li>
           <li><p><strong>User-visible literals are kept out of markup and code-behind by a second fitness gate, and
           composed sentences are banned.</strong> <code>LocalizedTextConventionTestsBase</code>
@@ -298,15 +305,18 @@
           <p>The mechanism is therefore an extension point, not a hard-coded URL. <code>ICultureApplier</code>
           (<code>MMCA.Common.UI</code>) is what the switcher and the login page call; <code>AddUIShared</code> <code>TryAdd</code>s the web
           implementation (<code>EndpointCultureApplier</code>, the Decision 5 endpoint round trip, unchanged), and
-          <code>MMCA.Common.UI.Maui</code> registers <code>MauiCultureApplier</code> after it. The hybrid applier sets
-          <code>CultureInfo.DefaultThreadCurrent[UI]Culture</code> <strong>and</strong> the calling thread&#39;s culture (the MAUI UI
-          thread is the Blazor renderer&#39;s dispatcher thread and has already materialized one), persists the
-          choice to device preferences, then force-loads the return path: resource strings resolve from
-          <code>CurrentUICulture</code> at render time and Blazor has no API to re-render a whole tree in place, so
-          re-booting the Blazor app inside the WebView (the .NET process, and the culture, survive) is what
-          makes the switch visible. <code>MauiCultureInitializer</code> (an <code>IMauiInitializeService</code>, so it runs inside
-          <code>MauiAppBuilder.Build()</code> before any window exists) restores the persisted culture at startup, the
-          hybrid counterpart to the WASM <code>MmcaCultureBootstrap</code>. Both are wired by
+          <code>MMCA.Common.UI.Maui</code> registers <code>MauiCultureApplier</code> after it. The hybrid applier persists the
+          choice to device preferences, sets <code>CultureInfo.DefaultThreadCurrent[UI]Culture</code> and
+          <strong>deliberately nothing else</strong> (never the calling thread&#39;s <code>CurrentCulture</code>/<code>CurrentUICulture</code>:
+          those setters write to an <code>AsyncLocal</code> that flows with the <code>ExecutionContext</code> and is restored
+          ahead of the thread defaults every time that context is re-entered, so assigning one at startup
+          would pin the app to its launch language and a later switch would never take), then force-loads
+          the return path: resource strings resolve from <code>CurrentUICulture</code> at render time and Blazor has
+          no API to re-render a whole tree in place, so re-booting the Blazor app inside the WebView (the
+          .NET process, and the culture, survive) is what makes the switch visible. <code>MauiCultureInitializer</code>
+          (an <code>IMauiInitializeService</code>, so it runs inside <code>MauiAppBuilder.Build()</code> before any window exists)
+          restores the persisted culture at startup through that same thread-defaults-only path, the hybrid
+          counterpart to the WASM <code>MmcaCultureBootstrap</code>. Both are wired by
           <code>UseMauiDeviceCapabilities()</code> so no head can be left half-configured, with <code>UseMauiCulture()</code>
           separately callable.</p>
           <p>Precedence mirrors the web deliberately: the persisted choice (the cookie&#39;s analogue), then the

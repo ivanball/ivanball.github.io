@@ -12,7 +12,7 @@ authentication, localization, theming, data fetching, and the test suite.
 
 Four accepted ADRs already reason about that transition and each treats it as **given context** rather
 than deciding it: ADR-022 solves `[Authorize]` on fresh GETs by reading an HttpOnly cookie "during SSR
-prerender" (`022-browser-session-cookie-auth.md:7-15`); ADR-027 states that its hard part is flowing one
+prerender" (`022-browser-session-cookie-auth.md:18`); ADR-027 states that its hard part is flowing one
 culture decision through "a Blazor `InteractiveAuto` app (SSR prerender, InteractiveServer circuit,
 InteractiveWebAssembly client)" (`027-multi-locale-i18n.md:13-16`); ADR-028 repeats the same three-phase
 premise for the theme and records that "there is no free no-flash for InteractiveAuto"
@@ -43,8 +43,8 @@ layer rather than by weakening the render mode.
   both sides of the pipeline: `AddInteractiveServerComponents()` + `AddInteractiveWebAssemblyComponents()`
   at service registration and `AddInteractiveServerRenderMode()` + `AddInteractiveWebAssemblyRenderMode()`
   on `MapRazorComponents<App>()`
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:33-35`, `Program.cs:183-186`;
-  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:61-63`, `Program.cs:180-188`).
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:33-35`, `Program.cs:187-189`;
+  `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:67-69`, `Program.cs:180-188`).
 - **Prerendering stays enabled.** No host anywhere in the workspace passes `prerender: false` or
   constructs a render mode with prerendering disabled; every render mode in use is the stock static
   instance. Prerender is what ADR-022's SSR cookie scheme exists to serve, so it is kept and its cost is
@@ -76,8 +76,8 @@ layer rather than by weakening the render mode.
   `if (!RendererInfo.IsInteractive) return;` guard in `OnParametersSetAsync` / `OnInitializedAsync` appears
   across both apps, with two different stated reasons: avoiding the doubled reads under `InteractiveAuto`
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicSessionDetail.razor.cs:81-90`,
-  `.../Pages/Public/PublicSpeakerDetail.razor.cs:59`, `.../Pages/Home/ADCHome.razor.cs:85`,
-  `.../Pages/Speaker/SpeakerDashboard.razor.cs:62`,
+  `.../Pages/Public/PublicSpeakerDetail.razor.cs:59`, `.../Pages/Home/ADCHome.razor.cs:90`,
+  `.../Pages/Speaker/SpeakerDashboard.razor.cs:65`,
   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLive.razor.cs:69`,
   `.../Pages/SessionLive/PresenterView.razor.cs:56`) and the fact that no auth token can be read at
   prerender time so every authenticated call would 401
@@ -113,9 +113,9 @@ layer rather than by weakening the render mode.
   `MMCA.Store/.../App.razor:39-42`). Those config keys are injected only by the AppHosts, and only when the
   matching environment variable is present (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:307-322`,
   `MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:262-270`). In CI only `E2E_FORCE_SERVER` is
-  exported (`MMCA.ADC/.github/workflows/e2e.yml:199-205`, `MMCA.Store/.github/workflows/e2e.yml:192-198`);
+  exported (`MMCA.ADC/.github/workflows/e2e.yml:218`, `MMCA.Store/.github/workflows/e2e.yml:210`);
   ADC's workflow deliberately does **not** set `E2E_FORCE_WASM` and records why
-  (`MMCA.ADC/.github/workflows/e2e.yml:190-197`). Both `App.razor` comments cite the same trace evidence:
+  (`MMCA.ADC/.github/workflows/e2e.yml:203-210`). Both `App.razor` comments cite the same trace evidence:
   under `InteractiveAuto` each test's second page load switched to the background-downloaded WASM bundle,
   whose runtime boot on a shared 2-core runner exceeded every suite wait while the download starved the
   live circuits.
@@ -123,7 +123,7 @@ layer rather than by weakening the render mode.
   the literal mode on `HeadOutlet` and `Routes`
   (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Components/App.razor:10`, `App.razor:14`) and
   registers only the server render mode
-  (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:74-78`). It has **no `.Client` project at
+  (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:14-15`, `Program.cs:85-86`). It has **no `.Client` project at
   all**, so `InteractiveAuto` is not available to it, and its two ticket pages use `MudTable` directly
   rather than the shared list-page base
   (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Components/Pages/Tickets.razor:30`), so none of the

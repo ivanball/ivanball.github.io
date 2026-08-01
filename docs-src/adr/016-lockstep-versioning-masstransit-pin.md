@@ -5,7 +5,10 @@ Accepted (2026-07-15). Amended (2026-07-28): the fitness function now gates two 
 majors (MassTransit and SixLabors.ImageSharp), so the decision is restated as the pattern rather than
 the single pin; the consumer framing is corrected (Store and ADC each declare a
 `MassTransit.Azure.ServiceBus.Core` entry of their own for the Service Bus emulator test tier), as is
-the claim that framework-to-app (`[C->A]`) changes are non-breaking.
+the claim that framework-to-app (`[C->A]`) changes are non-breaking. Amended (2026-08-01): Store now
+has its own `.github/dependabot.yml` (added 2026-07-29) mirroring ADC's, so the trade-off that rested
+on Store having no such file is restated, and the ADC `MassTransit.Azure.ServiceBus.Core` citation is
+rebased onto its current lines.
 
 ## Context
 MMCA.Common publishes its `MMCA.Common.*` NuGet package set (see `FACTS.md` for the authoritative
@@ -57,7 +60,7 @@ Two related governance questions had no recorded answer:
    (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/MMCA.Common.Infrastructure.csproj:34-36`),
    but each **does** declare one MassTransit entry of its own: `MassTransit.Azure.ServiceBus.Core`
    8.5.5 for the Service Bus emulator test tier, carrying a comment that points back to Common's v8
-   pin (`MMCA.ADC/Directory.Packages.props:90-95`, `MMCA.Store/Directory.Packages.props:116-121`).
+   pin (`MMCA.ADC/Directory.Packages.props:92-97`, `MMCA.Store/Directory.Packages.props:116-121`).
    They still do not subclass the test: its default list also names the two package ids they do not
    declare, and the rule fails on a pin it cannot find
    (`MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/ArchitectureRules.Governance.cs:42-45`).
@@ -83,8 +86,10 @@ Two related governance questions had no recorded answer:
 - The gate reads MMCA.Common's `Directory.Packages.props` and nothing else, so the
   `MassTransit.Azure.ServiceBus.Core` entry Store and ADC each declare for their emulator tier sits
   outside its reach. What holds those two at v8 is that neither repo lets dependabot touch NuGet at
-  all (ADC says so explicitly and cites this ADR, `MMCA.ADC/.github/dependabot.yml:1-4`; Store has
-  no dependabot config), plus review.
+  all: each carries a `dependabot.yml` scoped to github-actions only, whose own comment says NuGet is
+  deliberately excluded because `MMCA.Common.*` bumps happen solely through this ADR's lockstep sweep
+  and MassTransit must stay v8 (`MMCA.ADC/.github/dependabot.yml:1-4`,
+  `MMCA.Store/.github/dependabot.yml:1-8`, the latter added 2026-07-29), plus review.
 
 ## Related
 ADR-015 (the fitness function that enforces the pins), ADR-003 / ADR-006 (MassTransit is the broker

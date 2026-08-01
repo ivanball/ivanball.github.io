@@ -1,7 +1,11 @@
 # ADR-055: Repository plus Specification as the Data-Access Contract
 
 ## Status
-Accepted (2026-07-25).
+Accepted (2026-07-25). Revised 2026-08-01 (qualified the "referenced nowhere" claim about
+`IEntityReader` / `IEntityQuerier`: an ADC doc comment now names `IEntityQuerier`, though no code
+depends on either as a type; refreshed the ADC `SessionsController` and MMCA.Common
+`DependencyInjection` anchors, and the leak rationale, which now reads non-accepted sessions to
+non-privileged callers rather than declined sessions).
 
 ## Context
 Every read an application handler performs has to come from somewhere, and the shape of that contract
@@ -70,9 +74,9 @@ keeps the raw `IQueryable` surfaces out of Application code.
   `InlineSpecification` (`:45`) wraps a predicate that was assembled dynamically and has no
   hand-written class. Composition is used in production: ADC's paged session read ANDs the
   public-session specification with the speaker-scoped one rather than substituting, because dropping
-  the public filter would leak declined sessions
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:95`,
-  `:117`, rationale at `:90-92`).
+  the public filter would leak non-accepted sessions to non-privileged callers
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:97`,
+  `:119`, rationale at `:92-94`).
 - **The specification enters the same query pipeline, not a parallel one.** `IEntityQueryService`
   takes an optional `Specification<TEntity, TIdentifierType>` on every read
   (`Source/Core/MMCA.Common.Application/Interfaces/IEntityQueryService.cs:40`, `:63`, `:106`,
@@ -107,10 +111,14 @@ The interface split is shipped, but nothing depends on the narrow interfaces yet
 out only the composites (`IRepository` at
 `Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IUnitOfWork.cs:19`, `IReadRepository`
 at `:29`), and the container registers only the open generic `IRepository<,>`
-(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:99`). `IEntityReader` and
-`IEntityQuerier` are referenced nowhere outside their own declaration file across all four
-repositories. So the ISP split is today the declared target that new handlers are pointed at, not the
-dependency shape any handler currently has.
+(`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:100`). `IEntityReader` and
+`IEntityQuerier` have no type-level reference outside their own declaration file across all four
+repositories. The one mention anywhere else is prose: an ADC doc comment explains that a public
+lookup helper takes the composite because `GetAllForLookupAsync` is declared on `IEntityQuerier`
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/PublicLookupReader.cs:33`),
+while the parameter it actually declares is `IReadRepository<TEntity, TIdentifierType>` (`:66`),
+matching what `IUnitOfWork.GetReadRepository` returns. So the ISP split is today the declared target
+that new handlers are pointed at, not the dependency shape any handler currently has.
 
 ## Rationale
 - **A narrow interface is the enforcement, not a style preference.** A handler that asks for
@@ -124,7 +132,7 @@ dependency shape any handler currently has.
   in a query and compiled in memory by `IsSatisfiedBy` (`Specification.cs:9-11`, `:32`), so an
   authorization predicate can be asserted in a domain test with no database at all.
 - **Composability keeps filters additive.** ANDing an authorization scope onto a business filter is a
-  two-line construction (`SessionsController.cs:117`) instead of a second hand-written query path,
+  two-line construction (`SessionsController.cs:119`) instead of a second hand-written query path,
   which is what makes "never substitute the public filter" a cheap rule to follow.
 - **A textual scan was chosen deliberately over IL analysis.** NetArchTest and reflection cannot see
   member usage inside method bodies, and the testing package carries no IL or Roslyn dependency on

@@ -24,8 +24,8 @@ in production and is the sole migrator of its own database**: it applies its pen
 at startup, before the new revision serves traffic. There is deliberately **no** separate deploy-step
 migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
 
-- **Set in prod for every service.** `MMCA.Store/infra/main.bicep:708,820,918` (Identity/Catalog/Sales)
-  and `MMCA.ADC/infra/main.bicep:981,1141,1249,1383` (Identity/Conference/Engagement/Notification) all set
+- **Set in prod for every service.** `MMCA.Store/infra/main.bicep:786,899,998` (Identity/Catalog/Sales)
+  and `MMCA.ADC/infra/main.bicep:1061,1222,1331,1466` (Identity/Conference/Engagement/Notification) all set
   `DatabaseInitStrategy = 'Migrate'`.
 - **One applier per revision.** Each service runs `minReplicas: 1`, so the startup `MigrateAsync` is not
   racing sibling replicas of the same revision. (Since the 2026-07-19 outbox lease revision, ADR-003,
@@ -33,10 +33,10 @@ migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
   is scale-out safe by construction, so above one replica the setting is a cost/migration choice.)
 - **No deploy-step backstop, on purpose.** Both `deploy.yml` files carry an explicit comment that there
   is *no external `sqlcmd` migration backstop* and that each service is the **sole migrator**
-  (`MMCA.Store/.github/workflows/deploy.yml:935-943`, `MMCA.ADC/.github/workflows/deploy.yml:1015-1025`). The
+  (`MMCA.Store/.github/workflows/deploy.yml:1037-1045`, `MMCA.ADC/.github/workflows/deploy.yml:1079-1087`). The
   `sqlcmd` that *is* installed in the pipeline is a connectivity/readiness probe, not a migration apply.
 - **Build-time drift gate, not a runtime apply.** CI runs
-  `dotnet ef migrations has-pending-model-changes` (Store `deploy.yml:178`, ADC `deploy.yml:233`) so a
+  `dotnet ef migrations has-pending-model-changes` (Store `deploy.yml:221`, ADC `deploy.yml:272`) so a
   model that has drifted from its migrations fails the build, but that gate only *detects*; it never
   applies anything. The container does the applying.
 - **This overrides the framework's documented "None for production" default**, accepting auto-migrate-on-
