@@ -82,13 +82,13 @@ adds a dedicated `Http1`-only Kestrel listener whose only job is to answer the p
 `httpGet` probes, on a port that is never exposed via ingress:
 
 - The three Profile A hosts (Identity, Conference, Engagement) listen on **8081**. Bicep injects
-  `HealthProbe__Port=8081` (`MMCA.ADC/infra/main.bicep:957`, `:1126`, `:1235`) and points startup,
-  liveness, and readiness at it (`main.bicep:1045-1070` for Identity). The listener is added by
+  `HealthProbe__Port=8081` (`MMCA.ADC/infra/main.bicep:1037`, `:1207`, `:1317`) and points startup,
+  liveness, and readiness at it (`main.bicep:1125-1149` for Identity). The listener is added by
   `KestrelConfiguration.ConfigureHttp2WithHealthProbe`, called from each service's
   `Program.cs` (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:79`).
 - The mixed-endpoint host (Notification) listens on **8082**, one port above its `grpc` endpoint:
-  `HealthProbe__Port=8082` at `main.bicep:1367`, with all three probes on 8082 at
-  `main.bicep:1414-1439`. The listener is added by
+  `HealthProbe__Port=8082` at `main.bicep:1450`, with all three probes on 8082 at
+  `main.bicep:1497-1522`. The listener is added by
   `KestrelConfiguration.ConfigureMixedEndpointsWithHealthProbe`
   (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/KestrelConfiguration.cs:23-35`), strictly
   additive on top of the config-declared 8080 and 8081 endpoints, explicitly so that all four
@@ -107,9 +107,9 @@ DB-aware check), which is why ADC moved, and (two days later) why Store followed
 The two-argument call sites are all in the AppHost
 (`MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:273-275`), which configures the local
 Aspire environment only. In production ACA, ADC's Bicep hardcodes the **direct in-cluster authority**
-`http://${identityApp.name}` on every token-validating service: Conference (`main.bicep:1140`),
-Engagement (`:1248`), and Notification (`:1382`). Identity's own ingress is `transport: 'http2'`
-(`main.bicep:921`), so envoy accepts the HTTP/1.1 JwtBearer metadata fetch and carries it to the
+`http://${identityApp.name}` on every token-validating service: Conference (`main.bicep:1221`),
+Engagement (`:1330`), and Notification (`:1465`). Identity's own ingress is `transport: 'http2'`
+(`main.bicep:1000`), so envoy accepts the HTTP/1.1 JwtBearer metadata fetch and carries it to the
 container. That is exactly the arrangement the Store update above describes, so the
 "JWKS authority differs by environment" nuance is **not** Store-specific: both apps route discovery
 through the gateway locally and use the direct in-cluster authority in production. Read the Profile A
@@ -133,12 +133,13 @@ HTTP/1.1 `httpGet`.** The pattern is now uniform:
   call sites are `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:50` and
   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:45`.
 - **Bicep injects the port and points startup, liveness, and readiness at it.** Store sets
-  `HealthProbe__Port=8081` on Identity (`MMCA.Store/infra/main.bicep:732`) and Catalog (`:824`), with
-  `/alive` for startup and liveness and `/health/ready` for readiness on 8081 (`main.bicep:744-747`
-  and `:835-838`). ADC is unchanged (8081 for the three Profile A hosts, 8082 for Notification): the
-  anchors in the 2026-07-25 update above still hold.
+  `HealthProbe__Port=8081` on Identity (`MMCA.Store/infra/main.bicep:810`) and Catalog (`:903`), with
+  `/alive` for startup and liveness and `/health/ready` for readiness on 8081 (`main.bicep:822-826`
+  and `:914-918`). ADC is unchanged (8081 for the three Profile A hosts, 8082 for Notification): its
+  Bicep line anchors in the 2026-07-25 update above have since shifted (unrelated observability
+  commits) and are corrected there.
 - **Hosts that never went Http2-only keep probing their traffic port.** Store's Sales, Gateway, and
-  UI probe 8080 directly (`MMCA.Store/infra/main.bicep:939-941`, `:1004-1006`, `:1079-1081`), because
+  UI probe 8080 directly (`MMCA.Store/infra/main.bicep:1019-1021`, `:1085-1087`, `:1161-1163`), because
   an `Http1AndHttp2` endpoint answers the HTTP/1.1 probe on its own.
 
 Rule: the dedicated probe listener is part of Profile A, not an app-specific workaround. A host that

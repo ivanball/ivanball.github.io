@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-017: HTTP Request Idempotency via Client-Supplied Keys · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted">
+  <meta name="description" content="Accepted. Revised 2026-08-01: the guard around execute-and-store is now an IDistributedLock resolved from DI (Redis-backed wherever a connection…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/017-request-idempotency.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-017: HTTP Request Idempotency via Client-Supplied Keys">
-  <meta property="og:description" content="Accepted">
+  <meta property="og:description" content="Accepted. Revised 2026-08-01: the guard around execute-and-store is now an IDistributedLock resolved from DI (Redis-backed wherever a connection…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/017-request-idempotency.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-017: HTTP Request Idempotency via Client-Supplied Keys">
-  <meta name="twitter:description" content="Accepted">
+  <meta name="twitter:description" content="Accepted. Revised 2026-08-01: the guard around execute-and-store is now an IDistributedLock resolved from DI (Redis-backed wherever a connection…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"017 · HTTP Request Idempotency via Client-Supplied Keys","item":"https://ivanball.github.io/docs/adr/017-request-idempotency.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 60 ADRs</summary>
+        <summary>All 64 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -159,6 +159,10 @@
         <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
         <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
         <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
           </ol>
         </nav>
       </details>
@@ -167,7 +171,11 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-017-http-request-idempotency-via-client-supplied-keys">ADR-017: HTTP Request Idempotency via Client-Supplied Keys</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted</p>
+          <p>Accepted. Revised 2026-08-01: the guard around execute-and-store is now an <code>IDistributedLock</code> resolved
+          from DI (Redis-backed wherever a connection multiplexer is registered, which is every deployed service
+          host), with the striped semaphore kept only as the no-lock-registered fallback, and body-less 2xx
+          results (204/<code>NoContent()</code>) are cached and replayed as well as <code>ObjectResult</code> bodies. See Decision and
+          Trade-offs.</p>
           <h2 id="context">Context</h2>
           <p>Write endpoints (POST / PUT / PATCH) are exposed to <strong>client retries and double-submits</strong>: a flaky
           network, an impatient user double-clicking, or a resilience pipeline re-issuing a request can cause the
@@ -199,17 +207,33 @@
           cross-restart replay holds only when a distributed backing is configured. A later request with the same
           key replays the cached response and adds an <code>X-Idempotent-Replay: true</code> header so clients can tell a
           replay from a fresh execution.</li>
-          <li><strong>Concurrency-safe within an instance.</strong> The filter uses a fast-path cache read (no lock), then a
-          striped <code>SemaphoreSlim</code> (<code>KeyedSemaphoreStripe</code>, double-check locking) so concurrent duplicates that
-          arrive before the first completes are serialized rather than both executing. Striping is deliberate:
-          a dictionary of one semaphore per key forces a choice between two defects, since removing the entry
-          when the last holder releases lets a caller wait on a semaphore no longer in the table while a
-          second creates a fresh one (both then execute, defeating the lock), and never removing it lets a
+          <li><strong>The lock spans execute-and-store, and it is an <code>IDistributedLock</code> when one is registered.</strong> The
+          filter takes a fast-path cache read (no lock), then holds a lock across the re-check, the action, and
+          the store, so a duplicate cannot slip in between the action finishing and its response reaching the
+          cache. The lock is whatever <code>IDistributedLock</code> DI resolves, and <code>AddInfrastructure</code> -&gt; <code>AddCaching</code>
+          registers one unconditionally: <code>RedisDistributedLock</code> when an <code>IConnectionMultiplexer</code> is present,
+          the process-local <code>InProcessDistributedLock</code> (which warns once that it is degraded) otherwise. The
+          Redis lock is the single-instance <code>SET key token NX PX ttl</code> acquire with a compare-and-delete release
+          script, held for a 30s time-to-live with a 5s wait for the current holder. A duplicate that cannot
+          acquire within that wait, and finds nothing cached when it gives up, gets <strong>409 Conflict</strong> with a
+          retry-with-the-same-key <code>ProblemDetails</code>: the original is still running somewhere, so executing would
+          be the double write this filter exists to prevent.</li>
+          <li><strong>The striped semaphore is the fallback for a host that registers no lock.</strong> Without an
+          <code>IDistributedLock</code> the filter serializes on a striped <code>SemaphoreSlim</code> (<code>KeyedSemaphoreStripe</code>, the
+          same double-check pattern), which is correct for a single replica and for tests. Striping is
+          deliberate: a dictionary of one semaphore per key forces a choice between two defects, since removing
+          the entry when the last holder releases lets a caller wait on a semaphore no longer in the table while
+          a second creates a fresh one (both then execute, defeating the lock), and never removing it lets a
           caller-supplied key grow the table without bound. A fixed stripe width has neither problem.</li>
-          <li><strong>Only cache deterministic success shapes.</strong> Only <strong>2xx</strong> <code>ObjectResult</code> responses are cached;
-          redirects, file results, and failures are not replayed. Caching a failure would replay it for the
-          whole retention window, so a client retrying the same key after a transient 500 would keep receiving
-          that 500 for 24 hours instead of the retry actually executing.</li>
+          <li><strong>Only cache deterministic success shapes.</strong> A <strong>2xx</strong> response is cached when it is representable as
+          a status code plus an optional JSON body: an <code>ObjectResult</code> (200/201/202 with a payload), or a
+          body-less <code>StatusCodeResult</code> such as the 204 from <code>NoContent()</code>, which is stored with an empty body
+          and replayed as a bare status code rather than as JSON with no content. Redirects, file results, and
+          failures are not replayed. Caching a failure would replay it for the whole retention window, so a
+          client retrying the same key after a transient 500 would keep receiving that 500 for 24 hours instead
+          of the retry actually executing. The body-less case was originally skipped, which left every command
+          answering <code>NoContent()</code> with nothing stored at all: the writes most likely to be retried were the ones
+          idempotency did not actually cover.</li>
           </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -225,18 +249,23 @@
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>The in-process semaphore only serializes duplicates landing on the same instance.</strong> Two simultaneous
-          identical requests routed to <em>different</em> instances can both miss the cache and execute; a configured
-          distributed cache makes the <em>replay</em> consistent afterward but does not provide cross-instance mutual
-          exclusion. For
-          exactly-once across instances, the operation itself must also be naturally idempotent or guarded by a
-          unique constraint.</li>
+          <li><strong>Cross-instance mutual exclusion follows Redis, so it is a deployment property, not a guarantee.</strong>
+          Every ADC and Store service host registers a Redis <code>IConnectionMultiplexer</code> when a <code>redis</code> connection
+          string is present, and the Azure templates inject one into every service container, so the deployed
+          lock is the Redis one and two simultaneous duplicates landing on <em>different</em> replicas are genuinely
+          serialized. A host with no multiplexer (Helpdesk, a single-replica local run, tests) falls back to the
+          process-local lock or the striped semaphore, and there duplicates on different instances can both miss
+          the cache and execute, with a configured distributed cache making the <em>replay</em> consistent afterward
+          but not providing mutual exclusion. Even with Redis the lock is best-effort by design (one instance,
+          not Redlock, and a section that outruns the 30s time-to-live is no longer exclusive for the remainder),
+          so for exactly-once the operation itself should still be naturally idempotent or guarded by a unique
+          constraint.</li>
           <li><strong>Bounded window.</strong> Replays only work within the retention window (default 24h); a duplicate after
           expiry re-executes.</li>
-          <li><strong>Response-shape coupling.</strong> Only a 2xx <code>ObjectResult</code> is cached, and the cached body is the serialized
-          value, so an endpoint whose response depends on per-request state (other than the body) will replay the
-          original, not a freshly-computed response. Response headers are not part of the record either, so a
-          replayed 201 does not carry the original <code>Location</code>.</li>
+          <li><strong>Response-shape coupling.</strong> Only a 2xx <code>ObjectResult</code> or a body-less 2xx <code>StatusCodeResult</code> is cached,
+          and the cached body is the serialized value, so an endpoint whose response depends on per-request state
+          (other than the body) will replay the original, not a freshly-computed response. Response headers are
+          not part of the record either, so a replayed 201 does not carry the original <code>Location</code>.</li>
           <li><strong>A key is only ever replayed to the caller that produced it.</strong> Scoping to the subject means a
           client that retries under a different identity (a rotated anonymous address, or a token exchange
           between the first attempt and the retry) misses the cache and re-executes. That is the correct

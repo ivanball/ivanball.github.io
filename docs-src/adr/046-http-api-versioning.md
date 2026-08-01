@@ -1,7 +1,10 @@
 # ADR-046: HTTP API Versioning Strategy
 
 ## Status
-Accepted (2026-07-15).
+Accepted (2026-07-15). Revised 2026-08-01 (anonymity is granted by each per-service subclass, not by
+`ServiceInfoControllerBase`; corrected the ADR-034 cross-reference, which puts the class-level
+attributes on its own generic base rather than noting a non-inheritance caveat; refreshed the
+`AddCommonApiVersioning` call-site lines in the ADC Conference/Identity and Store Catalog hosts).
 
 ## Context
 The framework's REST surface is served by controllers hosted in extracted service processes behind a
@@ -49,7 +52,10 @@ proves two live versions coexist.
   `ServiceInfoResponse` shape (`ServiceInfoControllerBase.cs:51`); `GetV2` is mapped to `2.0`
   (`[MapToApiVersion("2.0")]`, `ServiceInfoControllerBase.cs:46`) and returns the evolved
   `ServiceInfoV2Response`, a superset that also advertises the supported and deprecated version lists
-  (`ServiceInfoControllerBase.cs:54`). The base is anonymous and read-only.
+  (`ServiceInfoControllerBase.cs:54`). The base is read-only: both actions are `[HttpGet]`
+  (`ServiceInfoControllerBase.cs:39`, `ServiceInfoControllerBase.cs:45`) and it declares no write verb.
+  Anonymity is not carried by the base; each sealed subclass grants it with `[AllowAnonymous]`
+  (ADC's `ServiceInfoController.cs:17`, Store's `ServiceInfoController.cs:17`).
 - **The class-level version attributes live on the per-service subclass.** Class-level
   routing/versioning attributes are not reliably inherited, so each host supplies a sealed subclass
   carrying them. ADC's `ServiceInfoController` declares `[ApiVersion("1.0", Deprecated = true)]` and
@@ -74,9 +80,9 @@ proves two live versions coexist.
   asserted rather than proven.
 - **Every REST host adopts it the same way.** The extracted services call `AddCommonApiVersioning`
   in their startup: ADC's Conference
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:153`) and Identity
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:137`) hosts, Store's Catalog host
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:114`), and the same call is made
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:159`) and Identity
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:143`) hosts, Store's Catalog host
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:120`), and the same call is made
   by the other extracted hosts and by the monolith reference host
   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:33`).
 
@@ -104,9 +110,8 @@ resource has yet needed to evolve its shape.
 
 ## Trade-offs
 - **The class-level version attributes are not inherited.** Each per-service subclass must repeat the
-  `[ApiVersion(...)]` and routing attributes (the same inheritance caveat ADR-034 and ADR-036 note
-  for controller convention attributes); the shared behavior lives in the base, but the attributes do
-  not.
+  `[ApiVersion(...)]` and routing attributes (the same inheritance caveat ADR-036 records for ADC's
+  sealed `OAuthController`); the shared behavior lives in the base, but the attributes do not.
 - **Adoption is per host.** A new REST host that forgets `AddCommonApiVersioning` gets no versioning
   and no reported versions, the same audit-the-inventory caveat other opt-in framework registrations
   carry; the shared fitness contract only guards a host once its subclass is added.
@@ -122,6 +127,9 @@ ADR-010 (integration-event schema versioning: the asynchronous, `SchemaVersion`-
 consumer-resolved axis this deliberately contrasts with; HTTP versioning here is request-time and
 client-selected), ADR-015 (the fitness-function approach that
 `ServiceInfoVersioningContractTestsBase` embodies, keeping the versioning machinery exercised rather
-than asserted), ADR-034 and ADR-036 (controller-convention decisions that note the same class-level
-`[ApiVersion]` non-inheritance handled by the per-service subclass).
+than asserted), ADR-036 (the other controller-convention decision that records the same class-level
+`[ApiVersion]` non-inheritance, handled there by ADC's sealed `OAuthController` subclass), ADR-034
+(the generic entity controller bases, which take the opposite shape: `[ApiController]` /
+`[Route("[controller]")]` / `[ApiVersion("1.0")]` sit on the generic base itself,
+`EntityControllerBase.cs:25-27`).
 </content>

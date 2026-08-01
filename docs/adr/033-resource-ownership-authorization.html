@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 60 ADRs</summary>
+        <summary>All 64 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -159,6 +159,10 @@
         <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
         <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
         <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
           </ol>
         </nav>
       </details>
@@ -256,20 +260,22 @@
           (<code>MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:53</code>,
           <code>MMCA.Store/.../Sales.Application/ShoppingCarts/Specifications/ShoppingCartByCustomerSpecification.cs:19</code>,
           which filters by <code>Id</code> because a cart is keyed by customer, <code>ShoppingCartByCustomerSpecification.cs:24</code>)
-          and <code>OrdersController</code> builds an <code>OrdersByCustomerSpecification</code>
-          (<code>MMCA.Store/.../Sales.API/Controllers/OrdersController.cs:54</code>,
+          and <code>OrdersController</code> builds an <code>OrdersByCustomerSpecification</code> through a private
+          <code>GetOwnershipSpecification()</code> method
+          (<code>MMCA.Store/.../Sales.API/Controllers/OrdersController.cs:62-64</code>,
           <code>MMCA.Store/.../Sales.Application/Orders/Specifications/OrdersByCustomerSpecification.cs:13</code>, filtering
-          by <code>CustomerId</code>, <code>OrdersByCustomerSpecification.cs:18</code>), passing it into each query (for example
-          <code>OrdersController.cs:69</code>). <code>OrdersController</code> does not use the class-level filter for its mutating
+          by <code>CustomerId</code>, <code>OrdersByCustomerSpecification.cs:18</code>), passed as <code>specification: GetOwnershipSpecification()</code> into each query (<code>OrdersController.cs:103</code>, <code>OrdersController.cs:141</code>,
+          <code>OrdersController.cs:175</code>). <code>OrdersController</code> does not use the class-level filter for its mutating
           routes; it runs an explicit per-mutation ownership check, <code>ValidateOwnershipAsync</code>
-          (<code>OrdersController.cs:303</code>), that reuses <code>OwnershipHelper.IsAdmin</code> (<code>OrdersController.cs:52</code>) to let
-          the bypass role through. Its two denial branches return different statuses on purpose:</p>
+          (<code>OrdersController.cs:345</code>), that reuses <code>OwnershipHelper.IsAdmin</code> through its <code>IsAdmin</code> property
+          (<code>OrdersController.cs:60</code>) to let the bypass role through. Its two denial branches return different
+          statuses on purpose:</p>
           <ul>
           <li><strong>Missing owner claim</strong> (the caller carries no <code>customer_id</code>): <code>Error.Forbidden</code>, a 403
-          (<code>OrdersController.cs:311</code>, <code>OrdersController.cs:313</code>). Nothing was looked up, so there is no
+          (<code>OrdersController.cs:353</code>, <code>OrdersController.cs:355-359</code>). Nothing was looked up, so there is no
           resource whose existence a 403 could leak; this matches the filter&#39;s own missing-claim <code>ForbidResult</code>.</li>
           <li><strong>Owner mismatch</strong> (the claim is present but the order is someone else&#39;s): <code>Error.NotFound</code>, a 404
-          rather than a 403 (<code>OrdersController.cs:324</code>, <code>OrdersController.cs:326</code>), so the response does not
+          rather than a 403 (<code>OrdersController.cs:366</code>, <code>OrdersController.cs:368-370</code>), so the response does not
           reveal that another customer&#39;s order exists.</li>
           </ul>
           <p>MMCA.ADC&#39;s Engagement module is the first host to configure the filter&#39;s vocabulary rather than take
@@ -366,6 +372,16 @@
           owner comparison, so the mismatch citations moved further than the rest), <code>ICurrentUserService.Role</code>,
           both Store ownership specifications, <code>OrdersController</code>, and the ADR-020 carve-out quote.</li>
           </ol>
+          <h2 id="revision-2026-08-01">Revision (2026-08-01)</h2>
+          <p>Anchor-only correction. No behavior changed; <code>OrdersController</code> was refactored (a constructor
+          parameter added, <code>GetOwnershipSpecification()</code> and the <code>IsAdmin</code> property extracted,
+          <code>ValidateOwnershipAsync</code> moved) since the 2026-07-25 pass, which shifted every line anchor pointing
+          into it. Refreshed: <code>GetOwnershipSpecification()</code> (now <code>OrdersController.cs:62-64</code>), its three call
+          sites (<code>OrdersController.cs:103</code>, <code>:141</code>, <code>:175</code>), <code>ValidateOwnershipAsync</code> (now
+          <code>OrdersController.cs:345</code>) and the <code>IsAdmin</code> property it reads (<code>OrdersController.cs:60</code>), the
+          missing-owner-claim <code>Error.Forbidden</code> branch (<code>OrdersController.cs:353</code>, <code>:355-359</code>), and the
+          owner-mismatch <code>Error.NotFound</code> branch (<code>OrdersController.cs:366</code>, <code>:368-370</code>).
+          <code>OrdersByCustomerSpecification.cs:13</code> and <code>:18</code> were re-checked and are unchanged.</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -383,6 +399,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#related">Related</a></li>
             <li><a href="#revision-2026-07-25">Revision (2026-07-25)</a></li>
+            <li><a href="#revision-2026-08-01">Revision (2026-08-01)</a></li>
             </ul>
           </nav>
         </aside>

@@ -1,7 +1,7 @@
 # ADR-027: Multi-Locale Internationalization (Supersedes ADR-011)
 
 ## Status
-Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, and 2026-07-29). **Supersedes [ADR-011](011-single-locale-i18n.md)** (single-locale by design).
+Accepted (2026-06-27, amended 2026-07-02, 2026-07-03, 2026-07-09, and 2026-07-29; corrected 2026-08-01: the pseudo-locale CI gate is required on all three browser engines, and the hybrid applier sets only the thread defaults). **Supersedes [ADR-011](011-single-locale-i18n.md)** (single-locale by design).
 
 ## Context
 ADR-011 recorded single-locale (en-US) as a deliberate, *revisitable* non-goal and sketched what
@@ -95,11 +95,14 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
 
    **The pseudo pass is also a required CI gate (since 2026-07-03).** The backend-less gallery host
    (test-only, never packaged) enables `qps-Ploc` unconditionally, and `PseudoLocalizationE2ETests`
-   (in the required chromium `ui-e2e` job) renders `/login`, `/register`, and `/components` under it,
-   asserting (a) the bracket sentinel appears (every displayed string made the resource round-trip)
-   and (b) the page does not overflow horizontally under the ~40% expansion (the layout-tolerance
-   criterion). A leak-guard test asserts the sentinel is absent under `en-US`. Production hosts are
-   unchanged: they keep `qps-Ploc` Development-only.
+   renders `/login`, `/register`, and `/components` under it, asserting (a) the bracket sentinel
+   appears (every displayed string made the resource round-trip) and (b) the page does not overflow
+   horizontally under the ~40% expansion (the layout-tolerance criterion). The gate is **required on
+   all three browser engines**, not just one: `ui-e2e` is a `chromium, firefox, webkit` matrix whose
+   legs are each a required merge check, and the run step executes the whole E2E project on every leg
+   with no per-class or per-browser filter (only coverage collection is chromium-only). A leak-guard
+   test asserts the sentinel is absent under `en-US`. Production hosts are unchanged: they keep
+   `qps-Ploc` Development-only.
 
 9. **User-visible literals are kept out of markup and code-behind by a second fitness gate, and
    composed sentences are banned.** `LocalizedTextConventionTestsBase`
@@ -141,15 +144,18 @@ machine `Code`, which makes server-side error localization a keyed lookup rather
     The mechanism is therefore an extension point, not a hard-coded URL. `ICultureApplier`
     (`MMCA.Common.UI`) is what the switcher and the login page call; `AddUIShared` `TryAdd`s the web
     implementation (`EndpointCultureApplier`, the Decision 5 endpoint round trip, unchanged), and
-    `MMCA.Common.UI.Maui` registers `MauiCultureApplier` after it. The hybrid applier sets
-    `CultureInfo.DefaultThreadCurrent[UI]Culture` **and** the calling thread's culture (the MAUI UI
-    thread is the Blazor renderer's dispatcher thread and has already materialized one), persists the
-    choice to device preferences, then force-loads the return path: resource strings resolve from
-    `CurrentUICulture` at render time and Blazor has no API to re-render a whole tree in place, so
-    re-booting the Blazor app inside the WebView (the .NET process, and the culture, survive) is what
-    makes the switch visible. `MauiCultureInitializer` (an `IMauiInitializeService`, so it runs inside
-    `MauiAppBuilder.Build()` before any window exists) restores the persisted culture at startup, the
-    hybrid counterpart to the WASM `MmcaCultureBootstrap`. Both are wired by
+    `MMCA.Common.UI.Maui` registers `MauiCultureApplier` after it. The hybrid applier persists the
+    choice to device preferences, sets `CultureInfo.DefaultThreadCurrent[UI]Culture` and
+    **deliberately nothing else** (never the calling thread's `CurrentCulture`/`CurrentUICulture`:
+    those setters write to an `AsyncLocal` that flows with the `ExecutionContext` and is restored
+    ahead of the thread defaults every time that context is re-entered, so assigning one at startup
+    would pin the app to its launch language and a later switch would never take), then force-loads
+    the return path: resource strings resolve from `CurrentUICulture` at render time and Blazor has
+    no API to re-render a whole tree in place, so re-booting the Blazor app inside the WebView (the
+    .NET process, and the culture, survive) is what makes the switch visible. `MauiCultureInitializer`
+    (an `IMauiInitializeService`, so it runs inside `MauiAppBuilder.Build()` before any window exists)
+    restores the persisted culture at startup through that same thread-defaults-only path, the hybrid
+    counterpart to the WASM `MmcaCultureBootstrap`. Both are wired by
     `UseMauiDeviceCapabilities()` so no head can be left half-configured, with `UseMauiCulture()`
     separately callable.
 

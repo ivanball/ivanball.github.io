@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-046: HTTP API Versioning Strategy · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-07-15).">
+  <meta name="description" content="Accepted (2026-07-15). Revised 2026-08-01 (anonymity is granted by each per-service subclass, not by ServiceInfoControllerBase; corrected the ADR-034…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/046-http-api-versioning.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-046: HTTP API Versioning Strategy">
-  <meta property="og:description" content="Accepted (2026-07-15).">
+  <meta property="og:description" content="Accepted (2026-07-15). Revised 2026-08-01 (anonymity is granted by each per-service subclass, not by ServiceInfoControllerBase; corrected the ADR-034…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/046-http-api-versioning.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-046: HTTP API Versioning Strategy">
-  <meta name="twitter:description" content="Accepted (2026-07-15).">
+  <meta name="twitter:description" content="Accepted (2026-07-15). Revised 2026-08-01 (anonymity is granted by each per-service subclass, not by ServiceInfoControllerBase; corrected the ADR-034…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"046 · HTTP API Versioning Strategy","item":"https://ivanball.github.io/docs/adr/046-http-api-versioning.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 60 ADRs</summary>
+        <summary>All 64 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -159,6 +159,10 @@
         <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
         <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
         <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
           </ol>
         </nav>
       </details>
@@ -167,7 +171,10 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-046-http-api-versioning-strategy">ADR-046: HTTP API Versioning Strategy</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-07-15).</p>
+          <p>Accepted (2026-07-15). Revised 2026-08-01 (anonymity is granted by each per-service subclass, not by
+          <code>ServiceInfoControllerBase</code>; corrected the ADR-034 cross-reference, which puts the class-level
+          attributes on its own generic base rather than noting a non-inheritance caveat; refreshed the
+          <code>AddCommonApiVersioning</code> call-site lines in the ADC Conference/Identity and Store Catalog hosts).</p>
           <h2 id="context">Context</h2>
           <p>The framework&#39;s REST surface is served by controllers hosted in extracted service processes behind a
           YARP gateway. As those services evolve, a response shape has to be able to change without breaking a
@@ -212,7 +219,10 @@
           <code>ServiceInfoResponse</code> shape (<code>ServiceInfoControllerBase.cs:51</code>); <code>GetV2</code> is mapped to <code>2.0</code>
           (<code>[MapToApiVersion(&quot;2.0&quot;)]</code>, <code>ServiceInfoControllerBase.cs:46</code>) and returns the evolved
           <code>ServiceInfoV2Response</code>, a superset that also advertises the supported and deprecated version lists
-          (<code>ServiceInfoControllerBase.cs:54</code>). The base is anonymous and read-only.</li>
+          (<code>ServiceInfoControllerBase.cs:54</code>). The base is read-only: both actions are <code>[HttpGet]</code>
+          (<code>ServiceInfoControllerBase.cs:39</code>, <code>ServiceInfoControllerBase.cs:45</code>) and it declares no write verb.
+          Anonymity is not carried by the base; each sealed subclass grants it with <code>[AllowAnonymous]</code>
+          (ADC&#39;s <code>ServiceInfoController.cs:17</code>, Store&#39;s <code>ServiceInfoController.cs:17</code>).</li>
           <li><strong>The class-level version attributes live on the per-service subclass.</strong> Class-level
           routing/versioning attributes are not reliably inherited, so each host supplies a sealed subclass
           carrying them. ADC&#39;s <code>ServiceInfoController</code> declares <code>[ApiVersion(&quot;1.0&quot;, Deprecated = true)]</code> and
@@ -237,9 +247,9 @@
           asserted rather than proven.</li>
           <li><strong>Every REST host adopts it the same way.</strong> The extracted services call <code>AddCommonApiVersioning</code>
           in their startup: ADC&#39;s Conference
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:153</code>) and Identity
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:137</code>) hosts, Store&#39;s Catalog host
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:114</code>), and the same call is made
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:159</code>) and Identity
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:143</code>) hosts, Store&#39;s Catalog host
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:120</code>), and the same call is made
           by the other extracted hosts and by the monolith reference host
           (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:33</code>).</li>
           </ul>
@@ -268,9 +278,8 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>The class-level version attributes are not inherited.</strong> Each per-service subclass must repeat the
-          <code>[ApiVersion(...)]</code> and routing attributes (the same inheritance caveat ADR-034 and ADR-036 note
-          for controller convention attributes); the shared behavior lives in the base, but the attributes do
-          not.</li>
+          <code>[ApiVersion(...)]</code> and routing attributes (the same inheritance caveat ADR-036 records for ADC&#39;s
+          sealed <code>OAuthController</code>); the shared behavior lives in the base, but the attributes do not.</li>
           <li><strong>Adoption is per host.</strong> A new REST host that forgets <code>AddCommonApiVersioning</code> gets no versioning
           and no reported versions, the same audit-the-inventory caveat other opt-in framework registrations
           carry; the shared fitness contract only guards a host once its subclass is added.</li>
@@ -286,8 +295,11 @@
           consumer-resolved axis this deliberately contrasts with; HTTP versioning here is request-time and
           client-selected), ADR-015 (the fitness-function approach that
           <code>ServiceInfoVersioningContractTestsBase</code> embodies, keeping the versioning machinery exercised rather
-          than asserted), ADR-034 and ADR-036 (controller-convention decisions that note the same class-level
-          <code>[ApiVersion]</code> non-inheritance handled by the per-service subclass).
+          than asserted), ADR-036 (the other controller-convention decision that records the same class-level
+          <code>[ApiVersion]</code> non-inheritance, handled there by ADC&#39;s sealed <code>OAuthController</code> subclass), ADR-034
+          (the generic entity controller bases, which take the opposite shape: <code>[ApiController]</code> /
+          <code>[Route(&quot;[controller]&quot;)]</code> / <code>[ApiVersion(&quot;1.0&quot;)]</code> sit on the generic base itself,
+          <code>EntityControllerBase.cs:25-27</code>).
           &lt;/content&gt;</p>
           
         <div class="doc-foot btn-row">

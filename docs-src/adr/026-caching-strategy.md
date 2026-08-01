@@ -29,7 +29,7 @@ Cache in two tiers, each with its own substrate.
   Caching decorators, `LoginProtectionService`) depends only on this interface, never on a concrete
   cache or on Redis.
 - **The backing store is chosen at startup, not in code.** `AddCaching()`
-  (`MMCA.Common.Infrastructure/DependencyInjection.cs:149`, called from `AddInfrastructure`) registers
+  (`MMCA.Common.Infrastructure/DependencyInjection.cs:150`, called from `AddInfrastructure`) registers
   `DistributedCacheService` when a real `IDistributedCache` is present (one that is not the in-memory
   `MemoryDistributedCache`, i.e. Aspire registered Redis), and otherwise `MemoryCacheService`. The
   monolith with no distributed cache gets in-process caching for free; a host that wires Redis gets the
@@ -72,8 +72,8 @@ Cache in two tiers, each with its own substrate.
   `AddOutputCache` defaults to a per-replica in-memory store, so a tag eviction reaches only the replica
   that served the mutation. Both adopters now register a shared store inside the same
   redis-connection-string conditional that wires Tier 1: ADC Conference
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:129`) and Store Catalog
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:90`) both call
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:135`) and Store Catalog
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:96`) both call
   `builder.Services.AddStackExchangeRedisOutputCache(...)`. `AddOutputCache` registers its store with
   `TryAdd`, so the explicit registration wins regardless of call order, and with no Redis configured the
   in-memory store still applies, which is correct at a single replica. ADR-040's 2026-07-25 amendment
@@ -105,13 +105,13 @@ Cache in two tiers, each with its own substrate.
   container. All seven services now register `AddRedisClient("redis")` immediately alongside
   `AddRedisDistributedCache("redis")`, gated by the same redis-connection-string conditional, precisely so
   the multiplexer is present for SCAN-based prefix eviction (ADC Conference
-  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:113,118`, Notification
-  `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:99,104`, Engagement
-  `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:88,93`, Identity
-  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:108,113`; Store Catalog
-  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:75,80`, Sales
-  `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:76,81`, Identity
-  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:79,84`). So whenever Redis is
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:119,124`, Notification
+  `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:105,110`, Engagement
+  `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:94,99`, Identity
+  `MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:114,119`; Store Catalog
+  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:81,86`, Sales
+  `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:82,87`, Identity
+  `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:85,90`). So whenever Redis is
   configured, prefix-based invalidation against Redis is live and cached entries are evicted on write; the
   30s TTL is now the backstop only for the no-Redis case (memory mode), where prefix removal self-heals
   within seconds instead. Single-key `RemoveAsync` is unaffected in either mode.
@@ -121,9 +121,9 @@ Cache in two tiers, each with its own substrate.
   `ICacheService.IncrementAsync` is a default interface member implemented as a read-modify-write
   (`MMCA.Common.Application/Interfaces/ICacheService.cs:57`), and `DistributedCacheService` overrides it
   with the same read-modify-write shape rather than Redis `INCR`
-  (`MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:122-128`). The reason is a storage
+  (`MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:175-181`). The reason is a storage
   format mismatch, documented at the implementation
-  (`MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:104-121`): `INCR` writes a Redis
+  (`MMCA.Common.Infrastructure/Caching/DistributedCacheService.cs:156-174`): `INCR` writes a Redis
   string, while `StackExchangeRedisCache` stores every entry as a Redis hash (`absexp` / `sldexp` /
   `data`, read back with `HMGET`). An `INCR`-written counter therefore makes the next read of that key
   fail with `WRONGTYPE`, which surfaces as a 500 on whatever endpoint owns the counter (registration and
@@ -205,3 +205,25 @@ substantive prose changed.
    `ICacheService` / `DistributedCacheService`.
 3. **The 2026-07-25 anchor claim is annotated rather than removed**, so the history stays readable
    without asserting an accuracy it no longer had.
+
+## Revision (2026-08-01)
+Line anchors only, re-verified against the current source. No decision, no behavior, and no
+substantive prose changed.
+
+1. **`AddCaching`.** Now at `MMCA.Common.Infrastructure/DependencyInjection.cs:150` (from `:149`); the
+   previous line is the `<returns>` doc comment above the declaration, not the declaration itself.
+2. **Tier 2.** Store Catalog's `AddStackExchangeRedisOutputCache(...)` moved again, to `Program.cs:96`
+   (from the 2026-07-28 anchor of `:90`, itself a correction of an earlier `:88`). ADC Conference's
+   moved to `Program.cs:135` (from `:129`).
+3. **Trade-offs, the seven paired Redis registrations.** All seven shifted by the same six lines: ADC
+   Conference to `Program.cs:119,124` (from `:113,118`), Notification to `Program.cs:105,110` (from
+   `:99,104`), Engagement to `Program.cs:94,99` (from `:88,93`), Identity to `Program.cs:114,119` (from
+   `:108,113`); Store Catalog to `Program.cs:81,86` (from `:75,80`), Sales to `Program.cs:82,87` (from
+   `:76,81`), Identity to `Program.cs:85,90` (from `:79,84`).
+4. **Counter anchors.** `DistributedCacheService`'s `IncrementAsync` override is now at
+   `DistributedCacheService.cs:175-181` (from `:122-128`), and the storage-format-mismatch `<remarks>`
+   documenting it is now at `DistributedCacheService.cs:156-174` (from `:104-121`). The old line range
+   for both now falls inside the unrelated `RemoveByPrefixAsync` / `ScanAndDeleteAsync` SCAN logic.
+5. **The 2026-07-28 anchor claim is annotated rather than removed**, consistent with how that revision
+   itself treated the 2026-07-25 entry: the anchors it recorded were correct on 2026-07-28 and have
+   since drifted again.

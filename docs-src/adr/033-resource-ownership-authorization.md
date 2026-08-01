@@ -94,20 +94,23 @@ ownership specification scopes list/get queries:
 (`MMCA.Store/.../Sales.API/Controllers/ShoppingCartsController.cs:53`,
 `MMCA.Store/.../Sales.Application/ShoppingCarts/Specifications/ShoppingCartByCustomerSpecification.cs:19`,
 which filters by `Id` because a cart is keyed by customer, `ShoppingCartByCustomerSpecification.cs:24`)
-and `OrdersController` builds an `OrdersByCustomerSpecification`
-(`MMCA.Store/.../Sales.API/Controllers/OrdersController.cs:54`,
+and `OrdersController` builds an `OrdersByCustomerSpecification` through a private
+`GetOwnershipSpecification()` method
+(`MMCA.Store/.../Sales.API/Controllers/OrdersController.cs:62-64`,
 `MMCA.Store/.../Sales.Application/Orders/Specifications/OrdersByCustomerSpecification.cs:13`, filtering
-by `CustomerId`, `OrdersByCustomerSpecification.cs:18`), passing it into each query (for example
-`OrdersController.cs:69`). `OrdersController` does not use the class-level filter for its mutating
+by `CustomerId`, `OrdersByCustomerSpecification.cs:18`), passed as `specification:
+GetOwnershipSpecification()` into each query (`OrdersController.cs:103`, `OrdersController.cs:141`,
+`OrdersController.cs:175`). `OrdersController` does not use the class-level filter for its mutating
 routes; it runs an explicit per-mutation ownership check, `ValidateOwnershipAsync`
-(`OrdersController.cs:303`), that reuses `OwnershipHelper.IsAdmin` (`OrdersController.cs:52`) to let
-the bypass role through. Its two denial branches return different statuses on purpose:
+(`OrdersController.cs:345`), that reuses `OwnershipHelper.IsAdmin` through its `IsAdmin` property
+(`OrdersController.cs:60`) to let the bypass role through. Its two denial branches return different
+statuses on purpose:
 
 - **Missing owner claim** (the caller carries no `customer_id`): `Error.Forbidden`, a 403
-  (`OrdersController.cs:311`, `OrdersController.cs:313`). Nothing was looked up, so there is no
+  (`OrdersController.cs:353`, `OrdersController.cs:355-359`). Nothing was looked up, so there is no
   resource whose existence a 403 could leak; this matches the filter's own missing-claim `ForbidResult`.
 - **Owner mismatch** (the claim is present but the order is someone else's): `Error.NotFound`, a 404
-  rather than a 403 (`OrdersController.cs:324`, `OrdersController.cs:326`), so the response does not
+  rather than a 403 (`OrdersController.cs:366`, `OrdersController.cs:368-370`), so the response does not
   reveal that another customer's order exists.
 
 MMCA.ADC's Engagement module is the first host to configure the filter's vocabulary rather than take
@@ -191,3 +194,14 @@ An audit against the code. No behavior changed; the ADR text did.
    deny-by-default `[AllowMissingOwner]` fallback was inserted between the claim check and the
    owner comparison, so the mismatch citations moved further than the rest), `ICurrentUserService.Role`,
    both Store ownership specifications, `OrdersController`, and the ADR-020 carve-out quote.
+
+## Revision (2026-08-01)
+Anchor-only correction. No behavior changed; `OrdersController` was refactored (a constructor
+parameter added, `GetOwnershipSpecification()` and the `IsAdmin` property extracted,
+`ValidateOwnershipAsync` moved) since the 2026-07-25 pass, which shifted every line anchor pointing
+into it. Refreshed: `GetOwnershipSpecification()` (now `OrdersController.cs:62-64`), its three call
+sites (`OrdersController.cs:103`, `:141`, `:175`), `ValidateOwnershipAsync` (now
+`OrdersController.cs:345`) and the `IsAdmin` property it reads (`OrdersController.cs:60`), the
+missing-owner-claim `Error.Forbidden` branch (`OrdersController.cs:353`, `:355-359`), and the
+owner-mismatch `Error.NotFound` branch (`OrdersController.cs:366`, `:368-370`).
+`OrdersByCustomerSpecification.cs:13` and `:18` were re-checked and are unchanged.

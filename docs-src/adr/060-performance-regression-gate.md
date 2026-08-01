@@ -1,7 +1,9 @@
 # ADR-060: Performance-Regression Gate (Committed Benchmark Baseline in CI)
 
 ## Status
-Accepted (2026-07-28).
+Accepted (2026-07-28). Revised 2026-08-01 (corrected the count in Trade-offs: the single ratio floor
+names two of the eight benchmarks, so six, not seven, are gated on allocations alone; refreshed the
+`ci.yml` line anchors for the `performance-smoke` job, which had shifted by about two lines).
 
 ## Context
 Rubric section 12 asks for hot-path efficiency that is **measured, not assumed**
@@ -31,12 +33,12 @@ benchmark-to-benchmark ratio floors where it is not.
 
 - **A dedicated CI job measures, then verifies.** The `performance-smoke` job, named
   `Performance gate (BenchmarkDotNet Short + baseline verify)`
-  (`MMCA.Common/.github/workflows/ci.yml:330-331`), runs the suite with `--filter "*" --job Short
-  --exporters json` (`ci.yml:354-360`) and then runs the verifier over the exported artifacts
-  (`ci.yml:362-369`). `--job Short` (3 warmup plus 3 iterations) is chosen to produce real
-  measurements inside the job's 15-minute budget (`ci.yml:334,358-359`); `--filter "*"` is required
+  (`MMCA.Common/.github/workflows/ci.yml:332-333`), runs the suite with `--filter "*" --job Short
+  --exporters json` (`ci.yml:362`) and then runs the verifier over the exported artifacts
+  (`ci.yml:371`). `--job Short` (3 warmup plus 3 iterations) is chosen to produce real
+  measurements inside the job's 15-minute budget (`ci.yml:336,360`); `--filter "*"` is required
   because BenchmarkDotNet otherwise prompts for a selection and would hang the runner
-  (`ci.yml:357-358`).
+  (`ci.yml:359-360`).
 
 - **The baseline is a committed JSON file, not a stored previous run.**
   `MMCA.Common/Tests/Performance/perf-baseline.json:1-20` holds an `allocationCeilingsBytes` object
@@ -72,7 +74,7 @@ benchmark-to-benchmark ratio floors where it is not.
   (`MMCA.Common/build/perfgate/perfgate.csproj:2-21`), so the gate itself cannot become a restore or
   supply-chain problem. It reads BenchmarkDotNet's `*-report-full-compressed.json` exports from the
   results directory it is handed (`Program.cs:26-33`), which CI points at
-  `BenchmarkDotNet.Artifacts/results` (`ci.yml:369`).
+  `BenchmarkDotNet.Artifacts/results` (`ci.yml:371`).
 
 - **The job is a required merge gate, not advisory.** It is listed among the eight required contexts
   in `MMCA.Common/CONTRIBUTING.md:68-71` and in the reproducible ruleset payload there
@@ -136,12 +138,13 @@ demand, not on a pull request (`MMCA.ADC/.github/workflows/load-test.yml:1-18`,
 
 ## Trade-offs
 - **The Short job cannot see small latency regressions.** Three warmup and three iterations
-  (`ci.yml:358-359`) give wide confidence intervals: enough for a 1000x floor and for counting bytes,
+  (`ci.yml:360`) give wide confidence intervals: enough for a 1000x floor and for counting bytes,
   useless for detecting a 5% slowdown. Detecting that would need a longer job and a dedicated runner,
-  which the 15-minute budget (`ci.yml:334`) deliberately does not buy.
+  which the 15-minute budget (`ci.yml:336`) deliberately does not buy.
 - **Only one ratio floor exists today** (`perf-baseline.json:13-19`), so the machine-independent
-  latency half of the gate protects exactly one invariant. The other seven benchmarks are gated on
-  allocations alone, which catches a new allocation but not a pure CPU regression.
+  latency half of the gate protects exactly one invariant. That floor names two of the eight
+  benchmarks (`perf-baseline.json:14-18`), so the remaining six are gated on allocations alone,
+  which catches a new allocation but not a pure CPU regression.
 - **The ceilings have roughly 25% headroom** (`perf-baseline.json:2`), so a regression smaller than
   that passes. The headroom is what keeps the gate stable across BenchmarkDotNet and runtime
   revisions; the cost is that it is a ratchet with slack, not a tripwire.
@@ -159,7 +162,7 @@ demand, not on a pull request (`MMCA.ADC/.github/workflows/load-test.yml:1-18`,
   the baseline.
 - **A green context does not always mean the benchmarks ran.** On a documentation-only PR the heavy
   steps are skipped by the `changes` classifier while all required contexts still post green, which
-  is what keeps branch protection satisfiable (`ci.yml:32-35,355,363`).
+  is what keeps branch protection satisfiable (`ci.yml:32-35,357,365`).
 - **Consumers inherit the numbers, not the gate.** MMCA.ADC, MMCA.Store and MMCA.Helpdesk get the
   framework's bounded hot paths through the released packages, but none of them gates their own
   application code this way.

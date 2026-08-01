@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 60 ADRs</summary>
+        <summary>All 64 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -159,6 +159,10 @@
         <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
         <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
         <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
           </ol>
         </nav>
       </details>
@@ -219,23 +223,23 @@
           upstream access logs.</li>
           <li><strong>The exchange resolves to a local <code>User</code>, three ways, and guards the by-email link.</strong>
           <code>ExternalLoginAsync</code> (app-level,
-          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:123</code>)
-          first looks the user up by <code>LoginProvider</code> + <code>ProviderKey</code> (<code>AuthenticationService.cs:144</code>). Missing,
+          <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:130</code>)
+          first looks the user up by <code>LoginProvider</code> + <code>ProviderKey</code> (<code>AuthenticationService.cs:151</code>). Missing,
           it <strong>validates the provider-supplied email before it searches on it</strong>: <code>Email.Create(email)</code>
-          (<code>AuthenticationService.cs:164</code>) is checked as a <code>Result</code>, and an unparseable claim value <strong>rejects</strong>
+          (<code>AuthenticationService.cs:171</code>) is checked as a <code>Result</code>, and an unparseable claim value <strong>rejects</strong>
           the sign-in with an <code>Error.Validation</code> carrying code <code>Auth.ExternalEmailInvalid</code>
-          (<code>AuthenticationService.cs:168</code>). This address is the one email in the system no request-level
+          (<code>AuthenticationService.cs:175</code>). This address is the one email in the system no request-level
           validator has already gated (it arrives in an OAuth claim, not in a validated request), and the
-          by-email lookup that follows (<code>AuthenticationService.cs:174</code>) compares against the validated <code>Email</code>
+          by-email lookup that follows (<code>AuthenticationService.cs:181</code>) compares against the validated <code>Email</code>
           value object rather than the raw claim string. When a local or other-provider account
           already owns that email, it applies an account-takeover guard before linking: it asks
-          <code>IExternalLoginEmailVerifier.IsCurrentExternalLoginEmailVerifiedAsync</code> (<code>AuthenticationService.cs:189</code>)
+          <code>IExternalLoginEmailVerifier.IsCurrentExternalLoginEmailVerifiedAsync</code> (<code>AuthenticationService.cs:196</code>)
           whether the provider asserted the incoming email as verified, and when it did not it <strong>rejects</strong> the
-          sign-in with <code>Auth.ExternalEmailNotVerified</code> (defined inline at <code>AuthenticationService.cs:195</code>)
+          sign-in with <code>Auth.ExternalEmailNotVerified</code> (defined inline at <code>AuthenticationService.cs:202</code>)
           instead of linking, so an unverified provider assertion cannot claim an existing local account. Only
           when the provider did assert a verified email does it <strong>link</strong> the external provider to that account
-          (<code>User.LinkExternalProvider</code>, <code>AuthenticationService.cs:200</code>). When no account owns the email it
-          <strong>creates</strong> a new <code>Attendee</code> via <code>User.CreateExternal</code> (<code>AuthenticationService.cs:206</code>; an external
+          (<code>User.LinkExternalProvider</code>, <code>AuthenticationService.cs:207</code>). When no account owns the email it
+          <strong>creates</strong> a new <code>Attendee</code> via <code>User.CreateExternal</code> (<code>AuthenticationService.cs:213</code>; an external
           user has empty password hash/salt and carries <code>LoginProvider</code> / <code>ProviderKey</code>). In the link and
           create cases it rotates the refresh token, saves, and mints the access token, so the caller receives
           the same <code>AuthenticationResponse</code> shape as a local login.</li>
@@ -308,7 +312,7 @@
           <code>email_verified</code> claim passes the guard; GitHub&#39;s OAuth flow asserts nothing, so a GitHub sign-in
           whose email matches an existing account is rejected with <code>Auth.ExternalEmailNotVerified</code>, not linked.
           The framework itself still performs no such check: <code>Auth.ExternalEmailNotVerified</code> is defined inline
-          in ADC&#39;s override (<code>AuthenticationService.cs:195</code>), and a non-adopting host (Store, Helpdesk) gets only
+          in ADC&#39;s override (<code>AuthenticationService.cs:202</code>), and a non-adopting host (Store, Helpdesk) gets only
           the framework&#39;s not-supported default (<code>Auth.ExternalLoginNotSupported</code>,
           <code>MMCA.Common/Source/Core/MMCA.Common.Application/Auth/IAuthenticationService.cs:74</code>), so the guard is
           ADC&#39;s own edge, not a framework guarantee.</li>

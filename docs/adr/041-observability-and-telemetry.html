@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 60 ADRs</summary>
+        <summary>All 64 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -159,6 +159,10 @@
         <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
         <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
         <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
           </ol>
         </nav>
       </details>
@@ -173,7 +177,11 @@
           (a per-path <code>RecordDuration</code> helper, not a <code>finally</code>) and to rebase the decorator outcome-tag, outbox
           poll-span, and <code>OutboxProcess</code> parent-context citations onto their current lines. Amended
           (2026-07-28) to rebase the Aspire service-defaults citations (the sampling and cost-knob helpers, the
-          two exporter reads) and the outbox dead-letter increment onto their current lines.</p>
+          two exporter reads) and the outbox dead-letter increment onto their current lines. Amended
+          (2026-08-01) to rebase the ASP.NET Core/<code>HttpClient</code> tracing citation, the CQRS duration-literal
+          citations, the outbox poll-span-filter clear statement, the outbox meter/counter/activity-source
+          declarations, the dead-letter increment call site, the poll-span open site, the <code>OutboxProcess</code>
+          span-start site, and the correlation-id response-header citation onto their current lines.</p>
           <h2 id="context">Context</h2>
           <p>The framework is a modular monolith whose modules extract into standalone services (ADR-008), so
           the same telemetry has to make sense whether a request stays in one process or crosses a gateway and
@@ -196,14 +204,14 @@
           (<code>Source/Hosting/MMCA.Common.Aspire/Extensions.cs:121</code>) wires OpenTelemetry logging with formatted
           messages and scopes (<code>Extensions.cs:125</code>), metrics from ASP.NET Core (unconditional,
           <code>Extensions.cs:132</code>) plus <code>HttpClient</code> and the runtime (each gated behind a cost knob, see below),
-          and tracing from ASP.NET Core and <code>HttpClient</code> (<code>Extensions.cs:164</code>). It is
+          and tracing from ASP.NET Core and <code>HttpClient</code> (<code>Extensions.cs:164</code>-<code>Extensions.cs:165</code>). It is
           called from <code>AddServiceDefaults</code> (<code>Extensions.cs:41</code>), so a host opts in once and every project in
           the Aspire model inherits the same pipeline.</p>
           </li>
           <li><p><strong>Custom RED metrics from the CQRS pipeline.</strong> A single meter <code>MMCA.Common.Cqrs</code>
           (<code>Source/Core/MMCA.Common.Application/UseCases/Decorators/CqrsMetrics.cs:15</code>) publishes two duration
-          histograms: <code>cqrs.command.duration</code> (<code>CqrsMetrics.cs:20</code>) and <code>cqrs.query.duration</code>
-          (<code>CqrsMetrics.cs:26</code>), both in milliseconds. Every path is measured without a <code>finally</code>: each
+          histograms: <code>cqrs.command.duration</code> (<code>CqrsMetrics.cs:21</code>) and <code>cqrs.query.duration</code>
+          (<code>CqrsMetrics.cs:27</code>), both in milliseconds. Every path is measured without a <code>finally</code>: each
           logging decorator routes all three of its exits through a private <code>RecordDuration</code> helper, so the
           measurement cannot be skipped. The command helper calls <code>CqrsMetrics.CommandDuration.Record(...)</code>
           tagged by <code>command</code> and <code>outcome</code>
@@ -217,10 +225,10 @@
           (<code>Extensions.cs:158</code>).</p>
           </li>
           <li><p><strong>An outbox dead-letter counter.</strong> The outbox processor owns a meter <code>MMCA.Common.Outbox</code>
-          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:62</code>) and a counter
-          <code>outbox.dead_letter.count</code> (<code>OutboxProcessor.cs:63</code>), incremented with an <code>event_type</code> tag whenever
-          a message is dead-lettered because its type cannot be resolved (<code>OutboxProcessor.cs:351</code>). The same
-          source emits outbox spans (<code>OutboxProcessor.cs:61</code>); both the meter and the trace source are
+          (<code>Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:77</code>) and a counter
+          <code>outbox.dead_letter.count</code> (<code>OutboxProcessor.cs:79</code>), incremented with an <code>event_type</code> tag whenever
+          a message is dead-lettered because its type cannot be resolved (<code>OutboxProcessor.cs:408</code>-<code>OutboxProcessor.cs:411</code>).
+          The same source emits outbox spans (<code>OutboxProcessor.cs:76</code>); both the meter and the trace source are
           registered by literal name in the Aspire defaults (<code>Extensions.cs:157</code>, <code>Extensions.cs:163</code>).</p>
           </li>
           <li><p><strong>Correlation-ID middleware ties the request together.</strong> <code>CorrelationIdMiddleware</code>
@@ -229,7 +237,8 @@
           back to the current W3C trace id and then to <code>HttpContext.TraceIdentifier</code>
           (<code>CorrelationIdMiddleware.cs:32</code>), sets it on the scoped <code>ICorrelationContext</code>
           (<code>CorrelationIdMiddleware.cs:36</code>), and echoes it on the response
-          (<code>CorrelationIdMiddleware.cs:37</code>). The CQRS logging decorators stamp that same id into every log
+          (<code>CorrelationIdMiddleware.cs:39</code>, inside the <code>OnStarting</code> callback registered at
+          <code>CorrelationIdMiddleware.cs:37</code>). The CQRS logging decorators stamp that same id into every log
           scope (<code>LoggingCommandDecorator.cs:23</code>, <code>:25</code>), so logs, the correlation id, and the trace id line
           up for one request.</p>
           </li>
@@ -256,13 +265,13 @@
           <li><p><strong>Outbox poll spans are filtered out of export.</strong> <code>OutboxPollFilterProcessor</code>
           (<code>Source/Hosting/MMCA.Common.Aspire/Telemetry/OutboxPollFilterProcessor.cs:15</code>), registered before
           the exporters (<code>Extensions.cs:172</code>), clears the <code>Recorded</code> flag on the recurring <code>OutboxPoll</code> span
-          and its children (<code>OutboxPollFilterProcessor.cs:42</code>). The poll query runs inside that span, opened at
-          the top of <code>FetchCandidatesAsync</code> (<code>OutboxProcessor.cs:269</code>, named at <code>OutboxProcessor.cs:56</code>), so
-          steady-state polling does not flood Application Insights. Real outbox work is untouched: each
-          per-message <code>OutboxProcess</code> span is started by <code>StartOutboxActivity</code> (<code>OutboxProcessor.cs:440</code>) under
-          an explicit parent context restored from the message&#39;s stored trace and span ids
-          (<code>OutboxProcessor.cs:447</code>, span started at <code>OutboxProcessor.cs:452</code>), so it is never a child of the
-          poll span.</p>
+          and its children (<code>OutboxPollFilterProcessor.cs:45</code>). The poll query runs inside that span, opened at
+          the top of <code>FetchCandidatesAsync</code> (<code>OutboxProcessor.cs:320</code>, span started at <code>OutboxProcessor.cs:326</code>,
+          named at <code>OutboxProcessor.cs:64</code>), so steady-state polling does not flood Application Insights. Real
+          outbox work is untouched: each per-message <code>OutboxProcess</code> span is started by <code>StartOutboxActivity</code>
+          (<code>OutboxProcessor.cs:497</code>) under an explicit parent context restored from the message&#39;s stored trace
+          and span ids (<code>OutboxProcessor.cs:504</code>-<code>OutboxProcessor.cs:507</code>), span started at
+          <code>OutboxProcessor.cs:509</code>, so it is never a child of the poll span.</p>
           </li>
           <li><p><strong>Dual exporters, either or both.</strong> <code>AddOpenTelemetryExporters</code> enables OTLP when
           <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is present (<code>Extensions.cs:277</code>, the Aspire dashboard sets it) and

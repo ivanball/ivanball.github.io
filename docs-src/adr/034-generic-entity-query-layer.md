@@ -48,7 +48,7 @@ contract, supplied by two controller bases over a shared query pipeline.
 3. **Sparse fieldsets via `fields`.** A comma-separated `fields` query parameter
    (`EntityControllerBase.cs:77`, `:121`, `:193`) drives a server-side projection:
    `QueryFieldService.ApplyFieldSelection`
-   (`Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:146`) builds a
+   (`Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:169`) builds a
    `MemberInit` expression that selects only the requested writable properties so
    only those columns leave the database.
 
@@ -67,7 +67,7 @@ contract, supplied by two controller bases over a shared query pipeline.
    via `QueryFilterService.RegisterStrategy` (`QueryFilterService.cs:60`).
 
 5. **Sort.** `sortColumn` / `sortDirection` (`EntityControllerBase.cs:119-120`)
-   feed `QueryFieldService.ApplySorting` (`QueryFieldService.cs:112`), an
+   feed `QueryFieldService.ApplySorting` (`QueryFieldService.cs:135`), an
    `OrderBy("<col> ascending|descending")` over the entity property the DTO name
    maps to.
 
@@ -128,7 +128,7 @@ contract, supplied by two controller bases over a shared query pipeline.
   type through its registered `IFilterStrategy` rather than free-form expression
   evaluation, and capping rows with `MaxUnboundedResultLimit`
   (`EntityQueryPipeline.cs:23`). Sparse fieldsets reject non-writable properties at
-  projection (`QueryFieldService.cs:181`).
+  projection (`QueryFieldService.cs:227`).
 - **Generic endpoints are less self-documenting than bespoke ones.** One generic
   shape per entity is consistent but conveys less domain intent than a named,
   purpose-built endpoint; the query contract (filter key syntax, operators) must be

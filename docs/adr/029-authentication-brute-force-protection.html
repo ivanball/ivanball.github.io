@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 60 ADRs</summary>
+        <summary>All 64 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -159,6 +159,10 @@
         <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
         <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
         <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
           </ol>
         </nav>
       </details>
@@ -171,12 +175,21 @@
           into <code>AuthenticationServiceBase&lt;TUser&gt;</code>; the adoption note and the &quot;convention the consumer must
           call&quot; trade-off were rewritten to match). Updated 2026-07-25 (the backoff formula now shows the
           clamped shift exponent; the counter-atomicity claim was corrected to the accepted non-atomic
-          read-modify-write, and the native-counter window claim was dropped).</p>
+          read-modify-write, and the native-counter window claim was dropped). Updated 2026-08-01 (the premise
+          that login and registration carry no rate limiter at all is stale: ADR-019&#39;s <code>auth-ip</code> per-IP window
+          now sits on both endpoints by default, so the context and the ADR-019 comparison were corrected to
+          describe the layering instead; the lockout decision itself is unchanged).</p>
           <h2 id="context">Context</h2>
           <p>ADR-019&#39;s global rate limiter is <strong>authenticated-only</strong>: it caps requests per authenticated principal
-          and deliberately <em>exempts</em> anonymous traffic. That leaves the highest-value anonymous attack
-          surface (the login and registration endpoints) uncovered by the limiter (credential stuffing, password
-          spraying, registration spam). Two of those defences also cannot live in a per-principal limiter at all:
+          and deliberately <em>exempts</em> anonymous traffic. The highest-value anonymous attack surface (the login
+          and registration endpoints) therefore gets nothing from <em>that</em> limiter (credential stuffing, password
+          spraying, registration spam). ADR-019 now puts a second, narrower limiter directly on those two
+          endpoints: the named <code>RateLimitPolicyAuthIp</code> (<code>&quot;auth-ip&quot;</code>) policy, a fixed one-minute window keyed on
+          the client IP (default 30 requests, <code>429</code> on overage), which <code>AuthControllerBase</code> applies to login and
+          register by default. That caps how fast <em>one source address</em> can hammer the auth surface; it does not
+          cap guesses against <em>one account</em>, since an attacker spreading a run across addresses gets a fresh
+          bucket per address, and its response is a middleware <code>429</code> rather than an auth outcome. Two of those
+          defences also cannot live in a per-principal limiter at all:
           at login time there is <strong>no principal yet</strong>, so account lockout must key on the <em>submitted</em> identity
           (email) and the client IP, not on an authenticated user. We needed a small, always-available service
           that the Identity flow calls to throttle these pre-authentication paths.</p>
@@ -239,10 +252,14 @@
           </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
-          <li><strong>Complements ADR-019 rather than duplicating it.</strong> The global limiter protects authenticated
-          <em>throughput</em> per principal; this protects the anonymous <em>auth surface</em> that limiter exempts. The
-          threat and the partition key differ (per-principal request flood vs. per-identity credential guessing
-          and per-IP signup spam), so they are two mechanisms by design, not one.</li>
+          <li><strong>Complements ADR-019 rather than duplicating it.</strong> ADR-019 carries two limiter layers and this is
+          the third on top of them: its global limiter caps authenticated <em>throughput</em> per principal, its
+          <code>auth-ip</code> policy caps <em>request rate per source IP</em> on login and register, and this caps <em>attempts
+          against one account</em> (keyed on the submitted email, so it holds however many addresses the attempts
+          come from) plus signups per IP over an hour rather than a minute. The keys differ and so does the
+          response shape: the limiters reject at the middleware with <code>429</code> and no auth outcome, while these
+          checks return a <code>Result</code> failure the edge maps to the same uniform <code>401</code> as a bad password. Three
+          mechanisms by design, not one.</li>
           <li><strong>Cache-backed, no new table.</strong> Reusing ADR-026&#39;s substrate means the protection scales from monolith
           to distributed with no schema and no per-handler branching, and a lockout&#39;s natural lifetime is a TTL,
           not a row to clean up.</li>
@@ -274,7 +291,8 @@
           audit-the-inventory caveat as the other opt-in capabilities (ADR-019/020/021/026).</li>
           </ul>
           <h2 id="related">Related</h2>
-          <p>ADR-019 (the authenticated-only global rate limiter that exempts this anonymous surface),
+          <p>ADR-019 (the layered limiter: an authenticated-only global cap that exempts this anonymous surface,
+          plus the per-IP <code>auth-ip</code> window that now sits on the same two endpoints),
           ADR-026 (the <code>ICacheService</code> substrate these counters live in),
           ADR-013 (the <code>Result</code> / <code>Error</code> the checks return),
           ADR-022 (the browser session-cookie auth flow these endpoints sit behind).</p>

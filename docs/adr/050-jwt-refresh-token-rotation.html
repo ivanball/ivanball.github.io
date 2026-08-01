@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 60 ADRs</summary>
+        <summary>All 64 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -159,6 +159,10 @@
         <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
         <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
         <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
           </ol>
         </nav>
       </details>
@@ -191,7 +195,7 @@
           <code>Source/Core/MMCA.Common.Infrastructure/Settings/JwtSettings.cs:42</code>), written by
           <code>TokenService.GenerateAccessToken</code> (<code>Source/Core/MMCA.Common.Infrastructure/Services/TokenService.cs:97</code>).
           The refresh token is a single nullable <code>RefreshToken</code> string plus its <code>RefreshTokenExpiry</code>
-          (<code>Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:20,24</code>), persisted on the app&#39;s <code>User</code> aggregate.
+          (<code>Source/Core/MMCA.Common.Domain/Auth/IAuthUser.cs:21,24</code>), persisted on the app&#39;s <code>User</code> aggregate.
           There is exactly one stored refresh token per user, not a per-device or per-session set.</li>
           <li><strong>The refresh token is 64 random bytes, base64-encoded, opaque.</strong> <code>TokenService.GenerateRefreshToken</code>
           draws 64 bytes from <code>RandomNumberGenerator.GetBytes</code> and base64-encodes them
@@ -200,22 +204,22 @@
           <li><strong>Rotation on every issuance.</strong> Both login and refresh route through <code>IssueTokensAsync</code>, which mints a
           new access token, generates a new refresh token, and overwrites the stored one via
           <code>user.UpdateRefreshToken(...)</code> before <code>SaveChangesAsync</code>
-          (<code>AuthenticationServiceBase.cs:264,268,269,270,272</code>). Registration seeds the first refresh token the
-          same way (<code>AuthenticationServiceBase.cs:168,169</code>). <code>UpdateRefreshToken</code> sets the token and its expiry
+          (<code>AuthenticationServiceBase.cs:292,296,297,298,300</code>). Registration seeds the first refresh token the
+          same way (<code>AuthenticationServiceBase.cs:167,168</code>). <code>UpdateRefreshToken</code> sets the token and its expiry
           (<code>IAuthUser.cs:27</code>; ADC <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:234,236,237</code>,
           Store <code>MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Users/User.cs:129,131,132</code>). The
           previous refresh token is therefore invalid the moment a new one is issued.</li>
           <li><strong>Refresh binds to the same principal via the expired access token.</strong> <code>RefreshTokenAsync</code> requires the
           client to present the expired access token alongside the refresh token and calls
-          <code>TokenService.GetPrincipalFromExpiredToken</code> (<code>AuthenticationServiceBase.cs:190,202</code>). That method
+          <code>TokenService.GetPrincipalFromExpiredToken</code> (<code>AuthenticationServiceBase.cs:218,230</code>). That method
           validates issuer, audience, signing key, and the pinned algorithm but skips only the lifetime check
           (<code>TokenService.cs:123,127,128,129,131,136</code>), so an unsigned, wrong-audience, or algorithm-swapped token
-          yields no principal and the refresh fails (<code>AuthenticationServiceBase.cs:203-207</code>). The <code>user_id</code> claim
+          yields no principal and the refresh fails (<code>AuthenticationServiceBase.cs:231-235</code>). The <code>user_id</code> claim
           from that principal selects the row whose stored refresh token is then compared
-          (<code>AuthenticationServiceBase.cs:209,216</code>).</li>
+          (<code>AuthenticationServiceBase.cs:237,244</code>).</li>
           <li><strong>Sliding per-rotation expiry, from a bound setting.</strong> Every issuance (login, refresh, and the first
           token seeded at registration) stamps the stored refresh token&#39;s expiry as now plus the
-          <code>RefreshTokenLifetime</code> base property (<code>AuthenticationServiceBase.cs:69,169,270</code>), so the window restarts
+          <code>RefreshTokenLifetime</code> base property (<code>AuthenticationServiceBase.cs:69,168,298</code>), so the window restarts
           from the moment of each successful rotation rather than staying pinned to the opening login. That
           property reads the value the token service derives from <code>JwtSettings.RefreshTokenExpirationDays</code>
           (<code>JwtSettings.cs:45</code>, default 7 days) via <code>TokenService.RefreshTokenLifetime</code> (<code>TokenService.cs:114</code>),
@@ -226,12 +230,12 @@
           <li><strong>Mismatch or expiry revokes the stored token.</strong> On refresh, if the presented token does not equal the
           stored <code>RefreshToken</code>, or the stored expiry is in the past, the workflow calls
           <code>user.RevokeRefreshToken()</code> and saves before returning a 401
-          (<code>AuthenticationServiceBase.cs:231,233,234,237</code>). <code>RevokeRefreshToken</code> nulls both the token and its
+          (<code>AuthenticationServiceBase.cs:259,261,262,264</code>). <code>RevokeRefreshToken</code> nulls both the token and its
           expiry (<code>IAuthUser.cs:30</code>; ADC <code>User.cs:243,245,246</code>, Store <code>User.cs:139,141,142</code>), so a presented
           token that has already been rotated away (the signature of reuse or theft) invalidates the current
           stored token as well, forcing a fresh password login rather than silently reissuing.</li>
           <li><strong>Explicit revocation and account-state changes clear the same slot.</strong> <code>RevokeTokenAsync</code> loads the
-          user and revokes the stored token on demand (<code>AuthenticationServiceBase.cs:244,254,255</code>). Both apps also
+          user and revokes the stored token on demand (<code>AuthenticationServiceBase.cs:276,282,283</code>). Both apps also
           revoke on account deactivation and erasure, so those transitions immediately end the refresh chain: ADC
           in <code>Delete()</code> and <code>Anonymize()</code> (<code>MMCA.ADC/.../Identity.Domain/Users/User.cs:350,403</code>), Store in
           <code>Deactivate()</code> and <code>Anonymize()</code> (<code>MMCA.Store/.../Identity.Domain/Users/User.cs:217,249</code>).</li>
@@ -244,9 +248,9 @@
           The rotation, reuse-detection, and lifetime logic is identical across both apps because it lives once in
           the base. ADC&#39;s external OAuth path (ADR-036) issues the same single rotating refresh token when it
           exchanges an external identity for the local token pair: the refresh token is minted and stored
-          (<code>AuthenticationService.cs:218,219</code>), the access token is minted
-          (<code>AuthenticationService.cs:233</code>), and the response is built
-          (<code>AuthenticationService.cs:235</code>).</li>
+          (<code>AuthenticationService.cs:225,226</code>), the access token is minted
+          (<code>AuthenticationService.cs:240</code>), and the response is built
+          (<code>AuthenticationService.cs:242</code>).</li>
           </ul>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -261,7 +265,7 @@
           clearing the stored token means a captured-and-replayed refresh cannot quietly mint tokens; it ends the
           session for everyone holding that token and requires a password to reopen it.</li>
           <li><strong>Rotation plus a sliding inactivity window, not an absolute cap.</strong> Because the expiry is re-stamped on
-          every rotation (<code>AuthenticationServiceBase.cs:270</code>), an actively refreshing client is never forced onto
+          every rotation (<code>AuthenticationServiceBase.cs:298</code>), an actively refreshing client is never forced onto
           a fixed re-authentication schedule; the window bounds inactivity instead, lapsing a chain that goes a
           full lifetime with no successful refresh. There is deliberately no absolute session cap: rotation (each
           refresh invalidates its predecessor) and reuse-detection revocation are the backstops that make a
@@ -273,7 +277,7 @@
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>One refresh token per user means one live session.</strong> A new login overwrites the single stored token
-          (<code>AuthenticationServiceBase.cs:270</code>), so signing in on a second device invalidates the first device&#39;s
+          (<code>AuthenticationServiceBase.cs:298</code>), so signing in on a second device invalidates the first device&#39;s
           refresh chain; the first device&#39;s next refresh mismatches and is revoked. Concurrent multi-device
           sessions that each keep their own refresh token are not supported by this model. A per-device or
           per-session token table would be required for that, and is deliberately out of scope here.</li>
@@ -282,10 +286,10 @@
           stored token and forces a re-login. The safety of failing closed is chosen over the convenience of a
           short reuse grace window.</li>
           <li><strong>The refresh token is server-side state.</strong> Unlike the fully stateless access token, the refresh token
-          is a column that must be written on every login and every refresh (<code>AuthenticationServiceBase.cs:272</code>),
+          is a column that must be written on every login and every refresh (<code>AuthenticationServiceBase.cs:300</code>),
           so the refresh path always incurs a write to the Identity database; it is not a stateless operation.</li>
           <li><strong>No absolute session cap.</strong> Because the refresh lifetime is re-stamped on every rotation
-          (<code>AuthenticationServiceBase.cs:270</code>), the configured window (seven days by default) bounds inactivity,
+          (<code>AuthenticationServiceBase.cs:298</code>), the configured window (seven days by default) bounds inactivity,
           not total session age: a continuously active client that refreshes at least once per window stays signed
           in indefinitely without re-entering a password. The flip side is exposure: a captured refresh-token
           chain that keeps refreshing never lapses on its own, so rotation (each refresh invalidates its

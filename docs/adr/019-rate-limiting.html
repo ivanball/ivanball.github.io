@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-019: Layered Rate Limiting with an Authenticated-Only Global Limiter · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted.">
+  <meta name="description" content="Accepted. Revised 2026-08-01 (the auth-ip per-IP anonymous-authentication limiter, which the shared auth controller applies to login and register by…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/019-rate-limiting.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-019: Layered Rate Limiting with an Authenticated-Only Global Limiter">
-  <meta property="og:description" content="Accepted.">
+  <meta property="og:description" content="Accepted. Revised 2026-08-01 (the auth-ip per-IP anonymous-authentication limiter, which the shared auth controller applies to login and register by…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/019-rate-limiting.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-019: Layered Rate Limiting with an Authenticated-Only Global Limiter">
-  <meta name="twitter:description" content="Accepted.">
+  <meta name="twitter:description" content="Accepted. Revised 2026-08-01 (the auth-ip per-IP anonymous-authentication limiter, which the shared auth controller applies to login and register by…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"019 · Layered Rate Limiting with an Authenticated-Only Global Limiter","item":"https://ivanball.github.io/docs/adr/019-rate-limiting.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 60 ADRs</summary>
+        <summary>All 64 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -159,6 +159,10 @@
         <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
         <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
         <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
           </ol>
         </nav>
       </details>
@@ -167,7 +171,10 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-019-layered-rate-limiting-with-an-authenticated-only-global-limiter">ADR-019: Layered Rate Limiting with an Authenticated-Only Global Limiter</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted.</p>
+          <p>Accepted. Revised 2026-08-01 (the <code>auth-ip</code> per-IP anonymous-authentication limiter, which the shared
+          auth controller applies to login and register by default, is recorded as the third layer; the
+          anonymous-surface trade-off was corrected to match; the edge trust posture behind every IP partition
+          key was made explicit).</p>
           <h2 id="context">Context</h2>
           <p>Every service exposes read and write endpoints to the public internet through the gateway (ADR-008).
           Abusive or runaway clients (scrapers, credential stuffing, retry storms, a buggy SPA stuck in a loop)
@@ -205,10 +212,35 @@
           controllers), and login/registration brute-force is handled by <code>LoginProtectionService</code>
           (exponential-backoff account lockout after <code>MaxFailedAttempts</code> failed logins, plus per-IP
           registration throttling).</li>
-          <li><strong>Named policies remain for opt-in, per-endpoint tightening.</strong> <code>AddCommonRateLimiting</code> also
-          registers named limiters (<code>FixedPolicy</code>, <code>UserPolicy</code>) that a specific action can apply with
-          <code>[EnableRateLimiting(...)]</code> when it needs a tighter cap than the global default. Nothing applies
-          them by default.</li>
+          <li><strong>A per-IP cap on the anonymous authentication endpoints, on by default.</strong> <code>AddCommonRateLimiting</code>
+          also registers the named policy <code>RateLimitPolicyAuthIp</code> (<code>&quot;auth-ip&quot;</code>): a fixed one-minute window
+          keyed on the client IP, <code>authIpPermitLimit</code> (default 30) requests, overage rejected with <code>429</code>.
+          Unlike the other named policies it is not left to each app to attach. <code>AuthControllerBase</code>
+          (<code>MMCA.Common.API</code>) decorates <code>LoginAsync</code> and <code>RegisterAsync</code> with
+          <code>[EnableRateLimiting(WebApplicationBuilderExtensions.RateLimitPolicyAuthIp)]</code>, so any consumer that
+          inherits the base gets it without opting in (ADC&#39;s <code>AuthController</code> repeats the attribute on its
+          overrides). It exists because the other two layers leave one hole between them: the global limiter
+          no-ops for anonymous traffic and the lockout is keyed per email, so a password spray (one password,
+          many emails) from a single source was otherwise unthrottled. Three details are deliberate:
+          <code>RefreshAsync</code> is <strong>not</strong> throttled (renewal is automatic and periodic, and Blazor Server circuits
+          issue it server-side from the UI host&#39;s IP); a request with no attributable IP gets <code>NoLimiter</code>
+          rather than sharing one bucket with every other such request, mirroring the global limiter&#39;s
+          fail-open posture; and the default is 30 rather than a tighter 10 for the same shared-IP reason,
+          since every Server-circuit user&#39;s login leaves from the UI host&#39;s address.</li>
+          <li><strong>The remaining named policies are opt-in, per-endpoint tightening.</strong> <code>AddCommonRateLimiting</code> also
+          registers <code>FixedPolicy</code> and <code>UserPolicy</code>, which a specific action can apply with
+          <code>[EnableRateLimiting(...)]</code> when it needs a tighter cap than the global default. Nothing in either
+          app applies those two today.</li>
+          <li><strong>The client IP these partitions key on is whatever the edge forwards, and that is trusted from any
+          proxy.</strong> Both IP-keyed decisions above (the <code>auth-ip</code> window, and the global limiter&#39;s third-choice
+          fallback key) read <code>HttpContext.Connection.RemoteIpAddress</code>, which <code>UseForwardedHeaders</code> has
+          already rewritten from <code>X-Forwarded-For</code> earlier in the same shared pipeline
+          (<code>UseCommonMiddlewarePipeline</code> runs forwarded headers before <code>UseRateLimiter</code>). That middleware is
+          configured to trust <strong>any</strong> proxy: the pipeline clears both <code>KnownProxies</code> and <code>KnownIPNetworks</code>,
+          because cloud reverse proxies (Azure Container Apps, AWS ALB) front the services from internal
+          addresses that are not in the default allow-lists, and an unlisted proxy means the headers are
+          ignored and every request is attributed to the proxy instead. The decision is to take a
+          caller-supplied IP as canonical rather than to run with no usable client IP at all.</li>
           </ol>
           <h2 id="rationale">Rationale</h2>
           <ul>
@@ -218,15 +250,27 @@
           <li><strong>Do not punish shared-origin anonymous traffic.</strong> With Blazor Server fronting public browsing
           behind one IP, and public reads served from the output cache, an anonymous IP cap would throttle
           legitimate visitors at scale while barely protecting an already-cached backend.</li>
-          <li><strong>Right control per threat.</strong> Brute-force is an auth concern with a lockout control; general
-          overload is a per-user request cap; infrastructure endpoints must never be throttled. A single
-          global IP bucket conflates all three.</li>
+          <li><strong>Right control per threat.</strong> Brute-force is an auth concern answered by a per-email lockout plus a
+          per-IP cap on the two endpoints that carry it; general overload is a per-user request cap;
+          infrastructure endpoints must never be throttled. A single global IP bucket conflates all three.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>The global limiter only protects the authenticated surface.</strong> Anonymous endpoints rely entirely
-          on output caching plus the login-protection service for abuse resistance; an uncached anonymous
-          endpoint added later would have no global cap and must opt into a named policy or its own control.</li>
+          <li><strong>The global limiter only protects the authenticated surface.</strong> The anonymous surface is covered
+          endpoint by endpoint instead: login and register carry the <code>auth-ip</code> limiter by default and the
+          login-protection service on top of it, and public reads are served from the output cache. An
+          uncached anonymous endpoint added later inherits none of that: it has no global cap and must opt
+          into a named policy or its own control.</li>
+          <li><strong>The per-IP cap keys on a header a caller can set.</strong> Trusting forwarded headers from any proxy is
+          what makes the IP usable at all behind a cloud load balancer, but it makes a spoofable input the
+          partition key of a security control. The exposure is bounded rather than absent: <code>ForwardLimit</code> is
+          left at its default of 1, so only the rightmost <code>X-Forwarded-For</code> entry is consumed, and a proxy
+          that appends the real client address wins for any traffic that actually traverses it. A caller that
+          can reach a service <strong>without</strong> passing through that proxy can name its own IP and mint a fresh
+          <code>auth-ip</code> bucket per request, leaving the per-email lockout (ADR-029, not IP-keyed) as the control
+          still standing in front of a spray. Containing this is a deployment concern, not a limiter one:
+          either the gateway is the only reachable ingress, or the allow-lists carry the real proxy ranges.
+          Neither is enforced in code today.</li>
           <li><strong>Per-user partitioning depends on the authenticated principal being populated</strong> when the limiter
           partitions the request, so the limiter&#39;s placement relative to authentication in the request
           pipeline is load-bearing: move it and the partition sees a different (or empty) principal.</li>
@@ -239,7 +283,8 @@
           <h2 id="related">Related</h2>
           <p>ADR-004 (the JWKS/discovery traffic the limiter exempts, and the authenticated principal it keys on),
           ADR-008 (the gateway edge this protects), ADR-017 (request idempotency, the other inbound-edge
-          safeguard against client retries).</p>
+          safeguard against client retries), ADR-029 (the per-email lockout and registration throttle that sit
+          on the same two endpoints as the <code>auth-ip</code> cap).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>

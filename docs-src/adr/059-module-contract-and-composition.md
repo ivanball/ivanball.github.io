@@ -41,11 +41,11 @@ rather than by absence.
   throws from `GetTypes()` is logged and skipped, not fatal (`ModuleLoader.cs:89-98,353-354`). An
   overload taking the assemblies explicitly exists and its own documentation calls it the preferred
   host call (`ModuleLoader.cs:61-79`), but **every host today uses the AppDomain overload**: Store
-  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:206`,
-  `MMCA.Store.Identity.Service/Program.cs:181`, `MMCA.Store.Sales.Service/Program.cs:173`), ADC
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:225`,
-  `MMCA.ADC.Conference.Service/Program.cs:270`, `MMCA.ADC.Engagement.Service/Program.cs:175`,
-  `MMCA.ADC.Notification.Service/Program.cs:184`) and Helpdesk
+  (`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:212`,
+  `MMCA.Store.Identity.Service/Program.cs:187`, `MMCA.Store.Sales.Service/Program.cs:179`), ADC
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:231`,
+  `MMCA.ADC.Conference.Service/Program.cs:280`, `MMCA.ADC.Engagement.Service/Program.cs:181`,
+  `MMCA.ADC.Notification.Service/Program.cs:190`) and Helpdesk
   (`MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:81`). Only the unit tests pass assemblies
   explicitly (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/Modules/ModuleLoaderTests.cs:41-48`).
 - **Registration order is a Kahn topological sort over the declared names.** The loader sorts before
@@ -141,14 +141,14 @@ Catalog enables `Catalog` and disables both peers with no remote declarations
 `Sales` and declares `["Catalog", "Identity"]` as `RemoteDependencies`
 (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/appsettings.json:20-27`), then replaces the two
 stubs with typed gRPC clients after the loader returns
-(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:176-183`). ADC Engagement declares
+(`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:188-189`). ADC Engagement declares
 `["Conference"]` remote (`MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/appsettings.json:22-30`)
 and ADC Notification declares `["Identity"]` remote
 (`MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/appsettings.json:27-35`), while ADC
 Conference enables one module and declares nothing remote
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:20-25`) even though it wires
 Engagement's `IBookmarkCountService` as a gRPC client
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:274-281`), because
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:291`), because
 `ConferenceModule` never declares Engagement in `Dependencies`.
 
 ## Rationale
@@ -163,7 +163,7 @@ Engagement's `IBookmarkCountService` as a gRPC client
   puts its contract type in the container, the dependent module's Application and Domain code has no
   branch for "peer not present", which is precisely why a module's non-hosting layers are identical
   in-process and extracted (`ModuleLoader.cs:123`, `CatalogModule.cs:24-25`). The host then
-  overwrites the stub with a real cross-process adapter (`Sales.Service/Program.cs:176-183`).
+  overwrites the stub with a real cross-process adapter (`Sales.Service/Program.cs:188-189`).
 - **Two strictness levels, chosen per module.** A module that genuinely cannot function without a
   peer opts into `RequiresDependencies = true` and fails fast (`SalesModule.cs:30`,
   `EngagementModule.cs:23`, `NotificationModule.cs:24`); everything else tolerates a missing peer and
@@ -196,7 +196,7 @@ Engagement's `IBookmarkCountService` as a gRPC client
   (`DependencyInjection.cs:181-188`, `ModuleLoader.cs:338-339,347-348`).
 - **The dependency graph is a hand-written declaration, not a derived fact.** ADC Conference consumes
   Engagement's `IBookmarkCountService` over gRPC without listing Engagement in `Dependencies`
-  (`ConferenceModule.cs:15-30` versus `Conference.Service/Program.cs:274-281`), so neither the
+  (`ConferenceModule.cs:15-30` versus `Conference.Service/Program.cs:291`), so neither the
   topological sort nor the `RequiresDependencies` check knows about that edge. Nothing enforces that
   `Dependencies` matches the interfaces a module actually resolves.
 - **The one guard against a forgotten cross-process rewire is unadopted.** `ValidateRemoteDependencies`

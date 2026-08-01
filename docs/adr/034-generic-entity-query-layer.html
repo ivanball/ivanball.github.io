@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 60 ADRs</summary>
+        <summary>All 64 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -159,6 +159,10 @@
         <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
         <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
         <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
           </ol>
         </nav>
       </details>
@@ -209,7 +213,7 @@
           <li><p><strong>Sparse fieldsets via <code>fields</code>.</strong> A comma-separated <code>fields</code> query parameter
           (<code>EntityControllerBase.cs:77</code>, <code>:121</code>, <code>:193</code>) drives a server-side projection:
           <code>QueryFieldService.ApplyFieldSelection</code>
-          (<code>Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:146</code>) builds a
+          (<code>Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:169</code>) builds a
           <code>MemberInit</code> expression that selects only the requested writable properties so
           only those columns leave the database.</p>
           </li>
@@ -228,7 +232,7 @@
           via <code>QueryFilterService.RegisterStrategy</code> (<code>QueryFilterService.cs:60</code>).</p>
           </li>
           <li><p><strong>Sort.</strong> <code>sortColumn</code> / <code>sortDirection</code> (<code>EntityControllerBase.cs:119-120</code>)
-          feed <code>QueryFieldService.ApplySorting</code> (<code>QueryFieldService.cs:112</code>), an
+          feed <code>QueryFieldService.ApplySorting</code> (<code>QueryFieldService.cs:135</code>), an
           <code>OrderBy(&quot;&lt;col&gt; ascending|descending&quot;)</code> over the entity property the DTO name
           maps to.</p>
           </li>
@@ -292,7 +296,7 @@
           type through its registered <code>IFilterStrategy</code> rather than free-form expression
           evaluation, and capping rows with <code>MaxUnboundedResultLimit</code>
           (<code>EntityQueryPipeline.cs:23</code>). Sparse fieldsets reject non-writable properties at
-          projection (<code>QueryFieldService.cs:181</code>).</li>
+          projection (<code>QueryFieldService.cs:227</code>).</li>
           <li><strong>Generic endpoints are less self-documenting than bespoke ones.</strong> One generic
           shape per entity is consistent but conveys less domain intent than a named,
           purpose-built endpoint; the query contract (filter key syntax, operators) must be

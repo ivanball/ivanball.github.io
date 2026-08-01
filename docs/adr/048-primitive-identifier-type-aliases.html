@@ -95,7 +95,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 60 ADRs</summary>
+        <summary>All 64 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -159,6 +159,10 @@
         <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
         <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
         <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
           </ol>
         </nav>
       </details>
@@ -219,7 +223,7 @@
           pulled into every project with a <code>&lt;Compile Include ... Link=... /&gt;</code> block, so the alias is visible
           everywhere without a project reference: Common
           (<code>MMCA.Common/Directory.Build.props:86-96</code>), ADC
-          (<code>MMCA.ADC/Directory.Build.props:77-87</code>), Store (<code>MMCA.Store/Directory.Build.props:75-86</code>). Adding a
+          (<code>MMCA.ADC/Directory.Build.props:79-92</code>), Store (<code>MMCA.Store/Directory.Build.props:79-90</code>). Adding a
           solution-wide alias is a new <code>GlobalUsings.*.cs</code> plus a matching <code>&lt;Compile Include&gt;</code> line, nothing more.</li>
           <li><strong>The alias flows unchanged through every layer.</strong> Tracing the ADC <code>User</code> aggregate: the domain
           entity is <code>User : AuditableAggregateRootEntity&lt;UserIdentifierType&gt;</code>
