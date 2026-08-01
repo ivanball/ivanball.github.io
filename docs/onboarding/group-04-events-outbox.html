@@ -624,7 +624,7 @@
           </ul>
           <h3 id="outboxsignal">OutboxSignal</h3>
           <blockquote>
-          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxSignal.cs:9</code> · Level 1 · class (sealed)</p>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxSignal.cs:15</code> · Level 1 · class (sealed)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the <code>SemaphoreSlim</code>-based <a href="#ioutboxsignal"><code>IOutboxSignal</code></a> that wakes the
@@ -721,7 +721,7 @@
           </ul>
           <h3 id="outboxcleanupservice">OutboxCleanupService</h3>
           <blockquote>
-          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxCleanupService.cs:32</code> · Level 8 · class (sealed partial, <code>BackgroundService</code>)</p>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxCleanupService.cs:35</code> · Level 8 · class (sealed partial, <code>BackgroundService</code>)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the periodic sweeper that purges <strong>processed</strong> outbox rows (and, when enabled,
@@ -760,7 +760,7 @@
           </ul>
           <h3 id="outboxprocessor">OutboxProcessor</h3>
           <blockquote>
-          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:37</code> · Level 8 · class (sealed partial, <code>BackgroundService</code>)</p>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Persistence.Outbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:46</code> · Level 8 · class (sealed partial, <code>BackgroundService</code>)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the background service that drains every outbox table the host owns and dispatches
@@ -818,7 +818,7 @@
           </ul>
           <h3 id="basedomainevent">BaseDomainEvent</h3>
           <blockquote>
-          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.DomainEvents</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseDomainEvent.cs:18</code> · Level 1 · record class (abstract)</p>
+          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.DomainEvents</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseDomainEvent.cs:26</code> · Level 1 · record class (abstract)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the abstract base record for all domain events, supplying default values for both
@@ -1039,65 +1039,81 @@
           </ul>
           <h3 id="safedomaineventhandlertdomainevent">SafeDomainEventHandler&lt;TDomainEvent&gt;</h3>
           <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.DomainEvents</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/DomainEvents/SafeDomainEventHandler.cs:14</code> · Level 2 · class (abstract)</p>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.DomainEvents</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/DomainEvents/SafeDomainEventHandler.cs:32</code> · Level 2 · class (abstract)</p>
           </blockquote>
           <ul>
-          <li><strong>What it is</strong>: a base class for domain-event handlers whose failures should <strong>not</strong> roll back the
-          primary transaction. It wraps an abstract <code>HandleSafelyAsync</code> in a <code>try/catch</code> that logs the error
-          but does not propagate it.</li>
+          <li><strong>What it is</strong>: a base class for domain-event handlers that must log their own failure with handler
+          and event context before the exception continues to the dispatcher. It wraps an abstract
+          <code>HandleSafelyAsync</code> in an exception <strong>filter</strong> that writes one error line and then lets the
+          exception propagate unchanged (lines 38-47); it does not swallow anything.</li>
           <li><strong>Depends on</strong>: <a href="#basedomainevent"><code>BaseDomainEvent</code></a> (Level 1),
           <a href="#idomaineventhandlerin-tdomainevent"><code>IDomainEventHandler&lt;in TDomainEvent&gt;</code></a> (Level 1),
           <code>Microsoft.Extensions.Logging.ILogger</code> (external).</li>
-          <li><strong>Concept introduced, safe side-effect handlers and at-least-once delivery discipline.</strong>
-          <code>[Rubric §6, CQRS &amp; Event-Driven]</code> (at-least-once delivery: the outbox guarantees retry, so a safe
-          handler lets the processor re-dispatch on failure without re-running the primary operation).
-          <code>[Rubric §29, Resilience &amp; Business Continuity]</code> (graceful degradation of side-effects). An
-          aggregate&#39;s <code>SaveChangesAsync</code> dispatches domain events in-process <em>after</em> the data is safely
-          persisted. If a side-effect handler (&quot;send welcome email when a user registers&quot;) throws, the entire
-          save should <em>not</em> roll back, the primary state change is already committed; only the side effect
-          failed. <code>SafeDomainEventHandler</code> catches non-cancellation exceptions, logs them with &quot;The outbox
-          processor will retry&quot; (lines 26-31), and returns gracefully. Handlers that <em>must</em> succeed atomically
-          with the primary transaction (e.g. a read model in the same DB) should instead implement
-          <a href="#idomaineventhandlerin-tdomainevent"><code>IDomainEventHandler&lt;in TDomainEvent&gt;</code></a> directly and let
-          exceptions propagate.</li>
-          <li><strong>Walkthrough</strong>: primary constructor takes an <code>ILogger</code> (line 14), constrained
-          <code>where TDomainEvent : BaseDomainEvent</code> (line 15). <code>HandleAsync</code> (line 18) awaits
-          <code>HandleSafelyAsync</code> inside <code>catch (Exception ex) when (ex is not OperationCanceledException)</code>
-          (line 24), cancellation is the one exception that <em>should</em> propagate. <code>HandleSafelyAsync</code> (line 38)
-          is the abstract method concrete subclasses implement.</li>
-          <li><strong>Why it&#39;s built this way</strong>: it codifies the at-least-once contract of
-          <code>ADRs/003-outbox-dual-dispatch.md</code> at the handler level: swallow-and-log instead of fail-the-save,
-          because the durable retry path already exists in the outbox.</li>
-          <li><strong>Where it&#39;s used</strong>: base class for ADC&#39;s side-effect handlers across Conference/Engagement/Identity.</li>
-          </ul>
-          <h3 id="brokermessagebus">BrokerMessageBus</h3>
-          <blockquote>
-          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/BrokerMessageBus.cs:24</code> · Level 3 · class (sealed)</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: the <a href="#imessagebus"><code>IMessageBus</code></a> implementation backed by <strong>MassTransit</strong>. It
-          publishes integration events to the configured broker (RabbitMQ in dev, Azure Service Bus in prod),
-          and is the transport swapped in for extracted microservices in place of
-          <a href="#inprocessmessagebus"><code>InProcessMessageBus</code></a>.</li>
-          <li><strong>Depends on</strong>: <a href="#imessagebus"><code>IMessageBus</code></a> (Level 2), <a href="#iintegrationevent"><code>IIntegrationEvent</code></a>
-          (Level 1), <code>MassTransit.IPublishEndpoint</code> (external NuGet).</li>
-          <li><strong>Concept introduced, publish-by-runtime-type for broker routing.</strong> <code>[Rubric §7, Microservices Readiness]</code> (the transport lives entirely in Infrastructure; nothing in Application/Domain knows the
-          broker exists). The key detail is line 33: <code>publishEndpoint.Publish(integrationEvent, integrationEvent.GetType(), cancellationToken)</code> publishes using the <strong>concrete runtime type</strong>, not
-          the <code>IIntegrationEvent</code> compile-time type, so MassTransit routes to the exchange/topic bound to the
-          concrete event class (the base interface has no consumers bound to it). <code>[Rubric §13, Observability &amp; Operability]</code>: the doc comment (lines 18-22) notes MassTransit automatically propagates the current
-          <code>System.Diagnostics.Activity</code> trace context as <code>traceparent</code>/<code>tracestate</code> message headers, so
-          distributed traces continue across the broker hop.</li>
-          <li><strong>Walkthrough</strong>: primary constructor injects <code>IPublishEndpoint</code> (line 24). <code>PublishAsync</code> (single,
-          line 27) null-guards (line 29) then returns the runtime-typed <code>Publish</code> call (line 33). The batch
-          overload (line 37) iterates and awaits the single overload per event (lines 41-44).</li>
-          <li><strong>Why it&#39;s built this way</strong>: this bus deliberately does <strong>not</strong> write to the outbox itself (doc
-          comment, lines 11-17); the transactional outbox semantics are preserved upstream by the
-          <a href="#outboxprocessor"><code>OutboxProcessor</code></a>, which drains persisted <a href="#outboxmessage"><code>OutboxMessage</code></a> rows
-          by calling this bus. Splitting &quot;persist to outbox&quot; (the event bus&#39;s job) from &quot;publish to broker&quot;
-          (this bus&#39;s job) is what makes the at-least-once guarantee of <code>ADRs/003-outbox-dual-dispatch.md</code>
-          survive a broker outage. The MassTransit v8 pin applies (see <a href="#imessagebus"><code>IMessageBus</code></a>).</li>
-          <li><strong>Where it&#39;s used</strong>: registered as the <code>IMessageBus</code> implementation when the host calls
-          <code>AddBrokerMessaging</code>; invoked only by the <a href="#outboxprocessor"><code>OutboxProcessor</code></a> drain loop.</li>
+          <li><strong>Concept introduced, log-and-propagate handlers and the at-least-once delivery contract.</strong>
+          <code>[Rubric §6, CQRS &amp; Event-Driven]</code> assesses whether event delivery is reliable end to end, and the
+          class comment (lines 13-20) records why the earlier swallow-and-log version was not: a handler that
+          threw still reported success to the dispatcher, so its outbox row was marked processed, nothing
+          ever retried, and the side effect was lost with only a log line to show for it. Propagating hands
+          the decision to the delivery mechanism, which is built for exactly this.
+          <code>[Rubric §29, Resilience &amp; Business Continuity]</code>: on the <a href="#outboxprocessor"><code>OutboxProcessor</code></a> path
+          the failed message keeps its retry count, backs off, and dead-letters after <code>Outbox:MaxRetries</code>
+          attempts (default 5,
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/OutboxSettings.cs:21</code>; the
+          increment/backoff/dead-letter branches are
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:440-470</code>).
+          <code>[Rubric §13, Observability &amp; Operability]</code>: the one job the base class keeps is the error line
+          naming the concrete handler and the event type, so an operator can tell which handler failed for
+          which event without every subclass hand-rolling that context. The consequence to design for is
+          <strong>batch</strong> redelivery on the interceptor path (class comment, lines 21-29):
+          <code>DomainEventSaveChangesInterceptor</code> dispatches every local event of one save in a single
+          <code>DispatchAsync</code> call and only then marks that batch processed
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:306</code>
+          and <code>:310</code>), so one rethrowing handler aborts that call and skips <code>MarkProcessedAsync</code> for the
+          WHOLE local batch: every local event written by that save is redelivered by the outbox processor,
+          not just the event whose handler failed. Delivery is therefore at-least-once and subclasses must be
+          idempotent for their own event <em>and</em> for every sibling event raised by the same save.</li>
+          <li><strong>Walkthrough</strong>: primary constructor takes an <code>ILogger</code> (line 32), constrained
+          <code>where TDomainEvent : BaseDomainEvent</code> (line 33). <code>HandleAsync</code> (line 36) awaits
+          <code>HandleSafelyAsync</code> (line 40) inside
+          <code>catch (Exception ex) when (ex is not OperationCanceledException &amp;&amp; LogAndRethrow(ex))</code> (line 42):
+          <code>OperationCanceledException</code> is excluded from the filter, so host shutdown propagates with no log
+          line, because it is not a delivery failure. <code>LogAndRethrow</code> (line 61) logs the exception with
+          <code>GetType().Name</code> and <code>typeof(TDomainEvent).Name</code> under the message
+          <code>&quot;Domain event handler {HandlerType} failed for event {EventType}. The outbox processor will redeliver the event.&quot;</code>
+          (lines 63-67) and always returns <code>false</code> (line 69), so the filter never matches and the exception
+          keeps propagating; the <code>throw;</code> inside the catch body is unreachable (lines 44-45). Doing the log
+          in a <em>filter</em> rather than a catch block is the point: filters run on the first pass, ahead of any
+          unwinding, so the handler context is recorded even if an outer frame wraps or rethrows, and the
+          original stack trace stays untouched. <code>HandleSafelyAsync</code> (line 54) is the abstract method concrete
+          subclasses implement.</li>
+          <li><strong>Why it&#39;s built this way</strong>: it puts the at-least-once contract of
+          <code>ADRs/003-outbox-dual-dispatch.md</code> where that ADR expects the retry decision to live, in the
+          delivery mechanism rather than in each handler: the handler reports the truth and the outbox
+          decides on retry, backoff, and dead-lettering (the ADR&#39;s matching obligation is that handlers are
+          idempotent, since the same event may be dispatched in-process and again by the processor). A failed
+          handler still does not roll back the primary save, but that is now the caller&#39;s doing rather than
+          the base class&#39;s: in
+          <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs</code>
+          the flush runs after the data is committed (dispatch is deferred while a transaction is open, lines
+          285-292) and catches the propagated exception itself (line 315), logging &quot;In-process domain event
+          dispatch failed; the outbox processor will retry&quot; (line 343) and signalling the processor so the
+          unprocessed rows are picked up (lines 321-322).</li>
+          <li><strong>Where it&#39;s used</strong>: reached at runtime through <a href="#domaineventdispatcher"><code>DomainEventDispatcher</code></a>,
+          whichever caller dispatched the event (the save-changes interceptor after <code>SaveChangesAsync</code>,
+          <a href="#inprocesseventbus"><code>InProcessEventBus</code></a> / <a href="#inprocessmessagebus"><code>InProcessMessageBus</code></a>, or the
+          background <a href="#outboxprocessor"><code>OutboxProcessor</code></a>). The only subclass in the workspace today is
+          <a href="group-27-testing-infrastructure.html#testsafedomaineventhandler"><code>TestSafeDomainEventHandler</code></a>,
+          driven by
+          <a href="group-27-testing-infrastructure.html#safedomaineventhandlertests"><code>SafeDomainEventHandlerTests</code></a>
+          (<code>MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/DomainEvents/SafeDomainEventHandlerTests.cs</code>),
+          which pin the three behaviours: log <strong>and</strong> propagate (line 33), the log lands before the caller
+          sees the exception (line 51), and <code>OperationCanceledException</code> passes through unlogged (line 73).</li>
+          <li><strong>Caveats / not-in-source</strong>: the swallow-to-propagate history and the batch-redelivery contract come
+          from the class remarks (lines 13-29), not from anything visible in the current control flow. The
+          base class cannot enforce the idempotency it demands: that stays a subclass obligation with no
+          compile-time or runtime guard. Not determinable from source: how a real side-effect handler behaves
+          under redelivery, because no application (ADC, Store, or Helpdesk) derives from this base class
+          today, so only the Common unit tests exercise it.</li>
           </ul>
           <h3 id="domaineventdispatcher">DomainEventDispatcher</h3>
           <blockquote>
@@ -1154,94 +1170,6 @@
           <code>ApplicationDbContext.SaveChangesAsync</code> after the outbox rows are written, by the background
           <a href="#outboxprocessor"><code>OutboxProcessor</code></a> when re-dispatching persisted events, and by both in-process
           buses (<a href="#inprocessmessagebus"><code>InProcessMessageBus</code></a>, <a href="#inprocesseventbus"><code>InProcessEventBus</code></a>).</li>
-          </ul>
-          <h3 id="inprocessmessagebus">InProcessMessageBus</h3>
-          <blockquote>
-          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/InProcessMessageBus.cs:19</code> · Level 3 · class (sealed)</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: the <a href="#imessagebus"><code>IMessageBus</code></a> implementation that dispatches integration events
-          <strong>synchronously through the in-process <a href="#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a></strong>. It is
-          the default <code>IMessageBus</code> registration for the modular-monolith deployment.</li>
-          <li><strong>Depends on</strong>: <a href="#imessagebus"><code>IMessageBus</code></a> (Level 2),
-          <a href="#idomaineventdispatcher"><code>IDomainEventDispatcher</code></a> (Level 1),
-          <a href="#iintegrationevent"><code>IIntegrationEvent</code></a> (Level 1).</li>
-          <li><strong>Concept</strong>: the monolith-mode counterpart to <a href="#brokermessagebus"><code>BrokerMessageBus</code></a>. Both satisfy
-          the same <code>IMessageBus</code> contract, but where the broker bus hands events to MassTransit, this one just
-          forwards them straight to the dispatcher (line 25 wraps a single event as <code>[integrationEvent]</code>; the
-          batch overload passes the sequence through, line 32). <code>[Rubric §7, Microservices Readiness]</code>: the
-          <code>IMessageBus</code> boundary is what lets a module flip from this class to the broker bus with only a
-          config change.</li>
-          <li><strong>Walkthrough</strong>: primary constructor injects <code>IDomainEventDispatcher</code> (line 19). <code>PublishAsync</code>
-          (single, line 22) null-guards then calls <code>DispatchAsync([integrationEvent])</code> (line 25); the batch
-          overload (line 29) null-guards then calls <code>DispatchAsync(integrationEvents)</code> directly (line 32).</li>
-          <li><strong>Caveats / not-in-source</strong>: this bus does <strong>not</strong> itself write to the outbox (doc comment, lines
-          11-17); it is meant to be invoked from the <a href="#outboxprocessor"><code>OutboxProcessor</code></a> when draining
-          already-persisted entries, or from paths that have already taken responsibility for outbox
-          persistence. The &quot;persist + dispatch in one call&quot; semantics belong to <a href="#ieventbus"><code>IEventBus</code></a> and
-          its <a href="#inprocesseventbus"><code>InProcessEventBus</code></a> implementation, not here.</li>
-          <li><strong>Where it&#39;s used</strong>: registered as the default <code>IMessageBus</code>; drained through by the
-          <a href="#outboxprocessor"><code>OutboxProcessor</code></a>.</li>
-          </ul>
-          <h3 id="integrationeventconsumertevent">IntegrationEventConsumer&lt;TEvent&gt;</h3>
-          <blockquote>
-          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventConsumer.cs:26</code> · Level 3 · class (sealed partial)</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: a <strong>generic MassTransit consumer</strong> that bridges <code>IConsumer&lt;TEvent&gt;</code> to the existing
-          in-process <a href="#iintegrationeventhandlerin-tintegrationevent"><code>IIntegrationEventHandler&lt;TEvent&gt;</code></a>
-          contract. There is no MassTransit-specific consumer class to write per event type: this one adapter
-          routes every broker-delivered message of type <code>TEvent</code> to all registered handlers.</li>
-          <li><strong>Depends on</strong>: <a href="#iintegrationeventhandlerin-tintegrationevent"><code>IIntegrationEventHandler&lt;in TIntegrationEvent&gt;</code></a>
-          (Level 2), <a href="#iinboxstore"><code>IInboxStore</code></a> (Level 0), <a href="#iintegrationevent"><code>IIntegrationEvent</code></a>
-          (Level 1); externals <code>MassTransit.IConsumer&lt;T&gt;</code>/<code>ConsumeContext&lt;T&gt;</code>, <code>ILogger&lt;T&gt;</code>.</li>
-          <li><strong>Concept introduced, consumer-side idempotency via the inbox.</strong> <code>[Rubric §6, CQRS &amp; Event-Driven]</code>
-          and <code>[Rubric §29, Resilience &amp; Business Continuity]</code>: at-least-once broker delivery can <strong>redeliver</strong>
-          the same message, so a consumer must be idempotent. On each message, <code>Consume</code> (line 33) first asks
-          the <a href="#iinboxstore"><code>IInboxStore</code></a> whether <code>integrationEvent.MessageId</code> was already processed (line
-          42); if so it logs a debug skip and acks without re-running handlers (lines 44-45). The stable
-          <code>MessageId</code> minted at construction on <a href="#basedomainevent"><code>BaseDomainEvent</code></a> is what makes this dedup
-          reliable across the round-trip. <code>[Rubric §13, Observability &amp; Operability]</code>: three source-generated
-          <code>[LoggerMessage]</code> methods (lines 81-88) cover duplicate-skip, no-handler, and handler-failure cases.</li>
-          <li><strong>Walkthrough</strong>: primary constructor injects the handler enumerable, <a href="#iinboxstore"><code>IInboxStore</code></a>,
-          and an <code>ILogger</code> (lines 26-29), constrained <code>where TEvent : class, IIntegrationEvent</code> (line 30).
-          <code>Consume</code> null-guards the context (line 35), runs the inbox check (line 42), then loops every handler
-          (lines 50-66) inside a <code>try/catch (Exception ex) when (ex is not OperationCanceledException)</code> that
-          <strong>rethrows</strong> on failure (line 64) so MassTransit&#39;s configured <code>UseMessageRetry</code> policy (exponential
-          backoff, <code>MessageBusSettings.RetryLimit</code> attempts) runs before dead-lettering. A zero-handler count
-          logs an informational warning and acks anyway (lines 68-74). Crucially, <code>MarkProcessedAsync</code> (line<ol start="78">
-          <li>runs <strong>after</strong> all handlers succeed, so a rethrown failure leaves the message un-recorded and
-          eligible for redelivery.</li>
-          </ol>
-          </li>
-          <li><strong>Why it&#39;s built this way</strong>: keeping the inbox record post-success (not pre-dispatch) is the correct
-          ordering for at-least-once delivery (<code>ADRs/003-outbox-dual-dispatch.md</code>): a failed handler must be
-          retried, and recording it early would suppress that retry. Reusing the existing
-          <code>IIntegrationEventHandler&lt;T&gt;</code> handlers (auto-discovered by <code>ScanModuleApplicationServices</code>) means
-          application code is identical whether a module runs in-process or as an extracted service.</li>
-          <li><strong>Where it&#39;s used</strong>: registered per event type via
-          <a href="#integrationeventconsumerextensions"><code>IntegrationEventConsumerExtensions</code></a> inside the
-          <code>configureConsumers</code> callback passed to <code>AddBrokerMessaging</code>.</li>
-          </ul>
-          <h3 id="integrationeventconsumerextensions">IntegrationEventConsumerExtensions</h3>
-          <blockquote>
-          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventConsumerExtensions.cs:11</code> · Level 4 · class (static)</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: the MassTransit registration helper for
-          <a href="#integrationeventconsumertevent"><code>IntegrationEventConsumer&lt;TEvent&gt;</code></a>. It exposes one call per
-          integration event type a service consumes.</li>
-          <li><strong>Depends on</strong>: <a href="#integrationeventconsumertevent"><code>IntegrationEventConsumer&lt;TEvent&gt;</code></a> (Level 3),
-          <a href="#iintegrationevent"><code>IIntegrationEvent</code></a> (Level 1);
-          external <code>MassTransit.IBusRegistrationConfigurator</code>.</li>
-          <li><strong>Concept</strong>: C# preview <strong>extension members</strong> used for registration ergonomics (taught in the
-          primer). The <code>extension(IBusRegistrationConfigurator x)</code> block (line 13) adds
-          <code>RegisterIntegrationEventConsumer&lt;TEvent&gt;()</code> (line 22), which calls
-          <code>x.AddConsumer&lt;IntegrationEventConsumer&lt;TEvent&gt;&gt;()</code> (line 25) and returns the configurator for
-          fluent chaining. <code>[Rubric §7, Microservices Readiness]</code>: this is the one line a host writes per
-          consumed event, keeping broker wiring declarative.</li>
-          <li><strong>Where it&#39;s used</strong>: called from inside the <code>configureConsumers</code> callback passed to
-          <code>AddBrokerMessaging</code> in each extracted service&#39;s <code>Program.cs</code>.</li>
           </ul>
           <h3 id="brokereventbus">BrokerEventBus</h3>
           <blockquote>
@@ -1322,7 +1250,7 @@
           <li><strong>Where it&#39;s used</strong>: the default <code>IEventBus</code> registration; superseded by
           <a href="#brokereventbus"><code>BrokerEventBus</code></a> once <code>AddBrokerMessaging</code> is called.</li>
           </ul>
-          <h3 id="brokermessagebus-1">BrokerMessageBus</h3>
+          <h3 id="brokermessagebus">BrokerMessageBus</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/BrokerMessageBus.cs:24</code> · Level 3 · class (sealed)</p>
           </blockquote>
@@ -1365,9 +1293,9 @@
           <code>AddBrokerMessaging()</code> in each service host&#39;s <code>Program.cs</code>. Driven by the
           <a href="#outboxprocessor"><code>OutboxProcessor</code></a> in broker mode.</li>
           </ul>
-          <h3 id="inprocessmessagebus-1">InProcessMessageBus</h3>
+          <h3 id="inprocessmessagebus">InProcessMessageBus</h3>
           <blockquote>
-          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/InProcessMessageBus.cs:20</code> · Level 3 · class (sealed)</p>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/InProcessMessageBus.cs:19</code> · Level 3 · class (sealed)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the <a href="#imessagebus"><code>IMessageBus</code></a> implementation for the modular-monolith /
@@ -1395,7 +1323,7 @@
           integration-test <code>WebApplicationFactory</code> configs. Swapped for <a href="#brokermessagebus"><code>BrokerMessageBus</code></a>
           in deployed service hosts.</li>
           </ul>
-          <h3 id="integrationeventconsumertevent-1">IntegrationEventConsumer&lt;TEvent&gt;</h3>
+          <h3 id="integrationeventconsumertevent">IntegrationEventConsumer&lt;TEvent&gt;</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventConsumer.cs:26</code> · Level 3 · class (sealed, partial)</p>
           </blockquote>
@@ -1445,7 +1373,7 @@
           every integration event the service consumes (e.g. Conference consuming <code>UserRegistered</code>; Identity
           consuming <code>SpeakerLinkedToUser</code> / <code>SpeakerUnlinkedFromUser</code>).</li>
           </ul>
-          <h3 id="integrationeventconsumerextensions-1">IntegrationEventConsumerExtensions</h3>
+          <h3 id="integrationeventconsumerextensions">IntegrationEventConsumerExtensions</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Services</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventConsumerExtensions.cs:11</code> · Level 4 · class (static)</p>
           </blockquote>

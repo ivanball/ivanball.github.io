@@ -551,7 +551,7 @@
           <hr>
           <h3 id="getmynotificationshandler">GetMyNotificationsHandler</h3>
           <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Notifications.UserNotifications.UseCases.GetInbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/UserNotifications/UseCases/GetInbox/GetMyNotificationsHandler.cs:15</code> · Level 8 · class</p>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Notifications.UserNotifications.UseCases.GetInbox</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/UserNotifications/UseCases/GetInbox/GetMyNotificationsHandler.cs:16</code> · Level 8 · class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the query handler that materializes a user&#39;s inbox page. It joins the per-user <a href="#usernotification"><code>UserNotification</code></a> rows with their shared <a href="#pushnotification"><code>PushNotification</code></a> content and projects the pair into a single flat <a href="#usernotificationdto"><code>UserNotificationDTO</code></a>.</li>
@@ -564,7 +564,7 @@
           <hr>
           <h3 id="getnotificationhistoryhandler">GetNotificationHistoryHandler</h3>
           <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Notifications.PushNotifications.UseCases.GetHistory</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/GetHistory/GetNotificationHistoryHandler.cs:14</code> · Level 8 · class</p>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Notifications.PushNotifications.UseCases.GetHistory</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/GetHistory/GetNotificationHistoryHandler.cs:15</code> · Level 8 · class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the query handler for the push <em>sent history</em>: a reverse-chronological page of <a href="#pushnotification"><code>PushNotification</code></a> rows (no per-user join), mapped to <a href="#pushnotificationdto"><code>PushNotificationDTO</code></a>.</li>
@@ -954,7 +954,7 @@
           </ul>
           <h3 id="livechannelgrpcservice">LiveChannelGrpcService</h3>
           <blockquote>
-          <p>MMCA.ADC.Notification.Service · <code>MMCA.ADC.Notification.Service.Grpc</code> · <code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Grpc/LiveChannelGrpcService.cs:19</code> · Level 1 · class (sealed)</p>
+          <p>MMCA.ADC.Notification.Service · <code>MMCA.ADC.Notification.Service.Grpc</code> · <code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Grpc/LiveChannelGrpcService.cs:22</code> · Level 1 · class (sealed)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the gRPC <strong>server</strong> endpoint that other services call to fan an ephemeral &quot;live&quot;
@@ -1336,7 +1336,7 @@
           <hr>
           <h3 id="sendpushnotificationrequestvalidator">SendPushNotificationRequestValidator</h3>
           <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Notifications.PushNotifications.UseCases.Send</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationRequestValidator.cs:10</code> · Level 5 · class (sealed)</p>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Notifications.PushNotifications.UseCases.Send</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationRequestValidator.cs:11</code> · Level 5 · class (sealed)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the FluentValidation validator for <a href="#sendpushnotificationrequest">SendPushNotificationRequest</a>:
@@ -1428,7 +1428,7 @@
           <hr>
           <h3 id="usernotificationexportgrpcservice">UserNotificationExportGrpcService</h3>
           <blockquote>
-          <p>MMCA.ADC.Notification.Service · <code>MMCA.ADC.Notification.Service.Grpc</code> · <code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Grpc/UserNotificationExportGrpcService.cs:20</code> · Level 9 · class (sealed)</p>
+          <p>MMCA.ADC.Notification.Service · <code>MMCA.ADC.Notification.Service.Grpc</code> · <code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Grpc/UserNotificationExportGrpcService.cs:27</code> · Level 9 · class (sealed)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the gRPC <strong>server</strong> endpoint that exposes the in-process
@@ -1651,7 +1651,7 @@
           <hr>
           <h3 id="pushnotificationinvariants">PushNotificationInvariants</h3>
           <blockquote>
-          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Notifications.PushNotifications.Invariants</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Notifications/PushNotifications/Invariants/PushNotificationInvariants.cs:9</code> · Level 4 · class (static)</p>
+          <p>MMCA.Common.Domain · <code>MMCA.Common.Domain.Notifications.PushNotifications.Invariants</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Domain/Notifications/PushNotifications/Invariants/PushNotificationInvariants.cs:10</code> · Level 4 · class (static)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the static invariants helper that validates a push notification&#39;s title and body: non-empty plus a maximum length, delegating the actual checks to <a href="group-02-domain-building-blocks.html#commoninvariants"><code>CommonInvariants</code></a>.</li>

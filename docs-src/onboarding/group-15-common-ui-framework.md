@@ -146,8 +146,14 @@ type whose `IStringLocalizer<SharedResource>` anchors the cross-cutting chrome s
 renders (`MainLayout.razor:12`).
 [`SupportedCultures`](group-12-api-hosting-mapping.md#supportedcultures) (group 12) is the canonical
 allowlist; adding a locale is adding a `.es.resx` sibling and one allowlist entry, not new
-infrastructure. `[Rubric §27, Internationalization]` (assesses externalized strings, a culture flow that
-survives the render-mode boundary, and server-side localized errors) is the home category here.
+infrastructure. Applying a switch is itself host-specific and sits behind
+[`ICultureApplier`](#icultureapplier): `AddUIShared` `TryAdd`s the web default
+[`EndpointCultureApplier`](#endpointcultureapplier) (`DependencyInjection.cs:89`), which force-loads the
+server `/culture/set` endpoint, while a MAUI Blazor Hybrid head, having no ASP.NET pipeline to round-trip,
+replaces it after `AddUIShared` with an in-process applier
+([group 26](group-26-device-capability-layer.md#mauicultureapplier)). `[Rubric §27, Internationalization]`
+(assesses externalized strings, a culture flow that survives the render-mode boundary, and server-side
+localized errors) is the home category here.
 
 **Per-user preference persistence.** A signed-in user's culture choice follows them across devices: it
 is persisted to the Identity profile (`User.PreferredCulture`) through
@@ -362,7 +368,7 @@ covered in the testing chapter (group 25).
 
 ### UISharedAssemblyReference
 
-> MMCA.Common.UI · `MMCA.Common.UI` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:123` · Level 0 · class
+> MMCA.Common.UI · `MMCA.Common.UI` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:129` · Level 0 · class
 
 - **What it is**: An empty marker class whose only purpose is to give code a stable `typeof(...).Assembly` handle on the UI assembly for reflection-based scanning (for example Scrutor component discovery).
 - **Depends on**: Nothing.
@@ -375,7 +381,7 @@ covered in the testing chapter (group 25).
 
 ### WebApplicationExtensions
 
-> MMCA.Common.UI · `MMCA.Common.UI.Extensions` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Extensions/WebApplicationExtensions.cs:9` · Level 0 · class (static)
+> MMCA.Common.UI · `MMCA.Common.UI.Extensions` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Extensions/WebApplicationExtensions.cs:8` · Level 0 · class (static)
 
 - **What it is**: Provides `UseAuthenticatedNoStore()`, middleware that stamps `Cache-Control: no-store` on HTML responses to authenticated users so the browser back-forward cache cannot restore a logged-in page after logout.
 - **Depends on**: `Microsoft.AspNetCore.Builder.IApplicationBuilder` and `Microsoft.AspNetCore.Http`; it reads `HttpContext.User.Identity.IsAuthenticated`.
@@ -440,7 +446,7 @@ covered in the testing chapter (group 25).
 
 ### MoneyExtensions
 
-> MMCA.Common.UI · `MMCA.Common.UI.Extensions` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Extensions/MoneyExtensions.cs:9` · Level 5 · class (static)
+> MMCA.Common.UI · `MMCA.Common.UI.Extensions` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Extensions/MoneyExtensions.cs:14` · Level 5 · class (static)
 
 - **What it is**: Two formatting helpers that turn [Money](group-02-domain-building-blocks.md#money) value objects into user-facing price strings: a single price and a price range.
 - **Depends on**: [Money](group-02-domain-building-blocks.md#money) and its [Currency](group-02-domain-building-blocks.md#currency) (via `MMCA.Common.Shared.ValueObjects`); `System.Globalization.CultureInfo`.
@@ -508,7 +514,7 @@ covered in the testing chapter (group 25).
 
 ### PersistedGridState
 
-> MMCA.Common.UI · `MMCA.Common.UI.Pages.Common` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DataGridListPageBase.cs:778` · Level 0 · record (sealed, private)
+> MMCA.Common.UI · `MMCA.Common.UI.Pages.Common` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Common/DataGridListPageBase.cs:791` · Level 0 · record (sealed, private)
 
 - **What it is**: a tiny serializable record `(List<TDto> Items, int TotalItems)` that carries the *grid's already-fetched data* from the SSR pre-render pass into the interactive circuit, so the first interactive `ServerData` call can return instantly instead of re-hitting the API.
 - **Depends on**: `Microsoft.AspNetCore.Components.PersistentComponentState` (the Blazor mechanism that serializes it). Nested privately inside [`DataGridListPageBase<TDto>`](#datagridlistpagebasetdto).
@@ -670,6 +676,43 @@ covered in the testing chapter (group 25).
   [`EntityServiceBase<TEntityDTO, TIdentifierType>`](#entityservicebasetentitydto-tidentifiertype),
   and the preference readers/writers).
 
+### ICultureApplier
+> MMCA.Common.UI · `MMCA.Common.UI.Services` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/ICultureApplier.cs:14` · Level 0 · interface
+
+- **What it is**: the one-method contract for "switch the active culture and put the user back where
+  they were", so the shared culture switcher never has to know which head it is rendering on
+  ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
+- **Depends on**: nothing first-party; BCL only (`Task`, `CancellationToken`).
+- **Concept introduced, the host-specific culture applier boundary.**
+  `[Rubric §27, Internationalization & Localization]` assesses whether one culture decision flows
+  consistently through every render mode and host rather than being re-derived per screen. The doc
+  comment (`ICultureApplier.cs:3-13`) is explicit that the *mechanism* differs per head and must not be
+  hard-coded by shared UI: a Blazor Web head round-trips the server `/culture/set` endpoint so the
+  cookie, the SSR prerender, and the WASM runtime all agree, while a MAUI Blazor Hybrid head has no
+  ASP.NET pipeline at all and switches the process culture in place. `[Rubric §18, UI Architecture]`
+  also applies: a component depends on this interface, and DI, not a URL literal, decides what happens.
+  `[Rubric §1, SOLID]` is the Dependency-Inversion move that made the hybrid gap fixable at the
+  composition root instead of inside a `.razor` file.
+- **Walkthrough**: a single member,
+  `ApplyAsync(string culture, string returnPath, CancellationToken cancellationToken = default)`
+  (`ICultureApplier.cs:27`). Three contract clauses live in the XML doc rather than in code, because
+  only implementations can honor them: a `culture` outside `SupportedCultures.All` is **ignored by the
+  underlying mechanism rather than throwing** (lines 19-22); an empty `returnPath` falls back to `"/"`
+  (lines 23-25); and implementations own landing the user back on the return path, so a caller must
+  treat `ApplyAsync` as **terminal** and do no navigation of its own (lines 8-12).
+- **Why it's built this way**: before this abstraction the switch was a `/culture/set` URL literal
+  inside the shared switcher, which is exactly why a hybrid head silently rendered its not-found page
+  instead of changing language; moving the mechanism behind an interface lets `AddUIShared` keep the web
+  default while a MAUI head replaces it after the fact ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html) decision 10).
+- **Where it's used**: injected by the shared `CultureSwitcher` component (`CultureSwitcher.razor:6`,
+  applied at `:48` after the best-effort profile write) and by the login preference reconciliation
+  (`Login.razor:14`, applied at `:211` when the stored culture differs from
+  `CultureInfo.CurrentUICulture.Name`). The default binding is
+  `services.TryAddScoped<ICultureApplier, EndpointCultureApplier>()` in `AddUIShared`
+  (`DependencyInjection.cs:89`); implementations are [`EndpointCultureApplier`](#endpointcultureapplier)
+  (web) and `MauiCultureApplier` in the MAUI package
+  ([group 26](group-26-device-capability-layer.md#mauicultureapplier)).
+
 ### IUserPreferenceWriter
 > MMCA.Common.UI · `MMCA.Common.UI.Services` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/IUserPreferenceWriter.cs:9` · Level 0 · interface
 
@@ -769,7 +812,7 @@ covered in the testing chapter (group 25).
   keeps a shared `Empty = new(null, null)` instance).
 
 ### UserPreferencesRequest
-> MMCA.Common.UI · `MMCA.Common.UI.Services` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/ApiUserPreferenceWriter.cs:19` · Level 0 · record (private sealed, nested)
+> MMCA.Common.UI · `MMCA.Common.UI.Services` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/ApiUserPreferenceWriter.cs:29` · Level 0 · record (private sealed, nested)
 
 - **What it is**: the write-side payload PUT to `auth/preferences`, a private nested record inside
   [`ApiUserPreferenceWriter`](#apiuserpreferencewriter) with the same two nullable fields as
@@ -784,7 +827,7 @@ covered in the testing chapter (group 25).
   [`ApiUserPreferenceWriter.SaveAsync`](#apiuserpreferencewriter) (`ApiUserPreferenceWriter.cs:36`).
 
 ### ApiUserPreferenceWriter
-> MMCA.Common.UI · `MMCA.Common.UI.Services` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/ApiUserPreferenceWriter.cs:15` · Level 1 · class (sealed)
+> MMCA.Common.UI · `MMCA.Common.UI.Services` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/ApiUserPreferenceWriter.cs:22` · Level 1 · class (sealed)
 
 - **What it is**: the default [`IUserPreferenceWriter`](#iuserpreferencewriter): it PUTs a
   [`UserPreferencesRequest`](#userpreferencesrequest) to `auth/preferences` over the shared `"APIClient"`,
@@ -840,6 +883,47 @@ covered in the testing chapter (group 25).
 - **Where it's used**: base of [`EntityServiceBase<TEntityDTO, TIdentifierType>`](#entityservicebasetentitydto-tidentifiertype)
   and [`ChildEntityServiceBase`](#childentityservicebase), and thus of every module UI service in the
   downstream apps.
+
+### EndpointCultureApplier
+> MMCA.Common.UI · `MMCA.Common.UI.Services` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/EndpointCultureApplier.cs:18` · Level 1 · class (sealed)
+
+- **What it is**: the default [`ICultureApplier`](#icultureapplier) for Blazor Web heads. It force-loads
+  the server `GET /culture/set` endpoint, which writes the ASP.NET culture cookie and local-redirects
+  back to the page the user was on ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
+- **Depends on**: [`ICultureApplier`](#icultureapplier); ASP.NET Core `NavigationManager` (primary
+  constructor parameter, `EndpointCultureApplier.cs:18`). It also depends on a *runtime* contract rather
+  than a compile-time one: the head must have mapped `MapCultureEndpoint()`
+  (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationExtensions.cs:155`).
+- **Concept introduced, the deliberate full page reload as a culture mechanism.**
+  `[Rubric §27, Internationalization & Localization]` assesses whether prerender and hydration can
+  disagree about locale; this implementation removes that possibility by making the *server* the thing
+  that changes, then re-entering the app from scratch. `[Rubric §23, Front-End Performance]` is the
+  trade-off side of the same decision: a `forceLoad` costs a full round trip and a fresh Blazor boot,
+  accepted because a language switch is rare and correctness beats a saved reload.
+- **Walkthrough**: `ApplyAsync` (`EndpointCultureApplier.cs:21`) guards the culture with
+  `ArgumentException.ThrowIfNullOrWhiteSpace` (line 23), defaults a blank `returnPath` to `"/"` (line 25),
+  and builds `/culture/set?culture=...&redirectUri=...` with `Uri.EscapeDataString` applied to **both**
+  values (line 26) so a return path carrying its own query string survives intact. It then calls
+  `navigation.NavigateTo(url, forceLoad: true)` (line 30) and returns `Task.CompletedTask` (line 31):
+  the method is synchronous despite the async-shaped contract, because the browser navigation is what
+  ends the call. Validation is deliberately *not* done here (comment, lines 28-29): the server endpoint
+  checks the value against the allowlist (`WebApplicationExtensions.cs:162`, plus the pseudo locale in
+  Development only) and simply redirects without writing a cookie when it does not match, so an
+  unsupported culture lands the user back on the same page unchanged instead of failing.
+- **Why it's built this way**: the force load is load-bearing, not incidental (doc comment,
+  `EndpointCultureApplier.cs:8-10`). The server re-renders SSR under the newly written cookie, and the
+  WASM runtime re-reads that same cookie on startup through
+  [`MmcaCultureBootstrap`](#mmcaculturebootstrap), so prerender and hydration stay on one culture. A
+  soft navigation would leave the already-booted runtime on the old culture.
+- **Where it's used**: registered as the `TryAdd` default in `AddUIShared`
+  (`DependencyInjection.cs:89`), which `EndpointCultureApplierTests.cs:62-76` pins as a scoped
+  registration precisely so a MAUI head's later plain `Add` can win. The Helpdesk seed registers it by
+  hand (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:28`) because it never calls
+  `AddUIShared`.
+- **Caveats / not-in-source**: valid only where the endpoint exists. The doc comment
+  (`EndpointCultureApplier.cs:11-15`) records the failure mode on a head without an ASP.NET pipeline:
+  the URL is resolved by the Blazor `Router`, matches no page, and renders the not-found page, which is
+  why MAUI Blazor Hybrid heads register their own applier after `AddUIShared`.
 
 ### IUserPreferenceReader
 > MMCA.Common.UI · `MMCA.Common.UI.Services` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/IUserPreferenceReader.cs:9` · Level 1 · interface
@@ -1576,6 +1660,20 @@ covered in the testing chapter (group 25).
 
 ---
 
+### ChannelReferenceCounter
+
+> MMCA.Common.UI · `MMCA.Common.UI.Services.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/ChannelReferenceCounter.cs:16` · Level 0 · class (internal, sealed)
+
+- **What it is**: A small self-synchronized counter that tracks how many outstanding joins the circuit is holding for each live-channel key, so [`NotificationHubService`](#notificationhubservice) tells the SignalR server to join a group on the first join and to leave it only on the last matching leave.
+- **Depends on**: Nothing first-party. It is a `System.Threading.Lock` plus a `Dictionary<string, int>` (BCL). It is owned as a private field by [`NotificationHubService`](#notificationhubservice) (`NotificationHubService.cs:39`), and sits beside (not inside) the separate handler bookkeeping that [`ChannelSubscription`](#channelsubscription) unwinds.
+- **Concept introduced: reference-counted group membership.** [Rubric §19, State Management] assesses how a shared per-circuit resource is owned when more than one component holds it at once. A live channel is exactly that resource: an invisible layout listener and a page can both be watching `event:1`. The class remarks state why a set is the wrong structure (`ChannelReferenceCounter.cs:5-9`): with set semantics the first leaver removes the only entry and cuts the channel off for every other subscriber still holding it. Counting joins per key turns membership into two edges, 0 to 1 and 1 to 0, and only those two moments need to reach the server. [Rubric §29, Resilience & Business Continuity] applies as well, because `Snapshot()` is the replay list the hub service re-joins after an automatic reconnect. The unit tier names the regression this closed, H13 (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Tests/Services/Notifications/NotificationHubServiceTests.cs:178-181`).
+- **Walkthrough**: Two fields: the `Lock` (`ChannelReferenceCounter.cs:18`) and the outstanding-join `Dictionary<string, int>` (line 22), whose default string comparer is ordinal, matching the hub's group-name semantics (lines 20-21). `AddRef(channelKey)` (line 30) reads the current count, writes `current + 1`, and returns `current == 0`, so only the 0-to-1 transition reports "the server must be told to join" (lines 34-36). `Release(channelKey)` (line 49) returns `false` for a key that was never joined (lines 53-56), removes the entry and returns `true` when the decrement reaches zero (lines 58-63), and otherwise stores the decremented value and returns `false` (lines 65-66); the count therefore never goes negative and an unpaired leave is a no-op. `Snapshot()` (line 74) returns `[.. _counts.Keys]` under the lock: the distinct keys with at least one outstanding join, so a channel held twice is re-joined once. `RefCountFor(channelKey)` (line 85) returns the outstanding count, or zero when the channel is not held. Every method takes the lock, because joins and leaves arrive from component lifecycle callbacks on different render batches (lines 11-14).
+- **Why it's built this way**: The counter is a separate type rather than inline state, and it is `internal` with an `InternalsVisibleTo` for the test project; the project file records exactly why (`MMCA.Common/Source/Presentation/MMCA.Common.UI/MMCA.Common.UI.csproj:12-15`): the ref-count semantics cannot be reached through the public API, since `JoinChannelAsync` starts a real `HubConnection`, so a join-based test would need a live server and a multi-second backoff. [ADR-039](https://ivanball.github.io/docs/adr/039-live-channel-push.html) decided the shape this implements: one hub, `JoinChannel`/`LeaveChannel` mapping a connection into a SignalR group, multicast subscriptions so an invisible listener and a page can observe the same channel concurrently, and a re-join on `Reconnected` because group membership does not survive a new connection. The ADR says the hub service tracks membership; this class is how that tracking is done so two concurrent holders cannot evict each other.
+- **Where it's used**: Three call sites, all inside [`NotificationHubService`](#notificationhubservice): `AddRef` in `JoinChannelAsync` (`NotificationHubService.cs:140`, deliberately counted before the connection is started so the replay inside `StartAsync` sees it, line 139), `Release` in `LeaveChannelAsync` (line 172), and `Snapshot` in `RejoinChannelsAsync` (line 267). Covered directly by `ChannelReferenceCounterTests` (`NotificationHubServiceTests.cs:182`). The two concurrent holders it exists for are real: [`LiveEventListener`](group-22-engagement-module.md#liveeventlistener) and the [`HappeningNow`](group-23-engagement-live-layer.md#happeningnow) page both join `LivePollChannel.ForEvent(eventId)`, the same key.
+- **Caveats / not-in-source**: It counts joins only; it knows nothing about handlers. Subscriptions live in a separate `_channelSubscriptions` dictionary under a different lock (`NotificationHubService.cs:38,40`), so disposing a [`ChannelSubscription`](#channelsubscription) does not decrement the count, and leaving a channel does not remove handlers (`NotificationHubService.cs:159-166` states that pairing requirement).
+
+---
+
 ### NotificationState
 
 > MMCA.Common.UI · `MMCA.Common.UI.Services.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationState.cs:8` · Level 0 · class (sealed)
@@ -1618,7 +1716,7 @@ covered in the testing chapter (group 25).
 
 ### MobileInfiniteScrollList<TItem>
 
-> MMCA.Common.UI · `MMCA.Common.UI.Components` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/MobileInfiniteScrollList.razor.cs:15` · Level 1 · class (generic component)
+> MMCA.Common.UI · `MMCA.Common.UI.Components` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Components/MobileInfiniteScrollList.razor.cs:17` · Level 1 · class (generic component)
 
 - **What it is**: The code-behind for the mobile card list that fetches pages on demand as the user scrolls, using an IntersectionObserver sentinel, and caps how many items ever reach the DOM.
 - **Depends on**: `IJSRuntime`, MudBlazor's `ISnackbar`, and `IStringLocalizer<SharedResource>` (all `[Inject]`ed, lines 17-19); the `infinite-scroll.js` interop module; `IAsyncDisposable` (BCL). The `FetchPage` delegate typically wraps a first-party UI service such as [`EntityServiceBase<TEntityDTO, TIdentifierType>`](#entityservicebasetentitydto-tidentifiertype).
@@ -1658,7 +1756,7 @@ covered in the testing chapter (group 25).
 
 ### ChannelSubscription
 
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:329` · Level 2 · class (private, sealed, nested)
+> MMCA.Common.UI · `MMCA.Common.UI.Services.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:328` · Level 2 · class (private, sealed, nested)
 
 - **What it is**: The disposable handle returned when a caller subscribes to a live channel on [`NotificationHubService`](#notificationhubservice); disposing it removes the handler from the channel's subscriber list.
 - **Depends on**: Its owning [`NotificationHubService`](#notificationhubservice) (back-reference), a channel key string, and a `Func<string, string, Task>` handler; implements `IDisposable`.
@@ -1710,7 +1808,7 @@ covered in the testing chapter (group 25).
 
 ### NotificationHubService
 
-> MMCA.Common.UI · `MMCA.Common.UI.Services.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:24` · Level 2 · class (sealed, partial)
+> MMCA.Common.UI · `MMCA.Common.UI.Services.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Services/Notifications/NotificationHubService.cs:26` · Level 2 · class (sealed, partial)
 
 - **What it is**: The client-side SignalR connection manager: it opens a connection to `/hubs/notifications` after login, invokes a callback for received notifications, and also carries ephemeral live-channel events that components join and subscribe to.
 - **Depends on**: [`ApiSettings`](#apisettings) (for the hub URL) and [`ITokenStorageService`](#itokenstorageservice) (for the bearer token); [`ChannelSubscription`](#channelsubscription) (its subscription handle); `Microsoft.AspNetCore.SignalR.Client` (NuGet); `IAsyncDisposable`.
@@ -1883,105 +1981,6 @@ covered in the testing chapter (group 25).
   - `AddCommonWebFormFactor()` (lines 47-48): registers [WebFormFactor](group-26-device-capability-layer.md#webformfactor) as a **singleton** [IFormFactor](group-26-device-capability-layer.md#iformfactor); it reports "Web" plus the server OS description. The XML doc notes the WASM client registers `AddWasmFormFactor()` from `MMCA.Common.UI` instead, so the same `IFormFactor` abstraction resolves differently per host kind.
 - **Why it's built this way**: all three pieces are host-level infrastructure that carried no app-specific state, so they were hoisted into `MMCA.Common.UI.Web` and exposed as one-line registrations, keeping every consumer's `Program.cs` free of duplicated token-store, CSP, and form-factor wiring (the reusable-building-blocks charter of this group). The comment on `AddCommonServerTokenStorage` also names its companions in `MMCA.Common.API` (`AddServerAuthSessionCookie` / `UseCookieSessionRefresh`) and the required `ITokenRefresher` registration, so the full session-cookie plumbing is discoverable from one place ([ADR-022](https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html)).
 - **Where it's used**: called from the `Program.cs` of the server-interactive Blazor Web hosts in the consumer apps (MMCA.ADC, MMCA.Store) to register the shared token store, CSP provider, and form factor.
-
-### NotificationInbox
-
-> MMCA.Common.UI · `MMCA.Common.UI.Pages.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Notifications/NotificationInbox.razor.cs:15` · Level 3 · class
-
-- **What it is**: the code-behind for the per-user notification inbox, routed at `@page "/notifications/inbox"` (`NotificationInbox.razor:1`). It fetches the signed-in user's notifications a page at a time, renders each as a read/unread card, and lets the user mark items read individually or all at once.
-- **Depends on**: first-party: [INotificationInboxUIService](#inotificationinboxuiservice) (the typed read-side HTTP service), [NotificationState](#notificationstate) (the per-circuit unread-count store), [UserNotificationDTO](group-10-notifications.md#usernotificationdto) (the row shape), [PagedCollectionResult<T>](group-01-result-error-handling.md#pagedcollectionresultt) (the paged envelope the inbox service returns), [ErrorMessages](#errormessages) (centralized snackbar copy), and [SharedResource](#sharedresource) (the resx anchor type for the injected localizer). Externals: `MudBlazor` (`ISnackbar`, `BreadcrumbItem`, `MudPagination`, `MudCard`, `MudProgressLinear`, `MudIconButton`), `Microsoft.AspNetCore.Components` (`[Inject]`, `OnInitializedAsync`), `Microsoft.Extensions.Localization` (`IStringLocalizer<T>`), BCL `CancellationTokenSource` / `IDisposable` / `Math.Ceiling`.
-- **Concept introduced, the Blazor code-behind page pattern (`.razor` + `.razor.cs` partial class).** The three notification pages in this file family are authored as *partial classes* split across two files: the `.razor` holds declarative MudBlazor markup, the `.razor.cs` holds the C# (`public partial class NotificationInbox`, line 15), injected services, state fields, and event handlers. The framework instantiates the component, calls `OnInitializedAsync` (line 37) once, and re-renders when handlers mutate fields. Three patterns recur across all three pages and are worth learning here once:
-  - **Disposal-safe async with a per-component `CancellationTokenSource`.** A `readonly CancellationTokenSource _cts` (line 24) is created with the component and passed to every service call (`_cts.Token`). `Dispose(bool)` (lines 153-164) cancels and disposes it via the classic dispose-pattern guard (`_disposed` flag, line 151). Every async handler swallows `OperationCanceledException` silently (e.g. lines 66-69) because that is the *expected* outcome when the user navigates away mid-fetch, only genuine exceptions reach the snackbar.
-  - **`IsLoading` / `IsSaving` busy flags** (lines 30-31) gate the UI: the markup shows a `MudProgressLinear` while loading (`NotificationInbox.razor:21-24`) and disables the action buttons while saving, preventing double-submits.
-  - **Centralized, localized error copy** via [ErrorMessages](#errormessages), e.g. `ErrorMessages.LoadError(L["Entity.Notifications"], ex)` (line 72), instead of inline strings.
-  - `[Rubric §18, UI Architecture & Component Design]` assesses component cohesion and separation of concerns; this page keeps presentation in `.razor` and behavior in `.razor.cs`, talks only to an injected abstraction ([INotificationInboxUIService](#inotificationinboxuiservice)) rather than `HttpClient` directly, and is single-responsibility (inbox only).
-  - `[Rubric §19, State Management & Data Flow]` assesses how UI state is held and shared; the page owns transient view state in private fields (`_notifications`, `_currentPage`, `_totalPages`, lines 33-35) but writes the *shared* unread count back into the scoped [NotificationState](#notificationstate) so the nav-bar bell stays in sync, local state local, shared state shared.
-  - `[Rubric §21, Accessibility (a11y)]` assesses keyboard/screen-reader support; the mark-read control is a `MudIconButton` carrying an explicit localized `aria-label="@L["Notif.MarkRead.Aria"]"` (`NotificationInbox.razor:55`) so the icon-only action is announced.
-  - `[Rubric §27, Internationalization & Localization]` assesses whether user-facing text resolves per-culture from a single catalog. This page holds no literal English: an injected `IStringLocalizer<SharedResource> L` (line 22) resolves the title, empty-state and mark-all labels, and every snackbar (`L["Notif.AllMarkedRead"]`, line 135). The breadcrumb trail is deliberately built inside `OnInitializedAsync` (lines 41-45), not in a field initializer, so the injected localizer is available and the labels re-resolve per circuit under the active culture (the comment on line 39-40 cites [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
-- **Walkthrough**,
-  - `PageSize` (line 17) is a `const int 20`; the page is fixed-size server-paginated, not infinite-scroll.
-  - Injected members: `InboxService`, `NotificationState`, `Snackbar`, `L` (lines 19-22) via `[Inject]` auto-properties (the `= default!;` silences nullability, DI guarantees non-null).
-  - `Title` (line 26) is a computed property reading `L["Notif.Inbox.Title"].Value`; `_breadcrumbs` (line 28) starts empty and is populated in `OnInitializedAsync`, the leaf crumb `disabled: true` marks the current page.
-  - `OnInitializedAsync` (line 37) builds the localized Home to Inbox trail (lines 41-45), then calls `LoadNotificationsAsync` (line 47).
-  - `LoadNotificationsAsync` (lines 50-78): sets `IsLoading`, calls `GetInboxAsync(_currentPage, PageSize, token)` (line 55), materializes `result.Items` into `_notifications` (line 58), and computes `_totalPages` from `result.PaginationMetadata.TotalItemCount` with `Math.Ceiling` (line 59), clamped to a floor of 1 (lines 60-63) so the pager never shows zero pages.
-  - `OnPageChangedAsync` (lines 80-84): bound to `MudPagination.SelectedChanged` (`NotificationInbox.razor:75`); records the page and reloads.
-  - `MarkReadAsync(notification)` (lines 86-116): calls `InboxService.MarkReadAsync` (line 91), then **optimistically patches local state**, finds the row (`FindIndex`, line 94) and replaces it with `notification with { IsRead = true, ReadOn = DateTime.UtcNow }` (line 97, a `record with`-expression), then refetches the authoritative unread count via `GetUnreadCountAsync` and pushes it into `NotificationState.SetUnreadCount` (lines 101-102) so the bell badge updates without a full reload.
-  - `MarkAllReadAsync` (lines 118-149): one service call (line 123), loops the local list flipping unread rows to read (lines 126-132), then `SetUnreadCount(0)` (line 134) and a localized success snackbar (line 135).
-- **Why it's built this way**: the page is a *thin* view over [INotificationInboxUIService](#inotificationinboxuiservice); all HTTP/JSON lives in the service so the component stays testable with a stub. The optimistic local-state patch (rather than re-fetching the whole page on every mark-read) keeps the UI responsive while still reconciling the shared badge count from the server. This whole notification UI ships from `MMCA.Common.UI` precisely so every consumer app gets the inbox for free, a reusable building block, the charter of this group.
-- **Where it's used**: rendered at `/notifications/inbox` for authenticated users; the route and nav entry are contributed by the notification UI module. The companion notification-bell component reads the same [NotificationState](#notificationstate) this page writes. Its siblings are the admin pages [NotificationList](#notificationlist) and [NotificationSend](#notificationsend).
-
-### NotificationList
-
-> MMCA.Common.UI · `MMCA.Common.UI.Pages.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Notifications/NotificationList.razor.cs:16` · Level 3 · class
-
-- **What it is**: the code-behind for the **admin/organizer** push-notification history page, routed at `@page "/notifications"` (`NotificationList.razor:1`). It loads previously sent broadcast notifications and renders them in a status table; a button routes onward to the compose page.
-- **Depends on**: first-party: [IPushNotificationUIService](#ipushnotificationuiservice) (the send/history HTTP service), [PushNotificationDTO](group-10-notifications.md#pushnotificationdto) (the table row shape, carrying `RecipientCount` / `Status` / `CreatedOn`), [NotificationRoutePaths](#notificationroutepaths) (route constants), [ErrorMessages](#errormessages), and [SharedResource](#sharedresource) (localizer anchor). Externals: `MudBlazor` (`MudTable`, `MudTablePager`, `MudChip`, `ISnackbar`, `BreadcrumbItem`), `Microsoft.AspNetCore.Components` (`NavigationManager`, `[Inject]`), `Microsoft.Extensions.Localization`.
-- **Concept reinforced, the same code-behind page shape as [NotificationInbox](#notificationinbox).** Same `[Inject]` services (lines 18-21), same `readonly CancellationTokenSource _cts` + dispose-pattern (lines 23, 78-95), same `IsLoading` gate (line 29), same `OperationCanceledException`-swallowing load (lines 60-63), same localized `ErrorMessages.LoadError` snackbar (line 66). It differs only in *what* it loads and *how* it renders.
-  - `[Rubric §25, Navigation, Routing & Information Architecture]` assesses route structure and inter-page flow; navigation here is centralized through [NotificationRoutePaths](#notificationroutepaths) constants (`NavigateToSend` sends to `NotificationRoutePaths.NotificationSend`, line 74) rather than hard-coded URL strings, so route changes happen in one place.
-  - `[Rubric §27, Internationalization & Localization]`, beyond the localized title and breadcrumbs (lines 25, 43-47), this page adds a small **status-localization** helper: `DisplayStatus(string status)` (lines 34-38) looks up `L[$"Notif.Status.{status}"]` and, when the key is missing (`localized.ResourceNotFound`), falls back to the raw wire value. The status *comparison* stays on the untranslated wire string (`context.Status == "Sent"` in the markup) while only the displayed chip text localizes, a clean separation of transport value from presentation ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)).
-- **Walkthrough**,
-  - Injected `NotificationService`, `NavigationManager`, `Snackbar`, `L` (lines 18-21); `Title` reads `L["Notif.List.Title"].Value` (line 25); `_breadcrumbs` built Home to Push-Notifications in `OnInitializedAsync` (lines 43-47).
-  - `_notifications` is an `IReadOnlyCollection<PushNotificationDTO>` initialized empty (line 31).
-  - `OnInitializedAsync` (line 40) sends to `LoadNotificationsAsync`.
-  - `LoadNotificationsAsync` (lines 52-72): calls `GetHistoryAsync(pageNumber: 1, pageSize: 50, token)` (line 57) and copies `result.Items` into `_notifications`, defaulting to `[]` when the result or its items are null (line 58). This page requests a **single fixed 50-row page** and lets MudBlazor's client-side `MudTablePager` (`NotificationList.razor:61`) paginate that buffer locally, unlike the inbox, there is no server round-trip per page.
-  - `NavigateToSend` (line 74): `NavigationManager.NavigateTo(NotificationRoutePaths.NotificationSend)`, bound to the "Send New Notification" button.
-  - The markup colors the `Status` cell with a `MudChip`, green `Sent`, red `Failed`, amber otherwise (`NotificationList.razor:45-56`), each rendering `DisplayStatus(context.Status)` as its label.
-- **Why it's built this way**: broadcast history is low-volume admin data, so a single 50-row fetch with client-side paging is simpler and adequate (no server-side paging plumbing). Keeping HTTP behind [IPushNotificationUIService](#ipushnotificationuiservice) mirrors the inbox page and keeps the component a thin view. See [NotificationInbox](#notificationinbox) for the shared `[Rubric §18, UI Architecture & Component Design]` story.
-- **Where it's used**: rendered at `/notifications` for organizer/admin roles; entry and route contributed by the notification UI module. Sibling of the compose page [NotificationSend](#notificationsend), to which it links.
-
-### NotificationSend
-
-> MMCA.Common.UI · `MMCA.Common.UI.Pages.Notifications` · `MMCA.Common/Source/Presentation/MMCA.Common.UI/Pages/Notifications/NotificationSend.razor.cs:16` · Level 3 · class
-
-- **What it is**: the code-behind for the compose-and-broadcast form, routed at `@page "/notifications/send"` (`NotificationSend.razor:1`). It collects a title and body, validates them via a `MudForm`, sends a single broadcast to all recipients through the Notification API, then reports the recipient count and returns to the list.
-- **Depends on**: first-party: [IPushNotificationUIService](#ipushnotificationuiservice) (the `SendAsync` HTTP call), [SendPushNotificationRequest](group-10-notifications.md#sendpushnotificationrequest) (the request record built from the form fields), [PushNotificationDTO](group-10-notifications.md#pushnotificationdto) (the send result carrying `RecipientCount`), [NotificationRoutePaths](#notificationroutepaths), [ErrorMessages](#errormessages), and [SharedResource](#sharedresource). Externals: `MudBlazor` (`MudForm`, `MudTextField`, `ISnackbar`, `BreadcrumbItem`), `Microsoft.AspNetCore.Components` (`NavigationManager`), `Microsoft.Extensions.Localization`.
-- **Concept introduced, `MudForm`-driven validation with a `@ref` handle.** This is the family's *form* page. The markup declares `<MudForm @ref="_form">` (`NotificationSend.razor:19`) with two `MudTextField`s carrying `Required="true"` + localized `RequiredError` and `MaxLength`/`Counter` constraints (`NotificationSend.razor:20-39`). The C# holds the form by reference (`MudForm? _form`, line 34) and, on submit, **explicitly drives validation** before sending: `await _form.ValidateAsync()` then a guard on `_form.IsValid` (lines 50-55). This is the imperative half of MudBlazor's two-way validation contract, declarative rules in markup, an explicit `ValidateAsync` gate in code so an invalid form never reaches the API. The bound fields are plain `string _notificationTitle` / `_notificationBody` (lines 32-33), not a model object, because the form is tiny; note they are deliberately *not* named `_title` so they do not collide with the localized `Title` page property (the comment on line 31 cites SonarAnalyzer S4275).
-  - `[Rubric §24, Forms, Validation & UX Safety]` assesses input validation, double-submit protection, and feedback. This page embodies all three: client-side required/length validation with `Immediate="true"` live feedback (`NotificationSend.razor:26,37`), an `IsSaving` flag (line 29) that disables the Send button and flips its label to the localized "Sending..." (`NotificationSend.razor:47-48`) to block double submits, and a localized warning snackbar `ErrorMessages.ValidationError` (line 53) on a failed gate plus a success snackbar naming the recipient count.
-  - `[Rubric §27, Internationalization & Localization]`, every string here resolves through `IStringLocalizer<SharedResource> L` (line 21): the compose labels, the required-error text, and the success message `L["Notif.Send.SentTo", result.RecipientCount]` (line 65), which passes the count as a format argument so pluralization/word-order stay in the resource file ([ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)). Like its siblings the breadcrumb trail is built in an initialization hook, here the synchronous `OnInitialized` (lines 36-43), so the injected localizer is available.
-- **Walkthrough**,
-  - Injected `NotificationService`, `NavigationManager`, `Snackbar`, `L` (lines 18-21); `_breadcrumbs` Home to Push-Notifications to Send (lines 38-43, the middle crumb is a real link via `NotificationRoutePaths.Notifications`).
-  - `SendNotificationAsync` (lines 45-81): null-guards `_form` (lines 47-48); validates (lines 50-55, warning snackbar `ErrorMessages.ValidationError` on failure); under `IsSaving`, builds `new SendPushNotificationRequest(_notificationTitle, _notificationBody)` (line 60) and awaits `SendAsync(request, token)` (line 61); on a non-null [PushNotificationDTO](group-10-notifications.md#pushnotificationdto) result, raises a success snackbar interpolating `result.RecipientCount` (line 65) and navigates back to the list (line 66).
-  - Same disposal-safe pattern as its siblings, `_cts` cancelled in `Dispose` (lines 87-98); the cancel-catch comment here additionally notes the `InteractiveAuto` render-mode transition (line 71), the case where the WebAssembly runtime takes over mid-call.
-  - `NavigateToList` (line 83): the Cancel button's handler, back to `NotificationRoutePaths.Notifications`.
-- **Why it's built this way**: a deliberately small form: no edit/unsaved-changes guard (it is create-only and one-shot), validation kept in `MudForm` rather than a FluentValidation round-trip because the only rules are required + length, and HTTP kept behind [IPushNotificationUIService](#ipushnotificationuiservice) so the component is unit-testable. The send is fire-and-confirm, the server fans out to recipients via the SignalR push pipeline (see [Group 10](group-10-notifications.md)) and returns only the aggregate count.
-- **Where it's used**: rendered at `/notifications/send` for organizer/admin roles; reached from the "Send New Notification" button on [NotificationList](#notificationlist). The server-side validator for [SendPushNotificationRequest](group-10-notifications.md#sendpushnotificationrequest) (notifications group) enforces the same rules a second time.
-
-### ServerTokenStorageService
-
-> MMCA.Common.UI.Web · `MMCA.Common.UI.Web.Services` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Services/ServerTokenStorageService.cs:17` · Level 4 · class
-
-- **What it is**: the Blazor **Server** implementation of [ITokenStorageService](#itokenstorageservice), a cookie-only token store (no `localStorage`). During SSR prerender it reads the access token from the HttpOnly session cookie; on the live interactive circuit it holds the access token in memory only and re-hydrates it from that cookie through a same-origin refresh endpoint. The HttpOnly refresh token is never readable by JavaScript.
-- **Depends on**: first-party: [ITokenStorageService](#itokenstorageservice) (the interface it implements), [CookieTokenReader](group-08-auth.md#cookietokenreader) (reads access/refresh tokens out of the request cookies), [ISessionCookieSync](#isessioncookiesync) (writes/clears the HttpOnly session cookies), [ITokenRefresher](#itokenrefresher) (acquires a fresh access token from the same-origin endpoint), and [JwtTokenInfo](#jwttokeninfo) (client-side expiry inspection). Its WASM counterpart is [WasmTokenStorageService](#wasmtokenstorageservice). Externals: `Microsoft.AspNetCore.Http` (`IHttpContextAccessor`, `HttpContext`), BCL `Task` / `TimeSpan`.
-- **Concept introduced, the two-world token store (SSR request vs. interactive circuit).** A Blazor Web app runs a page twice: first as a server-side prerender inside a live HTTP request (an `HttpContext` exists, JS interop does not), then as a stateful SignalR *circuit* with no `HttpContext` (JS interop is available). A single token store must serve both worlds, and this class does it by branching on `httpContextAccessor.HttpContext is not null`:
-  - **SSR prerender** (line 32): the request's HttpOnly cookie is the source of truth (it may have just been refreshed in place by the `UseCookieSessionRefresh` middleware), so `GetAccessTokenAsync` returns `cookieTokenReader.ReadAccessToken()` (line 34) with no interop.
-  - **Interactive circuit** (lines 37-52): the token lives in the `_accessToken` field (line 25). If [JwtTokenInfo.IsFresh](#jwttokeninfo) says it is still valid beyond a 30-second skew (`ExpirySkew`, line 23) it is returned directly (lines 38-41); otherwise it is re-acquired from the HttpOnly cookie via the same-origin refresh endpoint.
-  - `[Rubric §26, Front-End Security]` assesses protection of credentials in the browser. The design is a deliberate XSS-hardening choice: the long-lived refresh token stays in an HttpOnly cookie (unreachable from JS), the access token is held only in circuit memory and never persisted to `localStorage`, and the refresh token transits JS exactly once, for the same-origin POST that seeds the cookies at login (`SetTokensAsync`, lines 62-68).
-  - `[Rubric §11, Security]` assesses the wider auth model; this store is one edge of the dual-fetch/JWKS session design ([ADR-022](https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html)), the piece that decides *where* a token is read on each side of the prerender boundary.
-- **Walkthrough**,
-  - The primary constructor (lines 17-21) takes `IHttpContextAccessor`, [CookieTokenReader](group-08-auth.md#cookietokenreader), [ISessionCookieSync](#isessioncookiesync), and [ITokenRefresher](#itokenrefresher); it is `sealed`, carrying no app-specific state (the XML doc notes it was hoisted out of the app hosts so both consumer apps share one copy).
-  - Fields: `ExpirySkew` (line 23, a `static readonly TimeSpan` of 30 seconds), the in-memory `_accessToken` (line 25), and `_hydrateInFlight` (line 26), a `Task<string?>?` used for single-flight de-duplication.
-  - `GetAccessTokenAsync` (lines 28-53): the SSR/circuit branch described above. The refresh path uses a **single-flight** guard, `_hydrateInFlight ??= HydrateAsync()` (line 44), so that concurrent callers on one circuit (the delegating handler, the auth-state provider, the SignalR connection) share one acquisition rather than stampeding the refresh endpoint; the `finally` clears the field (line 51) so the next expiry triggers a new fetch.
-  - `GetRefreshTokenAsync` (lines 55-60): returns the cookie value only during SSR; on the circuit the HttpOnly refresh token is unreadable, so it returns `null`.
-  - `SetTokensAsync` (lines 62-68): caches the access token in memory (line 63) and calls `sessionCookieSync.SyncAsync(accessToken, refreshToken)` (line 67) to seed the HttpOnly cookies at login.
-  - `ClearTokensAsync` (lines 70-74): nulls the in-memory token and calls `sessionCookieSync.ClearAsync()` on logout.
-  - `HydrateAsync` (lines 76-80): the private refresh, `_accessToken = await tokenRefresher.AcquireAccessTokenAsync()` (line 78), caches and returns the new token.
-- **Why it's built this way**: Blazor Server's split lifecycle means a naive "read a token from storage" store would either break during prerender (no JS) or leak the refresh token to JS if it used `localStorage`. Branching on `HttpContext` presence and keeping the refresh token cookie-only resolves both, and the single-flight hydrate keeps the refresh endpoint from being hammered by the several components that all need the bearer token at once. See [ADR-022](https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html) for the session-token design.
-- **Where it's used**: registered as the scoped `ITokenStorageService` for Blazor Web (server-interactive) hosts by `AddCommonServerTokenStorage()` in [DependencyInjection](#dependencyinjection); the app's `Program.cs` calls that instead of registering a local copy.
-
-### DependencyInjection
-
-> MMCA.Common.UI.Web · `MMCA.Common.UI.Web` · `MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/DependencyInjection.cs:13` · Level 5 · class
-
-- **What it is**: the registration extensions for the server-side Blazor Web host pieces this package ships, two `IServiceCollection` methods that a host calls from `Program.cs` instead of registering app-local copies of the token store and CSP provider.
-- **Depends on**: first-party: [ServerTokenStorageService](#servertokenstorageservice) and [ITokenStorageService](#itokenstorageservice) (the token-store registration), [BlazorCspPolicyProvider](#blazorcsppolicyprovider) and [ICspPolicyProvider](group-16-aspire-orchestration.md#icsppolicyprovider) (the CSP registration). Externals: `Microsoft.Extensions.DependencyInjection` (`IServiceCollection`, `AddScoped`, `AddSingleton`, `AddHttpContextAccessor`).
-- **Concept**: uses the C# preview `extension(IServiceCollection services)` block (line 15, see [primer §4](00-primer.md#c-extensiont-types--read-this-once)) rather than classic `this`-parameter extension methods, the package-wide DI-registration idiom. The two methods inside the block are semantically ordinary extension methods declared in the new form.
-  - `[Rubric §15, Best Practices & Code Quality]` assesses idiom consistency; every `MMCA.Common.*` package registers services through the same `extension(IServiceCollection)` shape, and this class follows it.
-  - `[Rubric §26, Front-End Security]` assesses browser-side hardening; `AddCommonBlazorCsp()` wires the dynamic Content-Security-Policy that pins `connect-src` to the configured API/Gateway origin, and the doc comment encodes a **load-bearing ordering rule** (call it *before* `AddCommonSecurityHeaders`) so this provider wins over the default static one, which is registered with `TryAdd`.
-- **Walkthrough**,
-  - `AddCommonServerTokenStorage()` (lines 25-29): calls `services.AddHttpContextAccessor()` (line 27, the accessor [ServerTokenStorageService](#servertokenstorageservice) needs to detect the SSR-vs-circuit boundary), then registers [ServerTokenStorageService](#servertokenstorageservice) as the **scoped** [ITokenStorageService](#itokenstorageservice) (line 28). Scoped is correct here: a Blazor circuit is a DI scope, so the in-memory access token is per-user-session state.
-  - `AddCommonBlazorCsp()` (lines 38-39): registers [BlazorCspPolicyProvider](#blazorcsppolicyprovider) as a **singleton** [ICspPolicyProvider](group-16-aspire-orchestration.md#icsppolicyprovider) (the policy is computed once from `ApiSettings`, so a singleton is right). Because it uses `AddSingleton` (not `TryAdd`), it deterministically replaces the default provider, which is why the "register before `AddCommonSecurityHeaders`" ordering matters.
-- **Why it's built this way**: both pieces are host-level infrastructure that carried no app-specific state, so they were hoisted into `MMCA.Common.UI.Web` and exposed as one-line registrations, keeping every consumer's `Program.cs` free of duplicated token-store and CSP wiring (the reusable-building-blocks charter of this group). The comment on `AddCommonServerTokenStorage` also names its companions in `MMCA.Common.API` (`AddServerAuthSessionCookie` / `UseCookieSessionRefresh`) and the required `ITokenRefresher` registration, so the full session-cookie plumbing is discoverable from one place ([ADR-022](https://ivanball.github.io/docs/adr/022-browser-session-cookie-auth.html)).
-- **Where it's used**: called from the `Program.cs` of the server-interactive Blazor Web hosts in the consumer apps (MMCA.ADC, MMCA.Store) to register the shared token store and CSP provider.
 
 
 ---

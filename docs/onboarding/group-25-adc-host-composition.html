@@ -441,7 +441,7 @@
           </ul>
           <h3 id="mauitokenstorageservice">MauiTokenStorageService</h3>
           <blockquote>
-          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI.Services</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Services/MauiTokenStorageService.cs:9</code> · Level 1 · class (sealed)</p>
+          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI.Services</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Services/MauiTokenStorageService.cs:15</code> · Level 1 · class (sealed)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the MAUI implementation of <a href="group-15-common-ui-framework.html#itokenstorageservice">ITokenStorageService</a>. It persists the JWT access token and refresh token in the platform secure store through MAUI&#39;s <code>SecureStorage</code>.</li>
@@ -528,7 +528,7 @@
           </ul>
           <h3 id="mauiprogram">MauiProgram</h3>
           <blockquote>
-          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:28</code> · Level 9 · class (static)</p>
+          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:33</code> · Level 9 · class (static)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the composition root for the MAUI Blazor Hybrid app. <code>CreateMauiApp</code> builds the DI and configuration graph that runs Blazor components inside a native WebView on Android, iOS, MacCatalyst, and Windows: it loads embedded configuration, registers MudBlazor and the shared UI services, conditionally registers each module&#39;s UI, and wires the MAUI-specific auth, form-factor, and device-capability services.</li>
@@ -595,63 +595,6 @@
           <li><strong>Walkthrough</strong>: Two get-only members: <code>ComponentType =&gt; typeof(ADCHome)</code> (<code>ADCHomePageContent.cs:10</code>) hands the shell the component to render, and <code>PageTitle =&gt; &quot;Atlanta Developers Conference&quot;</code> (<code>ADCHomePageContent.cs:12</code>) supplies the title (an <code>i18n: allow</code> brand name).</li>
           <li><strong>Why it&#39;s built this way</strong>: Inverting the dependency (app implements the Common contract, Common consumes it) lets the same shell host Store, ADC, and Helpdesk without any app reference, satisfying the framework&#39;s &quot;build once, compose per app&quot; boundary.</li>
           <li><strong>Where it&#39;s used</strong>: Registered in the ADC UI host&#39;s DI as the <code>IHomePageContent</code> implementation, resolved by the shared <code>Home.razor</code> shell (MAUI host); the WebAssembly client project carries its own structural twin.</li>
-          </ul>
-          <h3 id="appactionsinitializer-1">AppActionsInitializer</h3>
-          <blockquote>
-          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI.Services</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Services/AppActionsInitializer.cs:16</code> · Level 1 · class (sealed)</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: a MAUI startup service that publishes the three home-screen quick actions (long-press app-icon shortcuts) once the app is built, with localized titles, and maps each action id to an in-app route.</li>
-          <li><strong>Depends on</strong>: <code>IMauiInitializeService</code> (the MMCA.Common.UI initialization contract it implements), <code>IStringLocalizer&lt;AppActionsInitializer&gt;</code> (BCL localization), <code>AppActions</code>/<code>AppAction</code>/<code>FeatureNotSupportedException</code> (MAUI Essentials); route constants from <a href="group-22-engagement-module.html#engagementroutepaths"><code>EngagementRoutePaths</code></a> and <a href="group-15-common-ui-framework.html#notificationroutepaths"><code>NotificationRoutePaths</code></a>. Its titles/routes feed the <a href="group-26-device-capability-layer.html#ideeplinkdispatcher"><code>IDeepLinkDispatcher</code></a> path documented in the class comment.</li>
-          <li><strong>Concept introduced, native quick actions as a navigation surface.</strong> <code>[Rubric §25, Navigation &amp; IA]</code> (assesses first-class entry points into the app): the three shortcuts (<code>happening_now</code>, <code>my_schedule</code>, <code>notifications</code>, <code>AppActionsInitializer.cs:18-20</code>) are OS-level deep-link jump points, not in-app links. <code>[Rubric §27, Internationalization]</code>: their titles are resolved from the resx pair via the injected localizer at build time (<code>AppActionsInitializer.cs:54-56</code>), so the shortcut labels follow the selected language.</li>
-          <li><strong>Walkthrough</strong><ul>
-          <li><code>Initialize(IServiceProvider)</code> (<code>AppActionsInitializer.cs:23</code>): null-guards, short-circuits when <code>AppActions.Current.IsSupported</code> is false (<code>:27-30</code>), resolves the localizer, then fires <code>SetActionsAsync</code> <strong>fire-and-forget</strong> (<code>_ =</code>, <code>:36</code>) so a slow or failing shortcut registration can never block or fail app startup (the inline comment states exactly this, <code>:34-35</code>).</li>
-          <li><code>RouteFor(string actionId)</code> (<code>AppActionsInitializer.cs:40</code>): a <code>switch</code> mapping each id to its app-relative route (<code>EngagementRoutePaths.HappeningNow</code>, a literal <code>/conference/sessions?mine=true</code>, <code>NotificationRoutePaths.NotificationInbox</code>), returning <code>null</code> for an unknown id. This is the lookup the activation handler in <code>MauiProgram</code> calls.</li>
-          <li><code>SetActionsAsync</code> (<code>AppActionsInitializer.cs:48</code>): builds the three <code>AppAction</code>s and calls <code>AppActions.Current.SetAsync</code>, catching <code>FeatureNotSupportedException</code> because some launchers report support then reject at runtime (<code>:60-64</code>).</li>
-          </ul>
-          </li>
-          <li><strong>Why it&#39;s built this way</strong>: registration (titles) and activation (routing) are split, the initializer sets the shortcuts, <a href="#mauiprogram"><code>MauiProgram</code></a> wires <code>OnAppAction</code> to <code>RouteFor</code>, and both publish the resolved route to the shared deep-link dispatcher, which buffers cold-start activations until the listener renders (class comment, <code>AppActionsInitializer.cs:9-15</code>). <a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a> (the MAUI head) is the governing decision.</li>
-          <li><strong>Where it&#39;s used</strong>: registered as an <code>IMauiInitializeService</code> in the MAUI head&#39;s DI; its <code>RouteFor</code> is invoked by the <code>ConfigureEssentials(e =&gt; e.OnAppAction(...))</code> handler in <a href="#mauiprogram"><code>MauiProgram</code></a>.</li>
-          </ul>
-          <h3 id="mauipubliclinkbuilder-1">MauiPublicLinkBuilder</h3>
-          <blockquote>
-          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI.Services</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Services/MauiPublicLinkBuilder.cs:13</code> · Level 1 · class (sealed)</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: the MAUI implementation of <a href="group-21-conference-ui.html#ipubliclinkbuilder"><code>IPublicLinkBuilder</code></a>: it turns a relative path into an absolute URL rooted at the public web app, so a shared or copied link points at the public site, not the WebView&#39;s internal origin.</li>
-          <li><strong>Depends on</strong>: <a href="group-21-conference-ui.html#ipubliclinkbuilder"><code>IPublicLinkBuilder</code></a> (implements), <code>IConfiguration</code> (BCL), <code>System.Uri</code>.</li>
-          <li><strong>Concept</strong>: platform-specific override of a UI service. <code>[Rubric §26, Front-End Security]</code>/<code>[Rubric §25, Navigation &amp; IA]</code>: on the browser head the default builder resolves against the current origin, but a MAUI WebView&#39;s origin is an internal shell address that is meaningless when pasted elsewhere, so this head substitutes the pinned public base URL. It is registered <strong>after</strong> the module registrations in <code>MauiProgram</code> so last-registration-wins replaces the browser default (class comment, <code>MauiPublicLinkBuilder.cs:6-12</code>).</li>
-          <li><strong>Walkthrough</strong><ul>
-          <li>Constructor (<code>MauiPublicLinkBuilder.cs:18</code>): reads <code>PublicSite:BaseUrl</code> from the embedded appsettings and <strong>throws <code>InvalidOperationException</code> if it is missing or blank</strong> (<code>:20-23</code>), a fail-fast so a misconfigured build cannot silently emit broken share links. The same mechanism pins the gateway endpoint.</li>
-          <li><code>BuildAbsolute(string relativePath)</code> (<code>MauiPublicLinkBuilder.cs:27</code>): guards against a null/blank path, then combines it onto <code>_baseUrl</code> via the <code>Uri(baseUri, relative)</code> constructor (<code>:29-31</code>).</li>
-          </ul>
-          </li>
-          <li><strong>Where it&#39;s used</strong>: injected wherever the Conference UI builds shareable links (the <code>IPublicLinkBuilder</code> consumers in <a href="group-21-conference-ui.html">Group 21</a>); only the MAUI head registers this variant.</li>
-          </ul>
-          <h3 id="mauitokenstorageservice-1">MauiTokenStorageService</h3>
-          <blockquote>
-          <p>MMCA.ADC.UI · <code>MMCA.ADC.UI.Services</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Services/MauiTokenStorageService.cs:9</code> · Level 1 · class (sealed)</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: the MAUI implementation of <a href="group-15-common-ui-framework.html#itokenstorageservice"><code>ITokenStorageService</code></a>, persisting the JWT access and refresh tokens in the platform secure enclave via MAUI <code>SecureStorage</code>.</li>
-          <li><strong>Depends on</strong>: <a href="group-15-common-ui-framework.html#itokenstorageservice"><code>ITokenStorageService</code></a> (implements), MAUI <code>SecureStorage</code> (Essentials).</li>
-          <li><strong>Concept introduced, at-rest token protection on the device head.</strong> <code>[Rubric §11, Security]</code> and <code>[Rubric §26, Front-End Security]</code> (assess where credentials live at rest): the browser client keeps tokens in the circuit/local storage, but the MAUI head can do better, <code>SecureStorage</code> routes to the platform-specific secure enclave (Android Keystore, iOS Keychain, Windows DPAPI, per the class comment, <code>MauiTokenStorageService.cs:5-8</code>), so tokens are encrypted at rest by the OS.</li>
-          <li><strong>Walkthrough</strong>: two fixed key constants (<code>auth_access_token</code>, <code>auth_refresh_token</code>, <code>MauiTokenStorageService.cs:11-12</code>). <code>GetAccessTokenAsync</code>/<code>GetRefreshTokenAsync</code> (<code>:14</code>, <code>:20</code>) read via <code>SecureStorage.Default.GetAsync</code>; <code>SetTokensAsync</code> (<code>:26</code>) writes both; <code>ClearTokensAsync</code> (<code>:32</code>) removes both and returns <code>Task.CompletedTask</code> (the remove call is synchronous).</li>
-          <li><strong>Why it&#39;s built this way</strong>: keeping the same <code>ITokenStorageService</code> interface across heads means the shared auth pipeline is head-agnostic; only the storage backend swaps. See <code>TokenStorageDesignNote.md</code> for the cross-head storage rationale.</li>
-          <li><strong>Where it&#39;s used</strong>: registered as the <code>ITokenStorageService</code> in the MAUI head&#39;s DI; consumed by the shared auth/token-refresh services in <a href="group-15-common-ui-framework.html">Group 15</a>.</li>
-          </ul>
-          <h3 id="adchomepagecontent-2">ADCHomePageContent</h3>
-          <blockquote>
-          <p>MMCA.ADC.UI.Web.Client · <code>MMCA.ADC.UI.Web.Client.Pages</code> · <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web.Client/Pages/ADCHomePageContent.cs:8</code> · Level 8 · class (sealed)</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: the ADC binding of the framework&#39;s <a href="group-15-common-ui-framework.html#ihomepagecontent"><code>IHomePageContent</code></a> extension point, it tells the shared <code>Home.razor</code> shell which component to render as the app&#39;s landing page and what browser title to use.</li>
-          <li><strong>Depends on</strong>: <a href="group-15-common-ui-framework.html#ihomepagecontent"><code>IHomePageContent</code></a> (implements), <a href="group-21-conference-ui.html#adchome"><code>ADCHome</code></a> (the component it points at).</li>
-          <li><strong>Concept introduced, app-supplied content into a shared shell.</strong> <code>[Rubric §18, UI Architecture]</code> and <code>[Rubric §2, Design Patterns]</code> (assess a reusable shell that host apps specialize): the framework ships a generic <code>Home.razor</code> shell; each app registers one <code>IHomePageContent</code> that hands the shell a <code>ComponentType</code> to render and a <code>PageTitle</code>. This inverts the dependency, the shared shell never references the ADC page directly.</li>
-          <li><strong>Walkthrough</strong>: two expression-bodied properties, <code>ComponentType =&gt; typeof(ADCHome)</code> (<code>ADCHomePageContent.cs:10</code>) and <code>PageTitle =&gt; &quot;Atlanta Developers Conference&quot;</code> (<code>:12</code>, an <code>// i18n: allow</code> brand name). No state, no logic.</li>
-          <li><strong>Why it&#39;s built this way</strong>: keeping the shell app-agnostic means the Web/WASM heads reuse one landing shell and only the plugged-in content differs per app.</li>
-          <li><strong>Where it&#39;s used</strong>: registered as the <code>IHomePageContent</code> for the ADC Web client and resolved by the shared <code>Home.razor</code> shell in <a href="group-15-common-ui-framework.html">Group 15</a>.</li>
-          <li><strong>Caveats / not-in-source</strong>: the prior tier edition described a paired MAUI <code>ADCHomePageContent</code> in <code>MMCA.ADC.UI</code>; this unit&#39;s source is the single WASM-client class in <code>MMCA.ADC.UI.Web.Client</code>, which references the same <a href="group-21-conference-ui.html#adchome"><code>ADCHome</code></a> component.</li>
           </ul>
           <h3 id="app-1">App</h3>
           <blockquote>

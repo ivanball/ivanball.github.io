@@ -150,7 +150,7 @@
           <p>The reason a concrete controller can be short is that the generic bases already supply <code>GET</code> (capped, returning <a href="group-01-result-error-handling.html#collectionresultt"><code>CollectionResult&lt;T&gt;</code></a>), <code>GET /paged</code> (filtered/sorted/paged with an <code>X-Pagination</code> header, returning <a href="group-01-result-error-handling.html#pagedcollectionresultt"><code>PagedCollectionResult&lt;T&gt;</code></a>), <code>GET /lookup</code> (id+name pairs as <a href="group-12-api-hosting-mapping.html#baselookuptidentifiertype"><code>BaseLookup&lt;TIdentifierType&gt;</code></a> for dropdowns), <code>GET /{id}</code>, and, on the aggregate base, <code>POST</code> (to <code>201 Created</code>) and <code>DELETE</code> (to <code>204</code>). Each Conference controller&#39;s constructor simply injects the <a href="group-03-querying-specifications.html#ientityqueryservicetentity-tentitydto-tidentifiertype"><code>IEntityQueryService&lt;TEntity, TEntityDTO, TIdentifierType&gt;</code></a> for reads and the specific <a href="group-05-cqrs-pipeline.html#icommandhandlerin-tcommand-tresult"><code>ICommandHandler&lt;in TCommand, TResult&gt;</code></a> / <a href="group-05-cqrs-pipeline.html#iqueryhandlerin-tquery-tresult"><code>IQueryHandler&lt;in TQuery, TResult&gt;</code></a> instances for its writes and bespoke reads (<code>SessionsController.cs:41-51</code>), then folds any <code>Result.Failure</code> back through the inherited <code>HandleFailure</code> (<code>SessionsController.cs:102</code>). That is the <code>[Rubric §1, SOLID]</code> / <code>[Rubric §16, Maintainability &amp; Evolvability]</code> payoff the generic base exists for (the generic-controller + dynamic-query contract of <a href="https://ivanball.github.io/docs/adr/034-generic-entity-query-layer.html" target="_blank" rel="noopener">ADR-034</a>): the CRUD logic is written once in Common, and a per-entity controller has almost no reason to change.</p>
           <h2 id="authorization-at-the-edge-three-shapes-not-one">Authorization at the edge, three shapes not one</h2>
           <p>Authorization is <strong>capability-based by default but not uniform</strong>, and the differences are the interesting part. Most write-bearing controllers carry a class-level <a href="group-08-auth.html#haspermissionattribute"><code>HasPermission</code></a> gate naming one <a href="group-17-conference-domain.html#conferencepermissions"><code>ConferencePermissions</code></a> capability rather than a role policy: <code>SessionsManage</code> on <a href="#sessionscontroller"><code>SessionsController</code></a> (<code>SessionsController.cs:40</code>) and on the two session-join controllers (<code>SessionSpeakersController.cs:39</code>, <code>SessionCategoryItemsController.cs:38</code>), <code>EventsManage</code> (<code>EventsController.cs:42</code>, <code>EventSpeakersController.cs:38</code>), <code>RoomsManage</code> (<code>RoomsController.cs:84</code>), <code>CategoriesManage</code> (<code>ConferenceCategoriesController.cs:31</code>, <code>CategoryItemsController.cs:59</code>), <code>QuestionsManage</code> (<code>QuestionsController.cs:30</code>), <code>SpeakersManage</code> (<code>SpeakerCategoryItemsController.cs:38</code>), and <code>SessionSelectionManage</code> (<code>SessionSelectionController.cs:28</code>). Reads are then re-opened action by action with <code>[AllowAnonymous]</code> (BR-43 public browse, for example <code>SessionsController.cs:80</code>, <code>RoomsController.cs:95</code>).</p>
-          <p>Two controllers deliberately break that pattern, and knowing why saves you from &quot;fixing&quot; them. <a href="#speakerscontroller"><code>SpeakersController</code></a> carries only a plain <code>[Authorize]</code> at class level (<code>SpeakersController.cs:41</code>) and pushes <code>[HasPermission(ConferencePermissions.SpeakersManage)]</code> down onto the individual organizer write actions (<code>SpeakersController.cs:151,194,206,225</code>), because one of its writes is an authenticated self-service surface rather than an organizer surface and re-declares plain <code>[Authorize]</code> (<code>SpeakersController.cs:169</code>). And <a href="#eventquestionanswerscontroller"><code>EventQuestionAnswersController</code></a> / <a href="#sessionquestionanswerscontroller"><code>SessionQuestionAnswersController</code></a> gate on <code>[Authorize(Policy = AuthorizationPolicies.RequireAuthenticated)]</code> instead (<code>EventQuestionAnswersController.cs:55</code>, <code>SessionQuestionAnswersController.cs:55</code>), because <em>any</em> signed-in attendee may submit feedback answers, so no organizer capability applies. Which roles hold which capability is declared once in <code>AddModuleConferenceAPI</code> (see below), the permission-over-RBAC model of <a href="https://ivanball.github.io/docs/adr/020-permission-based-authorization.html" target="_blank" rel="noopener">ADR-020</a>; <code>[Rubric §11, Security]</code> is the lens, and these two exceptions are the evidence that the model is applied per endpoint rather than pasted.</p>
+          <p>Two controllers deliberately break that pattern, and knowing why saves you from &quot;fixing&quot; them. <a href="#speakerscontroller"><code>SpeakersController</code></a> carries only a plain <code>[Authorize]</code> at class level (<code>SpeakersController.cs:41</code>) and pushes <code>[HasPermission(ConferencePermissions.SpeakersManage)]</code> down onto the individual organizer write actions (<code>SpeakersController.cs:151,194,206,225</code>), because one of its writes is an authenticated self-service surface rather than an organizer surface and re-declares plain <code>[Authorize]</code> (<code>SpeakersController.cs:169</code>). And <a href="#eventquestionanswerscontroller"><code>EventQuestionAnswersController</code></a> / <a href="#sessionquestionanswerscontroller"><code>SessionQuestionAnswersController</code></a> gate on <code>[Authorize(Policy = AuthorizationPolicies.RequireAuthenticated)]</code> instead (<code>EventQuestionAnswersController.cs:55</code>, <code>SessionQuestionAnswersController.cs:55</code>), because <em>any</em> signed-in attendee may submit feedback answers, so no organizer capability applies. Which roles hold which capability is declared once in <code>AddModuleConferenceAPI</code> (see below), the permission-over-RBAC model of <a href="https://ivanball.github.io/docs/adr/020-permission-based-authorization.html" target="_blank" rel="noopener">ADR-020</a>; <code>[Rubric §11, Security]</code> is the lens, and these two exceptions are the evidence that the model is applied per endpoint rather than pasted. Orthogonal to all three shapes is the <strong>read audience</strong>, which no attribute can express because it changes the <em>rows</em> rather than the verdict: seven read controllers ask <a href="#currentuserserviceextensions"><code>CurrentUserServiceExtensions</code></a><code>.IsPrivilegedConferenceReader()</code> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Authorization/CurrentUserServiceExtensions.cs:24</code>) and turn the answer into a specification or <code>null</code>, against the <a href="group-17-conference-domain.html#conferencereadaudience"><code>ConferenceReadAudience</code></a> list declared once in G17.</p>
           <h2 id="the-request-records-the-inbound-write-shapes">The request records, the inbound write shapes</h2>
           <p>Several controllers declare small <code>record class</code> request types alongside themselves, co-located in the same file: <a href="#addroomrequest"><code>AddRoomRequest</code></a>/<a href="#updateroomrequest"><code>UpdateRoomRequest</code></a> (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/RoomsController.cs:24,52</code>), <a href="#addcategoryitemrequest"><code>AddCategoryItemRequest</code></a>/<a href="#updatecategoryitemrequest"><code>UpdateCategoryItemRequest</code></a> (<code>CategoryItemsController.cs:23,39</code>), <a href="#addeventspeakerrequest"><code>AddEventSpeakerRequest</code></a> (<code>EventSpeakersController.cs:22</code>), <a href="#addsessionspeakerrequest"><code>AddSessionSpeakerRequest</code></a> (<code>SessionSpeakersController.cs:23</code>), <a href="#addspeakercategoryitemrequest"><code>AddSpeakerCategoryItemRequest</code></a> (<code>SpeakerCategoryItemsController.cs:22</code>), <a href="#addsessioncategoryitemrequest"><code>AddSessionCategoryItemRequest</code></a> (<code>SessionCategoryItemsController.cs:22</code>), <a href="#addeventquestionanswerrequest"><code>AddEventQuestionAnswerRequest</code></a>/<a href="#updateeventquestionanswerrequest"><code>UpdateEventQuestionAnswerRequest</code></a> (<code>EventQuestionAnswersController.cs:26,39</code>), and <a href="#addsessionquestionanswerrequest"><code>AddSessionQuestionAnswerRequest</code></a>/<a href="#updatesessionquestionanswerrequest"><code>UpdateSessionQuestionAnswerRequest</code></a> (<code>SessionQuestionAnswersController.cs:26,39</code>). These are the <strong>wire shapes</strong> for the child-entity writes the generic base cannot model: each carries the parent identifier (<code>EventId</code> at <code>RoomsController.cs:27</code>) plus the child&#39;s own fields, all <code>required</code>/<code>init</code> for immutability (<code>RoomsController.cs:26-48</code>), and the controller action translates the record into the matching <code>Add*Command</code>/<code>Update*Command</code> from <a href="group-18-conference-application.html">G18</a>. They are deliberately separate from the inbound <em>application</em> command types (and from the outbound DTOs), the §9 &quot;DTOs decoupled from entities&quot; discipline, so the HTTP contract can evolve independently of the command&#39;s parameter list. The aggregate-root controllers, by contrast, reuse the application layer&#39;s create-request command directly (for example <a href="#sessionscontroller"><code>SessionsController</code></a> binds <code>SessionCreateRequest</code> as its <code>TCreateRequest</code>, <code>SessionsController.cs:52</code>), so they need no per-controller record.</p>
           <h2 id="where-the-generic-shape-gives-way-filtering-caching-and-calendars">Where the generic shape gives way: filtering, caching, and calendars</h2>
@@ -375,7 +375,7 @@
           </ul>
           <h3 id="addcategoryitemrequest">AddCategoryItemRequest</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/CategoryItemsController.cs:23</code> · Level 0 · record class</p>
+          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/CategoryItemsController.cs:24</code> · Level 0 · record class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the JSON body POSTed to <code>/CategoryItems</code> to add an item to a category. It carries the
@@ -438,7 +438,7 @@
           <hr>
           <h3 id="addeventspeakerrequest">AddEventSpeakerRequest</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventSpeakersController.cs:22</code> · Level 0 · record class</p>
+          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventSpeakersController.cs:28</code> · Level 0 · record class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the POST body that links a speaker to an event. It carries exactly two ids, <code>EventId</code>
@@ -491,7 +491,7 @@
           <hr>
           <h3 id="addsessioncategoryitemrequest">AddSessionCategoryItemRequest</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionCategoryItemsController.cs:22</code> · Level 0 · record class</p>
+          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionCategoryItemsController.cs:28</code> · Level 0 · record class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the POST body that tags a session with a category item, two ids, <code>SessionId</code> and
@@ -531,7 +531,7 @@
           <hr>
           <h3 id="addsessionspeakerrequest">AddSessionSpeakerRequest</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionSpeakersController.cs:23</code> · Level 0 · record class</p>
+          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionSpeakersController.cs:28</code> · Level 0 · record class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the POST body that links a speaker to a session, <code>SessionId</code> + <code>SpeakerId</code>
@@ -553,7 +553,7 @@
           <hr>
           <h3 id="addspeakercategoryitemrequest">AddSpeakerCategoryItemRequest</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SpeakerCategoryItemsController.cs:22</code> · Level 0 · record class</p>
+          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SpeakerCategoryItemsController.cs:28</code> · Level 0 · record class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the POST body that tags a speaker with a category item, <code>SpeakerId</code> +
@@ -574,7 +574,7 @@
           <hr>
           <h3 id="updatecategoryitemrequest">UpdateCategoryItemRequest</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/CategoryItemsController.cs:39</code> · Level 0 · record class</p>
+          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/CategoryItemsController.cs:40</code> · Level 0 · record class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the PUT body for editing an existing category item. It is
@@ -705,7 +705,7 @@
           <hr>
           <h3 id="sessionselectioncontroller">SessionSelectionController</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionSelectionController.cs:30</code> · Level 4 · class (sealed partial)</p>
+          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionSelectionController.cs:29</code> · Level 4 · class (sealed partial)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: a <strong>decision-support</strong> controller for choosing which submitted sessions to accept,
@@ -777,9 +777,117 @@
           source alone.</li>
           </ul>
           <hr>
+          <h3 id="publiclookupreader">PublicLookupReader</h3>
+          <blockquote>
+          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/PublicLookupReader.cs:40</code> · Level 6 · class (static, internal)</p>
+          </blockquote>
+          <ul>
+          <li><strong>What it is</strong>: one static helper that runs the <code>GET /lookup</code> query for the <strong>non-privileged</strong> read
+          audience, applying the same visibility predicate the list and detail endpoints already apply, so a
+          dropdown cannot enumerate the rows the rest of the API hides (<code>PublicLookupReader.cs:40</code>). Seven
+          Conference controllers call it; privileged readers never reach it, because their controllers delegate
+          to the framework base action unchanged (<code>PublicLookupReader.cs:35-38</code>).</li>
+          <li><strong>Depends on</strong>:
+          <a href="group-07-persistence-ef-core.html#ireadrepositorytentity-tidentifiertype"><code>IReadRepository&lt;TEntity, TIdentifierType&gt;</code></a>
+          as its first parameter (<code>PublicLookupReader.cs:66</code>), obtained by the caller from
+          <a href="group-07-persistence-ef-core.html#iunitofwork"><code>IUnitOfWork</code></a><code>.GetReadRepository&lt;TEntity, TId&gt;()</code>;
+          <a href="group-03-querying-specifications.html#queryfieldservice"><code>QueryFieldService</code></a> for name-property
+          validation; <a href="group-01-result-error-handling.html#result"><code>Result</code></a> /
+          <a href="group-01-result-error-handling.html#error"><code>Error</code></a>;
+          <a href="group-12-api-hosting-mapping.html#baselookuptidentifiertype"><code>BaseLookup&lt;TIdentifierType&gt;</code></a> as the
+          payload shape; the <code>AuditableBaseEntity&lt;TIdentifierType&gt;</code> constraint (<code>PublicLookupReader.cs:71</code>); BCL
+          <code>Expression&lt;Func&lt;TEntity, bool&gt;&gt;</code> and <code>StringComparer.OrdinalIgnoreCase</code>.</li>
+          <li><strong>Concept introduced, the lookup endpoint as a visibility side channel.</strong> <code>[Rubric §11, Security]</code>
+          assesses whether authorization is applied consistently across every route that can reveal data, not
+          just the obvious ones. The generic <code>GET /lookup</code> inherited from
+          <a href="group-12-api-hosting-mapping.html#entitycontrollerbasetentity-tentitydto-tidentifiertype"><code>EntityControllerBase</code></a>
+          (<a href="https://ivanball.github.io/docs/adr/034-generic-entity-query-layer.html" target="_blank" rel="noopener">ADR-034</a>) returns id plus
+          label pairs for dropdowns and, before this type existed, returned <strong>every</strong> row: so a caller who could
+          not see a draft event on <code>GET /Events</code> could still read its name from <code>GET /Events/lookup</code>. This class
+          is the fix, and the rule it enforces is the same one the list endpoints enforce (BR-49 sessions, BR-108
+          events, BR-239 speakers, and the junction rows that follow their parent, <code>PublicLookupReader.cs:10-15</code>).
+          Second, <code>[Rubric §9, API &amp; Contract Design]</code>: the two audiences differ only in the <em>predicate</em>, never in
+          the response contract or the failure shape, which is why the class reuses the framework&#39;s own
+          <code>Source = &quot;GetAllForLookupAsync&quot;</code> string verbatim (<code>PublicLookupReader.cs:46</code>) so both paths answer a
+          bad <code>nameProperty</code> with an identical problem-details payload. Third, <code>[Rubric §3, Clean Architecture]</code>
+          (assesses whether a layer talks to the abstraction it is supposed to): this helper deliberately steps
+          around the module&#39;s usual
+          <a href="group-03-querying-specifications.html#ientityqueryservicetentity-tentitydto-tidentifiertype"><code>IEntityQueryService</code></a>
+          route and holds a repository instead, a documented workaround rather than a slip, spelled out below.</li>
+          <li><strong>Walkthrough</strong><ul>
+          <li><code>LookupSource</code> (<code>PublicLookupReader.cs:46</code>), the private const <code>&quot;GetAllForLookupAsync&quot;</code>. It is the
+          <code>Source</code> value the framework query service stamps on a bad name property
+          (<code>EntityQueryService.cs:291</code>), copied here so a failure from either path is byte-identical to a
+          client.</li>
+          <li><code>GetPublicLookupAsync&lt;TEntity, TIdentifierType&gt;</code> (<code>PublicLookupReader.cs:65</code>) is the only member:
+          generic over entity and identifier, constrained to
+          <code>AuditableBaseEntity&lt;TIdentifierType&gt;</code> / <code>notnull</code> (<code>:71-72</code>), taking the repository, the requested
+          <code>nameProperty</code>, the visibility <code>criteria</code>, an optional <code>allowedNameProperties</code> allow-list, and a
+          cancellation token (<code>:66-70</code>).</li>
+          <li><strong>Allow-list gate first</strong> (<code>:74-84</code>). When the caller supplied an allow-list and the requested label
+          is not in it (case-insensitive), the method returns
+          <code>Error.InvalidEntityField with { Message, Source = LookupSource, Target = typeof(TEntity).Name }</code>
+          <strong>without querying</strong>. <code>Error.InvalidEntityField</code> is a <code>Validation</code>-typed error
+          (<code>Error.cs:29</code>), so the controller&#39;s <code>HandleFailure</code> maps it to HTTP 400. This is the BR-66 side
+          channel: <code>nameProperty=Email</code> would project a speaker&#39;s email straight into the lookup label, going
+          around the DTO mapper that redacts it for non-privileged callers (<code>SpeakersController.cs:203-207</code>).</li>
+          <li><strong>Then the framework&#39;s own field validation</strong> (<code>:86-95</code>): <code>QueryFieldService.Validate&lt;TEntity&gt;( nameProperty, allowWriteableFields: true)</code>, with each returned error re-stamped with the same
+          <code>Source</code>/<code>Target</code>, which is exactly what
+          <a href="group-03-querying-specifications.html#entityqueryservicetentity-tentitydto-tidentifiertype"><code>EntityQueryService</code></a>
+          does for the privileged path (<code>EntityQueryService.cs:285-297</code>).</li>
+          <li><strong>The query</strong> (<code>:97-101</code>): <code>repository.GetAllForLookupAsync(nameProperty, where: criteria, asTracking: false, cancellationToken)</code>.
+          <a href="group-07-persistence-ef-core.html#efreadrepositorytentity-tidentifiertype"><code>EFReadRepository</code></a> applies
+          the predicate to the untracked queryable (<code>EFReadRepository.cs:80-83</code>), then projects through a
+          per-property cached compiled selector and orders by name (<code>EFReadRepository.cs:85-91</code>). The result is
+          wrapped with <code>Result.Success</code> (<code>:103</code>).</li>
+          </ul>
+          </li>
+          <li><strong>Why it&#39;s built this way</strong>: the class remarks are the design record (<code>PublicLookupReader.cs:16-38</code>) and
+          they record two non-obvious choices, both verified against the framework source.<ul>
+          <li><em>Repository, not query service.</em> <code>EntityQueryService.GetAllForLookupAsync</code> accepts a <code>where</code>
+          predicate and then never forwards it: its repository call passes only <code>nameProperty</code>, <code>asTracking</code>,
+          and the token (<code>EntityQueryService.cs:278-303</code>, specifically the call at <code>:299-302</code>). Filtering
+          through the query service would therefore silently return every row, which is the exact leak these
+          endpoints exist to close. <code>EFReadRepository.GetAllForLookupAsync</code> <em>does</em> apply it
+          (<code>EFReadRepository.cs:82-83</code>). The doc-comment asks for this to be folded back onto the query service
+          once that framework defect is fixed upstream (<code>PublicLookupReader.cs:23</code>).</li>
+          <li><em><code>IUnitOfWork.GetReadRepository</code>, never an injected <code>IRepository&lt;,&gt;</code>.</em> The open-generic container
+          registration cannot activate in this multi-database setup: <code>EFRepository</code> takes a raw <code>DbContext</code>,
+          and contexts are produced per data source by the context factory rather than registered as a service,
+          so resolving the interface throws at request time (<code>PublicLookupReader.cs:26-33</code>;
+          <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>). A <em>read</em> repository is
+          enough because <code>GetAllForLookupAsync</code> is declared on <code>IEntityQuerier</code> (<code>IRepository.cs:64,87</code>), which
+          <code>IReadRepository</code> composes (<code>IRepository.cs:110-111</code>), the ISP split of
+          <a href="https://ivanball.github.io/docs/adr/055-repository-and-specification-contract.html" target="_blank" rel="noopener">ADR-055</a>.</li>
+          </ul>
+          </li>
+          <li><strong>Where it&#39;s used</strong>: seven <code>GetAllForLookupAsync</code> overrides, each of which first builds the audience&#39;s
+          specification and short-circuits to <code>base.GetAllForLookupAsync(...)</code> when it is <code>null</code> (the privileged
+          case): <a href="#sessionscontroller"><code>SessionsController</code></a> (<code>SessionsController.cs:212</code>),
+          <a href="#speakerscontroller"><code>SpeakersController</code></a> (<code>SpeakersController.cs:220</code>, the only caller passing an
+          allow-list, <code>SpeakersController.cs:67</code>), <a href="#eventscontroller"><code>EventsController</code></a>
+          (<code>EventsController.cs:146</code>), <a href="#sessionspeakerscontroller"><code>SessionSpeakersController</code></a>
+          (<code>SessionSpeakersController.cs:153</code>), <a href="#eventspeakerscontroller"><code>EventSpeakersController</code></a>
+          (<code>EventSpeakersController.cs:152</code>), <a href="#sessioncategoryitemscontroller"><code>SessionCategoryItemsController</code></a>
+          (<code>SessionCategoryItemsController.cs:153</code>), and
+          <a href="#speakercategoryitemscontroller"><code>SpeakerCategoryItemsController</code></a>
+          (<code>SpeakerCategoryItemsController.cs:153</code>). Behavior is pinned by unit tests that assert a privileged
+          reader goes through the query service and never touches the repository, an anonymous reader&#39;s captured
+          <code>where</code> is the specification&#39;s <code>Criteria</code>, and <code>nameProperty=Email</code> is a 400 that never queries
+          (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.API.Tests/Controllers/SpeakersControllerTests.cs:548,569,587</code>),
+          plus integration tests over the real HTTP route
+          (<code>MMCA.ADC/Tests/Integration/MMCA.ADC.Conference.IntegrationTests/Reads/AnonymousConferenceReadTests.cs:69,86,153</code>).</li>
+          <li><strong>Caveats / not-in-source</strong>: the type is <code>internal</code>, so it is a Conference-module convenience and not a
+          framework extension point; nothing outside this assembly can call it. The allow-list is <em>opt-in</em>: six of
+          the seven call sites pass none, so a future entity with a field the DTO mapper redacts would reopen the
+          BR-66 channel unless its controller supplies one. And the &quot;fold this back onto the query service&quot;
+          note is conditional on an upstream MMCA.Common change that is <strong>not</strong> present in the source read here
+          (<code>EntityQueryService.cs:299-302</code> still drops the predicate), so the workaround is current, not stale.</li>
+          </ul>
+          <hr>
           <h3 id="categoryitemscontroller">CategoryItemsController</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/CategoryItemsController.cs:60</code> · Level 7 · class (sealed)</p>
+          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/CategoryItemsController.cs:61</code> · Level 7 · class (sealed)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the REST controller for conference category items. Reads are public (anonymous per
@@ -906,7 +1014,7 @@
           </ul>
           <h3 id="eventspeakerscontroller">EventSpeakersController</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventSpeakersController.cs:39</code> · Level 7 · class (sealed)</p>
+          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventSpeakersController.cs:46</code> · Level 7 · class (sealed)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the REST controller for the many-to-many link between an event and a speaker
@@ -999,7 +1107,7 @@
           <hr>
           <h3 id="speakercategoryitemscontroller">SpeakerCategoryItemsController</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SpeakerCategoryItemsController.cs:39</code> · Level 7 · class (sealed)</p>
+          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SpeakerCategoryItemsController.cs:47</code> · Level 7 · class (sealed)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the REST controller for the link between a <a href="group-17-conference-domain.html#speaker"><code>Speaker</code></a>
@@ -1077,7 +1185,7 @@
           <hr>
           <h3 id="eventscontroller">EventsController</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventsController.cs:42</code> · Level 8 · class (sealed)</p>
+          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventsController.cs:44</code> · Level 8 · class (sealed)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the REST controller for the <a href="group-17-conference-domain.html#event"><code>Event</code></a> aggregate
@@ -1159,7 +1267,7 @@
           <hr>
           <h3 id="sessioncategoryitemscontroller">SessionCategoryItemsController</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionCategoryItemsController.cs:39</code> · Level 8 · class (sealed)</p>
+          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionCategoryItemsController.cs:47</code> · Level 8 · class (sealed)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the REST controller for the link between a <a href="group-17-conference-domain.html#session"><code>Session</code></a>
@@ -1235,7 +1343,7 @@
           <hr>
           <h3 id="sessionscontroller">SessionsController</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:40</code> · Level 8 · class (sealed)</p>
+          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:42</code> · Level 8 · class (sealed)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the REST controller for the <a href="group-17-conference-domain.html#session"><code>Session</code></a> aggregate
@@ -1281,7 +1389,7 @@
           <hr>
           <h3 id="sessionspeakerscontroller">SessionSpeakersController</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionSpeakersController.cs:40</code> · Level 8 · class (sealed)</p>
+          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionSpeakersController.cs:47</code> · Level 8 · class (sealed)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the REST controller for the link between a <a href="group-17-conference-domain.html#session"><code>Session</code></a>
@@ -1317,7 +1425,7 @@
           <hr>
           <h3 id="speakerscontroller">SpeakersController</h3>
           <blockquote>
-          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SpeakersController.cs:41</code> · Level 8 · class (sealed)</p>
+          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SpeakersController.cs:44</code> · Level 8 · class (sealed)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the REST controller for the <a href="group-17-conference-domain.html#speaker"><code>Speaker</code></a> aggregate
@@ -1434,6 +1542,41 @@
           </li>
           <li><strong>Why it&#39;s built this way</strong>: <code>Result</code> is an in-process type; gRPC carries only proto messages plus an <code>RpcException</code> status. Trailers are the framework&#39;s chosen carrier for structured error data, and centralizing the parse keeps <a href="https://ivanball.github.io/docs/adr/007-grpc-extraction.html" target="_blank" rel="noopener">ADR-007</a>&#39;s promise that extraction is transparent to callers. See <a href="https://ivanball.github.io/docs/adr/007-grpc-extraction.html" target="_blank" rel="noopener">ADR-007</a> (gRPC extraction).</li>
           <li><strong>Where it&#39;s used</strong>: <a href="#eventlivevalidationservicegrpcadapter">EventLiveValidationServiceGrpcAdapter</a> and <a href="#sessionbookmarkvalidationservicegrpcadapter">SessionBookmarkValidationServiceGrpcAdapter</a>, both in this group, inside their <code>catch (RpcException)</code> blocks.</li>
+          </ul>
+          <h3 id="currentuserserviceextensions">CurrentUserServiceExtensions</h3>
+          <blockquote>
+          <p>MMCA.ADC.Conference.API · <code>MMCA.ADC.Conference.API.Authorization</code> · <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Authorization/CurrentUserServiceExtensions.cs:10</code> · Level 8 · class (static, <code>extension(ICurrentUserService)</code>)</p>
+          </blockquote>
+          <ul>
+          <li><p><strong>What it is</strong>: a one-member static class that hangs a single predicate, <code>IsPrivilegedConferenceReader()</code>, off any <a href="group-08-auth.html#icurrentuserservice">ICurrentUserService</a>. It is the API layer&#39;s wrapper over the module&#39;s read-audience catalog, so every Conference controller asks &quot;does this caller read the unfiltered catalog, or the public projection?&quot; the same way instead of hand-rolling a role check per endpoint (<code>CurrentUserServiceExtensions.cs:6-8</code>).</p>
+          </li>
+          <li><p><strong>Depends on</strong>: <a href="group-08-auth.html#icurrentuserservice">ICurrentUserService</a> from <code>MMCA.Common.Application.Interfaces.Infrastructure</code>, the extended type (<code>CurrentUserServiceExtensions.cs:2,12</code>), and in particular its <code>IsInRole</code> default interface member; <a href="group-17-conference-domain.html#conferencereadaudience">ConferenceReadAudience</a> from <code>MMCA.ADC.Conference.Shared.Authorization</code> (<code>:1,25</code>); BCL <code>Enumerable.Any</code>. Nothing else: no state, no DI registration, no lifetime.</p>
+          </li>
+          <li><p><strong>Concept: how the read-audience decision reaches the HTTP boundary.</strong> The rule itself is declared once in <a href="group-17-conference-domain.html#conferencereadaudience">ConferenceReadAudience</a> (G17), which names the two privileged roles and nothing more. This class is the middle hop of a three-hop path, and the only hop that touches the current request.</p>
+          <ol>
+          <li><strong>Shared declares the audience.</strong> <code>ConferenceReadAudience.PrivilegedRoles</code> is a bare <code>IReadOnlyList&lt;string&gt;</code> with no request or HTTP dependency, which is why the Blazor UI can read the same list.</li>
+          <li><strong>The API layer turns the audience into a boolean.</strong> <code>IsPrivilegedConferenceReader()</code> matches that list against the current principal&#39;s role claims (<code>:24-25</code>).</li>
+          <li><strong>The controller turns the boolean into rows.</strong> Six of the seven callers cache it as a <code>private bool IsPrivileged</code> (for example <code>SessionsController.cs:59</code>) and use it to build either a specification or <code>null</code>, where <code>null</code> means &quot;no filter, show everything&quot; (<code>SessionsController.cs:70-71</code>). The specification is otherwise resolved by the module&#39;s public-filter query handler and handed to <code>QueryService.GetAllAsync(specification: ...)</code> (<code>EventsController.cs:83,113</code>), so the audience decision lands in the WHERE clause rather than in a 403.</li>
+          </ol>
+          <p>That third hop is why this cannot be an attribute. <code>[Rubric §11, Security]</code> (assesses whether authorization is applied consistently and at the right granularity): a capability gate such as <a href="group-08-auth.html#haspermissionattribute">HasPermission</a> answers <em>may this caller act</em>, a yes/no verdict an attribute can enforce before the action runs, while the read audience answers <em>how many rows may this caller see</em> on an endpoint that stays <code>[AllowAnonymous]</code> either way. The method&#39;s own remarks fix that boundary so the two are never confused: it &quot;is a read-visibility check, not an authorization gate: mutations stay gated by <code>[HasPermission(...)]</code> capabilities, which a role check must never stand in for&quot; (<code>:20-23</code>). <code>[Rubric §1, SOLID]</code> (open/closed): the check extends <code>ICurrentUserService</code> without modifying it or subclassing anything. <code>[Rubric §16, Maintainability]</code>: seven call sites, one definition, and widening the audience is an edit to the G17 list rather than a sweep across the API project.</p>
+          </li>
+          <li><p><strong>Walkthrough</strong>: three nested declarations, one of which is real code.</p>
+          <ul>
+          <li><code>public static class CurrentUserServiceExtensions</code> (<code>:10</code>): the container the language requires for extension members. It declares nothing of its own.</li>
+          <li><code>extension(ICurrentUserService currentUserService)</code> (<code>:12</code>): the C# extension block. Everything inside gains <code>currentUserService</code> as its receiver, so the method is called as though it were declared on the interface. The same language feature appears later in this group for composition-root wiring (<a href="#dependencyinjection">DependencyInjection</a> wraps its two methods in <code>extension(IServiceCollection services)</code>); here it carries a predicate rather than a registration.</li>
+          <li><code>IsPrivilegedConferenceReader()</code> (<code>:24-25</code>): an expression body, <code>ConferenceReadAudience.PrivilegedRoles.Any(currentUserService.IsInRole)</code>. <code>IsInRole</code> is passed as a method group, so <code>Any</code> short-circuits on the first privileged role the principal holds. Note the two things that are deliberately absent: no null guard and no anonymous branch. <code>IsInRole</code> is a default interface member that reduces to <code>Roles.Any(...)</code>, and <code>Roles</code> yields an empty sequence when the principal carries no role claims and <code>Role</code> is null (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/ICurrentUserService.cs:45-64,88-89</code>), so an anonymous caller falls into the public audience by construction. Case-insensitive comparison and reading <em>every</em> role claim rather than only the first are likewise inherited from that default member (<code>ICurrentUserService.cs:88-89</code>), so a future multi-role token needs no change here.</li>
+          </ul>
+          </li>
+          <li><p><strong>Why it&#39;s built this way, and why it lives in the module</strong>: two choices worth naming.</p>
+          <ul>
+          <li><em>An extension over the interface, not a helper on a controller base.</em> The seven callers straddle both generic bases from Common: three derive from <a href="group-12-api-hosting-mapping.html#aggregaterootentitycontrollerbasetentity-tentitydto-tidentifiertype-tcreaterequest">AggregateRootEntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType, TCreateRequest&gt;</a> and four from <a href="group-12-api-hosting-mapping.html#entitycontrollerbasetentity-tentitydto-tidentifiertype">EntityControllerBase&lt;TEntity, TEntityDTO, TIdentifierType&gt;</a>. A protected helper on either base would reach only half of them, and putting it on both would push Conference vocabulary into MMCA.Common. Every caller already injects <code>ICurrentUserService</code> for its own reasons (<code>SessionsController.cs:52</code>, <code>EventsController.cs:55</code>, <code>SpeakersController.cs:57</code>), so extending that interface reaches all seven with no constructor change and no new registration.</li>
+          <li><em>Module, not Common.</em> The method&#39;s entire meaning is <code>ConferenceReadAudience</code>, which is Conference vocabulary: &quot;privileged reader&quot; has no definition in the framework. Common&#39;s <code>ICurrentUserService</code> is deliberately module-agnostic and says so where it explains <code>GetClaimValue&lt;T&gt;</code> as the way to read module-specific claims &quot;without coupling Common to specific modules&quot; (<code>ICurrentUserService.cs:68</code>). Declaring the extension in <code>MMCA.ADC.Conference.API.Authorization</code> keeps the dependency pointing one way: Conference references Common, Common never learns the word &quot;Conference&quot;. <code>[Rubric §3, Clean Architecture]</code> (assesses dependency direction across layer and package boundaries).</li>
+          </ul>
+          </li>
+          <li><p><strong>Where it&#39;s used</strong>: seven Conference REST controllers, all on read paths. Six expose it as <code>private bool IsPrivileged</code>: <a href="#sessionscontroller">SessionsController</a> (<code>SessionsController.cs:59</code>, consumed at <code>:70</code>), <a href="#speakerscontroller">SpeakersController</a> (<code>SpeakersController.cs:64,87</code>), <a href="#sessionspeakerscontroller">SessionSpeakersController</a> (<code>SessionSpeakersController.cs:59,69</code>), <a href="#eventspeakerscontroller">EventSpeakersController</a> (<code>EventSpeakersController.cs:58,68</code>), <a href="#sessioncategoryitemscontroller">SessionCategoryItemsController</a> (<code>SessionCategoryItemsController.cs:59,69</code>), and <a href="#speakercategoryitemscontroller">SpeakerCategoryItemsController</a> (<code>SpeakerCategoryItemsController.cs:59,69</code>). <a href="#eventscontroller">EventsController</a> calls it inline inside <code>GetPublishedEventSpecification()</code> (<code>EventsController.cs:68</code>). Two downstream shapes follow from the boolean: the list and paged actions pass the specification (or <code>null</code>) to the query service, and the <code>GET /lookup</code> actions branch on it, delegating to the framework base action for a privileged reader and to <a href="#publiclookupreader">PublicLookupReader</a> for everyone else (<code>EventsController.cs:142-150</code>, <code>SpeakersController.cs:216-225</code>). The Conference service host is the other half of the single-source-of-truth pair: it spreads the same <code>ConferenceReadAudience.PrivilegedRoles</code> into the output-cache <code>adminBypassRoles</code> array and names this method in the comment explaining why the two lists must agree (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:198-201</code>).</p>
+          </li>
+          <li><p><strong>Caveats / not-in-source</strong>: there is no unit-test file for this type. Its behavior is pinned indirectly through the controller tests, which mock <code>ICurrentUserService</code> with <code>CallBase = true</code> and stub only <code>Role</code>, so the real default-interface <code>Roles</code> and <code>IsInRole</code> implementations execute (<code>MMCA.ADC/Tests/Modules/Conference/MMCA.ADC.Conference.API.Tests/Controllers/SpeakersControllerTests.cs:45,50</code>); the privileged-versus-anonymous split is asserted at <code>SpeakersControllerTests.cs:548,569</code>. The class is <code>public</code> rather than <code>internal</code>, so nothing prevents a caller outside <code>MMCA.ADC.Conference.API</code> from using it, and whether a given JWT actually carries <code>Organizer</code> or <code>ContentEditor</code> is decided by the Identity module and is not visible from this file.</p>
+          </li>
           </ul>
           <h3 id="eventlivevalidationgrpcservice">EventLiveValidationGrpcService</h3>
           <blockquote>

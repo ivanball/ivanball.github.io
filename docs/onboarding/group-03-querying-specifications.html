@@ -342,7 +342,7 @@
           <hr>
           <h3 id="propertyaccessor">PropertyAccessor</h3>
           <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services</code> (private, nested in <code>QueryFieldService</code>) · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:23</code> · Level 0 · record struct (readonly, private)</p>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application.Services</code> (private, nested in <code>QueryFieldService</code>) · <code>MMCA.Common/Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:46</code> · Level 0 · record struct (readonly, private)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: a tiny <code>private readonly record struct</code> declared inside
@@ -354,31 +354,36 @@
           <li><strong>Concept introduced, compile-once expression delegates instead of per-call reflection.</strong>
           <code>[Rubric §12, Performance &amp; Scalability]</code> (assesses whether hot paths avoid avoidable per-request
           work): <code>PropertyInfo.GetValue</code> allocates an argument array on <em>every</em> invocation, and shaping a
-          1,000-row page with 20 properties would pay that cost 20,000 times. Building a
-          <code>Func&lt;object, object?&gt;</code> once per type from an <code>Expression.Lambda</code> (<code>QueryFieldService.cs:33-37</code>) and
-          caching it collapses each read to a delegate call. The <code>readonly record struct</code> shape is the
-          idiomatic .NET carrier for a small immutable tuple of values: no heap allocation per element,
-          structural equality for free.</li>
+          1,000-row page with 20 properties would pay that cost 20,000 times. The getter is instead built as
+          an expression tree and compiled once per property, inside the per-type loop in <code>GetAccessors</code>
+          (<code>QueryFieldService.cs:53-62</code>): a parameter of <code>object</code> (<code>:56</code>), a cast to the entity type (<code>:57</code>),
+          the property access (<code>:58</code>), a box back to <code>object</code> (<code>:59</code>), then
+          <code>Expression.Lambda&lt;Func&lt;object, object?&gt;&gt;(...).Compile()</code> (<code>:60</code>). Caching the result collapses each
+          later read to a delegate call. The <code>readonly record struct</code> shape is the idiomatic .NET carrier for
+          a small immutable tuple of values: no heap allocation per element, structural equality for free.</li>
           <li><strong>Walkthrough</strong>: the whole type is one positional declaration,
-          <code>private readonly record struct PropertyAccessor(string PropertyName, string CamelCaseName, Func&lt;object, object?&gt; GetValue)</code> (<code>QueryFieldService.cs:23</code>).<ul>
-          <li><code>PropertyName</code> is what a requested <code>?fields=</code> entry is matched against, case-insensitively
-          (<code>QueryFieldService.cs:292</code>).</li>
-          <li><code>CamelCaseName</code> is computed once at construction with <code>JsonNamingPolicy.CamelCase.ConvertName</code>
-          (<code>:38</code>, policy held at <code>:20</code>) and becomes the <code>ExpandoObject</code> key, so the shaped payload matches
-          the JSON casing a typed DTO would produce.</li>
-          <li><code>GetValue</code> is the compiled getter, invoked once per property per row inside <code>ShapeData</code> (<code>:60</code>)
-          and <code>ShapeCollectionData</code> (<code>:87</code>).</li>
+          <code>private readonly record struct PropertyAccessor(string PropertyName, string CamelCaseName, Func&lt;object, object?&gt; GetValue)</code> (<code>QueryFieldService.cs:46</code>).<ul>
+          <li><code>PropertyName</code> is the raw CLR name (<code>:61</code>) and is what a requested <code>?fields=</code> entry is matched
+          against, case-insensitively, when the accessor array is filtered down to the requested subset in
+          <code>FilterAccessorsByFields</code> (<code>:387-393</code>, the <code>StringComparer.OrdinalIgnoreCase</code> match at <code>:392</code>).</li>
+          <li><code>CamelCaseName</code> is computed once at construction with <code>CamelCase.ConvertName(prop.Name)</code> (<code>:61</code>,
+          the <code>JsonNamingPolicy.CamelCase</code> field held at <code>:43</code>) and becomes the <code>ExpandoObject</code> key, so the
+          shaped payload matches the JSON casing a typed DTO would produce.</li>
+          <li><code>GetValue</code> is the compiled getter, invoked once per property per row: in <code>ShapeData</code> (<code>:75-87</code>,
+          the invocation at <code>:83</code>) and in <code>ShapeCollectionData</code> (<code>:96-117</code>, the invocation at <code>:110</code>).</li>
           </ul>
           </li>
           <li><strong>Why it&#39;s built this way</strong>: <code>private</code> keeps a hot-path implementation detail out of the public
           surface; the struct plus record combination gives an allocation-free value carrier that is cheap to
           store in the cached arrays.</li>
           <li><strong>Where it&#39;s used</strong>: exclusively inside <a href="#queryfieldservice"><code>QueryFieldService</code></a>. Two caches hold
-          it: <code>AccessorCache</code> (<code>ConcurrentDictionary&lt;Type, PropertyAccessor[]&gt;</code>, <code>:19</code>), populated once per
-          entity/DTO type by <code>GetAccessors&lt;TEntity&gt;</code> (<code>:25-42</code>), and <code>ShapedAccessorCache</code>
-          (<code>ConcurrentDictionary&lt;(Type EntityType, string Fields), PropertyAccessor[]&gt;</code>, <code>:299</code>), which holds
+          it: <code>AccessorCache</code> (<code>ConcurrentDictionary&lt;Type, PropertyAccessor[]&gt;</code>, <code>:42</code>), populated once per
+          entity/DTO type by <code>GetAccessors&lt;TEntity&gt;</code> (<code>:48-65</code>), and <code>ShapedAccessorCache</code>
+          (<code>ConcurrentDictionary&lt;(Type EntityType, string Fields), PropertyAccessor[]&gt;</code>, <code>:405</code>), which holds
           the pre-filtered subset for a given <code>fields=</code> request. Both are read by <code>GetShapedAccessors</code>
-          (<code>:305-316</code>).</li>
+          (<code>:411-436</code>), which returns the full array when no field list was given (<code>:416-417</code>) and, once
+          <code>ShapedAccessorCache</code> has reached the <code>MaxCacheEntries</code> cap of 512 (<code>:39</code>), filters per request
+          rather than admitting another client-shaped key (<code>:429-430</code>).</li>
           </ul>
           <hr>
           <blockquote>

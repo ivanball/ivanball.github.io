@@ -219,7 +219,7 @@ The request reaches a read controller, [`EntityControllerBase<TEntity, TEntityDT
 ---
 
 ### PropertyAccessor
-> MMCA.Common.Application · `MMCA.Common.Application.Services` (private, nested in `QueryFieldService`) · `MMCA.Common/Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:23` · Level 0 · record struct (readonly, private)
+> MMCA.Common.Application · `MMCA.Common.Application.Services` (private, nested in `QueryFieldService`) · `MMCA.Common/Source/Core/MMCA.Common.Application/Services/QueryFieldService.cs:46` · Level 0 · record struct (readonly, private)
 
 - **What it is**: a tiny `private readonly record struct` declared inside
   [`QueryFieldService`](#queryfieldservice) that bundles a property's CLR name, its pre-computed
@@ -230,30 +230,35 @@ The request reaches a read controller, [`EntityControllerBase<TEntity, TEntityDT
 - **Concept introduced, compile-once expression delegates instead of per-call reflection.**
   `[Rubric §12, Performance & Scalability]` (assesses whether hot paths avoid avoidable per-request
   work): `PropertyInfo.GetValue` allocates an argument array on *every* invocation, and shaping a
-  1,000-row page with 20 properties would pay that cost 20,000 times. Building a
-  `Func<object, object?>` once per type from an `Expression.Lambda` (`QueryFieldService.cs:33-37`) and
-  caching it collapses each read to a delegate call. The `readonly record struct` shape is the
-  idiomatic .NET carrier for a small immutable tuple of values: no heap allocation per element,
-  structural equality for free.
+  1,000-row page with 20 properties would pay that cost 20,000 times. The getter is instead built as
+  an expression tree and compiled once per property, inside the per-type loop in `GetAccessors`
+  (`QueryFieldService.cs:53-62`): a parameter of `object` (`:56`), a cast to the entity type (`:57`),
+  the property access (`:58`), a box back to `object` (`:59`), then
+  `Expression.Lambda<Func<object, object?>>(...).Compile()` (`:60`). Caching the result collapses each
+  later read to a delegate call. The `readonly record struct` shape is the idiomatic .NET carrier for
+  a small immutable tuple of values: no heap allocation per element, structural equality for free.
 - **Walkthrough**: the whole type is one positional declaration,
   `private readonly record struct PropertyAccessor(string PropertyName, string CamelCaseName,
-  Func<object, object?> GetValue)` (`QueryFieldService.cs:23`).
-  - `PropertyName` is what a requested `?fields=` entry is matched against, case-insensitively
-    (`QueryFieldService.cs:292`).
-  - `CamelCaseName` is computed once at construction with `JsonNamingPolicy.CamelCase.ConvertName`
-    (`:38`, policy held at `:20`) and becomes the `ExpandoObject` key, so the shaped payload matches
-    the JSON casing a typed DTO would produce.
-  - `GetValue` is the compiled getter, invoked once per property per row inside `ShapeData` (`:60`)
-    and `ShapeCollectionData` (`:87`).
+  Func<object, object?> GetValue)` (`QueryFieldService.cs:46`).
+  - `PropertyName` is the raw CLR name (`:61`) and is what a requested `?fields=` entry is matched
+    against, case-insensitively, when the accessor array is filtered down to the requested subset in
+    `FilterAccessorsByFields` (`:387-393`, the `StringComparer.OrdinalIgnoreCase` match at `:392`).
+  - `CamelCaseName` is computed once at construction with `CamelCase.ConvertName(prop.Name)` (`:61`,
+    the `JsonNamingPolicy.CamelCase` field held at `:43`) and becomes the `ExpandoObject` key, so the
+    shaped payload matches the JSON casing a typed DTO would produce.
+  - `GetValue` is the compiled getter, invoked once per property per row: in `ShapeData` (`:75-87`,
+    the invocation at `:83`) and in `ShapeCollectionData` (`:96-117`, the invocation at `:110`).
 - **Why it's built this way**: `private` keeps a hot-path implementation detail out of the public
   surface; the struct plus record combination gives an allocation-free value carrier that is cheap to
   store in the cached arrays.
 - **Where it's used**: exclusively inside [`QueryFieldService`](#queryfieldservice). Two caches hold
-  it: `AccessorCache` (`ConcurrentDictionary<Type, PropertyAccessor[]>`, `:19`), populated once per
-  entity/DTO type by `GetAccessors<TEntity>` (`:25-42`), and `ShapedAccessorCache`
-  (`ConcurrentDictionary<(Type EntityType, string Fields), PropertyAccessor[]>`, `:299`), which holds
+  it: `AccessorCache` (`ConcurrentDictionary<Type, PropertyAccessor[]>`, `:42`), populated once per
+  entity/DTO type by `GetAccessors<TEntity>` (`:48-65`), and `ShapedAccessorCache`
+  (`ConcurrentDictionary<(Type EntityType, string Fields), PropertyAccessor[]>`, `:405`), which holds
   the pre-filtered subset for a given `fields=` request. Both are read by `GetShapedAccessors`
-  (`:305-316`).
+  (`:411-436`), which returns the full array when no field list was given (`:416-417`) and, once
+  `ShapedAccessorCache` has reached the `MaxCacheEntries` cap of 512 (`:39`), filters per request
+  rather than admitting another client-shaped key (`:429-430`).
 
 ---
 

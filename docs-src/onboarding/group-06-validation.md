@@ -240,7 +240,7 @@ ADRs and the layering rules the architecture fitness tests enforce (primer §4).
   fields.
 
 ### AddressValidator
-> MMCA.Common.Application · `MMCA.Common.Application.Validation` · `MMCA.Common/Source/Core/MMCA.Common.Application/Validation/AddressValidationRules.cs:12` · Level 5 · class (sealed)
+> MMCA.Common.Application · `MMCA.Common.Application.Validation` · `MMCA.Common/Source/Core/MMCA.Common.Application/Validation/AddressValidationRules.cs:13` · Level 5 · class (sealed)
 
 - **What it is**: a composite `AbstractValidator<Address>` that validates the whole
   [`Address`](group-02-domain-building-blocks.md#address) value object by `Include()`-ing the six

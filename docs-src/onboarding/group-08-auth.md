@@ -913,7 +913,7 @@ live in later groups; this chapter is the engine those endpoints call into.
 ---
 
 ### SessionCookieRequest
-> MMCA.Common.API · `MMCA.Common.API.SessionCookies` · `MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieEndpoints.cs:69` · Level 0 · record
+> MMCA.Common.API · `MMCA.Common.API.SessionCookies` · `MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieEndpoints.cs:72` · Level 0 · record
 
 - **What it is**: the inbound body for `POST /auth/session-cookie`: the access and refresh token strings the browser hands back to the server so they can be re-issued as HttpOnly cookies.
 - **Depends on**: nothing first-party; a two-string `sealed record`. Consumed by [`SessionCookieEndpoints`](#sessioncookieendpoints).
@@ -958,7 +958,7 @@ live in later groups; this chapter is the engine those endpoints call into.
 ---
 
 ### CookieSessionRefreshMiddleware
-> MMCA.Common.API · `MMCA.Common.API.SessionCookies` · `MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefreshMiddleware.cs:14` · Level 2 · class
+> MMCA.Common.API · `MMCA.Common.API.SessionCookies` · `MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefreshMiddleware.cs:13` · Level 2 · class
 
 - **What it is**: an ASP.NET middleware that runs before `UseAuthentication` on full-page navigations and, when the access cookie has expired but the refresh cookie is still valid, refreshes server-side so SSR `[Authorize]` survives instead of bouncing to `/login`.
 - **Depends on**: `RequestDelegate` and [`ICookieSessionRefresher`](#icookiesessionrefresher) (constructor injected, line 14). Registered by [`CookieSessionRefreshMiddlewareExtensions`](#cookiesessionrefreshmiddlewareextensions).
@@ -995,7 +995,7 @@ live in later groups; this chapter is the engine those endpoints call into.
 ---
 
 ### CookieSessionRefreshMiddlewareExtensions
-> MMCA.Common.API · `MMCA.Common.API.SessionCookies` · `MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefreshMiddleware.cs:36` · Level 3 · class
+> MMCA.Common.API · `MMCA.Common.API.SessionCookies` · `MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefreshMiddleware.cs:35` · Level 3 · class
 
 - **What it is**: a one-method registration helper (`UseCookieSessionRefresh`) that adds [`CookieSessionRefreshMiddleware`](#cookiesessionrefreshmiddleware) to the pipeline.
 - **Depends on**: `IApplicationBuilder` (ASP.NET) and [`CookieSessionRefreshMiddleware`](#cookiesessionrefreshmiddleware).
@@ -1315,7 +1315,7 @@ live in later groups; this chapter is the engine those endpoints call into.
 ---
 
 ### LoginProtectionService
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:18` · Level 4 · class
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Auth` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:19` · Level 4 · class
 
 - **What it is**: the cache-backed brute-force and rate-limiting service: exponential-backoff account
   lockout after repeated login failures, plus a per-IP registration rate limit

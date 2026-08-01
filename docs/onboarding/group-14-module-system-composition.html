@@ -247,6 +247,13 @@
           (<code>DependencyInjection.cs:253</code>), and the typed-client helper
           <code>AddTypedServiceClient&lt;TInterface, TImplementation&gt;(serviceName)</code> (<code>DependencyInjection.cs:441</code>) that
           swaps an in-process abstraction for a cross-process transport.</p>
+          <p><code>AddCaching</code> also registers this chapter&#39;s one cross-replica primitive: an
+          <a href="group-05-cqrs-pipeline.html#idistributedlock"><code>IDistributedLock</code></a> that resolves to
+          <a href="#redisdistributedlock"><code>RedisDistributedLock</code></a> when the host has an <code>IConnectionMultiplexer</code>
+          registered, and to the warn-once <a href="#inprocessdistributedlock"><code>InProcessDistributedLock</code></a> otherwise
+          (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:181-195</code>). That fallback is exclusive only inside
+          one process, so a multi-replica host which never registers a Redis client gets one execution of the
+          guarded section per replica.</p>
           <p>The <strong>order</strong> of these calls is a hard contract in exactly one respect, and it is the reason
           <code>AddApplicationDecorators()</code> must come <em>last</em>. Decorators are registered with <strong>Scrutor&#39;s
           <code>TryDecorate</code></strong>, which wraps <em>existing</em> registrations (<code>DependencyInjection.cs:94-103</code>), so the
@@ -569,7 +576,7 @@
           <hr>
           <h3 id="dependencyinjection">DependencyInjection</h3>
           <blockquote>
-          <p>MMCA.Common.Application · <code>MMCA.Common.Application</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:21</code> · Level 9 · class (static, C# <code>extension(IServiceCollection)</code>)</p>
+          <p>MMCA.Common.Application · <code>MMCA.Common.Application</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:20</code> · Level 9 · class (static, C# <code>extension(IServiceCollection)</code>)</p>
           </blockquote>
           <ul>
           <li><p><strong>What it is</strong>: the composition-root extension class that assembles the framework&#39;s entire Application layer into the DI container. It exposes four <code>IServiceCollection</code> extension methods: <code>AddApplication()</code>, <code>AddApplicationDecorators()</code>, <code>ScanModuleApplicationServices&lt;TAssemblyMarker&gt;()</code>, and <code>AddApplicationProfiling()</code>. Every consuming host calls these (in a specific order) before wiring Infrastructure.</p>
@@ -662,6 +669,44 @@
           </li>
           </ul>
           <hr>
+          <h3 id="inprocesslockhandle">InProcessLockHandle</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Concurrency</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Concurrency/InProcessDistributedLock.cs:79</code> · Level 0 · class (private nested, sealed)</p>
+          </blockquote>
+          <ul>
+          <li><p><strong>What it is</strong>: the disposable release token that <a href="#inprocessdistributedlock"><code>InProcessDistributedLock</code></a> hands back on a successful acquire. Disposing it removes exactly the key that acquisition added, exactly once.</p>
+          </li>
+          <li><p><strong>Depends on</strong>: nothing first-party. BCL only: the owner&#39;s <code>ConcurrentDictionary&lt;string, byte&gt;</code> and the key are passed into its primary constructor; <code>Interlocked</code> provides the once-only latch, <code>IAsyncDisposable</code>/<code>ValueTask</code> the shape.</p>
+          </li>
+          <li><p><strong>Concept introduced, the acquisition handle as a scope token.</strong> <code>[Rubric §2, Design Patterns]</code> assesses whether recurring problems use recognised patterns deliberately; returning a disposable instead of exposing a <code>Release(key)</code> method is the scope-bound-resource shape the <a href="group-05-cqrs-pipeline.html#idistributedlock"><code>IDistributedLock</code></a> contract mandates, and it is what lets <code>await using</code> release the lock even when the guarded work throws. The token is also what makes release <strong>owner-scoped</strong>: the handle closes over the key it added, so it cannot free anybody else&#39;s acquisition.</p>
+          </li>
+          <li><p><strong>Walkthrough</strong>: the primary constructor takes the owner&#39;s <code>held</code> dictionary and the <code>key</code> (<code>InProcessDistributedLock.cs:79</code>); a single <code>int _released</code> field (<code>InProcessDistributedLock.cs:81</code>) is the latch. <code>DisposeAsync</code> (<code>InProcessDistributedLock.cs:83-91</code>) runs <code>Interlocked.Exchange(ref _released, 1) == 0</code> and only then calls <code>held.TryRemove(key, out _)</code> (<code>InProcessDistributedLock.cs:85-88</code>), so a second disposal is a no-op and the contract&#39;s &quot;disposal is idempotent&quot; clause holds. It returns <code>ValueTask.CompletedTask</code> (<code>InProcessDistributedLock.cs:90</code>) because removing a key from a <code>ConcurrentDictionary</code> is synchronous, so there is no state machine to allocate.</p>
+          </li>
+          <li><p><strong>Why it&#39;s built this way</strong>: an interlocked latch rather than a plain bool because a handle can be disposed from more than one thread (an <code>await using</code> unwind plus an explicit dispose), and the removal has to happen exactly once, or a late second dispose would evict a key a different caller has since acquired.</p>
+          </li>
+          <li><p><strong>Where it&#39;s used</strong>: constructed by <code>InProcessDistributedLock.TryAcquireAsync</code> (<code>InProcessDistributedLock.cs:63</code>) and returned as the contract&#39;s <code>IAsyncDisposable?</code>; the API <a href="group-12-api-hosting-mapping.html#idempotencyfilter"><code>IdempotencyFilter</code></a> is the caller that disposes it.</p>
+          </li>
+          </ul>
+          <hr>
+          <h3 id="redislockhandle">RedisLockHandle</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Concurrency</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Concurrency/RedisDistributedLock.cs:88</code> · Level 0 · class (private nested, sealed)</p>
+          </blockquote>
+          <ul>
+          <li><p><strong>What it is</strong>: the release token for a <a href="#redisdistributedlock"><code>RedisDistributedLock</code></a> acquisition. Disposing it runs a compare-and-delete Lua script that removes the Redis key only while it still carries this acquisition&#39;s token.</p>
+          </li>
+          <li><p><strong>Depends on</strong>: nothing first-party. Externals: StackExchange.Redis (<code>IDatabase</code>, <code>RedisKey</code>, <code>RedisValue</code>, <code>RedisResult</code>) and <code>Microsoft.Extensions.Logging</code>; <code>Interlocked</code> for the latch. Same handle shape as <a href="#inprocesslockhandle"><code>InProcessLockHandle</code></a>, with real asynchronous work in the release.</p>
+          </li>
+          <li><p><strong>Concept</strong>: the owner-token release, the half of the <code>SET NX PX</code> lock that keeps it honest (the acquire half is taught under <a href="#redisdistributedlock"><code>RedisDistributedLock</code></a>). <code>[Rubric §13, Observability &amp; Operability]</code> assesses whether a system reports its own degradation: a release that finds nothing to delete is exactly the case where the guarded section outran its time-to-live and stopped being exclusive, so the handle logs a warning naming the key rather than swallowing it.</p>
+          </li>
+          <li><p><strong>Walkthrough</strong>: the primary constructor captures the <code>IDatabase</code>, the already-qualified <code>RedisKey</code>, this acquisition&#39;s <code>RedisValue</code> token, and a logger (<code>RedisDistributedLock.cs:88-92</code>), with the same <code>int _released</code> latch (<code>RedisDistributedLock.cs:94</code>). <code>DisposeAsync</code> (<code>RedisDistributedLock.cs:96-113</code>) returns immediately when the latch was already set (<code>RedisDistributedLock.cs:98-101</code>); otherwise it evaluates <code>ReleaseScript</code> with that key and token (<code>RedisDistributedLock.cs:103-105</code>). The script is <code>if redis.call(&#39;get&#39;, KEYS[1]) == ARGV[1] then return redis.call(&#39;del&#39;, KEYS[1]) else return 0 end</code> (<code>RedisDistributedLock.cs:36-37</code>), one round trip that compares and deletes atomically on the server. A <code>0</code> result means the key was already gone or is owned by someone else now, so there is nothing to release and <code>LogLockAlreadyExpired</code> warns (<code>RedisDistributedLock.cs:109-112</code>, message text at <code>RedisDistributedLock.cs:84</code>).</p>
+          </li>
+          <li><p><strong>Why it&#39;s built this way</strong>: a plain <code>DEL</code> would let a caller whose lock had already expired free the <em>next</em> holder&#39;s lock, which is precisely the double execution the lock exists to prevent (<code>RedisDistributedLock.cs:32-34</code>). Doing the comparison inside a Lua script makes compare-and-delete atomic server-side instead of a racy get-then-delete from the client (<a href="https://ivanball.github.io/docs/adr/017-request-idempotency.html" target="_blank" rel="noopener">ADR-017</a>).</p>
+          </li>
+          <li><p><strong>Where it&#39;s used</strong>: constructed by <code>RedisDistributedLock.TryAcquireAsync</code> (<code>RedisDistributedLock.cs:72</code>). <code>RedisDistributedLockTests</code> (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Concurrency/RedisDistributedLockTests.cs:15</code>) asserts the acquire/release pairing against a mocked <code>IDatabase</code>.</p>
+          </li>
+          </ul>
+          <hr>
           <h3 id="usedatasourceattribute">UseDataSourceAttribute</h3>
           <blockquote>
           <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/UseDataSourceAttribute.cs:13</code> · Level 1 · class (sealed attribute)</p>
@@ -686,9 +731,62 @@
           </li>
           </ul>
           <hr>
+          <h3 id="inprocessdistributedlock">InProcessDistributedLock</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Concurrency</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Concurrency/InProcessDistributedLock.cs:31</code> · Level 1 · class (internal, sealed, partial)</p>
+          </blockquote>
+          <ul>
+          <li><p><strong>What it is</strong>: the fallback <a href="group-05-cqrs-pipeline.html#idistributedlock"><code>IDistributedLock</code></a> for a host with no Redis connection registered. It serializes callers inside this one process, and it says so in the log the first time anybody uses it.</p>
+          </li>
+          <li><p><strong>Depends on</strong>: <a href="group-05-cqrs-pipeline.html#idistributedlock"><code>IDistributedLock</code></a> (the contract it implements, from <code>MMCA.Common.Application.Interfaces</code>, imported at <code>InProcessDistributedLock.cs:4</code>), <code>ILogger&lt;InProcessDistributedLock&gt;</code> injected through the primary constructor (<code>InProcessDistributedLock.cs:31</code>), and its own nested <a href="#inprocesslockhandle"><code>InProcessLockHandle</code></a>. BCL: <code>ConcurrentDictionary</code>, <code>Interlocked</code>, <code>Stopwatch</code>, <code>Task.Delay</code>.</p>
+          </li>
+          <li><p><strong>Concept introduced, the degraded implementation that announces itself.</strong> <code>[Rubric §12, Performance &amp; Scalability]</code> assesses whether the design survives horizontal scale-out: each replica gets its own instance of this class and therefore its own held-key table, so with more than one replica a section guarded by this lock <strong>still runs once per replica</strong> (<code>InProcessDistributedLock.cs:12-14</code>). That is correct for a single-replica deployment, for local development, and for tests, and wrong for anything else, which is why the fallback is not silent. <code>[Rubric §13, Observability &amp; Operability]</code> assesses whether an operator can see a degraded mode: the first acquisition emits a <code>[LoggerMessage]</code>-generated warning that names both the cause and the fix (<code>InProcessDistributedLock.cs:75-76</code>, &quot;no <code>IConnectionMultiplexer</code> is registered ... Register a Redis client (<code>AddRedisClient</code>) to make it exclusive across replicas&quot;).</p>
+          </li>
+          <li><p><strong>Walkthrough</strong>:</p>
+          <ul>
+          <li><strong>State.</strong> <code>PollInterval</code> is 25 ms (<code>InProcessDistributedLock.cs:34</code>), the gap between acquisition attempts while waiting for a holder. <code>_held</code> is a <code>ConcurrentDictionary&lt;string, byte&gt;</code> with <code>StringComparer.Ordinal</code> (<code>InProcessDistributedLock.cs:36</code>), used as a set: the value byte is a placeholder and only key presence matters. <code>_degradationWarned</code> is the warn-once flag (<code>InProcessDistributedLock.cs:39</code>).</li>
+          <li><strong>Guards and the warning.</strong> <code>TryAcquireAsync</code> (<code>InProcessDistributedLock.cs:42-73</code>) rejects a blank key, a non-positive <code>ttl</code>, and a negative <code>wait</code> (<code>InProcessDistributedLock.cs:48-50</code>), then flips the flag with <code>Interlocked.Exchange(ref _degradationWarned, 1) == 0</code> so a steady state warns once rather than per request (<code>InProcessDistributedLock.cs:52-55</code>).</li>
+          <li><strong>The acquire loop</strong> (<code>InProcessDistributedLock.cs:59-72</code>). <code>_held.TryAdd(key, 0)</code> is the atomic test-and-set: it succeeds only for the caller that inserts the key, and that caller gets an <a href="#inprocesslockhandle"><code>InProcessLockHandle</code></a> (<code>InProcessDistributedLock.cs:61-63</code>). Otherwise, if <code>Stopwatch.GetElapsedTime(startedAt) &gt;= wait</code> the method returns <code>null</code> (<code>InProcessDistributedLock.cs:66-69</code>), which is what makes <code>wait: TimeSpan.Zero</code> a single non-blocking attempt exactly as the contract promises. Otherwise it awaits <code>Task.Delay(PollInterval, cancellationToken)</code> and retries (<code>InProcessDistributedLock.cs:71</code>).</li>
+          <li><strong>Exact keys, not stripes.</strong> The remarks explain the one design choice that differs from <a href="group-08-auth.html#keyedsemaphorestripe"><code>KeyedSemaphoreStripe</code></a> (<code>InProcessDistributedLock.cs:19-24</code>): stripes let two unrelated keys share a semaphore, which is harmless for a caller that waits indefinitely but not for a <em>bounded</em> wait, where the false sharing turns into a spurious &quot;held elsewhere&quot; answer for a key nobody holds. The table stays bounded by the number of locks held right now, not by every key the process has ever seen, because the handle removes the entry on release.</li>
+          <li><strong><code>ttl</code> is accepted and ignored</strong> (<code>InProcessDistributedLock.cs:26-29</code>). It is validated (<code>InProcessDistributedLock.cs:49</code>) but never used: the TTL exists to bound a holder that died without releasing, and here the holder is a task in this process, so if the process dies the table dies with it.</li>
+          </ul>
+          </li>
+          <li><p><strong>Why it&#39;s built this way</strong>: <a href="https://ivanball.github.io/docs/adr/017-request-idempotency.html" target="_blank" rel="noopener">ADR-017</a> makes the lock a registration rather than an optional dependency, so a host always resolves <em>something</em>; this type is the honest floor of that guarantee. Logging the degradation once, instead of silently behaving like a lock, is what keeps &quot;we have a distributed lock&quot; from becoming a false belief in a multi-replica deployment.</p>
+          </li>
+          <li><p><strong>Where it&#39;s used</strong>: registered by <code>AddCaching</code> in the Infrastructure composition root when no <code>IConnectionMultiplexer</code> is resolvable (<code>DependencyInjection.cs:192-194</code>, see <a href="#dependencyinjection"><code>DependencyInjection</code></a>), which covers MMCA.Helpdesk, local single-process runs, and tests. Behaviour is pinned by <code>InProcessDistributedLockTests</code> (<code>MMCA.Common/Tests/Core/MMCA.Common.Infrastructure.Tests/Concurrency/InProcessDistributedLockTests.cs:12</code>); the selection logic itself is covered in <code>DependencyInjectionTests</code>.</p>
+          </li>
+          </ul>
+          <hr>
+          <h3 id="redisdistributedlock">RedisDistributedLock</h3>
+          <blockquote>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Concurrency</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Concurrency/RedisDistributedLock.cs:24</code> · Level 2 · class (internal, sealed, partial)</p>
+          </blockquote>
+          <ul>
+          <li><p><strong>What it is</strong>: the cross-replica <a href="group-05-cqrs-pipeline.html#idistributedlock"><code>IDistributedLock</code></a>, implemented as the standard <code>SET key token NX PX ttl</code> Redis lock against a single Redis instance.</p>
+          </li>
+          <li><p><strong>Depends on</strong>: <code>IConnectionMultiplexer</code> and the rest of StackExchange.Redis (<code>IDatabase</code>, <code>RedisKey</code>, <code>RedisValue</code>, <code>RedisResult</code>), <code>ILogger&lt;RedisDistributedLock&gt;</code>, and an optional <a href="group-09-caching.html#cachekeynamespace"><code>CacheKeyNamespace</code></a> (<code>RedisDistributedLock.cs:24-27</code>), which is what puts this type at Level 2 rather than Level 1. It returns its nested <a href="#redislockhandle"><code>RedisLockHandle</code></a>.</p>
+          </li>
+          <li><p><strong>Concept</strong>: the acquire half of the lock taught in two pieces with <a href="#redislockhandle"><code>RedisLockHandle</code></a>. <code>[Rubric §12, Performance &amp; Scalability]</code> assesses scale-out correctness: moving the lock into Redis is what makes &quot;only one of these runs at a time&quot; true across replicas instead of true per process, which is the whole reason the abstraction exists (see <a href="#inprocessdistributedlock"><code>InProcessDistributedLock</code></a> for the degraded alternative). <code>[Rubric §29, Resilience, Reliability &amp; Business Continuity]</code> assesses failure behaviour: the expiry carried on the <code>SET</code> is the crash guard (a holder that dies releases by expiry rather than wedging the key forever), and the class documents that it is deliberately <strong>single-instance, not Redlock</strong> (<code>RedisDistributedLock.cs:19-22</code>), inheriting Redis&#39;s failover behaviour, which is exactly why the contract is documented as best-effort.</p>
+          </li>
+          <li><p><strong>Walkthrough</strong>:</p>
+          <ul>
+          <li><strong>State.</strong> <code>KeyPrefix</code> is <code>&quot;lock:&quot;</code> (<code>RedisDistributedLock.cs:30</code>) so lock entries cannot collide with cache entries in a shared instance. <code>ReleaseScript</code> (<code>RedisDistributedLock.cs:36-37</code>) is the compare-and-delete Lua taught under <a href="#redislockhandle"><code>RedisLockHandle</code></a>. <code>PollInterval</code> is 50 ms (<code>RedisDistributedLock.cs:40</code>); unlike the in-process poll, each retry here is a network round trip. <code>_keys</code> falls back to <code>CacheKeyNamespace.None</code> when no namespace was injected (<code>RedisDistributedLock.cs:42</code>), so the <code>Cache:KeyPrefix</code> option (when configured) qualifies lock keys the same way it qualifies cache keys.</li>
+          <li><strong>Argument guards.</strong> <code>TryAcquireAsync</code> (<code>RedisDistributedLock.cs:45-82</code>) applies the same three checks as the in-process implementation: non-blank key, <code>ttl</code> greater than zero, non-negative <code>wait</code> (<code>RedisDistributedLock.cs:51-53</code>).</li>
+          <li><strong>Key and token.</strong> The physical key is <code>_keys.Qualify(&quot;lock:&quot; + key)</code> (<code>RedisDistributedLock.cs:55</code>). The token is a fresh <code>Guid.NewGuid().ToString(&quot;N&quot;, CultureInfo.InvariantCulture)</code> minted <strong>per acquisition</strong> (<code>RedisDistributedLock.cs:59</code>); the release script matches on it, and that is what makes a release owner-scoped instead of &quot;delete whatever is there now&quot; (<code>RedisDistributedLock.cs:57-58</code>).</li>
+          <li><strong>The acquire loop</strong> (<code>RedisDistributedLock.cs:64-81</code>). <code>StringSetAsync(redisKey, token, ttl, keepTtl: false, When.NotExists, CommandFlags.None)</code> (<code>RedisDistributedLock.cs:66-68</code>) is a single atomic conditional set carrying the expiry, so exactly one replica can win a key. On success it returns a <a href="#redislockhandle"><code>RedisLockHandle</code></a> closing over the database, key, token, and logger (<code>RedisDistributedLock.cs:70-73</code>); once <code>Stopwatch.GetElapsedTime(startedAt) &gt;= wait</code> it returns <code>null</code> (<code>RedisDistributedLock.cs:75-78</code>); otherwise it delays one <code>PollInterval</code> and retries (<code>RedisDistributedLock.cs:80</code>).</li>
+          </ul>
+          </li>
+          <li><p><strong>Why it&#39;s built this way</strong>: <a href="https://ivanball.github.io/docs/adr/017-request-idempotency.html" target="_blank" rel="noopener">ADR-017</a> (revised 2026-08-01) replaced the process-local guard around the idempotency filter&#39;s execute-then-store window with this, because a striped semaphore stops serializing anything once a service runs more than one replica. Choosing the one-instance <code>SET NX PX</code> lock over Redlock is a stated trade: simpler, dependent on a single Redis, and paired with a contract that tells callers never to lean on it for an invariant persistence can enforce.</p>
+          </li>
+          <li><p><strong>Where it&#39;s used</strong>: selected by <code>AddCaching</code> whenever an <code>IConnectionMultiplexer</code> is resolvable (<code>DependencyInjection.cs:183-190</code>, see <a href="#dependencyinjection"><code>DependencyInjection</code></a>), passing the same <a href="group-09-caching.html#cachekeynamespace"><code>CacheKeyNamespace</code></a> the distributed cache gets. Every deployed ADC and Store service host registers <code>AddRedisDistributedCache(&quot;redis&quot;)</code> plus <code>AddRedisClient(&quot;redis&quot;)</code> when a <code>redis</code> connection string is present (for example <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:116-124</code>), so those hosts get this implementation. The one in-framework caller is the API <a href="group-12-api-hosting-mapping.html#idempotencyfilter"><code>IdempotencyFilter</code></a>; <code>RedisDistributedLockTests</code> covers the acquire and release commands against a mocked <code>IDatabase</code>.</p>
+          </li>
+          <li><p><strong>Caveats / not-in-source</strong>: whether a given deployed environment actually supplies the <code>redis</code> connection string is an infrastructure/config fact, not a source fact, so &quot;which implementation is live in environment X&quot; is Not determinable from source here; the source only settles that the connection string decides it.</p>
+          </li>
+          </ul>
+          <hr>
           <h3 id="dependencyinjection-1">DependencyInjection</h3>
           <blockquote>
-          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:37</code> · Level 9 · class (static, extension)</p>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:38</code> · Level 9 · class (static, extension)</p>
           </blockquote>
           <ul>
           <li><p><strong>What it is</strong>: the single composition root for the entire Infrastructure layer. A static class whose body is one C# preview <code>extension(IServiceCollection services)</code> block (<code>DependencyInjection.cs:39</code>) adding the layer&#39;s registration methods directly onto <code>IServiceCollection</code>: <code>AddInfrastructure(IConfiguration)</code>, <code>AddCaching()</code>, <code>AddServices()</code>, <code>AddEntityConfigurationAssembly(Assembly)</code>, <code>AddNotificationInfrastructure()</code>, <code>AddPushNotifications(IConfiguration)</code>, <code>AddNativePushNotifications(IConfiguration)</code>, <code>AddAzureBlobFileStorage(IConfiguration)</code>, <code>AddBrokerMessaging(IConfiguration, Action?)</code>, and <code>AddTypedServiceClient&lt;TInterface, TImplementation&gt;(string)</code>.</p>

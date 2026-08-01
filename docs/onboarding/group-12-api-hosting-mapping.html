@@ -546,7 +546,7 @@
           </ul>
           <h3 id="externalauthextensions">ExternalAuthExtensions</h3>
           <blockquote>
-          <p>MMCA.Common.API · <code>MMCA.Common.API.Authentication</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authentication/ExternalAuthExtensions.cs:23</code> · Level 0 · class (static)</p>
+          <p>MMCA.Common.API · <code>MMCA.Common.API.Authentication</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Authentication/ExternalAuthExtensions.cs:21</code> · Level 0 · class (static)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: a static class that registers the external OAuth provider schemes (Google, GitHub) plus the short-lived cookie scheme that carries the external principal from the provider callback to the app&#39;s OAuth controller. It is the counterpart wiring that <code>AddCommonAuthentication</code> (JWT-only) deliberately leaves out.</li>
@@ -691,7 +691,7 @@
           </ul>
           <h3 id="idempotencyfilter">IdempotencyFilter</h3>
           <blockquote>
-          <p>MMCA.Common.API · <code>MMCA.Common.API.Idempotency</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:43</code> · Level 2 · class (sealed)</p>
+          <p>MMCA.Common.API · <code>MMCA.Common.API.Idempotency</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:48</code> · Level 2 · class (sealed)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the ASP.NET Core <code>IAsyncActionFilter</code> that gives write operations client-driven idempotency. A client attaches an <code>Idempotency-Key</code> header; the first successful response for that key is cached and every subsequent request carrying the same key gets the stored response back verbatim, without re-running the action.</li>
@@ -1011,7 +1011,7 @@
           <hr>
           <h3 id="errorhttpmapping">ErrorHttpMapping</h3>
           <blockquote>
-          <p>MMCA.Common.API · <code>MMCA.Common.API.Middleware</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:15</code> · Level 2 · class (internal static)</p>
+          <p>MMCA.Common.API · <code>MMCA.Common.API.Middleware</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:14</code> · Level 2 · class (internal static)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: The single source of truth that maps <a href="group-01-result-error-handling.html#errortype">ErrorType</a> values to HTTP status codes and builds the <code>errors</code> extension array for RFC 9457 Problem Details responses. It keeps <a href="#apicontrollerbase">ApiControllerBase</a> and <a href="#unhandledresultfailurefilter">UnhandledResultFailureFilter</a> consistent without duplicating the mapping.</li>
@@ -1209,7 +1209,7 @@
           <hr>
           <h3 id="jwksendpointextensions">JwksEndpointExtensions</h3>
           <blockquote>
-          <p>MMCA.Common.API · <code>MMCA.Common.API.Startup</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/JwksEndpointExtensions.cs:16</code> · Level 1 · class (static, extension block)</p>
+          <p>MMCA.Common.API · <code>MMCA.Common.API.Startup</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/JwksEndpointExtensions.cs:15</code> · Level 1 · class (static, extension block)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: maps <code>/.well-known/jwks.json</code>, serializing the active <code>JsonWebKeySet</code> of the
@@ -1259,7 +1259,7 @@
           <hr>
           <h3 id="oidcdiscoveryendpointextensions">OidcDiscoveryEndpointExtensions</h3>
           <blockquote>
-          <p>MMCA.Common.API · <code>MMCA.Common.API.Startup</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/OidcDiscoveryEndpointExtensions.cs:23</code> · Level 2 · class (static, extension block)</p>
+          <p>MMCA.Common.API · <code>MMCA.Common.API.Startup</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/OidcDiscoveryEndpointExtensions.cs:22</code> · Level 2 · class (static, extension block)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: maps a minimal OpenID Connect discovery document at
