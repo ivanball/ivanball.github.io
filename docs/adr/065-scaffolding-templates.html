@@ -5,24 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
-  <title>ADR-017: HTTP Request Idempotency via Client-Supplied Keys · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted. Revised 2026-08-01: the guard around execute-and-store is now an IDistributedLock resolved from DI (Redis-backed wherever a connection…">
-  <link rel="canonical" href="https://ivanball.github.io/docs/adr/017-request-idempotency.html">
+  <title>ADR-065: Scaffolding templates derived from the reference app · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Status: Accepted (2026-08-02)">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/065-scaffolding-templates.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
-  <meta property="og:title" content="ADR-017: HTTP Request Idempotency via Client-Supplied Keys">
-  <meta property="og:description" content="Accepted. Revised 2026-08-01: the guard around execute-and-store is now an IDistributedLock resolved from DI (Redis-backed wherever a connection…">
-  <meta property="og:url" content="https://ivanball.github.io/docs/adr/017-request-idempotency.html">
+  <meta property="og:title" content="ADR-065: Scaffolding templates derived from the reference app">
+  <meta property="og:description" content="Status: Accepted (2026-08-02)">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/065-scaffolding-templates.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ADR-017: HTTP Request Idempotency via Client-Supplied Keys">
-  <meta name="twitter:description" content="Accepted. Revised 2026-08-01: the guard around execute-and-store is now an IDistributedLock resolved from DI (Redis-backed wherever a connection…">
+  <meta name="twitter:title" content="ADR-065: Scaffolding templates derived from the reference app">
+  <meta name="twitter:description" content="Status: Accepted (2026-08-02)">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"017 · HTTP Request Idempotency via Client-Supplied Keys","item":"https://ivanball.github.io/docs/adr/017-request-idempotency.html"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"065 · Scaffolding templates derived from the reference app","item":"https://ivanball.github.io/docs/adr/065-scaffolding-templates.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
   <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -90,7 +90,7 @@
         <span aria-hidden="true">/</span>
         <a href="../../docs/adr/index.html">Architecture Decision Records</a>
         <span aria-hidden="true">/</span>
-        <span class="current">017 · HTTP Request Idempotency via Client-Supplied Keys</span>
+        <span class="current">065 · Scaffolding templates derived from the reference app</span>
       </nav>
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
@@ -115,7 +115,7 @@
         <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
         <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
         <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
-        <li><a href="017-request-idempotency.html" aria-current="page">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
         <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
         <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
         <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
@@ -163,138 +163,143 @@
         <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
         <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
         <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
-        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="065-scaffolding-templates.html" aria-current="page">065 · Scaffolding templates derived from the reference app</a></li>
           </ol>
         </nav>
       </details>
     </aside>
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
-          <h1 id="adr-017-http-request-idempotency-via-client-supplied-keys">ADR-017: HTTP Request Idempotency via Client-Supplied Keys</h1>
-          <h2 id="status">Status</h2>
-          <p>Accepted. Revised 2026-08-01: the guard around execute-and-store is now an <code>IDistributedLock</code> resolved
-          from DI (Redis-backed wherever a connection multiplexer is registered, which is every deployed service
-          host), with the striped semaphore kept only as the no-lock-registered fallback, and body-less 2xx
-          results (204/<code>NoContent()</code>) are cached and replayed as well as <code>ObjectResult</code> bodies. See Decision and
-          Trade-offs.</p>
+          <h1 id="adr-065-scaffolding-templates-derived-from-the-reference-app">ADR-065: Scaffolding templates derived from the reference app</h1>
+          <p><strong>Status:</strong> Accepted (2026-08-02)</p>
           <h2 id="context">Context</h2>
-          <p>Write endpoints (POST / PUT / PATCH) are exposed to <strong>client retries and double-submits</strong>: a flaky
-          network, an impatient user double-clicking, or a resilience pipeline re-issuing a request can cause the
-          same logical operation to execute twice (e.g. two orders, two payments). The <code>Result</code> pattern (ADR-013)
-          and domain invariants stop <em>invalid</em> states, but they do not stop a <em>valid</em> operation from being applied
-          twice when the second call is a genuine duplicate of the first.</p>
-          <p>This is a different concern from the <strong>handler idempotency</strong> of ADR-003: that is about domain-event
-          <em>consumers</em> tolerating at-least-once delivery from the outbox. ADR-017 is about the <strong>inbound HTTP edge</strong>
-          deduplicating <em>client</em> requests before the use case runs at all.</p>
+          <p><a href="../guides/common-GETTING-STARTED.html">Getting Started</a> is accurate and complete, and phases 1 through
+          6 of it are transcription work. Its own instruction for the load-bearing parts is &quot;copy
+          <code>MMCA.Helpdesk/Directory.Build.props</code>&quot;, &quot;copy MMCA.ADC&#39;s <code>.editorconfig</code> verbatim&quot;, &quot;copy the
+          relevant rows from MMCA.ADC/Directory.Packages.props&quot;.</p>
+          <p>Measured against MMCA.Helpdesk, the deliberately minimal seed, a brand-new app on the framework
+          starts by hand-creating <strong>12 projects, around 85 files, and roughly 5,300 lines</strong> before a line of
+          its own business logic: an 823-line <code>.editorconfig</code>, a 127-line <code>Directory.Packages.props</code> carrying
+          114 pins, a 75-line <code>Directory.Build.props</code>, the 75-line local-source swap in
+          <code>Directory.Build.targets</code>, the module project set, the vertical slice, the migrations project and
+          its design-time factory, two hosts, the Aspire AppHost, six <code>.resx</code> pairs, and the architecture map
+          with its fitness subclasses.</p>
+          <p>Several of those lines are load-bearing and quiet about it. <code>AddApplicationDecorators()</code> must be the
+          last DI call. The AppHost must <code>WaitFor</code> the SQL server and not the database resource. A missing
+          AppHost <code>launchSettings.json</code> presents as a hang. A module absent from <code>IArchitectureMap</code> silently
+          stops being covered by the layering and isolation rules (ADR-015).</p>
+          <p>The framework is published credential-free on nuget.org (ADR-053), so the distance between &quot;read the
+          guide&quot; and &quot;have a green solution&quot; is now the adoption bottleneck rather than access.</p>
           <h2 id="decision">Decision</h2>
-          <p>Provide opt-in, client-driven request idempotency as an MVC action filter in <code>MMCA.Common.API</code>.</p>
+          <p>Ship a <code>dotnet new</code> template pack, <strong><code>MMCA.Templates</code></strong>, containing four templates:</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Short name</th>
+          <th>Generates</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>mmca-app</code></td>
+          <td>the whole solution: build plumbing, one module across five layers, both hosts, the AppHost, migrations, and the test projects</td>
+          </tr>
+          <tr>
+          <td><code>mmca-module</code></td>
+          <td>a new business module: five layer projects, both test projects, a migrations project</td>
+          </tr>
+          <tr>
+          <td><code>mmca-command</code></td>
+          <td>one write-side vertical slice (command record + handler)</td>
+          </tr>
+          <tr>
+          <td><code>mmca-query</code></td>
+          <td>one read-side vertical slice (cacheable query record + handler)</td>
+          </tr>
+          </tbody></table></div>
+          <p><strong>The template content is the MMCA.Helpdesk reference application itself, staged at pack time.</strong>
+          <code>.template.config/</code> lives at that repo&#39;s root; <code>build/templates/stage.ps1</code> copies the tree, drops
+          the files belonging to the seed&#39;s own repo rather than to a generated app, and lays a small overlay
+          on top. No copy of the solution exists anywhere else. Everything else (renaming <code>MMCA.Helpdesk</code> to
+          the adopter&#39;s name, <code>Tickets</code> to their module, <code>Ticket</code> to their aggregate) is <code>dotnet new</code> doing
+          symbol replacement at instantiation.</p>
+          <p>The pack is published from MMCA.Helpdesk on a <code>templates-vX.Y.Z</code> tag, under its own nuget.org
+          trusted-publishing policy.</p>
+          <p><strong>Two things the scaffold deliberately does not hand over</strong>, because a rename invalidates them and
+          no fixed value is correct for every generated name:</p>
           <ul>
-          <li><strong>Opt-in per action.</strong> <code>[Idempotent]</code> (<code>IdempotentAttribute</code>, a <code>ServiceFilterAttribute</code> resolving
-          <code>IdempotencyFilter</code> from DI) marks an action. Nothing is deduplicated unless the action declares it.</li>
-          <li><strong>Client supplies the key.</strong> The caller sends an <code>Idempotency-Key</code> header. If the header is absent or
-          blank, the action runs normally with <strong>no</strong> deduplication: the key is the client&#39;s assertion that &quot;two
-          requests with this key are the same operation.&quot;</li>
-          <li><strong>The key is scoped to the caller and the endpoint, not taken bare.</strong> The cache key is
-          <code>idempotency:{SHA-256(subject | method | route template | client key)}</code>, where the subject is the
-          caller&#39;s <code>user_id</code> claim or, unauthenticated, <code>anon:{remote address}</code>. Keying on the bare
-          client-supplied value made the key space global: two callers who happened to choose the same value
-          shared an entry, so one user&#39;s serialized response body was replayed to another, and because
-          services can share a single cache instance the collision also reached across endpoints and across
-          services. Hashing keeps the stored key bounded regardless of what the client sends.</li>
-          <li><strong>Cache-backed replay.</strong> The first response (status code + serialized body) is stored via
-          <code>ICacheService</code> for a bounded window (default 24h, configurable via
-          <code>IdempotencySettings.CacheExpirationHours</code>). <code>ICacheService</code> resolves to the distributed (Redis) store
-          when the host wires one and otherwise to an in-process memory cache (ADR-026), so cross-instance /
-          cross-restart replay holds only when a distributed backing is configured. A later request with the same
-          key replays the cached response and adds an <code>X-Idempotent-Replay: true</code> header so clients can tell a
-          replay from a fresh execution.</li>
-          <li><strong>The lock spans execute-and-store, and it is an <code>IDistributedLock</code> when one is registered.</strong> The
-          filter takes a fast-path cache read (no lock), then holds a lock across the re-check, the action, and
-          the store, so a duplicate cannot slip in between the action finishing and its response reaching the
-          cache. The lock is whatever <code>IDistributedLock</code> DI resolves, and <code>AddInfrastructure</code> -&gt; <code>AddCaching</code>
-          registers one unconditionally: <code>RedisDistributedLock</code> when an <code>IConnectionMultiplexer</code> is present,
-          the process-local <code>InProcessDistributedLock</code> (which warns once that it is degraded) otherwise. The
-          Redis lock is the single-instance <code>SET key token NX PX ttl</code> acquire with a compare-and-delete release
-          script, held for a 30s time-to-live with a 5s wait for the current holder. A duplicate that cannot
-          acquire within that wait, and finds nothing cached when it gives up, gets <strong>409 Conflict</strong> with a
-          retry-with-the-same-key <code>ProblemDetails</code>: the original is still running somewhere, so executing would
-          be the double write this filter exists to prevent.</li>
-          <li><strong>The striped semaphore is the fallback for a host that registers no lock.</strong> Without an
-          <code>IDistributedLock</code> the filter serializes on a striped <code>SemaphoreSlim</code> (<code>KeyedSemaphoreStripe</code>, the
-          same double-check pattern), which is correct for a single replica and for tests. Striping is
-          deliberate: a dictionary of one semaphore per key forces a choice between two defects, since removing
-          the entry when the last holder releases lets a caller wait on a semaphore no longer in the table while
-          a second creates a fresh one (both then execute, defeating the lock), and never removing it lets a
-          caller-supplied key grow the table without bound. A fixed stripe width has neither problem.</li>
-          <li><strong>Only cache deterministic success shapes.</strong> A <strong>2xx</strong> response is cached when it is representable as
-          a status code plus an optional JSON body: an <code>ObjectResult</code> (200/201/202 with a payload), or a
-          body-less <code>StatusCodeResult</code> such as the 204 from <code>NoContent()</code>, which is stored with an empty body
-          and replayed as a bare status code rather than as JSON with no content. Redirects, file results, and
-          failures are not replayed. Caching a failure would replay it for the whole retention window, so a
-          client retrying the same key after a transient 500 would keep receiving that 500 for 24 hours instead
-          of the retry actually executing. The body-less case was originally skipped, which left every command
-          answering <code>NoContent()</code> with nothing stored at all: the writes most likely to be retried were the ones
-          idempotency did not actually cover.</li>
+          <li><strong>Using-directive order.</strong> An app namespace sorts above <code>MMCA.Common.*</code> for <code>Contoso.Support</code> and
+          below it for <code>Zeta.App</code>. <code>SA1210</code> has no notion of blank-line-separated groups, so no checked-in
+          order survives both. Staging appends a scoped <code>SA1210 = suggestion</code> delta to the <strong>staged</strong>
+          <code>.editorconfig</code>; the seed&#39;s own copy, which is the shared analyzer baseline that
+          <code>Tools/Scripts/compare-analyzer-config.ps1</code> holds identical across the four repos, is untouched.
+          The other 213 severities stay at error, and the generated README carries the
+          <code>dotnet format analyzers --diagnostics SA1210</code> command that restores full strictness.</li>
+          <li><strong>The <code>IntegrationEventContractTests</code> subclass.</strong> <code>IntegrationEventContractTestsBase</code> compares a
+          checked-in literal against the actual events with members sorted alphabetically, so
+          <code>{ RequesterUserId, TicketId }</code> is right for <code>Ticket</code> and wrong for <code>Invoice</code>. The subclass is
+          removed at stage time (deleted, not commented out: <code>S125</code> is a warning and <code>TreatWarningsAsErrors</code>
+          makes that a build error), and the generated README carries the class to paste plus the command
+          that prints the value to freeze.</li>
           </ul>
+          <p><code>mmca-module</code> additionally prints five wire-ups <code>dotnet new</code> cannot perform: the solution entries,
+          the host and architecture-test project references, the identifier-alias <code>&lt;Compile Include ... Link&gt;</code>
+          block, the five <code>IArchitectureMap</code> lines, and the host&#39;s <code>AddErrorResources&lt;&gt;</code> call.</p>
+          <p><strong>The correctness gate is a <code>template-smoke</code> CI job in MMCA.Helpdesk</strong>, not the seed&#39;s own build. The
+          seed builds in local-source mode against <code>MMCA.Common@main</code>; a generated app builds in package mode
+          against a released version, and a source-mode build can pass where package-mode Release fails on an
+          analyzer. The smoke generates two solutions whose names share no substring with the seed, sweeps for
+          residual <code>Helpdesk</code> / <code>Ticket</code> tokens, builds package-mode, runs the tests, then generates a module
+          and applies all five printed wire-ups.</p>
           <h2 id="rationale">Rationale</h2>
-          <ul>
-          <li><strong>Safety at the edge, not in every handler.</strong> Deduplication lives in one filter, so a handler stays a
-          thin use case (ADR-014) and does not grow ad-hoc &quot;did I already do this?&quot; checks.</li>
-          <li><strong>Client owns the identity of an operation.</strong> Only the caller knows that a retry is the <em>same</em>
-          operation; a server-generated key cannot distinguish a retry from a legitimately-similar new request.</li>
-          <li><strong>Distributed-cache backing (when configured)</strong> makes replays work across instances and across a
-          service restart within the window, matching the database-per-service / multi-host deployment (ADR-006,
-          ADR-008); with the in-memory fallback (ADR-026) the replay is per-instance and lost on restart.</li>
-          <li><strong>Invariant-friendly default.</strong> Absent header ⇒ no behavior change, so adding <code>[Idempotent]</code> is a safe,
-          additive annotation.</li>
-          </ul>
+          <p><strong>Deriving from the seed rather than maintaining a template tree</strong> is the whole design. A
+          hand-maintained copy of a 12-project solution drifts within one release, and drift in a scaffold is
+          invisible until an adopter&#39;s first build fails. Because the seed is the template, the app whose CI
+          keeps it green is exactly what adopters receive.</p>
+          <p><strong>A template pack rather than a workspace script.</strong> A PowerShell generator under <code>Tools/</code> would have
+          been faster to write and is useless to anyone outside this workspace. The framework is public and
+          credential-free; <code>dotnet new install MMCA.Templates</code> is the install path an outside adopter expects.</p>
+          <p><strong>Named <code>MMCA.Templates</code>, not <code>MMCA.Common.Templates</code>.</strong> The <code>MMCA.Common.*</code> names carry the ADR-016
+          lockstep-versioning contract and ship from the MMCA.Common repo under its own trusted-publishing
+          policy. This package ships from a different repo on a different cadence and pins the framework
+          version as a <code>--framework-version</code> parameter instead. Keeping it outside that family also leaves
+          <code>FACTS.md</code>&#39;s package count at 15, since its generator counts only packable projects under
+          <code>MMCA.Common/Source/</code>, so the CI drift gate is unaffected.</p>
+          <p><strong>The token sweep is in the gate on purpose.</strong> <code>sourceName</code> and the symbol replacements run as
+          separate passes, so a token that only ever appears nested inside another (<code>Ticket</code> inside <code>Tickets</code>,
+          <code>Helpdesk</code> inside <code>MMCA.Helpdesk</code>) is precisely where a rename half-applies, and it half-applies
+          silently: the output still compiles, it just carries someone else&#39;s domain vocabulary.</p>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>Cross-instance mutual exclusion follows Redis, so it is a deployment property, not a guarantee.</strong>
-          Every ADC and Store service host registers a Redis <code>IConnectionMultiplexer</code> when a <code>redis</code> connection
-          string is present, and the Azure templates inject one into every service container, so the deployed
-          lock is the Redis one and two simultaneous duplicates landing on <em>different</em> replicas are genuinely
-          serialized. A host with no multiplexer (Helpdesk, a single-replica local run, tests) falls back to the
-          process-local lock or the striped semaphore, and there duplicates on different instances can both miss
-          the cache and execute, with a configured distributed cache making the <em>replay</em> consistent afterward
-          but not providing mutual exclusion. Even with Redis the lock is best-effort by design (one instance,
-          not Redlock, and a section that outruns the 30s time-to-live is no longer exclusive for the remainder),
-          so for exactly-once the operation itself should still be naturally idempotent or guarded by a unique
-          constraint.</li>
-          <li><strong>Bounded window.</strong> Replays only work within the retention window (default 24h); a duplicate after
-          expiry re-executes.</li>
-          <li><strong>Response-shape coupling.</strong> Only a 2xx <code>ObjectResult</code> or a body-less 2xx <code>StatusCodeResult</code> is cached,
-          and the cached body is the serialized value, so an endpoint whose response depends on per-request state
-          (other than the body) will replay the original, not a freshly-computed response. Response headers are
-          not part of the record either, so a replayed 201 does not carry the original <code>Location</code>.</li>
-          <li><strong>A key is only ever replayed to the caller that produced it.</strong> Scoping to the subject means a
-          client that retries under a different identity (a rotated anonymous address, or a token exchange
-          between the first attempt and the retry) misses the cache and re-executes. That is the correct
-          trade against replaying one caller&#39;s response to another.</li>
-          <li><strong>Opt-in.</strong> An action that should be idempotent but is missing <code>[Idempotent]</code> gets no protection: the
-          same audit-the-inventory caveat as ADR-005&#39;s <code>IAnonymizable</code>.</li>
+          <li><strong>Two documented one-time fixups</strong> in every generated app, above. The alternative to the <code>SA1210</code>
+          delta was moving every app-local <code>using</code> into per-project global usings, which is not rename-stable
+          either once a project&#39;s usings span more than one second-level segment, and which costs the seed
+          the didactic value of showing where each type comes from.</li>
+          <li><strong><code>mmca-module</code> cannot finish the job.</strong> Five edits stay manual because <code>dotnet new</code> cannot patch
+          existing files. They are printed as post-action instructions and applied by the smoke job, so they
+          cannot silently go stale, but a new module is not usable until a human makes them.</li>
+          <li><strong>The template lags a framework release by one step.</strong> <code>--framework-version</code> defaults to whatever
+          the seed pins, so a <code>MMCA.Common</code> release needs the seed bumped and the pack re-tagged before the
+          default is current. Adopters can pass the flag in the meantime.</li>
+          <li><strong><code>release-templates.yml</code>&#39;s filename is load-bearing.</strong> Trusted publishing is keyless OIDC pinned
+          to owner, repository, and workflow filename, with no API-key fallback, so renaming that file
+          breaks publishing silently. Same property as the MMCA.Common release workflow (ADR-053).</li>
+          <li><strong>The generated app&#39;s first test run is 90 tests, not 91</strong>, and its fitness subclass count is one
+          below the seed&#39;s, until the adopter freezes their own wire contract.</li>
           </ul>
-          <h2 id="related">Related</h2>
-          <p>ADR-003 (handler idempotency for outbox/event consumers, a distinct concern), ADR-013 (Result is the
-          response the filter caches/replays), ADR-014 (the filter keeps the handler thin), ADR-009 (the resilience
-          pipeline that re-issues requests is the main source of the duplicates this filter absorbs), ADR-026 (the
-          <code>ICacheService</code> substrate whose distributed-vs-memory backing determines cross-instance replay).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/017-request-idempotency.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/065-scaffolding-templates.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
         <aside class="doc-aside">
           <nav class="doc-toc" aria-label="On this page">
             <p class="doc-toc-title">On this page</p>
             <ul>
-            <li><a href="#status">Status</a></li>
             <li><a href="#context">Context</a></li>
             <li><a href="#decision">Decision</a></li>
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
-            <li><a href="#related">Related</a></li>
             </ul>
           </nav>
         </aside>

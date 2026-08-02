@@ -108,6 +108,7 @@
         <li><a href="common-GETTING-STARTED.html" aria-current="page">Common · Getting Started: Build a New App on MMCA.Common</a></li>
         <li><a href="common-RESILIENCE.html">Common · Resilience &amp; Business Continuity (rubric §29)</a></li>
         <li><a href="common-RESPONSIVE.html">Common · Responsive Design &amp; Cross-Browser Support (rubric §22)</a></li>
+        <li><a href="common-TEMPLATES.html">Common · Templates: scaffolding an MMCA app</a></li>
         <li><a href="common-VERSIONING.html">Common · Versioning &amp; Breaking-Change Policy</a></li>
         <li><a href="store-ACCESSIBILITY-SCREENREADER-PASS.html">Store · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
         <li><a href="store-BusinessWorkflows.html">Store · Business Workflow Analysis</a></li>
@@ -141,6 +142,27 @@
           <a href="../adr/index.html">ADR</a>. For a type-by-type tour of the framework internals, see the
           <a href="../onboarding/index.html">onboarding guide</a>. This guide is the consumer-facing &quot;how do I start&quot; path.</p>
           </blockquote>
+          <hr>
+          <h2 id="scaffold-it-then-read-the-rest-of-this">Scaffold it, then read the rest of this</h2>
+          <p>Do not type phases 1 through 6 by hand. They add up to 12 projects and roughly 5,300 lines before a
+          line of your own business logic, and several of those lines are load-bearing in ways nothing tells
+          you about until much later. Scaffold the whole thing:</p>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet new install MMCA.Templates
+          dotnet new mmca-app -n Contoso.Support --module Orders --aggregate Order
+          <span class="hljs-built_in">cd</span> Contoso.Support
+          dotnet build Contoso.Support.slnx      <span class="hljs-comment"># warning-free under all five analyzers</span>
+          dotnet <span class="hljs-built_in">test</span>  --solution Contoso.Support.slnx   <span class="hljs-comment"># passing, including the fitness rules, no database</span></code></pre>
+          <p>Then read the phases below to understand <strong>what you were handed and why</strong>, which is what makes the
+          scaffold safe to change. Phase 7 (upgrading) and phase 8 (extracting a service) are not scaffolded:
+          those you do yourself.</p>
+          <p>The pack also has <code>mmca-module</code> for a new module across all five layers, and <code>mmca-command</code> /
+          <code>mmca-query</code> for a single vertical slice. Every parameter, plus the two one-time fixups a rename
+          makes unavoidable, is in the <a href="common-TEMPLATES.html">templates guide</a>; the reasoning is
+          <a href="../adr/065-scaffolding-templates.html">ADR-065</a>.</p>
+          <p>The template content <strong>is</strong> MMCA.Helpdesk, staged at pack time rather than copied, so what you
+          generate is the reference app whose CI keeps it green, under your own names.</p>
+          <p>Everything below still applies verbatim if you would rather build it up by hand, or are adding the
+          framework to a solution that already exists.</p>
           <hr>
           <h2 id="what-you-will-build">What you will build</h2>
           <p>A modular monolith with one business module and two hosts:</p>
@@ -195,9 +217,14 @@
           pins in <code>Directory.Packages.props</code> disagree, so a half-finished sweep cannot ship.</p>
           <hr>
           <h2 id="phase-1-create-the-solution-and-the-build-plumbing">Phase 1: Create the solution and the build plumbing</h2>
-          <p>The plumbing files are the load-bearing, easy-to-get-wrong part. The fastest start is to copy them from
-          <code>MMCA.Helpdesk</code> (already a trimmed single-module scaffold) or from <code>MMCA.ADC</code>. Lay out the repo like
-          this:</p>
+          <blockquote>
+          <p><strong>Scaffolded.</strong> <code>dotnet new mmca-app</code> writes every file in this phase. Read it to know what each
+          one does; you do not need to type any of it.</p>
+          </blockquote>
+          <p>The plumbing files are the load-bearing, easy-to-get-wrong part: about 1,170 lines across eight
+          files, including an 823-line <code>.editorconfig</code> and 114 package pins. If you are doing it by hand, copy
+          them from <code>MMCA.Helpdesk</code> (already a trimmed single-module scaffold) or from <code>MMCA.ADC</code>. Lay out the
+          repo like this:</p>
           <pre class="doc-pre"><code class="">MMCA.Helpdesk/
             MMCA.Helpdesk.slnx
             Directory.Build.props
@@ -360,6 +387,12 @@
           the plumbing parses).</p>
           <hr>
           <h2 id="phase-2-scaffold-the-module-project-set">Phase 2: Scaffold the module project set</h2>
+          <blockquote>
+          <p><strong>Scaffolded.</strong> <code>dotnet new mmca-app</code> creates this project set for your first module, and
+          <code>dotnet new mmca-module</code> adds another one later (it prints the five wire-ups it cannot perform:
+          the solution entries, the host and architecture-test project references, the identifier-alias
+          link, the map lines, and <code>AddErrorResources</code>). See the <a href="common-TEMPLATES.html">templates guide</a>.</p>
+          </blockquote>
           <p>Each business module is a set of layered projects under <code>Source/Modules/&lt;Module&gt;/</code>. Pattern source:
           <code>MMCA.Helpdesk/Source/Modules/Tickets/</code> (or the richer <code>MMCA.ADC/Source/Modules/Conference/</code>). For
           <strong>Tickets</strong>:</p>
@@ -409,6 +442,11 @@
           intentionally generic across apps.</p>
           <hr>
           <h2 id="phase-3-the-vertical-slice-end-to-end-the-heart-of-it">Phase 3: The vertical slice end-to-end (the heart of it)</h2>
+          <blockquote>
+          <p><strong>Scaffolded.</strong> The generated module already contains this slice and six more, worked end to end.
+          <code>dotnet new mmca-command</code> and <code>dotnet new mmca-query</code> add another one. This phase is the one to
+          actually read: it is the path every feature you add will follow.</p>
+          </blockquote>
           <p>Implement Tickets create and read. This traces the same path for every feature you will ever add (the
           reference app then repeats it for update, delete, status change, and comment add/edit/remove). Pattern
           source for each step is the Helpdesk <code>Ticket</code> aggregate.</p>
@@ -757,6 +795,12 @@
           one that survives a rename.</p>
           <hr>
           <h2 id="phase-4-dbcontext-model-and-migrations">Phase 4: DbContext model and migrations</h2>
+          <blockquote>
+          <p><strong>Partly scaffolded.</strong> The migrations project and its design-time factory are generated. Running
+          <code>dotnet ef migrations add InitialCreate</code> is still yours, and for a module added later the
+          generated migrations project ships deliberately empty so the first migration describes YOUR
+          entities.</p>
+          </blockquote>
           <p>Create <strong>one migrations project per (future) service database</strong>, even while you are a monolith. This
           costs nothing now and means extraction (Phase 8) needs zero migration rework. Pattern source:
           <code>MMCA.Helpdesk/Source/Hosting/MMCA.Helpdesk.Migrations.SqlServer.Tickets/</code>.</p>
@@ -799,6 +843,11 @@
           </blockquote>
           <hr>
           <h2 id="phase-5-compose-the-monolith-host-and-run-it">Phase 5: Compose the monolith host and run it</h2>
+          <blockquote>
+          <p><strong>Scaffolded.</strong> Both hosts, the AppHost, and the <code>.resx</code> pairs are generated. Read this phase
+          before you touch any of them: the DI sequence, <code>WaitFor(sql)</code> rather than the database resource,
+          and the AppHost <code>launchSettings.json</code> all fail quietly rather than loudly.</p>
+          </blockquote>
           <h3 id="the-web-host">The Web host</h3>
           <p>Create <code>Source/Hosts/MMCA.Helpdesk.Web</code> (the REST API host). Its <code>Program.cs</code> follows the <strong>fixed DI
           sequence</strong>, and the load-bearing rule is that <code>AddApplicationDecorators()</code> comes <strong>last</strong>: decorators
@@ -993,6 +1042,14 @@
           out, and that an outbox row was written for the <code>TicketOpenedIntegrationEvent</code>.</p>
           <hr>
           <h2 id="phase-6-tests-and-the-architecture-fitness-map">Phase 6: Tests and the architecture-fitness map</h2>
+          <blockquote>
+          <p><strong>Scaffolded, with one deliberate gap.</strong> All three test projects and the map are generated. The
+          <code>IntegrationEventContractTests</code> subclass is NOT: its frozen literal lists members alphabetically,
+          so an inherited one stops being correct the moment the aggregate is renamed, and a wire contract
+          inherited from someone else&#39;s sample module guarantees nothing anyway. Freeze your own, once. The
+          generated README and the <a href="common-TEMPLATES.html">templates guide</a> carry the class and the command
+          that prints the value.</p>
+          </blockquote>
           <h3 id="test-projects">Test projects</h3>
           <p>The reference app ships three test projects, all of which run anywhere with <strong>no database</strong> and finish
           in about a second:</p>
@@ -1109,6 +1166,10 @@
             -- --filter-class <span class="hljs-string">&quot;*ModuleIsolationTests*&quot;</span></code></pre>
           <hr>
           <h2 id="phase-7-upgrading-the-framework-version">Phase 7: Upgrading the framework version</h2>
+          <blockquote>
+          <p><strong>Not scaffolded.</strong> <code>dotnet new mmca-app --framework-version</code> picks the version you START on;
+          moving to a later one is this phase.</p>
+          </blockquote>
           <p>When a new MMCA.Common release ships, upgrade in <strong>one pass</strong>: bump <strong>every</strong> <code>MMCA.Common.*</code> entry in
           <code>Directory.Packages.props</code> to the new version together. There is no phased rollout and no per-package
           skew, and <code>FrameworkVersionConsistencyTestsBase</code> fails the build if you miss an entry. Keep MassTransit
@@ -1121,6 +1182,11 @@
           MMCA.Common in Debug before your app after editing framework source.</p>
           <hr>
           <h2 id="phase-8-extract-a-module-into-its-own-service-the-payoff">Phase 8: Extract a module into its own service (the payoff)</h2>
+          <blockquote>
+          <p><strong>Not scaffolded.</strong> The generated solution carries the plumbing (the <code>.Contracts</code> proto
+          convention and the <code>.Service</code> OpenAPI block in <code>Directory.Build.props</code>), but the extraction itself
+          is a decision, not a rename.</p>
+          </blockquote>
           <p>This phase is the documented next step beyond the reference app (which is build- and test-verified as
           the monolith through Phase 6); the scaffold already carries the plumbing: the <code>.Contracts</code> proto
           convention and the <code>.Service</code> OpenAPI block in <code>Directory.Build.props</code>. Now make the &quot;extract later,
@@ -1190,11 +1256,15 @@
           plus eventual consistency through the outbox, never cross-database foreign keys.</p>
           <hr>
           <h2 id="verification-checklist">Verification checklist</h2>
-          <ol>
+          <ol start="0">
+          <li><strong>Scaffolded:</strong> <code>dotnet new mmca-app -n &lt;YourApp&gt;</code> produced a solution that builds and tests
+          green before you changed anything. If it did not, that is a template bug, not yours.</li>
           <li><strong>Build green:</strong> <code>dotnet build MMCA.Helpdesk.slnx</code> with no warnings (TreatWarningsAsErrors + five
           analyzers). This is the primary automatable gate.</li>
           <li><strong>Unit + architecture tests pass:</strong> <code>dotnet test --solution MMCA.Helpdesk.slnx</code> (all three
-          projects, no DB needed). The <code>IArchitectureMap</code> rules must be green.</li>
+          projects, no DB needed). The <code>IArchitectureMap</code> rules must be green. A scaffolded solution runs
+          one test fewer than the reference app until you freeze your own integration-event contract
+          (Phase 6).</li>
           <li><strong>Migrations:</strong> <code>dotnet ef migrations add InitialCreate ...</code> succeeds for each migrations project
           (generates the <code>Ticket</code>, <code>TicketComment</code>, and per-DB <code>OutboxMessages</code> tables).</li>
           <li><strong>Run (interactive):</strong> <code>dotnet run --project ...AppHost</code>; the dashboard shows <code>sql</code>, <code>web</code>, and <code>ui</code>
@@ -1208,6 +1278,10 @@
           <hr>
           <h2 id="where-to-look-next">Where to look next</h2>
           <ul>
+          <li><strong><a href="common-TEMPLATES.html">Templates</a></strong>: every parameter of <code>mmca-app</code>, <code>mmca-module</code>,
+          <code>mmca-command</code>, and <code>mmca-query</code>, plus the two one-time fixups a rename makes unavoidable.
+          <a href="../adr/065-scaffolding-templates.html">ADR-065</a> explains why the pack is derived from the reference
+          app rather than maintained beside it.</li>
           <li><strong><a href="https://github.com/ivanball/MMCA.Helpdesk" target="_blank" rel="noopener">MMCA.Helpdesk</a></strong>: the minimal, build- and test-verified
           monolith this guide is the companion to: every step above maps to real code there. Read its
           <code>README.md</code> and <code>CLAUDE.md</code> for the Helpdesk-specific picture (issuer-less auth, the two event paths,
@@ -1228,6 +1302,7 @@
           <nav class="doc-toc" aria-label="On this page">
             <p class="doc-toc-title">On this page</p>
             <ul>
+            <li><a href="#scaffold-it-then-read-the-rest-of-this">Scaffold it, then read the rest of this</a></li>
             <li><a href="#what-you-will-build">What you will build</a></li>
             <li><a href="#phase-0-prerequisites-and-decisions">Phase 0: Prerequisites and decisions</a></li>
             <li><a href="#phase-1-create-the-solution-and-the-build-plumbing">Phase 1: Create the solution and the build plumbing</a></li>
