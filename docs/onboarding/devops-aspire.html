@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Aspire Orchestration and Containers · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="This chapter teaches how the MMCA.ADC system goes from a single dotnet run on your workstation to a running eight-process stack with databases, a…">
+  <meta name="description" content="This chapter teaches how the MMCA.ADC system goes from a single dotnet run on your workstation to a running stack of six .NET processes plus four…">
   <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/devops-aspire.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Aspire Orchestration and Containers">
-  <meta property="og:description" content="This chapter teaches how the MMCA.ADC system goes from a single dotnet run on your workstation to a running eight-process stack with databases, a…">
+  <meta property="og:description" content="This chapter teaches how the MMCA.ADC system goes from a single dotnet run on your workstation to a running stack of six .NET processes plus four…">
   <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/devops-aspire.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Aspire Orchestration and Containers">
-  <meta name="twitter:description" content="This chapter teaches how the MMCA.ADC system goes from a single dotnet run on your workstation to a running eight-process stack with databases, a…">
+  <meta name="twitter:description" content="This chapter teaches how the MMCA.ADC system goes from a single dotnet run on your workstation to a running stack of six .NET processes plus four…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"Aspire Orchestration and Containers","item":"https://ivanball.github.io/docs/onboarding/devops-aspire.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -145,7 +145,8 @@
           <p class="eyebrow doc-kicker">Onboarding guide</p>
           <h1 id="aspire-orchestration-and-containers">Aspire Orchestration and Containers</h1>
           <p>This chapter teaches how the MMCA.ADC system goes from a single <code>dotnet run</code> on your workstation to a
-          running eight-process stack with databases, a broker, a cache, a mail interceptor, and a dashboard.
+          running stack of six .NET processes plus four containers: databases, a broker, a cache, a mail
+          interceptor, and a dashboard.
           You will learn which resources the AppHost provisions and why, how service discovery and health-based
           startup ordering wire everything together, what service defaults each service host gets from the
           framework&#39;s <code>MMCA.Common.Aspire</code> package (there is no longer an ADC-local <code>ServiceDefaults</code> project),
@@ -164,6 +165,10 @@
           Aspire dashboard, opened automatically, shows live logs, metrics, and distributed traces from every
           process via an OTLP endpoint it injects into each one. No Docker Compose file is needed; no environment
           variables need to be set by hand; the AppHost is the single source of truth for the local topology.</p>
+          <p>One operational caveat that no source file states: run that command in an <strong>interactive terminal only</strong>.
+          Launched from a background or non-interactive shell the AppHost stalls at control-plane init (no
+          dashboard, no <code>:6001</code>), so a headless &quot;verification run&quot; hangs rather than failing (<code>MMCA.ADC/CLAUDE.md</code>,
+          Build/Test/Run section).</p>
           <p>[Rubric §33, Developer Experience] assesses how quickly a new engineer becomes productive. A
           single-command local run that matches production topology (same services, same broker, same auth flow)
           means the feedback loop is: edit → restart → observe real cross-service behavior, rather than mocking
@@ -173,15 +178,15 @@
           <blockquote>
           <p>Source file: <code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs</code>
           Extension helpers: <code>MMCA.Common.Aspire.Hosting/Extensions.cs</code> (<code>AddMessageBroker</code>, <code>WithBroker</code>,
-            <code>WithJwksDiscovery</code>, <code>WithSQLServerDataSource</code> / <code>WithCosmosDataSource</code> / <code>WithSqliteDataSource</code>,
-            there is no AppHost-local extensions file)
+            <code>WithJwksDiscovery</code>, <code>WithE2eRsaKeys</code>, <code>WithSQLServerDataSource</code> / <code>WithCosmosDataSource</code> /
+            <code>WithSqliteDataSource</code>, there is no AppHost-local extensions file)
           Project file: <code>MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/MMCA.ADC.AppHost.csproj</code></p>
           </blockquote>
           <h3 id="project-identity">Project identity</h3>
           <p>The <code>.csproj</code> (AppHost.csproj:3) opts in to the <code>Aspire.AppHost.Sdk</code> (version 13.2.3), which activates
           the Aspire resource model, code-generates strongly-typed <code>Projects.*</code> references from the project
           references listed below it (AppHost.csproj:19-24), and arranges for the <code>.Build().RunAsync()</code> entry
-          point (Program.cs:285) to launch the dashboard and all declared resources. The SDK also picks up
+          point (Program.cs:334) to launch the dashboard and all declared resources. The SDK also picks up
           <code>MMCA.Common.Aspire</code> and <code>MMCA.Common.Aspire.Hosting</code> as plain <code>PackageReference</code>s marked
           <code>IsAspireProjectResource=&quot;false&quot;</code> (AppHost.csproj:25-26) so the hosting extensions and service-defaults
           extensions those packages export are available without treating them as orchestrated processes.</p>
@@ -202,8 +207,9 @@
           <p><strong>RabbitMQ</strong> is provisioned via a framework helper (Program.cs:60-61):</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> rabbit = builder.AddMessageBroker()
               .WithLifetime(ContainerLifetime.Persistent);</code></pre>
-          <p><code>AddMessageBroker()</code> lives in <code>MMCA.Common.Aspire.Hosting</code> (Common.Aspire.Hosting/Extensions.cs:32-38)
-          and wraps <code>builder.AddRabbitMQ(name).WithManagementPlugin()</code>, the management plugin exposes the admin
+          <p><code>AddMessageBroker()</code> lives in <code>MMCA.Common.Aspire.Hosting</code> (Common.Aspire.Hosting/Extensions.cs:39-44)
+          and wraps <code>builder.AddRabbitMQ(name).WithManagementPlugin()</code> with the resource name defaulting to
+          <code>&quot;rabbitmq&quot;</code> (<code>DefaultBrokerResourceName</code>, Extensions.cs:27); the management plugin exposes the admin
           UI at <code>http://localhost:15672</code>. All four services are wired to the broker via <code>WithBroker(rabbit)</code> which
           sets <code>MessageBus__Provider=RabbitMq</code> in each service&#39;s environment (discussed below). The legacy
           <code>AtlDevCon</code> database comment at Program.cs:26-31 explains why the single combined database is not
@@ -223,26 +229,30 @@
           so there is no &quot;works on my machine&quot; topology gap between developer and pipeline.</p>
           <h3 id="the-withsqlserverdatasource-extension-and-its-cosmossqlite-siblings">The <code>WithSQLServerDataSource</code> extension (and its Cosmos/SQLite siblings)</h3>
           <p><code>WithSQLServerDataSource</code> is a framework extension method, not an AppHost-local helper. It lives in
-          <code>MMCA.Common.Aspire.Hosting</code>&#39;s <code>Extensions</code> class (Common.Aspire.Hosting/Extensions.cs:132-145); the
+          <code>MMCA.Common.Aspire.Hosting</code>&#39;s <code>Extensions</code> class (Common.Aspire.Hosting/Extensions.cs:166-178); the
           AppHost-local <code>DataSourceExtensions.cs</code> that once held it has been deleted. (It was named <code>WithDataSource</code>
           until <a href="https://ivanball.github.io/docs/adr/018-polyglot-persistence.html" target="_blank" rel="noopener">ADR-018</a>; the rename to <code>WithSQLServerDataSource</code> gives it a consistent <code>With*DataSource</code> shape with
           the two polyglot siblings below, a breaking API change swept across consumers in one lockstep release,
           <a href="https://ivanball.github.io/docs/adr/016-lockstep-versioning-masstransit-pin.html" target="_blank" rel="noopener">ADR-016</a>.)</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> IResourceBuilder&lt;ProjectResource&gt; <span class="hljs-title">WithSQLServerDataSource</span>(<span class="hljs-params">
-              <span class="hljs-keyword">this</span> IResourceBuilder&lt;ProjectResource&gt; service,
-              IResourceBuilder&lt;SqlServerDatabaseResource&gt; database,
-              <span class="hljs-built_in">string</span> logicalName</span>)</span>
+          <p>It is declared inside a C# preview <code>extension(...)</code> block rather than as a classic <code>this</code>-parameter
+          static method (Extensions.cs:147), which is why the receiver does not appear in the signature:</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">extension(IResourceBuilder&lt;ProjectResource&gt; service)
           {
-              ArgumentNullException.ThrowIfNull(service);
-              ArgumentNullException.ThrowIfNull(database);
+              <span class="hljs-function"><span class="hljs-keyword">public</span> IResourceBuilder&lt;ProjectResource&gt; <span class="hljs-title">WithSQLServerDataSource</span>(<span class="hljs-params">
+                  IResourceBuilder&lt;SqlServerDatabaseResource&gt; database,
+                  <span class="hljs-built_in">string</span> logicalName</span>)</span>
+              {
+                  ArgumentNullException.ThrowIfNull(service);
+                  ArgumentNullException.ThrowIfNull(database);
           
-              <span class="hljs-keyword">return</span> service
-                  .WithReference(database)
-                  .WaitFor(database)
-                  .WithEnvironment(<span class="hljs-string">$&quot;DataSources__<span class="hljs-subst">{logicalName}</span>__SQLServerConnectionString&quot;</span>,
-                                   database.Resource.ConnectionStringExpression)
-                  .WithEnvironment(<span class="hljs-string">&quot;ConnectionStrings__SQLServerConnectionString&quot;</span>,
-                                   database.Resource.ConnectionStringExpression);
+                  <span class="hljs-keyword">return</span> service
+                      .WithReference(database)
+                      .WaitFor(database)
+                      .WithEnvironment(<span class="hljs-string">$&quot;DataSources__<span class="hljs-subst">{logicalName}</span>__SQLServerConnectionString&quot;</span>,
+                                       database.Resource.ConnectionStringExpression)
+                      .WithEnvironment(<span class="hljs-string">&quot;ConnectionStrings__SQLServerConnectionString&quot;</span>,
+                                       database.Resource.ConnectionStringExpression);
+              }
           }</code></pre>
           <p>It injects the connection string twice. <code>DataSources__{logicalName}__SQLServerConnectionString</code> feeds
           the MMCA.Common multi-database routing: entities whose logical source matches <code>logicalName</code> are routed
@@ -250,25 +260,25 @@
           validation and the <code>AddSqlServer</code> health-check. Because both values are identical, the <code>DataSourceResolver</code>
           singleton collapses the logical name onto the <code>Default</code> source, one <code>SQLServerDbContext</code> instance, one
           EF change tracker, one migrations set per service. The <code>WaitFor(database)</code>
-          (Common.Aspire.Hosting/Extensions.cs:142) ensures the service process does not start until SQL Server
+          (Common.Aspire.Hosting/Extensions.cs:174) ensures the service process does not start until SQL Server
           is healthy.</p>
           <p><strong>Polyglot siblings (<a href="https://ivanball.github.io/docs/adr/018-polyglot-persistence.html" target="_blank" rel="noopener">ADR-018</a>).</strong> Two more helpers wire the non-SQL engines for the staged Conference
           <code>Session</code>→Cosmos / <code>Room</code>→SQLite move:</p>
           <ul>
-          <li><code>WithCosmosDataSource(service, database, logicalName)</code> (Extensions.cs:166-180) takes an
+          <li><code>WithCosmosDataSource(service, database, logicalName)</code> (Extensions.cs:198-211) takes an
           <code>AzureCosmosDBDatabaseResource</code> and injects three env vars,
           <code>DataSources__{logicalName}__CosmosConnectionString</code>, <code>DataSources__{logicalName}__CosmosDatabaseName</code>
           (Cosmos&#39;s <code>UseCosmos</code> takes the database name separately), and <code>ConnectionStrings__CosmosConnectionString</code>.
           It layers <strong>on top of</strong> <code>WithSQLServerDataSource</code> (a service uses Cosmos for one module alongside its
           SQL Server source).</li>
-          <li><code>WithSqliteDataSource(service, logicalName, filePath)</code> (Extensions.cs:198-211) takes a file path
+          <li><code>WithSqliteDataSource(service, logicalName, filePath)</code> (Extensions.cs:228-240) takes a file path
           (SQLite has no Aspire container resource) and injects <code>DataSources__{logicalName}__SqliteConnectionString</code>
           (<code>Data Source=&lt;path&gt;</code>) + <code>ConnectionStrings__SqliteConnectionString</code>.</li>
           </ul>
           <h3 id="the-four-service-hosts-and-their-wiring">The four service hosts and their wiring</h3>
-          <p>Services are declared in this order: Notification, Engagement, Conference, Identity (Program.cs:90-186).
+          <p>Services are declared in this order: Notification, Engagement, Conference, Identity (Program.cs:90-195).
           Declaration order matters because the gateway and UI references are added after all four are declared
-          (Program.cs:240-283). Each service follows the same pattern:</p>
+          (Program.cs:254-293). Each service follows the same pattern:</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">builder.AddProject&lt;Projects.MMCA_ADC_{Module}_Service&gt;(<span class="hljs-string">&quot;{name}&quot;</span>, launchProfileName: <span class="hljs-string">&quot;https&quot;</span>)
               .WithSQLServerDataSource({moduleDb}, <span class="hljs-string">&quot;{Module}&quot;</span>)
               .WithReference(redis)
@@ -278,7 +288,7 @@
               .WithExternalHttpEndpoints();</code></pre>
           <p><code>launchProfileName: &quot;https&quot;</code> selects the HTTPS launch profile from <code>launchSettings.json</code> so Aspire
           registers both HTTP and HTTPS endpoints for service discovery (Program.cs:78-80 comment). <code>WithBroker</code> is
-          called from <code>MMCA.Common.Aspire.Hosting</code> and chains <code>.WithReference(broker).WaitFor(broker) .WithEnvironment(&quot;MessageBus__Provider&quot;, &quot;RabbitMq&quot;)</code> (Common.Aspire.Hosting/Extensions.cs:50-62),
+          called from <code>MMCA.Common.Aspire.Hosting</code> and chains <code>.WithReference(broker).WaitFor(broker) .WithEnvironment(&quot;MessageBus__Provider&quot;, &quot;RabbitMq&quot;)</code> (Common.Aspire.Hosting/Extensions.cs:58-68),
           meaning each service waits for RabbitMQ to be healthy before starting and has the environment variable
           that makes <code>AddBrokerMessaging()</code> in its <code>Program.cs</code> select the RabbitMQ transport.</p>
           <p><strong>Conference service</strong> has one extra line (Program.cs:164):</p>
@@ -286,27 +296,60 @@
           <p>This seeds sample speakers and sessions so the public browse grids are non-empty for the Playwright E2E
           suite. The comment (Program.cs:161-163) explicitly restricts this to local dev and E2E CI; production
           leaves this unset.</p>
-          <p><strong>Identity service</strong> has special E2E handling (Program.cs:192-200): when <code>E2E_JWT_PRIVATE_KEY_PEM</code> and
-          <code>E2E_JWT_PUBLIC_KEY_PEM</code> environment variables are present (injected by the <code>e2e.yml</code> workflow for the
-          ephemeral CI keypair), they are forwarded to the Identity service&#39;s environment so it can sign RS256
-          tokens during E2E runs. Locally and in production these variables are absent, so user-secrets / Azure
-          Key Vault are used instead.</p>
+          <p><strong>Identity service</strong> carries two extra lines. <code>Seeding__IncludeSampleUsers=true</code> (Program.cs:189) seeds
+          the well-known organizer/attendee accounts the Playwright suite logs in with; the comment
+          (Program.cs:186-188) restricts it to local dev and E2E CI so production creates no weak-credential
+          accounts. <code>WithE2eRsaKeys()</code> (Program.cs:195) is a framework extension, not AppHost-local code: when
+          <code>E2E_JWT_PRIVATE_KEY_PEM</code> and <code>E2E_JWT_PUBLIC_KEY_PEM</code> are present in the AppHost&#39;s own environment
+          (injected by the <code>e2e.yml</code> workflow for the ephemeral CI keypair) it maps them onto
+          <code>Jwt__RsaPrivateKeyPem</code>, <code>Jwt__RsaPublicKeyPem</code> and <code>Jwks__RsaPublicKeyPem</code> on the Identity resource
+          (Common.Aspire.Hosting/Extensions.cs:129-144). Without either variable the method returns the resource
+          untouched (Extensions.cs:135-138), so locally and in production user-secrets / Azure Key Vault are used
+          instead.</p>
           <h3 id="grpc-cross-service-references">gRPC cross-service references</h3>
-          <p>Three directed edges express the gRPC topology (Program.cs:220-225):</p>
+          <p>Six directed edges express the gRPC topology (Program.cs:215-239):</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Notification → Identity</span>
           notificationService.WithReference(identityService).WaitFor(identityService);
           <span class="hljs-comment">// Engagement → Conference</span>
           engagementService.WithReference(conferenceService).WaitFor(conferenceService);
           <span class="hljs-comment">// Conference → Engagement (reverse edge, deliberately no WaitFor)</span>
-          conferenceService.WithReference(engagementService);</code></pre>
+          conferenceService.WithReference(engagementService);
+          <span class="hljs-comment">// Engagement → Notification (live-channel push, deliberately no WaitFor)</span>
+          engagementService.WithReference(notificationService);
+          <span class="hljs-comment">// Identity → Engagement and Identity → Notification (data-subject export aggregation, no WaitFor)</span>
+          identityService.WithReference(engagementService);
+          identityService.WithReference(notificationService);</code></pre>
           <p><code>WithReference</code> on a project resource injects <code>services__{name}__http__0</code> (and <code>https__0</code>) environment
           variables into the consumer. The <code>AddTypedGrpcClient&lt;T&gt;(serviceName)</code> call in each service&#39;s
           <code>Program.cs</code> uses <code>serviceName</code> to resolve <code>http://{name}</code> through Aspire&#39;s service discovery. The
-          deliberate asymmetry in the Conference↔Engagement pair is explained in the inline comment
-          (Program.cs:210-217): bidirectional <code>WaitFor</code> would produce a circular wait and deadlock. Instead,
+          Engagement→Notification edge targets a <strong>named</strong> endpoint rather than the default one: Notification
+          keeps <code>Http1AndHttp2</code> defaults so the SignalR WebSocket Upgrade works and declares a separate
+          <code>Http2</code>-only <code>grpc</code> endpoint on 8081 (<code>Notification.Service/appsettings.json:15-17</code>), so the reference
+          injects <code>services__notification__grpc__0</code> and the client resolves <code>http://_grpc.notification</code>
+          (Program.cs:221-227, <code>Notification.Contracts/DependencyInjection.cs:42</code>).</p>
+          <p>The deliberate asymmetry in the Conference↔Engagement pair is explained in the inline comment
+          (Program.cs:205-212): bidirectional <code>WaitFor</code> would produce a circular wait and deadlock. Instead,
           transient &quot;peer not ready&quot; gRPC errors during startup self-heal via the standard Polly retry and
           circuit-breaker pipeline baked into <code>AddTypedGrpcClient</code>. Engagement waits for Conference as a
-          best-effort ordering hint since Conference is the heavier producer (Program.cs:222).</p>
+          best-effort ordering hint since Conference is the heavier producer (Program.cs:217). The three later
+          edges omit <code>WaitFor</code> for the same reason plus one of their own: Engagement&#39;s live-channel publish is
+          fire-and-forget-with-logging (Program.cs:221-227), and Engagement and Notification already wait on
+          Identity, so a reciprocal wait for the export aggregation would deadlock startup (Program.cs:229-237).
+          Aspire&#39;s hosting package has no gRPC-specific API here: these are stock <code>WithReference</code> calls, and
+          MMCA.Common.Aspire.Hosting deliberately adds none.</p>
+          <p>What consumes those injected variables lives in a third package, <code>MMCA.Common.Grpc</code>. On the server side
+          <code>AddGrpcServiceDefaults()</code> registers <code>AddGrpc</code> with the <code>GrpcResultExceptionInterceptor</code> (mapping
+          <code>Result</code> failures to <code>RpcException</code>), turns detailed errors off, and adds server reflection
+          (<code>MMCA.Common.Grpc/DependencyInjection.cs:26-38</code>); the four ADC services that serve gRPC call it
+          (e.g. Conference/Program.cs:320, Identity/Program.cs:278). On the client side
+          <code>AddTypedGrpcClient&lt;TClient&gt;(serviceName)</code> sets the address to <code>http://{serviceName}</code>, which is HTTP/2
+          cleartext with prior knowledge, adds the <code>JwtForwardingClientInterceptor</code> so an inbound bearer token
+          rides along to the peer, forces a <code>SocketsHttpHandler</code> (the global <code>ConfigureHttpClientDefaults</code>
+          wrapper can otherwise defeat HTTP/2 negotiation) and re-applies the same <code>HttpResilienceDefaults</code>
+          values used by the HTTP defaults (DependencyInjection.cs:66-112). The h2c choice is not a shortcut:
+          Aspire&#39;s endpoint discovery does not reliably produce a <code>services__{name}__https__0</code> key for project
+          resources, so the resolver falls back to <code>http</code> regardless of the requested scheme, and the target
+          must therefore serve HTTP/2 on its cleartext endpoint (DependencyInjection.cs:44-52).</p>
           <p>[Rubric §7, Microservices Architecture] assesses how cleanly services are decoupled and how
           inter-service calls are managed. Declaring <code>WithReference</code> only for actual call edges (not broadcasting
           every service to every other service) keeps the service-discovery injection minimal and makes the
@@ -327,11 +370,11 @@
               .WaitFor(identityService)
               .WithExternalHttpEndpoints()
               .WithEndpoint(<span class="hljs-string">&quot;https&quot;</span>, endpoint =&gt; endpoint.Port = <span class="hljs-number">6001</span>);</code></pre>
-          <p>Program.cs:240-250. The gateway has no <code>WithSQLServerDataSource</code>, no <code>WithReference(redis)</code>, and no
+          <p>Program.cs:254-264. The gateway has no <code>WithSQLServerDataSource</code>, no <code>WithReference(redis)</code>, and no
           <code>WithBroker</code>. It is stateless: no database, no cache, no broker traffic. The four <code>WithReference</code> calls
           are purely for Aspire service-discovery injection, they make the gateway able to resolve
           <code>http://identity</code>, <code>http://conference</code>, etc., at runtime through YARP&#39;s route configuration. The HTTPS
-          endpoint is pinned to port 6001 (Program.cs:250) because the MAUI native client has this URL baked into
+          endpoint is pinned to port 6001 (Program.cs:264) because the MAUI native client has this URL baked into
           its <code>appsettings.json</code> and cannot participate in Aspire&#39;s dynamic port allocation.</p>
           <p>The gateway waits for all four backend services before Aspire marks it healthy. This means the UI, which
           in turn waits for the gateway, only starts after the full backend is ready, a deliberate staging of the
@@ -339,8 +382,8 @@
           <h4 id="why-the-gateway-proxies-jwks-discovery">Why the gateway proxies JWKS discovery</h4>
           <p>Identity runs <code>Http2</code>-only on cleartext (h2c prior knowledge) so gRPC clients can negotiate HTTP/2
           without TLS. The downside is that the default JwtBearer backchannel <code>HttpClient</code> sends HTTP/1.1, which
-          a Kestrel <code>Http2</code>-only endpoint rejects. The solution (Program.cs:259-261 and
-          Common.Aspire.Hosting/Extensions.cs:81-111) is <code>WithJwksDiscovery</code>, which sets
+          a Kestrel <code>Http2</code>-only endpoint rejects. The solution (Program.cs:273-275 and
+          Common.Aspire.Hosting/Extensions.cs:85-113) is <code>WithJwksDiscovery</code>, which sets
           <code>Authentication__JwtBearer__Authority</code> to the <strong>gateway&#39;s</strong> HTTPS endpoint rather than Identity&#39;s:</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">notificationService.WithJwksDiscovery(identityService, gateway);
           engagementService.WithJwksDiscovery(identityService, gateway);
@@ -364,18 +407,31 @@
               ...
               .WithEndpoint(<span class="hljs-string">&quot;https&quot;</span>, endpoint =&gt; endpoint.Port = <span class="hljs-number">6002</span>);
           identityService.WithEnvironment(<span class="hljs-string">&quot;OAuth__UIBaseUrl&quot;</span>, ui.GetEndpoint(<span class="hljs-string">&quot;https&quot;</span>));</code></pre>
-          <p>Program.cs:267-283. The UI waits for the gateway (and transitively the four services), ensuring it
+          <p>Program.cs:281-293. The UI waits for the gateway (and transitively the four services), ensuring it
           does not open to traffic while the backend is still cold. Port 6002 is pinned for the same reason as
           6001, E2E tests and out-of-Aspire clients need a stable address. The <code>identityService.WithEnvironment</code>
-          line (Program.cs:283) passes the UI&#39;s HTTPS endpoint back to Identity as <code>OAuth__UIBaseUrl</code> so the
+          line (Program.cs:332) passes the UI&#39;s HTTPS endpoint back to Identity as <code>OAuth__UIBaseUrl</code> so the
           post-login OAuth redirect lands on the correct host.</p>
+          <p>Between the UI declaration and that last line sit three environment-gated E2E switches
+          (Program.cs:295-328), all absent in production. <code>E2E_FORCE_WASM</code> sets <code>E2E__ForceWebAssembly</code> on the UI
+          to run the suite without a Blazor Server circuit; it is a local fast-box option only, since on the
+          two-core hosted runner the per-context WASM boot never wins the race against the suite&#39;s waits, so
+          <code>e2e.yml</code> deliberately does not set it (Program.cs:296-301). <code>E2E_FORCE_SERVER</code> sets <code>E2E__ForceServer</code>
+          to pin the UI to InteractiveServer, and loses to <code>E2E_FORCE_WASM</code> when both are set
+          (Program.cs:313-322). <code>E2E_LIFT_REGISTRATION_THROTTLE</code> (implied by <code>E2E_FORCE_WASM</code>) raises
+          <code>LoginProtection__MaxRegistrationsPerIpPerHour</code> on Identity from the BR-213 default of 10 to 1000,
+          because the suite registers far more than ten accounts from one localhost IP (Program.cs:302-306,
+          324-328).</p>
           <hr>
           <h2 id="where-service-defaults-come-from-mmcacommonaspire-not-a-local-project">Where service defaults come from, <code>MMCA.Common.Aspire</code>, not a local project</h2>
           <p>There is <strong>no</strong> <code>MMCA.ADC.ServiceDefaults</code> project. The conventional Aspire &quot;ServiceDefaults&quot; shared
           project that scaffolding generates has been deleted; each service host (and the UI) instead calls
           <code>AddServiceDefaults()</code> from the framework&#39;s <code>MMCA.Common.Aspire</code> package, and <code>MapDefaultEndpoints()</code> to
-          expose the health endpoints. This means the OpenTelemetry wiring, health checks, service discovery, and
-          Polly resilience are identical across both downstream apps (ADC and Store) and are versioned in lockstep
+          expose the health endpoints. All six ADC deployables do this, not just the services: Notification
+          (Program.cs:100 / 240), Engagement (89 / 248), Conference (113 / 334), Identity (109 / 288), the Gateway
+          (25 / 46) and the UI (30 / 109). This means the OpenTelemetry wiring, health checks, service discovery,
+          and Polly resilience are identical across both downstream apps (ADC and Store, neither of which has a
+          <code>ServiceDefaults</code> project any more) and are versioned in lockstep
           with the rest of the framework, there is no per-app copy to drift. The full behavior of those methods
           is documented in the next section, since <code>MMCA.Common.Aspire</code> is now the single source of truth for the
           service-side defaults.</p>
@@ -390,13 +446,14 @@
           <p>This package is the canonical, and now the only, service-defaults implementation. Each ADC service
           host calls its methods directly; there is no ADC-local copy that shadows or extends it.</p>
           <h3 id="addservicedefaultstbuilder"><code>AddServiceDefaults&lt;TBuilder&gt;</code></h3>
-          <p>Common.Aspire/Extensions.cs:31-78. Called early in each service&#39;s <code>Program.cs</code>, it chains
-          <code>ConfigureOpenTelemetry()</code> (Extensions.cs:34), <code>AddDefaultHealthChecks()</code>, a <code>&quot;self&quot;</code> check tagged
-          <code>&quot;live&quot;</code> (Extensions.cs:35), <code>AddWarmupReadiness()</code> (Extensions.cs:36), and <code>Services.AddServiceDiscovery()</code>
-          (Extensions.cs:37). It then applies a Polly resilience pipeline to every <code>HttpClient</code>
-          (<code>ConfigureHttpClientDefaults</code>, Extensions.cs:41-75) with 30 s per-attempt / 60 s circuit-breaker
-          sampling / 90 s total-request timeouts (Extensions.cs:49-51), and a <code>SocketsHttpHandler</code> tuned explicitly
-          for Azure Container Apps Consumption plan (Common.Aspire/Extensions.cs:66-74):</p>
+          <p>Common.Aspire/Extensions.cs:39-90. Called early in each service&#39;s <code>Program.cs</code>, it chains
+          <code>ConfigureOpenTelemetry()</code> (Extensions.cs:41), <code>AddDefaultHealthChecks()</code>, which adds a <code>&quot;self&quot;</code> check
+          tagged <code>&quot;live&quot;</code> (Extensions.cs:42, 196-197), <code>AddWarmupReadiness()</code> (Extensions.cs:43), and
+          <code>Services.AddServiceDiscovery()</code> (Extensions.cs:44). It then applies a Polly resilience pipeline to every
+          <code>HttpClient</code> (<code>ConfigureHttpClientDefaults</code>, Extensions.cs:48-87) with 30 s per-attempt / 60 s
+          circuit-breaker sampling / 90 s total-request timeouts and <strong>one</strong> retry per hop (Extensions.cs:60-63),
+          and a <code>SocketsHttpHandler</code> tuned explicitly for Azure Container Apps Consumption plan
+          (Common.Aspire/Extensions.cs:78-86):</p>
           <ul>
           <li><code>PooledConnectionLifetime = 10 min</code>, forces connection recycling so DNS changes during ACA replica
           rollovers are picked up without an app restart.</li>
@@ -408,10 +465,17 @@
           <li><code>EnableMultipleHttp2Connections = true</code>, avoids a single multiplexed connection becoming a bottleneck
           under concurrent requests.</li>
           </ul>
-          <p><code>AddServiceDefaults</code> also calls <code>AddWarmupReadiness()</code> (Common.Aspire/Extensions.cs:36), so every
+          <p>None of those numbers are literals here. They all come from <code>HttpResilienceDefaults</code> in
+          <code>MMCA.Common.Shared</code> (<code>Core/MMCA.Common.Shared/Resilience/HttpResilienceDefaults.cs:13-43</code>), which
+          exists so the Aspire HTTP defaults and the <code>MMCA.Common.Grpc</code> typed clients cannot drift apart: the
+          hand-mirrored copies previously did, leaving the gRPC side on the 10 s / 30 s library defaults
+          (HttpResilienceDefaults.cs:6-8). <code>MaxRetryAttempts</code> is deliberately 1, because the UI service base
+          classes own the user-facing retries and stacking a full budget at every hop turned a backend brownout
+          into an up-to-16x request storm (HttpResilienceDefaults.cs:21-28).</p>
+          <p><code>AddServiceDefaults</code> also calls <code>AddWarmupReadiness()</code> (Common.Aspire/Extensions.cs:43), so every
           service host inherits the warm-up gate (detailed next) without opting in.</p>
           <h3 id="warmup-infrastructure">Warmup infrastructure</h3>
-          <p><code>AddWarmupReadiness&lt;TBuilder&gt;</code> (Common.Aspire/Extensions.cs:91-103) registers:</p>
+          <p><code>AddWarmupReadiness&lt;TBuilder&gt;</code> (Common.Aspire/Extensions.cs:101-112) registers:</p>
           <ul>
           <li><code>WarmupReadinessGate</code> (singleton), a boolean gate that opens when all warm-up tasks finish.</li>
           <li><code>WarmupHostedService</code>, runs all registered <code>IWarmupTask</code> implementations on startup, then opens the
@@ -419,8 +483,10 @@
           <li><code>WarmupReadinessHealthCheck</code> tagged <code>&quot;ready&quot;</code>, reports unhealthy until the gate opens. Because it
           appears on <code>/health/ready</code> (the readiness probe) but not on <code>/alive</code>, ACA ingress holds back user
           traffic from a replica that is still warming up.</li>
-          <li><code>OpenIdConnectMetadataWarmupTask</code>, pre-fetches <code>{authority}/.well-known/openid-configuration</code>
-          (Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:28-48). This warms the TCP/TLS connection
+          <li><code>OpenIdConnectMetadataWarmupTask</code>, pre-fetches <code>{authority}/.well-known/openid-configuration</code>, where
+          <code>{authority}</code> is the <code>Authentication:JwtBearer:Authority</code> key <code>WithJwksDiscovery</code> sets; with that key
+          unset the task returns immediately (Common.Aspire/Warmup/OpenIdConnectMetadataWarmupTask.cs:28-49).
+          This warms the TCP/TLS connection
           to the JWKS endpoint before the first authenticated request arrives. The problem it solves is
           documented in the class comment: on a CPU-throttled idle ACA replica, a lazy metadata fetch on the
           first request can stretch past the client timeout, producing the &quot;first request fails, second
@@ -431,31 +497,52 @@
           Consumption plan cold-starts and idle-replica penalties. Solving them in the framework means every
           consumer inherits the fix.</p>
           <h3 id="configureopentelemetrytbuilder"><code>ConfigureOpenTelemetry&lt;TBuilder&gt;</code></h3>
-          <p>Common.Aspire/Extensions.cs:129-164. Configures OTel logging (<code>IncludeFormattedMessage</code> + <code>IncludeScopes</code>),
+          <p>Common.Aspire/Extensions.cs:121-186. Configures OTel logging (<code>IncludeFormattedMessage</code> + <code>IncludeScopes</code>),
           metrics (ASP.NET Core, HttpClient, .NET runtime), and tracing (the application&#39;s own source plus
-          <code>&quot;MMCA.Common.Outbox&quot;</code>, with ASP.NET Core and HttpClient instrumentation). Two MMCA.Common-specific
+          <code>&quot;MMCA.Common.Outbox&quot;</code>, with ASP.NET Core and HttpClient instrumentation). Three MMCA.Common-specific
           additions stand out:</p>
           <ol>
-          <li><p><strong>MMCA.Common meters</strong> (Common.Aspire/Extensions.cs:146-147): <code>&quot;MMCA.Common.Outbox&quot;</code> (dead-letter
+          <li><p><strong>MMCA.Common meters</strong> (Common.Aspire/Extensions.cs:157-158): <code>&quot;MMCA.Common.Outbox&quot;</code> (dead-letter
           counter) and <code>&quot;MMCA.Common.Cqrs&quot;</code> (RED histograms for command/query handlers). These are registered
           by literal name because the Aspire package has no project reference to the assemblies that define them.</p>
           </li>
           <li><p><strong><code>OutboxPollFilterProcessor</code></strong> is added to the tracing pipeline
-          (Common.Aspire/Extensions.cs:157-159) before the exporters, so its <code>OnEnd</code> runs first.</p>
+          (Common.Aspire/Extensions.cs:167-172) before the exporters, so its <code>OnEnd</code> runs first.</p>
+          </li>
+          <li><p><strong>Three cost knobs, all off by default</strong> ([Rubric §31, Cost and FinOps]).
+          <code>Telemetry:DisableHttpClientMetrics</code> drops the HttpClient connection/request metric family
+          (Extensions.cs:141-144), <code>Telemetry:DisableRuntimeMetrics</code> drops the ~17 .NET runtime instruments
+          (Extensions.cs:150-153), and <code>Telemetry:TracesSampleRatio</code> installs a <code>ParentBasedSampler</code> over a
+          <code>TraceIdRatioBasedSampler</code> for head-based trace sampling (Extensions.cs:179-180). A value outside the
+          open interval (0,1), or one that fails to parse, falls back to &quot;sample everything&quot; rather than
+          silently blinding the host (Extensions.cs:361-374, 384-385). ADC&#39;s production Bicep sets
+          <code>Telemetry__TracesSampleRatio</code> (<code>MMCA.ADC/infra/main.bicep:210</code>); an unset host behaves exactly as
+          before the knobs existed.</p>
           </li>
           </ol>
           <h3 id="mapdefaultendpoints"><code>MapDefaultEndpoints</code></h3>
-          <p>Common.Aspire/Extensions.cs:230-251. Maps three endpoints:</p>
+          <p>Common.Aspire/Extensions.cs:324-352. Maps three endpoints:</p>
           <ul>
           <li><code>/health</code>, all checks must pass; used by humans and dashboards.</li>
           <li><code>/alive</code>, liveness probe: <code>&quot;live&quot;</code>-tagged checks only, so a transient dependency outage (e.g. SQL
           Server down) does not mark the process dead and get it killed.</li>
-          <li><code>/health/ready</code>, readiness: everything except <code>&quot;live&quot;</code>-only checks. This includes the warmup check
-          (tagged <code>&quot;ready&quot;</code>) and any untagged dependency checks, so a replica still in cold-start or with a
-          failing dependency is removed from ACA ingress without being killed.</li>
+          <li><code>/health/ready</code>, readiness: everything except <code>&quot;live&quot;</code>-only <strong>and <code>&quot;optional&quot;</code></strong> checks
+          (Extensions.cs:346-349). This includes the warmup check (tagged <code>&quot;ready&quot;</code>) and any untagged dependency
+          checks, so a replica still in cold-start or with a failing dependency is removed from ACA ingress
+          without being killed. The <code>&quot;optional&quot;</code> exclusion is deliberate: a dependency the app degrades
+          gracefully without (a distributed cache behind an in-memory fallback, a broker behind a retrying
+          outbox) must not gate readiness, or a partial degradation takes every replica unready at once and
+          becomes a total outage (Extensions.cs:339-345).</li>
           </ul>
+          <p>The checks that carry that <code>&quot;optional&quot;</code> tag come from <code>AddInfrastructureHealthChecks(bool requireSqlServer)</code>
+          (Common.Aspire/Extensions.cs:225-259), which a host calls separately from <code>AddServiceDefaults</code>. It
+          registers a SQL Server check when <code>SQLServerConnectionString</code> resolves, plus Redis and RabbitMQ checks
+          tagged <code>&quot;optional&quot;</code> when theirs do. The asymmetry is intentional: Redis and RabbitMQ are optional per
+          host, but a host that cannot resolve its own database connection string is misconfigured, so passing
+          <code>requireSqlServer: true</code> throws at startup instead of quietly registering no check and reporting healthy
+          (Extensions.cs:208-233).</p>
           <h3 id="dual-telemetry-export">Dual telemetry export</h3>
-          <p><code>AddOpenTelemetryExporters</code> (Common.Aspire/Extensions.cs:266-284) activates two exporters, each
+          <p><code>AddOpenTelemetryExporters</code> (Common.Aspire/Extensions.cs:274-291) activates two exporters, each
           conditional:</p>
           <ul>
           <li><strong>OTLP</strong> when <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> is present, the Aspire dashboard sets this
@@ -472,63 +559,85 @@
           <p><code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Telemetry/OutboxPollFilterProcessor.cs</code></p>
           <p>This OpenTelemetry <code>BaseProcessor&lt;Activity&gt;</code> (OutboxPollFilterProcessor.cs:15) drops recurring outbox
           poll spans from export. The <code>OutboxProcessor</code> background service polls every relational outbox table on a
-          recurring cycle (default: 300 s in production). Without filtering, those idle polls would dominate
+          recurring cycle (2 s framework default, <code>OutboxSettings.cs:31</code>; deployed environments set 300 s).
+          Without filtering, those idle polls would dominate
           Application Insights ingestion, both by span count and by spawning <code>SqlClient</code> dependency spans when the
           Azure Monitor distro&#39;s auto-instrumentation is active.</p>
-          <p>The processor walks the in-process parent chain in <code>OnEnd</code> (OutboxPollFilterProcessor.cs:34-45),
+          <p>The processor walks the in-process parent chain in <code>OnEnd</code> (OutboxPollFilterProcessor.cs:37-48),
           matching spans whose source is <code>&quot;MMCA.Common.Outbox&quot;</code> and whose operation name is <code>&quot;OutboxPoll&quot;</code>. When a
           match is found, it clears the <code>ActivityTraceFlags.Recorded</code> flag, which tells the batch export
-          processors to skip the span. It is registered before the exporters (Common.Aspire/Extensions.cs:157-159)
-          so its <code>OnEnd</code> runs before the batch processors check the flag.</p>
+          processors to skip the span. It is registered before the exporters (Common.Aspire/Extensions.cs:167-172)
+          so its <code>OnEnd</code> runs before the batch processors check the flag. A null activity returns early rather
+          than throwing, because a telemetry callback must never throw (OutboxPollFilterProcessor.cs:29-33).</p>
           <p>Real outbox-work spans are unaffected: per-message <code>OutboxProcess</code> spans restore explicit parent
           contexts from the stored trace IDs and are never descendants of the poll span
           (OutboxPollFilterProcessor.cs:6-14 class comment).</p>
           <p>The constant names <code>OutboxActivitySourceName = &quot;MMCA.Common.Outbox&quot;</code> and
-          <code>PollActivityName = &quot;OutboxPoll&quot;</code> (OutboxPollFilterProcessor.cs:19-20) are deliberately duplicated from
-          <code>MMCA.Common.Infrastructure</code>, the comment explains the Aspire package has no project reference there by
-          design, to keep the dependency graph clean.</p>
+          <code>PollActivityName = &quot;OutboxPoll&quot;</code> (OutboxPollFilterProcessor.cs:23-24) are deliberately duplicated from
+          <code>MMCA.Common.Infrastructure</code>, the comment explains the Aspire package&#39;s only <code>ProjectReference</code> is
+          <code>MMCA.Common.Shared</code> (for <code>HttpResilienceDefaults</code>), so <code>AddServiceDefaults</code> stays usable from a host
+          that does not take the persistence stack (OutboxPollFilterProcessor.cs:17-22).</p>
           <p>[Rubric §31, Cost and FinOps] assesses whether observability costs are controlled. Suppressing poll
-          spans on a 300 s polling interval in production eliminates the majority of idle-process telemetry
-          ingestion. The framework makes this the default for every consumer; individual services do not need to
-          configure it.</p>
+          spans on a 300 s polling interval in production (<code>Outbox__PollingIntervalSeconds=300</code> on all four ADC
+          container apps, <code>MMCA.ADC/infra/main.bicep:1050,1215,1325,1460</code>) eliminates the majority of
+          idle-process telemetry ingestion. The framework makes this the default for every consumer; individual
+          services do not need to configure it.</p>
           <h3 id="security-headers">Security headers</h3>
           <p><code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/Security/SecurityHeaders.cs</code> provides
           <code>SecurityHeadersMiddleware</code> and <code>SecurityHeadersExtensions</code>. The middleware sets <code>X-Content-Type-Options: nosniff</code>, <code>X-Frame-Options</code> (default: <code>DENY</code>), <code>Referrer-Policy</code>, <code>Permissions-Policy</code>, HSTS outside
           Development, and a Content-Security-Policy resolved from <code>ICspPolicyProvider</code>
-          (SecurityHeaders.cs:120-142). The default static policy is the conservative baseline
+          (SecurityHeaders.cs:121-143). The default static policy is the conservative baseline
           <code>default-src &#39;self&#39;; object-src &#39;none&#39;; base-uri &#39;self&#39;; form-action &#39;self&#39;; frame-ancestors &#39;none&#39;</code>
-          (SecurityHeaders.cs:46-47), safe for JSON/WebSocket/static endpoints; it deliberately omits <code>script-src</code>
+          (SecurityHeaders.cs:47-48), safe for JSON/WebSocket/static endpoints; it deliberately omits <code>script-src</code>
           / <code>style-src</code> so it does not break a Blazor host that forgot to register a provider. HTML hosts register a
           custom <code>ICspPolicyProvider</code> for a full resource policy. Consumers call <code>AddCommonSecurityHeaders()</code> and
           <code>UseCommonSecurityHeaders()</code>.</p>
+          <p>The same package also ships <code>AddCommonGatewayCors</code>
+          (<code>MMCA.Common.Aspire/GatewayCorsExtensions.cs:24-57</code>), which the ADC Gateway calls right after the
+          security headers (Gateway/Program.cs:31, 36). It is deliberately looser than <code>MMCA.Common.API</code>&#39;s
+          allow-list version, because a reverse proxy has to pass arbitrary client headers through: allow-any in
+          Development (GatewayCorsExtensions.cs:34-42), and in every other environment the origins from
+          <code>Cors:AllowedOrigins</code> with any header/method plus credentials (GatewayCorsExtensions.cs:44-53).</p>
           <hr>
           <h2 id="mmcacommonaspirehosting-the-apphost-extensions-package"><code>MMCA.Common.Aspire.Hosting</code>, the AppHost extensions package</h2>
           <blockquote>
           <p>Source: <code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire.Hosting/Extensions.cs</code></p>
           </blockquote>
           <p>This package lives in a separate assembly from <code>MMCA.Common.Aspire</code> so running services do not pull in
-          the full <code>Aspire.Hosting</code> package (Common.Aspire.Hosting/Extensions.cs:6-15 class comment). It exports
-          four extension methods used in every AppHost that orchestrates extracted microservices
-          (<code>AddMessageBroker</code>, <code>WithBroker</code>, <code>WithJwksDiscovery</code>, and the <code>WithSQLServerDataSource</code> / <code>WithCosmosDataSource</code> / <code>WithSqliteDataSource</code> helpers covered earlier).</p>
+          the full <code>Aspire.Hosting</code> package (Common.Aspire.Hosting/Extensions.cs:8-17 class comment). It exports
+          seven extension methods used in the AppHosts that orchestrate extracted microservices
+          (<code>AddMessageBroker</code>, <code>WithBroker</code>, <code>WithJwksDiscovery</code>, <code>WithE2eRsaKeys</code>, and the <code>WithSQLServerDataSource</code> / <code>WithCosmosDataSource</code> / <code>WithSqliteDataSource</code> helpers covered earlier).
+          It exposes no gRPC API at all: gRPC peers are wired with stock Aspire <code>WithReference</code>, as shown above.</p>
           <h3 id="addmessagebroker"><code>AddMessageBroker</code></h3>
-          <p>Common.Aspire.Hosting/Extensions.cs:32-38. Wraps <code>builder.AddRabbitMQ(name).WithManagementPlugin()</code>.
+          <p>Common.Aspire.Hosting/Extensions.cs:39-44. Wraps <code>builder.AddRabbitMQ(name).WithManagementPlugin()</code>.
           The management plugin is always enabled for local debug. Used in <code>Program.cs:60-61</code> as
           <code>builder.AddMessageBroker()</code>.</p>
           <h3 id="withbrokertresource"><code>WithBroker&lt;TResource&gt;</code></h3>
-          <p>Common.Aspire.Hosting/Extensions.cs:50-62. Chains <code>WithReference(broker).WaitFor(broker) .WithEnvironment(&quot;MessageBus__Provider&quot;, &quot;RabbitMq&quot;)</code> onto a project resource. This single call is the
+          <p>Common.Aspire.Hosting/Extensions.cs:58-68. Chains <code>WithReference(broker).WaitFor(broker) .WithEnvironment(&quot;MessageBus__Provider&quot;, &quot;RabbitMq&quot;)</code> onto a project resource. This single call is the
           complete wiring for broker-aware services: service discovery, health-based wait, and the environment
           variable that <code>AddBrokerMessaging()</code> reads to select the MassTransit/RabbitMQ transport. When this
           environment variable is absent (integration tests running via <code>WebApplicationFactory</code>),
           <code>AddBrokerMessaging</code> short-circuits to in-process mode so existing tests continue to work without a
           real broker.</p>
           <h3 id="withjwksdiscoverytresource"><code>WithJwksDiscovery&lt;TResource&gt;</code></h3>
-          <p>Common.Aspire.Hosting/Extensions.cs:81-111. Injects <code>Authentication__JwtBearer__Authority</code> pointing to
+          <p>Common.Aspire.Hosting/Extensions.cs:85-113. Injects <code>Authentication__JwtBearer__Authority</code> pointing to
           the gateway&#39;s HTTPS endpoint (when a gateway is passed) or Identity&#39;s HTTPS endpoint (fallback). The
           routing-through-gateway rationale is explained in full in the method comment
-          (Common.Aspire.Hosting/Extensions.cs:95-106): Identity runs <code>Http2</code>-only, so the default HTTP/1.1
+          (Common.Aspire.Hosting/Extensions.cs:97-107): Identity runs <code>Http2</code>-only, so the default HTTP/1.1
           backchannel is rejected; the gateway terminates TLS, speaks ALPN, and routes <code>/.well-known/*</code> to
-          Identity over h2c. The method also calls <code>WithReference(identity).WaitFor(identity)</code> to add service
-          discovery for any direct identity calls the consuming service needs.</p>
+          Identity over h2c. The method also calls <code>WithReference(identity).WaitFor(identity)</code>
+          (Extensions.cs:92-94) to add service discovery for any direct identity calls the consuming service
+          needs. That <code>WaitFor</code> is easy to miss and it shapes the startup graph: all three non-Identity ADC
+          services wait on Identity because they call <code>WithJwksDiscovery</code>, not because of any explicit <code>WaitFor</code>
+          in the AppHost.</p>
+          <h3 id="withe2ersakeys"><code>WithE2eRsaKeys</code></h3>
+          <p>Common.Aspire.Hosting/Extensions.cs:129-144. Reads <code>E2E_JWT_PRIVATE_KEY_PEM</code> /
+          <code>E2E_JWT_PUBLIC_KEY_PEM</code> from the AppHost&#39;s own process environment and, only when both are non-blank,
+          maps them onto <code>Jwt__RsaPrivateKeyPem</code>, <code>Jwt__RsaPublicKeyPem</code> and <code>Jwks__RsaPublicKeyPem</code> on the
+          Identity resource. Without the forwarding every CI login and register fails with &quot;No supported key
+          formats were found&quot; and the readiness gate times out (Extensions.cs:118-127). Both ADC
+          (AppHost/Program.cs:195) and Store (<code>MMCA.Store/Source/Hosting/MMCA.Store.AppHost/Program.cs:144</code>) call
+          it, which is why it lives in the framework rather than in either AppHost.</p>
           <hr>
           <h2 id="the-six-dockerfiles">The six Dockerfiles</h2>
           <p>All six Dockerfiles share the same multi-stage structure (<code>base</code> → <code>build</code> → <code>publish</code> → <code>final</code>) and
@@ -537,37 +646,51 @@
           <p><strong>Stage <code>base</code></strong> (first <code>FROM</code> in all six): <code>mcr.microsoft.com/dotnet/aspnet:10.0</code> with <code>WORKDIR /app</code>
           and <code>EXPOSE 8080 8081</code>. This is the runtime-only image; it has no SDK tools, minimizing the attack
           surface of the final image.</p>
-          <p><strong>Stage <code>build</code></strong>: <code>mcr.microsoft.com/dotnet/sdk:10.0</code>. Accepts <code>GITHUB_TOKEN</code> as a build argument and
-          exports it as an environment variable (<code>ARG GITHUB_TOKEN</code> / <code>ENV GITHUB_TOKEN=${GITHUB_TOKEN}</code>) so
-          NuGet can restore <code>MMCA.Common.*</code> packages from GitHub Packages during the Docker build. All six require
-          <code>--build-arg GITHUB_TOKEN=...</code> at build time.</p>
+          <p><strong>Stage <code>build</code></strong>: <code>mcr.microsoft.com/dotnet/sdk:10.0</code>, restoring the <code>MMCA.Common.*</code> packages from
+          GitHub Packages. The token is a <strong>BuildKit secret</strong>, never a build argument: each restore step is
+          <code>RUN --mount=type=secret,id=github_token</code> and reads <code>/run/secrets/github_token</code> into <code>GITHUB_TOKEN</code> for
+          that one command (Gateway.Dockerfile:24-26). The header comment says why: an <code>ARG</code> promoted
+          to <code>ENV</code> lands in image layers, the build cache, and <code>docker history</code> (Gateway.Dockerfile:8-10). The
+          build call is therefore <code>--secret id=github_token,env=GITHUB_TOKEN</code>, not <code>--build-arg</code>.</p>
+          <p>There is deliberately <strong>no <code>dotnet build</code> step</strong> in any of the six. The comment records the measurement
+          (CI run 30115729720, 2026-07-24): a build stage emitted <code>bin/Release/net10.0/</code> while the ReadyToRun
+          publish emits <code>bin/Release/net10.0/linux-x64/</code>, so publish never reused the build output and every
+          image compiled twice, about 75 s of waste per image. Publish does its own restore and build, and the
+          analyzer gating (<code>TreatWarningsAsErrors</code>, <code>AnalysisMode=All</code>) still runs inside it
+          (Gateway.Dockerfile:33-38).</p>
           <p><strong>Stage <code>publish</code></strong>: runs <code>dotnet publish ... -o /app/publish /p:UseAppHost=false</code> against the same
-          project, then copies the publish output to <code>final</code>.</p>
+          project, with the same secret mount because publish performs its own restore pass. The four services
+          and the Gateway add <code>/p:PublishReadyToRun=true</code> so cold starts on fractional-vCPU containers skip
+          first-request JIT (Gateway.Dockerfile:42-47); the UI image does <strong>not</strong>, and its comment notes that
+          without R2R the publish reuses the same <code>obj/</code> path a build step would have produced
+          (UI.Web.Dockerfile:39-41, 48).</p>
           <p><strong>Stage <code>final</code></strong>: <code>COPY --from=publish /app/publish .</code> into the <code>base</code> layer. Sets
           <code>ASPNETCORE_ENVIRONMENT=Production</code> and uses the <code>ENTRYPOINT</code> form of the <code>dotnet</code> invocation.</p>
           <h3 id="gateway-dockerfile">Gateway Dockerfile</h3>
           <p><code>MMCA.ADC/Source/Hosts/MMCA.ADC.Gateway/Dockerfile</code></p>
-          <p>The build stage copies only the gateway&#39;s <code>.csproj</code> before restoring (Gateway.Dockerfile:20-23), then
-          copies the full <code>Source/</code> tree before building (Gateway.Dockerfile:28). The comment at lines 25-27
+          <p>The build stage copies only the gateway&#39;s <code>.csproj</code> before restoring (Gateway.Dockerfile:21-26), then
+          copies the full <code>Source/</code> tree before publishing (Gateway.Dockerfile:31). The comment at lines 28-30
           explains why the full tree is needed: <code>Directory.Build.props</code> links <code>GlobalUsings.IdentifierType.cs</code>
           from each module&#39;s <code>Shared</code> project, so the source tree must be present even though the gateway itself
           references no module projects. The gateway has minimal NuGet dependencies (<code>MMCA.Common.Aspire</code> and
           YARP); the partial restore approach is feasible.</p>
-          <p>Entrypoint: <code>dotnet MMCA.ADC.Gateway.dll</code> (Gateway.Dockerfile:39).</p>
+          <p>Entrypoint: <code>dotnet MMCA.ADC.Gateway.dll</code> (Gateway.Dockerfile:53).</p>
           <h3 id="ui-blazor-web-dockerfile">UI (Blazor Web) Dockerfile</h3>
           <p><code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Dockerfile</code></p>
           <p>The build stage copies eight <code>.csproj</code> files individually before restoring
-          (UI.Web.Dockerfile:21-28), three <code>*.Shared</code> projects, three <code>*.UI</code> projects, and the two web host
+          (UI.Web.Dockerfile:22-29), three <code>*.Shared</code> projects, three <code>*.UI</code> projects, and the two web host
           projects (<code>MMCA.ADC.UI.Web</code> + <code>MMCA.ADC.UI.Web.Client</code>). This is a layer-caching optimization: a
           dependency change in a source file does not invalidate the restore cache. After restoring, the full
-          <code>Source/</code> tree is copied and built (UI.Web.Dockerfile:34-35).</p>
-          <p>Entrypoint: <code>dotnet MMCA.ADC.UI.Web.dll</code> (UI.Web.Dockerfile:46).</p>
+          <code>Source/</code> tree is copied (UI.Web.Dockerfile:37) and the publish stage builds it.</p>
+          <p>Entrypoint: <code>dotnet MMCA.ADC.UI.Web.dll</code> (UI.Web.Dockerfile:54).</p>
           <h3 id="four-service-dockerfiles">Four service Dockerfiles</h3>
           <p><code>MMCA.ADC/Source/Services/MMCA.ADC.{Identity,Conference,Engagement,Notification}.Service/Dockerfile</code></p>
-          <p>All four are identical in structure. The build stage copies the full <code>Source/</code> tree before restoring
-          (e.g., Identity.Dockerfile:19-22 comment: &quot;services have deep project-reference chains through Migrations
-          → all module Infrastructure assemblies, so copying the full Source/ tree is simplest&quot;). Each service&#39;s
-          Dockerfile then restores, builds, and publishes its own <code>.Service.csproj</code> independently.</p>
+          <p>All four are identical in structure, down to the line numbers. The build stage copies the full <code>Source/</code>
+          tree (Identity.Dockerfile:23) before restoring, and the comment above it says why
+          (Identity.Dockerfile:20-22): &quot;services have deep project-reference chains through Migrations → all
+          module Infrastructure assemblies, so copying the full Source/ tree is simplest&quot;. Each service&#39;s
+          Dockerfile then restores (lines 26-28) and publishes its own <code>.Service.csproj</code> with ReadyToRun
+          (lines 42-44) independently; all four entrypoints sit on line 50.</p>
           <p>Entrypoints:</p>
           <ul>
           <li><code>dotnet MMCA.ADC.Identity.Service.dll</code></li>
@@ -576,10 +699,11 @@
           <li><code>dotnet MMCA.ADC.Notification.Service.dll</code></li>
           </ul>
           <p>[Rubric §17, DevOps and Deployment] continues: having one Dockerfile per deployable means each image
-          is independently versioned and deployed. CI can build only the images whose service changed, though the
-          current CI builds all six in sequence. The <code>UseAppHost=false</code> publish flag strips the native executable
-          wrapper; the Docker entrypoint invokes the DLL directly via the already-present runtime in the base
-          image.</p>
+          is independently versioned and deployed. CI builds all six in one six-way parallel matrix rather than
+          per-changed-service, gated as a whole on the <code>changes</code> job classifying the diff as code
+          (<code>.github/workflows/deploy.yml:795-816</code>). The <code>UseAppHost=false</code> publish flag strips the native
+          executable wrapper; the Docker entrypoint invokes the DLL directly via the already-present runtime in
+          the base image.</p>
           <hr>
           <h2 id="local-to-cloud-parity">Local-to-cloud parity</h2>
           <p>The AppHost topology maps directly to the Azure infrastructure provisioned by <code>infra/main.bicep</code>. The
@@ -593,23 +717,23 @@
           </thead>
           <tbody><tr>
           <td>SQL Server container (persistent)</td>
-          <td>Azure SQL Server; four databases (<code>ADC_Identity</code>, <code>ADC_Conference</code>, <code>ADC_Engagement</code>, <code>ADC_Notification</code>), each Basic tier</td>
+          <td>Azure SQL Server; four databases (<code>ADC_Identity</code>, <code>ADC_Conference</code>, <code>ADC_Engagement</code>, <code>ADC_Notification</code>), each Basic 5 DTU / 2 GB (main.bicep:639-662), plus the retained <code>AtlDevCon</code> archive (main.bicep:614-628)</td>
           </tr>
           <tr>
           <td>Redis container (persistent)</td>
-          <td>Azure Cache for Redis</td>
+          <td>Azure Managed Redis (<code>Microsoft.Cache/redisEnterprise</code>, Balanced B0), injected as <code>ConnectionStrings__redis</code> from Key Vault (main.bicep:817-861)</td>
           </tr>
           <tr>
           <td>RabbitMQ container (persistent, management plugin)</td>
-          <td>Azure Service Bus (Standard tier, Basic lacks topics needed by MassTransit)</td>
+          <td>Azure Service Bus (Standard tier, Basic lacks the topics MassTransit needs, main.bicep:689-700)</td>
           </tr>
           <tr>
           <td>MailDev container</td>
-          <td>Not provisioned (production uses a real SMTP relay)</td>
+          <td>Not provisioned; a real SMTP relay via <code>Smtp__Host</code> / <code>Smtp__Port</code> / <code>Smtp__From</code> (main.bicep:1087-1091)</td>
           </tr>
           <tr>
           <td><code>MessageBus__Provider=RabbitMq</code> (AppHost)</td>
-          <td><code>MessageBus__Provider=AzureServiceBus</code> (Bicep env var on all four services)</td>
+          <td><code>MessageBus__Provider=AzureServiceBus</code> (Bicep env var on all four services, main.bicep:1079, 1230, 1346, 1474)</td>
           </tr>
           <tr>
           <td>Aspire dashboard (OTLP)</td>
@@ -617,11 +741,15 @@
           </tr>
           <tr>
           <td><code>WithSQLServerDataSource</code> injects two connection-string env vars</td>
-          <td>Bicep injects the same two env vars plus <code>SQLServerMigrationsAssembly</code> and <code>Outbox__DatabaseName</code></td>
+          <td>Bicep injects the same two plus <code>ConnectionStrings__SQLServerMigrationsAssembly</code>, <code>DataSources__{Module}__SQLServerMigrationsAssembly</code> and <code>Outbox__DatabaseName</code> (main.bicep:1044-1046)</td>
           </tr>
           <tr>
           <td><code>OTEL_EXPORTER_OTLP_ENDPOINT</code> (local)</td>
           <td><code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> (Azure)</td>
+          </tr>
+          <tr>
+          <td>Outbox poll interval: framework default 2 s</td>
+          <td><code>Outbox__PollingIntervalSeconds=300</code> on every service (main.bicep:1050, 1215, 1325, 1460)</td>
           </tr>
           </tbody></table></div>
           <p>The transport switch (<code>RabbitMq</code> → <code>AzureServiceBus</code>) is entirely environment-driven. No code path
@@ -629,25 +757,44 @@
           service&#39;s <code>Program.cs</code> reads <code>MessageBus:Provider</code> and branches accordingly. This is <a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a> (outbox +
           in-process dispatch + background processor) combined with the infrastructure flexibility of
           <code>MessageBusProvider</code> selection.</p>
+          <p>Be honest about what that buys and what it does not. Environment-driven transport selection means no
+          <code>#if</code> and no second code path, but the AppHost still runs a <strong>different broker</strong> than production: local
+          RabbitMQ exercises the MassTransit RabbitMQ transport, not the Service Bus topic topology, its quotas,
+          or its admin-plane behavior. ADC covers that residual gap with a dedicated tier rather than pretending
+          it is closed: <code>Tests/Integration/MMCA.ADC.ServiceBusEmulator.IntegrationTests</code> smokes MassTransit
+          against the official Azure Service Bus emulator on the weekday nightly, <code>continue-on-error</code> and never
+          deploy-gating.</p>
           <p>[Rubric §7, Microservices Architecture] is directly served by the fact that the extraction boundaries
           (gRPC contracts, broker interfaces, JWKS discovery) are identical in both environments. An engineer can
           validate a cross-service event flow locally against RabbitMQ before it reaches the Azure Service Bus in
           production.</p>
           <p>[Rubric §17, DevOps and Deployment] is served by the single-command local run matching the production
-          topology in process count, service-discovery mechanism, and transport semantics. The main gap, MailDev
-          vs. a real SMTP relay, is intentional and clearly scoped.</p>
+          topology in process count, service-discovery mechanism, and transport semantics. The two remaining gaps,
+          MailDev vs. a real SMTP relay and RabbitMQ vs. Azure Service Bus, are intentional and each is scoped:
+          the first is never exercised in production paths, the second has the emulator tier above.</p>
           <hr>
           <h2 id="the-yarp-gateways-role">The YARP Gateway&#39;s role</h2>
           <p>The gateway (<code>Source/Hosts/MMCA.ADC.Gateway</code>) is a pure YARP reverse proxy. It has no <code>DbContext</code>, no
-          <code>ModuleLoader</code>, no REST controllers, and no broker connection. Its <code>Program.cs</code> configures YARP routes
-          that map URL prefixes to backend services via Aspire service discovery:</p>
+          <code>ModuleLoader</code>, no REST controllers, and no broker connection. Its <code>Program.cs</code> is the source of truth
+          for endpoint ownership: 24 <code>MapForwarder</code> calls map URL prefixes to backend services via Aspire service
+          discovery (Gateway/Program.cs:88-125), every destination an in-cluster service-discovery name over
+          cleartext, never a public URL:</p>
           <ul>
-          <li><code>/Auth</code>, <code>/.well-known/*</code> → Identity service</li>
-          <li><code>/Events</code>, <code>/Sessions</code>, <code>/Speakers</code>, <code>/Rooms</code>, <code>/Categories</code>, <code>/Questions</code>, <code>/EventQuestionAnswers</code> → Conference service</li>
-          <li><code>/Bookmarks</code> → Engagement service</li>
-          <li><code>/Notifications</code>, <code>/hubs/notifications</code> → Notification service</li>
+          <li><code>/Auth</code>, <code>/Users</code>, <code>/UserClaims</code>, <code>/.well-known/*</code> → <code>http://identity</code> (Program.cs:88-94)</li>
+          <li><code>/Events</code>, <code>/Sessions</code>, <code>/Speakers</code>, <code>/Rooms</code>, <code>/ConferenceCategories</code>, <code>/CategoryItems</code>,
+          <code>/SessionSpeakers</code>, <code>/EventSpeakers</code>, <code>/SessionCategoryItems</code>, <code>/SessionQuestionAnswers</code>,
+          <code>/EventQuestionAnswers</code>, <code>/SpeakerCategoryItems</code>, <code>/SpeakerQuestionAnswers</code>, <code>/SessionSelection</code>,
+          <code>/Questions</code> → <code>http://conference</code> (Program.cs:97-111)</li>
+          <li><code>/Bookmarks</code>, <code>/LivePolls</code>, <code>/SessionQuestions</code> → <code>http://engagement</code> (Program.cs:114-116)</li>
+          <li><code>/Notifications</code>, <code>/hubs/*</code> → <code>http://notification</code> (Program.cs:124-125)</li>
           </ul>
-          <p>(The route-to-service mapping in <code>Gateway/Program.cs</code> is the source of truth for endpoint ownership.)</p>
+          <p>The Identity, Conference and Engagement routes take a shared <code>http2Config</code> that sets
+          <code>Version = HttpVersion.Version20</code> with <code>VersionPolicy = RequestVersionExact</code> (Program.cs:66-77). Exact is
+          load-bearing: on cleartext there is no ALPN to negotiate, so <code>RequestVersionOrLower</code> silently downgrades
+          to HTTP/1.1 and the <code>Http2</code>-only backend rejects it. The two Notification routes deliberately use YARP&#39;s
+          default HTTP/1.1 config, because SignalR&#39;s WebSocket transport begins with an HTTP/1.1 Upgrade handshake
+          (Program.cs:119-123). <code>ForwardHttp2</code> stays configurable (default <code>true</code>, Program.cs:66) so a deployment
+          without HTTP/2 ingress can roll back without a code change.</p>
           <p>The gateway serves three architectural purposes:</p>
           <ol>
           <li><p><strong>Single entry point.</strong> The MAUI client and Blazor UI always talk to <code>https://localhost:6001</code>
@@ -655,8 +802,10 @@
           hardcoded to individual service addresses. This allows services to be scaled, moved, or split
           without client changes.</p>
           </li>
-          <li><p><strong>TLS termination.</strong> Backend services run HTTP/2 cleartext (h2c) for gRPC. The gateway terminates
-          TLS and forwards to services over cleartext h2c, avoiding TLS overhead on the internal network.
+          <li><p><strong>TLS termination.</strong> The three REST backends (Identity, Conference, Engagement) run HTTP/2 cleartext
+          (h2c) for gRPC; Notification keeps <code>Http1AndHttp2</code> defaults for the SignalR WebSocket Upgrade and
+          serves gRPC on a separate <code>Http2</code>-only endpoint. The gateway terminates
+          TLS and forwards to services over cleartext, avoiding TLS overhead on the internal network.
           The JWKS discovery routing exploits this: JwtBearer&#39;s HTTP/1.1 backchannel hits the gateway over
           HTTPS, the gateway negotiates h2c to Identity, and the JWKS document is returned transparently.</p>
           </li>
@@ -670,31 +819,33 @@
           service topology on behalf of clients.</p>
           <hr>
           <h2 id="startup-ordering-summary">Startup ordering summary</h2>
-          <p>The health-based <code>WaitFor</code> chain imposes this ordering:</p>
+          <p>The health-based <code>WaitFor</code> chain imposes this ordering. Note that three of the four services wait on
+          Identity without any explicit <code>WaitFor</code> in the AppHost: <code>WithJwksDiscovery</code> adds it
+          (Common.Aspire.Hosting/Extensions.cs:92-94).</p>
           <pre class="doc-pre"><code class="">SQL Server container health
             └─ Database resources health (adc-identity, adc-conference, adc-engagement, adc-notification)
-                 ├─ Identity Service  (WaitFor: identityDb, redis, mailDev, rabbit)
-                 ├─ Conference Service (WaitFor: conferenceDb, redis, mailDev, rabbit)
-                 ├─ Engagement Service (WaitFor: engagementDb, redis, mailDev, rabbit, conferenceService)
-                 └─ Notification Service (WaitFor: notificationDb, redis, mailDev, rabbit, identityService)
-                      └─ Gateway (WaitFor: all four services)
-                           └─ UI (WaitFor: gateway + all four services)</code></pre>
-          <p>The only deliberate gap in the ordering is Conference↔Engagement&#39;s bidirectional gRPC dependency:
-          Engagement waits for Conference, but Conference does not wait for Engagement
-          (Program.cs:222-225). Both will retry via Polly until the peer is ready.</p>
+                 └─ Identity Service  (WaitFor: identityDb, redis, mailDev, rabbit)
+                      ├─ Conference Service (WaitFor: conferenceDb, redis, mailDev, rabbit, identity via JWKS)
+                      │    └─ Engagement Service (WaitFor: engagementDb, redis, mailDev, rabbit,
+                      │         conferenceService, identity via JWKS)
+                      └─ Notification Service (WaitFor: notificationDb, redis, mailDev, rabbit,
+                           identityService twice over: explicit at Program.cs:215 and again via JWKS)
+                           └─ Gateway (WaitFor: all four services)
+                                └─ UI (WaitFor: gateway + all four services)</code></pre>
+          <p>Four edges deliberately carry a <code>WithReference</code> with no <code>WaitFor</code>: Conference→Engagement (the reverse
+          half of the bidirectional gRPC pair, Program.cs:220), Engagement→Notification (fire-and-forget live
+          channel, Program.cs:228), and Identity→Engagement / Identity→Notification (the export aggregation,
+          Program.cs:238-239). Each would close a cycle against a wait that already exists in the other
+          direction. All four retry via Polly until the peer is ready.</p>
           <hr>
           <h2 id="not-determinable-from-source">Not determinable from source</h2>
           <ul>
-          <li>The exact YARP route table in <code>Source/Hosts/MMCA.ADC.Gateway/Program.cs</code> was cited from the CLAUDE.md
-          description of which prefixes map to which service. The Gateway <code>Program.cs</code> was not read directly;
-          those route prefixes are not determinable from the files read in this chapter. The AppHost declares only
-          <code>WithReference</code> edges; the route-prefix table lives in the Gateway <code>Program.cs</code>.</li>
-          <li>Whether every service host and the UI call <code>AddServiceDefaults()</code> from <code>MMCA.Common.Aspire</code> (vs. only
-          some) was inferred from the architectural description in <code>MMCA.ADC/CLAUDE.md</code>; individual service
-          <code>Program.cs</code> files were not read for this chapter.</li>
           <li>The specific integration events that flow over the broker (e.g., <code>UserRegistered</code>,
-          <code>SpeakerLinkedToUser</code>) are cited from AppHost inline comments (Program.cs:46-51, 130-137), not from the
-          handler implementations.</li>
+          <code>SpeakerLinkedToUser</code>) are cited from AppHost inline comments (Program.cs:46-51, 130-136), not from the
+          handler implementations. The comments name the publisher and consumer handler on each side; whether
+          those handlers still match the comment is a question for the messaging chapter, not this one.</li>
+          <li>The headless-AppHost stall is an operational fact recorded in <code>MMCA.ADC/CLAUDE.md</code> and the workspace
+          <code>CLAUDE.md</code>, not something any source file asserts. There is no code path or config key to cite for it.</li>
           </ul>
           
         <div class="doc-foot btn-row">
