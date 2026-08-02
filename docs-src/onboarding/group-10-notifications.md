@@ -414,7 +414,7 @@ four ever taking the others down.
 ---
 
 ### GetMyNotificationsHandler
-> MMCA.Common.Application · `MMCA.Common.Application.Notifications.UserNotifications.UseCases.GetInbox` · `MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/UserNotifications/UseCases/GetInbox/GetMyNotificationsHandler.cs:15` · Level 8 · class
+> MMCA.Common.Application · `MMCA.Common.Application.Notifications.UserNotifications.UseCases.GetInbox` · `MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/UserNotifications/UseCases/GetInbox/GetMyNotificationsHandler.cs:16` · Level 8 · class
 
 - **What it is**: the query handler that materializes a user's inbox page. It joins the per-user [`UserNotification`](#usernotification) rows with their shared [`PushNotification`](#pushnotification) content and projects the pair into a single flat [`UserNotificationDTO`](#usernotificationdto).
 - **Depends on**: [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork) (typed repositories) and [`IQueryableExecutor`](group-07-persistence-ef-core.md#iqueryableexecutor) (EF terminal operations kept out of Application), injected via primary constructor (lines 15-17). Implements [`IQueryHandler`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult)`<GetMyNotificationsQuery, Result<PagedCollectionResult<UserNotificationDTO>>>`. Returns [`Result`](group-01-result-error-handling.md#result), [`PagedCollectionResult<T>`](group-01-result-error-handling.md#pagedcollectionresultt), and [`PaginationMetadata`](group-01-result-error-handling.md#paginationmetadata).
@@ -426,7 +426,7 @@ four ever taking the others down.
 ---
 
 ### GetNotificationHistoryHandler
-> MMCA.Common.Application · `MMCA.Common.Application.Notifications.PushNotifications.UseCases.GetHistory` · `MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/GetHistory/GetNotificationHistoryHandler.cs:14` · Level 8 · class
+> MMCA.Common.Application · `MMCA.Common.Application.Notifications.PushNotifications.UseCases.GetHistory` · `MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/GetHistory/GetNotificationHistoryHandler.cs:15` · Level 8 · class
 
 - **What it is**: the query handler for the push *sent history*: a reverse-chronological page of [`PushNotification`](#pushnotification) rows (no per-user join), mapped to [`PushNotificationDTO`](#pushnotificationdto).
 - **Depends on**: [`IUnitOfWork`](group-07-persistence-ef-core.md#iunitofwork), [`IQueryableExecutor`](group-07-persistence-ef-core.md#iqueryableexecutor), and [`PushNotificationDTOMapper`](#pushnotificationdtomapper) (primary constructor, lines 14-17). Implements [`IQueryHandler`](group-05-cqrs-pipeline.md#iqueryhandlerin-tquery-tresult)`<GetNotificationHistoryQuery, Result<PagedCollectionResult<PushNotificationDTO>>>`.
@@ -792,7 +792,7 @@ four ever taking the others down.
   registration.
 
 ### LiveChannelGrpcService
-> MMCA.ADC.Notification.Service · `MMCA.ADC.Notification.Service.Grpc` · `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Grpc/LiveChannelGrpcService.cs:19` · Level 1 · class (sealed)
+> MMCA.ADC.Notification.Service · `MMCA.ADC.Notification.Service.Grpc` · `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Grpc/LiveChannelGrpcService.cs:22` · Level 1 · class (sealed)
 
 - **What it is**: the gRPC **server** endpoint that other services call to fan an ephemeral "live"
   event out to connected clients. It implements the generated
@@ -1165,7 +1165,7 @@ four ever taking the others down.
 ---
 
 ### SendPushNotificationRequestValidator
-> MMCA.Common.Application · `MMCA.Common.Application.Notifications.PushNotifications.UseCases.Send` · `MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationRequestValidator.cs:10` · Level 5 · class (sealed)
+> MMCA.Common.Application · `MMCA.Common.Application.Notifications.PushNotifications.UseCases.Send` · `MMCA.Common/Source/Core/MMCA.Common.Application/Notifications/PushNotifications/UseCases/Send/SendPushNotificationRequestValidator.cs:11` · Level 5 · class (sealed)
 
 - **What it is**: the FluentValidation validator for [SendPushNotificationRequest](#sendpushnotificationrequest):
   it enforces that title and body are present and within the length limits declared by
@@ -1258,7 +1258,7 @@ four ever taking the others down.
 ---
 
 ### UserNotificationExportGrpcService
-> MMCA.ADC.Notification.Service · `MMCA.ADC.Notification.Service.Grpc` · `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Grpc/UserNotificationExportGrpcService.cs:20` · Level 9 · class (sealed)
+> MMCA.ADC.Notification.Service · `MMCA.ADC.Notification.Service.Grpc` · `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Grpc/UserNotificationExportGrpcService.cs:27` · Level 9 · class (sealed)
 
 - **What it is**: the gRPC **server** endpoint that exposes the in-process
   [IUserNotificationExportService](#iusernotificationexportservice) over the wire. The Identity service
@@ -1470,7 +1470,7 @@ four ever taking the others down.
 
 ### PushNotificationInvariants
 
-> MMCA.Common.Domain · `MMCA.Common.Domain.Notifications.PushNotifications.Invariants` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Notifications/PushNotifications/Invariants/PushNotificationInvariants.cs:9` · Level 4 · class (static)
+> MMCA.Common.Domain · `MMCA.Common.Domain.Notifications.PushNotifications.Invariants` · `MMCA.Common/Source/Core/MMCA.Common.Domain/Notifications/PushNotifications/Invariants/PushNotificationInvariants.cs:10` · Level 4 · class (static)
 
 - **What it is**: the static invariants helper that validates a push notification's title and body: non-empty plus a maximum length, delegating the actual checks to [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants).
 - **Depends on**: [`CommonInvariants`](group-02-domain-building-blocks.md#commoninvariants); [`Result`](group-01-result-error-handling.md#result).

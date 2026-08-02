@@ -180,7 +180,7 @@ part of the contract surface by virtue of their `.proto` regardless, so they nee
   client an extracted ADC/Store service builds gets it without explicit wiring.
 
 ### ServiceContractAttribute
-> MMCA.Common.Shared · `MMCA.Common.Shared.Abstractions` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ServiceContractAttribute.cs:18` · Level 0 · class (sealed attribute)
+> MMCA.Common.Shared · `MMCA.Common.Shared.Abstractions` · `MMCA.Common/Source/Core/MMCA.Common.Shared/Abstractions/ServiceContractAttribute.cs:19` · Level 0 · class (sealed attribute)
 
 - **What it is**: an attribute marking an interface/DTO/event as part of a service's **wire contract**
   (the surface published in a `*.Contracts` NuGet package for an extracted microservice).
@@ -290,7 +290,7 @@ part of the contract surface by virtue of their `.proto` regardless, so they nee
   gRPC server pipeline of every extracted service host.
 
 ### ResultGrpcExtensions
-> MMCA.Common.Grpc · `MMCA.Common.Grpc` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:21` · Level 3 · class (static)
+> MMCA.Common.Grpc · `MMCA.Common.Grpc` · `MMCA.Common/Source/Presentation/MMCA.Common.Grpc/ResultGrpcExtensions.cs:27` · Level 3 · class (static)
 
 - **What it is**: the extension methods that bridge [`Result`](group-01-result-error-handling.md#result)/`Result<T>`
   to gRPC's transport model (`RpcException`, `StatusCode`). It provides `ToGrpcStatusCode(this ErrorType)`,

@@ -338,7 +338,12 @@ set or the narrower session-catalog-curation slice (sessions, speakers, and the 
 once, a distinction capability checks express centrally and role checks cannot. This is the
 permission-based authorization story (`[Rubric §11, Security]`, [ADR-020](https://ivanball.github.io/docs/adr/020-permission-based-authorization.html)), decided by the
 role-to-permission grants declared in the module's registration rather than scattered across
-controllers.
+controllers. Beside it sits [`ConferenceReadAudience`](#conferencereadaudience)
+(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferenceReadAudience.cs:23`),
+the answer to the *other* question a caller raises, not "may I change this" but "how much of the catalog
+may I see": exactly two audiences exist, the privileged readers (`Organizer` and `ContentEditor`) and
+everyone else, and naming them once is what keeps the output-cache bypass list and the API-layer
+visibility checks from ever disagreeing.
 
 [`CurrentEventSelector`](#currenteventselector)
 (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Events/CurrentEventSelector.cs:10`) is
@@ -471,7 +476,7 @@ rules themselves are catalogued in ADC's specifications guide.
 ---
 
 ### SessionStatuses
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionStatuses.cs:8` · Level 0 · class (static)
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionStatuses.cs:14` · Level 0 · class (static)
 
 - **What it is**: the catalog of the six recognized Sessionize session-status strings, plus a behavioral predicate `IsEligible()` that gates public display, attendee bookmarking, and post-session feedback (BR-49). `Session.Status` is a free-text field imported from Sessionize; this class is the single place in the domain that gives those strings behavioral significance.
 - **Depends on**: nothing first-party (`System.StringComparison` only).
@@ -482,6 +487,28 @@ rules themselves are catalogued in ADC's specifications guide.
   - `IsEligible(string? status)` (`SessionStatuses.cs:45-47`): returns `true` unless `status` equals `"Declined"` or the literal `"Cancelled"` (case-insensitive, `StringComparison.OrdinalIgnoreCase`). `"Cancelled"` is deliberately *not* in `AllKnownStatuses`, it is a defensive guard for a Sessionize value seen in the wild but not part of the formal six.
 - **Why it's built this way**: keeping the eligibility predicate in the domain (not the application or API layer) ensures every consumer, command handler, query filter, and UI visibility check applies the identical definition. Adding a new ineligible status is a one-line edit here, not a grep across handlers.
 - **Where it's used**: [`SessionInvariants.EnsureStatusIsEligible`](#sessioninvariants) (same group), the Sessionize sync strategy's pre-import eligibility check, the session-selection dashboard's status bucketing, the public session-list query filter, and the bookmark/feedback guards (groups 18-22).
+
+---
+
+### ConferenceReadAudience
+> MMCA.ADC.Conference.Shared · `MMCA.ADC.Conference.Shared.Authorization` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/Authorization/ConferenceReadAudience.cs:23` · Level 1 · class (static)
+
+- **What it is**: the Conference module's **read-audience catalog**: one `IReadOnlyList<string> PrivilegedRoles` naming the two roles that read the whole catalog, [`RoleNames`](group-08-auth.md#rolenames)`.Organizer` and `RoleNames.ContentEditor` (`ConferenceReadAudience.cs:26-30`). Every other caller (attendee, speaker, anonymous visitor) gets the *public projection*: published events (BR-108), accepted-or-unset sessions (BR-49), and their speakers (BR-239), exactly as the class doc comment states (`ConferenceReadAudience.cs:5-9`).
+- **Depends on**: [`RoleNames`](group-08-auth.md#rolenames) from `MMCA.Common.Shared.Auth` (`ConferenceReadAudience.cs:1`). Nothing else, which is why it can sit in `Shared` and be referenced from the Blazor WebAssembly UI as easily as from the service host.
+- **Concept introduced, the read audience as a thing distinct from the capability permission.** `[Rubric §11, Security]` (assesses authorization that is fine-grained and data-scoped rather than a scattering of coarse role checks). Two different questions are asked in this module, and this type answers only the second:
+  - *"May this caller change X?"* is a **capability** question, answered by [`ConferencePermissions`](#conferencepermissions) and enforced per endpoint with [`[HasPermission(...)]`](group-08-auth.md#haspermissionattribute).
+  - *"How much of the catalog may this caller see?"* is a **read-audience** question. It cannot be a per-endpoint attribute, because the answer changes the *rows* rather than the verdict: the same anonymous-allowed GET has to return a narrower list. So the audience is declared once, here, and read paths compare against it.
+
+  The API-layer helper that consumes it spells the boundary out: `IsPrivilegedConferenceReader()` "is a read-visibility check, not an authorization gate: mutations stay gated by `[HasPermission(...)]` capabilities, which a role check must never stand in for" (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Authorization/CurrentUserServiceExtensions.cs:20-25`). `[Rubric §12, Performance & Scalability]` applies for a less obvious reason: the same list drives the output-cache bypass, so the audience definition is simultaneously a cache-correctness invariant (see **Where it's used**).
+- **Walkthrough**: one member. `PrivilegedRoles` (`ConferenceReadAudience.cs:26-30`) is a `static IReadOnlyList<string>` initialized with a collection expression of the two constants. There are no methods and no state: callers do the matching themselves with `Any(...IsInRole)`.
+- **Why it's built this way**: the remarks (`ConferenceReadAudience.cs:10-16`) name the exact failure the single declaration prevents. The output-cache bypass list and the API-layer visibility checks must name the *same* roles; if the two lists drifted apart, a privileged caller's everything-inclusive response would land in a shared public cache entry and then be served to anonymous visitors. Declaring the audience once "makes that drift impossible instead of merely unlikely". The second paragraph (`ConferenceReadAudience.cs:17-21`) records what keeps the list at exactly two entries: a third, partially privileged audience would need its own cache key, so extending it means revisiting the cache policies first.
+- **Where it's used**: four call sites across three layers.
+  - The Conference service host spreads it into `adminBypassRoles` (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:201`) and hands that array to eight named output-cache policies (`Program.cs:202-224`); the comment above it states the single-source-of-truth rule outright, "if these two lists ever named different roles, a privileged payload would be cached and served to the public" (`Program.cs:198-200`). One policy deliberately takes no bypass list, `NowNextCache`, because its payload is identical for every role (`Program.cs:214-216`).
+  - The API layer wraps it as the [`ICurrentUserService`](group-08-auth.md#icurrentuserservice) extension `IsPrivilegedConferenceReader()` (`CurrentUserServiceExtensions.cs:24-25`), which the Conference controllers call to decide whether to apply a public filter specification at all.
+  - The Blazor UI reads it directly when sizing its event filters: `_isPrivileged = ConferenceReadAudience.PrivilegedRoles.Any(authState.User.IsInRole)` in both `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicSessionList.razor.cs:149` and `.../Public/PublicSpeakerList.razor.cs:97`.
+
+  The rows themselves are narrowed one layer up by [`PublicConferenceVisibility`](group-18-conference-application.md#publicconferencevisibility) and the public filter handlers built on it (G18).
+- **Caveats / not-in-source**: case-insensitive role comparison is a property of `ICurrentUserService.IsInRole`, not of this type (`MMCA.Common/Source/Core/MMCA.Common.Shared/Auth/RoleNames.cs:7-11`). Whether a given JWT actually carries one of these roles is decided by the Identity module and is not visible from this file.
 
 ---
 
@@ -500,7 +527,7 @@ rules themselves are catalogued in ADC's specifications guide.
 ---
 
 ### SessionAiScore
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionAiScore.cs:12` · Level 5 · class (sealed)
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Sessions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Sessions/SessionAiScore.cs:13` · Level 5 · class (sealed)
 
 - **What it is**: an aggregate root storing the AI-generated score for one session across seven criteria (topic relevance, description quality, novelty, actionable takeaways, depth/insight, credibility/experience, and an overall score), plus the model's free-text `Reasoning` and the `ModelUsed` identifier. One score per session; re-scoring replaces the existing record via `Update`.
 - **Depends on**: [`AuditableAggregateRootEntity<TIdentifierType>`](group-02-domain-building-blocks.md#auditableaggregaterootentitytidentifiertype) (bound to `SessionAiScoreIdentifierType`), [`IdValueGeneratedAttribute`](group-02-domain-building-blocks.md#idvaluegeneratedattribute), [`Result`](group-01-result-error-handling.md#result)/[`Error`](group-01-result-error-handling.md#error) (group-01).
@@ -1815,7 +1842,7 @@ rules themselves are catalogued in ADC's specifications guide.
   command handlers (Application tier), and projected via `IEntityQueryService` for the category UI.
 
 ### CategoryInvariants
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Categories` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/CategoryInvariants.cs:10` · Level 5 · class (static), SCC with `Category`, `CategoryItem`
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Categories` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Categories/CategoryInvariants.cs:11` · Level 5 · class (static), SCC with `Category`, `CategoryItem`
 
 - **What it is**: invariant rules for [`Category`](#category) and its [`CategoryItem`](#categoryitem)
   children: title validation, item-name validation, and case-insensitive uniqueness checking (BR-138).
@@ -1875,7 +1902,7 @@ rules themselves are catalogued in ADC's specifications guide.
   referenced by [`SpeakerCategoryItem`](#speakercategoryitem) as the many-to-many bridge target.
 
 ### Question
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Questions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Questions/Question.cs:15` · Level 5 · class (sealed)
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Questions` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Questions/Question.cs:14` · Level 5 · class (sealed)
 
 - **What it is**: a standalone aggregate root for a survey/feedback question. A question targets an
   entity type (`QuestionEntity`: "Session"/"Event"/"Speaker"), has an input type (`QuestionType`:
@@ -2038,7 +2065,7 @@ rules themselves are catalogued in ADC's specifications guide.
   infrastructure dependency).
 
 ### EventCascadeDeletionDomainService
-> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Services` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Services/EventCascadeDeletionDomainService.cs:11` · Level 8 · class (sealed)
+> MMCA.ADC.Conference.Domain · `MMCA.ADC.Conference.Domain.Services` · `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Domain/Services/EventCascadeDeletionDomainService.cs:13` · Level 8 · class (sealed)
 
 - **What it is**: the concrete implementation of
   [`IEventCascadeDeletionDomainService`](#ieventcascadedeletiondomainservice): a stateless, pure domain

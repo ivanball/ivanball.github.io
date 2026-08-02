@@ -864,7 +864,7 @@ sentences written in it.
   the converter globally.
 
 ### CurrencyJsonConverter
-> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Currency.cs:65` · Level 3 · class (sealed)
+> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/Currency.cs:73` · Level 3 · class (sealed)
 
 - **What it is**: a `JsonConverter<Currency>` that serializes [`Currency`](#currency) as its ISO code
   string and deserializes via `Currency.FromCode`.
@@ -931,7 +931,7 @@ sentences written in it.
 - **Where it's used**: session time slots and room scheduling windows in the Conference module.
 
 ### EmailInvariants
-> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/EmailInvariants.cs:10` · Level 3 · class (static, partial)
+> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/EmailInvariants.cs:11` · Level 3 · class (static, partial)
 
 - **What it is**: invariant checks for email addresses: not-empty, max-length (256), and format via
   a `[GeneratedRegex]` method.
@@ -955,7 +955,7 @@ sentences written in it.
   rule helpers (Application).
 
 ### PhoneNumberInvariants
-> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/PhoneNumberInvariants.cs:10` · Level 3 · class (static, partial)
+> MMCA.Common.Shared · `MMCA.Common.Shared.ValueObjects` · `MMCA.Common/Source/Core/MMCA.Common.Shared/ValueObjects/PhoneNumberInvariants.cs:11` · Level 3 · class (static, partial)
 
 - **What it is**: invariant checks for phone numbers: not-empty, length range (7–20 chars), and
   format via `[GeneratedRegex]` (`^[\d\s\-\(\)\+]+$`).

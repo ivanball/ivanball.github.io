@@ -180,10 +180,10 @@
           Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pre>
           <p>When a type must reference a first-party type whose home group appears <strong>later</strong>, that forward
           reference is allowed (functional cohesion can outrank strict progressive disclosure) and is
-          cross-linked. Nineteen dependency <strong>cycles</strong> exist (mutually-dependent types, e.g. an aggregate root and
+          cross-linked. Twenty dependency <strong>cycles</strong> exist (mutually-dependent types, e.g. an aggregate root and
           its child entity with bidirectional EF navigations); each is kept whole within a single group and
           called out where it occurs. They are listed in the
-          <a href="00-dependency-manifest.html#cycles-scc-size--1-19">dependency manifest</a>. One of the nineteen is an
+          <a href="00-dependency-manifest.html#cycles-scc-size--1-20">dependency manifest</a>. One of the twenty is an
           extraction artifact rather than a real dependency: the two identically-named <code>SelfHttpWarmupTask</code>
           classes (<code>MMCA.ADC.Engagement.Service/SelfHttpWarmupTask.cs:19</code> and
           <code>MMCA.ADC.Identity.Service/SelfHttpWarmupTask.cs:19</code>) are distinct types in different services, and the
@@ -192,9 +192,9 @@
           <p>The type inventory and dependency graph are produced <strong>mechanically</strong> by a small Roslyn syntactic
           parser (<code>Tools/invtool/</code>), so the type list, namespaces, and <code>file:line</code> are exact and reproducible. Edges
           are resolved by <strong>namespace-aware name matching</strong>; ~96% bind by namespace visibility, the rest by a
-          globally-unique-name fallback (338 edges), and 28 references are dropped as ambiguous. The functional grouping is
+          globally-unique-name fallback (348 edges), and 28 references are dropped as ambiguous. The functional grouping is
           then applied mechanically (<code>Tools/invtool/classify.ps1</code> → <code>00-group-taxonomy.md</code>), so every one of the
-          <strong>2,645</strong> distinct type nodes maps to exactly one group with no silent drops. See the
+          <strong>2,737</strong> distinct type nodes maps to exactly one group with no silent drops. See the
           <a href="00-dependency-manifest.html#edge-resolution--accuracy">manifest&#39;s accuracy note</a> for residual caveats.</p>
           <hr>
           <h2 id="chapters">Chapters</h2>
@@ -212,11 +212,11 @@
           </tr>
           <tr>
           <td><a href="00-inventory.html"><code>00-inventory.md</code></a></td>
-          <td>Phase 0, every in-scope type (2,645 distinct), mechanically extracted, with <code>file:line</code></td>
+          <td>Phase 0, every in-scope type (2,737 distinct), mechanically extracted, with <code>file:line</code></td>
           </tr>
           <tr>
           <td><a href="00-dependency-manifest.html"><code>00-dependency-manifest.md</code></a></td>
-          <td>Phase 1a, per-type first-party deps + computed Level; the 19 cycles</td>
+          <td>Phase 1a, per-type first-party deps + computed Level; the 20 cycles</td>
           </tr>
           <tr>
           <td><a href="00-group-taxonomy.html"><code>00-group-taxonomy.md</code></a></td>
@@ -260,7 +260,7 @@
           <tr>
           <td>5</td>
           <td><a href="group-05-cqrs-pipeline.html">CQRS: Commands, Queries &amp; the Decorator Pipeline</a></td>
-          <td>23</td>
+          <td>24</td>
           <td>Handler abstraction + the logging/transaction/caching/feature-gate/idempotency decorators (incl. the cache-stampede lock)</td>
           </tr>
           <tr>
@@ -272,7 +272,7 @@
           <tr>
           <td>7</td>
           <td><a href="group-07-persistence-ef-core.html">Persistence &amp; EF Core</a></td>
-          <td>90</td>
+          <td>91</td>
           <td><code>SQLServerDbContext</code> over abstract <code>ApplicationDbContext</code>, interceptors (incl. the deferred-dispatch record), repositories, engine-aware entity config, data-source routing, conventions (incl. the soft-delete unique-index convention), factories, managed file storage + image processing (<a href="https://ivanball.github.io/docs/adr/045-managed-file-storage-and-avatars.html" target="_blank" rel="noopener">ADR-045</a>), native-push device registrar (<a href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html" target="_blank" rel="noopener">ADR-044</a>)</td>
           </tr>
           <tr>
@@ -314,13 +314,13 @@
           <tr>
           <td>14</td>
           <td><a href="group-14-module-system-composition.html">Module System, Composition &amp; Configuration</a></td>
-          <td>34</td>
+          <td>38</td>
           <td><code>IModule</code> + Kahn-ordered loader, DI composition roots, data-source attributes, options binding</td>
           </tr>
           <tr>
           <td>15</td>
           <td><a href="group-15-common-ui-framework.html">Common UI Framework</a></td>
-          <td>82</td>
+          <td>85</td>
           <td>Reusable MudBlazor building blocks: data-grid list page base, theme, common pages/services, i18n culture bootstrap + day/dark <code>ThemeService</code>, user-preference readers/writers, pseudo-localization gate, OAuth UI settings + token storage (Web/WASM), hub-channel subscriptions (<a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>)</td>
           </tr>
           <tr>
@@ -332,13 +332,13 @@
           <tr>
           <td>17</td>
           <td><a href="group-17-conference-domain.html">ADC Conference, Domain Model &amp; Module Contracts</a></td>
-          <td>86</td>
+          <td>87</td>
           <td>Event/Session/Speaker/Category/Question aggregates + domain events + invariants + Shared contracts (incl. <code>ConferencePermissions</code>, the current/next-event selector + live-validation contracts)</td>
           </tr>
           <tr>
           <td>18</td>
           <td><a href="group-18-conference-application.html">ADC Conference, Application &amp; Use Cases</a></td>
-          <td>216</td>
+          <td>229</td>
           <td>Conference CQRS handlers, validators (incl. the per-field session validation-rule family), DTOs, specs, Sessionize import, decision-support analytics, batch bookmark-count query, event-filtering-by-role handlers, calendar (.ics) export slice (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>)</td>
           </tr>
           <tr>
@@ -350,19 +350,19 @@
           <tr>
           <td>20</td>
           <td><a href="group-20-conference-api-grpc.html">ADC Conference, API, gRPC Contracts &amp; Service Host</a></td>
-          <td>41</td>
+          <td>43</td>
           <td>REST controllers, <code>.Contracts</code> gRPC, the extractable service host (incl. its Kestrel config), the gRPC adapters (incl. cross-service live-validation), localized error resources</td>
           </tr>
           <tr>
           <td>21</td>
           <td><a href="group-21-conference-ui.html">ADC Conference, UI</a></td>
-          <td>89</td>
+          <td>88</td>
           <td>Conference Blazor pages + UI services, the single canonical ADC Home page + its view models, the AI-scoring poll recovery tracker, calendar/QR export UI, OfflineBanner, PresenterLayout on Common theme providers</td>
           </tr>
           <tr>
           <td>22</td>
           <td><a href="group-22-engagement-module.html">ADC Engagement Module (Session Bookmarks)</a></td>
-          <td>74</td>
+          <td>79</td>
           <td>The async session-bookmarking slice of the Engagement bounded context: bookmark aggregate, use cases, persistence, API/contracts/service, feedback UI, the durable live-channel publish queue (<a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>), the cross-service user-engagement export slice (gRPC)</td>
           </tr>
           <tr>
@@ -386,13 +386,13 @@
           <tr>
           <td>26</td>
           <td><a href="group-26-device-capability-layer.html">Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</a></td>
-          <td>87</td>
+          <td>90</td>
           <td>Per-capability interface contracts (biometric, geolocation, speech, push registration, clipboard/share/haptics, external auth/links, connectivity/battery, deep links) + their MAUI-native, browser-JS-interop, and inert-fallback implementations, selected per host at DI composition time (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>/043/044/045)</td>
           </tr>
           <tr>
           <td>27</td>
           <td><a href="group-27-testing-infrastructure.html">Testing &amp; Quality Infrastructure</a></td>
-          <td>1275</td>
+          <td>1335</td>
           <td>All test projects + reusable Testing/Testing.E2E/Testing.UI/<strong>Testing.Architecture</strong> bases (incl. the handler + decorator-pipeline test bases, the shared production-host/graceful-shutdown bases, the observability-convention fitness base, and the Gallery auth stubs) + architecture-fitness tests + Gallery + the BenchmarkDotNet perf-smoke suite</td>
           </tr>
           </tbody></table></div>

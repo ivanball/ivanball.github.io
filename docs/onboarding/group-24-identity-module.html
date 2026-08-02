@@ -881,19 +881,6 @@
           <li><strong>Why it&#39;s built this way</strong>: <code>FromAssemblyOf&lt;ClassReference&gt;()</code> needs an instantiable <code>T</code>; this provides one per layer without exposing any behavior.</li>
           <li><strong>Where it&#39;s used</strong>: generic assembly-scan registrations that take a type argument.</li>
           </ul>
-          <h3 id="dependencyinjection-2">DependencyInjection</h3>
-          <blockquote>
-          <p>MMCA.ADC.Identity.Infrastructure · <code>MMCA.ADC.Identity.Infrastructure</code> · <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/DependencyInjection.cs:11</code> · Level 0 · class (static)</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: the Infrastructure-layer DI entry point for the Identity module. Currently a deliberate <strong>no-op placeholder</strong>: <code>AddModuleIdentityInfrastructure()</code> returns the <code>IServiceCollection</code> unchanged (line 20).</li>
-          <li><strong>Depends on</strong>: <code>Microsoft.Extensions.DependencyInjection.IServiceCollection</code> (NuGet) only.</li>
-          <li><strong>Concept introduced</strong>: the <code>extension(IServiceCollection)</code> DI-registration idiom (see <a href="00-primer.html#4-c-build-and-code-style-conventions">primer §4</a>). <code>[Rubric §16, Maintainability &amp; Evolvability]</code> (assesses uniform, predictable structure): every module layer ships an <code>AddModule{Name}{Layer}()</code> method so the module loader can call them uniformly; an empty one is honest about &quot;nothing to register here yet&quot; rather than absent and surprising.</li>
-          <li><strong>Walkthrough</strong>: a single <code>extension(IServiceCollection services)</code> block (line 13) exposing <code>public IServiceCollection AddModuleIdentityInfrastructure() =&gt; services;</code> (line 20). The doc comment (lines 5-10) records <em>why</em> it is empty: Identity has no infrastructure services beyond the EF configurations and seeder, which are discovered automatically via assembly scanning.</li>
-          <li><strong>Why it&#39;s built this way</strong>: keeping the method present even when empty means the module-registration pipeline never special-cases Identity; if Identity later needs a typed infrastructure service (a query service, a key store) it is added here without touching the caller.</li>
-          <li><strong>Where it&#39;s used</strong>: invoked from the Identity API layer&#39;s <code>AddIdentityModule(...)</code> alongside <code>AddModuleIdentityApplication</code> and <code>AddModuleIdentityAPI</code>; the module/registration machinery is covered in <a href="group-14-module-system-composition.html">G14, Module System &amp; Composition</a>.</li>
-          <li><strong>Caveats / not-in-source</strong>: the Identity module ships several <code>DependencyInjection</code> classes, one per layer (this Infrastructure one at Level 0, plus the API, Application, and UI-layer ones covered in the sibling parts of this chapter). They share the bare <code>dependencyinjection</code> anchor, which in the assembled chapter resolves to the first occurrence; cross-references in other sections disambiguate by layer in prose.</li>
-          </ul>
           <h3 id="getuseravatarquery">GetUserAvatarQuery</h3>
           <blockquote>
           <p>MMCA.ADC.Identity.Application · <code>MMCA.ADC.Identity.Application.Users.UseCases.GetUserAvatar</code> · <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/GetUserAvatar/GetUserAvatarQuery.cs:5</code> · Level 0 · record (sealed)</p>
@@ -908,7 +895,7 @@
           </ul>
           <h3 id="getuserpreferencesquery">GetUserPreferencesQuery</h3>
           <blockquote>
-          <p>MMCA.ADC.Identity.Application · <code>MMCA.ADC.Identity.Application.Users.UseCases.GetPreferences</code> · <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/GetPreferences/GetUserPreferencesQuery.cs:7</code> · Level 0 · record (sealed)</p>
+          <p>MMCA.ADC.Identity.Application · <code>MMCA.ADC.Identity.Application.Users.UseCases.GetPreferences</code> · <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/GetPreferences/GetUserPreferencesQuery.cs:5</code> · Level 0 · record (sealed)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the CQRS query that asks for one user&#39;s stored UI preferences (preferred culture and theme). It carries a single field, the target <code>UserId</code>.</li>
@@ -920,7 +907,7 @@
           </ul>
           <h3 id="getusersquery">GetUsersQuery</h3>
           <blockquote>
-          <p>MMCA.ADC.Identity.Application · <code>MMCA.ADC.Identity.Application.Users.UseCases.GetUsers</code> · <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/GetUsers/GetUsersQuery.cs:18</code> · Level 0 · record (sealed)</p>
+          <p>MMCA.ADC.Identity.Application · <code>MMCA.ADC.Identity.Application.Users.UseCases.GetUsers</code> · <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/GetUsers/GetUsersQuery.cs:12</code> · Level 0 · record (sealed)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the query behind the organizer user-management list (BR-51): optional email/first-name/last-name/role filters plus paging and sort parameters.</li>
@@ -1083,7 +1070,7 @@
           <li><strong>Caveats / not-in-source</strong>: whether an Infrastructure-layer generic scan is planned is <code>Not determinable from source</code>; today the copy is declared and unreferenced.</li>
           </ul>
           <hr>
-          <h3 id="dependencyinjection-3">DependencyInjection</h3>
+          <h3 id="dependencyinjection-2">DependencyInjection</h3>
           <blockquote>
           <p>MMCA.ADC.Identity.Infrastructure · <code>MMCA.ADC.Identity.Infrastructure</code> · <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/DependencyInjection.cs:11</code> · Level 0 · class (static)</p>
           </blockquote>
@@ -1346,7 +1333,7 @@
           <li><strong>Why it&#39;s built this way</strong>: a descriptor class is the smallest thing that can carry declarative metadata into DI. Because it is a plain sealed class with no dependencies, it registers as a singleton and costs nothing at runtime, while keeping the sidebar&#39;s Identity section owned by the Identity module rather than by the host.</li>
           <li><strong>Where it&#39;s used</strong>: registered as <code>IUIModule</code> in <a href="#dependencyinjection"><code>DependencyInjection.AddIdentityUI</code></a> (<code>MMCA.ADC.Identity.UI/DependencyInjection.cs:32</code>); also the <code>FromAssemblyOf&lt;IdentityUIModule&gt;</code> marker for that method&#39;s Scrutor scan (<code>DependencyInjection.cs:23</code>).</li>
           </ul>
-          <h3 id="dependencyinjection-4">DependencyInjection</h3>
+          <h3 id="dependencyinjection-3">DependencyInjection</h3>
           <blockquote>
           <p>MMCA.ADC.Identity.UI · <code>MMCA.ADC.Identity.UI</code> · <code>MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.UI/DependencyInjection.cs:11</code> · Level 4 · class (static)</p>
           </blockquote>

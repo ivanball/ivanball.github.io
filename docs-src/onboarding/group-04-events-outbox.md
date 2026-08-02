@@ -487,7 +487,7 @@ For the mechanics of *why* each design choice was made, [ADR-003](https://ivanba
   in `EventTypeCache`, and the row dead-letters on the next cycle.
 
 ### OutboxSignal
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Outbox` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxSignal.cs:9` · Level 1 · class (sealed)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Outbox` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxSignal.cs:15` · Level 1 · class (sealed)
 
 - **What it is**: the `SemaphoreSlim`-based [`IOutboxSignal`](#ioutboxsignal) that wakes the
   [`OutboxProcessor`](#outboxprocessor) the instant new outbox entries are written.
@@ -580,7 +580,7 @@ For the mechanics of *why* each design choice was made, [ADR-003](https://ivanba
   pipeline around handler invocation; its rows are purged by [`OutboxCleanupService`](#outboxcleanupservice).
 
 ### OutboxCleanupService
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Outbox` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxCleanupService.cs:32` · Level 8 · class (sealed partial, `BackgroundService`)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Outbox` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxCleanupService.cs:35` · Level 8 · class (sealed partial, `BackgroundService`)
 
 - **What it is**: the periodic sweeper that purges **processed** outbox rows (and, when enabled,
   inbox rows) older than the retention window from every relational source the host owns.
@@ -618,7 +618,7 @@ For the mechanics of *why* each design choice was made, [ADR-003](https://ivanba
   in `AddInfrastructure`.
 
 ### OutboxProcessor
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Outbox` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:37` · Level 8 · class (sealed partial, `BackgroundService`)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Persistence.Outbox` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:46` · Level 8 · class (sealed partial, `BackgroundService`)
 
 - **What it is**: the background service that drains every outbox table the host owns and dispatches
   the [`OutboxMessage`](#outboxmessage)s, the engine of at-least-once delivery ([ADR-003](https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html)).
@@ -675,7 +675,7 @@ For the mechanics of *why* each design choice was made, [ADR-003](https://ivanba
   its companion sweeper is [`OutboxCleanupService`](#outboxcleanupservice).
 
 ### BaseDomainEvent
-> MMCA.Common.Domain · `MMCA.Common.Domain.DomainEvents` · `MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseDomainEvent.cs:18` · Level 1 · record class (abstract)
+> MMCA.Common.Domain · `MMCA.Common.Domain.DomainEvents` · `MMCA.Common/Source/Core/MMCA.Common.Domain/DomainEvents/BaseDomainEvent.cs:26` · Level 1 · record class (abstract)
 
 - **What it is**: the abstract base record for all domain events, supplying default values for both
   [`IDomainEvent`](#idomainevent) properties so a concrete event type is a one-liner.
@@ -882,65 +882,80 @@ For the mechanics of *why* each design choice was made, [ADR-003](https://ivanba
   [`OutboxProcessor`](#outboxprocessor).
 
 ### SafeDomainEventHandler<TDomainEvent>
-> MMCA.Common.Application · `MMCA.Common.Application.DomainEvents` · `MMCA.Common/Source/Core/MMCA.Common.Application/DomainEvents/SafeDomainEventHandler.cs:14` · Level 2 · class (abstract)
+> MMCA.Common.Application · `MMCA.Common.Application.DomainEvents` · `MMCA.Common/Source/Core/MMCA.Common.Application/DomainEvents/SafeDomainEventHandler.cs:32` · Level 2 · class (abstract)
 
-- **What it is**: a base class for domain-event handlers whose failures should **not** roll back the
-  primary transaction. It wraps an abstract `HandleSafelyAsync` in a `try/catch` that logs the error
-  but does not propagate it.
+- **What it is**: a base class for domain-event handlers that must log their own failure with handler
+  and event context before the exception continues to the dispatcher. It wraps an abstract
+  `HandleSafelyAsync` in an exception **filter** that writes one error line and then lets the
+  exception propagate unchanged (lines 38-47); it does not swallow anything.
 - **Depends on**: [`BaseDomainEvent`](#basedomainevent) (Level 1),
   [`IDomainEventHandler<in TDomainEvent>`](#idomaineventhandlerin-tdomainevent) (Level 1),
   `Microsoft.Extensions.Logging.ILogger` (external).
-- **Concept introduced, safe side-effect handlers and at-least-once delivery discipline.**
-  `[Rubric §6, CQRS & Event-Driven]` (at-least-once delivery: the outbox guarantees retry, so a safe
-  handler lets the processor re-dispatch on failure without re-running the primary operation).
-  `[Rubric §29, Resilience & Business Continuity]` (graceful degradation of side-effects). An
-  aggregate's `SaveChangesAsync` dispatches domain events in-process *after* the data is safely
-  persisted. If a side-effect handler ("send welcome email when a user registers") throws, the entire
-  save should *not* roll back, the primary state change is already committed; only the side effect
-  failed. `SafeDomainEventHandler` catches non-cancellation exceptions, logs them with "The outbox
-  processor will retry" (lines 26-31), and returns gracefully. Handlers that *must* succeed atomically
-  with the primary transaction (e.g. a read model in the same DB) should instead implement
-  [`IDomainEventHandler<in TDomainEvent>`](#idomaineventhandlerin-tdomainevent) directly and let
-  exceptions propagate.
-- **Walkthrough**: primary constructor takes an `ILogger` (line 14), constrained
-  `where TDomainEvent : BaseDomainEvent` (line 15). `HandleAsync` (line 18) awaits
-  `HandleSafelyAsync` inside `catch (Exception ex) when (ex is not OperationCanceledException)`
-  (line 24), cancellation is the one exception that *should* propagate. `HandleSafelyAsync` (line 38)
-  is the abstract method concrete subclasses implement.
-- **Why it's built this way**: it codifies the at-least-once contract of
-  `ADRs/003-outbox-dual-dispatch.md` at the handler level: swallow-and-log instead of fail-the-save,
-  because the durable retry path already exists in the outbox.
-- **Where it's used**: base class for ADC's side-effect handlers across Conference/Engagement/Identity.
-
-### BrokerMessageBus
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Services` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/BrokerMessageBus.cs:24` · Level 3 · class (sealed)
-
-- **What it is**: the [`IMessageBus`](#imessagebus) implementation backed by **MassTransit**. It
-  publishes integration events to the configured broker (RabbitMQ in dev, Azure Service Bus in prod),
-  and is the transport swapped in for extracted microservices in place of
-  [`InProcessMessageBus`](#inprocessmessagebus).
-- **Depends on**: [`IMessageBus`](#imessagebus) (Level 2), [`IIntegrationEvent`](#iintegrationevent)
-  (Level 1), `MassTransit.IPublishEndpoint` (external NuGet).
-- **Concept introduced, publish-by-runtime-type for broker routing.** `[Rubric §7, Microservices
-  Readiness]` (the transport lives entirely in Infrastructure; nothing in Application/Domain knows the
-  broker exists). The key detail is line 33: `publishEndpoint.Publish(integrationEvent,
-  integrationEvent.GetType(), cancellationToken)` publishes using the **concrete runtime type**, not
-  the `IIntegrationEvent` compile-time type, so MassTransit routes to the exchange/topic bound to the
-  concrete event class (the base interface has no consumers bound to it). `[Rubric §13, Observability
-  & Operability]`: the doc comment (lines 18-22) notes MassTransit automatically propagates the current
-  `System.Diagnostics.Activity` trace context as `traceparent`/`tracestate` message headers, so
-  distributed traces continue across the broker hop.
-- **Walkthrough**: primary constructor injects `IPublishEndpoint` (line 24). `PublishAsync` (single,
-  line 27) null-guards (line 29) then returns the runtime-typed `Publish` call (line 33). The batch
-  overload (line 37) iterates and awaits the single overload per event (lines 41-44).
-- **Why it's built this way**: this bus deliberately does **not** write to the outbox itself (doc
-  comment, lines 11-17); the transactional outbox semantics are preserved upstream by the
-  [`OutboxProcessor`](#outboxprocessor), which drains persisted [`OutboxMessage`](#outboxmessage) rows
-  by calling this bus. Splitting "persist to outbox" (the event bus's job) from "publish to broker"
-  (this bus's job) is what makes the at-least-once guarantee of `ADRs/003-outbox-dual-dispatch.md`
-  survive a broker outage. The MassTransit v8 pin applies (see [`IMessageBus`](#imessagebus)).
-- **Where it's used**: registered as the `IMessageBus` implementation when the host calls
-  `AddBrokerMessaging`; invoked only by the [`OutboxProcessor`](#outboxprocessor) drain loop.
+- **Concept introduced, log-and-propagate handlers and the at-least-once delivery contract.**
+  `[Rubric §6, CQRS & Event-Driven]` assesses whether event delivery is reliable end to end, and the
+  class comment (lines 13-20) records why the earlier swallow-and-log version was not: a handler that
+  threw still reported success to the dispatcher, so its outbox row was marked processed, nothing
+  ever retried, and the side effect was lost with only a log line to show for it. Propagating hands
+  the decision to the delivery mechanism, which is built for exactly this.
+  `[Rubric §29, Resilience & Business Continuity]`: on the [`OutboxProcessor`](#outboxprocessor) path
+  the failed message keeps its retry count, backs off, and dead-letters after `Outbox:MaxRetries`
+  attempts (default 5,
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/OutboxSettings.cs:21`; the
+  increment/backoff/dead-letter branches are
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:440-470`).
+  `[Rubric §13, Observability & Operability]`: the one job the base class keeps is the error line
+  naming the concrete handler and the event type, so an operator can tell which handler failed for
+  which event without every subclass hand-rolling that context. The consequence to design for is
+  **batch** redelivery on the interceptor path (class comment, lines 21-29):
+  `DomainEventSaveChangesInterceptor` dispatches every local event of one save in a single
+  `DispatchAsync` call and only then marks that batch processed
+  (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs:306`
+  and `:310`), so one rethrowing handler aborts that call and skips `MarkProcessedAsync` for the
+  WHOLE local batch: every local event written by that save is redelivered by the outbox processor,
+  not just the event whose handler failed. Delivery is therefore at-least-once and subclasses must be
+  idempotent for their own event *and* for every sibling event raised by the same save.
+- **Walkthrough**: primary constructor takes an `ILogger` (line 32), constrained
+  `where TDomainEvent : BaseDomainEvent` (line 33). `HandleAsync` (line 36) awaits
+  `HandleSafelyAsync` (line 40) inside
+  `catch (Exception ex) when (ex is not OperationCanceledException && LogAndRethrow(ex))` (line 42):
+  `OperationCanceledException` is excluded from the filter, so host shutdown propagates with no log
+  line, because it is not a delivery failure. `LogAndRethrow` (line 61) logs the exception with
+  `GetType().Name` and `typeof(TDomainEvent).Name` under the message
+  `"Domain event handler {HandlerType} failed for event {EventType}. The outbox processor will redeliver the event."`
+  (lines 63-67) and always returns `false` (line 69), so the filter never matches and the exception
+  keeps propagating; the `throw;` inside the catch body is unreachable (lines 44-45). Doing the log
+  in a *filter* rather than a catch block is the point: filters run on the first pass, ahead of any
+  unwinding, so the handler context is recorded even if an outer frame wraps or rethrows, and the
+  original stack trace stays untouched. `HandleSafelyAsync` (line 54) is the abstract method concrete
+  subclasses implement.
+- **Why it's built this way**: it puts the at-least-once contract of
+  `ADRs/003-outbox-dual-dispatch.md` where that ADR expects the retry decision to live, in the
+  delivery mechanism rather than in each handler: the handler reports the truth and the outbox
+  decides on retry, backoff, and dead-lettering (the ADR's matching obligation is that handlers are
+  idempotent, since the same event may be dispatched in-process and again by the processor). A failed
+  handler still does not roll back the primary save, but that is now the caller's doing rather than
+  the base class's: in
+  `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Interceptors/DomainEventSaveChangesInterceptor.cs`
+  the flush runs after the data is committed (dispatch is deferred while a transaction is open, lines
+  285-292) and catches the propagated exception itself (line 315), logging "In-process domain event
+  dispatch failed; the outbox processor will retry" (line 343) and signalling the processor so the
+  unprocessed rows are picked up (lines 321-322).
+- **Where it's used**: reached at runtime through [`DomainEventDispatcher`](#domaineventdispatcher),
+  whichever caller dispatched the event (the save-changes interceptor after `SaveChangesAsync`,
+  [`InProcessEventBus`](#inprocesseventbus) / [`InProcessMessageBus`](#inprocessmessagebus), or the
+  background [`OutboxProcessor`](#outboxprocessor)). The only subclass in the workspace today is
+  [`TestSafeDomainEventHandler`](group-27-testing-infrastructure.md#testsafedomaineventhandler),
+  driven by
+  [`SafeDomainEventHandlerTests`](group-27-testing-infrastructure.md#safedomaineventhandlertests)
+  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/DomainEvents/SafeDomainEventHandlerTests.cs`),
+  which pin the three behaviours: log **and** propagate (line 33), the log lands before the caller
+  sees the exception (line 51), and `OperationCanceledException` passes through unlogged (line 73).
+- **Caveats / not-in-source**: the swallow-to-propagate history and the batch-redelivery contract come
+  from the class remarks (lines 13-29), not from anything visible in the current control flow. The
+  base class cannot enforce the idempotency it demands: that stays a subclass obligation with no
+  compile-time or runtime guard. Not determinable from source: how a real side-effect handler behaves
+  under redelivery, because no application (ADC, Store, or Helpdesk) derives from this base class
+  today, so only the Common unit tests exercise it.
 
 ### DomainEventDispatcher
 > MMCA.Common.Application · `MMCA.Common.Application.Services` · `MMCA.Common/Source/Core/MMCA.Common.Application/Services/DomainEventDispatcher.cs:16` · Level 3 · class (sealed)
@@ -993,86 +1008,6 @@ For the mechanics of *why* each design choice was made, [ADR-003](https://ivanba
   `ApplicationDbContext.SaveChangesAsync` after the outbox rows are written, by the background
   [`OutboxProcessor`](#outboxprocessor) when re-dispatching persisted events, and by both in-process
   buses ([`InProcessMessageBus`](#inprocessmessagebus), [`InProcessEventBus`](#inprocesseventbus)).
-
-### InProcessMessageBus
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Services` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/InProcessMessageBus.cs:19` · Level 3 · class (sealed)
-
-- **What it is**: the [`IMessageBus`](#imessagebus) implementation that dispatches integration events
-  **synchronously through the in-process [`IDomainEventDispatcher`](#idomaineventdispatcher)**. It is
-  the default `IMessageBus` registration for the modular-monolith deployment.
-- **Depends on**: [`IMessageBus`](#imessagebus) (Level 2),
-  [`IDomainEventDispatcher`](#idomaineventdispatcher) (Level 1),
-  [`IIntegrationEvent`](#iintegrationevent) (Level 1).
-- **Concept**: the monolith-mode counterpart to [`BrokerMessageBus`](#brokermessagebus). Both satisfy
-  the same `IMessageBus` contract, but where the broker bus hands events to MassTransit, this one just
-  forwards them straight to the dispatcher (line 25 wraps a single event as `[integrationEvent]`; the
-  batch overload passes the sequence through, line 32). `[Rubric §7, Microservices Readiness]`: the
-  `IMessageBus` boundary is what lets a module flip from this class to the broker bus with only a
-  config change.
-- **Walkthrough**: primary constructor injects `IDomainEventDispatcher` (line 19). `PublishAsync`
-  (single, line 22) null-guards then calls `DispatchAsync([integrationEvent])` (line 25); the batch
-  overload (line 29) null-guards then calls `DispatchAsync(integrationEvents)` directly (line 32).
-- **Caveats / not-in-source**: this bus does **not** itself write to the outbox (doc comment, lines
-  11-17); it is meant to be invoked from the [`OutboxProcessor`](#outboxprocessor) when draining
-  already-persisted entries, or from paths that have already taken responsibility for outbox
-  persistence. The "persist + dispatch in one call" semantics belong to [`IEventBus`](#ieventbus) and
-  its [`InProcessEventBus`](#inprocesseventbus) implementation, not here.
-- **Where it's used**: registered as the default `IMessageBus`; drained through by the
-  [`OutboxProcessor`](#outboxprocessor).
-
-### IntegrationEventConsumer<TEvent>
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Services` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventConsumer.cs:26` · Level 3 · class (sealed partial)
-
-- **What it is**: a **generic MassTransit consumer** that bridges `IConsumer<TEvent>` to the existing
-  in-process [`IIntegrationEventHandler<TEvent>`](#iintegrationeventhandlerin-tintegrationevent)
-  contract. There is no MassTransit-specific consumer class to write per event type: this one adapter
-  routes every broker-delivered message of type `TEvent` to all registered handlers.
-- **Depends on**: [`IIntegrationEventHandler<in TIntegrationEvent>`](#iintegrationeventhandlerin-tintegrationevent)
-  (Level 2), [`IInboxStore`](#iinboxstore) (Level 0), [`IIntegrationEvent`](#iintegrationevent)
-  (Level 1); externals `MassTransit.IConsumer<T>`/`ConsumeContext<T>`, `ILogger<T>`.
-- **Concept introduced, consumer-side idempotency via the inbox.** `[Rubric §6, CQRS & Event-Driven]`
-  and `[Rubric §29, Resilience & Business Continuity]`: at-least-once broker delivery can **redeliver**
-  the same message, so a consumer must be idempotent. On each message, `Consume` (line 33) first asks
-  the [`IInboxStore`](#iinboxstore) whether `integrationEvent.MessageId` was already processed (line
-  42); if so it logs a debug skip and acks without re-running handlers (lines 44-45). The stable
-  `MessageId` minted at construction on [`BaseDomainEvent`](#basedomainevent) is what makes this dedup
-  reliable across the round-trip. `[Rubric §13, Observability & Operability]`: three source-generated
-  `[LoggerMessage]` methods (lines 81-88) cover duplicate-skip, no-handler, and handler-failure cases.
-- **Walkthrough**: primary constructor injects the handler enumerable, [`IInboxStore`](#iinboxstore),
-  and an `ILogger` (lines 26-29), constrained `where TEvent : class, IIntegrationEvent` (line 30).
-  `Consume` null-guards the context (line 35), runs the inbox check (line 42), then loops every handler
-  (lines 50-66) inside a `try/catch (Exception ex) when (ex is not OperationCanceledException)` that
-  **rethrows** on failure (line 64) so MassTransit's configured `UseMessageRetry` policy (exponential
-  backoff, `MessageBusSettings.RetryLimit` attempts) runs before dead-lettering. A zero-handler count
-  logs an informational warning and acks anyway (lines 68-74). Crucially, `MarkProcessedAsync` (line
-  78) runs **after** all handlers succeed, so a rethrown failure leaves the message un-recorded and
-  eligible for redelivery.
-- **Why it's built this way**: keeping the inbox record post-success (not pre-dispatch) is the correct
-  ordering for at-least-once delivery (`ADRs/003-outbox-dual-dispatch.md`): a failed handler must be
-  retried, and recording it early would suppress that retry. Reusing the existing
-  `IIntegrationEventHandler<T>` handlers (auto-discovered by `ScanModuleApplicationServices`) means
-  application code is identical whether a module runs in-process or as an extracted service.
-- **Where it's used**: registered per event type via
-  [`IntegrationEventConsumerExtensions`](#integrationeventconsumerextensions) inside the
-  `configureConsumers` callback passed to `AddBrokerMessaging`.
-
-### IntegrationEventConsumerExtensions
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Services` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/IntegrationEventConsumerExtensions.cs:11` · Level 4 · class (static)
-
-- **What it is**: the MassTransit registration helper for
-  [`IntegrationEventConsumer<TEvent>`](#integrationeventconsumertevent). It exposes one call per
-  integration event type a service consumes.
-- **Depends on**: [`IntegrationEventConsumer<TEvent>`](#integrationeventconsumertevent) (Level 3),
-  [`IIntegrationEvent`](#iintegrationevent) (Level 1);
-  external `MassTransit.IBusRegistrationConfigurator`.
-- **Concept**: C# preview **extension members** used for registration ergonomics (taught in the
-  primer). The `extension(IBusRegistrationConfigurator x)` block (line 13) adds
-  `RegisterIntegrationEventConsumer<TEvent>()` (line 22), which calls
-  `x.AddConsumer<IntegrationEventConsumer<TEvent>>()` (line 25) and returns the configurator for
-  fluent chaining. `[Rubric §7, Microservices Readiness]`: this is the one line a host writes per
-  consumed event, keeping broker wiring declarative.
-- **Where it's used**: called from inside the `configureConsumers` callback passed to
-  `AddBrokerMessaging` in each extracted service's `Program.cs`.
 
 ### BrokerEventBus
 > MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Services` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/BrokerEventBus.cs:30` · Level 8 · class (sealed)
@@ -1191,7 +1126,7 @@ For the mechanics of *why* each design choice was made, [ADR-003](https://ivanba
 
 ### InProcessMessageBus
 
-> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Services` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/InProcessMessageBus.cs:20` · Level 3 · class (sealed)
+> MMCA.Common.Infrastructure · `MMCA.Common.Infrastructure.Services` · `MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/InProcessMessageBus.cs:19` · Level 3 · class (sealed)
 
 - **What it is**: the [`IMessageBus`](#imessagebus) implementation for the modular-monolith /
   integration-test case: dispatches integration events synchronously through the in-process

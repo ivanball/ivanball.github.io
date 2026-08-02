@@ -673,17 +673,6 @@ and avatars) are the primary references.
 - **Why it's built this way**: `FromAssemblyOf<ClassReference>()` needs an instantiable `T`; this provides one per layer without exposing any behavior.
 - **Where it's used**: generic assembly-scan registrations that take a type argument.
 
-### DependencyInjection
-> MMCA.ADC.Identity.Infrastructure · `MMCA.ADC.Identity.Infrastructure` · `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/DependencyInjection.cs:11` · Level 0 · class (static)
-
-- **What it is**: the Infrastructure-layer DI entry point for the Identity module. Currently a deliberate **no-op placeholder**: `AddModuleIdentityInfrastructure()` returns the `IServiceCollection` unchanged (line 20).
-- **Depends on**: `Microsoft.Extensions.DependencyInjection.IServiceCollection` (NuGet) only.
-- **Concept introduced**: the `extension(IServiceCollection)` DI-registration idiom (see [primer §4](00-primer.md#4-c-build-and-code-style-conventions)). `[Rubric §16, Maintainability & Evolvability]` (assesses uniform, predictable structure): every module layer ships an `AddModule{Name}{Layer}()` method so the module loader can call them uniformly; an empty one is honest about "nothing to register here yet" rather than absent and surprising.
-- **Walkthrough**: a single `extension(IServiceCollection services)` block (line 13) exposing `public IServiceCollection AddModuleIdentityInfrastructure() => services;` (line 20). The doc comment (lines 5-10) records *why* it is empty: Identity has no infrastructure services beyond the EF configurations and seeder, which are discovered automatically via assembly scanning.
-- **Why it's built this way**: keeping the method present even when empty means the module-registration pipeline never special-cases Identity; if Identity later needs a typed infrastructure service (a query service, a key store) it is added here without touching the caller.
-- **Where it's used**: invoked from the Identity API layer's `AddIdentityModule(...)` alongside `AddModuleIdentityApplication` and `AddModuleIdentityAPI`; the module/registration machinery is covered in [G14, Module System & Composition](group-14-module-system-composition.md).
-- **Caveats / not-in-source**: the Identity module ships several `DependencyInjection` classes, one per layer (this Infrastructure one at Level 0, plus the API, Application, and UI-layer ones covered in the sibling parts of this chapter). They share the bare `dependencyinjection` anchor, which in the assembled chapter resolves to the first occurrence; cross-references in other sections disambiguate by layer in prose.
-
 ### GetUserAvatarQuery
 > MMCA.ADC.Identity.Application · `MMCA.ADC.Identity.Application.Users.UseCases.GetUserAvatar` · `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/GetUserAvatar/GetUserAvatarQuery.cs:5` · Level 0 · record (sealed)
 
@@ -695,7 +684,7 @@ and avatars) are the primary references.
 - **Where it's used**: dispatched by the Identity profile/avatar read endpoint; handled by [`GetUserAvatarHandler`](#getuseravatarhandler), which returns a [`UserAvatarDTO`](#useravatardto).
 
 ### GetUserPreferencesQuery
-> MMCA.ADC.Identity.Application · `MMCA.ADC.Identity.Application.Users.UseCases.GetPreferences` · `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/GetPreferences/GetUserPreferencesQuery.cs:7` · Level 0 · record (sealed)
+> MMCA.ADC.Identity.Application · `MMCA.ADC.Identity.Application.Users.UseCases.GetPreferences` · `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/GetPreferences/GetUserPreferencesQuery.cs:5` · Level 0 · record (sealed)
 
 - **What it is**: the CQRS query that asks for one user's stored UI preferences (preferred culture and theme). It carries a single field, the target `UserId`.
 - **Depends on**: `UserIdentifierType` (the Identity `global using UserIdentifierType = int;` alias, see [identifier aliases](00-primer.md#2-architectural-styles-this-codebase-commits-to)).
@@ -705,7 +694,7 @@ and avatars) are the primary references.
 - **Where it's used**: dispatched by the Identity profile/preferences read endpoint; handled by [`GetUserPreferencesHandler`](#getuserpreferenceshandler), which returns a [`UserPreferencesResponse`](#userpreferencesresponse).
 
 ### GetUsersQuery
-> MMCA.ADC.Identity.Application · `MMCA.ADC.Identity.Application.Users.UseCases.GetUsers` · `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/GetUsers/GetUsersQuery.cs:18` · Level 0 · record (sealed)
+> MMCA.ADC.Identity.Application · `MMCA.ADC.Identity.Application.Users.UseCases.GetUsers` · `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/UseCases/GetUsers/GetUsersQuery.cs:12` · Level 0 · record (sealed)
 
 - **What it is**: the query behind the organizer user-management list (BR-51): optional email/first-name/last-name/role filters plus paging and sort parameters.
 - **Depends on**: nothing first-party (all members are BCL `string?` / `int`).

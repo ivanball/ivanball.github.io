@@ -1063,7 +1063,7 @@
           <hr>
           <h3 id="sessioncookierequest">SessionCookieRequest</h3>
           <blockquote>
-          <p>MMCA.Common.API · <code>MMCA.Common.API.SessionCookies</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieEndpoints.cs:69</code> · Level 0 · record</p>
+          <p>MMCA.Common.API · <code>MMCA.Common.API.SessionCookies</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/SessionCookieEndpoints.cs:72</code> · Level 0 · record</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the inbound body for <code>POST /auth/session-cookie</code>: the access and refresh token strings the browser hands back to the server so they can be re-issued as HttpOnly cookies.</li>
@@ -1112,7 +1112,7 @@
           <hr>
           <h3 id="cookiesessionrefreshmiddleware">CookieSessionRefreshMiddleware</h3>
           <blockquote>
-          <p>MMCA.Common.API · <code>MMCA.Common.API.SessionCookies</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefreshMiddleware.cs:14</code> · Level 2 · class</p>
+          <p>MMCA.Common.API · <code>MMCA.Common.API.SessionCookies</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefreshMiddleware.cs:13</code> · Level 2 · class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: an ASP.NET middleware that runs before <code>UseAuthentication</code> on full-page navigations and, when the access cookie has expired but the refresh cookie is still valid, refreshes server-side so SSR <code>[Authorize]</code> survives instead of bouncing to <code>/login</code>.</li>
@@ -1152,7 +1152,7 @@
           <hr>
           <h3 id="cookiesessionrefreshmiddlewareextensions">CookieSessionRefreshMiddlewareExtensions</h3>
           <blockquote>
-          <p>MMCA.Common.API · <code>MMCA.Common.API.SessionCookies</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefreshMiddleware.cs:36</code> · Level 3 · class</p>
+          <p>MMCA.Common.API · <code>MMCA.Common.API.SessionCookies</code> · <code>MMCA.Common/Source/Presentation/MMCA.Common.API/SessionCookies/CookieSessionRefreshMiddleware.cs:35</code> · Level 3 · class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: a one-method registration helper (<code>UseCookieSessionRefresh</code>) that adds <a href="#cookiesessionrefreshmiddleware"><code>CookieSessionRefreshMiddleware</code></a> to the pipeline.</li>
@@ -1492,7 +1492,7 @@
           <hr>
           <h3 id="loginprotectionservice">LoginProtectionService</h3>
           <blockquote>
-          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Auth</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:18</code> · Level 4 · class</p>
+          <p>MMCA.Common.Infrastructure · <code>MMCA.Common.Infrastructure.Auth</code> · <code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Auth/LoginProtectionService.cs:19</code> · Level 4 · class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the cache-backed brute-force and rate-limiting service: exponential-backoff account

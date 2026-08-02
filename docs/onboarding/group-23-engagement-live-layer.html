@@ -446,7 +446,7 @@
           </ul>
           <h3 id="closelivepollcommand">CloseLivePollCommand</h3>
           <blockquote>
-          <p>MMCA.ADC.Engagement.Application · <code>MMCA.ADC.Engagement.Application.LivePolls.UseCases.Close</code> · <code>MMCA.ADC.Engagement.Application/LivePolls/UseCases/Close/CloseLivePollCommand.cs:11</code> · Level 0 · record</p>
+          <p>MMCA.ADC.Engagement.Application · <code>MMCA.ADC.Engagement.Application.LivePolls.UseCases.Close</code> · <code>MMCA.ADC.Engagement.Application/LivePolls/UseCases/Close/CloseLivePollCommand.cs:12</code> · Level 0 · record</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the command that closes an open poll (BR-221, no reopen). A <code>sealed record</code> carrying
@@ -553,7 +553,7 @@
           </ul>
           <h3 id="openlivepollcommand">OpenLivePollCommand</h3>
           <blockquote>
-          <p>MMCA.ADC.Engagement.Application · <code>MMCA.ADC.Engagement.Application.LivePolls.UseCases.Open</code> · <code>MMCA.ADC.Engagement.Application/LivePolls/UseCases/Open/OpenLivePollCommand.cs:11</code> · Level 0 · record</p>
+          <p>MMCA.ADC.Engagement.Application · <code>MMCA.ADC.Engagement.Application.LivePolls.UseCases.Open</code> · <code>MMCA.ADC.Engagement.Application/LivePolls/UseCases/Open/OpenLivePollCommand.cs:12</code> · Level 0 · record</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the command that opens a Draft poll for voting (BR-221/BR-223). A <code>sealed record</code>
@@ -601,7 +601,7 @@
           </ul>
           <h3 id="closelivepollhandler">CloseLivePollHandler</h3>
           <blockquote>
-          <p>MMCA.ADC.Engagement.Application · <code>MMCA.ADC.Engagement.Application.LivePolls.UseCases.Close</code> · <code>MMCA.ADC.Engagement.Application/LivePolls/UseCases/Close/CloseLivePollHandler.cs:17</code> · Level 8 · class</p>
+          <p>MMCA.ADC.Engagement.Application · <code>MMCA.ADC.Engagement.Application.LivePolls.UseCases.Close</code> · <code>MMCA.ADC.Engagement.Application/LivePolls/UseCases/Close/CloseLivePollHandler.cs:19</code> · Level 8 · class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the command handler for the Open -&gt; Closed transition (BR-221). It authorizes the
@@ -674,7 +674,7 @@
           </ul>
           <h3 id="openlivepollhandler">OpenLivePollHandler</h3>
           <blockquote>
-          <p>MMCA.ADC.Engagement.Application · <code>MMCA.ADC.Engagement.Application.LivePolls.UseCases.Open</code> · <code>MMCA.ADC.Engagement.Application/LivePolls/UseCases/Open/OpenLivePollHandler.cs:19</code> · Level 8 · class</p>
+          <p>MMCA.ADC.Engagement.Application · <code>MMCA.ADC.Engagement.Application.LivePolls.UseCases.Open</code> · <code>MMCA.ADC.Engagement.Application/LivePolls/UseCases/Open/OpenLivePollHandler.cs:20</code> · Level 8 · class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the command handler for the Draft -&gt; Open transition. It authorizes the caller,
@@ -840,7 +840,7 @@
           </ul>
           <h3 id="getsessionquestionsquery">GetSessionQuestionsQuery</h3>
           <blockquote>
-          <p>MMCA.ADC.Engagement.Application · <code>MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.GetSessionQuestions</code> · <code>MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/GetSessionQuestions/GetSessionQuestionsQuery.cs:9</code> · Level 0 · record</p>
+          <p>MMCA.ADC.Engagement.Application · <code>MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.GetSessionQuestions</code> · <code>MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/GetSessionQuestions/GetSessionQuestionsQuery.cs:11</code> · Level 0 · record</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the read message for the attendee view of a session&#39;s Q&amp;A: it asks for one session&#39;s questions from the calling user&#39;s perspective. It is a <code>sealed record</code> with two positional members (<code>GetSessionQuestionsQuery.cs:9</code>).</li>
@@ -900,7 +900,7 @@
           </ul>
           <h3 id="toggleupvotehandler">ToggleUpvoteHandler</h3>
           <blockquote>
-          <p>MMCA.ADC.Engagement.Application · <code>MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.ToggleUpvote</code> · <code>MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/ToggleUpvote/ToggleUpvoteHandler.cs:19</code> · Level 8 · class</p>
+          <p>MMCA.ADC.Engagement.Application · <code>MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.ToggleUpvote</code> · <code>MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/ToggleUpvote/ToggleUpvoteHandler.cs:17</code> · Level 8 · class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the command handler that applies an upvote toggle, enforces the Q&amp;A upvote rules, and broadcasts the fresh count. A <code>sealed partial class</code> implementing <a href="group-05-cqrs-pipeline.html#icommandhandlerin-tcommand-tresult">ICommandHandler&lt;in TCommand, TResult&gt;</a> as <code>ICommandHandler&lt;ToggleUpvoteCommand, Result&lt;int&gt;&gt;</code> (<code>ToggleUpvoteHandler.cs:19-23</code>); it returns the new active-upvote count.</li>
@@ -913,7 +913,7 @@
           </ul>
           <h3 id="getsessionquestionshandler">GetSessionQuestionsHandler</h3>
           <blockquote>
-          <p>MMCA.ADC.Engagement.Application · <code>MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.GetSessionQuestions</code> · <code>MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/GetSessionQuestions/GetSessionQuestionsHandler.cs:15</code> · Level 9 · class</p>
+          <p>MMCA.ADC.Engagement.Application · <code>MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.GetSessionQuestions</code> · <code>MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/GetSessionQuestions/GetSessionQuestionsHandler.cs:26</code> · Level 9 · class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the query handler that returns the attendee view of a session&#39;s questions, ordered and scoped per caller. A <code>sealed class</code> implementing <a href="group-05-cqrs-pipeline.html#iqueryhandlerin-tquery-tresult">IQueryHandler&lt;in TQuery, TResult&gt;</a> as <code>IQueryHandler&lt;GetSessionQuestionsQuery, Result&lt;IReadOnlyList&lt;SessionQuestionDTO&gt;&gt;&gt;</code> (<code>GetSessionQuestionsHandler.cs:15-17</code>).</li>
@@ -925,7 +925,7 @@
           </ul>
           <h3 id="submitquestionhandler">SubmitQuestionHandler</h3>
           <blockquote>
-          <p>MMCA.ADC.Engagement.Application · <code>MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.Submit</code> · <code>MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:23</code> · Level 9 · class</p>
+          <p>MMCA.ADC.Engagement.Application · <code>MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.Submit</code> · <code>MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Submit/SubmitQuestionHandler.cs:24</code> · Level 9 · class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the command handler that creates a question against a live session, honoring the event&#39;s moderation default, then broadcasts best-effort. A <code>sealed partial class</code> implementing <a href="group-05-cqrs-pipeline.html#icommandhandlerin-tcommand-tresult">ICommandHandler&lt;in TCommand, TResult&gt;</a> as <code>ICommandHandler&lt;SubmitQuestionCommand, Result&lt;SessionQuestionDTO&gt;&gt;</code> (<code>SubmitQuestionHandler.cs:23-29</code>).</li>
@@ -1093,7 +1093,7 @@
           </ul>
           <h3 id="optionstate">OptionState</h3>
           <blockquote>
-          <p>MMCA.ADC.Engagement.UI · <code>MMCA.ADC.Engagement.UI.Pages.HappeningNow</code> · <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/HappeningNow/HappeningNow.razor.cs:383</code> · Level 0 · class</p>
+          <p>MMCA.ADC.Engagement.UI · <code>MMCA.ADC.Engagement.UI.Pages.HappeningNow</code> · <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/HappeningNow/HappeningNow.razor.cs:390</code> · Level 0 · class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: a tiny private, mutable holder for one poll-option&#39;s text, used purely as a two-way binding target while an organizer types the options of a new poll on the <a href="#happeningnow"><code>HappeningNow</code></a> page.</li>
@@ -1222,7 +1222,7 @@
           </ul>
           <h3 id="happeningnow">HappeningNow</h3>
           <blockquote>
-          <p>MMCA.ADC.Engagement.UI · <code>MMCA.ADC.Engagement.UI.Pages.HappeningNow</code> · <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/HappeningNow/HappeningNow.razor.cs:21</code> · Level 8 · class (Blazor page)</p>
+          <p>MMCA.ADC.Engagement.UI · <code>MMCA.ADC.Engagement.UI.Pages.HappeningNow</code> · <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/HappeningNow/HappeningNow.razor.cs:23</code> · Level 8 · class (Blazor page)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the conference-day home page. It shows now-and-next sessions, the event&#39;s open live polls with live tallies, and (for organizers only) a poll-manage tab, and it joins the event&#39;s live channel so poll events refresh the tallies without polling.</li>
@@ -1245,7 +1245,7 @@
           </ul>
           <h3 id="optionstate-1">OptionState</h3>
           <blockquote>
-          <p>MMCA.ADC.Engagement.UI · <code>MMCA.ADC.Engagement.UI.Pages.SessionLive</code> · <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLiveModerationPanel.razor.cs:233</code> · Level 0 · class</p>
+          <p>MMCA.ADC.Engagement.UI · <code>MMCA.ADC.Engagement.UI.Pages.SessionLive</code> · <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLiveModerationPanel.razor.cs:242</code> · Level 0 · class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: a one-field mutable holder for a single poll-option&#39;s text, private and nested inside <a href="#sessionlivemoderationpanel">SessionLiveModerationPanel</a>. It exists only to give the create-poll form&#39;s dynamic option rows a stable reference-type target for two-way Blazor binding.</li>
@@ -1270,7 +1270,7 @@
           </ul>
           <h3 id="presenterview">PresenterView</h3>
           <blockquote>
-          <p>MMCA.ADC.Engagement.UI · <code>MMCA.ADC.Engagement.UI.Pages.SessionLive</code> · <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/SessionLive/PresenterView.razor.cs:17</code> · Level 5 · class</p>
+          <p>MMCA.ADC.Engagement.UI · <code>MMCA.ADC.Engagement.UI.Pages.SessionLive</code> · <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/SessionLive/PresenterView.razor.cs:18</code> · Level 5 · class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the chrome-less, large-type projector page for a session&#39;s live layer: the session title, the open polls as big result bars, and the top approved questions by upvotes. It has no inputs; it is meant to be thrown on the room screen and left to refresh itself from the live channel.</li>
@@ -1283,7 +1283,7 @@
           </ul>
           <h3 id="sessionlive">SessionLive</h3>
           <blockquote>
-          <p>MMCA.ADC.Engagement.UI · <code>MMCA.ADC.Engagement.UI.Pages.SessionLive</code> · <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLive.razor.cs:23</code> · Level 5 · class</p>
+          <p>MMCA.ADC.Engagement.UI · <code>MMCA.ADC.Engagement.UI.Pages.SessionLive</code> · <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLive.razor.cs:24</code> · Level 5 · class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the routed session Live page and the <em>container</em> for the whole per-session live experience: open polls with live tallies, the attendee Q&amp;A surface, and a moderation panel for organizers/admins and speaker-claim holders. It owns the lists, the channel subscription, and the shared saving flag, and renders the three sections through the presentational child panels.</li>
@@ -1418,7 +1418,7 @@
           </ul>
           <h3 id="livepolluiservice">LivePollUIService</h3>
           <blockquote>
-          <p>MMCA.ADC.Engagement.UI · <code>MMCA.ADC.Engagement.UI.Services</code> · <code>MMCA.ADC.Engagement.UI/Services/LivePollUIService.cs:12</code> · Level 3 · class</p>
+          <p>MMCA.ADC.Engagement.UI · <code>MMCA.ADC.Engagement.UI.Services</code> · <code>MMCA.ADC.Engagement.UI/Services/LivePollUIService.cs:14</code> · Level 3 · class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: The HTTP implementation of <a href="#ilivepolluiservice">ILivePollUIService</a>, calling the Gateway&#39;s <code>/livepolls</code> routes with an authenticated client and a retry pipeline.</li>
@@ -1442,7 +1442,7 @@
           </ul>
           <h3 id="sessionquestionuiservice">SessionQuestionUIService</h3>
           <blockquote>
-          <p>MMCA.ADC.Engagement.UI · <code>MMCA.ADC.Engagement.UI.Services</code> · <code>MMCA.ADC.Engagement.UI/Services/SessionQuestionUIService.cs:12</code> · Level 3 · class</p>
+          <p>MMCA.ADC.Engagement.UI · <code>MMCA.ADC.Engagement.UI.Services</code> · <code>MMCA.ADC.Engagement.UI/Services/SessionQuestionUIService.cs:14</code> · Level 3 · class</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: The HTTP implementation of <a href="#isessionquestionuiservice">ISessionQuestionUIService</a>, calling the Gateway&#39;s <code>/sessionquestions</code> routes with the same authenticated-client + retry pattern as <a href="#livepolluiservice">LivePollUIService</a>.</li>
@@ -1502,7 +1502,7 @@
           </ul>
           <h3 id="moderatequestioncommand">ModerateQuestionCommand</h3>
           <blockquote>
-          <p>MMCA.ADC.Engagement.Application · <code>MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.Moderate</code> · <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Moderate/ModerateQuestionCommand.cs:14</code> · Level 1 · record</p>
+          <p>MMCA.ADC.Engagement.Application · <code>MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.Moderate</code> · <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Moderate/ModerateQuestionCommand.cs:15</code> · Level 1 · record</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the CQRS command that carries one moderation action (approve / dismiss / mark-answered) against a single session question, together with the caller&#39;s identity as resolved at the API edge.</li>
@@ -1596,30 +1596,9 @@
           <li><strong>Why it&#39;s built this way</strong>: even a trivial guard is expressed as a named invariant so the factory reads as a <code>Result.Combine</code> of intent, and every id-presence failure produces a consistent, traceable error.</li>
           <li><strong>Where it&#39;s used</strong>: combined inside <a href="#livepollvote"><code>LivePollVote.Create</code></a> (<code>LivePollVote.cs:54-57</code>); <code>EnsureOptionIdIsValid</code> is also called on its own by <code>ChangeOption</code> and <code>Reactivate</code> (<code>LivePollVote.cs:79,99</code>).</li>
           </ul>
-          <h3 id="sessionquestionscontroller">SessionQuestionsController</h3>
-          <blockquote>
-          <p>MMCA.ADC.Engagement.API · <code>MMCA.ADC.Engagement.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/SessionQuestionsController.cs:35</code> · Level 4 · class</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: the REST controller for the conference-day session Q&amp;A layer: submit a question, read the attendee/moderation views, run the moderation transitions, and toggle upvotes.</li>
-          <li><strong>Depends on</strong>: the five Q&amp;A handlers via <a href="group-05-cqrs-pipeline.html#icommandhandlerin-tcommand-tresult"><code>ICommandHandler&lt;in TCommand, TResult&gt;</code></a> / <a href="group-05-cqrs-pipeline.html#iqueryhandlerin-tquery-tresult"><code>IQueryHandler&lt;in TQuery, TResult&gt;</code></a>, <a href="group-08-auth.html#icurrentuserservice"><code>ICurrentUserService</code></a> (claims), <a href="group-12-api-hosting-mapping.html#apicontrollerbase"><code>ApiControllerBase</code></a> (the <code>HandleFailure</code> Result-to-HTTP bridge), and <a href="#moderatequestioncommand"><code>ModerateQuestionCommand</code></a>.</li>
-          <li><strong>Concept introduced, identity bound at the edge and rights enforced in the handler.</strong> <code>[Rubric §9, API &amp; Contract Design]</code> (thin controllers over the handler pipeline) and <code>[Rubric §11, Security]</code> (trust boundary at the transport edge). The class-level attributes set the contract: <code>[ApiController]</code>, <code>[Route(&quot;[controller]&quot;)]</code>, <code>[ApiVersion(&quot;1.0&quot;)]</code>, <code>[FeatureGate(EngagementFeatures.SessionQA)]</code> (the whole controller is dark when the flag is off), and <code>[Authorize(Policy = AuthorizationPolicies.RequireAuthenticated)]</code> (<code>SessionQuestionsController.cs:30-34</code>). Every action is thin: bind identity from claims, build a command/query, call the handler, and map the <a href="group-01-result-error-handling.html#result"><code>Result</code></a> to HTTP via <code>HandleFailure</code> or a success status.</li>
-          <li><strong>Walkthrough</strong><ul>
-          <li>Constructor injects five handlers plus <a href="group-08-auth.html#icurrentuserservice"><code>ICurrentUserService</code></a> (<code>:35-41</code>).</li>
-          <li><code>SubmitAsync</code> (<code>:48</code>): reads <code>currentUserService.UserId</code>, refuses with <code>Error.Forbidden</code> if absent, else builds <code>SubmitQuestionCommand</code> and returns <code>201 Created</code> at <code>/sessionquestions/{id}</code>.</li>
-          <li><code>GetSessionQuestionsAsync</code> (<code>:73</code>): the attendee view (approved questions plus the caller&#39;s own pending/dismissed), keyed on <code>sessionId</code> and the caller&#39;s user id.</li>
-          <li><code>GetModerationQueueAsync</code> (<code>:100</code>): the all-statuses moderator view; passes <code>GetCallerSpeakerId()</code> and <code>IsCallerOrganizer()</code> so rights are checked in the handler.</li>
-          <li><code>ApproveAsync</code> / <code>DismissAsync</code> / <code>MarkAnsweredAsync</code> (<code>:119,130,141</code>): three thin verbs that all funnel into the private <code>ModerateAsync(id, action, ct)</code> (<code>:166</code>), which builds a <a href="#moderatequestioncommand"><code>ModerateQuestionCommand</code></a> and returns <code>204 No Content</code>.</li>
-          <li><code>UpvoteAsync</code> / <code>RemoveUpvoteAsync</code> (<code>:151,161</code>): the POST/DELETE pair on <code>{id}/upvotes</code>, both funnel into private <code>ToggleUpvoteAsync(id, upvote, ct)</code> (<code>:179</code>) and return the fresh count as <code>200 OK</code>.</li>
-          <li>The two claim helpers are the load-bearing security detail: <code>GetCallerSpeakerId()</code> (<code>:200</code>) reads the <code>speaker_id</code> claim (mapping <code>default</code> to <code>null</code>), and <code>IsCallerOrganizer()</code> (<code>:207</code>) is <code>currentUserService.IsInRole(Organizer) || IsInRole(Admin)</code>. Both read the token, never the request body.</li>
-          </ul>
-          </li>
-          <li><strong>Why it&#39;s built this way</strong>: pushing rights into the handler (via <a href="#livepollauthorization"><code>LivePollAuthorization</code></a>) keeps the controller a pure transport adapter and means the same rule protects the REST path and any future transport; <code>[FeatureGate]</code> lets the entire live Q&amp;A surface ship dark and be enabled per environment.</li>
-          <li><strong>Where it&#39;s used</strong>: mounted by the Engagement service host; reached by clients through the YARP Gateway (<a href="https://ivanball.github.io/docs/adr/008-service-extraction-topology.html" target="_blank" rel="noopener">ADR-008</a>).</li>
-          </ul>
           <h3 id="livepollvote">LivePollVote</h3>
           <blockquote>
-          <p>MMCA.ADC.Engagement.Domain · <code>MMCA.ADC.Engagement.Domain.LivePolls</code> · <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/LivePolls/LivePollVote.cs:20</code> · Level 5 · class (sealed aggregate root)</p>
+          <p>MMCA.ADC.Engagement.Domain · <code>MMCA.ADC.Engagement.Domain.LivePolls</code> · <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Domain/LivePolls/LivePollVote.cs:19</code> · Level 5 · class (sealed aggregate root)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the aggregate root for one user&#39;s vote on a live poll. Deliberately a <strong>separate</strong> aggregate from <a href="#livepoll"><code>LivePoll</code></a>, not a child of it.</li>
@@ -1670,29 +1649,6 @@
           <li><strong>Why it&#39;s built this way</strong>: modeling the option as an immutable child keeps the poll&#39;s consistency boundary simple, tally math only ever adds new options via re-authoring, never mutates an existing option&#39;s meaning under a live vote count.</li>
           <li><strong>Where it&#39;s used</strong>: built inside <a href="#livepoll"><code>LivePoll.Create</code></a> and rehydrated by <a href="#livepollnavigationpopulator"><code>LivePollNavigationPopulator</code></a>; read by <a href="#livepollresultsbuilder"><code>LivePollResultsBuilder</code></a> to label each tally.</li>
           </ul>
-          <h3 id="livepollscontroller">LivePollsController</h3>
-          <blockquote>
-          <p>MMCA.ADC.Engagement.API · <code>MMCA.ADC.Engagement.API.Controllers</code> · <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:40</code> · Level 7 · class</p>
-          </blockquote>
-          <ul>
-          <li><strong>What it is</strong>: the REST controller for the live poll layer: create/open/close/delete a poll and list/read tallies/cast votes.</li>
-          <li><strong>Depends on</strong>: eight poll handlers via <a href="group-05-cqrs-pipeline.html#icommandhandlerin-tcommand-tresult"><code>ICommandHandler&lt;in TCommand, TResult&gt;</code></a> / <a href="group-05-cqrs-pipeline.html#iqueryhandlerin-tquery-tresult"><code>IQueryHandler&lt;in TQuery, TResult&gt;</code></a> (including the generic <a href="group-05-cqrs-pipeline.html#deleteentitycommandtentity-tidentifiertype"><code>DeleteEntityCommand&lt;TEntity, TIdentifierType&gt;</code></a>), <a href="group-08-auth.html#icurrentuserservice"><code>ICurrentUserService</code></a>, <a href="group-12-api-hosting-mapping.html#apicontrollerbase"><code>ApiControllerBase</code></a>, and <a href="#livepoll"><code>LivePoll</code></a>.</li>
-          <li><strong>Concept reinforced, two-tier authorization (feature gate + policy + capability).</strong> <code>[Rubric §9, API &amp; Contract Design]</code> and <code>[Rubric §11, Security]</code>. Like <a href="#sessionquestionscontroller"><code>SessionQuestionsController</code></a>, the class carries <code>[FeatureGate(EngagementFeatures.LivePolls)]</code> and <code>[Authorize(RequireAuthenticated)]</code> (<code>LivePollsController.cs:35-39</code>). The difference is that the <em>organizer-only</em> surfaces, the delete and the event-wide manage list, additionally carry <code>[HasPermission(EngagementPermissions.LiveManage)]</code> (<code>:106,125</code>), a coarse capability gate, while the create/open/close verbs enforce the finer BR-236 speaker rights <em>inside the handler</em> via <a href="#livepollauthorization"><code>LivePollAuthorization</code></a>. So there are two authorization tiers: a declarative capability on the manage endpoints and a data-scoped speaker check in the handlers.</li>
-          <li><strong>Walkthrough</strong><ul>
-          <li>Constructor injects eight handlers plus <a href="group-08-auth.html#icurrentuserservice"><code>ICurrentUserService</code></a> (<code>:40-49</code>).</li>
-          <li><code>CreateAsync</code> (<code>:56</code>): builds <code>CreateLivePollCommand(request, GetCallerSpeakerId(), IsCallerOrganizer())</code> and returns <code>201 Created</code>.</li>
-          <li><code>OpenAsync</code> / <code>CloseAsync</code> (<code>:74,92</code>): pass the same caller-rights inputs; return <code>204</code>.</li>
-          <li><code>DeleteAsync</code> (<code>:110</code>): gated by <code>[HasPermission(LiveManage)]</code>, dispatches the generic <a href="group-05-cqrs-pipeline.html#deleteentitycommandtentity-tidentifiertype"><code>DeleteEntityCommand&lt;LivePoll, LivePollIdentifierType&gt;</code></a>; the BR-228 &quot;close before delete&quot; rule is enforced deeper, in <a href="#livepoll"><code>LivePoll.Delete</code></a>.</li>
-          <li><code>GetEventPollsAsync</code> (<code>:127</code>): the organizer manage list, also <code>[HasPermission(LiveManage)]</code>.</li>
-          <li><code>GetOpenPollsAsync</code> (<code>:145</code>): the attendee/presenter view of open polls with tallies and the caller&#39;s own vote, keyed on optional <code>eventId</code> or <code>sessionId</code> plus the caller&#39;s user id.</li>
-          <li><code>GetResultsAsync</code> (<code>:169</code>): one poll&#39;s tallies with the caller&#39;s vote.</li>
-          <li><code>CastVoteAsync</code> (<code>:193</code>): builds <code>CastVoteCommand(id, request.OptionId, userId)</code> and returns the fresh <a href="#livepollresultsdto"><code>LivePollResultsDTO</code></a>.</li>
-          <li>The two claim helpers (<code>GetCallerSpeakerId</code> <code>:214</code>, <code>IsCallerOrganizer</code> <code>:221</code>) are identical in shape to the Q&amp;A controller&#39;s, identity from the token only.</li>
-          </ul>
-          </li>
-          <li><strong>Why it&#39;s built this way</strong>: the coarse <code>[HasPermission]</code> gate keeps organizer-only management endpoints declaratively locked, while delegating the nuanced &quot;this speaker owns this session&quot; decision to the shared handler check avoids duplicating the rule at the transport layer.</li>
-          <li><strong>Where it&#39;s used</strong>: mounted by the Engagement service host; reached through the Gateway (<a href="https://ivanball.github.io/docs/adr/008-service-extraction-topology.html" target="_blank" rel="noopener">ADR-008</a>).</li>
-          </ul>
           <h3 id="livepollresultsbuilder">LivePollResultsBuilder</h3>
           <blockquote>
           <p>MMCA.ADC.Engagement.Application · <code>MMCA.ADC.Engagement.Application.LivePolls.Services</code> · <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/LivePolls/Services/LivePollResultsBuilder.cs:12</code> · Level 8 · class (sealed)</p>
@@ -1708,7 +1664,7 @@
           </ul>
           <h3 id="moderatequestionhandler">ModerateQuestionHandler</h3>
           <blockquote>
-          <p>MMCA.ADC.Engagement.Application · <code>MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.Moderate</code> · <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Moderate/ModerateQuestionHandler.cs:21</code> · Level 8 · class (sealed partial)</p>
+          <p>MMCA.ADC.Engagement.Application · <code>MMCA.ADC.Engagement.Application.SessionQuestions.UseCases.Moderate</code> · <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.Application/SessionQuestions/UseCases/Moderate/ModerateQuestionHandler.cs:22</code> · Level 8 · class (sealed partial)</p>
           </blockquote>
           <ul>
           <li><strong>What it is</strong>: the command handler that applies a moderation transition to a <a href="#sessionquestion"><code>SessionQuestion</code></a> (BR-234), enforcing the BR-236 rights, then best-effort publishes the matching live-channel event (BR-238).</li>
@@ -2043,7 +1999,7 @@
           maps is rehydrated on query paths by
           <a href="#livepollnavigationpopulator"><code>LivePollNavigationPopulator</code></a>.</li>
           </ul>
-          <h3 id="livepollscontroller-1">LivePollsController</h3>
+          <h3 id="livepollscontroller">LivePollsController</h3>
           <blockquote>
           <p>MMCA.ADC.Engagement.API · <code>MMCA.ADC.Engagement.API.Controllers</code> · <code>MMCA.ADC.Engagement.API/Controllers/LivePollsController.cs:42</code> · Level 8 · class (sealed)</p>
           </blockquote>
@@ -2147,7 +2103,7 @@
           <a href="#castvotehandler"><code>CastVoteHandler</code></a> relies on the unique index as the final arbiter when two
           concurrent votes race.</li>
           </ul>
-          <h3 id="sessionquestionscontroller-1">SessionQuestionsController</h3>
+          <h3 id="sessionquestionscontroller">SessionQuestionsController</h3>
           <blockquote>
           <p>MMCA.ADC.Engagement.API · <code>MMCA.ADC.Engagement.API.Controllers</code> · <code>MMCA.ADC.Engagement.API/Controllers/SessionQuestionsController.cs:37</code> · Level 8 · class (sealed)</p>
           </blockquote>

@@ -409,7 +409,7 @@ code stays modules and domain logic, never plumbing.
 - **Where it's used**: generic registration helpers that need a per-assembly type anchor from the API layer.
 
 ### ExternalAuthExtensions
-> MMCA.Common.API · `MMCA.Common.API.Authentication` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Authentication/ExternalAuthExtensions.cs:23` · Level 0 · class (static)
+> MMCA.Common.API · `MMCA.Common.API.Authentication` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Authentication/ExternalAuthExtensions.cs:21` · Level 0 · class (static)
 
 - **What it is**: a static class that registers the external OAuth provider schemes (Google, GitHub) plus the short-lived cookie scheme that carries the external principal from the provider callback to the app's OAuth controller. It is the counterpart wiring that `AddCommonAuthentication` (JWT-only) deliberately leaves out.
 - **Depends on**: `AspNet.Security.OAuth.GitHub`, `Microsoft.AspNetCore.Authentication.Google`, and the ASP.NET Core authentication/DI/configuration BCL surface. First-party, it partners with the app's OAuth controller subclassing [OAuthControllerBase](#oauthcontrollerbase), whose `ExtractClaims` consumes the schemes registered here.
@@ -535,7 +535,7 @@ code stays modules and domain logic, never plumbing.
 
 ### IdempotencyFilter
 
-> MMCA.Common.API · `MMCA.Common.API.Idempotency` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:43` · Level 2 · class (sealed)
+> MMCA.Common.API · `MMCA.Common.API.Idempotency` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:48` · Level 2 · class (sealed)
 
 - **What it is**: the ASP.NET Core `IAsyncActionFilter` that gives write operations client-driven idempotency. A client attaches an `Idempotency-Key` header; the first successful response for that key is cached and every subsequent request carrying the same key gets the stored response back verbatim, without re-running the action.
 - **Depends on**: [`ICacheService`](group-09-caching.md#icacheservice) (resolved per-request from `RequestServices`, `IdempotencyFilter.cs:81`), [`IdempotencyRecord`](#idempotencyrecord), [`IdempotencySettings`](#idempotencysettings) via `IOptions<>`, and [`KeyedSemaphoreStripe`](group-08-auth.md#keyedsemaphorestripe) from `MMCA.Common.Shared.Concurrency`; `SHA256`, `Encoding`, and `System.Text.Json` from the BCL.
@@ -832,7 +832,7 @@ code stays modules and domain logic, never plumbing.
 
 ### ErrorHttpMapping
 
-> MMCA.Common.API · `MMCA.Common.API.Middleware` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:15` · Level 2 · class (internal static)
+> MMCA.Common.API · `MMCA.Common.API.Middleware` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Middleware/ErrorHttpMapping.cs:14` · Level 2 · class (internal static)
 
 - **What it is**: The single source of truth that maps [ErrorType](group-01-result-error-handling.md#errortype) values to HTTP status codes and builds the `errors` extension array for RFC 9457 Problem Details responses. It keeps [ApiControllerBase](#apicontrollerbase) and [UnhandledResultFailureFilter](#unhandledresultfailurefilter) consistent without duplicating the mapping.
 - **Depends on**: [Error](group-01-result-error-handling.md#error), [ErrorType](group-01-result-error-handling.md#errortype), [IErrorLocalizer](#ierrorlocalizer); `System.Collections.Frozen`, ASP.NET Core `StatusCodes`.
@@ -1016,7 +1016,7 @@ code stays modules and domain logic, never plumbing.
 ---
 
 ### JwksEndpointExtensions
-> MMCA.Common.API · `MMCA.Common.API.Startup` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/JwksEndpointExtensions.cs:16` · Level 1 · class (static, extension block)
+> MMCA.Common.API · `MMCA.Common.API.Startup` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/JwksEndpointExtensions.cs:15` · Level 1 · class (static, extension block)
 
 - **What it is**: maps `/.well-known/jwks.json`, serializing the active `JsonWebKeySet` of the
   Identity service so other services can validate its RS256 tokens.
@@ -1065,7 +1065,7 @@ code stays modules and domain logic, never plumbing.
 ---
 
 ### OidcDiscoveryEndpointExtensions
-> MMCA.Common.API · `MMCA.Common.API.Startup` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/OidcDiscoveryEndpointExtensions.cs:23` · Level 2 · class (static, extension block)
+> MMCA.Common.API · `MMCA.Common.API.Startup` · `MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/OidcDiscoveryEndpointExtensions.cs:22` · Level 2 · class (static, extension block)
 
 - **What it is**: maps a minimal OpenID Connect discovery document at
   `/.well-known/openid-configuration`. It returns just enough for token validation (the `issuer` and

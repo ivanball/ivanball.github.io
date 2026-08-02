@@ -160,12 +160,12 @@
           </thead>
           <tbody><tr>
           <td><code>.cs</code> files scanned</td>
-          <td align="right">2,260</td>
+          <td align="right">2,321</td>
           <td><code>00-inventory.md</code></td>
           </tr>
           <tr>
           <td>, in-scope</td>
-          <td align="right">2,172</td>
+          <td align="right">2,233</td>
           <td></td>
           </tr>
           <tr>
@@ -175,33 +175,33 @@
           </tr>
           <tr>
           <td>Type declaration rows (incl. partial-class fragments)</td>
-          <td align="right">2,735</td>
+          <td align="right">2,833</td>
           <td><code>00-inventory.md</code></td>
           </tr>
           <tr>
           <td><strong>Distinct type nodes (partials collapsed)</strong></td>
-          <td align="right"><strong>2,645</strong></td>
+          <td align="right"><strong>2,737</strong></td>
           <td>the master checklist</td>
           </tr>
           <tr>
           <td>→ mapped to a functional group</td>
-          <td align="right">2,645</td>
+          <td align="right">2,737</td>
           <td><code>classify.ps1</code> (0 unmapped)</td>
           </tr>
           <tr>
           <td>→ individually sectioned (named in a chapter)</td>
-          <td align="right">1,524</td>
+          <td align="right">1,556</td>
           <td><code>verify.ps1</code></td>
           </tr>
           <tr>
           <td>→ rolled up by project (G25 test classes)</td>
-          <td align="right">1,121</td>
+          <td align="right">1,181</td>
           <td>logged exception §2.2</td>
           </tr>
           <tr>
           <td>Distinct <code>###</code> sections written across 27 chapters</td>
-          <td align="right">1,446</td>
-          <td>covering the 1,524 (sibling families share a section, §2.3)</td>
+          <td align="right">1,442</td>
+          <td>covering the 1,556 (sibling families share a section, §2.3)</td>
           </tr>
           <tr>
           <td>Chapter overviews written</td>
@@ -209,10 +209,18 @@
           <td>one per group</td>
           </tr>
           </tbody></table></div>
-          <p><strong>Cross-check result:</strong> <code>verify.ps1</code> confirms <strong>0</strong> of the 1,524 individually-sectioned types are
+          <p><strong>Cross-check result:</strong> <code>verify.ps1</code> confirms <strong>0</strong> of the 1,556 individually-sectioned types are
           missing from their group chapter, every one appears as a <code>###</code> heading or in a sibling-family
-          <code>File:Line</code> table. 2,645 = 1,524 individually-sectioned + 1,121 rolled-up. Nothing dropped, nothing
+          <code>File:Line</code> table. 2,737 = 1,556 individually-sectioned + 1,181 rolled-up. Nothing dropped, nothing
           double-counted (each type maps to exactly one group).</p>
+          <blockquote>
+          <p><strong>Caveat on what <code>verify.ps1</code> proves.</strong> Its check is name presence: a type counts as covered when
+          its name appears as a <code>###</code> heading, in a sibling-family <code>File:Line</code> cell, <strong>or anywhere in the
+          chapter text</strong>. A type that is only named in passing therefore passes. A stricter check (heading or
+          table cell only) run at this pass reports <strong>64</strong> types that are cross-linked from other sections but
+          have no section of their own, so those anchors resolve nowhere. They are listed in §5 as an open
+          item, not a silent omission.</p>
+          </blockquote>
           <blockquote>
           <p><strong>Regeneration note (re-verified against current source, polyglot-persistence update).</strong> This audit
           was regenerated after the <strong>polyglot-persistence framework enhancement</strong> (MMCA.Common commit
@@ -841,6 +849,82 @@
           &quot;no project references&quot; reason in two places; both now state the Infrastructure-specific one.</li>
           </ul>
           </blockquote>
+          <blockquote>
+          <p><strong>Regeneration note (re-verified against current source, v1.135.0 full drift sweep).</strong> Regenerated at
+          <strong>framework v1.135.0</strong> (MMCA.Common <code>f292233</code>; MMCA.ADC <code>995a7886</code>; both clean; <code>FACTS.md</code> is the source
+          of truth for the version and package figures). Net change since the v1.131.0 pass: <strong>+92</strong> distinct
+          nodes (2,645 to <strong>2,737</strong>), individually-sectioned 1,524 to <strong>1,556</strong>, rolled-up 1,121 to <strong>1,181</strong>,
+          cycles 19 to <strong>20</strong>. <code>classify.ps1</code>: <strong>0 unmapped</strong>, so no new functional group was needed and the
+          chapter count stays at 27. <code>verify.ps1</code>: <strong>0 missing, rubric 34/34</strong>. <code>###</code> sections 1,446 to
+          <strong>1,442</strong>, which is a <em>fall</em> despite 43 new sections because this pass also removed 47 duplicate or
+          dead ones (see the dedup paragraph below): 1,446 - 47 + 43 = 1,442, measured from <code>concat.ps1</code>&#39;s
+          per-chapter output rather than inferred. The delta traces to the bug-hunt remediation waves in both
+          repos (MMCA.Common #177/#179/#180, MMCA.ADC #88 to #94) and releases v1.132.0 through v1.135.0.</p>
+          <ul>
+          <li><strong>34 new individually-sectioned types, +60 rolled-up test types, 2 removed.</strong> G05 +1
+          (<code>IDistributedLock</code>, <code>MMCA.Common.Application/Interfaces/IDistributedLock.cs:30</code>); G07 +1
+          (<code>TransactionCommitAmbiguousException</code>,
+          <code>MMCA.Common.Infrastructure/Persistence/DbContexts/Factory/TransactionCommitAmbiguousException.cs:22</code>);
+          G14 +4 (the distributed-lock implementations and their handles, <code>Infrastructure/Concurrency/</code>);
+          G15 +3 (<code>ICultureApplier</code>, <code>EndpointCultureApplier</code>, <code>ChannelReferenceCounter</code>); G17 +1
+          (<code>ConferenceReadAudience</code>, <code>Conference.Shared/Authorization/ConferenceReadAudience.cs:23</code>);
+          G18 +13 (the six <code>GetPublic*Filter</code> query/handler pairs, <code>PublicConferenceVisibility</code>,
+          <code>PublicSessionStatusSpecification</code>, <code>LocalityLookupEntry</code>); G20 +2 (<code>PublicLookupReader</code>,
+          <code>CurrentUserServiceExtensions</code>); G21 +1 (<code>SessionSelectionFilterOptions</code>) and <strong>-2</strong>
+          (<code>SponsorInfo</code>, <code>SponsorTierInfo</code>, both deleted from <code>ADCHome.razor.cs</code>, whose sections and inbound
+          links were removed); G22 +5 (the now-and-next slice plus <code>LiveEventListener</code>); G26 +3 (the MAUI
+          culture applier, initializer and store). The clusters are the BR-49/BR-239 public-visibility
+          projection, the culture-applier boundary (<a href="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html" target="_blank" rel="noopener">ADR-027</a>),
+          distributed locking behind the idempotency filter, and reference-counted hub-channel membership
+          (<a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>).</li>
+          <li><strong>The <code>DbContexts.Factory</code> family was written for the first time (+9 sections).</strong> <code>IDbContextFactory</code>,
+          <code>IPhysicalDbContextFactory</code>, <code>PhysicalDbContextFactory</code>, <code>ApplicationDbContextEFFactory</code>, the three
+          <code>Default*DbContextFactory</code> engine shims, <code>DbContextFactory</code> and <code>IdentityInsertGroup</code> had <strong>no
+          sections at all</strong> despite other chapters cross-linking to them, so those anchors resolved nowhere.
+          Closing them dropped the anchor-less count from 107 to 64 (§5, item 4).</li>
+          <li><strong>47 duplicate or dead sections removed.</strong> Earlier passes re-authored a repacked part into its
+          successor without removing the predecessor, so seven chapters taught the same type twice: the
+          assembled corpus held <strong>42</strong> duplicate headings, 28 of them in group-07 alone, where <code>p02</code>&#39;s 13
+          sections were a strict subset of <code>p03</code>&#39;s 14 and <code>p04</code>&#39;s 15 a subset of <code>p05</code>&#39;s 16. The stale copies
+          were the losers on evidence (<code>p02</code> cited <code>ApplicationDbContext.cs:34</code> and <code>class</code>; <code>p03</code> cites <code>:35</code>
+          and <code>class (abstract)</code>), so four fully-redundant part files were deleted and the individual
+          duplicates removed from <code>group-04-p02</code>, <code>group-19-p01</code>, <code>group-23-p07</code> and <code>group-24-p02</code>. One
+          deletion was caught and reverted: <code>group-25-p03</code> also held the <strong>WinUI</strong> <code>App</code>
+          (<code>MMCA.ADC.UI/Platforms/Windows/App.xaml.cs:8</code>), a distinct type from <code>p01</code>&#39;s <code>App</code>
+          (<code>MMCA.ADC.UI/App.xaml.cs:7</code>), so a name-based subset test wrongly read it as redundant; that
+          section was restored. A (section + citation) pair check across the whole corpus now reports <strong>0</strong>
+          duplicates.</li>
+          <li><strong>137 section-header citations corrected mechanically</strong> from the fresh inventory across 35 parts
+          (3 same-name cases were left alone as ambiguous). This only fixes the declaration line in each
+          section&#39;s meta line; see §5 item 5 for why that is not sufficient.</li>
+          <li><strong>8 sections repaired after an adversarial prose check returned 8 DRIFTED out of 8.</strong> The sampled
+          sections were the ones whose declaration line had moved furthest, and several described behaviour
+          that has since inverted: <code>SafeDomainEventHandler&lt;TDomainEvent&gt;</code> was documented as swallowing handler
+          exceptions when the current code uses an exception filter that logs and <strong>rethrows</strong>
+          (<code>SafeDomainEventHandler.cs:63-67</code>); <code>WarmupHostedService</code> was documented as having no per-task
+          deadline, with the hang called out as an open gap, when a <code>WaitAsync(_taskTimeout, ...)</code> timeout and
+          a fourth <code>LogTaskTimedOut</code> message now exist (<code>WarmupHostedService.cs:69</code>, <code>:105</code>);
+          <code>QueryCacheKeyLocks</code> was documented as a <code>ConcurrentDictionary&lt;string, SemaphoreSlim&gt;</code> keyed exactly
+          when it is now a fixed-width <code>KeyedSemaphoreStripe</code> that buckets keys (<code>CachingQueryDecorator.cs:123</code>);
+          <code>MemoryCacheService</code>&#39;s claimed load-bearing write ordering no longer exists; <code>SpeakerLocalityHelper</code>&#39;s
+          <code>FindLocalityCategory</code> is now the plural <code>FindLocalityCategories</code> returning every match
+          (<code>SpeakerLocalityHelper.cs:88</code>); and <code>ConferenceTrackInfo</code> described twelve tracks with names that
+          appear nowhere in source against the real eight (<code>ADCHome.razor.cs:254-268</code>). <code>PropertyAccessor</code> and
+          <code>AggregateCapture</code> were citation-stale throughout. All eight were rewritten against current source.</li>
+          <li><strong>The 20th cycle is genuine, unlike the 19th.</strong> <code>CommitFailingDbContext</code> and <code>FailingDatabaseFacade</code>
+          (<code>MMCA.Common.Infrastructure.Tests/Persistence/DbContextFactoryCommitAmbiguityTests.cs:175</code> and
+          <code>:230</code>) really do reference each other: the context holds the facade and the facade takes the context.
+          Both are rolled-up test doubles, so no chapter section is affected. Edge resolution: <strong>9,543</strong>
+          namespace-visible (~96%), <strong>348</strong> globally-unique fallback (338 to 348), <strong>28</strong> dropped ambiguous
+          (unchanged).</li>
+          <li><strong>Method note.</strong> The mechanical plan repacked G18 (16 to 17 units) and G26 (10 to 11), and the
+          workflow&#39;s default apply path would have re-authored all 28 of those parts from their new rosters.
+          That was deliberately <strong>not</strong> done: parts and unit boundaries have been out of sync for many passes
+          (44 of 123 sections units at this pass), so a wholesale rewrite drops the sections that migrated
+          elsewhere, which is exactly what produced the 42 duplicates above. New sections were inserted into
+          the part where their siblings already live, leaving every other section byte-identical.</li>
+          </ul>
+          </blockquote>
           <hr>
           <h2 id="2-exceptions-log-every-deliberate-omission-with-reason">2. Exceptions log (every deliberate omission, with reason)</h2>
           <h3 id="21-generated--scaffolded-code-not-sectioned-88-files">2.1 Generated / scaffolded code, not sectioned (88 files)</h3>
@@ -850,7 +934,7 @@
           the <code>.proto</code>/gRPC contracts (see <a href="group-07-persistence-ef-core.html">group-07</a>,
           <a href="group-13-grpc-contracts.html">group-13</a>, and <a href="devops-testing.html">devops-testing</a>). The full file list is
           in <a href="00-inventory.html#generated--excluded-artifacts-no-type-sections-written"><code>00-inventory.md</code></a>.</p>
-          <h3 id="22-per-fact-test-classes-rolled-up-by-project-1121-types">2.2 Per-<code>[Fact]</code> test classes, rolled up by project (1,121 types)</h3>
+          <h3 id="22-per-fact-test-classes-rolled-up-by-project-1181-types">2.2 Per-<code>[Fact]</code> test classes, rolled up by project (1,181 types)</h3>
           <p>Per the guide&#39;s TESTS note, individual test classes are <strong>not</strong> given per-type sections. The
           <a href="group-27-testing-infrastructure.html">Testing chapter (group-27)</a> instead:</p>
           <ul>
@@ -1129,10 +1213,29 @@
           <a href="00-primer.html#2-architectural-styles-this-codebase-commits-to">primer §2</a> and group-07), not yet as
           live production options.</li>
           <li><strong>Edge-resolution approximation.</strong> The dependency graph is a <em>syntactic</em> (namespace-aware) resolve,
-          not a full semantic compiler bind: ~97% of edges bind by namespace visibility, the rest by a
-          globally-unique-name fallback (237 edges), and 26 references are dropped as ambiguous. This is accurate enough
+          not a full semantic compiler bind: ~96% of edges bind by namespace visibility (9,543), the rest by a
+          globally-unique-name fallback (348 edges), and 28 references are dropped as ambiguous. This is accurate enough
           for the leveling spine but is a documented approximation
           (<a href="00-dependency-manifest.html#edge-resolution--accuracy">manifest accuracy note</a>).</li>
+          <li><strong>64 cross-linked types have no section of their own</strong> (measured at the v1.135.0 pass by the
+          stricter heading-or-table-cell check described in §1). They are named in prose and, in many cases,
+          linked to with a <code>#anchor</code> that resolves nowhere: <strong>G07 17</strong> (the <code>EntityTypeConfiguration</code>
+          family, seeding, encryption, the repository factory, value generators, <code>IUnitOfWork</code>,
+          <code>ReadRepositoryExtensions</code>), <strong>G21 16</strong> (the Conference UI lookup/service contracts),
+          <strong>G23 15</strong> (Identity: <code>ChangePassword</code>, <code>DeleteUser</code>, <code>ExportUserData</code>, <code>ModuleApplicationDbContext</code>,
+          <code>Profile</code>, the gRPC adapters), <strong>G18 9</strong>, <strong>G22 5</strong> (the Shared bookmark contracts), <strong>G08 2</strong>.
+          The <code>DbContexts.Factory</code> family that sat in this list was written at this pass, which is how the
+          count fell from 107 to 64. Same-name types (several <code>DependencyInjection</code> classes) can hide a hole
+          from a name-based check, so 64 is a floor, not an exact figure: one such hole
+          (<code>MMCA.ADC.Identity.Contracts.DependencyInjection</code>) was found by hand at this pass.</li>
+          <li><strong>Body drift is not mechanically detectable, and it is real.</strong> A section&#39;s declaration citation can
+          be corrected from the inventory, but its walkthrough line numbers and its description of behaviour
+          cannot. At the v1.135.0 pass, <strong>199</strong> of the 1,556 individually-sectioned types were declared in one
+          of the <strong>256</strong> non-test source files that changed since the previous sweep. An adversarial
+          spot-check of 8 sections whose declaration line had moved returned <strong>8 DRIFTED</strong>, several with
+          inverted behaviour (see the v1.135.0 regeneration note). Eight were repaired at this pass; the rest
+          of the 199 have corrected declaration citations but unverified bodies, and should be treated as the
+          next pass&#39;s first task.</li>
           </ol>
           <hr>
           <h2 id="6-how-to-regenerate-this-audit">6. How to regenerate this audit</h2>
