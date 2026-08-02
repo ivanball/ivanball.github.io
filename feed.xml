@@ -6,8 +6,76 @@
     <atom:link href="https://ivanball.github.io/feed.xml" rel="self" type="application/rss+xml"/>
     <description>A long-form series turning a production .NET framework's architecture decisions into teachable patterns: the Result railway, the transactional outbox, database-per-service, JWKS auth, fitness functions, and more.</description>
     <language>en-us</language>
-    <lastBuildDate>Sun, 26 Jul 2026 14:22:48 GMT</lastBuildDate>
+    <lastBuildDate>Sun, 02 Aug 2026 14:19:18 GMT</lastBuildDate>
     <managingEditor>noreply@ivanball.github.io (Ivan Ball-llovera)</managingEditor>
+    <item>
+      <title>Resilience and recovery objectives</title>
+      <link>https://medium.com/@ivanball76/retries-are-not-a-recovery-plan-resilience-handlers-rto-rpo-and-a-restore-you-actually-drilled-3c7474814123</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/retries-are-not-a-recovery-plan-resilience-handlers-rto-rpo-and-a-restore-you-actually-drilled-3c7474814123</guid>
+      <pubDate>Sun, 02 Aug 2026 14:19:18 GMT</pubDate>
+      <description>Standard resilience on every outbound client, plus declared RTO/RPO and a drilled restore.</description>
+      <category>Run &amp; extract</category>
+      <category>ADR 009</category>
+    </item>
+    <item>
+      <title>Extracting a module to a gRPC service</title>
+      <link>https://medium.com/@ivanball76/extracting-a-module-to-a-grpc-service-live-799926cf8a32</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/extracting-a-module-to-a-grpc-service-live-799926cf8a32</guid>
+      <pubDate>Sat, 01 Aug 2026 13:30:35 GMT</pubDate>
+      <description>A step-by-step extraction of an in-process module into its own gRPC service, database, and auth.</description>
+      <category>Run &amp; extract</category>
+      <category>ADR 007</category>
+      <category>ADR 008</category>
+      <category>ADR 012</category>
+    </item>
+    <item>
+      <title>Aspire: one command</title>
+      <link>https://medium.com/@ivanball76/aspire-one-command-brings-up-the-whole-distributed-app-379b5cffdeed</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/aspire-one-command-brings-up-the-whole-distributed-app-379b5cffdeed</guid>
+      <pubDate>Fri, 31 Jul 2026 11:23:51 GMT</pubDate>
+      <description>Model services, databases, and the broker as one Aspire graph that runs from laptop to Azure with one command.</description>
+      <category>Run &amp; extract</category>
+      <category>ADR 023</category>
+      <category>ADR 025</category>
+      <category>ADR 041</category>
+    </item>
+    <item>
+      <title>Rate limiting and brute-force protection</title>
+      <link>https://medium.com/@ivanball76/defending-the-api-edge-three-controls-that-cover-the-whole-surface-d958ecae1091</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/defending-the-api-edge-three-controls-that-cover-the-whole-surface-d958ecae1091</guid>
+      <pubDate>Thu, 30 Jul 2026 12:20:41 GMT</pubDate>
+      <description>Two layers that cover the whole API edge: endpoint rate limits plus lockout-based brute-force defense on identity.</description>
+      <category>Auth &amp; the edge</category>
+      <category>ADR 019</category>
+      <category>ADR 029</category>
+    </item>
+    <item>
+      <title>Resource-ownership authorization</title>
+      <link>https://medium.com/@ivanball76/resource-ownership-authorization-which-rows-you-may-touch-not-just-which-actions-cb8e78867bae</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/resource-ownership-authorization-which-rows-you-may-touch-not-just-which-actions-cb8e78867bae</guid>
+      <pubDate>Wed, 29 Jul 2026 13:02:35 GMT</pubDate>
+      <description>Beyond roles and permissions: which rows you may touch, enforced per resource.</description>
+      <category>Auth &amp; the edge</category>
+      <category>ADR 033</category>
+    </item>
+    <item>
+      <title>Generic entity controllers</title>
+      <link>https://medium.com/@ivanball76/generic-entity-controllers-and-the-dynamic-query-contract-adr-034-2b5c799bc69f</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/generic-entity-controllers-and-the-dynamic-query-contract-adr-034-2b5c799bc69f</guid>
+      <pubDate>Tue, 28 Jul 2026 12:10:47 GMT</pubDate>
+      <description>A write-once REST surface every entity inherits, plus a bounded dynamic query contract that is never open SQL.</description>
+      <category>Auth &amp; the edge</category>
+      <category>ADR 034</category>
+    </item>
+    <item>
+      <title>One rotating refresh token</title>
+      <link>https://medium.com/@ivanball76/one-rotating-refresh-token-and-reuse-detection-that-makes-theft-self-limiting-fab42234a04a</link>
+      <guid isPermaLink="true">https://medium.com/@ivanball76/one-rotating-refresh-token-and-reuse-detection-that-makes-theft-self-limiting-fab42234a04a</guid>
+      <pubDate>Mon, 27 Jul 2026 10:27:05 GMT</pubDate>
+      <description>A short-lived JWT plus one server-stored refresh token that rotates on every use, with reuse detection that makes a stolen token end its own session.</description>
+      <category>Auth &amp; the edge</category>
+      <category>ADR 050</category>
+    </item>
     <item>
       <title>External OAuth login behind your own JWTs</title>
       <link>https://medium.com/@ivanball76/google-and-github-login-without-leaking-tokens-external-oauth-behind-your-own-jwts-d68ba5e3aca4</link>
