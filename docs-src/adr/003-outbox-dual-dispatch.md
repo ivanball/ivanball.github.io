@@ -2,7 +2,9 @@
 
 ## Status
 Accepted. Revised 2026-07-19 (integration-event routing via `IMessageBus`, lease-based claims for
-safe scale-out, dead-letter visibility, post-commit dispatch; see Revision below).
+safe scale-out, dead-letter visibility, post-commit dispatch; see Revision below). Revised
+2026-08-01 (explicit exponential retry backoff supersedes polling-interval pacing; see Revision
+below).
 
 ## Context
 Domain events must be reliably published after aggregate changes are persisted. Two failure modes exist:
@@ -29,7 +31,8 @@ Use a dual-dispatch strategy:
   dead-lettered immediately on first pickup (it can never succeed) and requires manual investigation.
   A message that **throws during dispatch** is retried up to `Outbox:MaxRetries` (default 5) times,
   then dropped from the eligible set (it stops being polled once `RetryCount >= MaxRetries`).
-- Failed-message retries pace at the polling interval: with a 300s prod interval, a persistently failing message dead-letters after ~25 minutes instead of seconds (an intentional, healthier backoff).
+- Failed-message retries are paced by an explicit exponential backoff, not by the polling interval. A failure re-leases its own row for `Outbox:RetryBackoffBaseSeconds * 2^(n-1)` seconds, capped at `Outbox:LeaseSeconds` (`MMCA.Common/.../Outbox/OutboxProcessor.cs:451-452,481-489`). At the shipped defaults (base 10s, `MaxRetries` 5, lease 300s, batch 50: `MMCA.Common/.../Settings/OutboxSettings.cs:17,21,82,98`) the four waits between the five attempts are 10s, 20s, 40s and 80s, so a persistently failing message spends **150 seconds of backoff (2.5 minutes)** before the fifth failure dead-letters it, and the 300s cap never binds at those defaults (it would first apply to a sixth attempt, at 320s).
+- That 150s is a floor, not a schedule. A backoff that expires between cycles is only noticed when the processor next wakes, and a failed-but-eligible row never shortens the wait (`OutboxProcessor.cs:134-135`), so the wall-clock horizon is the floor plus poll granularity at the 2s default interval, and up to one fallback interval per retry (about 20 minutes at the 300s prod interval) when no new write signals the loop sooner. A batch that dispatched nothing also does not re-poll immediately (`OutboxProcessor.cs:277-281`), so a batch of 50 that fails in full cannot hot-spin the processor.
 - Rows orphaned by a process crash (no signal exists) wait up to the polling interval before the safety-net pickup.
 
 ## Revision (2026-07-19)
@@ -84,3 +87,21 @@ close gaps between what it promised and what the interceptor did.
    cancellation raised at host shutdown, incrementing `RetryCount` and stamping `LastError` on the
    whole remainder of the batch. A graceful restart could therefore dead-letter messages that were
    never actually attempted. Cancellation now rethrows and the batch is left untouched.
+
+## Revision (2026-08-01)
+One retry-pacing correction. The dual-dispatch decision is unchanged; the Trade-offs above described
+a cadence the processor no longer has.
+
+1. **Retry backoff is explicit, and it supersedes polling-interval pacing.** Before
+   `Outbox:RetryBackoffBaseSeconds` existed, a failed row simply kept the claim its cycle had taken,
+   and because the poll skips leased rows the next attempt could not happen until the FULL
+   `Outbox:LeaseSeconds` (300s) elapsed, whatever the polling interval or an explicit signal said:
+   the retry cadence was an accident of the lease rather than a decision
+   (`MMCA.Common/.../Settings/OutboxSettings.cs:89-96`). A failure now re-leases its row for
+   `RetryBackoffBaseSeconds * 2^(n-1)` seconds, capped at the lease so a permanently failing message
+   never holds a claim longer than a dead replica's rows would
+   (`MMCA.Common/.../Outbox/OutboxProcessor.cs:445-452,477-490`). At the shipped defaults that is
+   10s, 20s, 40s and 80s between the five attempts: 150 seconds of enforced backoff before
+   dead-lettering, shortening the first retries while still throttling a message that will never
+   succeed. The Trade-offs bullet that quoted "~25 minutes" at a 300s interval is replaced by the
+   curve plus its wake-cadence ceiling above.
