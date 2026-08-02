@@ -227,6 +227,23 @@
           mutations raising domain events, a child entity, soft-delete cascade, the caching pair (a cacheable
           read plus invalidating commands, both keyed through one <code>*CacheKeys</code> type), an integration event
           through the outbox, <code>en-US</code> and <code>es</code> resource pairs, a REST controller, and two Blazor pages.</p>
+          <h3 id="dropping-the-blazor-ui-host">Dropping the Blazor UI host</h3>
+          <p>There is no <code>--ui</code> flag: a conditional big enough to remove a host cannot be expressed without
+          <code>#if</code> regions that would either break the reference app&#39;s own build or leave it compiling the
+          wrong variant. Removing it afterwards is five steps, and <strong>four of them fail loudly while the fifth
+          does not</strong>, so do them together:</p>
+          <ol>
+          <li>Delete <code>Source/Hosts/UI/</code>.</li>
+          <li>Remove the <code>&lt;Project Path=&quot;Source/Hosts/UI/...&quot; /&gt;</code> line from the <code>.slnx</code>.</li>
+          <li>Remove the UI <code>ProjectReference</code> from <code>&lt;App&gt;.AppHost.csproj</code>. Aspire generates the
+          <code>Projects.&lt;App&gt;_UI_Web</code> type from that reference, so the AppHost will not compile until it goes.</li>
+          <li>Remove the <code>builder.AddProject&lt;Projects.&lt;App&gt;_UI_Web&gt;(&quot;ui&quot;)</code> block from the AppHost <code>Program.cs</code>.</li>
+          <li><strong>Drop the <code>var web = </code> prefix from the block above it.</strong> <code>web</code> existed only for the UI&#39;s
+          <code>WithReference(web)</code> / <code>WaitFor(web)</code>. Left assigned and unread it is an unused local, which is
+          <code>IDE0059</code> <strong>and</strong> <code>S1481</code>, both at error severity, so the build fails on a line you never
+          touched.</li>
+          </ol>
+          <p>The API host, the module, the migrations project, and all three test projects are unaffected.</p>
           <h3 id="the-two-one-time-fixups">The two one-time fixups</h3>
           <p>The scaffold deliberately does not hand these over, because renaming invalidates them and no fixed
           value is right for every name you could pick.</p>

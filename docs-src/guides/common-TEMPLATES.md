@@ -67,6 +67,25 @@ mutations raising domain events, a child entity, soft-delete cascade, the cachin
 read plus invalidating commands, both keyed through one `*CacheKeys` type), an integration event
 through the outbox, `en-US` and `es` resource pairs, a REST controller, and two Blazor pages.
 
+### Dropping the Blazor UI host
+
+There is no `--ui` flag: a conditional big enough to remove a host cannot be expressed without
+`#if` regions that would either break the reference app's own build or leave it compiling the
+wrong variant. Removing it afterwards is five steps, and **four of them fail loudly while the fifth
+does not**, so do them together:
+
+1. Delete `Source/Hosts/UI/`.
+2. Remove the `<Project Path="Source/Hosts/UI/..." />` line from the `.slnx`.
+3. Remove the UI `ProjectReference` from `<App>.AppHost.csproj`. Aspire generates the
+   `Projects.<App>_UI_Web` type from that reference, so the AppHost will not compile until it goes.
+4. Remove the `builder.AddProject<Projects.<App>_UI_Web>("ui")` block from the AppHost `Program.cs`.
+5. **Drop the `var web = ` prefix from the block above it.** `web` existed only for the UI's
+   `WithReference(web)` / `WaitFor(web)`. Left assigned and unread it is an unused local, which is
+   `IDE0059` **and** `S1481`, both at error severity, so the build fails on a line you never
+   touched.
+
+The API host, the module, the migrations project, and all three test projects are unaffected.
+
 ### The two one-time fixups
 
 The scaffold deliberately does not hand these over, because renaming invalidates them and no fixed
