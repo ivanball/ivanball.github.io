@@ -1,20 +1,23 @@
 # Getting Started: Build a New App on MMCA.Common
 
 This is the step-by-step guide for standing up a **brand-new application** on the MMCA.Common
-framework. MMCA.Common is a .NET 10 framework for DDD, Clean Architecture, and CQRS, shipped as
-fifteen lockstep-versioned NuGet packages. Its core promise: **build a modular monolith now, and
-extract a module into its own microservice later, without a rewrite.**
+framework. MMCA.Common is a .NET 10 framework for DDD, Clean Architecture, and CQRS, shipped as a set
+of lockstep-versioned NuGet packages (the authoritative list and count live in
+[FACTS.md](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md)). Its core promise: **build a
+modular monolith now, and extract a module into its own microservice later, without a rewrite.**
 
 This guide builds **monolith-first** (the fastest path to a running app), then shows the **extraction**
 of one module into its own service behind a gateway, so the "extract later" promise is concrete rather
 than theoretical.
 
-A runnable reference app lives at `../MMCA.Helpdesk` (a support-ticket app). It is build-verified
-through the monolith phases below: one **Tickets** module exercised across all five layers, a REST API
-host, and a Blazor Server + MudBlazor UI host, all orchestrated by Aspire. To stay minimal it ships
-**without an Identity module** and runs **issuer-less** (see Phase 2), and the **extraction** (Phase 8)
-is documented rather than pre-built (the plumbing is in place). Wherever a step says "pattern source",
-that points at real, working code you can copy from MMCA.Helpdesk, MMCA.ADC, or MMCA.Store.
+A runnable reference app lives at [MMCA.Helpdesk](https://github.com/ivanball/MMCA.Helpdesk) (a
+support-ticket app). It is build- and test-verified through the monolith phases below: one **Tickets**
+module exercised across all five layers, a REST API host, and a Blazor Server + MudBlazor UI host, all
+orchestrated by Aspire, with three test projects (domain, application, architecture fitness) that run
+with no database. To stay minimal it ships **without an Identity module** and runs **issuer-less** (see
+Phase 2), and the **extraction** (Phase 8) is documented rather than pre-built (the plumbing is in
+place). Wherever a step says "pattern source", that points at real, working code you can copy from
+MMCA.Helpdesk, MMCA.ADC, or MMCA.Store.
 
 > **Reading the framework itself:** for the *why* behind each pattern, read the relevant
 > [ADR](../adr/README.md). For a type-by-type tour of the framework internals, see the
@@ -50,7 +53,8 @@ and pull Tickets out into a microservice.
 
 - **.NET 10 SDK** (the framework targets `net10.0` with `LangVersion: preview` for C# extension types).
 - **SQL Server** reachable locally (LocalDB, a container, or the one Aspire starts for you).
-- **Docker Desktop** (Aspire provisions SQL Server, Redis, and RabbitMQ as containers for local runs).
+- **Docker Desktop** (Aspire provisions SQL Server as a container for the monolith; Redis and RabbitMQ
+  join in the extraction phase).
 - **EF Core tools:** `dotnet tool install --global dotnet-ef`.
 
 **Decide how to consume MMCA.Common (two modes, switchable in one file):**
@@ -69,11 +73,13 @@ and pull Tickets out into a microservice.
 > Debug** before your app, or the IDE binds the stale last-built Debug reference assembly and reports
 > phantom `CS0103` errors against new members. Build MMCA.Common with `-c Debug`, then build your app.
 
-**Pick the framework version.** All fifteen packages move together. Use the latest released tag
-(see [FACTS.md](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md) for the current version; the `1.128.0` in the samples below was
+**Pick the framework version.** Every package moves together. Use the latest released tag
+(see [FACTS.md](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md) for the current version; the `1.135.0` in the samples below was
 current when this guide was last refreshed). Choose one version and use it for every `MMCA.Common.*` entry (Phase 1). See
 [ADR-016](../adr/016-lockstep-versioning-masstransit-pin.md): there is no phased rollout and no version
-skew across the fifteen packages.
+skew across the set. The rule is enforced, not just advisory: the shared
+`FrameworkVersionConsistencyTestsBase` fitness rule (Phase 6) fails the build when the `MMCA.Common.*`
+pins in `Directory.Packages.props` disagree, so a half-finished sweep cannot ship.
 
 ---
 
@@ -91,7 +97,7 @@ MMCA.Helpdesk/
   Directory.Packages.props
   global.json
   nuget.config
-  local.props.template            (copy to local.props for local-source mode; local.props is gitignored)
+  local.props.template            (copy to local.props for local-source mode; gitignore it in a real app)
   .editorconfig                   (copy MMCA.ADC's verbatim; it drives the 5 analyzers)
   .gitignore
   Source/
@@ -102,7 +108,7 @@ MMCA.Helpdesk/
     Hosting/                      (Aspire AppHost + per-DB migrations projects)
     Services/                     (added later, in the extraction phase)
   Tests/
-    Modules/  Architecture/       (the reference app ships these two; Integration/E2E are optional adds)
+    Modules/  Architecture/       (the reference app ships three projects here; Integration/E2E are optional adds)
 ```
 
 ### `Directory.Packages.props` (Central Package Management)
@@ -119,22 +125,22 @@ to v8** (v9 needs a commercial license, enforced by a build gate in MMCA.Common,
   </PropertyGroup>
   <ItemGroup>
     <!-- MMCA Common packages: all at one version, bumped in lockstep -->
-    <PackageVersion Include="MMCA.Common.Shared" Version="1.128.0" />
-    <PackageVersion Include="MMCA.Common.Domain" Version="1.128.0" />
-    <PackageVersion Include="MMCA.Common.Application" Version="1.128.0" />
-    <PackageVersion Include="MMCA.Common.Infrastructure" Version="1.128.0" />
-    <PackageVersion Include="MMCA.Common.API" Version="1.128.0" />
-    <PackageVersion Include="MMCA.Common.Grpc" Version="1.128.0" />
-    <PackageVersion Include="MMCA.Common.UI" Version="1.128.0" />
-    <PackageVersion Include="MMCA.Common.UI.Web" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.Shared" Version="1.135.0" />
+    <PackageVersion Include="MMCA.Common.Domain" Version="1.135.0" />
+    <PackageVersion Include="MMCA.Common.Application" Version="1.135.0" />
+    <PackageVersion Include="MMCA.Common.Infrastructure" Version="1.135.0" />
+    <PackageVersion Include="MMCA.Common.API" Version="1.135.0" />
+    <PackageVersion Include="MMCA.Common.Grpc" Version="1.135.0" />
+    <PackageVersion Include="MMCA.Common.UI" Version="1.135.0" />
+    <PackageVersion Include="MMCA.Common.UI.Web" Version="1.135.0" />
     <!-- MAUI heads only: the one MAUI-TFM package (ADR-042); web-only apps skip it -->
-    <PackageVersion Include="MMCA.Common.UI.Maui" Version="1.128.0" />
-    <PackageVersion Include="MMCA.Common.Aspire" Version="1.128.0" />
-    <PackageVersion Include="MMCA.Common.Aspire.Hosting" Version="1.128.0" />
-    <PackageVersion Include="MMCA.Common.Testing" Version="1.128.0" />
-    <PackageVersion Include="MMCA.Common.Testing.E2E" Version="1.128.0" />
-    <PackageVersion Include="MMCA.Common.Testing.UI" Version="1.128.0" />
-    <PackageVersion Include="MMCA.Common.Testing.Architecture" Version="1.128.0" />
+    <PackageVersion Include="MMCA.Common.UI.Maui" Version="1.135.0" />
+    <PackageVersion Include="MMCA.Common.Aspire" Version="1.135.0" />
+    <PackageVersion Include="MMCA.Common.Aspire.Hosting" Version="1.135.0" />
+    <PackageVersion Include="MMCA.Common.Testing" Version="1.135.0" />
+    <PackageVersion Include="MMCA.Common.Testing.E2E" Version="1.135.0" />
+    <PackageVersion Include="MMCA.Common.Testing.UI" Version="1.135.0" />
+    <PackageVersion Include="MMCA.Common.Testing.Architecture" Version="1.135.0" />
     <!-- Third-party versions: copy the relevant rows from MMCA.ADC/Directory.Packages.props -->
     <!-- (EF Core, FluentValidation, Riok.Mapperly, Scrutor, xunit.v3, Aspire.*, Yarp, the 5 analyzers, etc.) -->
   </ItemGroup>
@@ -414,12 +420,16 @@ global using TicketIdentifierType = int;
 global using TicketCommentIdentifierType = int;
 ```
 
-The read model implements `IBaseDTO<TId>` (the framework read-side contract) and carries its children:
+The read model implements `IBaseDTO<TId>` (the framework read-side contract) and carries its children.
+It also implements **`IConcurrencyAware`**, exposing the `RowVersion` the client echoes back on an
+update so a conflicting concurrent edit surfaces as 409 instead of silently last-write-winning (see
+[ADR-035](../adr/035-optimistic-concurrency.md)):
 
 ```csharp
-public record class TicketDTO : IBaseDTO<TicketIdentifierType>
+public record class TicketDTO : IBaseDTO<TicketIdentifierType>, IConcurrencyAware
 {
     public required TicketIdentifierType Id { get; init; }
+    public byte[]? RowVersion { get; init; }               // ADR-035: echoed back on update
     public required string Title { get; init; }
     public required string Description { get; init; }
     public required TicketStatus Status { get; init; }     // the enum itself; serialized by name
@@ -433,9 +443,22 @@ public sealed record class TicketOpenedIntegrationEvent(TicketIdentifierType Tic
     : BaseIntegrationEvent;
 ```
 
-Plain request bodies (e.g. `UpdateTicketRequest`, `AddCommentRequest`) live in Shared too. The **create
-request doubles as the command** and is co-located with its use case in Application (next section); it
-implements `ICacheInvalidating` so a successful create evicts cached ticket reads:
+Plain request bodies (e.g. `TicketUpdateRequest`, `AddCommentRequest`) live in Shared too. Name the
+update body with the **`*UpdateRequest`** suffix and have it implement `IConcurrencyAware`: that exact
+pairing is what the `ConcurrencyConventionTestsBase` fitness rule looks for (Phase 6), so an update
+request that skips the token fails the build rather than quietly losing a concurrent edit.
+
+```csharp
+public sealed record class TicketUpdateRequest : IConcurrencyAware
+{
+    public byte[]? RowVersion { get; init; }               // the token the client last read
+    public required string Title { get; init; }
+    public required string Description { get; init; }
+}
+```
+
+The **create request doubles as the command** and is co-located with its use case in Application (next
+section); it implements `ICacheInvalidating` so a successful create evicts cached ticket reads:
 
 ```csharp
 // Source/Modules/Tickets/.../Application/Tickets/UseCases/Create/TicketCreateRequest.cs
@@ -511,6 +534,19 @@ public static class DependencyInjection
     }
 }
 ```
+
+That scan is also what picks up the **consuming** side of both event paths, and the reference app ships
+one of each so the distinction is visible in running code rather than only in prose:
+
+- `Tickets/DomainEventHandlers/TicketChangedAuditHandler` implements `IDomainEventHandler<TicketChanged>`.
+  Intra-module, dispatched in-process by `DomainEventDispatcher` after `SaveChangesAsync` (deferred
+  until after the commit when a transaction is open, so a handler never acts on state that rolls back).
+- `Tickets/IntegrationEventHandlers/TicketOpenedHandler` implements
+  `IIntegrationEventHandler<TicketOpenedIntegrationEvent>`. Cross-module, delivered through the outbox:
+  in-process today, over the broker once Tickets is extracted, with no change to this handler.
+
+Neither is registered by hand. Put a handler in the module's Application assembly and the convention
+scan finds it.
 
 ### 3d. Infrastructure: EF configuration, the abstract module context, no concrete per-module context
 
@@ -592,7 +628,10 @@ public sealed class TicketsController(
 
 The reference app's controller goes further: `GET {id}/details`, `PUT {id}`, `PUT {id}/status`,
 `DELETE {id}`, and `POST|PUT|DELETE {id}/comments[/{commentId}]`, each one the same three lines: call
-the handler, `HandleFailure` on failure, else return the success shape.
+the handler, `HandleFailure` on failure, else return the success shape. `PUT {id}` also closes the
+ADR-035 loop by forwarding the request's `RowVersion` onto the command
+(`new UpdateTicketCommand(id, request.Title, request.Description) { RowVersion = request.RowVersion }`),
+which is what turns a stale write into a 409 instead of an overwrite.
 
 ### What the pipeline does for you
 
@@ -773,10 +812,16 @@ services.AddOptions<ApplicationSettings>().Bind(builder.Configuration.GetSection
     .ValidateDataAnnotations().ValidateOnStart();
 var applicationSettings = builder.Configuration.GetSection(ApplicationSettings.SectionName).Get<ApplicationSettings>()!;
 
-// Cross-cutting edge (also wire health checks + output cache here, elided for brevity).
+// Health checks. SQL is REQUIRED: a host that cannot resolve its own connection string should fail
+// fast rather than report healthy and take traffic it cannot serve. Redis/RabbitMQ checks are tagged
+// optional upstream, so they report on /health without gating readiness.
+builder.AddInfrastructureHealthChecks(requireSqlServer: true);
+
+// Cross-cutting edge.
 services.AddCommonCors(builder.Configuration);
 services.AddCommonApiVersioning();
 services.AddCommonRateLimiting();
+services.AddOutputCache(options => options.AddBasePolicy(policy => policy.NoCache()));
 services.AddCommonResponseCompression();
 
 // Auth. Issuer-less by default: with no Authentication:JwtBearer:Authority configured, register a bare
@@ -800,17 +845,28 @@ services.AddInfrastructure(builder.Configuration); // repos, UoW, context, cachi
 var modulesSettings = builder.Configuration.GetSection(ModulesSettings.SectionName).Get<ModulesSettings>() ?? [];
 services.AddAPI(modulesSettings);                // controllers, idempotency, exception handlers
 
-var moduleLoader = new ModuleLoader();
+// Contribute the module's error-code translations to the edge localizer (ADR-027), so domain
+// Error.Code values come back as localized ProblemDetails messages. One call per module.
+services.AddErrorResources<TicketsErrorResources>();
+
+using var loggerFactory = LoggerFactory.Create(logging => logging.AddConsole());
+var moduleLoader = new ModuleLoader { Logger = loggerFactory.CreateLogger<ModuleLoader>() };
 moduleLoader.DiscoverAndRegister(services, builder.Configuration, applicationSettings, modulesSettings, builder.Environment.EnvironmentName);
 services.AddSingleton(moduleLoader);
 
 services.AddBrokerMessaging(builder.Configuration);  // InProcessMessageBus until a broker is configured
 services.AddApplicationDecorators();             // MUST be last
 
+services.AddModuleHealthChecks(moduleLoader);    // per-module readiness, after the modules are known
+
 var app = builder.Build();
 await app.Services.InitializeDatabaseAsync(applicationSettings, moduleLoader);   // applies migrations / seeds
 app.MapDefaultEndpoints();             // /health, /alive
-app.UseCommonMiddlewarePipeline();     // exception -> correlation -> auth -> output-cache -> controllers
+// exception -> correlation -> request localization -> forwarded headers -> HTTPS -> compression ->
+// routing -> CORS -> authentication -> rate limiting -> soft-deleted-user filter -> authorization ->
+// output cache -> JWKS/OIDC endpoints -> controllers. Rate limiting sits AFTER authentication on
+// purpose (ADR-019): the partition keys off the authenticated principal.
+app.UseCommonMiddlewarePipeline();
 await app.RunAsync();
 ```
 
@@ -834,6 +890,17 @@ ProblemDetails message (e.g. "Comments cannot be added to a closed ticket.") bef
 pages show a meaningful error. `Program.cs` is the standard Razor-components host plus
 `AddServiceDefaults()` / `MapDefaultEndpoints()`.
 
+Two wiring details in the layout are easy to miss because nothing fails loudly without them:
+
+- **`<MmcaThemeProviders />` owns the Mud providers.** Drop that one framework component at the top of
+  `MainLayout.razor` instead of hand-placing `MudThemeProvider`/`MudPopoverProvider`/`MudDialogProvider`/
+  `MudSnackbarProvider`: it also carries the dark/light lifecycle from
+  [ADR-028](../adr/028-dark-theme-mode.md), so `<ThemeToggle />` has something to toggle.
+- **`<CultureSwitcher />` needs an `ICultureApplier`.** The switcher delegates the actual switch to that
+  service, which `AddUIShared()` normally registers. A UI host that does not call `AddUIShared` (this
+  seed does not: it has no `ApiSettings`-backed client pipeline) must register the Blazor Web default
+  itself, `services.AddScoped<ICultureApplier, EndpointCultureApplier>()`, or the menu silently no-ops.
+
 ### Internationalization (ADR-027): every visible string follows the selected language
 
 The framework ships multi-locale i18n (`en-US` + `es`) end to end; adopting it in a new app is five
@@ -849,10 +916,12 @@ mechanical steps, and MMCA.Helpdesk is the worked example for each:
 2. **Wire request localization + the culture switcher.** API-layer hosts get it for free from
    `UseCommonMiddlewarePipeline()` (which calls `UseCommonRequestLocalization()`) plus
    `MapCultureEndpoint()`; a UI host that deliberately does not reference `MMCA.Common.API` inlines
-   the same three lines against `SupportedCultures` (see `MMCA.Helpdesk.UI.Web/Program.cs`, which
-   documents the inline variant). Drop the shared `<CultureSwitcher />` (and `<ThemeToggle />`) into
-   the layout; a WASM client also calls `MmcaCultureBootstrap.SetBrowserCultureAsync` before
-   `RunAsync()`.
+   the same lines against `SupportedCultures` (see `MMCA.Helpdesk.UI.Web/Program.cs`, which documents
+   the inline variant). When you inline them, the `UseRequestLocalization` allowlist and the
+   `/culture/set` endpoint must admit the pseudo-locale under the **same** `IsDevelopment()` condition
+   the switcher uses to offer it, or picking it silently does nothing. Drop the shared
+   `<CultureSwitcher />` (and `<ThemeToggle />`) into the layout; a WASM client also calls
+   `MmcaCultureBootstrap.SetBrowserCultureAsync` before `RunAsync()`.
 3. **Localize backend error text by `Error.Code`.** Register
    `services.AddErrorResources<YourModuleErrorResources>()` in the host and keep a
    `YourModuleErrorResources.{resx,es.resx}` pair keyed by the module's `Error.Code` values; the
@@ -948,16 +1017,20 @@ out, and that an outbox row was written for the `TicketOpenedIntegrationEvent`.
 
 ### Test projects
 
-The reference app ships two test projects: both run anywhere with **no database**:
+The reference app ships three test projects, all of which run anywhere with **no database** and finish
+in about a second:
 
 - `Tests/Modules/Tickets/...Domain.Tests`: xUnit v3 + AwesomeAssertions. Test factory methods,
   invariants, state transitions, and domain events (including the assertion that `Create` raises **no**
   domain event, since the id is DB-generated; don't "fix" it).
+- `Tests/Modules/Tickets/...Application.Tests`: handler and decorator behavior against test doubles.
+  In the reference app this is where the caching pair is proved end to end
+  (`Caching/TicketCacheInvalidationTests.cs`, shown in Phase 3); add mocked-`IUnitOfWork` handler tests
+  here as the module grows.
 - `Tests/Architecture/...Architecture.Tests`: the fitness functions (below).
 
-Optional additions as the app grows:
+Optional addition as the app grows:
 
-- `...Application.Tests`: handler behavior with mocked `IUnitOfWork`/publishers.
 - `Tests/Integration/...IntegrationTests`: boot the host with `WebApplicationFactory` and use
   `IntegrationTestBase<TFixture>` plus `JwtTokenGenerator` (both from `MMCA.Common.Testing`). These
   need a reachable SQL Server, so run them in an environment that has one (Aspire, a container, or CI
@@ -996,17 +1069,53 @@ internal sealed class HelpdeskArchitectureMap : ArchitectureMapBase
 }
 ```
 
-Each test class is a tiny sealed subclass of a framework `*TestsBase` (`LayerDependencyTestsBase`,
-`DomainPurityTestsBase`, `ModuleIsolationTestsBase`, `SharedLayerTestsBase`) that supplies your map. The
-rules then assert: the layer dependency flow, no cross-module internal references, and that
-MassTransit/gRPC never leak into Domain/Application/Shared (transport stays at the edges).
+Each test class is then a tiny sealed subclass of a framework `*TestsBase` that supplies your map:
+
+```csharp
+public sealed class LayerDependencyTests : LayerDependencyTestsBase
+{
+    protected override IArchitectureMap Map { get; } = new HelpdeskArchitectureMap();
+}
+```
+
+The package ships far more bases than the four structural ones (the authoritative base and method
+counts live in [FACTS.md](https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md)), and the
+reference app subclasses nineteen. That is the realistic target for a new app, not a stretch goal:
+each base is a few lines. Start with the structural group and add the rest as the corresponding
+feature appears:
+
+| Group | Bases | What it catches |
+|---|---|---|
+| Structure (start here) | `LayerDependencyTestsBase`, `DomainPurityTestsBase`, `ModuleIsolationTestsBase`, `SharedLayerTestsBase` | the layer dependency flow, a Domain that reaches for infrastructure, cross-module internal references |
+| Extraction | `MicroserviceExtractionTestsBase`, `IntegrationEventContractTestsBase`, `EventConventionTestsBase` | MassTransit/gRPC leaking out of the edges; an integration event reshaped instead of versioned |
+| Conventions | `NamingConventionTestsBase`, `HandlerConventionTestsBase`, `ControllerConventionTestsBase`, `EntityConventionTestsBase`, `ImmutabilityTestsBase`, `SliceCohesionTestsBase`, `SpecificationConventionTestsBase` | factory-name, handler, controller, and entity drift away from the framework shape |
+| Policy gates | `ConcurrencyConventionTestsBase` (ADR-035), `FrameworkVersionConsistencyTestsBase` (ADR-016), `PiiConventionTestsBase` (ADR-005) | an `*UpdateRequest` with no `RowVersion`, a half-finished version sweep, unmarked personal data |
+| i18n (ADR-027) | `LocalizationResourceTestsBase`, `LocalizedTextConventionTestsBase` | a base `.resx` with no complete `es` sibling; a hard-coded user-visible literal |
+
+Two things to know before you copy the list wholesale:
+
+- **`IntegrationEventContractTestsBase` freezes your wire contract.** You override `ExpectedContract`
+  with the literal shape of every integration event (`"...TicketOpenedIntegrationEvent { RequesterUserId:Int32, TicketId:Int32 }"`).
+  Editing that list is the deliberate act of evolving the contract, so a silent reshape fails the build.
+- **Some bases fail deliberately when they find nothing**, which is an anti-vacuity guard rather than a
+  bug. `ConstructorDependencyCountTestsBase` scans Application `*Service` classes and fails when there
+  are none, so the reference app leaves it unsubclassed until its first Application service exists.
+  Others (`DataResidencyTestsBase`, `BrandColorTokenTestsBase`, `FormsConventionTestsBase`) stay
+  unsubclassed for scope reasons. Record *why* you skipped one next to the ones you kept: an
+  unsubclassed rule is invisible otherwise.
 
 > **Register every layer assembly in the map.** If you add a module or a layer and forget to add its
 > `Module(...)` / `Framework(...)` line here, the layering and isolation rules silently stop covering it.
 
 **Checkpoint:** `dotnet build MMCA.Helpdesk.slnx` is warning-free (the five analyzers at error
-severity), and the Domain + Architecture test projects pass (`dotnet test --solution MMCA.Helpdesk.slnx`,
-no database needed).
+severity), and all three test projects pass (`dotnet test --solution MMCA.Helpdesk.slnx`, no database
+needed). To run one class or method, target the project and pass a Microsoft Testing Platform filter
+after `--` (these solutions run on MTP, not VSTest, so a bare `--filter` silently matches nothing):
+
+```bash
+dotnet test --project Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/MMCA.Helpdesk.Architecture.Tests.csproj \
+  -- --filter-class "*ModuleIsolationTests*"
+```
 
 ---
 
@@ -1014,9 +1123,13 @@ no database needed).
 
 When a new MMCA.Common release ships, upgrade in **one pass**: bump **every** `MMCA.Common.*` entry in
 `Directory.Packages.props` to the new version together. There is no phased rollout and no per-package
-skew (your app has no lock file, so the bump is the whole upgrade). Keep MassTransit at v8. See
-[ADR-016](../adr/016-lockstep-versioning-masstransit-pin.md) and the
+skew, and `FrameworkVersionConsistencyTestsBase` fails the build if you miss an entry. Keep MassTransit
+at v8. See [ADR-016](../adr/016-lockstep-versioning-masstransit-pin.md) and the
 [versioning policy](common-VERSIONING.md).
+
+If your app commits `packages.lock.json` files (the reference app deliberately does not), the pin bump
+is only half the upgrade: regenerate the locks with `dotnet restore <your.slnx> --force-evaluate` and
+commit them alongside the pins, with `local.props` set aside so the restore runs in package mode.
 
 For local framework co-development, flip `UseLocalMMCA` in `local.props`, and remember to rebuild
 MMCA.Common in Debug before your app after editing framework source.
@@ -1025,8 +1138,8 @@ MMCA.Common in Debug before your app after editing framework source.
 
 ## Phase 8: Extract a module into its own service (the payoff)
 
-This phase is the documented next step beyond the reference app (which is build-verified as the
-monolith through Phase 6); the scaffold already carries the plumbing: the `.Contracts` proto
+This phase is the documented next step beyond the reference app (which is build- and test-verified as
+the monolith through Phase 6); the scaffold already carries the plumbing: the `.Contracts` proto
 convention and the `.Service` OpenAPI block in `Directory.Build.props`. Now make the "extract later,
 without a rewrite" promise concrete. We pull **Tickets** out of the monolith into its own service
 behind a gateway. The Tickets Domain, Application, Shared, Infrastructure, and API code is
@@ -1117,8 +1230,8 @@ plus eventual consistency through the outbox, never cross-database foreign keys.
 
 1. **Build green:** `dotnet build MMCA.Helpdesk.slnx` with no warnings (TreatWarningsAsErrors + five
    analyzers). This is the primary automatable gate.
-2. **Unit + architecture tests pass:** run the Domain + Architecture test projects (`dotnet test
-   --solution MMCA.Helpdesk.slnx`, no DB needed). The `IArchitectureMap` rules must be green.
+2. **Unit + architecture tests pass:** `dotnet test --solution MMCA.Helpdesk.slnx` (all three
+   projects, no DB needed). The `IArchitectureMap` rules must be green.
 3. **Migrations:** `dotnet ef migrations add InitialCreate ...` succeeds for each migrations project
    (generates the `Ticket`, `TicketComment`, and per-DB `OutboxMessages` tables).
 4. **Run (interactive):** `dotnet run --project ...AppHost`; the dashboard shows `sql`, `web`, and `ui`
@@ -1133,9 +1246,10 @@ plus eventual consistency through the outbox, never cross-database foreign keys.
 
 ## Where to look next
 
-- **MMCA.Helpdesk** (`../MMCA.Helpdesk`): the minimal, build-verified monolith this guide is the
-  companion to: every step above maps to real code there. Read its `README.md` and `CLAUDE.md` for the
-  Helpdesk-specific picture (issuer-less auth, the two event paths, the abstract module DbContext).
+- **[MMCA.Helpdesk](https://github.com/ivanball/MMCA.Helpdesk)**: the minimal, build- and test-verified
+  monolith this guide is the companion to: every step above maps to real code there. Read its
+  `README.md` and `CLAUDE.md` for the Helpdesk-specific picture (issuer-less auth, the two event paths,
+  the abstract module DbContext).
 - **The ADRs** ([index](../adr/README.md)): the *why* behind every pattern you just used.
 - **`MMCA.Common/CLAUDE.md`**: the framework's layer rules, DI sequence, and extension points in depth.
 - **The [onboarding guide](../onboarding/00-index.md)**: a type-by-type tour of the framework internals.
