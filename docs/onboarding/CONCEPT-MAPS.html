@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>MMCA Concept &amp; Pattern Maps · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Mermaid diagrams distilled from the Onboarding guide (primer, group taxonomy, dependency manifest, and the 26 group chapters). Each diagram captures a…">
+  <meta name="description" content="Mermaid diagrams distilled from the Onboarding guide (primer, group taxonomy, dependency manifest, and the 27 group chapters). Each diagram captures a…">
   <link rel="canonical" href="https://ivanball.github.io/docs/onboarding/CONCEPT-MAPS.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="MMCA Concept &amp; Pattern Maps">
-  <meta property="og:description" content="Mermaid diagrams distilled from the Onboarding guide (primer, group taxonomy, dependency manifest, and the 26 group chapters). Each diagram captures a…">
+  <meta property="og:description" content="Mermaid diagrams distilled from the Onboarding guide (primer, group taxonomy, dependency manifest, and the 27 group chapters). Each diagram captures a…">
   <meta property="og:url" content="https://ivanball.github.io/docs/onboarding/CONCEPT-MAPS.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="MMCA Concept &amp; Pattern Maps">
-  <meta name="twitter:description" content="Mermaid diagrams distilled from the Onboarding guide (primer, group taxonomy, dependency manifest, and the 26 group chapters). Each diagram captures a…">
+  <meta name="twitter:description" content="Mermaid diagrams distilled from the Onboarding guide (primer, group taxonomy, dependency manifest, and the 27 group chapters). Each diagram captures a…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"MMCA Concept & Pattern Maps","item":"https://ivanball.github.io/docs/onboarding/CONCEPT-MAPS.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -145,17 +145,20 @@
           <p class="eyebrow doc-kicker">Onboarding guide</p>
           <h1 id="mmca-concept--pattern-maps">MMCA Concept &amp; Pattern Maps</h1>
           <p>Mermaid diagrams distilled from the <a href="index.html">Onboarding guide</a> (primer, group taxonomy,
-          dependency manifest, and the 26 group chapters). Each diagram captures a <em>relationship</em> between the
-          concepts the guide teaches: the layering, the 26 functional groups, the cross-cutting patterns, and
+          dependency manifest, and the 27 group chapters). Each diagram captures a <em>relationship</em> between the
+          concepts the guide teaches: the layering, the 27 functional groups, the cross-cutting patterns, and
           the ADRs (see <code>Website/docs-src/adr/README.md</code> for the canonical range) / rubric categories that explain the &quot;why&quot;.</p>
           <p>Diagrams are grounded in:
           <a href="00-primer.html"><code>00-primer.md</code></a> · <a href="00-group-taxonomy.html"><code>00-group-taxonomy.md</code></a> ·
           <a href="00-dependency-manifest.html"><code>00-dependency-manifest.md</code></a> · the <code>group-NN-*.md</code> chapters.</p>
           <hr>
           <h2 id="1-system-context-two-codebases--the-15-packages">1. System context, two codebases + the 15 packages</h2>
-          <p><code>MMCA.Common</code> is a framework published as fifteen NuGet packages in lockstep; <code>MMCA.ADC</code> and
-          <code>MMCA.Store</code> consume them. The framework depends on neither consumer (that one-way arrow is why the
-          Common groups come first in the guide).</p>
+          <p><code>MMCA.Common</code> is a framework published as fifteen NuGet packages in lockstep, to nuget.org <strong>and</strong>
+          GitHub Packages from one tag (<a href="https://ivanball.github.io/docs/adr/053-dual-registry-package-publishing.html" target="_blank" rel="noopener">ADR-053</a>);
+          <code>MMCA.ADC</code> and <code>MMCA.Store</code> consume them. The framework depends on neither consumer (that one-way
+          arrow is why the Common groups come first in the guide). <code>UI.Maui</code> is the one MAUI-TFM package: it
+          lives outside <code>MMCA.Common.slnx</code> and is built and packed by dedicated windows CI jobs
+          (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>).</p>
           <pre class="mermaid">flowchart TD
               subgraph COMMON[&quot;MMCA.Common: framework, 15 NuGet packages (lockstep versioned)&quot;]
                   direction TB
@@ -170,7 +173,7 @@
                       GRPC[&quot;Grpc&quot;]
                       UI[&quot;UI&quot;]
                       UIW[&quot;UI.Web&quot;]
-                      UIM[&quot;UI.Maui&quot;]
+                      UIM[&quot;UI.Maui&lt;br/&gt;(outside the slnx)&quot;]
                   end
                   subgraph ASP[&quot;Aspire (2)&quot;]
                       ASPIRE[&quot;Aspire&quot;]
@@ -197,21 +200,35 @@
           <hr>
           <h2 id="2-clean-architecture-the-layered-dependency-rule">2. Clean Architecture, the layered dependency rule</h2>
           <p>Source dependencies point <strong>inward</strong> toward the Domain; each layer references only layers below it.
-          Two deliberate exceptions: <code>UI</code> and <code>Grpc</code> depend on <code>Shared</code> <strong>only</strong> (UI for Blazor WASM
-          compatibility, Grpc because it is pure transport). Enforced twice: a compile-time MSBuild layer guard
-          <strong>and</strong> NetArchTest fitness tests (<a href="https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html" target="_blank" rel="noopener">ADR-015</a>).</p>
+          Deliberate exceptions: <code>UI</code> and <code>Grpc</code> depend on <code>Shared</code> <strong>only</strong> (UI for Blazor WASM compatibility,
+          Grpc because it is pure transport, and <code>Aspire</code> in fact references only <code>Shared</code> too); <code>UI.Maui</code> may
+          reference <code>UI</code> and <code>Shared</code> only; and <code>UI.Web</code>, the Blazor Web host bridge, sits above <code>UI</code>, <code>API</code>
+          and <code>Aspire</code>, with transitive project references disabled so the guard can tell a deliberate direct
+          reference from an inherited one. Enforced twice: the compile-time MSBuild layer guard in
+          <code>Source/Build/MMCA.Common.LayerEnforcement.targets</code>, which carries a target per guarded project
+          (Shared, Domain, Application, Infrastructure, UI, UI.Maui, UI.Web) and fails the build on a
+          forbidden <code>ProjectReference</code>, <strong>and</strong> NetArchTest fitness tests that re-assert the same rules against
+          compiled assemblies (<a href="https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html" target="_blank" rel="noopener">ADR-015</a>).</p>
           <pre class="mermaid">flowchart TD
-              APIL[&quot;API / Grpc&lt;br/&gt;&lt;i&gt;presentation / transport&lt;/i&gt;&quot;]
+              APIL[&quot;API&lt;br/&gt;&lt;i&gt;controllers, middleware, filters, startup&lt;/i&gt;&quot;]
               INFL[&quot;Infrastructure&lt;br/&gt;&lt;i&gt;EF Core, caching, JWT/JWKS, outbox, message bus, SignalR&lt;/i&gt;&quot;]
               APPL[&quot;Application&lt;br/&gt;&lt;i&gt;CQRS handlers, decorators, module system, IMessageBus (ports)&lt;/i&gt;&quot;]
               DOML[&quot;Domain&lt;br/&gt;&lt;i&gt;entities, aggregates, domain events, specifications&lt;/i&gt;&quot;]
               SHRL[&quot;Shared&lt;br/&gt;&lt;i&gt;Result pattern, errors, DTOs, value objects&lt;/i&gt;&quot;]
               UIL[&quot;UI (Blazor / MudBlazor)&quot;]
               GRPCL[&quot;Grpc (pure transport)&quot;]
+              ASPL[&quot;Aspire (service defaults)&quot;]
+              UIMA[&quot;UI.Maui (MAUI heads, ADR-042)&quot;]
+              UIWB[&quot;UI.Web (Blazor Web host bridge)&quot;]
           
               APIL --&gt; INFL --&gt; APPL --&gt; DOML --&gt; SHRL
               UIL -.-&gt;|&quot;Shared only&quot;| SHRL
               GRPCL -.-&gt;|&quot;Shared only&quot;| SHRL
+              ASPL -.-&gt;|&quot;Shared only&quot;| SHRL
+              UIMA --&gt;|&quot;UI + Shared only&quot;| UIL
+              UIWB --&gt; UIL
+              UIWB --&gt; APIL
+              UIWB --&gt; ASPL
           
               ENF[&quot;Enforced 2x: compile-time layer guard + NetArchTest fitness (ADR-015)&quot;]
               ENF -.-&gt; APIL
@@ -220,14 +237,15 @@
               classDef exc fill:#fce8e6,stroke:#ea4335,color:#111
               classDef note fill:#f1f3f4,stroke:#9aa0a6,color:#333
               class APIL,INFL,APPL,DOML,SHRL layer
-              class UIL,GRPCL exc
+              class UIL,GRPCL,ASPL,UIMA,UIWB exc
               class ENF note</pre>
           <hr>
-          <h2 id="3-the-25-functional-groups-dependency--build-order">3. The 25 functional groups, dependency / build order</h2>
-          <p>The primary axis of the guide: every type lives in exactly one of 25 groups, ordered roughly
+          <h2 id="3-the-27-functional-groups-dependency--build-order">3. The 27 functional groups, dependency / build order</h2>
+          <p>The primary axis of the guide: every type lives in exactly one of 27 chapter groups, ordered roughly
           <strong>topologically</strong>. Foundational, widely-depended-on concerns first (Result → domain blocks →
           querying → events → CQRS → …), then the ASP.NET/UI/Aspire edges, then the ADC business modules, then
-          the test infrastructure. Arrows show the dominant &quot;builds on&quot; direction (charters + levels).</p>
+          the late-added Common device-capability layer and the test infrastructure. Arrows show the dominant
+          &quot;builds on&quot; direction (charters + levels).</p>
           <pre class="mermaid">flowchart TD
               G01[&quot;G01 Result &amp;amp; Error&quot;]
               G02[&quot;G02 Domain Building Blocks&quot;]
@@ -253,12 +271,14 @@
                   G19[&quot;G19 Conference · Infrastructure&quot;]
                   G20[&quot;G20 Conference · API / gRPC&quot;]
                   G21[&quot;G21 Conference · UI&quot;]
-                  G22[&quot;G22 Engagement module&quot;]
-                  G23[&quot;G23 Identity module&quot;]
-                  G24[&quot;G24 ADC Host / Shell / Composition&quot;]
+                  G22[&quot;G22 Engagement · session bookmarks&quot;]
+                  G23[&quot;G23 Engagement · live layer (polls, Q&amp;amp;A)&quot;]
+                  G24[&quot;G24 Identity module&quot;]
+                  G25[&quot;G25 ADC Host / Shell / Composition&quot;]
               end
           
-              G25[&quot;G25 Testing &amp;amp; Quality Infrastructure&quot;]
+              G26[&quot;G26 Device Capability Layer&lt;br/&gt;(MMCA.Common, appended after the modules)&quot;]
+              G27[&quot;G27 Testing &amp;amp; Quality Infrastructure&quot;]
           
               %% framework backbone
               G01 --&gt; G02 --&gt; G03
@@ -282,6 +302,7 @@
               G14 --&gt; G07
               G12 --&gt; G15
               G08 --&gt; G15
+              G15 --&gt; G26
           
               %% edges into composition + orchestration
               G05 --&gt; G14
@@ -300,21 +321,28 @@
               G13 --&gt; G20
               G18 --&gt; G21
               G15 --&gt; G21
-              G14 --&gt; G24
-              G16 --&gt; G24
-              G20 --&gt; G24
-              G21 --&gt; G24
+              G05 --&gt; G22
+              G22 --&gt; G23
+              G10 --&gt; G23
+              G13 --&gt; G23
+              G08 --&gt; G24
+              G14 --&gt; G25
+              G16 --&gt; G25
+              G20 --&gt; G25
+              G21 --&gt; G25
+              G26 --&gt; G25
           
               %% everything is tested
-              ADCMOD --&gt; G25
-              G16 --&gt; G25
+              ADCMOD --&gt; G27
+              G16 --&gt; G27
+              G26 --&gt; G27
           
               classDef fw fill:#e8f0fe,stroke:#4285f4,color:#111
               classDef adc fill:#e6f4ea,stroke:#34a853,color:#111
               classDef test fill:#f3e8fd,stroke:#a142f4,color:#111
-              class G01,G02,G03,G04,G05,G06,G07,G08,G09,G10,G11,G12,G13,G14,G15,G16 fw
-              class G17,G18,G19,G20,G21,G22,G23,G24 adc
-              class G25 test</pre>
+              class G01,G02,G03,G04,G05,G06,G07,G08,G09,G10,G11,G12,G13,G14,G15,G16,G26 fw
+              class G17,G18,G19,G20,G21,G22,G23,G24,G25 adc
+              class G27 test</pre>
           <hr>
           <h2 id="4-core-framework-patterns-how-the-building-blocks-compose">4. Core framework patterns, how the building blocks compose</h2>
           <p>The pattern-level view of the same backbone: the ideas the primer commits to and how they feed each
@@ -371,69 +399,87 @@
           <hr>
           <h2 id="5-request-lifecycle-the-cqrs-decorator-pipeline-adr-014">5. Request lifecycle, the CQRS decorator pipeline (<a href="https://ivanball.github.io/docs/adr/014-cqrs-decorator-pipeline.html" target="_blank" rel="noopener">ADR-014</a>)</h2>
           <p>Handlers are thin (one method); every cross-cutting concern is a decorator wrapping the next. Scrutor
-          <code>TryDecorate</code> composes them; the <strong>execution order is load-bearing</strong>:
-          FeatureGate → Logging → Caching → Validating → Transactional → Handler. Opt-in marker interfaces let
-          a handler switch each concern on.</p>
+          <code>TryDecorate</code> composes them <strong>in reverse registration order</strong> (last registered = outermost), so the
+          registration list in <code>AddApplicationDecorators()</code> reads inside-out while the <strong>execution order is
+          load-bearing</strong>: FeatureGate → Logging → Caching → Validating → Transactional → Handler for commands,
+          and FeatureGate → Logging → Caching → Handler for queries (a query gets no Validating and no
+          Transactional decorator). Opt-in marker interfaces let a handler switch each concern on.</p>
           <pre class="mermaid">flowchart TD
               HTTP[&quot;HTTP / gRPC request&quot;]
               EDGE[&quot;Edge: controller base / model binder&lt;br/&gt;maps request → command/query (G12)&quot;]
-              IDEMP[&quot;Idempotent action filter: dedup client retries&lt;br/&gt;(ADR-017, 24h replay)&quot;]
+              IDEMP[&quot;Idempotent action filter: dedup client retries&lt;br/&gt;(ADR-017, 24h replay, IDistributedLock guard)&quot;]
           
-              subgraph PIPELINE[&quot;Decorator pipeline (registration order outer→inner)&quot;]
+              subgraph PIPELINE[&quot;Decorator pipeline (execution order, outermost→innermost)&quot;]
                   direction TB
                   FG[&quot;FeatureGate: 404 if flag off (ADR-031)&quot;]
-                  LOG[&quot;Logging + metrics&quot;]
+                  LOG[&quot;Logging + RED metrics&quot;]
                   CA[&quot;Caching: reads only (ADR-026)&quot;]
-                  VA[&quot;Validating: FluentValidation (G06)&quot;]
-                  TX[&quot;Transactional: SaveChanges + outbox&quot;]
+                  VA[&quot;Validating: FluentValidation (G06, commands only)&quot;]
+                  TX[&quot;Transactional: SaveChanges + outbox (commands only)&quot;]
                   H[&quot;Concrete handler (one job)&quot;]
               end
           
               DOMAIN[&quot;Domain: aggregate factory / behavior → Result&amp;lt;T&amp;gt;&quot;]
               RESP[&quot;Result&amp;lt;T&amp;gt; → edge maps to HTTP/gRPC status (ADR-013)&quot;]
+              EXC[&quot;Exceptional path: ordered IExceptionHandler chain&lt;br/&gt;OperationCanceled, Domain, DbUpdate, Validation, Global&lt;br/&gt;→ RFC 9457 ProblemDetails (ADR-013)&quot;]
           
               HTTP --&gt; IDEMP --&gt; EDGE --&gt; FG --&gt; LOG --&gt; CA --&gt; VA --&gt; TX --&gt; H --&gt; DOMAIN
               DOMAIN --&gt; RESP
+              H -.-&gt;|&quot;thrown, not returned&quot;| EXC
           
               classDef dec fill:#fef7e0,stroke:#f9ab00,color:#111
               class FG,LOG,CA,VA,TX,H dec</pre>
           <hr>
           <h2 id="6-event-driven-integration-outbox-dual-dispatch-adr-003--010--021">6. Event-driven integration, outbox dual-dispatch (<a href="https://ivanball.github.io/docs/adr/003-outbox-dual-dispatch.html" target="_blank" rel="noopener">ADR-003</a> / 010 / 021)</h2>
           <p>Domain events are captured into an <code>OutboxMessage</code> row <strong>in the same transaction</strong> as the data
-          (no dual-write bug). A background processor drains the outbox and dispatches both in-process and over
-          the broker; every integration event carries a <code>SchemaVersion</code>; consumers dedup by <code>MessageId</code> via an
-          inbox.</p>
+          (no dual-write bug). The two event kinds then part ways: <strong>local domain events</strong> are dispatched
+          in-process by the interceptor right after the save (deferred until after commit inside a
+          Transactional command) and their outbox rows marked processed, while <strong>integration events</strong> are
+          never dispatched locally: their rows stay unprocessed until the background <code>OutboxProcessor</code>
+          publishes them through <code>IMessageBus</code>, so the registered transport (in-process for a monolith, a
+          MassTransit broker for extracted services) decides delivery. The processor is also the safety net
+          for a local dispatch that failed. A handler that publishes an integration event itself calls
+          <code>IEventBus.PublishAsync</code>, which writes outbox rows rather than sending inline (the removed
+          <code>IIntegrationEventPublisher</code> is not a caller-facing option any more). Every integration event carries
+          a <code>SchemaVersion</code>; consumers dedup by <code>MessageId</code> via the opt-in inbox.</p>
           <pre class="mermaid">flowchart TD
               AGG[&quot;Aggregate raises IDomainEvent / IIntegrationEvent&quot;]
               SAVE[&quot;SaveChangesAsync: DomainEventSaveChangesInterceptor&quot;]
+              EBUS[&quot;Second entry point: IEventBus.PublishAsync from a handler&lt;br/&gt;InProcessEventBus writes the outbox then dispatches;&lt;br/&gt;BrokerEventBus writes the outbox and only signals the processor&quot;]
               subgraph TXN[&quot;One DB transaction (per-service DB, ADR-006)&quot;]
                   ENTITY[(&quot;Entity rows&quot;)]
                   OBX[(&quot;OutboxMessage rows&quot;)]
               end
-              PROC[&quot;OutboxProcessor (background, smart-wait poll)&quot;]
-              DISP[&quot;IDomainEventDispatcher: in-process handlers&quot;]
-              BROKER[&quot;BrokerMessageBus → MassTransit v8&lt;br/&gt;(RabbitMQ / Azure Service Bus)&quot;]
+              DISP[&quot;IDomainEventDispatcher: in-process handlers&lt;br/&gt;(deferred until after commit)&quot;]
+              PROC[&quot;OutboxProcessor: background, smart-wait poll,&lt;br/&gt;leased rows for replica scale-out,&lt;br/&gt;dead-letter on retry exhaustion&quot;]
+              BUS[&quot;IMessageBus: InProcessMessageBus or BrokerMessageBus&lt;br/&gt;→ MassTransit v8 (RabbitMQ / Azure Service Bus)&quot;]
               CONSUMER[&quot;IntegrationEventConsumer in another module/service&quot;]
-              INBOX[(&quot;Inbox: dedup by MessageId (ADR-021)&quot;)]
+              INBOX[(&quot;Opt-in inbox: dedup by MessageId (ADR-021)&quot;)]
               HANDLER[&quot;IIntegrationEventHandler&quot;]
           
               AGG --&gt; SAVE
               SAVE --&gt; ENTITY
               SAVE --&gt;|&quot;same commit&quot;| OBX
-              OBX --&gt; PROC
-              PROC --&gt; DISP
-              PROC --&gt; BROKER
-              BROKER --&gt; CONSUMER --&gt; INBOX --&gt; HANDLER
-              SCHEMA[&quot;SchemaVersion + upcaster (ADR-010)&quot;] -.-&gt; BROKER
+              SAVE --&gt;|&quot;local domain events&quot;| DISP
+              EBUS --&gt; OBX
+              OBX --&gt;|&quot;unprocessed rows&quot;| PROC
+              PROC --&gt;|&quot;integration events&quot;| BUS
+              PROC -.-&gt;|&quot;safety net for a failed local dispatch&quot;| DISP
+              BUS --&gt; CONSUMER --&gt; INBOX --&gt; HANDLER
+              SCHEMA[&quot;SchemaVersion + upcaster (ADR-010)&quot;] -.-&gt; BUS
           
               classDef evt fill:#e6f4ea,stroke:#34a853,color:#111
-              class AGG,SAVE,PROC,DISP,BROKER,CONSUMER,HANDLER evt</pre>
+              class AGG,SAVE,EBUS,PROC,DISP,BUS,CONSUMER,HANDLER evt</pre>
           <hr>
           <h2 id="7-modular-monolith--extractable-services-adr-006--007--008--012">7. Modular monolith → extractable services (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a> / 007 / 008 / 012)</h2>
-          <p>Modules implement <code>IModule</code> and are discovered + Kahn-ordered by <code>ModuleLoader</code>. The <strong>same module
-          code</strong> runs as a single monolith host or as N service processes behind a YARP gateway, because
-          application code talks to abstractions (<code>IMessageBus</code>, typed gRPC clients) and transport lives at the
-          edges.</p>
+          <p>Modules implement <code>IModule</code> and are discovered + Kahn-ordered by <code>ModuleLoader</code>
+          (<a href="https://ivanball.github.io/docs/adr/059-module-contract-and-composition.html" target="_blank" rel="noopener">ADR-059</a>). The
+          <strong>same module code</strong> runs as a single monolith host or as N service processes behind a YARP gateway,
+          because application code talks to abstractions (<code>IMessageBus</code>, typed gRPC clients) and transport
+          lives at the edges. MMCA.ADC has taken the second path all the way: its four modules each run as
+          their own service host under <code>Source/Services/</code> behind the Gateway, and the former single
+          <code>MMCA.ADC.WebAPI</code> host is gone. Deploy A is not hypothetical: it is what MMCA.Helpdesk (its single
+          Tickets module in one API host) runs.</p>
           <pre class="mermaid">flowchart TD
               subgraph SRC[&quot;Same module code (IModule implementations)&quot;]
                   MC[&quot;ConferenceModule&quot;]
@@ -445,15 +491,17 @@
           
               MONO[&quot;Deploy A: single monolith host&lt;br/&gt;(all modules in one process)&quot;]
           
-              subgraph SERVICES[&quot;Deploy B: extracted services&quot;]
+              subgraph SERVICES[&quot;Deploy B: extracted services (what ADC runs)&quot;]
                   direction TB
                   GW[&quot;YARP Gateway (service discovery)&quot;]
                   SVC1[&quot;Conference service host&quot;]
                   SVC2[&quot;Engagement service host&quot;]
                   SVC3[&quot;Identity service host&quot;]
+                  SVC4[&quot;Notification service host&lt;br/&gt;(SignalR hub + gRPC live-channel ingress)&quot;]
                   GW --&gt; SVC1
                   GW --&gt; SVC2
                   GW --&gt; SVC3
+                  GW --&gt; SVC4
               end
           
               SYNC[&quot;Sync calls: typed gRPC clients + .Contracts&lt;br/&gt;Result-over-the-wire (ADR-007)&quot;]
@@ -470,7 +518,7 @@
               classDef mod fill:#e8f0fe,stroke:#4285f4,color:#111
               classDef dep fill:#e6f4ea,stroke:#34a853,color:#111
               class MC,ME,MI,MN mod
-              class MONO,GW,SVC1,SVC2,SVC3 dep</pre>
+              class MONO,GW,SVC1,SVC2,SVC3,SVC4 dep</pre>
           <hr>
           <h2 id="8-persistence-database-per-service--polyglot-engines-adr-006--018--030">8. Persistence, database-per-service + polyglot engines (<a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a> / 018 / 030)</h2>
           <p>One concrete <code>SQLServerDbContext</code> over the abstract <code>ApplicationDbContext</code>, <strong>one instance per
@@ -510,8 +558,9 @@
               class ENTITY,CFG,ATTR,REG,XSPEC,MIG p</pre>
           <hr>
           <h2 id="9-authentication--authorization-stack">9. Authentication &amp; Authorization stack</h2>
-          <p>The auth concern (G08) spans token validation, session cookies, password hashing, brute-force
-          protection, and a layered authorization model: RBAC roles → opt-in permissions → resource ownership.</p>
+          <p>The auth concern (G08) spans token validation, session cookies, federated sign-in, password hashing,
+          brute-force protection, refresh-token rotation and revocation, and a layered authorization model:
+          RBAC roles → opt-in permissions → resource ownership.</p>
           <pre class="mermaid">flowchart TD
               subgraph AUTHN[&quot;Authentication&quot;]
                   JWT[&quot;JWT bearer validation&quot;]
@@ -519,9 +568,12 @@
                   COOKIE[&quot;HttpOnly session cookie + non-validating SSR scheme (ADR-022)&quot;]
                   HASH[&quot;PBKDF2-HMAC-SHA512, 600k iters + salt-length migration (ADR-032)&quot;]
                   LOGIN[&quot;ILoginProtectionService: lockout + per-IP cap (ADR-029)&quot;]
+                  EXT[&quot;External OAuth: Google / GitHub behind a short-lived&lt;br/&gt;ExternalLogin cookie + single-use code (ADR-036/043)&quot;]
+                  ROT[&quot;AuthenticationServiceBase: 15-min access token +&lt;br/&gt;one rotating refresh token per user (ADR-050);&lt;br/&gt;ITokenRefresher per head (ADR-051)&quot;]
               end
           
               CU[&quot;ICurrentUser / claims principal&quot;]
+              REV[&quot;SoftDeletedUserMiddleware: 401 for a soft-deleted&lt;br/&gt;caller, 30s cached check (ADR-047)&quot;]
           
               subgraph AUTHZ[&quot;Authorization (layered)&quot;]
                   RBAC[&quot;RBAC roles (RoleValue base)&quot;]
@@ -535,39 +587,57 @@
               JWKS --&gt; JWT
               COOKIE --&gt; CU
               HASH --&gt; LOGIN
-              CU --&gt; RBAC --&gt; PERM --&gt; OWN
+              LOGIN --&gt; ROT
+              EXT --&gt; ROT
+              ROT --&gt; JWT
+              CU --&gt; REV
+              REV --&gt; RBAC --&gt; PERM --&gt; OWN
               CU --&gt; RL
           
               classDef a fill:#fce8e6,stroke:#ea4335,color:#111
-              class JWT,JWKS,COOKIE,HASH,LOGIN,RBAC,PERM,OWN,RL a</pre>
+              class JWT,JWKS,COOKIE,HASH,LOGIN,EXT,ROT,REV,RBAC,PERM,OWN,RL a</pre>
           <hr>
-          <h2 id="10-notifications-two-channels-behind-one-sender-adr-024">10. Notifications, two channels behind one sender (<a href="https://ivanball.github.io/docs/adr/024-push-notifications.html" target="_blank" rel="noopener">ADR-024</a>)</h2>
-          <p>A durable in-app inbox <strong>and</strong> a transient SignalR push, both behind <code>IPushNotificationSender</code>, plus
-          email. Recipient providers resolve who gets notified; the thin <code>MMCA.ADC.Notification</code> module hosts
-          it.</p>
+          <h2 id="10-notifications-three-channels-behind-one-send-pipeline-adr-024--044">10. Notifications, three channels behind one send pipeline (<a href="https://ivanball.github.io/docs/adr/024-push-notifications.html" target="_blank" rel="noopener">ADR-024</a> / <a href="https://ivanball.github.io/docs/adr/044-native-push-delivery.html" target="_blank" rel="noopener">044</a>)</h2>
+          <p>One use case (<code>SendPushNotificationHandler</code>) writes a durable per-user inbox, fires a transient
+          SignalR push, and then an OS-level native push that reaches a backgrounded or killed app. The inbox
+          is the source of truth, so both push legs are non-fatal: a failed SignalR send marks the audit row
+          failed, a failed native send is only logged. Recipient providers resolve who gets notified; the thin
+          <code>MMCA.ADC.Notification</code> module hosts the hub. Email is a <strong>separate</strong> framework leg
+          (<code>IEmailSender</code> / <code>SmtpEmailSender</code>) driven by its own handlers, not something the push sender fans
+          out to, and the same hub also carries <a href="https://ivanball.github.io/docs/adr/039-live-channel-push.html" target="_blank" rel="noopener">ADR-039</a>&#39;s
+          deliberately non-durable live-channel events.</p>
           <pre class="mermaid">flowchart TD
               SRC[&quot;Domain / integration event (e.g. new session, bookmark)&quot;]
-              RP[&quot;Recipient providers: resolve target users&quot;]
-              SENDER[&quot;IPushNotificationSender&quot;]
-              DURABLE[(&quot;UserNotification inbox: durable, persisted&quot;)]
-              PUSH[&quot;SignalR push: transient (Redis backplane for scale-out)&quot;]
-              EMAIL[&quot;Email sender (SMTP)&quot;]
+              RP[&quot;INotificationRecipientProvider: resolve target users&quot;]
+              UC[&quot;SendPushNotificationHandler: one use case, three legs&quot;]
+              DURABLE[(&quot;UserNotification inbox: durable, persisted, source of truth&quot;)]
+              PUSH[&quot;IPushNotificationSender → SignalR&lt;br/&gt;transient, optional Redis backplane for scale-out&quot;]
+              NATIVE[&quot;INativePushSender → Azure Notification Hubs&lt;br/&gt;FCM v1 / APNs, best-effort (ADR-044)&quot;]
+              LIVE[&quot;ILiveChannelPublisher: ephemeral channel events,&lt;br/&gt;same hub, never persisted (ADR-039)&quot;]
+              EMAIL[&quot;IEmailSender / SmtpEmailSender: separate leg&quot;]
               UIBELL[&quot;UI: notification bell / in-app inbox (G15)&quot;]
           
-              SRC --&gt; RP --&gt; SENDER
-              SENDER --&gt; DURABLE
-              SENDER --&gt; PUSH
-              SENDER --&gt; EMAIL
+              SRC --&gt; RP --&gt; UC
+              UC --&gt; DURABLE
+              UC --&gt; PUSH
+              UC --&gt; NATIVE
+              SRC -.-&gt;|&quot;own handlers&quot;| EMAIL
+              LIVE -.-&gt;|&quot;same NotificationHub&quot;| PUSH
               DURABLE --&gt; UIBELL
               PUSH --&gt; UIBELL
           
               classDef n fill:#e6f4ea,stroke:#34a853,color:#111
-              class SRC,RP,SENDER,DURABLE,PUSH,EMAIL,UIBELL n</pre>
+              class SRC,RP,UC,DURABLE,PUSH,NATIVE,LIVE,EMAIL,UIBELL n</pre>
           <hr>
           <h2 id="11-ui-write-once-render-everywhere--i18n--theming">11. UI, write-once render everywhere + i18n + theming</h2>
           <p>A page is authored <strong>once</strong> as a Razor component in a per-module UI library; both the Blazor web host
           (Server + WASM) and the .NET MAUI host reference the same libraries, so it renders across Web,
-          Android, iOS, macOS, Windows. Culture cookie + <code>IStringLocalizer</code> drive i18n (<a href="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html" target="_blank" rel="noopener">ADR-027</a>); <code>ThemeService</code>
+          Android, iOS, macOS, Windows. <code>InteractiveAuto</code> is declared once on each web head&#39;s root router with
+          prerendering left on (<a href="https://ivanball.github.io/docs/adr/056-blazor-render-mode-strategy.html" target="_blank" rel="noopener">ADR-056</a>),
+          so no page carries its own <code>@rendermode</code>. Anything a browser cannot do is a per-capability contract
+          in <code>MMCA.Common.UI</code> with MAUI-native, browser-JS and inert fallback adapters chosen at DI composition
+          time (<a href="https://ivanball.github.io/docs/adr/042-device-capability-abstraction.html" target="_blank" rel="noopener">ADR-042</a>, taught in
+          G26). Culture cookie + <code>IStringLocalizer</code> drive i18n (<a href="https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html" target="_blank" rel="noopener">ADR-027</a>); <code>ThemeService</code>
           drives day/dark (<a href="https://ivanball.github.io/docs/adr/028-dark-theme-mode.html" target="_blank" rel="noopener">ADR-028</a>).</p>
           <pre class="mermaid">flowchart TD
               PAGE[&quot;Razor component authored once&lt;br/&gt;(per-module .UI library, e.g. EventList.razor)&quot;]
@@ -589,6 +659,8 @@
               I18N[&quot;i18n: culture cookie (source of truth) →&lt;br/&gt;IStringLocalizer + .resx; edge errors localized by Error.Code (ADR-027)&quot;]
               THEME[&quot;ThemeService binds MudThemeProvider IsDarkMode;&lt;br/&gt;cookie/localStorage/PreferredTheme (ADR-028)&quot;]
               CSP[&quot;Security headers + pluggable CSP (ADR-023)&quot;]
+              RM[&quot;Render mode: InteractiveAuto on the root router,&lt;br/&gt;prerender on (ADR-056)&quot;]
+              CAP[&quot;Device capability contracts in MMCA.Common.UI:&lt;br/&gt;browser-JS, inert fallback and MAUI-native adapters&lt;br/&gt;chosen per host at DI time (ADR-042, G26)&quot;]
           
               PAGE --&gt; COMMONUI
               COMMONUI --&gt; WEB
@@ -598,14 +670,19 @@
               I18N -.-&gt; COMMONUI
               THEME -.-&gt; COMMONUI
               CSP -.-&gt; WEB
+              RM -.-&gt; WEB
+              COMMONUI --&gt; CAP
+              CAP -.-&gt;|&quot;browser + fallback adapters&quot;| WEB
+              CAP -.-&gt;|&quot;MMCA.Common.UI.Maui adapters&quot;| MAUI
           
               classDef u fill:#f3e8fd,stroke:#a142f4,color:#111
-              class PAGE,COMMONUI,WEB,MAUI u</pre>
+              class PAGE,COMMONUI,WEB,MAUI,CAP u</pre>
           <hr>
           <h2 id="12-adc-business-modules-bounded-contexts-end-to-end">12. ADC business modules, bounded contexts end-to-end</h2>
           <p>Each ADC module is a vertical slice through all layers. Conference is large enough to split across
-          five chapters (G17-G21); Engagement and Identity are one chapter each; Notification is the thin host
-          over the Common notifications capability.</p>
+          five chapters (G17-G21); Engagement takes two (G22 session bookmarks, G23 the conference-day live
+          layer); Identity is one (G24); Notification is the thin host over the Common notifications
+          capability, taught in G10.</p>
           <pre class="mermaid">flowchart LR
               subgraph CONF[&quot;Conference (G17-G21)&quot;]
                   direction TB
@@ -617,12 +694,14 @@
                   C_D --&gt; C_A --&gt; C_I --&gt; C_P --&gt; C_U
               end
           
-              subgraph ENG[&quot;Engagement (G22)&quot;]
+              subgraph ENG[&quot;Engagement (G22-G23)&quot;]
                   direction TB
-                  E[&quot;Session bookmarks aggregate → use cases →&lt;br/&gt;persistence → API/contracts/service → feedback UI&quot;]
+                  E[&quot;G22: UserSessionBookmark aggregate → use cases →&lt;br/&gt;persistence → API/contracts/service → feedback UI&quot;]
+                  EL[&quot;G23 live layer: LivePoll + SessionQuestion aggregates,&lt;br/&gt;voting, moderated Q&amp;amp;A, Happening Now / presenter UI&quot;]
+                  E --&gt; EL
               end
           
-              subgraph IDN[&quot;Identity (G23)&quot;]
+              subgraph IDN[&quot;Identity (G24)&quot;]
                   direction TB
                   I[&quot;User aggregate → change-password/delete/export →&lt;br/&gt;persistence → API/contracts/service → profile UI&quot;]
               end
@@ -632,44 +711,60 @@
                   N[&quot;Thin module host over the Common notifications capability&quot;]
               end
           
-              HOST[&quot;ADC Host / Shell / Cross-module composition (G24)&quot;]
+              HOST[&quot;ADC Host / Shell / Cross-module composition (G25)&quot;]
           
               CONF --&gt; HOST
               ENG --&gt; HOST
               IDN --&gt; HOST
               NOT --&gt; HOST
           
-              ENG -.-&gt;|&quot;BookmarkAdded event&quot;| NOT
-              IDN -.-&gt;|&quot;UserRegistered event&quot;| NOT
+              IDN -.-&gt;|&quot;UserRegistered integration event&quot;| CONF
+              CONF -.-&gt;|&quot;SpeakerLinkedToUser / SpeakerUnlinkedFromUser&quot;| IDN
+              ENG -.-&gt;|&quot;bookmark + event-live validation over gRPC&quot;| CONF
+              CONF -.-&gt;|&quot;bookmark counts over gRPC&quot;| ENG
+              ENG -.-&gt;|&quot;live-channel push over gRPC&quot;| NOT
           
               classDef adc fill:#e6f4ea,stroke:#34a853,color:#111
-              class C_D,C_A,C_I,C_P,C_U,E,I,N,HOST adc</pre>
+              class C_D,C_A,C_I,C_P,C_U,E,EL,I,N,HOST adc</pre>
           <hr>
-          <h2 id="13-the-34-adrs-grouped-by-theme">13. The 34 ADRs, grouped by theme</h2>
-          <p>Every accepted ADR in <code>Website/docs-src/adr/</code>, clustered by the concern it governs. (011 is struck
-          through: superseded by 027.)</p>
+          <h2 id="13-the-adrs-grouped-by-theme">13. The ADRs, grouped by theme</h2>
+          <p>Every accepted ADR in <code>Website/docs-src/adr/</code>, clustered by the concern it governs. That directory&#39;s
+          <a href="https://ivanball.github.io/docs/adr/" target="_blank" rel="noopener"><code>README.md</code></a> is the canonical index and owns the count and
+          range; this map only regroups it. (011 is struck through there: superseded by 027.)</p>
           <pre class="mermaid">mindmap
-            root((&quot;34 ADRs&quot;))
+            root((&quot;ADRs by theme&quot;))
               Domain and errors
                 013 Result pattern
                 005 Soft-delete vs erasure
                 001 Manual DTO mapping
+                048 Primitive identifier aliases
               CQRS and events
                 014 CQRS decorator pipeline
                 003 Outbox dual-dispatch
                 010 Integration event schema versioning
                 021 Consumer inbox idempotency
+                054 Saga compensation and reconciliation
+                052 Background job execution
+              Notifications and real time
                 024 Two-channel notifications
+                039 Live channel push
+                044 Native push delivery
               Data and persistence
                 006 Database-per-service
                 018 Polyglot persistence
                 030 Startup sole-migrator
                 002 Navigation populators
+                035 Optimistic concurrency via RowVersion
+                055 Repository and specification contract
+                037 Field-level encryption at rest
+                045 Managed file storage and avatars
+                057 Expand and contract schema gate
               Services and transport
                 007 gRPC extraction
                 008 Service-extraction topology
                 012 gRPC host transport
                 009 Resilience and RTO/RPO
+                059 IModule contract and composition
               Security and auth
                 004 JWKS dual-fetch
                 020 Permission-based authz
@@ -679,19 +774,40 @@
                 033 Resource-ownership authz
                 019 Rate limiting
                 023 Security headers and CSP
+                036 External OAuth login
+                047 Soft-deleted-user session revocation
+                050 JWT and rotating refresh token
+                051 Client auth token lifecycle
+                061 Runtime secret management
               API edge
                 017 Request idempotency
                 031 Feature-flag management
                 034 Generic entity controllers
+                040 Authenticated output caching
+                046 HTTP API versioning
+              Runtime and operations
+                025 Startup warm-up and readiness
+                026 Two-tier caching
+                041 Observability and telemetry
+                062 SLO alerting as code
+                064 Deploy recency gates
               Front-end
                 027 Multi-locale i18n
                 028 Day and Dark theme
+                056 Blazor render-mode strategy
+                063 Accessibility conformance gate
                 011 en-US-only i18n superseded by 027
+              Mobile and device
+                042 Device capability abstraction
+                043 Mobile deep links and native OAuth callback
               Governance
                 015 Architecture fitness functions
                 016 Lockstep versioning + MassTransit v8 pin
-                025 Startup warm-up + readiness
-                026 Two-tier caching</pre>
+                038 Supply-chain provenance
+                049 Library ConfigureAwait policy
+                053 Dual-registry package publishing
+                058 Runtime conformance suites as a package
+                060 Performance-regression gate</pre>
           <hr>
           <h2 id="14-the-34-category-evaluation-rubric">14. The 34-category evaluation rubric</h2>
           <p>The lens the guide tags code against (<code>[Rubric §N]</code>). Scored on two axes: <strong>Maturity</strong> (0-4, process)
@@ -742,11 +858,12 @@
           <pre class="mermaid">flowchart TD
               PRIMER[&quot;Primer: cross-cutting concepts, stack, conventions, rubric (taught once)&quot;]
           
-              subgraph AXIS1[&quot;Primary axis: functional groups (G01→G25)&quot;]
+              subgraph AXIS1[&quot;Primary axis: functional groups (G01→G27)&quot;]
                   FW[&quot;Framework groups G01-G16 (MMCA.Common)&quot;]
-                  ADCG[&quot;ADC module groups G17-G24&quot;]
-                  TESTG[&quot;Testing G25&quot;]
-                  FW --&gt; ADCG --&gt; TESTG
+                  ADCG[&quot;ADC module groups G17-G25&quot;]
+                  CAPG[&quot;Device capability layer G26 (MMCA.Common, appended late)&quot;]
+                  TESTG[&quot;Testing G27&quot;]
+                  FW --&gt; ADCG --&gt; CAPG --&gt; TESTG
               end
           
               AXIS2[&quot;Secondary axis: dependency Level within each group&lt;br/&gt;(meet a type only after its first-party deps)&quot;]
@@ -760,16 +877,21 @@
               AXIS1 --&gt; DEVOPS
           
               classDef m fill:#e8f0fe,stroke:#4285f4,color:#111
-              class PRIMER,FW,ADCG,TESTG,AXIS2,LENS,DEVOPS m</pre>
+              class PRIMER,FW,ADCG,CAPG,TESTG,AXIS2,LENS,DEVOPS m</pre>
           <hr>
           <h3 id="notes-on-fidelity">Notes on fidelity</h3>
           <ul>
           <li>Group-to-group arrows in §3 show the <strong>dominant</strong> &quot;builds on&quot; direction from the charters and Level
           ranges in <a href="00-group-taxonomy.html"><code>00-group-taxonomy.md</code></a>; the guide allows forward references where
           functional cohesion outranks strict layering, so a few minor edges are omitted for readability.</li>
+          <li><strong>GNN here is the chapter number</strong> (<code>group-NN-*.md</code>), the numbering the index and the reading paths
+          use. <a href="00-group-taxonomy.html"><code>00-group-taxonomy.md</code></a> still carries the original classification ids
+          for the chapters inserted later (its G26 is the live layer, chapter 23; its G27 is the device
+          capability layer, chapter 26; its G25 is testing, chapter 27), so match that table by chapter
+          filename rather than by its id.</li>
           <li>Pattern diagrams (§4-§12) reflect the mechanisms as taught in the corresponding <code>group-NN-*.md</code>
           chapters and the ADRs named in <a href="00-primer.html"><code>00-primer.md</code></a>.</li>
-          <li>The 14 dependency cycles (SCCs) noted in the manifest are kept whole inside a single group
+          <li>The 20 dependency cycles (SCCs) listed in the manifest are kept whole inside a single group
           (e.g. the <code>ApplicationDbContext</code> ↔ interceptors cycle in G07, the Conference aggregate nav-cycles in
           G17); they are not drawn as separate nodes here.</li>
           </ul>
@@ -784,17 +906,17 @@
             <ul>
             <li><a href="#1-system-context-two-codebases--the-15-packages">1. System context, two codebases + the 15 packages</a></li>
             <li><a href="#2-clean-architecture-the-layered-dependency-rule">2. Clean Architecture, the layered dependency rule</a></li>
-            <li><a href="#3-the-25-functional-groups-dependency--build-order">3. The 25 functional groups, dependency / build order</a></li>
+            <li><a href="#3-the-27-functional-groups-dependency--build-order">3. The 27 functional groups, dependency / build order</a></li>
             <li><a href="#4-core-framework-patterns-how-the-building-blocks-compose">4. Core framework patterns, how the building blocks compose</a></li>
             <li><a href="#5-request-lifecycle-the-cqrs-decorator-pipeline-adr-014">5. Request lifecycle, the CQRS decorator pipeline (ADR-014)</a></li>
             <li><a href="#6-event-driven-integration-outbox-dual-dispatch-adr-003--010--021">6. Event-driven integration, outbox dual-dispatch (ADR-003 / 010 / 021)</a></li>
             <li><a href="#7-modular-monolith--extractable-services-adr-006--007--008--012">7. Modular monolith → extractable services (ADR-006 / 007 / 008 / 012)</a></li>
             <li><a href="#8-persistence-database-per-service--polyglot-engines-adr-006--018--030">8. Persistence, database-per-service + polyglot engines (ADR-006 / 018 / 030)</a></li>
             <li><a href="#9-authentication--authorization-stack">9. Authentication &amp; Authorization stack</a></li>
-            <li><a href="#10-notifications-two-channels-behind-one-sender-adr-024">10. Notifications, two channels behind one sender (ADR-024)</a></li>
+            <li><a href="#10-notifications-three-channels-behind-one-send-pipeline-adr-024--044">10. Notifications, three channels behind one send pipeline (ADR-024 / 044)</a></li>
             <li><a href="#11-ui-write-once-render-everywhere--i18n--theming">11. UI, write-once render everywhere + i18n + theming</a></li>
             <li><a href="#12-adc-business-modules-bounded-contexts-end-to-end">12. ADC business modules, bounded contexts end-to-end</a></li>
-            <li><a href="#13-the-34-adrs-grouped-by-theme">13. The 34 ADRs, grouped by theme</a></li>
+            <li><a href="#13-the-adrs-grouped-by-theme">13. The ADRs, grouped by theme</a></li>
             <li><a href="#14-the-34-category-evaluation-rubric">14. The 34-category evaluation rubric</a></li>
             <li><a href="#15-how-the-axes-fit-together-reading-map">15. How the axes fit together (reading map)</a></li>
             </ul>

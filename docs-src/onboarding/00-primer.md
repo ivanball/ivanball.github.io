@@ -12,7 +12,9 @@ architecture-evaluation lens the guide tags against. Later sections cross-refere
 
 Two codebases are in scope:
 
-- **`MMCA.Common`**: a **framework**, published as **fifteen NuGet packages** to GitHub Packages
+- **`MMCA.Common`**: a **framework**, published as **fifteen NuGet packages** to nuget.org (the
+  documented install path) and mirrored to GitHub Packages
+  ([ADR-053](https://ivanball.github.io/docs/adr/053-dual-registry-package-publishing.html))
   (four core: `.Shared`, `.Domain`, `.Application`, `.Infrastructure`; five presentation: `.API`,
   `.Grpc`, `.UI`, `.UI.Maui`, `.UI.Web`; two Aspire: `.Aspire`, `.Aspire.Hosting`; four testing: `.Testing`, `.Testing.E2E`,
   `.Testing.UI`, `.Testing.Architecture`). It is *not* a runnable app; it ships the base classes and
@@ -47,7 +49,11 @@ Each layer references only layers **below** it, the **dependency rule** of Clean
 dependencies point inward, toward the domain, and the domain depends on nothing framework-specific.
 Two deliberate exceptions: **`UI`** and **`Grpc`** depend on **`Shared` only**, `UI` for Blazor
 WebAssembly compatibility, `Grpc` because it is pure transport that must not couple to business
-layers.
+layers. The two host-support presentation packages sit above those: **`UI.Maui`** may reference
+`UI` and `Shared` only, and **`UI.Web`** (the Blazor Web host bridge) references `UI`, `API`, and
+`Aspire`, never `Domain`/`Application`/`Infrastructure` directly, which is why it disables transitive
+project references and carries its own boundary check
+(`MMCA.Common/Source/Build/MMCA.Common.LayerEnforcement.targets:90-123`).
 
 `MMCA.ADC` repeats the same layering *per module*: each of Conference/Engagement/Identity has
 `.Shared`, `.Domain`, `.Application`, `.Infrastructure`, `.API`, and `.UI` projects following the
@@ -73,7 +79,12 @@ chapter; here is the orientation so the vocabulary is familiar.
 
 - **CQRS (Command/Query Responsibility Segregation).** Writes (**commands**, which mutate and return
   a `Result`) are separated from reads (**queries**, side-effect-free). Both flow through a
-  **dispatcher** with a **decorator pipeline**: `Logging → Caching → Transactional → handler`.
+  **decorator pipeline**: commands run
+  `FeatureGate → Logging → Caching → Validating → Transactional → handler`, queries run
+  `FeatureGate → Logging → Caching → handler` (no validation and no transaction on the read side).
+  The order is set by the registrations in `AddApplicationDecorators`, which Scrutor's `TryDecorate`
+  applies in **reverse**, so the last registered is the outermost
+  (`MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:93-102`).
   Cross-cutting concerns live in the pipeline, not in each handler. First concrete code: the
   `ICommandHandler`/`IQueryHandler` contracts and their decorators in
   [`group-05`](group-05-cqrs-pipeline.md).
@@ -94,8 +105,9 @@ chapter; here is the orientation so the vocabulary is familiar.
   (`MMCA.ADC.UI.Web` / `.Web.Client`, Blazor Server + WebAssembly) and the **.NET MAUI** host
   (`MMCA.ADC.UI`) `ProjectReference` the *same* UI libraries, so one page renders across **Web,
   Android, iOS, macOS, and Windows** with no per-platform reimplementation, MAUI hosts the shared
-  components in a `BlazorWebView` (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MainPage.xaml:9`, wired by
-  `AddMauiBlazorWebView()` in `MauiProgram.cs:51`). The only platform-specific code is tiny entry
+  components in a `BlazorWebView` (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MainPage.xaml:16`, wired by
+  `AddMauiBlazorWebView()` in `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/MauiProgram.cs:64`). The only
+  platform-specific code is tiny entry
   points (`App`/`AppDelegate`/`MainApplication`, `MauiProgram`). First concrete code: the MAUI
   bootstraps and host shells in [`group-25`](group-25-adc-host-composition.md); the supported
   device/browser matrix is in `MMCA.ADC/CLAUDE.md`.
@@ -126,13 +138,16 @@ chapter; here is the orientation so the vocabulary is familiar.
   translatable). First concrete code: the configuration hierarchy in
   [`group-07`](group-07-persistence-ef-core.md); this is the per-entity half of database-per-service
   ([ADR-006](https://ivanball.github.io/docs/adr/006-database-per-service.html)) plus the polyglot story ([ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html)).
-  *Adoption note (verified by source):* this is a real, **tested** capability with a **staged first
-  adoption**. Today **all current production entity configs use the `…SQLServer` base** (ADC runs SQL
-  Server only, 4 SQL databases), but the [ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html) work shipped the full polyglot machinery (unified base,
+  *Adoption note (verified by source):* this is a real, **tested** capability that no entity routes
+  to yet. Today **every entity configuration in ADC derives from the `…SQLServer` base** (ADC runs
+  SQL Server only, four databases: `ADC_Identity`, `ADC_Conference`, `ADC_Engagement`,
+  `ADC_Notification`, `MMCA.ADC/Source/Hosting/MMCA.ADC.AppHost/Program.cs:32-35`), and the
+  [ADR-018](https://ivanball.github.io/docs/adr/018-polyglot-persistence.html) work shipped the full polyglot machinery (unified base,
   cross-source spec + fitness rule, Cosmos-index skip, SQLite `EnsureCreated`, Cosmos/SQLite Aspire
-  helpers, portability tests) and ADC Conference's `Session`→Cosmos / `Room`→SQLite move is the
-  staged-but-not-yet-deployed first use. Treat Cosmos/SQLite as supported, exercised extension points, see the
-  coverage audit's extension-point inventory.
+  helpers, portability tests). An end-to-end trial moving ADC Conference's `Session` to Cosmos and
+  `Room` to SQLite was built and tested locally, then **deliberately reverted** to all-SQL-Server
+  with every framework extension point kept. Treat Cosmos/SQLite as supported, exercised extension
+  points, see the coverage audit's extension-point inventory.
 
 - **The Result pattern.** Expected error paths use a `Result`/`Result<T>` return value carrying
   `Error`s, **not** exceptions. This is the single most pervasive idiom in the codebase, taught in
@@ -142,10 +157,15 @@ chapter; here is the orientation so the vocabulary is familiar.
   query filters exclude them. `CreatedOn/By` and `LastModifiedOn/By` are stamped centrally in
   `SaveChangesAsync`. For genuine erasure (GDPR/CCPA) there is a separate anonymize path. ([ADR-005](https://ivanball.github.io/docs/adr/005-soft-delete-vs-erasure.html).)
 
-- **Strongly-typed identifier aliases.** Each entity's ID type is a solution-wide
+- **Primitive identifier type aliases ([ADR-048](https://ivanball.github.io/docs/adr/048-primitive-identifier-type-aliases.html)).** Each entity's ID type is a per-module
   `global using XIdentifierType = int;` (or `= System.Guid;`) alias, linked into every project via
   `Directory.Build.props`. Code says `EventIdentifierType`, not bare `int`, so the ID type can change
-  in one place. (The identifier-alias mechanism is covered with the entity contracts in
+  in one place: ADC's `SpeakerIdentifierType` is a `System.Guid` beside fourteen `int` siblings in
+  the same file (`MMCA.ADC.Conference.GlobalUsings.IdentifierType.cs:18`, in
+  `MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Shared/`).
+  These are **aliases, not wrapper structs**: the alias is erased at compile time, so it buys
+  readability and one-place change, not compile-time protection against passing the wrong same-typed
+  ID. (The identifier-alias mechanism is covered with the entity contracts in
   [`group-02`](group-02-domain-building-blocks.md).)
 
 ### The decision records (ADRs) this guide tags
@@ -169,7 +189,7 @@ the full set, for orientation:
 | 009 | Standard resilience handler on every outbound client; declared RTO/RPO + drilled restore | [g13](group-13-grpc-contracts.md)/[devops-runbooks](devops-runbooks.md) |
 | 010 | Every integration event carries a `SchemaVersion`; breaking changes use a new type + upcaster | [g04](group-04-events-outbox.md) |
 | 011 | ~~en-US-only i18n is a deliberate non-goal~~ **superseded by [ADR-027](https://ivanball.github.io/docs/adr/027-multi-locale-i18n.html)** (multi-locale en-US + es) | [g15](group-15-common-ui-framework.md) |
-| 012 | gRPC host transport: `Http2`-only h2c + gateway-routed JWKS (ADC) vs `Http1AndHttp2` + ALPN (Store) | [g16](group-16-aspire-orchestration.md)/[g20](group-20-conference-api-grpc.md) |
+| 012 | gRPC host transport: both consumers now default to `Http2`-only h2c (Profile A); `Http1AndHttp2` survives on the WebSocket hosts only (ADC Notification, which adds a dedicated `Http2` gRPC endpoint beside it, and Store Sales) | [g16](group-16-aspire-orchestration.md)/[g20](group-20-conference-api-grpc.md) |
 | 013 | Expected failures are `Result`/`ErrorType` values; only the edge maps to HTTP/gRPC | [g01](group-01-result-error-handling.md) |
 | 014 | CQRS decorator chain: FeatureGate → Logging → Caching → Validating → Transactional → Handler | [g05](group-05-cqrs-pipeline.md) |
 | 015 | Architecture fitness functions: compile-time layer guard + shared NetArchTest rule library | [g27](group-27-testing-infrastructure.md) |
@@ -248,7 +268,7 @@ Management, see §4). What each is and why it's here:
   compile-time, allocation-free way to keep mapping explicit and fast.
 - **Scrutor 7**: assembly scanning and **decorator registration** (`TryDecorate`) for DI; this is how
   the CQRS decorator pipeline is wired.
-- **Microsoft.FeatureManagement 4.5**: feature flags (e.g. `Notification.PushNotifications`).
+- **Microsoft.FeatureManagement 4.6**: feature flags (e.g. `Notification.PushNotifications`).
 - **System.Linq.Dynamic.Core**: dynamic `OrderBy`/filtering for query endpoints.
 
 **Persistence**
@@ -263,21 +283,21 @@ Management, see §4). What each is and why it's here:
 - **MassTransit 8.5.5** (RabbitMQ + Azure Service Bus transports), the broker abstraction behind
   `IMessageBus`'s broker implementation. **Pinned to v8 by policy**: v9 requires a commercial license
   and crashes broker-enabled hosts at startup; a build-time test fails if the major reaches 9
-  (`Directory.Packages.props:39-48`, and see §4).
+  (`MMCA.Common/Directory.Packages.props:49-56` carries the pin and the warning comment, and see §4).
 
 **Transport (service extraction)**
 - **Grpc.AspNetCore / Grpc.Net.ClientFactory / Grpc.Tools / Google.Protobuf**: gRPC server + client
   + `.proto` compilation, for synchronous inter-service calls between extracted modules ([ADR-007](https://ivanball.github.io/docs/adr/007-grpc-extraction.html)).
 
 **UI**
-- **MudBlazor 9.5.0**: the Blazor **component library** and design system (grids, dialogs, forms,
+- **MudBlazor 9.7.0**: the Blazor **component library** and design system (grids, dialogs, forms,
   theme). Used by both `MMCA.Common.UI` and the ADC UIs.
 - **Microsoft.AspNetCore.Components.***: Blazor (Server + WebAssembly) runtime and authorization.
 - **Polly 8** (via `Microsoft.Extensions.Http.Resilience`), retry/timeout/circuit-breaker resilience
   on outbound HTTP/gRPC clients.
 
 **Hosting / observability (.NET Aspire)**
-- **Aspire.Hosting 13.4.2** (+ RabbitMQ, Azure CosmosDB integrations), local **orchestration**: the
+- **Aspire.Hosting 13.4.6** (+ RabbitMQ, Azure CosmosDB integrations), local **orchestration**: the
   AppHost spins up every service, database, broker, and a dashboard with one command.
 - **OpenTelemetry** (Api/Exporter/Instrumentation) + **Azure.Monitor.OpenTelemetry.AspNetCore**,
   structured logs, distributed traces, and metrics, exported to Azure Application Insights.
@@ -301,7 +321,7 @@ Management, see §4). What each is and why it's here:
   `"runner": "Microsoft.Testing.Platform"`), **not** VSTest. This changes how you run a single test
   (see §6).
 - **bUnit 2**: Blazor component testing (the v2 line is the one compatible with xUnit v3 / MTP).
-- **Microsoft.Playwright 1.60** + **Deque.AxeCore.Playwright**: browser E2E and **axe-core**
+- **Microsoft.Playwright 1.61** + **Deque.AxeCore.Playwright 4.12**: browser E2E and **axe-core**
   accessibility (WCAG 2.1 AA) scanning.
 - **NetArchTest.eNhancedEdition**: **architecture fitness tests** (assert layer/purity rules against
   compiled assemblies).
@@ -325,11 +345,14 @@ Management, see §4). What each is and why it's here:
 - **`TreatWarningsAsErrors` globally**, and **five analyzers at *error* severity.** The code must be
   warning-free to compile. `[Rubric §15, Best Practices & Code Quality]`
 - **`.editorconfig` enforces style at error severity** (`MMCA.Common/.editorconfig`): file-scoped
-  namespaces (`csharp_style_namespace_declarations = file_scoped:error`, line 94), braces always
-  required, `var` only when the type is apparent (lines 97–99), expression-bodied members preferred
-  (lines 102–109), all accessibility modifiers required, no `this.` qualification, `readonly` where
-  possible, private fields `_camelCase`, constants `PascalCase`, interfaces begin with `I` (error,
-  line 204). Test files relax method-naming and complexity rules via a `[Tests/**/*.cs]` section.
+  namespaces (`csharp_style_namespace_declarations = file_scoped:error`, line 102), braces always
+  required (`csharp_prefer_braces = true:error`, line 138), `var` only when the type is apparent
+  (lines 105-107), expression-bodied members preferred (lines 110-117), all accessibility modifiers
+  required (line 73), no `this.` qualification (lines 57-60), `readonly` where possible (line 94),
+  interfaces begin with `I` (error, line 212). The naming rules below that (private fields
+  `_camelCase`, constants `PascalCase`) are declared at `warning`, which `TreatWarningsAsErrors`
+  promotes to a build break anyway. Test files relax method-naming and complexity rules via the
+  `[Tests/**/*.cs]` section (line 737).
 
 ### C# `extension(T)` types, read this once
 <a id="c-extensiont-types--read-this-once"></a>
@@ -359,15 +382,18 @@ to the enclosing static class, that's how this guide attributes their dependenci
 The layer rules are not just convention, they are enforced **twice**:
 
 1. **Compile-time**, `Source/Build/MMCA.Common.LayerEnforcement.targets`, imported for every
-   `MMCA.Common.*` project, inspects `ProjectReference`s before build and **fails** with a descriptive
-   error if a layer references a forbidden upstream layer.
+   `MMCA.Common.*` project under `Source/` (`MMCA.Common/Directory.Build.props:99-100`), inspects
+   `ProjectReference`s before build and **fails** with a descriptive error if a layer references a
+   forbidden upstream layer.
 2. **Runtime (test)**, `Tests/Architecture/MMCA.Common.Architecture.Tests` (NetArchTest) asserts the
    same rules against compiled assemblies: layer flow, **domain purity**, and **microservice
    extraction** rules (e.g. *Application/Domain/Shared must never reference MassTransit directly*,
    depend on `IMessageBus` instead). The rule bodies themselves now live once in the shipped
-   **`MMCA.Common.Testing.Architecture`** package (the 13th package): a reusable rule library +
+   **`MMCA.Common.Testing.Architecture`** package (the 13th of the fifteen): a reusable rule library +
    abstract `*TestsBase` classes that each repo's arch-test project subclasses, supplying only a
-   repo-specific `IArchitectureMap`, so both `MMCA.Common` and `MMCA.ADC` enforce one rule set.
+   repo-specific `IArchitectureMap`, so `MMCA.Common` and `MMCA.ADC` (and, outside this guide's
+   scope, MMCA.Store and MMCA.Helpdesk) all enforce one rule set
+   ([ADR-015](https://ivanball.github.io/docs/adr/015-architecture-fitness-functions.html)).
 
 When you move a type between packages, expect *both* gates to react. This is the codebase's
 "executable governance", covered fully in the architecture-tests chapter.
@@ -381,10 +407,15 @@ When you move a type between packages, expect *both* gates to react. This is the
 - **Microsoft Testing Platform**, not VSTest. To run one test class/method you target the test
   project and pass an MTP filter after `--`:
   ```bash
-  dotnet test --project Tests/<path>/<Name>.Tests.csproj -- -method "*Pattern*"
-  #                                                          -- -class  "*FooTests*"
+  dotnet test --project Tests/<path>/<Name>.Tests.csproj -- --filter-method "*Pattern*"
+  #                                                      -- --filter-class  "*FooTests*"
   ```
-  Every test project must contain ≥1 test or MTP exits 8 (CI uses `--minimum-expected-tests 1`).
+  Always `--project <csproj>`, never a bare path, and get the flag right: a wrong filter flag exits
+  5 having run zero tests instead of erroring out loudly. Every test project must contain at least
+  one test or MTP exits 8, so CI passes `--minimum-expected-tests` on every run: `1` on the ADC legs
+  (`MMCA.ADC/.github/workflows/deploy.yml:219`) and `2000` on MMCA.Common's full solution run, where
+  the point is to fail a discovery regression that silently drops thousands of tests
+  (`MMCA.Common/.github/workflows/ci.yml:144`).
 - Some UI test projects (`MMCA.Common.UI.Gallery`, `MMCA.Common.UI.E2E.Tests`) are **deliberately
   excluded** from the `.slnx` so the unit-test run stays fast; they run in a dedicated CI job and are
   built by csproj path.
@@ -393,40 +424,44 @@ When you move a type between packages, expect *both* gates to react. This is the
 
 ## 6. The 34-category architecture-evaluation lens
 
-This codebase is also scored against a **34-category rubric** (`Architecture/ArchitectureEvaluationCriteria.md`).
+This codebase is also scored against a **34-category rubric**
+(`Website/docs-src/governance/ArchitectureEvaluationCriteria.md`, published at
+<https://ivanball.github.io/docs/governance/>).
 This guide **weaves the rubric in** so you learn the system *and* the lens it's judged by at the same
 time. Each type section tags the categories it genuinely touches as **`[Rubric §N, Name]`**, with a
 one-line "what §N assesses" and "how this code embodies (or under-uses) it". The first occurrence of a
 category teaches it; later ones cross-reference back. **The guide explains categories; it does not
-score them**, the filled scorecards live in `Architecture/ArchitectureEvaluation-MMCA.Common.md`,
-`Architecture/ArchitectureEvaluation-MMCA.ADC.md`, and the repo's `ArchitectureScorecard.md`.
+score them**, the filled scorecards live beside the rubric as one repo-prefixed file per repo
+(`Website/docs-src/governance/common-ArchitectureScorecard.md`, `adc-ArchitectureScorecard.md`,
+`store-ArchitectureScorecard.md`), each paired with a `*-RemediationBacklog.md`.
 
 ### Two axes (so a tag can say "mature but mediocre" or vice-versa)
 
-- **Maturity (0–4)**, *process*: how consistently/automatically the pattern is governed
+- **Maturity (0 to 4)**, *process*: how consistently/automatically the pattern is governed
   (ad-hoc → enforced by CI).
-- **Implementation (0–10)**, *substance*: how good the implementation is right now, against the
+- **Implementation (0 to 10)**, *substance*: how good the implementation is right now, against the
   category's criteria and red flags.
 
 ### The categories, in three parts (quick index, full criteria in the rubric file)
 
-**Part A, Application / Backend (§1–17):** §1 SOLID · §2 Design Patterns · §3 Clean Architecture ·
+**Part A, Application / Backend (§1 to §17):** §1 SOLID · §2 Design Patterns · §3 Clean Architecture ·
 §4 Domain-Driven Design · §5 Vertical Slice · §6 CQRS & Event-Driven · §7 Microservices Readiness ·
 §8 Data Architecture · §9 API & Contract Design · §10 Cross-Cutting Concerns · §11 Security ·
 §12 Performance & Scalability · §13 Observability & Operability · §14 Testability & Test Strategy ·
 §15 Best Practices & Code Quality · §16 Maintainability & Evolvability · §17 DevOps & Deployment.
 
-**Part B, Front-End / UI (§18–28):** §18 UI Architecture & Component Design · §19 State Management &
-Data Flow · §20 Design System, Theming & Consistency · §21 Accessibility (a11y) · §22 Responsive &
-Cross-Browser/Device · §23 Front-End Performance & Rendering · §24 Forms, Validation & UX Safety ·
+**Part B, Front-End / UI (§18 to §28):** §18 UI Architecture & Component Design · §19 State Management &
+Data Flow · §20 Design System, Theming & UI Consistency · §21 Accessibility (a11y) · §22 Responsive
+Design & Cross-Browser/Device · §23 Front-End Performance & Rendering · §24 Forms, Validation & UX Safety ·
 §25 Navigation, Routing & Information Architecture · §26 Front-End Security · §27 Internationalization
 & Localization · §28 Front-End Testing & Quality.
 
-**Part C, Operational, Governance & Cross-Cutting (§29–34):** §29 Resilience, Reliability & Business
+**Part C, Operational, Governance & Cross-Cutting (§29 to §34):** §29 Resilience, Reliability & Business
 Continuity · §30 Compliance, Privacy & Data Governance · §31 Cost Efficiency / FinOps · §32 Dependency
-& Supply-Chain · §33 Developer Experience & Inner Loop · §34 Architecture Governance & Documentation.
+& Supply-Chain Management · §33 Developer Experience & Inner Loop · §34 Architecture Governance &
+Documentation.
 
-Some categories live most naturally in the DevOps/test chapters (§13–14, §17, §28, §29–34) and are
+Some categories live most naturally in the DevOps/test chapters (§13 to §14, §17, §28, §29 to §34) and are
 explained there. The coverage audit will include a matrix proving every one of the 34 is explained at
 least once against real code or a real artifact.
 
