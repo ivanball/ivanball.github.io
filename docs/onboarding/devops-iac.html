@@ -876,14 +876,20 @@
           not have. The trade-off is stated in the ADR: one shared identity means any app carrying it can read
           <strong>every</strong> secret in the vault, not only the ones its own <code>secrets</code> list names, and the template
           cannot report that a grant is missing.</p>
-          <p><strong>The staged SQL auth is the one credential still on the old model.</strong> <code>useManagedIdentitySql</code>
-          (<code>main.bicep:36</code>) defaults to <code>false</code> and selects one of two auth segments for the shared connection
-          string base (<code>main.bicep:152-154</code>): either
+          <p><strong>The staged SQL auth completed its migration, but only the staging is visible in source.</strong>
+          <code>useManagedIdentitySql</code> (<code>main.bicep:36</code>) defaults to <code>false</code> and selects one of two auth segments
+          for the shared connection string base (<code>main.bicep:152-154</code>): either
           <code>Authentication=Active Directory Managed Identity;User Id=&lt;apps identity client id&gt;</code> with no
-          password at all, or <code>User ID=...;Password=...</code>. With the default parameters every app-to-database
-          string still carries a login and password (<code>main.bicep:154</code>). That password is itself a vault secret
-          and never app configuration, so what remains is a shared SQL login, not an exposed one. The
-          migration runs in three stages, all driven by repository variables that are absent by default:
+          password at all, or <code>User ID=...;Password=...</code>. Reading the template alone suggests every
+          app-to-database string still carries a login and password (<code>main.bicep:154</code>), and that is what a
+          fresh environment gets. It is not what ADC production runs. The deployed value comes from a
+          repository variable: <code>deploy.yml:932</code> reads <code>vars.USE_MANAGED_IDENTITY_SQL</code>, and
+          <code>deploy.yml:1065-1068</code> rewrites the parameter to <code>true</code> when it is set. In <code>ivanball/ADC</code> that
+          variable is <code>true</code> (set 2026-06-28, alongside <code>SQL_AAD_ADMIN_LOGIN</code> and <code>SQL_AAD_ADMIN_OID</code>), so the
+          running apps authenticate passwordlessly and the shared SQL password is no longer on the app path.
+          The ADC scorecard records the same activation on that date as the change that lifted §17 DevOps
+          Implementation from 8 to 9. The
+          migration ran in three stages, all driven by repository variables that are absent by default:
           supply the Entra admin (<code>deploy.yml:1054-1061</code>), run the per-database external-provider grants by
           hand, then set <code>USE_MANAGED_IDENTITY_SQL=true</code> (<code>deploy.yml:1065-1068</code>). Because the Entra admin is
           additive and the flag defaults off, stage 1 changes nothing observable and a bad flip rolls back by
@@ -1185,11 +1191,14 @@
           commands themselves live in <code>infra/DISASTER-RECOVERY.md</code>, which is private to the ADC repo and out
           of scope for this chapter. A distilled version is published in the framework&#39;s reference runbook,
           <code>MMCA.Common/samples/deployment/DEPLOYMENT.md</code>.</li>
-          <li>Whether the live deployment has set the <code>USE_MANAGED_IDENTITY_SQL</code>, <code>SQL_AAD_ADMIN_LOGIN</code> or
-          <code>SQL_AAD_ADMIN_OID</code> repository variables is not visible in the repository: the template defaults
-          are <code>false</code> and empty, and the values are GitHub repo variables. The same applies to
-          <code>AZURE_RESOURCE_GROUP</code> and <code>AZURE_SQL_LOCATION</code>, whose fallbacks (<code>acc-rg</code>, <code>westus2</code>) appear only
-          in workflow comments and defaults.</li>
+          <li>The <code>USE_MANAGED_IDENTITY_SQL</code>, <code>SQL_AAD_ADMIN_LOGIN</code> and <code>SQL_AAD_ADMIN_OID</code> repository variables
+          are <strong>not visible in the repository</strong>, because they are GitHub repo configuration rather than
+          source: the template defaults are <code>false</code> and empty. All three are in fact set in <code>ivanball/ADC</code>
+          (confirmed 2026-08-02, all dated 2026-06-28), which is why the deployed apps run passwordless SQL
+          even though the template default says otherwise. Treat the template as the shape and the
+          repository variables as the state; neither alone tells you what production is doing. The same
+          split applies to <code>AZURE_RESOURCE_GROUP</code> and <code>AZURE_SQL_LOCATION</code>, whose fallbacks (<code>acc-rg</code>,
+          <code>westus2</code>) appear only in workflow comments and defaults.</li>
           <li>The <code>azure/arm-deploy@v2</code> action&#39;s <code>deploymentMode</code> is not set explicitly in <code>deploy.yml</code>
           (<code>deploy.yml:773-779</code> for foundation, <code>deploy.yml:1070-1076</code> for main), the action defaults to
           Incremental, but this is not stated in the workflow file; it is inferred from the Incremental intent

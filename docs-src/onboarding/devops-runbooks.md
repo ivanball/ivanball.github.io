@@ -618,9 +618,22 @@ SQL data plane staying on public network access with no VNet.
 deploy path: all three bicep knobs are default-safe, so a deploy with the defaults changes nothing
 (`SQL-MANAGED-IDENTITY.md:8-9`).
 
-[Rubric §11, Security] assesses credential hardening. Today ADC is at stage 0: `main.bicep:36`
-declares `useManagedIdentitySql` with a default of `false`, so production still authenticates to
-SQL with the admin password from Key Vault. [ADR-061](https://ivanball.github.io/docs/adr/061-runtime-secret-management.html) records the staging.
+[Rubric §11, Security] assesses credential hardening. **All three stages have been run in ADC
+production.** The template default is still `false` (`main.bicep:36`), because that is what makes a
+fresh environment start on password auth and each stage independently deployable, but the deployed
+value comes from a repository variable, not the default: `deploy.yml:932` reads
+`vars.USE_MANAGED_IDENTITY_SQL` and `deploy.yml:1065-1068` rewrites the parameter to `true` when it
+is set. All three variables are set in `ivanball/ADC` (`USE_MANAGED_IDENTITY_SQL`,
+`SQL_AAD_ADMIN_LOGIN` and `SQL_AAD_ADMIN_OID`, all dated 2026-06-28), so the deployed apps use
+passwordless `Active Directory Managed Identity` connection strings. The ADC scorecard records the
+same activation on that date, with all four services healthy and mapped `db_owner` in every
+per-service database, which is what lifted §17 DevOps Implementation from 8 to 9. `OPERATIONS.md:46`
+is therefore correct when it tells an on-call engineer that production runs passwordless SQL.
+
+Note for a reader trying to verify this: the live value is repository configuration, not source, so
+it cannot be confirmed from the tree. Reading `main.bicep:36` alone gives the opposite impression.
+[ADR-061](https://ivanball.github.io/docs/adr/061-runtime-secret-management.html) records the
+staging mechanism and describes the flag as not yet flipped, which was true when it was written.
 
 ### Why staged, and the three stages
 

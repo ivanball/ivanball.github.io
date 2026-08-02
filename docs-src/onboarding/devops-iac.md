@@ -793,14 +793,20 @@ not have. The trade-off is stated in the ADR: one shared identity means any app 
 **every** secret in the vault, not only the ones its own `secrets` list names, and the template
 cannot report that a grant is missing.
 
-**The staged SQL auth is the one credential still on the old model.** `useManagedIdentitySql`
-(`main.bicep:36`) defaults to `false` and selects one of two auth segments for the shared connection
-string base (`main.bicep:152-154`): either
+**The staged SQL auth completed its migration, but only the staging is visible in source.**
+`useManagedIdentitySql` (`main.bicep:36`) defaults to `false` and selects one of two auth segments
+for the shared connection string base (`main.bicep:152-154`): either
 `Authentication=Active Directory Managed Identity;User Id=<apps identity client id>` with no
-password at all, or `User ID=...;Password=...`. With the default parameters every app-to-database
-string still carries a login and password (`main.bicep:154`). That password is itself a vault secret
-and never app configuration, so what remains is a shared SQL login, not an exposed one. The
-migration runs in three stages, all driven by repository variables that are absent by default:
+password at all, or `User ID=...;Password=...`. Reading the template alone suggests every
+app-to-database string still carries a login and password (`main.bicep:154`), and that is what a
+fresh environment gets. It is not what ADC production runs. The deployed value comes from a
+repository variable: `deploy.yml:932` reads `vars.USE_MANAGED_IDENTITY_SQL`, and
+`deploy.yml:1065-1068` rewrites the parameter to `true` when it is set. In `ivanball/ADC` that
+variable is `true` (set 2026-06-28, alongside `SQL_AAD_ADMIN_LOGIN` and `SQL_AAD_ADMIN_OID`), so the
+running apps authenticate passwordlessly and the shared SQL password is no longer on the app path.
+The ADC scorecard records the same activation on that date as the change that lifted §17 DevOps
+Implementation from 8 to 9. The
+migration ran in three stages, all driven by repository variables that are absent by default:
 supply the Entra admin (`deploy.yml:1054-1061`), run the per-database external-provider grants by
 hand, then set `USE_MANAGED_IDENTITY_SQL=true` (`deploy.yml:1065-1068`). Because the Entra admin is
 additive and the flag defaults off, stage 1 changes nothing observable and a bad flip rolls back by
@@ -1124,11 +1130,14 @@ secret and redeploying.
   commands themselves live in `infra/DISASTER-RECOVERY.md`, which is private to the ADC repo and out
   of scope for this chapter. A distilled version is published in the framework's reference runbook,
   `MMCA.Common/samples/deployment/DEPLOYMENT.md`.
-- Whether the live deployment has set the `USE_MANAGED_IDENTITY_SQL`, `SQL_AAD_ADMIN_LOGIN` or
-  `SQL_AAD_ADMIN_OID` repository variables is not visible in the repository: the template defaults
-  are `false` and empty, and the values are GitHub repo variables. The same applies to
-  `AZURE_RESOURCE_GROUP` and `AZURE_SQL_LOCATION`, whose fallbacks (`acc-rg`, `westus2`) appear only
-  in workflow comments and defaults.
+- The `USE_MANAGED_IDENTITY_SQL`, `SQL_AAD_ADMIN_LOGIN` and `SQL_AAD_ADMIN_OID` repository variables
+  are **not visible in the repository**, because they are GitHub repo configuration rather than
+  source: the template defaults are `false` and empty. All three are in fact set in `ivanball/ADC`
+  (confirmed 2026-08-02, all dated 2026-06-28), which is why the deployed apps run passwordless SQL
+  even though the template default says otherwise. Treat the template as the shape and the
+  repository variables as the state; neither alone tells you what production is doing. The same
+  split applies to `AZURE_RESOURCE_GROUP` and `AZURE_SQL_LOCATION`, whose fallbacks (`acc-rg`,
+  `westus2`) appear only in workflow comments and defaults.
 - The `azure/arm-deploy@v2` action's `deploymentMode` is not set explicitly in `deploy.yml`
   (`deploy.yml:773-779` for foundation, `deploy.yml:1070-1076` for main), the action defaults to
   Incremental, but this is not stated in the workflow file; it is inferred from the Incremental intent

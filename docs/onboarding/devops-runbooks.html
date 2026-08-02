@@ -647,9 +647,21 @@
           <p><strong>When to run.</strong> Only when deliberately advancing that hardening. Nothing here is on the normal
           deploy path: all three bicep knobs are default-safe, so a deploy with the defaults changes nothing
           (<code>SQL-MANAGED-IDENTITY.md:8-9</code>).</p>
-          <p>[Rubric §11, Security] assesses credential hardening. Today ADC is at stage 0: <code>main.bicep:36</code>
-          declares <code>useManagedIdentitySql</code> with a default of <code>false</code>, so production still authenticates to
-          SQL with the admin password from Key Vault. <a href="https://ivanball.github.io/docs/adr/061-runtime-secret-management.html" target="_blank" rel="noopener">ADR-061</a> records the staging.</p>
+          <p>[Rubric §11, Security] assesses credential hardening. <strong>All three stages have been run in ADC
+          production.</strong> The template default is still <code>false</code> (<code>main.bicep:36</code>), because that is what makes a
+          fresh environment start on password auth and each stage independently deployable, but the deployed
+          value comes from a repository variable, not the default: <code>deploy.yml:932</code> reads
+          <code>vars.USE_MANAGED_IDENTITY_SQL</code> and <code>deploy.yml:1065-1068</code> rewrites the parameter to <code>true</code> when it
+          is set. All three variables are set in <code>ivanball/ADC</code> (<code>USE_MANAGED_IDENTITY_SQL</code>,
+          <code>SQL_AAD_ADMIN_LOGIN</code> and <code>SQL_AAD_ADMIN_OID</code>, all dated 2026-06-28), so the deployed apps use
+          passwordless <code>Active Directory Managed Identity</code> connection strings. The ADC scorecard records the
+          same activation on that date, with all four services healthy and mapped <code>db_owner</code> in every
+          per-service database, which is what lifted §17 DevOps Implementation from 8 to 9. <code>OPERATIONS.md:46</code>
+          is therefore correct when it tells an on-call engineer that production runs passwordless SQL.</p>
+          <p>Note for a reader trying to verify this: the live value is repository configuration, not source, so
+          it cannot be confirmed from the tree. Reading <code>main.bicep:36</code> alone gives the opposite impression.
+          <a href="https://ivanball.github.io/docs/adr/061-runtime-secret-management.html" target="_blank" rel="noopener">ADR-061</a> records the
+          staging mechanism and describes the flag as not yet flipped, which was true when it was written.</p>
           <h3 id="why-staged-and-the-three-stages">Why staged, and the three stages</h3>
           <p>The migration is staged because managed-identity auth needs a database user mapped to the identity
           (<code>CREATE USER ... FROM EXTERNAL PROVIDER</code>), which is data-plane T-SQL that must run as an Entra
