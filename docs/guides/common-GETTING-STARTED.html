@@ -121,18 +121,21 @@
           <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
           <h1 id="getting-started-build-a-new-app-on-mmcacommon">Getting Started: Build a New App on MMCA.Common</h1>
           <p>This is the step-by-step guide for standing up a <strong>brand-new application</strong> on the MMCA.Common
-          framework. MMCA.Common is a .NET 10 framework for DDD, Clean Architecture, and CQRS, shipped as
-          fifteen lockstep-versioned NuGet packages. Its core promise: <strong>build a modular monolith now, and
-          extract a module into its own microservice later, without a rewrite.</strong></p>
+          framework. MMCA.Common is a .NET 10 framework for DDD, Clean Architecture, and CQRS, shipped as a set
+          of lockstep-versioned NuGet packages (the authoritative list and count live in
+          <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a>). Its core promise: <strong>build a
+          modular monolith now, and extract a module into its own microservice later, without a rewrite.</strong></p>
           <p>This guide builds <strong>monolith-first</strong> (the fastest path to a running app), then shows the <strong>extraction</strong>
           of one module into its own service behind a gateway, so the &quot;extract later&quot; promise is concrete rather
           than theoretical.</p>
-          <p>A runnable reference app lives at <code>../MMCA.Helpdesk</code> (a support-ticket app). It is build-verified
-          through the monolith phases below: one <strong>Tickets</strong> module exercised across all five layers, a REST API
-          host, and a Blazor Server + MudBlazor UI host, all orchestrated by Aspire. To stay minimal it ships
-          <strong>without an Identity module</strong> and runs <strong>issuer-less</strong> (see Phase 2), and the <strong>extraction</strong> (Phase 8)
-          is documented rather than pre-built (the plumbing is in place). Wherever a step says &quot;pattern source&quot;,
-          that points at real, working code you can copy from MMCA.Helpdesk, MMCA.ADC, or MMCA.Store.</p>
+          <p>A runnable reference app lives at <a href="https://github.com/ivanball/MMCA.Helpdesk" target="_blank" rel="noopener">MMCA.Helpdesk</a> (a
+          support-ticket app). It is build- and test-verified through the monolith phases below: one <strong>Tickets</strong>
+          module exercised across all five layers, a REST API host, and a Blazor Server + MudBlazor UI host, all
+          orchestrated by Aspire, with three test projects (domain, application, architecture fitness) that run
+          with no database. To stay minimal it ships <strong>without an Identity module</strong> and runs <strong>issuer-less</strong> (see
+          Phase 2), and the <strong>extraction</strong> (Phase 8) is documented rather than pre-built (the plumbing is in
+          place). Wherever a step says &quot;pattern source&quot;, that points at real, working code you can copy from
+          MMCA.Helpdesk, MMCA.ADC, or MMCA.Store.</p>
           <blockquote>
           <p><strong>Reading the framework itself:</strong> for the <em>why</em> behind each pattern, read the relevant
           <a href="../adr/index.html">ADR</a>. For a type-by-type tour of the framework internals, see the
@@ -162,7 +165,8 @@
           <ul>
           <li><strong>.NET 10 SDK</strong> (the framework targets <code>net10.0</code> with <code>LangVersion: preview</code> for C# extension types).</li>
           <li><strong>SQL Server</strong> reachable locally (LocalDB, a container, or the one Aspire starts for you).</li>
-          <li><strong>Docker Desktop</strong> (Aspire provisions SQL Server, Redis, and RabbitMQ as containers for local runs).</li>
+          <li><strong>Docker Desktop</strong> (Aspire provisions SQL Server as a container for the monolith; Redis and RabbitMQ
+          join in the extraction phase).</li>
           <li><strong>EF Core tools:</strong> <code>dotnet tool install --global dotnet-ef</code>.</li>
           </ul>
           <p><strong>Decide how to consume MMCA.Common (two modes, switchable in one file):</strong></p>
@@ -182,11 +186,13 @@
           Debug</strong> before your app, or the IDE binds the stale last-built Debug reference assembly and reports
           phantom <code>CS0103</code> errors against new members. Build MMCA.Common with <code>-c Debug</code>, then build your app.</p>
           </blockquote>
-          <p><strong>Pick the framework version.</strong> All fifteen packages move together. Use the latest released tag
-          (see <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a> for the current version; the <code>1.128.0</code> in the samples below was
+          <p><strong>Pick the framework version.</strong> Every package moves together. Use the latest released tag
+          (see <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a> for the current version; the <code>1.135.0</code> in the samples below was
           current when this guide was last refreshed). Choose one version and use it for every <code>MMCA.Common.*</code> entry (Phase 1). See
           <a href="../adr/016-lockstep-versioning-masstransit-pin.html">ADR-016</a>: there is no phased rollout and no version
-          skew across the fifteen packages.</p>
+          skew across the set. The rule is enforced, not just advisory: the shared
+          <code>FrameworkVersionConsistencyTestsBase</code> fitness rule (Phase 6) fails the build when the <code>MMCA.Common.*</code>
+          pins in <code>Directory.Packages.props</code> disagree, so a half-finished sweep cannot ship.</p>
           <hr>
           <h2 id="phase-1-create-the-solution-and-the-build-plumbing">Phase 1: Create the solution and the build plumbing</h2>
           <p>The plumbing files are the load-bearing, easy-to-get-wrong part. The fastest start is to copy them from
@@ -199,7 +205,7 @@
             Directory.Packages.props
             global.json
             nuget.config
-            local.props.template            (copy to local.props for local-source mode; local.props is gitignored)
+            local.props.template            (copy to local.props for local-source mode; gitignore it in a real app)
             .editorconfig                   (copy MMCA.ADC&#39;s verbatim; it drives the 5 analyzers)
             .gitignore
             Source/
@@ -210,7 +216,7 @@
               Hosting/                      (Aspire AppHost + per-DB migrations projects)
               Services/                     (added later, in the extraction phase)
             Tests/
-              Modules/  Architecture/       (the reference app ships these two; Integration/E2E are optional adds)</code></pre>
+              Modules/  Architecture/       (the reference app ships three projects here; Integration/E2E are optional adds)</code></pre>
           <h3 id="directorypackagesprops-central-package-management"><code>Directory.Packages.props</code> (Central Package Management)</h3>
           <p>Versions live here, not in individual <code>.csproj</code> files. List <strong>every</strong> <code>MMCA.Common.*</code> package you
           consume at one version (the count is owned by <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a>), and keep <strong>MassTransit pinned
@@ -222,22 +228,22 @@
             <span class="hljs-tag">&lt;/<span class="hljs-name">PropertyGroup</span>&gt;</span>
             <span class="hljs-tag">&lt;<span class="hljs-name">ItemGroup</span>&gt;</span>
               <span class="hljs-comment">&lt;!-- MMCA Common packages: all at one version, bumped in lockstep --&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Shared&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Domain&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Application&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Infrastructure&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.API&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Grpc&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.UI&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.UI.Web&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Shared&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Domain&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Application&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Infrastructure&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.API&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Grpc&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.UI&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.UI.Web&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
               <span class="hljs-comment">&lt;!-- MAUI heads only: the one MAUI-TFM package (ADR-042); web-only apps skip it --&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.UI.Maui&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Aspire&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Aspire.Hosting&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Testing&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Testing.E2E&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Testing.UI&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Testing.Architecture&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.128.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.UI.Maui&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Aspire&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Aspire.Hosting&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Testing&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Testing.E2E&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Testing.UI&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
+              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Testing.Architecture&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
               <span class="hljs-comment">&lt;!-- Third-party versions: copy the relevant rows from MMCA.ADC/Directory.Packages.props --&gt;</span>
               <span class="hljs-comment">&lt;!-- (EF Core, FluentValidation, Riok.Mapperly, Scrutor, xunit.v3, Aspire.*, Yarp, the 5 analyzers, etc.) --&gt;</span>
             <span class="hljs-tag">&lt;/<span class="hljs-name">ItemGroup</span>&gt;</span>
@@ -497,10 +503,14 @@
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs  (linked solution-wide via Directory.Build.props)</span>
           <span class="hljs-keyword">global</span> <span class="hljs-keyword">using</span> TicketIdentifierType = <span class="hljs-built_in">int</span>;
           <span class="hljs-keyword">global</span> <span class="hljs-keyword">using</span> TicketCommentIdentifierType = <span class="hljs-built_in">int</span>;</code></pre>
-          <p>The read model implements <code>IBaseDTO&lt;TId&gt;</code> (the framework read-side contract) and carries its children:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">record</span> <span class="hljs-title">class</span> <span class="hljs-title">TicketDTO</span> : <span class="hljs-title">IBaseDTO</span>&lt;<span class="hljs-title">TicketIdentifierType</span>&gt;
+          <p>The read model implements <code>IBaseDTO&lt;TId&gt;</code> (the framework read-side contract) and carries its children.
+          It also implements <strong><code>IConcurrencyAware</code></strong>, exposing the <code>RowVersion</code> the client echoes back on an
+          update so a conflicting concurrent edit surfaces as 409 instead of silently last-write-winning (see
+          <a href="../adr/035-optimistic-concurrency.html">ADR-035</a>):</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">record</span> <span class="hljs-title">class</span> <span class="hljs-title">TicketDTO</span> : <span class="hljs-title">IBaseDTO</span>&lt;<span class="hljs-title">TicketIdentifierType</span>&gt;, <span class="hljs-title">IConcurrencyAware</span>
           {
               <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> TicketIdentifierType Id { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
+              <span class="hljs-keyword">public</span> <span class="hljs-built_in">byte</span>[]? RowVersion { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }               <span class="hljs-comment">// ADR-035: echoed back on update</span>
               <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> <span class="hljs-built_in">string</span> Title { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
               <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> <span class="hljs-built_in">string</span> Description { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
               <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> TicketStatus Status { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }     <span class="hljs-comment">// the enum itself; serialized by name</span>
@@ -512,9 +522,18 @@
           <span class="hljs-comment">// fitness-enforced): a breaking change uses a NEW event type + upcaster, never a reshape. See ADR-010.</span>
           <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-keyword">class</span> <span class="hljs-title">TicketOpenedIntegrationEvent</span>(<span class="hljs-params">TicketIdentifierType TicketId, <span class="hljs-built_in">int</span> RequesterUserId</span>)
               : BaseIntegrationEvent</span>;</code></pre>
-          <p>Plain request bodies (e.g. <code>UpdateTicketRequest</code>, <code>AddCommentRequest</code>) live in Shared too. The <strong>create
-          request doubles as the command</strong> and is co-located with its use case in Application (next section); it
-          implements <code>ICacheInvalidating</code> so a successful create evicts cached ticket reads:</p>
+          <p>Plain request bodies (e.g. <code>TicketUpdateRequest</code>, <code>AddCommentRequest</code>) live in Shared too. Name the
+          update body with the <strong><code>*UpdateRequest</code></strong> suffix and have it implement <code>IConcurrencyAware</code>: that exact
+          pairing is what the <code>ConcurrencyConventionTestsBase</code> fitness rule looks for (Phase 6), so an update
+          request that skips the token fails the build rather than quietly losing a concurrent edit.</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">class</span> <span class="hljs-title">TicketUpdateRequest</span> : <span class="hljs-title">IConcurrencyAware</span>
+          {
+              <span class="hljs-keyword">public</span> <span class="hljs-built_in">byte</span>[]? RowVersion { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }               <span class="hljs-comment">// the token the client last read</span>
+              <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> <span class="hljs-built_in">string</span> Title { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
+              <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> <span class="hljs-built_in">string</span> Description { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
+          }</code></pre>
+          <p>The <strong>create request doubles as the command</strong> and is co-located with its use case in Application (next
+          section); it implements <code>ICacheInvalidating</code> so a successful create evicts cached ticket reads:</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Tickets/.../Application/Tickets/UseCases/Create/TicketCreateRequest.cs</span>
           <span class="hljs-keyword">public</span> <span class="hljs-keyword">record</span> <span class="hljs-title">class</span> <span class="hljs-title">TicketCreateRequest</span> : <span class="hljs-title">ICreateRequest</span>, <span class="hljs-title">ICacheInvalidating</span>
           {
@@ -577,6 +596,18 @@
                   }
               }
           }</code></pre>
+          <p>That scan is also what picks up the <strong>consuming</strong> side of both event paths, and the reference app ships
+          one of each so the distinction is visible in running code rather than only in prose:</p>
+          <ul>
+          <li><code>Tickets/DomainEventHandlers/TicketChangedAuditHandler</code> implements <code>IDomainEventHandler&lt;TicketChanged&gt;</code>.
+          Intra-module, dispatched in-process by <code>DomainEventDispatcher</code> after <code>SaveChangesAsync</code> (deferred
+          until after the commit when a transaction is open, so a handler never acts on state that rolls back).</li>
+          <li><code>Tickets/IntegrationEventHandlers/TicketOpenedHandler</code> implements
+          <code>IIntegrationEventHandler&lt;TicketOpenedIntegrationEvent&gt;</code>. Cross-module, delivered through the outbox:
+          in-process today, over the broker once Tickets is extracted, with no change to this handler.</li>
+          </ul>
+          <p>Neither is registered by hand. Put a handler in the module&#39;s Application assembly and the convention
+          scan finds it.</p>
           <h3 id="3d-infrastructure-ef-configuration-the-abstract-module-context-no-concrete-per-module-context">3d. Infrastructure: EF configuration, the abstract module context, no concrete per-module context</h3>
           <p>There is exactly <strong>one concrete</strong> context at runtime, the framework&#39;s sealed <code>SQLServerDbContext</code> (one
           instance per database). Each module declares an <strong>abstract</strong> <code>ModuleApplicationDbContext : ApplicationDbContext</code> that <em>only</em> lists the module&#39;s <code>DbSet</code>s: it documents the module&#39;s entity set
@@ -641,7 +672,10 @@
           }</code></pre>
           <p>The reference app&#39;s controller goes further: <code>GET {id}/details</code>, <code>PUT {id}</code>, <code>PUT {id}/status</code>,
           <code>DELETE {id}</code>, and <code>POST|PUT|DELETE {id}/comments[/{commentId}]</code>, each one the same three lines: call
-          the handler, <code>HandleFailure</code> on failure, else return the success shape.</p>
+          the handler, <code>HandleFailure</code> on failure, else return the success shape. <code>PUT {id}</code> also closes the
+          ADR-035 loop by forwarding the request&#39;s <code>RowVersion</code> onto the command
+          (<code>new UpdateTicketCommand(id, request.Title, request.Description) { RowVersion = request.RowVersion }</code>),
+          which is what turns a stale write into a 409 instead of an overwrite.</p>
           <h3 id="what-the-pipeline-does-for-you">What the pipeline does for you</h3>
           <p>Once <code>AddApplicationDecorators()</code> runs (Phase 5), every handler is wrapped by the Scrutor decorator
           chain (outermost first). See <a href="../adr/014-cqrs-decorator-pipeline.html">ADR-014</a>:</p>
@@ -778,10 +812,16 @@
               .ValidateDataAnnotations().ValidateOnStart();
           <span class="hljs-keyword">var</span> applicationSettings = builder.Configuration.GetSection(ApplicationSettings.SectionName).Get&lt;ApplicationSettings&gt;()!;
           
-          <span class="hljs-comment">// Cross-cutting edge (also wire health checks + output cache here, elided for brevity).</span>
+          <span class="hljs-comment">// Health checks. SQL is REQUIRED: a host that cannot resolve its own connection string should fail</span>
+          <span class="hljs-comment">// fast rather than report healthy and take traffic it cannot serve. Redis/RabbitMQ checks are tagged</span>
+          <span class="hljs-comment">// optional upstream, so they report on /health without gating readiness.</span>
+          builder.AddInfrastructureHealthChecks(requireSqlServer: <span class="hljs-literal">true</span>);
+          
+          <span class="hljs-comment">// Cross-cutting edge.</span>
           services.AddCommonCors(builder.Configuration);
           services.AddCommonApiVersioning();
           services.AddCommonRateLimiting();
+          services.AddOutputCache(options =&gt; options.AddBasePolicy(policy =&gt; policy.NoCache()));
           services.AddCommonResponseCompression();
           
           <span class="hljs-comment">// Auth. Issuer-less by default: with no Authentication:JwtBearer:Authority configured, register a bare</span>
@@ -805,17 +845,28 @@
           <span class="hljs-keyword">var</span> modulesSettings = builder.Configuration.GetSection(ModulesSettings.SectionName).Get&lt;ModulesSettings&gt;() ?? [];
           services.AddAPI(modulesSettings);                <span class="hljs-comment">// controllers, idempotency, exception handlers</span>
           
-          <span class="hljs-keyword">var</span> moduleLoader = <span class="hljs-keyword">new</span> ModuleLoader();
+          <span class="hljs-comment">// Contribute the module&#x27;s error-code translations to the edge localizer (ADR-027), so domain</span>
+          <span class="hljs-comment">// Error.Code values come back as localized ProblemDetails messages. One call per module.</span>
+          services.AddErrorResources&lt;TicketsErrorResources&gt;();
+          
+          <span class="hljs-keyword">using</span> <span class="hljs-keyword">var</span> loggerFactory = LoggerFactory.Create(logging =&gt; logging.AddConsole());
+          <span class="hljs-keyword">var</span> moduleLoader = <span class="hljs-keyword">new</span> ModuleLoader { Logger = loggerFactory.CreateLogger&lt;ModuleLoader&gt;() };
           moduleLoader.DiscoverAndRegister(services, builder.Configuration, applicationSettings, modulesSettings, builder.Environment.EnvironmentName);
           services.AddSingleton(moduleLoader);
           
           services.AddBrokerMessaging(builder.Configuration);  <span class="hljs-comment">// InProcessMessageBus until a broker is configured</span>
           services.AddApplicationDecorators();             <span class="hljs-comment">// MUST be last</span>
           
+          services.AddModuleHealthChecks(moduleLoader);    <span class="hljs-comment">// per-module readiness, after the modules are known</span>
+          
           <span class="hljs-keyword">var</span> app = builder.Build();
           <span class="hljs-keyword">await</span> app.Services.InitializeDatabaseAsync(applicationSettings, moduleLoader);   <span class="hljs-comment">// applies migrations / seeds</span>
           app.MapDefaultEndpoints();             <span class="hljs-comment">// /health, /alive</span>
-          app.UseCommonMiddlewarePipeline();     <span class="hljs-comment">// exception -&gt; correlation -&gt; auth -&gt; output-cache -&gt; controllers</span>
+          <span class="hljs-comment">// exception -&gt; correlation -&gt; request localization -&gt; forwarded headers -&gt; HTTPS -&gt; compression -&gt;</span>
+          <span class="hljs-comment">// routing -&gt; CORS -&gt; authentication -&gt; rate limiting -&gt; soft-deleted-user filter -&gt; authorization -&gt;</span>
+          <span class="hljs-comment">// output cache -&gt; JWKS/OIDC endpoints -&gt; controllers. Rate limiting sits AFTER authentication on</span>
+          <span class="hljs-comment">// purpose (ADR-019): the partition keys off the authenticated principal.</span>
+          app.UseCommonMiddlewarePipeline();
           <span class="hljs-keyword">await</span> app.RunAsync();</code></pre>
           <p>Modules are discovered by <code>ModuleLoader</code> and registered in topological dependency order (Kahn&#39;s
           algorithm) from their <code>IModule</code> implementations. <code>TicketsModule</code> is a leaf (no dependencies); its
@@ -834,6 +885,17 @@
           <code>EnsureSuccessStatusCode</code> fallback: the same pattern <code>MMCA.Common.UI</code>&#39;s <code>EntityServiceBase</code> uses, so
           pages show a meaningful error. <code>Program.cs</code> is the standard Razor-components host plus
           <code>AddServiceDefaults()</code> / <code>MapDefaultEndpoints()</code>.</p>
+          <p>Two wiring details in the layout are easy to miss because nothing fails loudly without them:</p>
+          <ul>
+          <li><strong><code>&lt;MmcaThemeProviders /&gt;</code> owns the Mud providers.</strong> Drop that one framework component at the top of
+          <code>MainLayout.razor</code> instead of hand-placing <code>MudThemeProvider</code>/<code>MudPopoverProvider</code>/<code>MudDialogProvider</code>/
+          <code>MudSnackbarProvider</code>: it also carries the dark/light lifecycle from
+          <a href="../adr/028-dark-theme-mode.html">ADR-028</a>, so <code>&lt;ThemeToggle /&gt;</code> has something to toggle.</li>
+          <li><strong><code>&lt;CultureSwitcher /&gt;</code> needs an <code>ICultureApplier</code>.</strong> The switcher delegates the actual switch to that
+          service, which <code>AddUIShared()</code> normally registers. A UI host that does not call <code>AddUIShared</code> (this
+          seed does not: it has no <code>ApiSettings</code>-backed client pipeline) must register the Blazor Web default
+          itself, <code>services.AddScoped&lt;ICultureApplier, EndpointCultureApplier&gt;()</code>, or the menu silently no-ops.</li>
+          </ul>
           <h3 id="internationalization-adr-027-every-visible-string-follows-the-selected-language">Internationalization (ADR-027): every visible string follows the selected language</h3>
           <p>The framework ships multi-locale i18n (<code>en-US</code> + <code>es</code>) end to end; adopting it in a new app is five
           mechanical steps, and MMCA.Helpdesk is the worked example for each:</p>
@@ -848,10 +910,12 @@
           <li><strong>Wire request localization + the culture switcher.</strong> API-layer hosts get it for free from
           <code>UseCommonMiddlewarePipeline()</code> (which calls <code>UseCommonRequestLocalization()</code>) plus
           <code>MapCultureEndpoint()</code>; a UI host that deliberately does not reference <code>MMCA.Common.API</code> inlines
-          the same three lines against <code>SupportedCultures</code> (see <code>MMCA.Helpdesk.UI.Web/Program.cs</code>, which
-          documents the inline variant). Drop the shared <code>&lt;CultureSwitcher /&gt;</code> (and <code>&lt;ThemeToggle /&gt;</code>) into
-          the layout; a WASM client also calls <code>MmcaCultureBootstrap.SetBrowserCultureAsync</code> before
-          <code>RunAsync()</code>.</li>
+          the same lines against <code>SupportedCultures</code> (see <code>MMCA.Helpdesk.UI.Web/Program.cs</code>, which documents
+          the inline variant). When you inline them, the <code>UseRequestLocalization</code> allowlist and the
+          <code>/culture/set</code> endpoint must admit the pseudo-locale under the <strong>same</strong> <code>IsDevelopment()</code> condition
+          the switcher uses to offer it, or picking it silently does nothing. Drop the shared
+          <code>&lt;CultureSwitcher /&gt;</code> (and <code>&lt;ThemeToggle /&gt;</code>) into the layout; a WASM client also calls
+          <code>MmcaCultureBootstrap.SetBrowserCultureAsync</code> before <code>RunAsync()</code>.</li>
           <li><strong>Localize backend error text by <code>Error.Code</code>.</strong> Register
           <code>services.AddErrorResources&lt;YourModuleErrorResources&gt;()</code> in the host and keep a
           <code>YourModuleErrorResources.{resx,es.resx}</code> pair keyed by the module&#39;s <code>Error.Code</code> values; the
@@ -930,16 +994,20 @@
           <hr>
           <h2 id="phase-6-tests-and-the-architecture-fitness-map">Phase 6: Tests and the architecture-fitness map</h2>
           <h3 id="test-projects">Test projects</h3>
-          <p>The reference app ships two test projects: both run anywhere with <strong>no database</strong>:</p>
+          <p>The reference app ships three test projects, all of which run anywhere with <strong>no database</strong> and finish
+          in about a second:</p>
           <ul>
           <li><code>Tests/Modules/Tickets/...Domain.Tests</code>: xUnit v3 + AwesomeAssertions. Test factory methods,
           invariants, state transitions, and domain events (including the assertion that <code>Create</code> raises <strong>no</strong>
           domain event, since the id is DB-generated; don&#39;t &quot;fix&quot; it).</li>
+          <li><code>Tests/Modules/Tickets/...Application.Tests</code>: handler and decorator behavior against test doubles.
+          In the reference app this is where the caching pair is proved end to end
+          (<code>Caching/TicketCacheInvalidationTests.cs</code>, shown in Phase 3); add mocked-<code>IUnitOfWork</code> handler tests
+          here as the module grows.</li>
           <li><code>Tests/Architecture/...Architecture.Tests</code>: the fitness functions (below).</li>
           </ul>
-          <p>Optional additions as the app grows:</p>
+          <p>Optional addition as the app grows:</p>
           <ul>
-          <li><code>...Application.Tests</code>: handler behavior with mocked <code>IUnitOfWork</code>/publishers.</li>
           <li><code>Tests/Integration/...IntegrationTests</code>: boot the host with <code>WebApplicationFactory</code> and use
           <code>IntegrationTestBase&lt;TFixture&gt;</code> plus <code>JwtTokenGenerator</code> (both from <code>MMCA.Common.Testing</code>). These
           need a reachable SQL Server, so run them in an environment that has one (Aspire, a container, or CI
@@ -973,30 +1041,88 @@
                   <span class="hljs-comment">// ...add the same five lines per additional module (e.g. Identity).</span>
               ];
           }</code></pre>
-          <p>Each test class is a tiny sealed subclass of a framework <code>*TestsBase</code> (<code>LayerDependencyTestsBase</code>,
-          <code>DomainPurityTestsBase</code>, <code>ModuleIsolationTestsBase</code>, <code>SharedLayerTestsBase</code>) that supplies your map. The
-          rules then assert: the layer dependency flow, no cross-module internal references, and that
-          MassTransit/gRPC never leak into Domain/Application/Shared (transport stays at the edges).</p>
+          <p>Each test class is then a tiny sealed subclass of a framework <code>*TestsBase</code> that supplies your map:</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">LayerDependencyTests</span> : <span class="hljs-title">LayerDependencyTestsBase</span>
+          {
+              <span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> IArchitectureMap Map { <span class="hljs-keyword">get</span>; } = <span class="hljs-keyword">new</span> HelpdeskArchitectureMap();
+          }</code></pre>
+          <p>The package ships far more bases than the four structural ones (the authoritative base and method
+          counts live in <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a>), and the
+          reference app subclasses nineteen. That is the realistic target for a new app, not a stretch goal:
+          each base is a few lines. Start with the structural group and add the rest as the corresponding
+          feature appears:</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Group</th>
+          <th>Bases</th>
+          <th>What it catches</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Structure (start here)</td>
+          <td><code>LayerDependencyTestsBase</code>, <code>DomainPurityTestsBase</code>, <code>ModuleIsolationTestsBase</code>, <code>SharedLayerTestsBase</code></td>
+          <td>the layer dependency flow, a Domain that reaches for infrastructure, cross-module internal references</td>
+          </tr>
+          <tr>
+          <td>Extraction</td>
+          <td><code>MicroserviceExtractionTestsBase</code>, <code>IntegrationEventContractTestsBase</code>, <code>EventConventionTestsBase</code></td>
+          <td>MassTransit/gRPC leaking out of the edges; an integration event reshaped instead of versioned</td>
+          </tr>
+          <tr>
+          <td>Conventions</td>
+          <td><code>NamingConventionTestsBase</code>, <code>HandlerConventionTestsBase</code>, <code>ControllerConventionTestsBase</code>, <code>EntityConventionTestsBase</code>, <code>ImmutabilityTestsBase</code>, <code>SliceCohesionTestsBase</code>, <code>SpecificationConventionTestsBase</code></td>
+          <td>factory-name, handler, controller, and entity drift away from the framework shape</td>
+          </tr>
+          <tr>
+          <td>Policy gates</td>
+          <td><code>ConcurrencyConventionTestsBase</code> (ADR-035), <code>FrameworkVersionConsistencyTestsBase</code> (ADR-016), <code>PiiConventionTestsBase</code> (ADR-005)</td>
+          <td>an <code>*UpdateRequest</code> with no <code>RowVersion</code>, a half-finished version sweep, unmarked personal data</td>
+          </tr>
+          <tr>
+          <td>i18n (ADR-027)</td>
+          <td><code>LocalizationResourceTestsBase</code>, <code>LocalizedTextConventionTestsBase</code></td>
+          <td>a base <code>.resx</code> with no complete <code>es</code> sibling; a hard-coded user-visible literal</td>
+          </tr>
+          </tbody></table></div>
+          <p>Two things to know before you copy the list wholesale:</p>
+          <ul>
+          <li><strong><code>IntegrationEventContractTestsBase</code> freezes your wire contract.</strong> You override <code>ExpectedContract</code>
+          with the literal shape of every integration event (<code>&quot;...TicketOpenedIntegrationEvent { RequesterUserId:Int32, TicketId:Int32 }&quot;</code>).
+          Editing that list is the deliberate act of evolving the contract, so a silent reshape fails the build.</li>
+          <li><strong>Some bases fail deliberately when they find nothing</strong>, which is an anti-vacuity guard rather than a
+          bug. <code>ConstructorDependencyCountTestsBase</code> scans Application <code>*Service</code> classes and fails when there
+          are none, so the reference app leaves it unsubclassed until its first Application service exists.
+          Others (<code>DataResidencyTestsBase</code>, <code>BrandColorTokenTestsBase</code>, <code>FormsConventionTestsBase</code>) stay
+          unsubclassed for scope reasons. Record <em>why</em> you skipped one next to the ones you kept: an
+          unsubclassed rule is invisible otherwise.</li>
+          </ul>
           <blockquote>
           <p><strong>Register every layer assembly in the map.</strong> If you add a module or a layer and forget to add its
           <code>Module(...)</code> / <code>Framework(...)</code> line here, the layering and isolation rules silently stop covering it.</p>
           </blockquote>
           <p><strong>Checkpoint:</strong> <code>dotnet build MMCA.Helpdesk.slnx</code> is warning-free (the five analyzers at error
-          severity), and the Domain + Architecture test projects pass (<code>dotnet test --solution MMCA.Helpdesk.slnx</code>,
-          no database needed).</p>
+          severity), and all three test projects pass (<code>dotnet test --solution MMCA.Helpdesk.slnx</code>, no database
+          needed). To run one class or method, target the project and pass a Microsoft Testing Platform filter
+          after <code>--</code> (these solutions run on MTP, not VSTest, so a bare <code>--filter</code> silently matches nothing):</p>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet <span class="hljs-built_in">test</span> --project Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/MMCA.Helpdesk.Architecture.Tests.csproj \
+            -- --filter-class <span class="hljs-string">&quot;*ModuleIsolationTests*&quot;</span></code></pre>
           <hr>
           <h2 id="phase-7-upgrading-the-framework-version">Phase 7: Upgrading the framework version</h2>
           <p>When a new MMCA.Common release ships, upgrade in <strong>one pass</strong>: bump <strong>every</strong> <code>MMCA.Common.*</code> entry in
           <code>Directory.Packages.props</code> to the new version together. There is no phased rollout and no per-package
-          skew (your app has no lock file, so the bump is the whole upgrade). Keep MassTransit at v8. See
-          <a href="../adr/016-lockstep-versioning-masstransit-pin.html">ADR-016</a> and the
+          skew, and <code>FrameworkVersionConsistencyTestsBase</code> fails the build if you miss an entry. Keep MassTransit
+          at v8. See <a href="../adr/016-lockstep-versioning-masstransit-pin.html">ADR-016</a> and the
           <a href="common-VERSIONING.html">versioning policy</a>.</p>
+          <p>If your app commits <code>packages.lock.json</code> files (the reference app deliberately does not), the pin bump
+          is only half the upgrade: regenerate the locks with <code>dotnet restore &lt;your.slnx&gt; --force-evaluate</code> and
+          commit them alongside the pins, with <code>local.props</code> set aside so the restore runs in package mode.</p>
           <p>For local framework co-development, flip <code>UseLocalMMCA</code> in <code>local.props</code>, and remember to rebuild
           MMCA.Common in Debug before your app after editing framework source.</p>
           <hr>
           <h2 id="phase-8-extract-a-module-into-its-own-service-the-payoff">Phase 8: Extract a module into its own service (the payoff)</h2>
-          <p>This phase is the documented next step beyond the reference app (which is build-verified as the
-          monolith through Phase 6); the scaffold already carries the plumbing: the <code>.Contracts</code> proto
+          <p>This phase is the documented next step beyond the reference app (which is build- and test-verified as
+          the monolith through Phase 6); the scaffold already carries the plumbing: the <code>.Contracts</code> proto
           convention and the <code>.Service</code> OpenAPI block in <code>Directory.Build.props</code>. Now make the &quot;extract later,
           without a rewrite&quot; promise concrete. We pull <strong>Tickets</strong> out of the monolith into its own service
           behind a gateway. The Tickets Domain, Application, Shared, Infrastructure, and API code is
@@ -1067,7 +1193,8 @@
           <ol>
           <li><strong>Build green:</strong> <code>dotnet build MMCA.Helpdesk.slnx</code> with no warnings (TreatWarningsAsErrors + five
           analyzers). This is the primary automatable gate.</li>
-          <li><strong>Unit + architecture tests pass:</strong> run the Domain + Architecture test projects (<code>dotnet test --solution MMCA.Helpdesk.slnx</code>, no DB needed). The <code>IArchitectureMap</code> rules must be green.</li>
+          <li><strong>Unit + architecture tests pass:</strong> <code>dotnet test --solution MMCA.Helpdesk.slnx</code> (all three
+          projects, no DB needed). The <code>IArchitectureMap</code> rules must be green.</li>
           <li><strong>Migrations:</strong> <code>dotnet ef migrations add InitialCreate ...</code> succeeds for each migrations project
           (generates the <code>Ticket</code>, <code>TicketComment</code>, and per-DB <code>OutboxMessages</code> tables).</li>
           <li><strong>Run (interactive):</strong> <code>dotnet run --project ...AppHost</code>; the dashboard shows <code>sql</code>, <code>web</code>, and <code>ui</code>
@@ -1081,9 +1208,10 @@
           <hr>
           <h2 id="where-to-look-next">Where to look next</h2>
           <ul>
-          <li><strong>MMCA.Helpdesk</strong> (<code>../MMCA.Helpdesk</code>): the minimal, build-verified monolith this guide is the
-          companion to: every step above maps to real code there. Read its <code>README.md</code> and <code>CLAUDE.md</code> for the
-          Helpdesk-specific picture (issuer-less auth, the two event paths, the abstract module DbContext).</li>
+          <li><strong><a href="https://github.com/ivanball/MMCA.Helpdesk" target="_blank" rel="noopener">MMCA.Helpdesk</a></strong>: the minimal, build- and test-verified
+          monolith this guide is the companion to: every step above maps to real code there. Read its
+          <code>README.md</code> and <code>CLAUDE.md</code> for the Helpdesk-specific picture (issuer-less auth, the two event paths,
+          the abstract module DbContext).</li>
           <li><strong>The ADRs</strong> (<a href="../adr/index.html">index</a>): the <em>why</em> behind every pattern you just used.</li>
           <li><strong><code>MMCA.Common/CLAUDE.md</code></strong>: the framework&#39;s layer rules, DI sequence, and extension points in depth.</li>
           <li><strong>The <a href="../onboarding/index.html">onboarding guide</a></strong>: a type-by-type tour of the framework internals.</li>
