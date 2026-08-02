@@ -724,6 +724,56 @@
           <p>[Rubric §8, Data Architecture] (assesses whether schema management is automated, versioned, and safe)
           is directly served. [Rubric §17, DevOps &amp; Deployment] is served: the migration gate is the CI
           enforcement of the &quot;migrations-before-code&quot; discipline.</p>
+          <p><strong>The expand/contract migration guard</strong> (<code>deploy.yml:138-184</code>) is the job&#39;s <em>first</em> step, ahead of even
+          the .NET SDK setup, because it needs nothing but <code>git</code>, <code>awk</code> and <code>grep</code>:</p>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:138-139</span>
+          <span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Expand/contract</span> <span class="hljs-string">migration</span> <span class="hljs-string">guard</span> <span class="hljs-string">(schema</span> <span class="hljs-string">rollback</span> <span class="hljs-string">safety)</span>
+            <span class="hljs-attr">if:</span> <span class="hljs-string">needs.changes.outputs.code</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;true&#x27;</span></code></pre>
+          <p>It is the other half of the schema-safety story the model-drift gate starts. The drift gate proves a
+          migration <em>exists</em> for every model change; this one proves the migration is safe to be rolled back past.
+          The post-deploy smoke gate&#39;s remedy (Phase 5 below) is a container-app <strong>revision</strong> rollback, and a
+          revision rollback does <strong>not</strong> revert schema: each service self-applies its migrations at startup, so the
+          previous release comes back up against the <em>new</em> schema. A <code>DropColumn</code>, <code>DropTable</code> or <code>DropIndex</code> in
+          the migration that just shipped therefore breaks one-release-back compatibility, and the rollback that
+          was supposed to rescue the deploy fails on the way back down. The step comment (<code>deploy.yml:140-151</code>)
+          states exactly that chain.</p>
+          <p>The rule: for every migration file <strong>added</strong> by the pull request, if the <code>Up()</code> body contains
+          <code>DropColumn</code>, <code>DropTable</code> or <code>DropIndex</code> and does not contain <code>EXPAND-CONTRACT-OVERRIDE</code>, fail
+          (<code>deploy.yml:176-179</code>). Three scoping decisions carry the design:</p>
+          <ul>
+          <li>The file set is <code>git diff --diff-filter=A --name-only &quot;origin/&lt;base&gt;...HEAD&quot;</code> (<code>deploy.yml:160-161</code>),
+          path-scoped to <code>Source/Hosting/MMCA.ADC.Migrations.SqlServer.*/Migrations/*.cs</code>. Only <em>added</em> files
+          count, so the four per-service migrations projects are covered and nothing else in the tree is.</li>
+          <li><code>.Designer.cs</code> files are skipped (<code>deploy.yml:172-174</code>), they carry the model snapshot, not operations.</li>
+          <li>Only the <code>Up()</code> body is scanned, extracted with <code>awk</code> between the <code>Up(</code> and <code>Down(</code> signatures
+          (<code>deploy.yml:175</code>). Every additive migration&#39;s <code>Down()</code> legitimately drops what <code>Up()</code> added, and
+          <code>Down()</code> never runs at startup (down-migration is explicit tooling only), so scanning the whole file
+          would fail every ordinary migration.</li>
+          </ul>
+          <p>The escape hatch exists because the <em>contract</em> half of an expand/contract sequence genuinely is a drop,
+          and it is correct once the expand half has been in production for a release. It is documented as
+          <code>// EXPAND-CONTRACT-OVERRIDE: &lt;reason&gt;</code> but enforced as a bare substring match (<code>deploy.yml:177</code>), so the
+          comment form is convention, not syntax, and one occurrence anywhere in the <code>Up()</code> body exempts <strong>every</strong>
+          destructive operation in that migration. The marker is a prompt for the reviewer to ask &quot;has the expand
+          half already shipped?&quot;, not a machine-checked proof that it has.</p>
+          <p>The checkout immediately above sets <code>fetch-depth: 0</code> for this step alone, and says so
+          (<code>deploy.yml:135-136</code>): without full history the base diff cannot resolve. That coupling produces the
+          most transferable lesson in the whole job. There is deliberately no <code>|| true</code> on the diff: when it fails,
+          the step prints an error naming <code>fetch-depth</code> and exits 1 (<code>deploy.yml:155-164</code>). A gate that cannot
+          evaluate must fail closed, because the alternative is a required check that reports green while checking
+          nothing, and the comment records the incident that settled the point: swallowing that error is exactly
+          what made this check silently pass on every run in MMCA.Store between 2026-07-25 and 2026-07-28. It is
+          the same instinct as the <code>--minimum-expected-tests</code> floors elsewhere in this chapter: a gate whose input
+          went missing must be indistinguishable from a gate that failed.</p>
+          <p>MMCA.Store now runs the same step in its own <code>build-and-test</code>, immediately after its model-drift loop
+          (<code>MMCA.Store/.github/workflows/deploy.yml:227</code>), path-scoped to its three migrations projects; it ships
+          the identical startup-migration plus revision-rollback model and had no equivalent guard before the port
+          (<code>MMCA.Store/.github/workflows/deploy.yml:240-242</code>).</p>
+          <p><a href="https://ivanball.github.io/docs/adr/057-expand-contract-schema-evolution-gate.html" target="_blank" rel="noopener">ADR-057</a> is the
+          decision record. [Rubric §8, Data Architecture] is served at the level the drift gate cannot reach: not
+          just &quot;a migration exists&quot; but &quot;the schema stays compatible with the release you can still roll back to&quot;.
+          [Rubric §29, Resilience, Reliability &amp; Business Continuity] is served because it is what keeps the
+          automatic rollback in Phase 5 an actual recovery path rather than a hopeful one.</p>
           <h3 id="job-supply-chain">Job: <code>supply-chain</code></h3>
           <p>This job runs in parallel with <code>build-and-test</code> on every push and PR. It is non-gating (<code>continue-on- error: true</code> on every step), it produces artifacts, not failures.</p>
           <p><strong>What it produces</strong> (<code>deploy.yml:104-129</code>):</p>
@@ -743,11 +793,18 @@
           supply-chain hygiene. [Rubric §30, Compliance, Privacy &amp; Data Governance] is touched: the license report
           is the mechanism for discovering GPL or AGPL dependencies that would create licensing obligations.</p>
           <h3 id="job-integration-tests">Job: <code>integration-tests</code></h3>
-          <p>This job is a required dependency of <code>deploy</code> (<code>deploy.yml:244</code>):</p>
-          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">needs:</span> [<span class="hljs-string">build-and-test</span>, <span class="hljs-string">integration-tests</span>]</code></pre>
+          <p>This job is <strong>pull-request-only</strong> (<code>deploy.yml:383,389</code>), and <code>deploy</code> does not list it:</p>
+          <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">needs:</span> <span class="hljs-string">changes</span>
+          <span class="hljs-attr">if:</span> <span class="hljs-string">github.event_name</span> <span class="hljs-string">==</span> <span class="hljs-string">&#x27;pull_request&#x27;</span></code></pre>
           <p>It runs the per-service <code>WebApplicationFactory</code> integration tests against a real SQL Server service
-          container, covering approximately 290 tests across Identity, Conference, and Engagement. It gates every
-          production deploy.</p>
+          container, covering approximately 290 tests across Identity, Conference, and Engagement.</p>
+          <p>How it protects production is worth being precise about, because the mechanism is not the one you
+          would guess. This job never runs on the push to <code>main</code>, and it is absent from <code>deploy</code>&#39;s <code>needs</code>
+          list (<code>deploy.yml:866</code>); the only job that consumes it is <code>coverage</code> (<code>:471</code>). The protection comes
+          from branch protection instead: <code>main</code> requires branches to be up to date, so the PR check runs
+          against the exact merge tree that will land, which the job&#39;s own comment gives as the rationale for
+          being PR-only (<code>:384-386</code>). The practical consequence is that a <code>workflow_dispatch</code> run of
+          <code>deploy.yml</code> does not re-run the integration tier at all.</p>
           <p><strong>SQL Server service container</strong> (<code>deploy.yml:139-147</code>):</p>
           <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-attr">services:</span>
             <span class="hljs-attr">sqlserver:</span>
@@ -779,6 +836,91 @@
           exercise real EF migrations, real HTTP middleware, real domain logic through a real SQL Server engine. A
           bug that only manifests under an actual database connection (e.g. a LINQ translation error, a migration
           column type mismatch) is caught here before it reaches production.</p>
+          <h3 id="jobs-dr-freshness-load-freshness-cross-service-freshness">Jobs: <code>dr-freshness</code>, <code>load-freshness</code>, <code>cross-service-freshness</code></h3>
+          <p>Three near-identical jobs, one idea: <strong>a deploy blocks on the age of out-of-band verification, not only
+          on the tests that are green in this run</strong>. Each one asks the Actions API for the newest successful run of
+          one scheduled workflow and fails the deploy when that proof is older than its window, or when there is no
+          qualifying run at all.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Job</th>
+          <th>Proof it demands</th>
+          <th>Producing workflow</th>
+          <th>Window</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>dr-freshness</code> (<code>deploy.yml:549</code>)</td>
+          <td>a real PITR restore drill with its RTO timing</td>
+          <td><code>dr-drill.yml</code></td>
+          <td>8 days (<code>deploy.yml:557</code>)</td>
+          </tr>
+          <tr>
+          <td><code>load-freshness</code> (<code>deploy.yml:606</code>)</td>
+          <td>the k6 capacity run at the observed peak</td>
+          <td><code>load-test.yml</code></td>
+          <td>35 days (<code>deploy.yml:614</code>)</td>
+          </tr>
+          <tr>
+          <td><code>cross-service-freshness</code> (<code>deploy.yml:663</code>)</td>
+          <td>the Testcontainers outbox to broker to consumer round-trip</td>
+          <td><code>cross-service-tests.yml</code></td>
+          <td>5 days (<code>deploy.yml:673</code>)</td>
+          </tr>
+          </tbody></table></div>
+          <p>All three carry <code>if: github.event_name != &#39;pull_request&#39;</code> (<code>deploy.yml:552</code>, <code>deploy.yml:609</code>,
+          <code>deploy.yml:666</code>) and exactly one privilege, <code>permissions: actions: read</code> (<code>deploy.yml:553-555</code>,
+          <code>deploy.yml:610-612</code>, <code>deploy.yml:667-669</code>): they read run history and run nothing. Each has a
+          five-minute timeout and costs an Actions API read or two, no restore, no k6, no Docker daemon. And all
+          three sit in <code>deploy</code>&#39;s <code>needs</code> list (<code>deploy.yml:866</code>), which is the entire point: a stale proof blocks
+          the production deploy.</p>
+          <p>That <code>needs</code> edge is what separates a gate from a report. A scheduled workflow nobody watches can sit
+          unrun or red for weeks while deploys ship daily, and the recovery-objective evidence still technically
+          &quot;exists&quot;. Making recency a dependency prices the verification correctly too: the expensive run stays on
+          its cron, the deploy pays for a lookup. Each window is the producing cadence plus slack (weekly drill and
+          an 8-day window, monthly k6 and a 35-day window), so an on-schedule producer never trips the gate.</p>
+          <p><code>cross-service-freshness</code> is the one worth reading closely, because it does <strong>not</strong> trust the run&#39;s
+          conclusion. It enumerates the last 25 <em>completed</em> runs of <code>cross-service-tests.yml</code> (any conclusion) and,
+          for each, asks the jobs API whether that run&#39;s <code>cross-service</code> <strong>job</strong> concluded <code>success</code>, taking the
+          first one that did (<code>deploy.yml:711-724</code>). The comment (<code>deploy.yml:698-710</code>) gives both reasons the run
+          conclusion is a lying proxy, and they fail in opposite directions:</p>
+          <ol>
+          <li>The advisory <code>servicebus-emulator-smoke</code> job is <code>continue-on-error</code> and can fail or hang independently,
+          so a run can conclude <code>failure</code> or <code>cancelled</code> while the broker round-trip genuinely passed. Keying off
+          the run would hide a real, recent proof and block every deploy, which is exactly what forced break-glass
+          while that job was hanging (2026-07-21 to 2026-07-24).</li>
+          <li>The skip-if-unchanged guard can make a run conclude <code>success</code> with the test jobs <strong>skipped</strong>, so no
+          round-trip executed. Keying off the run would accept a proof that never happened.</li>
+          </ol>
+          <p>The per-job check is honest in both directions: it counts a run only when that specific job actually ran
+          and passed, which is also why a cancelled-but-proven run still counts.</p>
+          <p>Its window was widened from 3 to 5 days on 2026-07-18 (<code>deploy.yml:671-673</code>) when <code>cross-service-tests.yml</code>
+          moved to weekdays plus the skip-if-unchanged guard: the last successful nightly can legitimately be about
+          four days old across a weekend or a holiday. A window narrower than the producing cadence is a gate that
+          fails for calendar reasons, and a gate that fails for calendar reasons trains people to reach for the
+          break-glass.</p>
+          <p><strong>Break-glass</strong> is two <code>workflow_dispatch</code> inputs, <code>skip_freshness_gates</code> and <code>skip_justification</code>, read
+          by all three jobs. Setting the flag with an empty justification is itself an error and the job exits 1
+          (<code>deploy.yml:567-571</code>); with a justification, the job writes a step-summary block naming the skipped gate
+          and the reason plus a run annotation, then exits 0 (<code>deploy.yml:572-580</code>). Three properties make it a
+          sound escape hatch rather than a hole: it is unreachable on a push (the inputs exist only on a dispatch),
+          one flag covers all three gates so an operator in a hurry does not disable them one at a time, and its
+          cost is a permanent attributable record in the run summary instead of a quiet edit to a <code>needs:</code> list.
+          Note the interaction with <code>deploy</code>&#39;s condition (<code>deploy.yml:882</code>, <code>deploy.yml:891-893</code>): a broken-glass
+          gate still reports <code>success</code>, which is what lets the deploy condition demand <code>success</code> from all three
+          without special-casing.</p>
+          <p>MMCA.Store runs all three in near-identical form with the same windows
+          (<code>MMCA.Store/.github/workflows/deploy.yml:551</code>, <code>:608</code>, <code>:663</code>), and its <code>deploy</code> needs list matches
+          (<code>MMCA.Store/.github/workflows/deploy.yml:857</code>).</p>
+          <p><a href="https://ivanball.github.io/docs/adr/064-deploy-recency-gates.html" target="_blank" rel="noopener">ADR-064</a> is the decision record.
+          [Rubric §29, Resilience, Reliability &amp; Business Continuity] is served by <code>dr-freshness</code>: the
+          <a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a> recovery
+          objectives are only real if the drill that measures them is recent. [Rubric §12, Performance &amp;
+          Scalability] is served by <code>load-freshness</code> for the same reason applied to the capacity baseline.
+          [Rubric §6, CQRS &amp; Event-Driven Design] is served by <code>cross-service-freshness</code>: the outbox-to-broker
+          delivery path has no in-process test that can falsify it, so its recency is the only continuous evidence
+          the event pipeline still works end to end.</p>
           <h3 id="job-deploy">Job: <code>deploy</code></h3>
           <p>Runs only on push to <code>main</code> or <code>workflow_dispatch</code> (never on pull requests):</p>
           <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># deploy.yml:247</span>
@@ -1314,13 +1456,13 @@
           <tr>
           <td><code>MMCA.ADC/load-test.yml</code></td>
           <td>monthly / dispatch</td>
-          <td>No</td>
+          <td>Indirectly, via the <code>load-freshness</code> recency gate</td>
           <td>No (read-only)</td>
           </tr>
           <tr>
           <td><code>MMCA.ADC/dr-drill.yml</code></td>
-          <td>dispatch</td>
-          <td>No</td>
+          <td>weekly cron / dispatch</td>
+          <td>Indirectly, via the <code>dr-freshness</code> recency gate</td>
           <td>No (restores a throwaway copy, then deletes it)</td>
           </tr>
           <tr>
@@ -1339,6 +1481,13 @@
           <code>--minimum-expected-tests</code> to prevent empty or silently-truncated test suites from passing: ADC&#39;s runs
           floor at 1, while MMCA.Common&#39;s <code>build-and-test</code> floors at 2000 against a suite of roughly 2,254, so a
           discovery regression that drops thousands of tests fails instead of reporting green.</p>
+          <p>The &quot;Gates production&quot; column has two indirect entries because of the recency gates described in
+          <code>deploy.yml</code>: <code>dr-drill.yml</code> and <code>load-test.yml</code> (and the weekday-nightly <code>cross-service-tests.yml</code>, which
+          has no section of its own here) never touch the deploy path themselves, but the <strong>age</strong> of their latest
+          successful run is a <code>deploy</code> precondition through <code>dr-freshness</code>, <code>load-freshness</code> and
+          <code>cross-service-freshness</code> (<a href="https://ivanball.github.io/docs/adr/064-deploy-recency-gates.html" target="_blank" rel="noopener">ADR-064</a>).
+          That is the pattern to take away from this table: a scheduled workflow only governs anything once
+          something in the delivery path depends on it having run recently.</p>
           <hr>
           <h2 id="rubric-category-index-for-this-chapter">Rubric category index for this chapter</h2>
           <div class="table-wrap"><table>
@@ -1350,7 +1499,7 @@
           </thead>
           <tbody><tr>
           <td>§8 Data Architecture</td>
-          <td><code>deploy.yml</code> build-time EF model-drift gate (migrations applied by services at startup, not by <code>deploy.yml</code>); <code>cutover-per-service-dbs.yml</code> gates</td>
+          <td><code>deploy.yml</code> build-time EF model-drift gate (migrations applied by services at startup, not by <code>deploy.yml</code>); the expand/contract migration guard in <code>build-and-test</code> (<a href="https://ivanball.github.io/docs/adr/057-expand-contract-schema-evolution-gate.html" target="_blank" rel="noopener">ADR-057</a>); <code>cutover-per-service-dbs.yml</code> gates</td>
           </tr>
           <tr>
           <td>§11 Security</td>
@@ -1358,7 +1507,7 @@
           </tr>
           <tr>
           <td>§12 Performance &amp; Scalability</td>
-          <td><code>load-test.yml</code> k6 baseline at observed peak VUs</td>
+          <td><code>load-test.yml</code> k6 baseline at observed peak VUs, kept current by the <code>load-freshness</code> deploy gate (35 days)</td>
           </tr>
           <tr>
           <td>§13 Observability &amp; Operability</td>
@@ -1370,7 +1519,7 @@
           </tr>
           <tr>
           <td>§17 DevOps &amp; Deployment</td>
-          <td>The full workflow set collectively; SHA-tagged images; phased Bicep deploy; smoke+rollback</td>
+          <td>The full workflow set collectively; SHA-tagged images; phased Bicep deploy; smoke+rollback; the three proof-of-recency gates in <code>deploy.needs</code> and their justification-required break-glass (<a href="https://ivanball.github.io/docs/adr/064-deploy-recency-gates.html" target="_blank" rel="noopener">ADR-064</a>)</td>
           </tr>
           <tr>
           <td>§21 Accessibility</td>
@@ -1382,7 +1531,7 @@
           </tr>
           <tr>
           <td>§29 Resilience &amp; Business Continuity</td>
-          <td><code>prod-azure</code> concurrency group; smoke+rollback in <code>deploy.yml</code>; outbox drain gate in <code>cutover</code>; <code>dr-drill.yml</code> PITR restore drill (<a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a> objectives)</td>
+          <td><code>prod-azure</code> concurrency group; smoke+rollback in <code>deploy.yml</code>, kept viable by the expand/contract migration guard (revision rollback does not revert schema); outbox drain gate in <code>cutover</code>; <code>dr-drill.yml</code> PITR restore drill (<a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a> objectives) enforced fresh within 8 days by <code>dr-freshness</code></td>
           </tr>
           <tr>
           <td>§30 Compliance &amp; Privacy</td>
