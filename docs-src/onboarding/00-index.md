@@ -12,6 +12,11 @@ code to a 34-category architecture-evaluation rubric as it goes.
 > but **source code is ground truth**, where a doc and the code disagree, the code wins and the
 > discrepancy is noted.
 
+> **Building a new app rather than reading an existing one?** This guide is a tour of code that
+> already exists. The step-by-step adoption path is the
+> [getting-started guide](../guides/common-GETTING-STARTED.md), whose worked companion is the runnable
+> MMCA.Helpdesk seed.
+
 ---
 
 ## How the guide is organized, two axes
@@ -164,6 +169,9 @@ Every type gets one section using this template:
   then follow the `[Rubric §N]` tags; the [coverage audit](99-coverage-audit.md#rubric-coverage-matrix)
   maps every category to where it's first explained.
 - **Operations / DevOps.** Primer → the [`devops-*`](devops-cicd.md) chapters.
+- **"I want to build my own app on the framework."** Not this guide: start at the
+  [getting-started guide](../guides/common-GETTING-STARTED.md), then come back here for the internals
+  behind whichever pattern you land on.
 
 ---
 
