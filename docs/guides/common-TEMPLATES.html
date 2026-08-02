@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Templates: scaffolding an MMCA app · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="MMCA.Templates is a dotnet new pack that scaffolds solutions, modules, and vertical slices on the MMCA.Common framework. It exists because standing up…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/guides/common-TEMPLATES.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Templates: scaffolding an MMCA app">
+  <meta property="og:description" content="MMCA.Templates is a dotnet new pack that scaffolds solutions, modules, and vertical slices on the MMCA.Common framework. It exists because standing up…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/guides/common-TEMPLATES.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Templates: scaffolding an MMCA app">
+  <meta name="twitter:description" content="MMCA.Templates is a dotnet new pack that scaffolds solutions, modules, and vertical slices on the MMCA.Common framework. It exists because standing up…">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Common · Templates: scaffolding an MMCA app","item":"https://ivanball.github.io/docs/guides/common-TEMPLATES.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/guides/index.html">Guides &amp; Specifications</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">Common · Templates: scaffolding an MMCA app</span>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All guides</summary>
+        <nav class="doc-nav" aria-label="Guides &amp; Specifications">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="adc-ACCESSIBILITY-SCREENREADER-PASS.html">ADC · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="adc-IntegrationTestReworkPlan.html">ADC · Integration-Test Tier Rework Plan (RemediationBacklog #14)</a></li>
+        <li><a href="adc-NavigationFlow.html">ADC · Navigation Flow</a></li>
+        <li><a href="adc-specifications.html">ADC · Business Specifications</a></li>
+        <li><a href="common-ACCESSIBILITY.html">Common · Accessibility (rubric §21)</a></li>
+        <li><a href="common-COST.html">Common · Cost &amp; FinOps Notes (rubric §31)</a></li>
+        <li><a href="common-GETTING-STARTED.html">Common · Getting Started: Build a New App on MMCA.Common</a></li>
+        <li><a href="common-RESILIENCE.html">Common · Resilience &amp; Business Continuity (rubric §29)</a></li>
+        <li><a href="common-RESPONSIVE.html">Common · Responsive Design &amp; Cross-Browser Support (rubric §22)</a></li>
+        <li><a href="common-TEMPLATES.html" aria-current="page">Common · Templates: scaffolding an MMCA app</a></li>
+        <li><a href="common-VERSIONING.html">Common · Versioning &amp; Breaking-Change Policy</a></li>
+        <li><a href="store-ACCESSIBILITY-SCREENREADER-PASS.html">Store · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="store-BusinessWorkflows.html">Store · Business Workflow Analysis</a></li>
+        <li><a href="store-NavigationFlow.html">Store · Navigation Flow</a></li>
+        <li><a href="store-Specification.html">Store · Business Specification Document</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
+          <h1 id="templates-scaffolding-an-mmca-app">Templates: scaffolding an MMCA app</h1>
+          <p><code>MMCA.Templates</code> is a <code>dotnet new</code> pack that scaffolds solutions, modules, and vertical slices on the
+          <a href="https://www.nuget.org/packages?q=MMCA.Common" target="_blank" rel="noopener">MMCA.Common</a> framework. It exists because standing up
+          a new app by hand meant 12 projects and roughly 5,300 lines before a line of business logic, several
+          of them load-bearing in ways nothing tells you about until much later. See
+          <a href="../adr/065-scaffolding-templates.html">ADR-065</a> for the reasoning and
+          <a href="common-GETTING-STARTED.html">Getting Started</a> for what the generated code actually does.</p>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet new install MMCA.Templates
+          dotnet new mmca-app -n Contoso.Support --module Orders --aggregate Order
+          <span class="hljs-built_in">cd</span> Contoso.Support
+          dotnet build Contoso.Support.slnx
+          dotnet <span class="hljs-built_in">test</span>  --solution Contoso.Support.slnx</code></pre>
+          <p>That is a warning-free build under all five analyzers and a passing test run, including the
+          architecture-fitness rules, with no database needed.</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Short name</th>
+          <th>Generates</th>
+          <th>Run it from</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>mmca-app</code></td>
+          <td>the whole solution</td>
+          <td>anywhere; it creates the solution directory</td>
+          </tr>
+          <tr>
+          <td><code>mmca-module</code></td>
+          <td>a business module across all five layers, both test projects, a migrations project</td>
+          <td>your solution root</td>
+          </tr>
+          <tr>
+          <td><code>mmca-command</code></td>
+          <td>one write-side slice: command record + handler</td>
+          <td>your module&#39;s <code>UseCases</code> folder</td>
+          </tr>
+          <tr>
+          <td><code>mmca-query</code></td>
+          <td>one read-side slice: cacheable query record + handler</td>
+          <td>your module&#39;s <code>UseCases</code> folder</td>
+          </tr>
+          </tbody></table></div>
+          <hr>
+          <h2 id="mmca-app"><code>mmca-app</code></h2>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Parameter</th>
+          <th>Default</th>
+          <th>Meaning</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>-n, --name</code></td>
+          <td><code>MMCA.App</code></td>
+          <td>solution name and root namespace, for example <code>Contoso.Support</code></td>
+          </tr>
+          <tr>
+          <td><code>-m, --module</code></td>
+          <td><code>Tickets</code></td>
+          <td>the first business module, plural PascalCase</td>
+          </tr>
+          <tr>
+          <td><code>-a, --aggregate</code></td>
+          <td><code>Ticket</code></td>
+          <td>that module&#39;s aggregate root, singular PascalCase</td>
+          </tr>
+          <tr>
+          <td><code>-f, --framework-version</code></td>
+          <td>the version the pack was cut against</td>
+          <td>the <code>MMCA.Common.*</code> version to pin</td>
+          </tr>
+          <tr>
+          <td><code>--local-mmca</code></td>
+          <td>off</td>
+          <td>emit a <code>local.props</code> that builds against <code>../MMCA.Common/Source</code> instead of the published packages</td>
+          </tr>
+          <tr>
+          <td><code>--no-restore</code></td>
+          <td>off</td>
+          <td>skip the restore after generation</td>
+          </tr>
+          </tbody></table></div>
+          <p>The module and aggregate names are independent, so <code>--module Billing --aggregate Invoice</code> is fine.
+          Everything derived from them follows: routes, the Aspire database resource, the design-time
+          connection-string environment variable, the identifier alias, the cache-key prefix, the resource
+          strings, and the Blazor pages.</p>
+          <p><strong>What you get</strong> (names shown for <code>-n Contoso.Support --module Orders --aggregate Order</code>):</p>
+          <pre class="doc-pre"><code class="">Contoso.Support.slnx
+          .editorconfig                 the five analyzers at error severity
+          Directory.Build.props         language settings, analyzers, the identifier-alias links
+          Directory.Build.targets       the local-source PackageReference -&gt; ProjectReference swap
+          Directory.Packages.props      Central Package Management
+          Source/
+            Modules/Orders/             Shared, Domain, Application, Infrastructure, API
+            Hosts/Contoso.Support.Web           the monolith REST API host
+            Hosts/UI/Contoso.Support.UI.Web     Blazor Server + MudBlazor
+            Hosting/Contoso.Support.AppHost     Aspire orchestration
+            Hosting/Contoso.Support.Migrations.SqlServer.Orders
+          Tests/
+            Modules/Orders/             domain + application tests
+            Architecture/               the fitness functions, parameterized by SupportArchitectureMap</code></pre>
+          <p>The <code>Order</code> aggregate arrives fully worked: a <code>Result</code>-returning factory, invariants, guarded
+          mutations raising domain events, a child entity, soft-delete cascade, the caching pair (a cacheable
+          read plus invalidating commands, both keyed through one <code>*CacheKeys</code> type), an integration event
+          through the outbox, <code>en-US</code> and <code>es</code> resource pairs, a REST controller, and two Blazor pages.</p>
+          <h3 id="dropping-the-blazor-ui-host">Dropping the Blazor UI host</h3>
+          <p>There is no <code>--ui</code> flag: a conditional big enough to remove a host cannot be expressed without
+          <code>#if</code> regions that would either break the reference app&#39;s own build or leave it compiling the
+          wrong variant. Removing it afterwards is five steps, and <strong>four of them fail loudly while the fifth
+          does not</strong>, so do them together:</p>
+          <ol>
+          <li>Delete <code>Source/Hosts/UI/</code>.</li>
+          <li>Remove the <code>&lt;Project Path=&quot;Source/Hosts/UI/...&quot; /&gt;</code> line from the <code>.slnx</code>.</li>
+          <li>Remove the UI <code>ProjectReference</code> from <code>&lt;App&gt;.AppHost.csproj</code>. Aspire generates the
+          <code>Projects.&lt;App&gt;_UI_Web</code> type from that reference, so the AppHost will not compile until it goes.</li>
+          <li>Remove the <code>builder.AddProject&lt;Projects.&lt;App&gt;_UI_Web&gt;(&quot;ui&quot;)</code> block from the AppHost <code>Program.cs</code>.</li>
+          <li><strong>Drop the <code>var web = </code> prefix from the block above it.</strong> <code>web</code> existed only for the UI&#39;s
+          <code>WithReference(web)</code> / <code>WaitFor(web)</code>. Left assigned and unread it is an unused local, which is
+          <code>IDE0059</code> <strong>and</strong> <code>S1481</code>, both at error severity, so the build fails on a line you never
+          touched.</li>
+          </ol>
+          <p>The API host, the module, the migrations project, and all three test projects are unaffected.</p>
+          <h3 id="the-two-one-time-fixups">The two one-time fixups</h3>
+          <p>The scaffold deliberately does not hand these over, because renaming invalidates them and no fixed
+          value is right for every name you could pick.</p>
+          <p><strong>1. Using-directive order.</strong> <code>using Contoso.Support.Orders.Shared;</code> sorts above <code>MMCA.Common.*</code>,
+          but <code>using Zeta.App.Orders.Shared;</code> sorts below it. <code>SA1210</code> has no notion of blank-line-separated
+          groups, so no checked-in order survives both. It ships as a suggestion, via a clearly marked block at
+          the bottom of the generated <code>.editorconfig</code>. Sort them with:</p>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet format analyzers Contoso.Support.slnx --diagnostics SA1210 --severity error</code></pre>
+          <p>Every <code>mmca-command</code> / <code>mmca-query</code> slice arrives with the same skew, so either re-run that after
+          scaffolding, or leave the block until you have stopped scaffolding and then delete it. Every other
+          analyzer stays at error severity throughout.</p>
+          <p><strong>2. Your integration-event wire contract.</strong> Integration events cross service boundaries over the
+          broker, so a renamed, removed, or retyped property breaks consumers in another service.
+          <code>IntegrationEventContractTestsBase</code> fails the build on a silent reshape, but only against a contract
+          <strong>you</strong> froze: one inherited from a sample module guarantees nothing, and its frozen literal lists
+          members alphabetically, so <code>{ RequesterUserId, TicketId }</code> stops being correct the moment <code>Ticket</code>
+          becomes <code>Order</code>. Add the subclass to your <code>ArchitectureTests.cs</code>:</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">IntegrationEventContractTests</span> : <span class="hljs-title">IntegrationEventContractTestsBase</span>
+          {
+              <span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> IArchitectureMap Map { <span class="hljs-keyword">get</span>; } = <span class="hljs-keyword">new</span> SupportArchitectureMap();
+          
+              <span class="hljs-comment">// Frozen wire contract. Update DELIBERATELY when evolving an integration event</span>
+              <span class="hljs-comment">// (version it per ADR-010; never a silent reshape).</span>
+              <span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> IReadOnlyList&lt;<span class="hljs-built_in">string</span>&gt; ExpectedContract =&gt;
+              [
+                  <span class="hljs-comment">// paste the actual value from the failing run</span>
+              ];
+          }</code></pre>
+          <p>then run it once and paste what the failure prints:</p>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet <span class="hljs-built_in">test</span> --project Tests/Architecture/Contoso.Support.Architecture.Tests/Contoso.Support.Architecture.Tests.csproj \
+            -- --filter-class <span class="hljs-string">&quot;*IntegrationEventContract*&quot;</span></code></pre>
+          <hr>
+          <h2 id="mmca-module"><code>mmca-module</code></h2>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-built_in">cd</span> Contoso.Support
+          dotnet new mmca-module -n Billing --app Contoso.Support --aggregate Invoice</code></pre>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Parameter</th>
+          <th>Meaning</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>-n, --name</code></td>
+          <td>the module, plural PascalCase, for example <code>Billing</code></td>
+          </tr>
+          <tr>
+          <td><code>--app</code></td>
+          <td>your solution / root namespace, for example <code>Contoso.Support</code> (required)</td>
+          </tr>
+          <tr>
+          <td><code>-a, --aggregate</code></td>
+          <td>the module&#39;s aggregate root, singular PascalCase (required)</td>
+          </tr>
+          </tbody></table></div>
+          <p>Generates eight projects into the right places: the five layer projects under
+          <code>Source/Modules/&lt;Module&gt;/</code>, both test projects under <code>Tests/Modules/&lt;Module&gt;/</code>, and a migrations
+          project under <code>Source/Hosting/</code>. The migrations project ships <strong>without</strong> a <code>Migrations/</code> folder: you
+          create the first one against your own entities.</p>
+          <h3 id="the-five-wire-ups-it-prints">The five wire-ups it prints</h3>
+          <p><code>dotnet new</code> cannot patch files that already exist, so it prints these. Until they are done the
+          module is invisible to the host and to the fitness rules; the first two are what make it compile.</p>
+          <ol>
+          <li><strong>Solution.</strong> <code>dotnet sln &lt;App&gt;.slnx add Source/Modules/&lt;Module&gt;/*/*.csproj Tests/Modules/&lt;Module&gt;/*/*.csproj Source/Hosting/&lt;App&gt;.Migrations.SqlServer.&lt;Module&gt;/*.csproj</code></li>
+          <li><strong>Project references.</strong> <code>&lt;App&gt;.Web.csproj</code> needs <code>&lt;App&gt;.&lt;Module&gt;.API</code> and
+          <code>&lt;App&gt;.Migrations.SqlServer.&lt;Module&gt;</code>. <code>&lt;App&gt;.Architecture.Tests.csproj</code> needs <strong>all five</strong> layer
+          projects, because the map in step 4 names a type from each.</li>
+          <li><strong>Identifier alias.</strong> Copy the existing <code>&lt;Compile Include ... Link&gt;</code> block in
+          <code>Directory.Build.props</code> and point it at the new module&#39;s <code>*.GlobalUsings.IdentifierType.cs</code>.
+          Without it the alias is invisible outside its own project.</li>
+          <li><strong>Architecture map.</strong> Five lines in your <code>*ArchitectureMap.cs</code>, one per layer. <strong>A module missing
+          from the map is silently not covered by the layering and isolation rules</strong> (ADR-015).</li>
+          <li><strong>Host.</strong> <code>services.AddErrorResources&lt;&lt;Module&gt;ErrorResources&gt;();</code> next to the existing ones.
+          <code>ModuleLoader</code> discovers the <code>IModule</code> itself, so nothing else needs registering.</li>
+          </ol>
+          <p>Then create the first migration:</p>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet ef migrations add InitialCreate \
+            --project Source/Hosting/Contoso.Support.Migrations.SqlServer.Billing \
+            --startup-project Source/Hosting/Contoso.Support.Migrations.SqlServer.Billing \
+            --context SQLServerDbContext</code></pre>
+          <hr>
+          <h2 id="mmca-command-and-mmca-query"><code>mmca-command</code> and <code>mmca-query</code></h2>
+          <p>Run these from the module&#39;s <code>UseCases</code> folder. Each creates a folder named after the slice holding
+          its two files.</p>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-built_in">cd</span> Source/Modules/Billing/Contoso.Support.Billing.Application/Billing/UseCases
+          
+          dotnet new mmca-command -n ArchiveInvoice --app Contoso.Support --module Billing \
+            --aggregate Invoice --domain-method Archive
+          
+          dotnet new mmca-query -n GetInvoiceByNumber --app Contoso.Support --module Billing \
+            --aggregate Invoice</code></pre>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Parameter</th>
+          <th>Applies to</th>
+          <th>Meaning</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>-n, --name</code></td>
+          <td>both</td>
+          <td>the use case, PascalCase; names the folder, the namespace segment, and both types</td>
+          </tr>
+          <tr>
+          <td><code>--app</code></td>
+          <td>both</td>
+          <td>your solution / root namespace (required)</td>
+          </tr>
+          <tr>
+          <td><code>-m, --module</code></td>
+          <td>both</td>
+          <td>the module this slice goes into (required)</td>
+          </tr>
+          <tr>
+          <td><code>-a, --aggregate</code></td>
+          <td>both</td>
+          <td>the aggregate the handler loads (required)</td>
+          </tr>
+          <tr>
+          <td><code>--domain-method</code></td>
+          <td><code>mmca-command</code></td>
+          <td>the guarded method the command calls on the aggregate</td>
+          </tr>
+          </tbody></table></div>
+          <p>Handlers are convention-scanned by Scrutor, so there is no DI registration to add. Two things do
+          need you:</p>
+          <ul>
+          <li><strong>The command slice calls <code>--domain-method</code> on your aggregate</strong>, and the scaffold cannot invent it.
+          Add that method returning <code>Result</code> before the slice compiles.</li>
+          <li><strong>Keep the query&#39;s <code>CacheKey</code> inside your module&#39;s <code>*CacheKeys.Prefix</code>.</strong> The caching decorator
+          matches cacheable reads to invalidating commands <strong>by string prefix</strong>, so a key that drifts out of
+          the prefix goes stale silently and nothing fails.</li>
+          </ul>
+          <p>Map both in your module&#39;s controller: reads generally come from <code>EntityControllerBase</code>, and writes
+          inject handlers directly.</p>
+          <hr>
+          <h2 id="how-the-pack-is-built">How the pack is built</h2>
+          <p>The template content is the <a href="https://github.com/ivanball/MMCA.Helpdesk" target="_blank" rel="noopener">MMCA.Helpdesk</a> reference
+          application itself, staged at pack time. There is no second copy of the solution, so the template
+          cannot drift from the app whose CI keeps it building.</p>
+          <p>That also means the seed&#39;s green CI is <strong>not</strong> the template&#39;s gate. The seed builds in local-source
+          mode against <code>MMCA.Common@main</code>, while a generated app builds in package mode against a released
+          version, and a source-mode build can pass where package-mode Release fails on an analyzer. A separate
+          <code>template-smoke</code> job generates two solutions whose names share no substring with the seed, sweeps for
+          residual tokens, builds package-mode, runs the tests, and applies the five module wire-ups.</p>
+          <p>To work on the templates:</p>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">git <span class="hljs-built_in">clone</span> https://github.com/ivanball/MMCA.Helpdesk
+          <span class="hljs-built_in">cd</span> MMCA.Helpdesk
+          pwsh build/templates/smoke.ps1        <span class="hljs-comment"># stage, pack, install, generate, build, test</span></code></pre>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/guides/common-TEMPLATES.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#mmca-app">mmca-app</a></li>
+            <li><a href="#mmca-module">mmca-module</a></li>
+            <li><a href="#mmca-command-and-mmca-query">mmca-command and mmca-query</a></li>
+            <li><a href="#how-the-pack-is-built">How the pack is built</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

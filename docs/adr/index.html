@@ -95,7 +95,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 64 ADRs</summary>
+        <summary>All 65 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html" aria-current="page">Overview</a></li>
@@ -163,6 +163,7 @@
         <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
         <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
         <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
           </ol>
         </nav>
       </details>
@@ -499,6 +500,11 @@
           <td><a href="064-deploy-recency-gates.html">064</a></td>
           <td>Deploy preconditions as proof-of-recency gates</td>
           <td>Production deploys block on the AGE of out-of-band verification, not only on green tests: <code>dr-freshness</code> / <code>load-freshness</code> / <code>cross-service-freshness</code> sit in <code>deploy.needs</code> and query the Actions API for the newest successful DR drill (8 days), k6 load run (35 days) and Testcontainers broker round-trip (5 days), failing the deploy when the newest proof is older than its window and when there is no successful run at all. The broker gate keys off the <code>cross-service</code> JOB&#39;s conclusion rather than the run&#39;s, because a skip-if-unchanged guard makes a run green with nothing executed and an advisory smoke job makes a proven run red. Break-glass is a <code>workflow_dispatch</code> pair (<code>skip_freshness_gates</code> + <code>skip_justification</code>) that errors out on an empty reason and otherwise exits 0 with the reason in the step summary and a run annotation; it is unreachable on a push and covers all three gates at once. MMCA.ADC and MMCA.Store only, in near-identical form; MMCA.Helpdesk and MMCA.Common have no deploy pipeline at all. ADR-009 requires the drill be recorded; it never gave a record an expiry.</td>
+          </tr>
+          <tr>
+          <td><a href="065-scaffolding-templates.html">065</a></td>
+          <td>Scaffolding templates derived from the reference app</td>
+          <td>A <code>dotnet new</code> pack, <strong><code>MMCA.Templates</code></strong> (<code>mmca-app</code>, <code>mmca-module</code>, <code>mmca-command</code>, <code>mmca-query</code>), replaces the transcription work in phases 1-6 of Getting Started: standing up a new app by hand meant 12 projects and roughly 5,300 lines before any business logic, several of them silently load-bearing (<code>AddApplicationDecorators()</code> last, <code>WaitFor(sql)</code> not the database resource, a module absent from <code>IArchitectureMap</code>). The template content is the MMCA.Helpdesk reference app ITSELF, staged at pack time from its own tree with <code>.template.config/</code> at the repo root, so no second copy of the solution exists to drift and the app whose CI keeps it green is what adopters receive. Two things are deliberately withheld because a rename invalidates them and no fixed value suits every generated name: using-directive order (<code>SA1210</code> relaxed in the STAGED <code>.editorconfig</code> only, leaving the shared analyzer baseline untouched) and the <code>IntegrationEventContractTests</code> subclass (an inherited wire-contract freeze guarantees nothing; adopters freeze their own). The gate is a <code>template-smoke</code> job, not the seed&#39;s build: the seed builds local-source against <code>MMCA.Common@main</code> while a generated app builds package-mode against a release, and it sweeps for residual <code>Helpdesk</code>/<code>Ticket</code> tokens, since <code>sourceName</code> and symbol replacement run as separate passes and a nested token half-applies silently. Named outside the <code>MMCA.Common.*</code> family on purpose (ADR-016 lockstep, different repo, different cadence), which also leaves <code>FACTS.md</code>&#39;s package count at 15.</td>
           </tr>
           </tbody></table></div>
           <h2 id="writing-a-new-adr">Writing a new ADR</h2>

@@ -25,6 +25,37 @@ MMCA.Helpdesk, MMCA.ADC, or MMCA.Store.
 
 ---
 
+## Scaffold it, then read the rest of this
+
+Do not type phases 1 through 6 by hand. They add up to 12 projects and roughly 5,300 lines before a
+line of your own business logic, and several of those lines are load-bearing in ways nothing tells
+you about until much later. Scaffold the whole thing:
+
+```bash
+dotnet new install MMCA.Templates
+dotnet new mmca-app -n Contoso.Support --module Orders --aggregate Order
+cd Contoso.Support
+dotnet build Contoso.Support.slnx      # warning-free under all five analyzers
+dotnet test  --solution Contoso.Support.slnx   # passing, including the fitness rules, no database
+```
+
+Then read the phases below to understand **what you were handed and why**, which is what makes the
+scaffold safe to change. Phase 7 (upgrading) and phase 8 (extracting a service) are not scaffolded:
+those you do yourself.
+
+The pack also has `mmca-module` for a new module across all five layers, and `mmca-command` /
+`mmca-query` for a single vertical slice. Every parameter, plus the two one-time fixups a rename
+makes unavoidable, is in the [templates guide](common-TEMPLATES.md); the reasoning is
+[ADR-065](../adr/065-scaffolding-templates.md).
+
+The template content **is** MMCA.Helpdesk, staged at pack time rather than copied, so what you
+generate is the reference app whose CI keeps it green, under your own names.
+
+Everything below still applies verbatim if you would rather build it up by hand, or are adding the
+framework to a solution that already exists.
+
+---
+
 ## What you will build
 
 A modular monolith with one business module and two hosts:
@@ -85,9 +116,13 @@ pins in `Directory.Packages.props` disagree, so a half-finished sweep cannot shi
 
 ## Phase 1: Create the solution and the build plumbing
 
-The plumbing files are the load-bearing, easy-to-get-wrong part. The fastest start is to copy them from
-`MMCA.Helpdesk` (already a trimmed single-module scaffold) or from `MMCA.ADC`. Lay out the repo like
-this:
+> **Scaffolded.** `dotnet new mmca-app` writes every file in this phase. Read it to know what each
+> one does; you do not need to type any of it.
+
+The plumbing files are the load-bearing, easy-to-get-wrong part: about 1,170 lines across eight
+files, including an 823-line `.editorconfig` and 114 package pins. If you are doing it by hand, copy
+them from `MMCA.Helpdesk` (already a trimmed single-module scaffold) or from `MMCA.ADC`. Lay out the
+repo like this:
 
 ```
 MMCA.Helpdesk/
@@ -282,6 +317,11 @@ the plumbing parses).
 
 ## Phase 2: Scaffold the module project set
 
+> **Scaffolded.** `dotnet new mmca-app` creates this project set for your first module, and
+> `dotnet new mmca-module` adds another one later (it prints the five wire-ups it cannot perform:
+> the solution entries, the host and architecture-test project references, the identifier-alias
+> link, the map lines, and `AddErrorResources`). See the [templates guide](common-TEMPLATES.md).
+
 Each business module is a set of layered projects under `Source/Modules/<Module>/`. Pattern source:
 `MMCA.Helpdesk/Source/Modules/Tickets/` (or the richer `MMCA.ADC/Source/Modules/Conference/`). For
 **Tickets**:
@@ -309,6 +349,10 @@ intentionally generic across apps.
 ---
 
 ## Phase 3: The vertical slice end-to-end (the heart of it)
+
+> **Scaffolded.** The generated module already contains this slice and six more, worked end to end.
+> `dotnet new mmca-command` and `dotnet new mmca-query` add another one. This phase is the one to
+> actually read: it is the path every feature you add will follow.
 
 Implement Tickets create and read. This traces the same path for every feature you will ever add (the
 reference app then repeats it for update, delete, status change, and comment add/edit/remove). Pattern
@@ -740,6 +784,11 @@ one that survives a rename.
 
 ## Phase 4: DbContext model and migrations
 
+> **Partly scaffolded.** The migrations project and its design-time factory are generated. Running
+> `dotnet ef migrations add InitialCreate` is still yours, and for a module added later the
+> generated migrations project ships deliberately empty so the first migration describes YOUR
+> entities.
+
 Create **one migrations project per (future) service database**, even while you are a monolith. This
 costs nothing now and means extraction (Phase 8) needs zero migration rework. Pattern source:
 `MMCA.Helpdesk/Source/Hosting/MMCA.Helpdesk.Migrations.SqlServer.Tickets/`.
@@ -795,6 +844,10 @@ At runtime the host applies migrations via the framework's `InitializeDatabaseAs
 ---
 
 ## Phase 5: Compose the monolith host and run it
+
+> **Scaffolded.** Both hosts, the AppHost, and the `.resx` pairs are generated. Read this phase
+> before you touch any of them: the DI sequence, `WaitFor(sql)` rather than the database resource,
+> and the AppHost `launchSettings.json` all fail quietly rather than loudly.
 
 ### The Web host
 
@@ -1015,6 +1068,13 @@ out, and that an outbox row was written for the `TicketOpenedIntegrationEvent`.
 
 ## Phase 6: Tests and the architecture-fitness map
 
+> **Scaffolded, with one deliberate gap.** All three test projects and the map are generated. The
+> `IntegrationEventContractTests` subclass is NOT: its frozen literal lists members alphabetically,
+> so an inherited one stops being correct the moment the aggregate is renamed, and a wire contract
+> inherited from someone else's sample module guarantees nothing anyway. Freeze your own, once. The
+> generated README and the [templates guide](common-TEMPLATES.md) carry the class and the command
+> that prints the value.
+
 ### Test projects
 
 The reference app ships three test projects, all of which run anywhere with **no database** and finish
@@ -1121,6 +1181,9 @@ dotnet test --project Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/MMCA.H
 
 ## Phase 7: Upgrading the framework version
 
+> **Not scaffolded.** `dotnet new mmca-app --framework-version` picks the version you START on;
+> moving to a later one is this phase.
+
 When a new MMCA.Common release ships, upgrade in **one pass**: bump **every** `MMCA.Common.*` entry in
 `Directory.Packages.props` to the new version together. There is no phased rollout and no per-package
 skew, and `FrameworkVersionConsistencyTestsBase` fails the build if you miss an entry. Keep MassTransit
@@ -1137,6 +1200,10 @@ MMCA.Common in Debug before your app after editing framework source.
 ---
 
 ## Phase 8: Extract a module into its own service (the payoff)
+
+> **Not scaffolded.** The generated solution carries the plumbing (the `.Contracts` proto
+> convention and the `.Service` OpenAPI block in `Directory.Build.props`), but the extraction itself
+> is a decision, not a rename.
 
 This phase is the documented next step beyond the reference app (which is build- and test-verified as
 the monolith through Phase 6); the scaffold already carries the plumbing: the `.Contracts` proto
@@ -1228,10 +1295,14 @@ plus eventual consistency through the outbox, never cross-database foreign keys.
 
 ## Verification checklist
 
+0. **Scaffolded:** `dotnet new mmca-app -n <YourApp>` produced a solution that builds and tests
+   green before you changed anything. If it did not, that is a template bug, not yours.
 1. **Build green:** `dotnet build MMCA.Helpdesk.slnx` with no warnings (TreatWarningsAsErrors + five
    analyzers). This is the primary automatable gate.
 2. **Unit + architecture tests pass:** `dotnet test --solution MMCA.Helpdesk.slnx` (all three
-   projects, no DB needed). The `IArchitectureMap` rules must be green.
+   projects, no DB needed). The `IArchitectureMap` rules must be green. A scaffolded solution runs
+   one test fewer than the reference app until you freeze your own integration-event contract
+   (Phase 6).
 3. **Migrations:** `dotnet ef migrations add InitialCreate ...` succeeds for each migrations project
    (generates the `Ticket`, `TicketComment`, and per-DB `OutboxMessages` tables).
 4. **Run (interactive):** `dotnet run --project ...AppHost`; the dashboard shows `sql`, `web`, and `ui`
@@ -1246,6 +1317,10 @@ plus eventual consistency through the outbox, never cross-database foreign keys.
 
 ## Where to look next
 
+- **[Templates](common-TEMPLATES.md)**: every parameter of `mmca-app`, `mmca-module`,
+  `mmca-command`, and `mmca-query`, plus the two one-time fixups a rename makes unavoidable.
+  [ADR-065](../adr/065-scaffolding-templates.md) explains why the pack is derived from the reference
+  app rather than maintained beside it.
 - **[MMCA.Helpdesk](https://github.com/ivanball/MMCA.Helpdesk)**: the minimal, build- and test-verified
   monolith this guide is the companion to: every step above maps to real code there. Read its
   `README.md` and `CLAUDE.md` for the Helpdesk-specific picture (issuer-less auth, the two event paths,
