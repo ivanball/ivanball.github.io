@@ -4,7 +4,10 @@
 Accepted (2026-07-25). Amended (2026-07-28): Store's reconciliation sweep now derives from
 `PeriodicBackgroundService`, so the shared-loop and adoption paragraphs are rewritten and the
 duplicated-scaffolding trade-off is dropped; the scope/`IUnitOfWork` and `maxReplicas` citations
-are corrected.
+are corrected. Amended (2026-08-01): `SafeDomainEventHandler<TDomainEvent>` logs and **rethrows**,
+so the redelivery bullet, the throwing-is-correct rationale and the redelivery trade-off are
+corrected: the framework packages no swallow, the one hand-rolled swallow is not an instance of the
+base class, and the redelivery blast radius is the whole save's local batch.
 
 ## Context
 Checkout spans a boundary no transaction covers. `CheckOutHandler` commits the order insert, the cart
@@ -61,10 +64,18 @@ saga-timeout backstop for steps that depend on an external system.
   unprocessed (`MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:301-329`) and the
   `OutboxProcessor` re-dispatches the pure domain event on a later cycle
   (`MMCA.Common/.../Outbox/OutboxProcessor.cs:419-426`), with the bounded retries, backoff and
-  dead-lettering ADR-003 already defines. Handlers whose work is a pure side effect and must not
-  force a redelivery swallow their own failures instead
-  (`OrderPaymentFailedSagaHandler.cs:52-55`; the packaged form is
-  `MMCA.Common/.../DomainEvents/SafeDomainEventHandler.cs:14-32`).
+  dead-lettering ADR-003 already defines. The framework packages that failure mode and only that
+  one: `SafeDomainEventHandler<TDomainEvent>` runs the subclass inside an exception filter whose
+  `LogAndRethrow` writes one error line and always returns `false`, so the exception keeps
+  propagating, with `OperationCanceledException` excluded because a host shutdown is not a delivery
+  failure (`MMCA.Common/.../DomainEvents/SafeDomainEventHandler.cs:36-70`). What it standardizes is
+  the log line, not a swallow. No production handler in the four repos derives from it today: its
+  only subclass is the test double in its own unit tests
+  (`MMCA.Common/Tests/Core/MMCA.Common.Application.Tests/DomainEvents/SafeDomainEventHandlerTests.cs:124`).
+  A handler whose work is a pure side effect and must not force a redelivery therefore writes the
+  catch by hand and owns that decision alone: `OrderPaymentFailedSagaHandler` implements
+  `IDomainEventHandler<OrderPaymentFailed>` directly (`OrderPaymentFailedSagaHandler.cs:20-22`) and
+  swallows everything except cancellation into an Error log (`OrderPaymentFailedSagaHandler.cs:52-55`).
 - **Concurrent redeliveries are serialized by the `RowVersion` concurrency token.** Every auditable
   entity carries one (`MMCA.Common/.../Entities/AuditableBaseEntity.cs:39`), configured as a
   concurrency token on every non-owned auditable type
@@ -127,7 +138,11 @@ adopted.
   handlers succeed and therefore keeps a narrow crash window open.
 - **Throwing is the correct failure mode.** The outbox already owns retry policy, backoff and
   dead-lettering, so a handler that cannot complete should fail loudly and let redelivery re-run it
-  rather than invent local retries.
+  rather than invent local retries. The framework's one packaged base class now says the same thing
+  in code: it logs and rethrows (`SafeDomainEventHandler.cs:36-47`), because a swallowing base made
+  the "retried via the outbox" promise false. A handler that reported success had its outbox row
+  marked processed, so nothing retried and the side effect was lost with only a log line to show for
+  it. Opting out of redelivery is therefore an explicit, per-handler `catch`, not a base class.
 - **The sweep needs no new infrastructure.** The authoritative answer already lives at the provider,
   so a bounded, indexed poll plus the existing guarded transitions is enough: no timer message, no
   scheduler, no saga-timeout store.
@@ -148,8 +163,14 @@ adopted.
 - **Redelivery re-runs every handler of the event, not the failed one.** The dispatcher iterates
   handlers sequentially with no per-handler isolation
   (`MMCA.Common/.../Services/DomainEventDispatcher.cs:55-64`), so one throwing handler also skips the
-  handlers after it, and a redelivery re-runs the ones that already succeeded. Every handler on a
-  shared event must be idempotent or must swallow.
+  handlers after it, and a redelivery re-runs the ones that already succeeded. The blast radius is
+  wider than the one event: the interceptor dispatches every local event of a save in a single call
+  and marks their outbox rows processed only afterwards
+  (`MMCA.Common/.../Interceptors/DomainEventSaveChangesInterceptor.cs:305-310`), so a throw skips
+  that mark for the whole batch and every local event written by that save is redelivered, not just
+  the one whose handler failed. Every handler on a shared event must therefore be idempotent against
+  both a repeat of its own event and a repeat of every sibling event of the same save, or must
+  swallow its failures itself.
 - **The sweep is not replica-leased.** The outbox processor claims rows with a lease before working
   them (ADR-003); the sweep takes no such claim, so at the configured `maxReplicas: 2`
   (`MMCA.Store/infra/main.bicep:1025`) two replicas can pick the same stuck order and each spend a

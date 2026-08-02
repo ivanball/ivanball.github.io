@@ -172,7 +172,9 @@
           <h1 id="adr-003-outbox-pattern-with-dual-dispatch">ADR-003: Outbox Pattern with Dual Dispatch</h1>
           <h2 id="status">Status</h2>
           <p>Accepted. Revised 2026-07-19 (integration-event routing via <code>IMessageBus</code>, lease-based claims for
-          safe scale-out, dead-letter visibility, post-commit dispatch; see Revision below).</p>
+          safe scale-out, dead-letter visibility, post-commit dispatch; see Revision below). Revised
+          2026-08-01 (explicit exponential retry backoff supersedes polling-interval pacing; see Revision
+          below).</p>
           <h2 id="context">Context</h2>
           <p>Domain events must be reliably published after aggregate changes are persisted. Two failure modes exist:</p>
           <ol>
@@ -202,7 +204,8 @@
           dead-lettered immediately on first pickup (it can never succeed) and requires manual investigation.
           A message that <strong>throws during dispatch</strong> is retried up to <code>Outbox:MaxRetries</code> (default 5) times,
           then dropped from the eligible set (it stops being polled once <code>RetryCount &gt;= MaxRetries</code>).</li>
-          <li>Failed-message retries pace at the polling interval: with a 300s prod interval, a persistently failing message dead-letters after ~25 minutes instead of seconds (an intentional, healthier backoff).</li>
+          <li>Failed-message retries are paced by an explicit exponential backoff, not by the polling interval. A failure re-leases its own row for <code>Outbox:RetryBackoffBaseSeconds * 2^(n-1)</code> seconds, capped at <code>Outbox:LeaseSeconds</code> (<code>MMCA.Common/.../Outbox/OutboxProcessor.cs:451-452,481-489</code>). At the shipped defaults (base 10s, <code>MaxRetries</code> 5, lease 300s, batch 50: <code>MMCA.Common/.../Settings/OutboxSettings.cs:17,21,82,98</code>) the four waits between the five attempts are 10s, 20s, 40s and 80s, so a persistently failing message spends <strong>150 seconds of backoff (2.5 minutes)</strong> before the fifth failure dead-letters it, and the 300s cap never binds at those defaults (it would first apply to a sixth attempt, at 320s).</li>
+          <li>That 150s is a floor, not a schedule. A backoff that expires between cycles is only noticed when the processor next wakes, and a failed-but-eligible row never shortens the wait (<code>OutboxProcessor.cs:134-135</code>), so the wall-clock horizon is the floor plus poll granularity at the 2s default interval, and up to one fallback interval per retry (about 20 minutes at the 300s prod interval) when no new write signals the loop sooner. A batch that dispatched nothing also does not re-poll immediately (<code>OutboxProcessor.cs:277-281</code>), so a batch of 50 that fails in full cannot hot-spin the processor.</li>
           <li>Rows orphaned by a process crash (no signal exists) wait up to the polling interval before the safety-net pickup.</li>
           </ul>
           <h2 id="revision-2026-07-19">Revision (2026-07-19)</h2>
@@ -258,6 +261,24 @@
           whole remainder of the batch. A graceful restart could therefore dead-letter messages that were
           never actually attempted. Cancellation now rethrows and the batch is left untouched.</li>
           </ol>
+          <h2 id="revision-2026-08-01">Revision (2026-08-01)</h2>
+          <p>One retry-pacing correction. The dual-dispatch decision is unchanged; the Trade-offs above described
+          a cadence the processor no longer has.</p>
+          <ol>
+          <li><strong>Retry backoff is explicit, and it supersedes polling-interval pacing.</strong> Before
+          <code>Outbox:RetryBackoffBaseSeconds</code> existed, a failed row simply kept the claim its cycle had taken,
+          and because the poll skips leased rows the next attempt could not happen until the FULL
+          <code>Outbox:LeaseSeconds</code> (300s) elapsed, whatever the polling interval or an explicit signal said:
+          the retry cadence was an accident of the lease rather than a decision
+          (<code>MMCA.Common/.../Settings/OutboxSettings.cs:89-96</code>). A failure now re-leases its row for
+          <code>RetryBackoffBaseSeconds * 2^(n-1)</code> seconds, capped at the lease so a permanently failing message
+          never holds a claim longer than a dead replica&#39;s rows would
+          (<code>MMCA.Common/.../Outbox/OutboxProcessor.cs:445-452,477-490</code>). At the shipped defaults that is
+          10s, 20s, 40s and 80s between the five attempts: 150 seconds of enforced backoff before
+          dead-lettering, shortening the first retries while still throttling a message that will never
+          succeed. The Trade-offs bullet that quoted &quot;~25 minutes&quot; at a 300s interval is replaced by the
+          curve plus its wake-cadence ceiling above.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -275,6 +296,7 @@
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#revision-2026-07-19">Revision (2026-07-19)</a></li>
             <li><a href="#revision-2026-07-24">Revision (2026-07-24)</a></li>
+            <li><a href="#revision-2026-08-01">Revision (2026-08-01)</a></li>
             </ul>
           </nav>
         </aside>

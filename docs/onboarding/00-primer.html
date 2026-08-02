@@ -569,6 +569,51 @@
           <td>Repository + Specification contract: the read side is ISP-split into <code>IEntityReader</code> (id lookups) and <code>IEntityQuerier</code> (collections, projections, counts), and a fitness rule fails the build on raw <code>IQueryable</code> surfaces in Application code</td>
           <td><a href="group-03-querying-specifications.html">g03</a>/<a href="group-07-persistence-ef-core.html">g07</a></td>
           </tr>
+          <tr>
+          <td>056</td>
+          <td>One render mode for the whole routable tree, chosen at the root on the shared <code>Routes</code> component: <code>InteractiveAuto</code> with prerendering left on, and the resulting SSR-to-interactive double fetch removed in <code>DataGridListPageBase</code> through <code>PersistentComponentState</code> rather than by weakening the mode</td>
+          <td><a href="group-15-common-ui-framework.html">g15</a></td>
+          </tr>
+          <tr>
+          <td>057</td>
+          <td>Expand/contract schema evolution enforced in CI: adding columns, tables and indexes is safe in any release, while a migration added by a PR whose <code>Up()</code> drops one fails the merge check unless it carries an <code>EXPAND-CONTRACT-OVERRIDE</code> marker, because production rollback is revision-only and never un-migrates</td>
+          <td><a href="devops-cicd.html">devops-cicd</a>/<a href="group-07-persistence-ef-core.html">g07</a></td>
+          </tr>
+          <tr>
+          <td>058</td>
+          <td>Runtime conformance suites shipped in <code>MMCA.Common.Testing</code>: six abstract behavioral bases (problem details, OpenAPI, <code>/ServiceInfo</code> versioning, security headers, graceful shutdown, decorator order) that a host subclasses and that run against a really booted host, picking up where ADR-015&#39;s structural fitness tests stop</td>
+          <td><a href="group-27-testing-infrastructure.html">g27</a></td>
+          </tr>
+          <tr>
+          <td>059</td>
+          <td><code>IModule</code> is the one composition contract (five members, three defaulted): reflection discovery over the AppDomain, Kahn topological registration order, and a disabled module represented by null-object stub registrations rather than by absence</td>
+          <td><a href="group-14-module-system-composition.html">g14</a></td>
+          </tr>
+          <tr>
+          <td>060</td>
+          <td>Performance-regression gate: a <code>performance-smoke</code> job runs the BenchmarkDotNet suite on every code PR and verifies it against a committed <code>perf-baseline.json</code> of absolute allocation ceilings plus benchmark-to-benchmark ratio floors; no absolute wall-clock threshold, since a shared runner cannot deliver one</td>
+          <td><a href="devops-cicd.html">devops-cicd</a></td>
+          </tr>
+          <tr>
+          <td>061</td>
+          <td>Runtime secrets live in Azure Key Vault and reach each Container App as a <code>keyVaultUrl</code> reference resolved by one shared user-assigned managed identity, consumed only through <code>secretRef</code> (no inline values); SQL managed-identity auth is staged behind <code>useManagedIdentitySql</code>, still false by default</td>
+          <td><a href="devops-iac.html">devops-iac</a></td>
+          </tr>
+          <tr>
+          <td>062</td>
+          <td>SLO alerting as code: <code>sloAlertSpecs</code> in each consumer&#39;s Bicep materializes KQL scheduled query rules (401/499 and hub traffic excluded) on one action group, and a framework test base pairs every alert with a severity-correct <code>OPERATIONS.md</code> triage section, failing the build in either direction</td>
+          <td><a href="devops-iac.html">devops-iac</a>/<a href="group-27-testing-infrastructure.html">g27</a></td>
+          </tr>
+          <tr>
+          <td>063</td>
+          <td>WCAG 2.1 AA as a shipped test contract: <code>AxeOptions.Wcag21Aa</code> pins the four WCAG tag sets and excludes axe&#39;s advisory rules, a violation throws instead of reporting, and the scan is a cross-browser required merge check in Common plus a chromium deploy gate in both apps</td>
+          <td><a href="group-27-testing-infrastructure.html">g27</a>/<a href="devops-cicd.html">devops-cicd</a></td>
+          </tr>
+          <tr>
+          <td>064</td>
+          <td>Deploy preconditions as proof of recency: <code>dr-freshness</code>, <code>load-freshness</code> and <code>cross-service-freshness</code> sit in <code>deploy.needs</code> and fail when the newest successful DR drill (8 days), k6 load run (35) or broker round-trip (5) is older than its window; no successful run at all fails too</td>
+          <td><a href="devops-cicd.html">devops-cicd</a></td>
+          </tr>
           </tbody></table></div>
           <p>The canonical index for the full set can be found at <a href="https://ivanball.github.io/docs/adr/" target="_blank" rel="noopener">https://ivanball.github.io/docs/adr/</a>.</p>
           <hr>
