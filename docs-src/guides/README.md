@@ -4,7 +4,9 @@ The narrative documentation for the MMCA platform: adoption guides, business spe
 
 ## Framework (MMCA.Common)
 
-- [Getting Started](common-GETTING-STARTED.md): build a new application on the framework, step by step (MMCA.Helpdesk is the worked companion).
+- [Getting Started](common-GETTING-STARTED.md): stand up a new application from the `MMCA.Templates` scaffold, in six steps.
+- [Templates](common-TEMPLATES.md): every parameter of `mmca-app`, `mmca-module`, `mmca-command`, and `mmca-query`.
+- [Building by Hand](common-BUILD-BY-HAND.md): the same solution phase by phase, for retrofitting an existing solution or understanding what the scaffold generated (MMCA.Helpdesk is the worked companion).
 - [Versioning & Breaking-Change Policy](common-VERSIONING.md)
 - [Accessibility](common-ACCESSIBILITY.md)
 - [Resilience & Business Continuity](common-RESILIENCE.md)

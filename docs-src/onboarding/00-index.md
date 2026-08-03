@@ -13,9 +13,11 @@ code to a 34-category architecture-evaluation rubric as it goes.
 > discrepancy is noted.
 
 > **Building a new app rather than reading an existing one?** This guide is a tour of code that
-> already exists. The step-by-step adoption path is the
-> [getting-started guide](../guides/common-GETTING-STARTED.md), whose worked companion is the runnable
-> MMCA.Helpdesk seed.
+> already exists. The adoption path is the
+> [getting-started guide](../guides/common-GETTING-STARTED.md), which scaffolds the solution with
+> `dotnet new mmca-app`; the phase-by-phase detail behind it is the
+> [build-by-hand walkthrough](../guides/common-BUILD-BY-HAND.md), whose worked companion is the
+> runnable MMCA.Helpdesk seed.
 
 ---
 

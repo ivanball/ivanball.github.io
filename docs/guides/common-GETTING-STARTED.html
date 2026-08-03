@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>Getting Started: Build a New App on MMCA.Common · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="This is the step-by-step guide for standing up a brand-new application on the MMCA.Common framework. MMCA.Common is a .NET 10 framework for DDD, Clean…">
+  <meta name="description" content="MMCA.Common is a .NET 10 framework for DDD, Clean Architecture, and CQRS, shipped as a set of lockstep-versioned NuGet packages (the authoritative list…">
   <link rel="canonical" href="https://ivanball.github.io/docs/guides/common-GETTING-STARTED.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="Getting Started: Build a New App on MMCA.Common">
-  <meta property="og:description" content="This is the step-by-step guide for standing up a brand-new application on the MMCA.Common framework. MMCA.Common is a .NET 10 framework for DDD, Clean…">
+  <meta property="og:description" content="MMCA.Common is a .NET 10 framework for DDD, Clean Architecture, and CQRS, shipped as a set of lockstep-versioned NuGet packages (the authoritative list…">
   <meta property="og:url" content="https://ivanball.github.io/docs/guides/common-GETTING-STARTED.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Getting Started: Build a New App on MMCA.Common">
-  <meta name="twitter:description" content="This is the step-by-step guide for standing up a brand-new application on the MMCA.Common framework. MMCA.Common is a .NET 10 framework for DDD, Clean…">
+  <meta name="twitter:description" content="MMCA.Common is a .NET 10 framework for DDD, Clean Architecture, and CQRS, shipped as a set of lockstep-versioned NuGet packages (the authoritative list…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Common · Getting Started: Build a New App on MMCA.Common","item":"https://ivanball.github.io/docs/guides/common-GETTING-STARTED.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
@@ -104,6 +104,7 @@
         <li><a href="adc-NavigationFlow.html">ADC · Navigation Flow</a></li>
         <li><a href="adc-specifications.html">ADC · Business Specifications</a></li>
         <li><a href="common-ACCESSIBILITY.html">Common · Accessibility (rubric §21)</a></li>
+        <li><a href="common-BUILD-BY-HAND.html">Common · Building on MMCA.Common by Hand</a></li>
         <li><a href="common-COST.html">Common · Cost &amp; FinOps Notes (rubric §31)</a></li>
         <li><a href="common-GETTING-STARTED.html" aria-current="page">Common · Getting Started: Build a New App on MMCA.Common</a></li>
         <li><a href="common-RESILIENCE.html">Common · Resilience &amp; Business Continuity (rubric §29)</a></li>
@@ -121,1176 +122,245 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
           <h1 id="getting-started-build-a-new-app-on-mmcacommon">Getting Started: Build a New App on MMCA.Common</h1>
-          <p>This is the step-by-step guide for standing up a <strong>brand-new application</strong> on the MMCA.Common
-          framework. MMCA.Common is a .NET 10 framework for DDD, Clean Architecture, and CQRS, shipped as a set
-          of lockstep-versioned NuGet packages (the authoritative list and count live in
+          <p>MMCA.Common is a .NET 10 framework for DDD, Clean Architecture, and CQRS, shipped as a set of
+          lockstep-versioned NuGet packages (the authoritative list and count live in
           <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a>). Its core promise: <strong>build a
           modular monolith now, and extract a module into its own microservice later, without a rewrite.</strong></p>
-          <p>This guide builds <strong>monolith-first</strong> (the fastest path to a running app), then shows the <strong>extraction</strong>
-          of one module into its own service behind a gateway, so the &quot;extract later&quot; promise is concrete rather
-          than theoretical.</p>
-          <p>A runnable reference app lives at <a href="https://github.com/ivanball/MMCA.Helpdesk" target="_blank" rel="noopener">MMCA.Helpdesk</a> (a
-          support-ticket app). It is build- and test-verified through the monolith phases below: one <strong>Tickets</strong>
-          module exercised across all five layers, a REST API host, and a Blazor Server + MudBlazor UI host, all
-          orchestrated by Aspire, with three test projects (domain, application, architecture fitness) that run
-          with no database. To stay minimal it ships <strong>without an Identity module</strong> and runs <strong>issuer-less</strong> (see
-          Phase 2), and the <strong>extraction</strong> (Phase 8) is documented rather than pre-built (the plumbing is in
-          place). Wherever a step says &quot;pattern source&quot;, that points at real, working code you can copy from
-          MMCA.Helpdesk, MMCA.ADC, or MMCA.Store.</p>
+          <p>Standing that up by hand means 12 projects and roughly 5,300 lines before a line of your own
+          business logic, several of them load-bearing in ways nothing tells you about until much later. So
+          you do not type it. One command writes the whole thing, green:</p>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet new install MMCA.Templates
+          dotnet new mmca-app -n Contoso.Support --module Orders --aggregate Order</code></pre>
+          <p>The six steps below take that from nothing to a running, migrated, browsable app. Everything after
+          them is optional depth.</p>
           <blockquote>
-          <p><strong>Reading the framework itself:</strong> for the <em>why</em> behind each pattern, read the relevant
-          <a href="../adr/index.html">ADR</a>. For a type-by-type tour of the framework internals, see the
-          <a href="../onboarding/index.html">onboarding guide</a>. This guide is the consumer-facing &quot;how do I start&quot; path.</p>
+          <p><strong>Adding the framework to a solution that already exists?</strong> The template creates a solution; it
+          cannot retrofit one. Take the <a href="common-BUILD-BY-HAND.html">build-by-hand walkthrough</a> instead. It is
+          also where to read <em>what</em> the scaffold handed you and why, once you want to change it.</p>
           </blockquote>
           <hr>
-          <h2 id="scaffold-it-then-read-the-rest-of-this">Scaffold it, then read the rest of this</h2>
-          <p>Do not type phases 1 through 6 by hand. They add up to 12 projects and roughly 5,300 lines before a
-          line of your own business logic, and several of those lines are load-bearing in ways nothing tells
-          you about until much later. Scaffold the whole thing:</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet new install MMCA.Templates
-          dotnet new mmca-app -n Contoso.Support --module Orders --aggregate Order
-          <span class="hljs-built_in">cd</span> Contoso.Support
-          dotnet build Contoso.Support.slnx      <span class="hljs-comment"># warning-free under all five analyzers</span>
-          dotnet <span class="hljs-built_in">test</span>  --solution Contoso.Support.slnx   <span class="hljs-comment"># passing, including the fitness rules, no database</span></code></pre>
-          <p>Then read the phases below to understand <strong>what you were handed and why</strong>, which is what makes the
-          scaffold safe to change. Phase 7 (upgrading) and phase 8 (extracting a service) are not scaffolded:
-          those you do yourself.</p>
-          <p>The pack also has <code>mmca-module</code> for a new module across all five layers, and <code>mmca-command</code> /
-          <code>mmca-query</code> for a single vertical slice. Every parameter, plus the two one-time fixups a rename
-          makes unavoidable, is in the <a href="common-TEMPLATES.html">templates guide</a>; the reasoning is
-          <a href="../adr/065-scaffolding-templates.html">ADR-065</a>.</p>
-          <p>The template content <strong>is</strong> MMCA.Helpdesk, staged at pack time rather than copied, so what you
-          generate is the reference app whose CI keeps it green, under your own names.</p>
-          <p>Everything below still applies verbatim if you would rather build it up by hand, or are adding the
-          framework to a solution that already exists.</p>
-          <hr>
-          <h2 id="what-you-will-build">What you will build</h2>
-          <p>A modular monolith with one business module and two hosts:</p>
+          <h2 id="before-you-start">Before you start</h2>
           <ul>
-          <li><strong>Tickets</strong> (your business module): a <code>Ticket</code> aggregate with <code>TicketComment</code> children, opened
-          through a <code>Result</code>-returning factory, mutated through guarded methods that raise domain events, and
-          exposed end-to-end through a REST controller. This is the module you later extract into its own
-          service.</li>
-          <li>A <strong>Web API host</strong> (the monolith) and a <strong>Blazor Server + MudBlazor UI host</strong> that calls the API
-          server-side through Aspire service discovery.</li>
-          </ul>
-          <p>The seed runs <strong>issuer-less</strong>: with no Identity module it registers a bare auth scheme and the
-          controller is <code>[AllowAnonymous]</code>, so you get a running app immediately. <strong>Identity</strong> is the standard
-          auth module you add when you want real RS256/JWKS authentication (and which becomes the <strong>JWKS issuer</strong>
-          when you extract Tickets): that path is shown in Phase 2 and Phase 8.</p>
-          <p>By the end you will have a green-building solution, applied EF migrations, a running Aspire stack
-          (<code>sql</code> + <code>web</code> + <code>ui</code>), and passing architecture-fitness tests, plus a documented path to add Identity
-          and pull Tickets out into a microservice.</p>
-          <hr>
-          <h2 id="phase-0-prerequisites-and-decisions">Phase 0: Prerequisites and decisions</h2>
-          <p><strong>Install:</strong></p>
-          <ul>
-          <li><strong>.NET 10 SDK</strong> (the framework targets <code>net10.0</code> with <code>LangVersion: preview</code> for C# extension types).</li>
-          <li><strong>SQL Server</strong> reachable locally (LocalDB, a container, or the one Aspire starts for you).</li>
-          <li><strong>Docker Desktop</strong> (Aspire provisions SQL Server as a container for the monolith; Redis and RabbitMQ
-          join in the extraction phase).</li>
+          <li><strong>.NET 10 SDK.</strong> The framework targets <code>net10.0</code> with <code>LangVersion: preview</code> for C# extension types.</li>
+          <li><strong>Docker Desktop.</strong> Aspire provisions SQL Server as a container, so you do not install one.</li>
           <li><strong>EF Core tools:</strong> <code>dotnet tool install --global dotnet-ef</code>.</li>
           </ul>
-          <p><strong>Decide how to consume MMCA.Common (two modes, switchable in one file):</strong></p>
-          <ol>
-          <li><strong>NuGet (nuget.org)</strong> is the production path for any standalone app. The <code>MMCA.Common.*</code> packages
-          are published to nuget.org, so <code>dotnet add package MMCA.Common.API</code> (or any other package in the
-          set) restores with no token, no credentials, and no extra feed. GitHub Packages is kept as a
-          mirror of the same releases rather than the primary path: its NuGet registry requires a personal
-          access token with <code>read:packages</code> even for public packages, so reach for it only if you already
-          restore from it. See <a href="../adr/053-dual-registry-package-publishing.html">ADR-053</a>.</li>
-          <li><strong>Local source (<code>UseLocalMMCA</code>)</strong> references <code>../MMCA.Common/Source/</code> directly via <code>local.props</code>.
-          Use this when your app sits in the same workspace as MMCA.Common and you want to co-develop the
-          framework and the app together. It needs no token (MMCA.Common itself restores only from nuget.org).</li>
-          </ol>
-          <blockquote>
-          <p>When using local source mode, after editing MMCA.Common source you must <strong>rebuild MMCA.Common in
-          Debug</strong> before your app, or the IDE binds the stale last-built Debug reference assembly and reports
-          phantom <code>CS0103</code> errors against new members. Build MMCA.Common with <code>-c Debug</code>, then build your app.</p>
-          </blockquote>
-          <p><strong>Pick the framework version.</strong> Every package moves together. Use the latest released tag
-          (see <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a> for the current version; the <code>1.135.0</code> in the samples below was
-          current when this guide was last refreshed). Choose one version and use it for every <code>MMCA.Common.*</code> entry (Phase 1). See
-          <a href="../adr/016-lockstep-versioning-masstransit-pin.html">ADR-016</a>: there is no phased rollout and no version
-          skew across the set. The rule is enforced, not just advisory: the shared
-          <code>FrameworkVersionConsistencyTestsBase</code> fitness rule (Phase 6) fails the build when the <code>MMCA.Common.*</code>
-          pins in <code>Directory.Packages.props</code> disagree, so a half-finished sweep cannot ship.</p>
+          <p>No credentials, tokens, or extra feeds. <code>MMCA.Templates</code> and every <code>MMCA.Common.*</code> package restore
+          from nuget.org (see <a href="../adr/053-dual-registry-package-publishing.html">ADR-053</a>).</p>
           <hr>
-          <h2 id="phase-1-create-the-solution-and-the-build-plumbing">Phase 1: Create the solution and the build plumbing</h2>
-          <blockquote>
-          <p><strong>Scaffolded.</strong> <code>dotnet new mmca-app</code> writes every file in this phase. Read it to know what each
-          one does; you do not need to type any of it.</p>
-          </blockquote>
-          <p>The plumbing files are the load-bearing, easy-to-get-wrong part: about 1,170 lines across eight
-          files, including an 823-line <code>.editorconfig</code> and 114 package pins. If you are doing it by hand, copy
-          them from <code>MMCA.Helpdesk</code> (already a trimmed single-module scaffold) or from <code>MMCA.ADC</code>. Lay out the
-          repo like this:</p>
-          <pre class="doc-pre"><code class="">MMCA.Helpdesk/
-            MMCA.Helpdesk.slnx
-            Directory.Build.props
-            Directory.Build.targets         (local-source swap: PackageReference -&gt; ProjectReference when UseLocalMMCA)
-            Directory.Packages.props
-            global.json
-            nuget.config
-            local.props.template            (copy to local.props for local-source mode; gitignore it in a real app)
-            .editorconfig                   (copy MMCA.ADC&#39;s verbatim; it drives the 5 analyzers)
-            .gitignore
-            Source/
-              Modules/                      (one folder per business module: Tickets)
-              Hosts/                        (runnable entry points)
-                MMCA.Helpdesk.Web           (the monolith REST API host)
-                UI/MMCA.Helpdesk.UI.Web     (the Blazor Server + MudBlazor front end)
-              Hosting/                      (Aspire AppHost + per-DB migrations projects)
-              Services/                     (added later, in the extraction phase)
-            Tests/
-              Modules/  Architecture/       (the reference app ships three projects here; Integration/E2E are optional adds)</code></pre>
-          <h3 id="directorypackagesprops-central-package-management"><code>Directory.Packages.props</code> (Central Package Management)</h3>
-          <p>Versions live here, not in individual <code>.csproj</code> files. List <strong>every</strong> <code>MMCA.Common.*</code> package you
-          consume at one version (the count is owned by <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a>), and keep <strong>MassTransit pinned
-          to v8</strong> (v9 needs a commercial license, enforced by a build gate in MMCA.Common, see
-          <a href="../adr/016-lockstep-versioning-masstransit-pin.html">ADR-016</a>):</p>
-          <pre class="doc-pre" data-lang="XML"><code class="language-xml hljs"><span class="hljs-tag">&lt;<span class="hljs-name">Project</span>&gt;</span>
-            <span class="hljs-tag">&lt;<span class="hljs-name">PropertyGroup</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">ManagePackageVersionsCentrally</span>&gt;</span>true<span class="hljs-tag">&lt;/<span class="hljs-name">ManagePackageVersionsCentrally</span>&gt;</span>
-            <span class="hljs-tag">&lt;/<span class="hljs-name">PropertyGroup</span>&gt;</span>
-            <span class="hljs-tag">&lt;<span class="hljs-name">ItemGroup</span>&gt;</span>
-              <span class="hljs-comment">&lt;!-- MMCA Common packages: all at one version, bumped in lockstep --&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Shared&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Domain&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Application&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Infrastructure&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.API&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Grpc&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.UI&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.UI.Web&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
-              <span class="hljs-comment">&lt;!-- MAUI heads only: the one MAUI-TFM package (ADR-042); web-only apps skip it --&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.UI.Maui&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Aspire&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Aspire.Hosting&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Testing&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Testing.E2E&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Testing.UI&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageVersion</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;MMCA.Common.Testing.Architecture&quot;</span> <span class="hljs-attr">Version</span>=<span class="hljs-string">&quot;1.135.0&quot;</span> /&gt;</span>
-              <span class="hljs-comment">&lt;!-- Third-party versions: copy the relevant rows from MMCA.ADC/Directory.Packages.props --&gt;</span>
-              <span class="hljs-comment">&lt;!-- (EF Core, FluentValidation, Riok.Mapperly, Scrutor, xunit.v3, Aspire.*, Yarp, the 5 analyzers, etc.) --&gt;</span>
-            <span class="hljs-tag">&lt;/<span class="hljs-name">ItemGroup</span>&gt;</span>
-          <span class="hljs-tag">&lt;/<span class="hljs-name">Project</span>&gt;</span></code></pre>
-          <p>Then in each <code>.csproj</code> you reference a package with <strong>no version</strong>:
-          <code>&lt;PackageReference Include=&quot;MMCA.Common.Domain&quot; /&gt;</code>.</p>
-          <h3 id="directorybuildprops"><code>Directory.Build.props</code></h3>
-          <p>This sets the language/build mode, wires the five analyzers at error severity, links the per-module
-          identifier-alias files into every project, and declares the <code>.Contracts</code> gRPC convention. Copy
-          <code>MMCA.Helpdesk/Directory.Build.props</code> and adapt the module-alias <code>&lt;Compile Include ... Link&gt;</code> block to
-          your modules. The critical pieces:</p>
-          <pre class="doc-pre" data-lang="XML"><code class="language-xml hljs"><span class="hljs-tag">&lt;<span class="hljs-name">Project</span>&gt;</span>
-            <span class="hljs-comment">&lt;!-- Optional: local.props sets UseLocalMMCA; the actual PackageReference -&gt; ProjectReference swap
-                 lives in a companion Directory.Build.targets (copy MMCA.Helpdesk&#x27;s verbatim). --&gt;</span>
-            <span class="hljs-tag">&lt;<span class="hljs-name">Import</span> <span class="hljs-attr">Project</span>=<span class="hljs-string">&quot;local.props&quot;</span> <span class="hljs-attr">Condition</span>=<span class="hljs-string">&quot;Exists(&#x27;local.props&#x27;)&quot;</span> /&gt;</span>
-          
-            <span class="hljs-tag">&lt;<span class="hljs-name">PropertyGroup</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">TargetFramework</span>&gt;</span>net10.0<span class="hljs-tag">&lt;/<span class="hljs-name">TargetFramework</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">ImplicitUsings</span>&gt;</span>enable<span class="hljs-tag">&lt;/<span class="hljs-name">ImplicitUsings</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">Nullable</span>&gt;</span>enable<span class="hljs-tag">&lt;/<span class="hljs-name">Nullable</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">LangVersion</span>&gt;</span>preview<span class="hljs-tag">&lt;/<span class="hljs-name">LangVersion</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">TreatWarningsAsErrors</span>&gt;</span>true<span class="hljs-tag">&lt;/<span class="hljs-name">TreatWarningsAsErrors</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">AnalysisLevel</span>&gt;</span>latest<span class="hljs-tag">&lt;/<span class="hljs-name">AnalysisLevel</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">AnalysisMode</span>&gt;</span>All<span class="hljs-tag">&lt;/<span class="hljs-name">AnalysisMode</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">EnforceCodeStyleInBuild</span>&gt;</span>true<span class="hljs-tag">&lt;/<span class="hljs-name">EnforceCodeStyleInBuild</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">GenerateDocumentationFile</span>&gt;</span>true<span class="hljs-tag">&lt;/<span class="hljs-name">GenerateDocumentationFile</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">NoWarn</span>&gt;</span>$(NoWarn);CS1591;RMG020;EXTEXP0001<span class="hljs-tag">&lt;/<span class="hljs-name">NoWarn</span>&gt;</span>
-            <span class="hljs-tag">&lt;/<span class="hljs-name">PropertyGroup</span>&gt;</span>
-          
-            <span class="hljs-comment">&lt;!-- The five analyzers, all at error severity (Meziantou, VS.Threading, Roslynator, Sonar, StyleCop) --&gt;</span>
-            <span class="hljs-tag">&lt;<span class="hljs-name">ItemGroup</span> <span class="hljs-attr">Condition</span>=<span class="hljs-string">&quot;&#x27;$(MSBuildProjectExtension)&#x27; != &#x27;.dcproj&#x27;&quot;</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageReference</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;Meziantou.Analyzer&quot;</span>&gt;</span> ... <span class="hljs-tag">&lt;/<span class="hljs-name">PackageReference</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageReference</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;Microsoft.VisualStudio.Threading.Analyzers&quot;</span>&gt;</span> ... <span class="hljs-tag">&lt;/<span class="hljs-name">PackageReference</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageReference</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;Roslynator.Analyzers&quot;</span>&gt;</span> ... <span class="hljs-tag">&lt;/<span class="hljs-name">PackageReference</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageReference</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;SonarAnalyzer.CSharp&quot;</span>&gt;</span> ... <span class="hljs-tag">&lt;/<span class="hljs-name">PackageReference</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageReference</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;StyleCop.Analyzers&quot;</span>&gt;</span> ... <span class="hljs-tag">&lt;/<span class="hljs-name">PackageReference</span>&gt;</span>
-            <span class="hljs-tag">&lt;/<span class="hljs-name">ItemGroup</span>&gt;</span>
-          
-            <span class="hljs-comment">&lt;!-- Identifier-type aliases linked into all projects (one block per module Shared project) --&gt;</span>
-            <span class="hljs-tag">&lt;<span class="hljs-name">ItemGroup</span> <span class="hljs-attr">Condition</span>=<span class="hljs-string">&quot;&#x27;$(MSBuildProjectExtension)&#x27; != &#x27;.dcproj&#x27;&quot;</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">Compile</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;$(MSBuildThisFileDirectory)Source\Modules\Tickets\MMCA.Helpdesk.Tickets.Shared\MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs&quot;</span>
-                       <span class="hljs-attr">Link</span>=<span class="hljs-string">&quot;GlobalUsings\MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs&quot;</span>
-                       <span class="hljs-attr">Condition</span>=<span class="hljs-string">&quot;&#x27;$(MSBuildProjectName)&#x27; != &#x27;MMCA.Helpdesk.Tickets.Shared&#x27;&quot;</span> /&gt;</span>
-              <span class="hljs-comment">&lt;!-- ...one more block per additional module&#x27;s *.Shared alias file --&gt;</span>
-            <span class="hljs-tag">&lt;/<span class="hljs-name">ItemGroup</span>&gt;</span>
-          
-            <span class="hljs-comment">&lt;!-- .Contracts convention: any *.Contracts project auto-compiles Protos/**/*.proto (server + client) --&gt;</span>
-            <span class="hljs-tag">&lt;<span class="hljs-name">ItemGroup</span> <span class="hljs-attr">Condition</span>=<span class="hljs-string">&quot;$(MSBuildProjectName.EndsWith(&#x27;.Contracts&#x27;))&quot;</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageReference</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;Grpc.Tools&quot;</span>&gt;</span> ... <span class="hljs-tag">&lt;/<span class="hljs-name">PackageReference</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageReference</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;Google.Protobuf&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">PackageReference</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;Grpc.Net.ClientFactory&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">Protobuf</span> <span class="hljs-attr">Include</span>=<span class="hljs-string">&quot;Protos\**\*.proto&quot;</span> <span class="hljs-attr">GrpcServices</span>=<span class="hljs-string">&quot;Both&quot;</span> /&gt;</span>
-            <span class="hljs-tag">&lt;/<span class="hljs-name">ItemGroup</span>&gt;</span>
-          <span class="hljs-tag">&lt;/<span class="hljs-name">Project</span>&gt;</span></code></pre>
-          <blockquote>
-          <p><strong>Why the identifier-alias linking matters.</strong> Each module declares <code>global using {Entity}IdentifierType = int;</code> (or <code>Guid</code>) in one file in its <code>*.Shared</code> project. The
-          <code>&lt;Compile Include ... Link&gt;</code> block makes that alias visible in <strong>every</strong> project solution-wide.
-          Always use the alias (<code>TicketIdentifierType</code>), never the raw <code>int</code>. See the Entity Identifier
-          Convention in <code>MMCA.Common/CLAUDE.md</code>.</p>
-          </blockquote>
-          <h3 id="globaljson-nugetconfig-localpropstemplate"><code>global.json</code>, <code>nuget.config</code>, <code>local.props.template</code></h3>
-          <pre class="doc-pre" data-lang="JSON"><code class="language-jsonc hljs"><span class="hljs-comment">// global.json: all three apps run on Microsoft Testing Platform (xUnit v3), not VSTest</span>
-          <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;test&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;runner&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Microsoft.Testing.Platform&quot;</span> <span class="hljs-punctuation">}</span> <span class="hljs-punctuation">}</span></code></pre>
-          <pre class="doc-pre" data-lang="XML"><code class="language-xml hljs"><span class="hljs-comment">&lt;!-- nuget.config (NuGet mode): everything, MMCA.* included, comes from nuget.org. No credentials.
-               The single `*` mapping is also supply-chain hygiene: it stops a package from another feed being
-               substituted for one you expect. This is MMCA.Common&#x27;s own nuget.config shape. --&gt;</span>
-          <span class="hljs-tag">&lt;<span class="hljs-name">configuration</span>&gt;</span>
-            <span class="hljs-tag">&lt;<span class="hljs-name">packageSources</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">clear</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">add</span> <span class="hljs-attr">key</span>=<span class="hljs-string">&quot;nuget.org&quot;</span> <span class="hljs-attr">value</span>=<span class="hljs-string">&quot;https://api.nuget.org/v3/index.json&quot;</span> /&gt;</span>
-            <span class="hljs-tag">&lt;/<span class="hljs-name">packageSources</span>&gt;</span>
-            <span class="hljs-tag">&lt;<span class="hljs-name">packageSourceMapping</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">packageSource</span> <span class="hljs-attr">key</span>=<span class="hljs-string">&quot;nuget.org&quot;</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">package</span> <span class="hljs-attr">pattern</span>=<span class="hljs-string">&quot;*&quot;</span> /&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">packageSource</span>&gt;</span>
-            <span class="hljs-tag">&lt;/<span class="hljs-name">packageSourceMapping</span>&gt;</span>
-          <span class="hljs-tag">&lt;/<span class="hljs-name">configuration</span>&gt;</span></code></pre>
-          <p>You only need the GitHub Packages mirror in two cases: you are pinning a version released before
-          nuget.org publishing began (there was no backfill, so those versions exist on GitHub Packages only),
-          or your organization already restores <code>MMCA.*</code> from that feed. In that case add the feed <em>beside</em>
-          nuget.org, source-map <code>MMCA.*</code> to it, and supply a token. Note the <code>auditSources</code> block: GitHub
-          Packages serves no NuGet vulnerability data, so an unrestricted audit reports NU1900 against it.</p>
-          <pre class="doc-pre" data-lang="XML"><code class="language-xml hljs"><span class="hljs-comment">&lt;!-- Optional: MMCA.* from the GitHub Packages mirror. Needs a token with read:packages. --&gt;</span>
-          <span class="hljs-tag">&lt;<span class="hljs-name">configuration</span>&gt;</span>
-            <span class="hljs-tag">&lt;<span class="hljs-name">packageSources</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">add</span> <span class="hljs-attr">key</span>=<span class="hljs-string">&quot;github-mmca&quot;</span> <span class="hljs-attr">value</span>=<span class="hljs-string">&quot;https://nuget.pkg.github.com/ivanball/index.json&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">add</span> <span class="hljs-attr">key</span>=<span class="hljs-string">&quot;nuget.org&quot;</span> <span class="hljs-attr">value</span>=<span class="hljs-string">&quot;https://api.nuget.org/v3/index.json&quot;</span> /&gt;</span>
-            <span class="hljs-tag">&lt;/<span class="hljs-name">packageSources</span>&gt;</span>
-            <span class="hljs-tag">&lt;<span class="hljs-name">auditSources</span>&gt;</span>            <span class="hljs-comment">&lt;!-- GitHub Packages serves no vuln data; restrict audit to nuget.org --&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">clear</span> /&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">add</span> <span class="hljs-attr">key</span>=<span class="hljs-string">&quot;nuget.org&quot;</span> <span class="hljs-attr">value</span>=<span class="hljs-string">&quot;https://api.nuget.org/v3/index.json&quot;</span> /&gt;</span>
-            <span class="hljs-tag">&lt;/<span class="hljs-name">auditSources</span>&gt;</span>
-            <span class="hljs-tag">&lt;<span class="hljs-name">packageSourceMapping</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">packageSource</span> <span class="hljs-attr">key</span>=<span class="hljs-string">&quot;github-mmca&quot;</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">package</span> <span class="hljs-attr">pattern</span>=<span class="hljs-string">&quot;MMCA.*&quot;</span> /&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">packageSource</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">packageSource</span> <span class="hljs-attr">key</span>=<span class="hljs-string">&quot;nuget.org&quot;</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">package</span> <span class="hljs-attr">pattern</span>=<span class="hljs-string">&quot;*&quot;</span> /&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">packageSource</span>&gt;</span>
-            <span class="hljs-tag">&lt;/<span class="hljs-name">packageSourceMapping</span>&gt;</span>
-            <span class="hljs-tag">&lt;<span class="hljs-name">packageSourceCredentials</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">github-mmca</span>&gt;</span>
-                <span class="hljs-tag">&lt;<span class="hljs-name">add</span> <span class="hljs-attr">key</span>=<span class="hljs-string">&quot;Username&quot;</span> <span class="hljs-attr">value</span>=<span class="hljs-string">&quot;&lt;your-user&gt;&quot;</span> /&gt;</span>
-                <span class="hljs-tag">&lt;<span class="hljs-name">add</span> <span class="hljs-attr">key</span>=<span class="hljs-string">&quot;ClearTextPassword&quot;</span> <span class="hljs-attr">value</span>=<span class="hljs-string">&quot;%GITHUB_TOKEN%&quot;</span> /&gt;</span>
-              <span class="hljs-tag">&lt;/<span class="hljs-name">github-mmca</span>&gt;</span>
-            <span class="hljs-tag">&lt;/<span class="hljs-name">packageSourceCredentials</span>&gt;</span>
-          <span class="hljs-tag">&lt;/<span class="hljs-name">configuration</span>&gt;</span></code></pre>
-          <pre class="doc-pre" data-lang="XML"><code class="language-xml hljs"><span class="hljs-comment">&lt;!-- local.props.template: copy to local.props (gitignored) to build against MMCA.Common source.
-               Directory.Build.targets reads UseLocalMMCA and swaps each MMCA.Common.* PackageReference for a
-               ProjectReference under LocalMMCAPath. The MMCA.Helpdesk scaffold ships local.props ACTIVE (so it
-               builds straight against framework source); delete it to consume the published packages from
-               nuget.org instead. --&gt;</span>
-          <span class="hljs-tag">&lt;<span class="hljs-name">Project</span>&gt;</span>
-            <span class="hljs-tag">&lt;<span class="hljs-name">PropertyGroup</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">UseLocalMMCA</span>&gt;</span>true<span class="hljs-tag">&lt;/<span class="hljs-name">UseLocalMMCA</span>&gt;</span>
-              <span class="hljs-tag">&lt;<span class="hljs-name">LocalMMCAPath</span>&gt;</span>$(MSBuildThisFileDirectory)..\MMCA.Common\Source\<span class="hljs-tag">&lt;/<span class="hljs-name">LocalMMCAPath</span>&gt;</span>
-            <span class="hljs-tag">&lt;/<span class="hljs-name">PropertyGroup</span>&gt;</span>
-          <span class="hljs-tag">&lt;/<span class="hljs-name">Project</span>&gt;</span></code></pre>
-          <p><strong>Checkpoint:</strong> <code>dotnet build MMCA.Helpdesk.slnx</code> succeeds on an empty solution (no projects yet, but
-          the plumbing parses).</p>
-          <hr>
-          <h2 id="phase-2-scaffold-the-module-project-set">Phase 2: Scaffold the module project set</h2>
-          <blockquote>
-          <p><strong>Scaffolded.</strong> <code>dotnet new mmca-app</code> creates this project set for your first module, and
-          <code>dotnet new mmca-module</code> adds another one later (it prints the five wire-ups it cannot perform:
-          the solution entries, the host and architecture-test project references, the identifier-alias
-          link, the map lines, and <code>AddErrorResources</code>). See the <a href="common-TEMPLATES.html">templates guide</a>.</p>
-          </blockquote>
-          <p>Each business module is a set of layered projects under <code>Source/Modules/&lt;Module&gt;/</code>. Pattern source:
-          <code>MMCA.Helpdesk/Source/Modules/Tickets/</code> (or the richer <code>MMCA.ADC/Source/Modules/Conference/</code>). For
-          <strong>Tickets</strong>:</p>
-          <div class="table-wrap"><table>
-          <thead>
-          <tr>
-          <th>Project</th>
-          <th>References</th>
-          <th>Holds</th>
-          </tr>
-          </thead>
-          <tbody><tr>
-          <td><code>MMCA.Helpdesk.Tickets.Shared</code></td>
-          <td><code>MMCA.Common.Shared</code>, <code>MMCA.Common.Domain</code></td>
-          <td>DTOs, request records, <strong>identifier aliases</strong>, the status enum, integration events</td>
-          </tr>
-          <tr>
-          <td><code>MMCA.Helpdesk.Tickets.Domain</code></td>
-          <td><code>MMCA.Common.Domain</code></td>
-          <td>aggregate, child entities, invariants, domain events</td>
-          </tr>
-          <tr>
-          <td><code>MMCA.Helpdesk.Tickets.Application</code></td>
-          <td><code>MMCA.Common.Application</code>, Riok.Mapperly, the Shared + Domain projects</td>
-          <td>use cases (command/query + handler), validators, mappers, event handlers, module DI</td>
-          </tr>
-          <tr>
-          <td><code>MMCA.Helpdesk.Tickets.Infrastructure</code></td>
-          <td><code>MMCA.Common.Infrastructure</code>, the Application project</td>
-          <td>EF entity configurations, the abstract module DbContext, infra DI</td>
-          </tr>
-          <tr>
-          <td><code>MMCA.Helpdesk.Tickets.API</code></td>
-          <td><code>MMCA.Common.API</code>, the Application + Infrastructure projects</td>
-          <td>REST controller, the <code>IModule</code>, the module-composition DI</td>
-          </tr>
-          </tbody></table></div>
-          <p>The layering is enforced twice by the framework (compile-time MSBuild guard + the NetArchTest rules in
-          Phase 6), so a forbidden reference fails the build. See
-          <a href="../adr/015-architecture-fitness-functions.html">ADR-015</a>.</p>
-          <p><strong>Identity is optional and omitted from the reference app.</strong> The Helpdesk seed runs issuer-less (a bare
-          auth scheme + an <code>[AllowAnonymous]</code> controller), which is the fastest path to a running app. Add an
-          Identity module when you want real RS256/JWKS authentication or are about to extract a service (Phase
-          8): the fastest start is to copy MMCA.Store&#39;s or MMCA.ADC&#39;s Identity module and rename the namespaces
-          (Store&#39;s Identity is local-credential + RS256 only, the simpler base), then set
-          <code>Authentication:JwtBearer:Authority</code> and flip the controller back to <code>[Authorize]</code>. Identity is
-          intentionally generic across apps.</p>
-          <hr>
-          <h2 id="phase-3-the-vertical-slice-end-to-end-the-heart-of-it">Phase 3: The vertical slice end-to-end (the heart of it)</h2>
-          <blockquote>
-          <p><strong>Scaffolded.</strong> The generated module already contains this slice and six more, worked end to end.
-          <code>dotnet new mmca-command</code> and <code>dotnet new mmca-query</code> add another one. This phase is the one to
-          actually read: it is the path every feature you add will follow.</p>
-          </blockquote>
-          <p>Implement Tickets create and read. This traces the same path for every feature you will ever add (the
-          reference app then repeats it for update, delete, status change, and comment add/edit/remove). Pattern
-          source for each step is the Helpdesk <code>Ticket</code> aggregate.</p>
-          <h3 id="3a-domain-aggregate-invariants-events">3a. Domain: aggregate, invariants, events</h3>
-          <p>Entities inherit the framework hierarchy: <code>BaseEntity&lt;TId&gt;</code> to <code>AuditableBaseEntity&lt;TId&gt;</code> (adds
-          soft-delete <code>IsDeleted</code> + audit fields) to <code>AuditableAggregateRootEntity&lt;TId&gt;</code> (adds the domain-events
-          collection and child-collection helpers). <strong>Aggregates use factory methods that return <code>Result&lt;T&gt;</code>,
-          never public constructors.</strong> See <a href="../adr/013-result-pattern.html">ADR-013</a>.</p>
-          <p>The reference app uses <strong>database-generated</strong> integer ids (the <code>[IdValueGenerated]</code> attribute + the
-          <code>TicketIdentifierType = int</code> alias). That has one important consequence: the factory does <strong>not</strong> raise
-          an &quot;Added&quot; domain event, because the id is still <code>0</code> at that point: creation is signalled <em>after the
-          commit</em> by an integration event (see 3c). Mutations raise a single <code>TicketChanged</code> domain event
-          (<code>EntityChangedEvent</code>-derived) carrying the lifecycle state.</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Tickets/MMCA.Helpdesk.Tickets.Domain/Tickets/Ticket.cs</span>
-          [<span class="hljs-meta">IdValueGenerated</span>]
-          <span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">Ticket</span> : <span class="hljs-title">AuditableAggregateRootEntity</span>&lt;<span class="hljs-title">TicketIdentifierType</span>&gt;
-          {
-              <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> Title { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }
-              <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> Description { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }
-              <span class="hljs-keyword">public</span> TicketStatus Status { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }
-              <span class="hljs-keyword">public</span> <span class="hljs-built_in">int</span> RequesterUserId { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }   <span class="hljs-comment">// resolved from Identity once you add it</span>
-          
-              <span class="hljs-keyword">private</span> <span class="hljs-keyword">readonly</span> List&lt;TicketComment&gt; _comments = [];
-          
-              [<span class="hljs-meta">Navigation(IsCollection = true)</span>]
-              <span class="hljs-keyword">public</span> IReadOnlyCollection&lt;TicketComment&gt; Comments =&gt; _comments.AsReadOnly();
-          
-              <span class="hljs-function"><span class="hljs-keyword">private</span> <span class="hljs-title">Ticket</span>(<span class="hljs-params"><span class="hljs-built_in">string</span> title, <span class="hljs-built_in">string</span> description, <span class="hljs-built_in">int</span> requesterUserId</span>)   <span class="hljs-comment">// EF + factory materializer</span></span>
-              {
-                  Title = title;
-                  Description = description;
-                  RequesterUserId = requesterUserId;
-                  Status = TicketStatus.Open;
-              }
-          
-              <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> Result&lt;Ticket&gt; <span class="hljs-title">Create</span>(<span class="hljs-params">TicketIdentifierType? id, <span class="hljs-built_in">string</span> title, <span class="hljs-built_in">string</span> description, <span class="hljs-built_in">int</span> requesterUserId</span>)</span>
-              {
-                  <span class="hljs-keyword">var</span> validation = Result.Combine(
-                      TicketInvariants.EnsureTitleIsValid(title, <span class="hljs-keyword">nameof</span>(Create)),
-                      TicketInvariants.EnsureDescriptionIsValid(description, <span class="hljs-keyword">nameof</span>(Create)));
-                  <span class="hljs-keyword">if</span> (validation.IsFailure) { <span class="hljs-keyword">return</span> Result.Failure&lt;Ticket&gt;(validation.Errors); }
-          
-                  <span class="hljs-comment">// When the id is DB-generated, leave it default; the supplied id is only used for engines that</span>
-                  <span class="hljs-comment">// do not generate keys. No &quot;Added&quot; domain event here (the id is still 0).</span>
-                  <span class="hljs-keyword">var</span> ticket = <span class="hljs-keyword">new</span> Ticket(title, description, requesterUserId)
-                  {
-                      Id = <span class="hljs-keyword">typeof</span>(Ticket).IsIdValueGenerated ? <span class="hljs-literal">default</span> : id!.Value,
-                  };
-                  <span class="hljs-keyword">return</span> Result.Success(ticket);
-              }
-          
-              <span class="hljs-function"><span class="hljs-keyword">public</span> Result <span class="hljs-title">ChangeStatus</span>(<span class="hljs-params">TicketStatus newStatus</span>)</span>
-              {
-                  <span class="hljs-keyword">if</span> (Status == newStatus) { <span class="hljs-keyword">return</span> Result.Success(); }
-                  Status = newStatus;
-                  AddDomainEvent(<span class="hljs-keyword">new</span> TicketChanged(DomainEntityState.Updated, Id));   <span class="hljs-comment">// dispatched after SaveChanges</span>
-                  <span class="hljs-keyword">return</span> Result.Success();
-              }
-          
-              <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">override</span> Result <span class="hljs-title">Delete</span>()                       <span class="hljs-comment">// soft-delete + cascade to comments</span></span>
-              {
-                  <span class="hljs-keyword">var</span> result = <span class="hljs-keyword">base</span>.Delete();
-                  <span class="hljs-keyword">if</span> (result.IsFailure) { <span class="hljs-keyword">return</span> result; }
-                  <span class="hljs-keyword">foreach</span> (<span class="hljs-keyword">var</span> comment <span class="hljs-keyword">in</span> _comments.Where(c =&gt; !c.IsDeleted)) { comment.Delete(); }
-                  AddDomainEvent(<span class="hljs-keyword">new</span> TicketChanged(DomainEntityState.Deleted, Id));
-                  <span class="hljs-keyword">return</span> result;
-              }
-          
-              <span class="hljs-comment">// AddComment / EditComment / RemoveComment / UpdateDetails follow the same shape: guard with an</span>
-              <span class="hljs-comment">// invariant, mutate, AddDomainEvent(new TicketChanged(DomainEntityState.Updated, Id)).</span>
-          }</code></pre>
-          <p>Invariants are static methods returning <code>Result</code> (each takes a <code>source</code> for error provenance),
-          combined with <code>Result.Combine(...)</code>. Use <code>Error.Invariant(...)</code> for broken business rules:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">class</span> <span class="hljs-title">TicketInvariants</span>
-          {
-              <span class="hljs-keyword">public</span> <span class="hljs-keyword">const</span> <span class="hljs-built_in">int</span> TitleMaxLength = <span class="hljs-number">200</span>;
-          
-              <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> Result <span class="hljs-title">EnsureTitleIsValid</span>(<span class="hljs-params"><span class="hljs-built_in">string</span> title, <span class="hljs-built_in">string</span> source</span>)</span> =&gt;
-                  <span class="hljs-built_in">string</span>.IsNullOrWhiteSpace(title) || title.Length &gt; TitleMaxLength
-                      ? Result.Failure(Error.Invariant(
-                          code: <span class="hljs-string">&quot;Ticket.Title.Invalid&quot;</span>,
-                          message: <span class="hljs-string">$&quot;Title is required and must be at most <span class="hljs-subst">{TitleMaxLength}</span> characters.&quot;</span>,
-                          source: source,
-                          target: <span class="hljs-keyword">nameof</span>(title)))
-                      : Result.Success();
-          }</code></pre>
-          <p><code>TicketComment</code> inherits <code>AuditableBaseEntity&lt;TicketCommentIdentifierType&gt;</code> and is <code>[IdValueGenerated]</code>
-          too, with its own <code>Create(...)</code> factory. Manage children <strong>through the aggregate root</strong>: <code>Ticket</code>
-          exposes <code>AddComment</code> / <code>EditComment</code> / <code>RemoveComment</code> that validate, mutate <code>_comments</code>, and raise
-          <code>TicketChanged</code>: never mutate the collection or a comment from outside the aggregate.</p>
-          <h3 id="3b-shared-dto-request-integration-event-aliases">3b. Shared: DTO, request, integration event, aliases</h3>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// MMCA.Helpdesk.Tickets.GlobalUsings.IdentifierType.cs  (linked solution-wide via Directory.Build.props)</span>
-          <span class="hljs-keyword">global</span> <span class="hljs-keyword">using</span> TicketIdentifierType = <span class="hljs-built_in">int</span>;
-          <span class="hljs-keyword">global</span> <span class="hljs-keyword">using</span> TicketCommentIdentifierType = <span class="hljs-built_in">int</span>;</code></pre>
-          <p>The read model implements <code>IBaseDTO&lt;TId&gt;</code> (the framework read-side contract) and carries its children.
-          It also implements <strong><code>IConcurrencyAware</code></strong>, exposing the <code>RowVersion</code> the client echoes back on an
-          update so a conflicting concurrent edit surfaces as 409 instead of silently last-write-winning (see
-          <a href="../adr/035-optimistic-concurrency.html">ADR-035</a>):</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">record</span> <span class="hljs-title">class</span> <span class="hljs-title">TicketDTO</span> : <span class="hljs-title">IBaseDTO</span>&lt;<span class="hljs-title">TicketIdentifierType</span>&gt;, <span class="hljs-title">IConcurrencyAware</span>
-          {
-              <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> TicketIdentifierType Id { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
-              <span class="hljs-keyword">public</span> <span class="hljs-built_in">byte</span>[]? RowVersion { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }               <span class="hljs-comment">// ADR-035: echoed back on update</span>
-              <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> <span class="hljs-built_in">string</span> Title { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
-              <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> <span class="hljs-built_in">string</span> Description { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
-              <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> TicketStatus Status { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }     <span class="hljs-comment">// the enum itself; serialized by name</span>
-              <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> <span class="hljs-built_in">int</span> RequesterUserId { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
-              <span class="hljs-keyword">public</span> IReadOnlyCollection&lt;TicketCommentDTO&gt; Comments { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; } = [];
-          }
-          
-          <span class="hljs-comment">// Integration events derive BaseIntegrationEvent, which supplies SchemaVersion (default 1,</span>
-          <span class="hljs-comment">// fitness-enforced): a breaking change uses a NEW event type + upcaster, never a reshape. See ADR-010.</span>
-          <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-keyword">class</span> <span class="hljs-title">TicketOpenedIntegrationEvent</span>(<span class="hljs-params">TicketIdentifierType TicketId, <span class="hljs-built_in">int</span> RequesterUserId</span>)
-              : BaseIntegrationEvent</span>;</code></pre>
-          <p>Plain request bodies (e.g. <code>TicketUpdateRequest</code>, <code>AddCommentRequest</code>) live in Shared too. Name the
-          update body with the <strong><code>*UpdateRequest</code></strong> suffix and have it implement <code>IConcurrencyAware</code>: that exact
-          pairing is what the <code>ConcurrencyConventionTestsBase</code> fitness rule looks for (Phase 6), so an update
-          request that skips the token fails the build rather than quietly losing a concurrent edit.</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">class</span> <span class="hljs-title">TicketUpdateRequest</span> : <span class="hljs-title">IConcurrencyAware</span>
-          {
-              <span class="hljs-keyword">public</span> <span class="hljs-built_in">byte</span>[]? RowVersion { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }               <span class="hljs-comment">// the token the client last read</span>
-              <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> <span class="hljs-built_in">string</span> Title { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
-              <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> <span class="hljs-built_in">string</span> Description { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
-          }</code></pre>
-          <p>The <strong>create request doubles as the command</strong> and is co-located with its use case in Application (next
-          section); it implements <code>ICacheInvalidating</code> so a successful create evicts cached ticket reads:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Tickets/.../Application/Tickets/UseCases/Create/TicketCreateRequest.cs</span>
-          <span class="hljs-keyword">public</span> <span class="hljs-keyword">record</span> <span class="hljs-title">class</span> <span class="hljs-title">TicketCreateRequest</span> : <span class="hljs-title">ICreateRequest</span>, <span class="hljs-title">ICacheInvalidating</span>
-          {
-              <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> CachePrefix =&gt; TicketCacheKeys.Prefix;
-              <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> <span class="hljs-built_in">string</span> Title { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
-              <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> <span class="hljs-built_in">string</span> Description { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
-              <span class="hljs-keyword">public</span> <span class="hljs-keyword">required</span> <span class="hljs-built_in">int</span> RequesterUserId { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">init</span>; }
-          }</code></pre>
-          <p><code>TicketCacheKeys</code> is the one place the module names cache entries, and the reason it exists is worth
-          reading in <a href="#caching-is-a-pair-and-you-wire-both-halves">&quot;Caching is a pair&quot;</a> below.</p>
-          <h3 id="3c-application-use-case-validator-mapper-di">3c. Application: use case, validator, mapper, DI</h3>
-          <p>A command handler implements <code>ICommandHandler&lt;TCommand, TResult&gt;</code> and stays thin: the decorator
-          pipeline supplies logging, caching, validation, and the transaction around it. The request is turned
-          into the aggregate by an <code>IEntityRequestMapper</code> (which calls the domain factory), and a FluentValidation
-          validator + the Mapperly <code>*RequestMapper</code>/<code>*DTOMapper</code> are all auto-discovered by convention scanning.
-          Because the id is DB-generated, the handler publishes the <strong>integration event after the commit</strong>, when
-          the real id exists:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">CreateTicketHandler</span>(<span class="hljs-params">
-              IUnitOfWork unitOfWork,
-              IEntityRequestMapper&lt;Ticket, TicketCreateRequest, TicketIdentifierType&gt; requestMapper,
-              IEventBus eventBus,
-              TicketDTOMapper dtoMapper</span>) : ICommandHandler&lt;TicketCreateRequest, Result&lt;TicketDTO&gt;&gt;</span>
-          {
-              <span class="hljs-keyword">public</span> <span class="hljs-keyword">async</span> Task&lt;Result&lt;TicketDTO&gt;&gt; HandleAsync(TicketCreateRequest command, CancellationToken cancellationToken = <span class="hljs-literal">default</span>)
-              {
-                  <span class="hljs-keyword">var</span> result = <span class="hljs-keyword">await</span> requestMapper.CreateEntityAsync(command, cancellationToken);   <span class="hljs-comment">// runs Ticket.Create</span>
-                  <span class="hljs-keyword">if</span> (result.IsFailure) { <span class="hljs-keyword">return</span> Result.Failure&lt;TicketDTO&gt;(result.Errors); }
-          
-                  <span class="hljs-keyword">var</span> entity = result.Value!;
-                  <span class="hljs-keyword">var</span> repository = unitOfWork.GetRepository&lt;Ticket, TicketIdentifierType&gt;();
-                  <span class="hljs-keyword">await</span> repository.AddAsync(entity, cancellationToken);
-                  <span class="hljs-keyword">await</span> unitOfWork.SaveChangesAsync(cancellationToken);   <span class="hljs-comment">// stamps audit, captures domain events to outbox, dispatches</span>
-          
-                  <span class="hljs-comment">// After commit: the DB-generated entity.Id is now populated. PublishAsync writes to the outbox</span>
-                  <span class="hljs-comment">// and dispatches in-process now, over the broker once Tickets is extracted (no handler change).</span>
-                  <span class="hljs-keyword">await</span> eventBus.PublishAsync(
-                      <span class="hljs-keyword">new</span> TicketOpenedIntegrationEvent(entity.Id, entity.RequesterUserId), cancellationToken);
-          
-                  <span class="hljs-keyword">return</span> Result.Success(dtoMapper.MapToDTO(entity));
-              }
-          }</code></pre>
-          <p>Module DI uses C# extension types (the framework&#39;s registration idiom). You make a few explicit
-          registrations (the entity query service that powers read endpoints, and a navigation populator), then
-          let <code>ScanModuleApplicationServices</code> find your handlers, validators, mappers, and event handlers by
-          convention:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">class</span> <span class="hljs-title">DependencyInjection</span>
-          {
-              extension(IServiceCollection services)
-              {
-                  <span class="hljs-function"><span class="hljs-keyword">public</span> IServiceCollection <span class="hljs-title">AddModuleTicketsApplication</span>(<span class="hljs-params">ApplicationSettings applicationSettings</span>)</span>
-                  {
-                      <span class="hljs-comment">// A Null populator suffices when eager loading goes through repository includes; swap for a</span>
-                      <span class="hljs-comment">// custom INavigationPopulator&lt;Ticket&gt; to batch-load comments instead.</span>
-                      services.TryAddScoped&lt;INavigationPopulator&lt;Ticket&gt;, NullNavigationPopulator&lt;Ticket&gt;&gt;();
-                      services.TryAddScoped&lt;IEntityQueryService&lt;Ticket, TicketDTO, TicketIdentifierType&gt;,
-                          EntityQueryService&lt;Ticket, TicketDTO, TicketIdentifierType&gt;&gt;();
-          
-                      services.ScanModuleApplicationServices&lt;ClassReference&gt;();   <span class="hljs-comment">// ClassReference = an anchor type in this assembly</span>
-                      <span class="hljs-keyword">return</span> services;
-                  }
-              }
-          }</code></pre>
-          <p>That scan is also what picks up the <strong>consuming</strong> side of both event paths, and the reference app ships
-          one of each so the distinction is visible in running code rather than only in prose:</p>
+          <h2 id="1-install-the-template-pack">1. Install the template pack</h2>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet new install MMCA.Templates</code></pre>
+          <p>Four templates arrive: <code>mmca-app</code> (a whole solution), <code>mmca-module</code> (a business module across all
+          five layers), and <code>mmca-command</code> / <code>mmca-query</code> (a single vertical slice).</p>
+          <h2 id="2-generate-the-solution">2. Generate the solution</h2>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet new mmca-app -n Contoso.Support --module Orders --aggregate Order
+          <span class="hljs-built_in">cd</span> Contoso.Support</code></pre>
+          <p>Three names, and they are independent: the <strong>solution</strong> (also your root namespace), the first
+          <strong>module</strong> in plural PascalCase, and that module&#39;s <strong>aggregate root</strong> in singular PascalCase.
+          <code>--module Billing --aggregate Invoice</code> is equally fine. Everything derived from them follows: routes,
+          the Aspire database resource, the identifier alias, the cache-key prefix, the resource strings, and
+          the Blazor pages.</p>
+          <p>Two more parameters are worth knowing on day one:</p>
           <ul>
-          <li><code>Tickets/DomainEventHandlers/TicketChangedAuditHandler</code> implements <code>IDomainEventHandler&lt;TicketChanged&gt;</code>.
-          Intra-module, dispatched in-process by <code>DomainEventDispatcher</code> after <code>SaveChangesAsync</code> (deferred
-          until after the commit when a transaction is open, so a handler never acts on state that rolls back).</li>
-          <li><code>Tickets/IntegrationEventHandlers/TicketOpenedHandler</code> implements
-          <code>IIntegrationEventHandler&lt;TicketOpenedIntegrationEvent&gt;</code>. Cross-module, delivered through the outbox:
-          in-process today, over the broker once Tickets is extracted, with no change to this handler.</li>
+          <li><code>--framework-version</code> pins the <code>MMCA.Common.*</code> set, defaulting to the version the pack was cut
+          against. Every package in the set moves together and there is no phased rollout
+          (<a href="../adr/016-lockstep-versioning-masstransit-pin.html">ADR-016</a>); a fitness rule fails the build if
+          the pins ever disagree.</li>
+          <li><code>--local-mmca</code> emits a <code>local.props</code> that builds against <code>../MMCA.Common/Source</code> by
+          <code>ProjectReference</code> instead of the published packages. Use it only when your app sits beside the
+          framework source in the same workspace.</li>
           </ul>
-          <p>Neither is registered by hand. Put a handler in the module&#39;s Application assembly and the convention
-          scan finds it.</p>
-          <h3 id="3d-infrastructure-ef-configuration-the-abstract-module-context-no-concrete-per-module-context">3d. Infrastructure: EF configuration, the abstract module context, no concrete per-module context</h3>
-          <p>There is exactly <strong>one concrete</strong> context at runtime, the framework&#39;s sealed <code>SQLServerDbContext</code> (one
-          instance per database). Each module declares an <strong>abstract</strong> <code>ModuleApplicationDbContext : ApplicationDbContext</code> that <em>only</em> lists the module&#39;s <code>DbSet</code>s: it documents the module&#39;s entity set
-          and never gets instantiated. <strong>Never write a concrete per-module or per-app DbContext class</strong> (see
-          <a href="../adr/006-database-per-service.html">ADR-006</a> and the &quot;Don&#39;t split SQLServerDbContext&quot; rule):</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">abstract</span> <span class="hljs-keyword">class</span> <span class="hljs-title">ModuleApplicationDbContext</span>(<span class="hljs-params">
-              DbContextOptions options, IServiceProvider serviceProvider,
-              IEntityConfigurationAssemblyProvider assemblyProvider, PhysicalDataSource physicalDataSource</span>)
-              : <span class="hljs-title">ApplicationDbContext</span>(<span class="hljs-params">options, serviceProvider, assemblyProvider, physicalDataSource</span>)</span>
-          {
-              <span class="hljs-keyword">internal</span> DbSet&lt;Ticket&gt; Tickets { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; }
-              <span class="hljs-keyword">internal</span> DbSet&lt;TicketComment&gt; TicketComments { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">set</span>; }
-          }</code></pre>
-          <p>You supply EF configurations that inherit <code>EntityTypeConfigurationSQLServer&lt;TEntity, TId&gt;</code> (the base
-          wires <code>Id</code>, <code>IsDeleted</code> + soft-delete query filter, audit fields, and the concurrency token):</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">internal</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">TicketConfiguration</span> : <span class="hljs-title">EntityTypeConfigurationSQLServer</span>&lt;<span class="hljs-title">Ticket</span>, <span class="hljs-title">TicketIdentifierType</span>&gt;
-          {
-              <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">override</span> <span class="hljs-keyword">void</span> <span class="hljs-title">Configure</span>(<span class="hljs-params">EntityTypeBuilder&lt;Ticket&gt; builder</span>)</span>
-              {
-                  <span class="hljs-keyword">base</span>.Configure(builder);   <span class="hljs-comment">// Id, IsDeleted + filter, audit fields, concurrency token</span>
-                  builder.Property(t =&gt; t.Title).HasMaxLength(TicketInvariants.TitleMaxLength).IsRequired();
-                  builder.Property(t =&gt; t.Status).HasConversion&lt;<span class="hljs-built_in">string</span>&gt;().HasMaxLength(<span class="hljs-number">32</span>).IsRequired();
-                  builder.HasMany(t =&gt; t.Comments).WithOne(c =&gt; c.Ticket).HasForeignKey(c =&gt; c.TicketId).IsRequired();
-              }
-          }</code></pre>
-          <p>Configurations are <strong>auto-discovered by assembly-name convention</strong> (the module&#39;s Infrastructure
-          assembly is registered for the design-time factory and the host), so the module&#39;s
-          <code>Infrastructure/DependencyInjection.cs</code> is a near no-op: <code>AddModuleTicketsInfrastructure()</code> just
-          returns <code>services</code>. You obtain a repository through
-          <code>IUnitOfWork.GetRepository&lt;Ticket, TicketIdentifierType&gt;()</code>; you never hand-write a context or a
-          repository class. The three module layers are composed in the <strong>API layer&#39;s</strong> DI
-          (<code>AddTicketsModule</code> calls Application + Infrastructure + API), which the module&#39;s <code>IModule.Register</code>
-          invokes (see Phase 5).</p>
-          <h3 id="3e-api-controller-and-error-mapping">3e. API: controller and error mapping</h3>
-          <p>Read endpoints (get-all / paged) come for free from <code>EntityControllerBase&lt;TEntity, TDTO, TId&gt;</code>, which
-          you parameterize with the entity query service; write endpoints inject handlers directly. On failure,
-          <code>HandleFailure(result.Errors)</code> maps the transport-agnostic <code>ErrorType</code> to the right HTTP status as RFC
-          9457 ProblemDetails (Validation/Invariant to 400, NotFound to 404, Conflict to 409, Unauthorized to
-          401, Forbidden to 403). See <a href="../adr/013-result-pattern.html">ADR-013</a>. The controller is
-          <strong><code>[AllowAnonymous]</code></strong> because the seed ships issuer-less; flip it to <code>[Authorize]</code> once you add Identity.</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">[<span class="hljs-meta">ApiController</span>]
-          [<span class="hljs-meta">Route(<span class="hljs-string">&quot;[controller]&quot;</span>)</span>]
-          [<span class="hljs-meta">ApiVersion(<span class="hljs-string">&quot;1.0&quot;</span>)</span>]
-          [<span class="hljs-meta">AllowAnonymous</span>]   <span class="hljs-comment">// issuer-less seed; switch to [Authorize] after adding Identity (Phase 8)</span>
-          <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">TicketsController</span>(<span class="hljs-params">
-              IEntityQueryService&lt;Ticket, TicketDTO, TicketIdentifierType&gt; queryService,
-              ICommandHandler&lt;TicketCreateRequest, Result&lt;TicketDTO&gt;&gt; createHandler,
-              ILogger&lt;TicketsController&gt; logger</span>)
-              : <span class="hljs-title">EntityControllerBase</span>&lt;<span class="hljs-title">Ticket</span>, <span class="hljs-title">TicketDTO</span>, <span class="hljs-title">TicketIdentifierType</span>&gt;(<span class="hljs-params">queryService, logger</span>)</span>
-          {
-              [<span class="hljs-meta">HttpPost</span>]
-              <span class="hljs-keyword">public</span> <span class="hljs-keyword">async</span> Task&lt;ActionResult&lt;TicketDTO&gt;&gt; CreateAsync(TicketCreateRequest request, CancellationToken cancellationToken)
-              {
-                  <span class="hljs-keyword">var</span> result = <span class="hljs-keyword">await</span> createHandler.HandleAsync(request, cancellationToken);
-                  <span class="hljs-keyword">if</span> (result.IsFailure) { <span class="hljs-keyword">return</span> HandleFailure(result.Errors); }
-          
-                  <span class="hljs-comment">// Build the Location URI directly: CreatedAtAction against the versioned base GetById route</span>
-                  <span class="hljs-comment">// throws &quot;No route matches the supplied values&quot;.</span>
-                  <span class="hljs-keyword">var</span> dto = result.Value!;
-                  <span class="hljs-keyword">return</span> Created(<span class="hljs-keyword">new</span> Uri(<span class="hljs-string">$&quot;Tickets/<span class="hljs-subst">{dto.Id}</span>&quot;</span>, UriKind.Relative), dto);
-              }
-          }</code></pre>
-          <p>The reference app&#39;s controller goes further: <code>GET {id}/details</code>, <code>PUT {id}</code>, <code>PUT {id}/status</code>,
-          <code>DELETE {id}</code>, and <code>POST|PUT|DELETE {id}/comments[/{commentId}]</code>, each one the same three lines: call
-          the handler, <code>HandleFailure</code> on failure, else return the success shape. <code>PUT {id}</code> also closes the
-          ADR-035 loop by forwarding the request&#39;s <code>RowVersion</code> onto the command
-          (<code>new UpdateTicketCommand(id, request.Title, request.Description) { RowVersion = request.RowVersion }</code>),
-          which is what turns a stale write into a 409 instead of an overwrite.</p>
-          <h3 id="what-the-pipeline-does-for-you">What the pipeline does for you</h3>
-          <p>Once <code>AddApplicationDecorators()</code> runs (Phase 5), every handler is wrapped by the Scrutor decorator
-          chain (outermost first). See <a href="../adr/014-cqrs-decorator-pipeline.html">ADR-014</a>:</p>
-          <pre class="doc-pre"><code class="">Commands: FeatureGate -&gt; Logging -&gt; Caching -&gt; Validating -&gt; Transactional -&gt; your handler
-          Queries:  FeatureGate -&gt; Logging -&gt; Caching -&gt; your handler</code></pre>
-          <p>The order is load-bearing: validation runs before the transaction opens; cache invalidation happens
-          after a successful commit (outside the transaction); a business <code>Result.Failure</code> commits the
-          transaction but skips cache invalidation; an exception rolls the transaction back.</p>
-          <h4 id="caching-is-a-pair-and-you-wire-both-halves">Caching is a pair, and you wire both halves</h4>
-          <p>The Caching decorator is two extension points that only do something <strong>together</strong>, and the framework
-          cannot check that you wired both:</p>
-          <ul>
-          <li>a query implements <strong><code>IQueryCacheable</code></strong> (<code>CacheKey</code> + <code>CacheDuration</code>) and is served from cache,</li>
-          <li>a command implements <strong><code>ICacheInvalidating</code></strong> (<code>CachePrefix</code>) and, on success, evicts every entry
-          whose key starts with that prefix.</li>
-          </ul>
-          <p>Implement only the command half and you get a write path that faithfully invalidates an empty cache:
-          no error, no warning, no benefit. That is the easiest thing in the whole pipeline to get half-done,
-          so the reference app wires both. Start from the key, because the decorator matches the two sides by
-          <strong>string prefix</strong> and nothing at compile time is watching:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Tickets/.../Application/Tickets/TicketCacheKeys.cs</span>
-          <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">class</span> <span class="hljs-title">TicketCacheKeys</span>
-          {
-              <span class="hljs-comment">// Derived from the aggregate type name so two modules cannot collide on a shared cache.</span>
-              <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-built_in">string</span> Prefix { <span class="hljs-keyword">get</span>; } = <span class="hljs-string">$&quot;<span class="hljs-subst">{<span class="hljs-keyword">typeof</span>(Ticket).FullName}</span>:&quot;</span>;
-          
-              <span class="hljs-comment">// Every input that changes the result belongs in the key. This read has only an id.</span>
-              <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-built_in">string</span> <span class="hljs-title">ById</span>(<span class="hljs-params">TicketIdentifierType id</span>)</span> =&gt;
-                  <span class="hljs-built_in">string</span>.Create(CultureInfo.InvariantCulture, <span class="hljs-string">$&quot;<span class="hljs-subst">{Prefix}</span>ById:<span class="hljs-subst">{id}</span>&quot;</span>);
-          }</code></pre>
-          <p>The read side opts in by implementing <code>IQueryCacheable</code>. The duration is a <strong>staleness budget</strong>, not
-          a performance knob: a write through the pipeline evicts the entry immediately, so it only bounds the
-          window for changes that bypass the pipeline (a migration, a manual edit, another writer on the same
-          database):</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Tickets/.../Application/Tickets/UseCases/GetById/GetTicketByIdQuery.cs</span>
-          <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">GetTicketByIdQuery</span>(<span class="hljs-params">TicketIdentifierType Id</span>) : IQueryCacheable</span>
-          {
-              <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> CacheKey =&gt; TicketCacheKeys.ById(Id);
-              <span class="hljs-keyword">public</span> TimeSpan CacheDuration =&gt; TimeSpan.FromMinutes(<span class="hljs-number">5</span>);
-          }</code></pre>
-          <p>The write side returns the prefix its write dirties. Every ticket command does, from the same
-          constant, which is the point: a hand-typed literal in one of seven commands is one rename away from
-          a read that is never evicted, and the symptom appears later as a stale ticket rather than as a
-          failure at the write.</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Tickets/.../Application/Tickets/UseCases/AddComment/AddCommentCommand.cs</span>
-          <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">AddCommentCommand</span>(<span class="hljs-params">TicketIdentifierType TicketId, <span class="hljs-built_in">string</span> Body, <span class="hljs-built_in">int</span> AuthorUserId</span>)
-              : ICacheInvalidating</span>
-          {
-              <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> CachePrefix =&gt; TicketCacheKeys.Prefix;
-          }</code></pre>
-          <p>Two properties of the decorator are worth knowing before you rely on it:</p>
-          <ul>
-          <li><strong>Invalidation runs only on success.</strong> A <code>Result.Failure</code> persisted nothing, so evicting valid
-          entries would be pure loss. Assert this, because it is invisible in normal use.</li>
-          <li><strong>Invalidation runs outside the transaction</strong>, after the commit. It cannot roll back with the
-          write, which is the correct trade: a spurious eviction costs one cache miss, whereas invalidating
-          inside the transaction would leave the cache holding pre-write state if the commit then failed.</li>
-          </ul>
-          <p>Both halves are testable without a database. Wire the two real decorators around stub handlers and a
-          dictionary-backed <code>ICacheService</code>, and the assertions say nothing about whether the substrate is
-          in-memory or Redis (source:
-          <code>Tests/Modules/Tickets/MMCA.Helpdesk.Tickets.Application.Tests/Caching/TicketCacheInvalidationTests.cs</code>):</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> cache = <span class="hljs-keyword">new</span> DictionaryCache();                       <span class="hljs-comment">// a plain Dictionary behind ICacheService</span>
-          <span class="hljs-keyword">var</span> handler = <span class="hljs-keyword">new</span> CountingQueryHandler(TicketResult());  <span class="hljs-comment">// counts how often the real read is reached</span>
-          <span class="hljs-keyword">var</span> read = <span class="hljs-keyword">new</span> CachingQueryDecorator&lt;GetTicketByIdQuery, Result&lt;TicketDTO&gt;&gt;(handler, cache);
-          <span class="hljs-keyword">var</span> write = <span class="hljs-keyword">new</span> CachingCommandDecorator&lt;ChangeTicketStatusCommand, Result&lt;TicketDTO&gt;&gt;(
-              <span class="hljs-keyword">new</span> StubCommandHandler(TicketResult(TicketStatus.Closed)), cache);
-          
-          <span class="hljs-keyword">await</span> read.HandleAsync(<span class="hljs-keyword">new</span> GetTicketByIdQuery(TicketId));     <span class="hljs-comment">// miss: runs the handler, caches</span>
-          <span class="hljs-keyword">await</span> read.HandleAsync(<span class="hljs-keyword">new</span> GetTicketByIdQuery(TicketId));     <span class="hljs-comment">// hit: handler not reached</span>
-          handler.Invocations.Should().Be(<span class="hljs-number">1</span>);
-          
-          <span class="hljs-keyword">await</span> write.HandleAsync(<span class="hljs-keyword">new</span> ChangeTicketStatusCommand(TicketId, TicketStatus.Closed));
-          
-          <span class="hljs-keyword">await</span> read.HandleAsync(<span class="hljs-keyword">new</span> GetTicketByIdQuery(TicketId));     <span class="hljs-comment">// miss again: the write evicted it</span>
-          handler.Invocations.Should().Be(<span class="hljs-number">2</span>);</code></pre>
-          <p>Add the negative case (a command returning <code>Result.Failure</code> must leave the entry in place) and one
-          guard that the read key still starts with the prefix every command returns. That last test is the
-          one that survives a rename.</p>
-          <hr>
-          <h2 id="phase-4-dbcontext-model-and-migrations">Phase 4: DbContext model and migrations</h2>
-          <blockquote>
-          <p><strong>Partly scaffolded.</strong> The migrations project and its design-time factory are generated. Running
-          <code>dotnet ef migrations add InitialCreate</code> is still yours, and for a module added later the
-          generated migrations project ships deliberately empty so the first migration describes YOUR
-          entities.</p>
-          </blockquote>
-          <p>Create <strong>one migrations project per (future) service database</strong>, even while you are a monolith. This
-          costs nothing now and means extraction (Phase 8) needs zero migration rework. Pattern source:
-          <code>MMCA.Helpdesk/Source/Hosting/MMCA.Helpdesk.Migrations.SqlServer.Tickets/</code>.</p>
-          <pre class="doc-pre"><code class="">Source/Hosting/MMCA.Helpdesk.Migrations.SqlServer.Tickets/
-            MMCA.Helpdesk.Migrations.SqlServer.Tickets.csproj   (refs EF Design + SqlServer + the Tickets.Infrastructure project)
-            DesignTimeSQLServerDbContextFactory.cs
-            Migrations/   (generated)</code></pre>
-          <p>The design-time factory uses the framework helper so <code>dotnet ef</code> can build a per-source context:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">DesignTimeSQLServerDbContextFactory</span> : <span class="hljs-title">IDesignTimeDbContextFactory</span>&lt;<span class="hljs-title">SQLServerDbContext</span>&gt;
-          {
-              <span class="hljs-function"><span class="hljs-keyword">public</span> SQLServerDbContext <span class="hljs-title">CreateDbContext</span>(<span class="hljs-params"><span class="hljs-built_in">string</span>[] <span class="hljs-keyword">args</span></span>)</span> =&gt;
-                  DesignTimeDbContextHelper.CreateSqlServer(<span class="hljs-keyword">args</span>, options =&gt;
-                  {
-                      options.DataSourceName = <span class="hljs-string">&quot;Tickets&quot;</span>;
-                      <span class="hljs-comment">// A placeholder top-level string keeps the helper happy; migrations add/script never connect.</span>
-                      options.ConnectionStrings = <span class="hljs-keyword">new</span> ConnectionStringSettings { SQLServerConnectionString = <span class="hljs-string">&quot;Server=design-time-unused;&quot;</span> };
-                      options.DataSources[<span class="hljs-string">&quot;Tickets&quot;</span>] = <span class="hljs-keyword">new</span> DataSourceEntrySettings
-                      {
-                          SQLServerConnectionString = Environment.GetEnvironmentVariable(<span class="hljs-string">&quot;HELPDESK_TICKETS_SQL&quot;</span>)
-                              ?? <span class="hljs-string">&quot;Server=localhost;Database=Helpdesk_Tickets;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=True&quot;</span>,
-                          SQLServerMigrationsAssembly = <span class="hljs-keyword">typeof</span>(DesignTimeSQLServerDbContextFactory).Assembly.GetName().Name!,
-                      };
-                      options.AddConfigurationAssembly(<span class="hljs-keyword">typeof</span>(MMCA.Helpdesk.Tickets.Infrastructure.AssemblyReference).Assembly);
-                  });
-          }</code></pre>
-          <p>Add the first migration (run per migrations project, always <code>--context SQLServerDbContext</code>):</p>
+          <p>The full parameter table is in the <a href="common-TEMPLATES.html">templates guide</a>.</p>
+          <h2 id="3-build-and-test-before-you-change-anything">3. Build and test before you change anything</h2>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet build Contoso.Support.slnx
+          dotnet <span class="hljs-built_in">test</span>  --solution Contoso.Support.slnx</code></pre>
+          <p>That is a warning-free build with <code>TreatWarningsAsErrors</code> and all five analyzers at error severity,
+          and a passing test run including the architecture-fitness rules, with <strong>no database needed</strong>. If it
+          is not green, that is a template bug rather than yours: the pack is generated from the reference app
+          whose CI keeps it building, and a separate smoke job builds two generated solutions in package mode
+          on every change.</p>
+          <p>Getting a green baseline <strong>first</strong> is the point of this step. It is the line you bisect against
+          later.</p>
+          <h2 id="4-create-the-first-migration">4. Create the first migration</h2>
+          <p>The scaffold ships the migrations project and its design-time factory; the migration itself
+          describes your entities, so it is yours to generate:</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet ef migrations add InitialCreate \
-            --project Source/Hosting/MMCA.Helpdesk.Migrations.SqlServer.Tickets \
-            --startup-project Source/Hosting/MMCA.Helpdesk.Migrations.SqlServer.Tickets \
+            --project Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders \
+            --startup-project Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders \
             --context SQLServerDbContext</code></pre>
-          <p>At runtime the host applies migrations via the framework&#39;s <code>InitializeDatabaseAsync(...)</code> driven by
-          <code>ApplicationSettings.DatabaseInitStrategy</code>: <code>Migrate</code> (production, the host is the sole migrator),
-          <code>EnsureCreated</code> (quick local), or <code>None</code> (throws if migrations are pending, a safety check).</p>
+          <p>Always pass <code>--context SQLServerDbContext</code>. There is exactly one concrete context class per database
+          engine; module contexts are abstract and only declare their <code>DbSet</code>s
+          (<a href="../adr/006-database-per-service.html">ADR-006</a>). You get <strong>one migrations project per (future)
+          service database</strong> even while you are a monolith, which is what makes extraction later cost no
+          migration rework.</p>
+          <h2 id="5-run-it">5. Run it</h2>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet run --project Source/Hosting/Contoso.Support.AppHost</code></pre>
           <blockquote>
-          <p><strong>Monolith collapse:</strong> with no <code>DataSources</code> section in config, every entity collapses onto one
-          physical database (one context, FK constraints intact) and behaves exactly like a classic
-          single-DB monolith. The same configurations and migrations later route to separate databases when
-          you add <code>DataSources</code> entries in the extraction phase. This collapse is what makes &quot;monolith now,
-          services later&quot; free. See <a href="../adr/006-database-per-service.html">ADR-006</a>.</p>
+          <p><strong>Run this from a real, interactive terminal.</strong> Launched from a headless or background shell the
+          Aspire AppHost stalls at control-plane init and no dashboard appears.</p>
           </blockquote>
+          <p>The dashboard lists three resources: <code>sql</code>, <code>web</code> (the REST API), and <code>ui</code> (Blazor Server +
+          MudBlazor). Open the <strong><code>ui</code></strong> endpoint to create and browse orders in the browser. To exercise the
+          API directly, <code>POST /Orders</code> then <code>GET /Orders</code> against the <code>web</code> endpoint; the API root <code>/</code> has no
+          page and returns 404 by design. Confirm 201 then 200, that audit fields are stamped, that
+          soft-deleted rows are filtered out, and that an outbox row was written for the
+          <code>OrderOpenedIntegrationEvent</code>.</p>
+          <p>The app runs <strong>issuer-less</strong>: with no Identity module it registers a bare auth scheme and the
+          controller is <code>[AllowAnonymous]</code>, so nothing blocks you on day one. Adding real RS256/JWKS auth is
+          under <a href="#then-what">Then what</a> below.</p>
+          <h2 id="6-the-two-one-time-fixups">6. The two one-time fixups</h2>
+          <p>The scaffold deliberately does not hand these over, because renaming invalidates them and no fixed
+          value is right for every name you could pick. Both are covered in full in the
+          <a href="common-TEMPLATES.html">templates guide</a>.</p>
+          <p><strong>Using-directive order.</strong> <code>using Contoso.Support.Orders.Shared;</code> sorts above <code>MMCA.Common.*</code>, but
+          <code>using Zeta.App.Orders.Shared;</code> sorts below it, so no checked-in order survives every name. <code>SA1210</code>
+          ships as a suggestion in a marked block at the bottom of the generated <code>.editorconfig</code>. Sort them,
+          then delete the block once you have stopped scaffolding:</p>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet format analyzers Contoso.Support.slnx --diagnostics SA1210 --severity error</code></pre>
+          <p><strong>Your integration-event wire contract.</strong> Integration events cross service boundaries, so a renamed
+          or retyped property breaks consumers elsewhere. <code>IntegrationEventContractTestsBase</code> fails the build
+          on a silent reshape, but only against a contract <strong>you</strong> froze: its frozen literal lists members
+          alphabetically, so one inherited from a sample module is wrong the moment your aggregate is not
+          called <code>Ticket</code>. Add the subclass to <code>ArchitectureTests.cs</code>, run it once, and paste in what the
+          failure prints:</p>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet <span class="hljs-built_in">test</span> --project Tests/Architecture/Contoso.Support.Architecture.Tests/Contoso.Support.Architecture.Tests.csproj \
+            -- --filter-class <span class="hljs-string">&quot;*IntegrationEventContract*&quot;</span></code></pre>
           <hr>
-          <h2 id="phase-5-compose-the-monolith-host-and-run-it">Phase 5: Compose the monolith host and run it</h2>
-          <blockquote>
-          <p><strong>Scaffolded.</strong> Both hosts, the AppHost, and the <code>.resx</code> pairs are generated. Read this phase
-          before you touch any of them: the DI sequence, <code>WaitFor(sql)</code> rather than the database resource,
-          and the AppHost <code>launchSettings.json</code> all fail quietly rather than loudly.</p>
-          </blockquote>
-          <h3 id="the-web-host">The Web host</h3>
-          <p>Create <code>Source/Hosts/MMCA.Helpdesk.Web</code> (the REST API host). Its <code>Program.cs</code> follows the <strong>fixed DI
-          sequence</strong>, and the load-bearing rule is that <code>AddApplicationDecorators()</code> comes <strong>last</strong>: decorators
-          wrap handlers that already exist, and the module handlers are registered by <code>ModuleLoader</code> (each
-          <code>IModule.Register</code> composes its Application+Infrastructure+API layers):</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> builder = WebApplication.CreateBuilder(<span class="hljs-keyword">args</span>);
-          builder.AddServiceDefaults();        <span class="hljs-comment">// from MMCA.Common.Aspire: OpenTelemetry, health checks, resilience</span>
-          
-          <span class="hljs-keyword">var</span> services = builder.Services;
-          services.AddOptions&lt;ApplicationSettings&gt;().Bind(builder.Configuration.GetSection(ApplicationSettings.SectionName))
-              .ValidateDataAnnotations().ValidateOnStart();
-          <span class="hljs-keyword">var</span> applicationSettings = builder.Configuration.GetSection(ApplicationSettings.SectionName).Get&lt;ApplicationSettings&gt;()!;
-          
-          <span class="hljs-comment">// Health checks. SQL is REQUIRED: a host that cannot resolve its own connection string should fail</span>
-          <span class="hljs-comment">// fast rather than report healthy and take traffic it cannot serve. Redis/RabbitMQ checks are tagged</span>
-          <span class="hljs-comment">// optional upstream, so they report on /health without gating readiness.</span>
-          builder.AddInfrastructureHealthChecks(requireSqlServer: <span class="hljs-literal">true</span>);
-          
-          <span class="hljs-comment">// Cross-cutting edge.</span>
-          services.AddCommonCors(builder.Configuration);
-          services.AddCommonApiVersioning();
-          services.AddCommonRateLimiting();
-          services.AddOutputCache(options =&gt; options.AddBasePolicy(policy =&gt; policy.NoCache()));
-          services.AddCommonResponseCompression();
-          
-          <span class="hljs-comment">// Auth. Issuer-less by default: with no Authentication:JwtBearer:Authority configured, register a bare</span>
-          <span class="hljs-comment">// scheme so the pipeline is satisfied and [AllowAnonymous] endpoints work. Set the authority (after you</span>
-          <span class="hljs-comment">// add Identity) to validate RS256 tokens against its JWKS instead.</span>
-          <span class="hljs-keyword">var</span> jwtAuthority = builder.Configuration[<span class="hljs-string">&quot;Authentication:JwtBearer:Authority&quot;</span>];
-          <span class="hljs-keyword">if</span> (!<span class="hljs-built_in">string</span>.IsNullOrWhiteSpace(jwtAuthority))
-          {
-              services.AddForwardedJwtBearer(authority: jwtAuthority, audience: builder.Configuration[<span class="hljs-string">&quot;Jwt:Audience&quot;</span>] ?? <span class="hljs-string">&quot;helpdesk&quot;</span>);
-          }
-          <span class="hljs-keyword">else</span>
-          {
-              services.AddAuthentication();
-              services.AddAuthorization();
-          }
-          
-          services.AddCommonExceptionHandlers();
-          
-          services.AddApplication();                       <span class="hljs-comment">// core services, event dispatcher</span>
-          services.AddInfrastructure(builder.Configuration); <span class="hljs-comment">// repos, UoW, context, caching, outbox</span>
-          <span class="hljs-keyword">var</span> modulesSettings = builder.Configuration.GetSection(ModulesSettings.SectionName).Get&lt;ModulesSettings&gt;() ?? [];
-          services.AddAPI(modulesSettings);                <span class="hljs-comment">// controllers, idempotency, exception handlers</span>
-          
-          <span class="hljs-comment">// Contribute the module&#x27;s error-code translations to the edge localizer (ADR-027), so domain</span>
-          <span class="hljs-comment">// Error.Code values come back as localized ProblemDetails messages. One call per module.</span>
-          services.AddErrorResources&lt;TicketsErrorResources&gt;();
-          
-          <span class="hljs-keyword">using</span> <span class="hljs-keyword">var</span> loggerFactory = LoggerFactory.Create(logging =&gt; logging.AddConsole());
-          <span class="hljs-keyword">var</span> moduleLoader = <span class="hljs-keyword">new</span> ModuleLoader { Logger = loggerFactory.CreateLogger&lt;ModuleLoader&gt;() };
-          moduleLoader.DiscoverAndRegister(services, builder.Configuration, applicationSettings, modulesSettings, builder.Environment.EnvironmentName);
-          services.AddSingleton(moduleLoader);
-          
-          services.AddBrokerMessaging(builder.Configuration);  <span class="hljs-comment">// InProcessMessageBus until a broker is configured</span>
-          services.AddApplicationDecorators();             <span class="hljs-comment">// MUST be last</span>
-          
-          services.AddModuleHealthChecks(moduleLoader);    <span class="hljs-comment">// per-module readiness, after the modules are known</span>
-          
-          <span class="hljs-keyword">var</span> app = builder.Build();
-          <span class="hljs-keyword">await</span> app.Services.InitializeDatabaseAsync(applicationSettings, moduleLoader);   <span class="hljs-comment">// applies migrations / seeds</span>
-          app.MapDefaultEndpoints();             <span class="hljs-comment">// /health, /alive</span>
-          <span class="hljs-comment">// exception -&gt; correlation -&gt; request localization -&gt; forwarded headers -&gt; HTTPS -&gt; compression -&gt;</span>
-          <span class="hljs-comment">// routing -&gt; CORS -&gt; authentication -&gt; rate limiting -&gt; soft-deleted-user filter -&gt; authorization -&gt;</span>
-          <span class="hljs-comment">// output cache -&gt; JWKS/OIDC endpoints -&gt; controllers. Rate limiting sits AFTER authentication on</span>
-          <span class="hljs-comment">// purpose (ADR-019): the partition keys off the authenticated principal.</span>
-          app.UseCommonMiddlewarePipeline();
-          <span class="hljs-keyword">await</span> app.RunAsync();</code></pre>
-          <p>Modules are discovered by <code>ModuleLoader</code> and registered in topological dependency order (Kahn&#39;s
-          algorithm) from their <code>IModule</code> implementations. <code>TicketsModule</code> is a leaf (no dependencies); its
-          <code>Register(...)</code> calls <code>AddTicketsModule</code>, which wires the Application (handler/validator/mapper scan),
-          Infrastructure, and API layers. Disabled peers get stub registrations so cross-module interfaces still
-          resolve. See <a href="../adr/008-service-extraction-topology.html">ADR-008</a>. Monolith config: no <code>DataSources</code>
-          section (one DB) and no <code>MessageBus:Provider</code>, so the framework selects the <code>InProcessMessageBus</code>.</p>
-          <h3 id="the-blazor-ui-host">The Blazor UI host</h3>
-          <p><code>Source/Hosts/UI/MMCA.Helpdesk.UI.Web</code> is a <strong>Blazor Server + MudBlazor</strong> front end. It holds no domain
-          logic and no DbContext: it calls the API through a typed <code>HelpdeskApiClient</code> registered with
-          <code>AddHttpClient&lt;HelpdeskApiClient&gt;(...)</code>, whose base address (<code>https+http://web</code>, from config) is
-          resolved by the service-discovery handler that <code>AddServiceDefaults()</code> installs. Because Blazor Server
-          runs the calls <strong>server-side</strong>, there is no browser CORS and no token to forward. On a failed response
-          the client calls <code>ServiceExceptionHelper.ThrowIfDomainExceptionAsync</code> to surface the RFC 9457
-          ProblemDetails message (e.g. &quot;Comments cannot be added to a closed ticket.&quot;) before the generic
-          <code>EnsureSuccessStatusCode</code> fallback: the same pattern <code>MMCA.Common.UI</code>&#39;s <code>EntityServiceBase</code> uses, so
-          pages show a meaningful error. <code>Program.cs</code> is the standard Razor-components host plus
-          <code>AddServiceDefaults()</code> / <code>MapDefaultEndpoints()</code>.</p>
-          <p>Two wiring details in the layout are easy to miss because nothing fails loudly without them:</p>
-          <ul>
-          <li><strong><code>&lt;MmcaThemeProviders /&gt;</code> owns the Mud providers.</strong> Drop that one framework component at the top of
-          <code>MainLayout.razor</code> instead of hand-placing <code>MudThemeProvider</code>/<code>MudPopoverProvider</code>/<code>MudDialogProvider</code>/
-          <code>MudSnackbarProvider</code>: it also carries the dark/light lifecycle from
-          <a href="../adr/028-dark-theme-mode.html">ADR-028</a>, so <code>&lt;ThemeToggle /&gt;</code> has something to toggle.</li>
-          <li><strong><code>&lt;CultureSwitcher /&gt;</code> needs an <code>ICultureApplier</code>.</strong> The switcher delegates the actual switch to that
-          service, which <code>AddUIShared()</code> normally registers. A UI host that does not call <code>AddUIShared</code> (this
-          seed does not: it has no <code>ApiSettings</code>-backed client pipeline) must register the Blazor Web default
-          itself, <code>services.AddScoped&lt;ICultureApplier, EndpointCultureApplier&gt;()</code>, or the menu silently no-ops.</li>
-          </ul>
-          <h3 id="internationalization-adr-027-every-visible-string-follows-the-selected-language">Internationalization (ADR-027): every visible string follows the selected language</h3>
-          <p>The framework ships multi-locale i18n (<code>en-US</code> + <code>es</code>) end to end; adopting it in a new app is five
-          mechanical steps, and MMCA.Helpdesk is the worked example for each:</p>
-          <ol>
-          <li><strong>Externalize page strings to co-located <code>.resx</code> pairs.</strong> Inject
-          <code>IStringLocalizer&lt;YourPage&gt; L</code> and render <code>@L[&quot;Key&quot;]</code>; put <code>YourPage.resx</code> + <code>YourPage.es.resx</code>
-          next to the page (see <code>MMCA.Helpdesk.UI.Web/Components/Pages/Tickets.resx</code> and its <code>es</code> sibling).
-          Snackbar/confirmation text uses whole-sentence keys (<code>Snackbar.Created</code> = &quot;Ticket created
-          successfully.&quot;); never compose sentences from fragments (the obsoleted
-          <code>ErrorMessages.Success(entity, action)</code> shows why: Spanish gender agreement breaks). Always add
-          the <code>en</code> and <code>es</code> values in the same commit, or the completeness gate below fails the build.</li>
-          <li><strong>Wire request localization + the culture switcher.</strong> API-layer hosts get it for free from
-          <code>UseCommonMiddlewarePipeline()</code> (which calls <code>UseCommonRequestLocalization()</code>) plus
-          <code>MapCultureEndpoint()</code>; a UI host that deliberately does not reference <code>MMCA.Common.API</code> inlines
-          the same lines against <code>SupportedCultures</code> (see <code>MMCA.Helpdesk.UI.Web/Program.cs</code>, which documents
-          the inline variant). When you inline them, the <code>UseRequestLocalization</code> allowlist and the
-          <code>/culture/set</code> endpoint must admit the pseudo-locale under the <strong>same</strong> <code>IsDevelopment()</code> condition
-          the switcher uses to offer it, or picking it silently does nothing. Drop the shared
-          <code>&lt;CultureSwitcher /&gt;</code> (and <code>&lt;ThemeToggle /&gt;</code>) into the layout; a WASM client also calls
-          <code>MmcaCultureBootstrap.SetBrowserCultureAsync</code> before <code>RunAsync()</code>.</li>
-          <li><strong>Localize backend error text by <code>Error.Code</code>.</strong> Register
-          <code>services.AddErrorResources&lt;YourModuleErrorResources&gt;()</code> in the host and keep a
-          <code>YourModuleErrorResources.{resx,es.resx}</code> pair keyed by the module&#39;s <code>Error.Code</code> values; the
-          HTTP edge then returns localized ProblemDetails messages while domain code stays culture-agnostic.</li>
-          <li><strong>Subclass the two i18n fitness gates</strong> in your architecture-test project (Phase 6):
-          <code>LocalizationResourceTestsBase</code> (every base <code>.resx</code> must have a complete, non-empty <code>es</code> sibling)
-          and <code>LocalizedTextConventionTestsBase</code> (no hard-coded snackbar/title/<code>&lt;PageTitle&gt;</code>/breadcrumb/
-          <code>NavItem</code> literals; mark deliberate literals such as brand names with an <code>i18n: allow</code> comment).</li>
-          <li><strong>Verify visually with the pseudo-locale.</strong> In Development, pick <code>qps-Ploc</code> in the culture
-          switcher: every properly externalized string renders with a <code>[!!</code> sentinel and ~40% padding, so a
-          hard-coded literal or a clipped layout is immediately visible without translating anything.</li>
-          </ol>
-          <p>MudBlazor&#39;s own component chrome (pager, pickers, filter menus) localizes automatically through the
-          framework&#39;s <code>ResxMudLocalizer</code>; nav menu items localize by giving each <code>NavItem</code> a <code>TitleResource</code>
-          (its <code>Title</code>/<code>Group</code> then act as resource keys resolved at render time).</p>
-          <h3 id="the-aspire-apphost">The Aspire AppHost</h3>
-          <p><code>Source/Hosting/MMCA.Helpdesk.AppHost</code> orchestrates the local stack. For the monolith it is small:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">using</span> MMCA.Common.Aspire.Hosting;
-          
-          <span class="hljs-keyword">var</span> builder = DistributedApplication.CreateBuilder(<span class="hljs-keyword">args</span>);
-          <span class="hljs-keyword">var</span> sql = builder.AddSqlServer(<span class="hljs-string">&quot;sql&quot;</span>).WithLifetime(ContainerLifetime.Persistent);
-          <span class="hljs-keyword">var</span> db = sql.AddDatabase(<span class="hljs-string">&quot;helpdesk&quot;</span>, <span class="hljs-string">&quot;Helpdesk&quot;</span>);
-          
-          <span class="hljs-keyword">var</span> web = builder.AddProject&lt;Projects.MMCA_Helpdesk_Web&gt;(<span class="hljs-string">&quot;web&quot;</span>)
-              .WithSQLServerDataSource(db, <span class="hljs-string">&quot;Tickets&quot;</span>)   <span class="hljs-comment">// injects ConnectionStrings__SQLServerConnectionString (collapses to one DB)</span>
-              .WaitFor(sql)                    <span class="hljs-comment">// wait on the SQL server, NOT the database (see warning below)</span>
-              .WithExternalHttpEndpoints();
-          
-          <span class="hljs-comment">// The Blazor UI calls the API server-side; WithReference(&quot;web&quot;) gives its typed HttpClient the endpoint</span>
-          <span class="hljs-comment">// to resolve via service discovery, and WaitFor(web) gates the UI until the API is healthy.</span>
-          builder.AddProject&lt;Projects.MMCA_Helpdesk_UI_Web&gt;(<span class="hljs-string">&quot;ui&quot;</span>)
-              .WithReference(web)
-              .WaitFor(web)
-              .WithExternalHttpEndpoints();
-          
-          <span class="hljs-keyword">await</span> builder.Build().RunAsync();</code></pre>
-          <blockquote>
-          <p><strong><code>WaitFor</code> the SQL server, not the database resource.</strong> The host creates the database via EF
-          <code>Migrate</code> at startup, so <code>WaitFor(db)</code> deadlocks: the <code>db</code> resource is never &quot;healthy&quot; until the
-          database exists, but the only thing that creates it is the host that is waiting on it. The app
-          resource sits at &quot;Waiting&quot; forever. Wait on the <code>sql</code> server resource (healthy once the container
-          accepts connections) and let EF create the database. This mirrors MMCA.ADC/Store, which <code>WaitFor</code>
-          the broker and peer services but never the database resource.</p>
-          </blockquote>
-          <p>The AppHost also needs a <code>Properties/launchSettings.json</code> (the AppHost template always ships one).
-          Without it, the Aspire <strong>dashboard endpoints are never configured</strong>, so on F5 the dashboard never
-          opens, no browser launches, and the AppHost appears to hang at control-plane init. Copy ADC&#39;s and give
-          it its own ports:</p>
-          <pre class="doc-pre" data-lang="JSON"><code class="language-jsonc hljs"><span class="hljs-comment">// Source/Hosting/MMCA.Helpdesk.AppHost/Properties/launchSettings.json</span>
-          <span class="hljs-punctuation">{</span>
-            <span class="hljs-attr">&quot;profiles&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-              <span class="hljs-attr">&quot;https&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-                <span class="hljs-attr">&quot;commandName&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Project&quot;</span><span class="hljs-punctuation">,</span>
-                <span class="hljs-attr">&quot;launchBrowser&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">true</span></span><span class="hljs-punctuation">,</span>
-                <span class="hljs-attr">&quot;applicationUrl&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;https://localhost:17300;http://localhost:15300&quot;</span><span class="hljs-punctuation">,</span>
-                <span class="hljs-attr">&quot;environmentVariables&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-                  <span class="hljs-attr">&quot;ASPNETCORE_ENVIRONMENT&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Development&quot;</span><span class="hljs-punctuation">,</span>
-                  <span class="hljs-attr">&quot;DOTNET_ENVIRONMENT&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Development&quot;</span><span class="hljs-punctuation">,</span>
-                  <span class="hljs-attr">&quot;DOTNET_DASHBOARD_OTLP_ENDPOINT_URL&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;https://localhost:21300&quot;</span><span class="hljs-punctuation">,</span>
-                  <span class="hljs-attr">&quot;DOTNET_RESOURCE_SERVICE_ENDPOINT_URL&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;https://localhost:22300&quot;</span>
-                <span class="hljs-punctuation">}</span>
-              <span class="hljs-punctuation">}</span>
-            <span class="hljs-punctuation">}</span>
-          <span class="hljs-punctuation">}</span></code></pre>
-          <p>Run it:</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet run --project Source/Hosting/MMCA.Helpdesk.AppHost</code></pre>
-          <blockquote>
-          <p><strong>Run it interactively, from a real terminal.</strong> The Aspire AppHost stalls at control-plane init if
-          launched from a headless or background shell (no dashboard appears). Use an interactive terminal for
-          any manual verification.</p>
-          </blockquote>
-          <p>The dashboard lists three resources: <code>sql</code>, <code>web</code> (the API), and <code>ui</code> (the Blazor front end). Open the
-          <strong><code>ui</code></strong> endpoint to browse and open tickets in the browser. To exercise the API directly, hit <code>POST /Tickets</code> then <code>GET /Tickets</code> against the <code>web</code> endpoint (the API root <code>/</code> has no page and returns 404
-          by design). Confirm 201 then 200, that audit fields are stamped, that soft-deleted rows are filtered
-          out, and that an outbox row was written for the <code>TicketOpenedIntegrationEvent</code>.</p>
-          <hr>
-          <h2 id="phase-6-tests-and-the-architecture-fitness-map">Phase 6: Tests and the architecture-fitness map</h2>
-          <blockquote>
-          <p><strong>Scaffolded, with one deliberate gap.</strong> All three test projects and the map are generated. The
-          <code>IntegrationEventContractTests</code> subclass is NOT: its frozen literal lists members alphabetically,
-          so an inherited one stops being correct the moment the aggregate is renamed, and a wire contract
-          inherited from someone else&#39;s sample module guarantees nothing anyway. Freeze your own, once. The
-          generated README and the <a href="common-TEMPLATES.html">templates guide</a> carry the class and the command
-          that prints the value.</p>
-          </blockquote>
-          <h3 id="test-projects">Test projects</h3>
-          <p>The reference app ships three test projects, all of which run anywhere with <strong>no database</strong> and finish
-          in about a second:</p>
-          <ul>
-          <li><code>Tests/Modules/Tickets/...Domain.Tests</code>: xUnit v3 + AwesomeAssertions. Test factory methods,
-          invariants, state transitions, and domain events (including the assertion that <code>Create</code> raises <strong>no</strong>
-          domain event, since the id is DB-generated; don&#39;t &quot;fix&quot; it).</li>
-          <li><code>Tests/Modules/Tickets/...Application.Tests</code>: handler and decorator behavior against test doubles.
-          In the reference app this is where the caching pair is proved end to end
-          (<code>Caching/TicketCacheInvalidationTests.cs</code>, shown in Phase 3); add mocked-<code>IUnitOfWork</code> handler tests
-          here as the module grows.</li>
-          <li><code>Tests/Architecture/...Architecture.Tests</code>: the fitness functions (below).</li>
-          </ul>
-          <p>Optional addition as the app grows:</p>
-          <ul>
-          <li><code>Tests/Integration/...IntegrationTests</code>: boot the host with <code>WebApplicationFactory</code> and use
-          <code>IntegrationTestBase&lt;TFixture&gt;</code> plus <code>JwtTokenGenerator</code> (both from <code>MMCA.Common.Testing</code>). These
-          need a reachable SQL Server, so run them in an environment that has one (Aspire, a container, or CI
-          with a SQL service); they cannot run where no SQL is reachable.</li>
-          </ul>
-          <h3 id="the-architecture-fitness-map-mandatory">The architecture-fitness map (mandatory)</h3>
-          <p>The framework enforces layering and module isolation by running the <strong>same</strong> NetArchTest rule library
-          (shipped in <code>MMCA.Common.Testing.Architecture</code>) against a per-repo map. You implement one
-          <code>IArchitectureMap</code> by subclassing <code>ArchitectureMapBase</code>: declare a <code>RepoToken</code> and list every layer
-          assembly. See <a href="../adr/015-architecture-fitness-functions.html">ADR-015</a>. Pattern source: the
-          <code>*.Architecture.Tests</code> project in MMCA.Helpdesk (shown below), ADC, or Store.</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">internal</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">HelpdeskArchitectureMap</span> : <span class="hljs-title">ArchitectureMapBase</span>
-          {
-              <span class="hljs-keyword">public</span> <span class="hljs-keyword">override</span> <span class="hljs-built_in">string</span> RepoToken =&gt; <span class="hljs-string">&quot;MMCA.Helpdesk&quot;</span>;
-          
-              <span class="hljs-function"><span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> IEnumerable&lt;LayerRef&gt; <span class="hljs-title">DefineLayers</span>()</span> =&gt;
-              [
-                  <span class="hljs-comment">// Framework (MMCA.Common): one anchor type per layer assembly</span>
-                  Framework(Layer.Shared, <span class="hljs-keyword">typeof</span>(MMCA.Common.Shared.Abstractions.Result).Assembly),
-                  Framework(Layer.Domain, <span class="hljs-keyword">typeof</span>(MMCA.Common.Domain.Entities.BaseEntity&lt;&gt;).Assembly),
-                  Framework(Layer.Application, <span class="hljs-keyword">typeof</span>(MMCA.Common.Application.Services.EntityQueryService&lt;,,&gt;).Assembly),
-                  Framework(Layer.Infrastructure, <span class="hljs-keyword">typeof</span>(MMCA.Common.Infrastructure.Persistence.DbContexts.ApplicationDbContext).Assembly),
-                  Framework(Layer.Api, <span class="hljs-keyword">typeof</span>(MMCA.Common.API.Controllers.ApiControllerBase).Assembly),
-          
-                  <span class="hljs-comment">// Tickets module</span>
-                  Module(<span class="hljs-string">&quot;Tickets&quot;</span>, Layer.Domain, <span class="hljs-keyword">typeof</span>(MMCA.Helpdesk.Tickets.Domain.Tickets.Ticket).Assembly),
-                  Module(<span class="hljs-string">&quot;Tickets&quot;</span>, Layer.Application, <span class="hljs-keyword">typeof</span>(MMCA.Helpdesk.Tickets.Application.ClassReference).Assembly),
-                  Module(<span class="hljs-string">&quot;Tickets&quot;</span>, Layer.Infrastructure, <span class="hljs-keyword">typeof</span>(MMCA.Helpdesk.Tickets.Infrastructure.AssemblyReference).Assembly),
-                  Module(<span class="hljs-string">&quot;Tickets&quot;</span>, Layer.Shared, <span class="hljs-keyword">typeof</span>(MMCA.Helpdesk.Tickets.Shared.Tickets.TicketDTO).Assembly),
-                  Module(<span class="hljs-string">&quot;Tickets&quot;</span>, Layer.Api, <span class="hljs-keyword">typeof</span>(MMCA.Helpdesk.Tickets.API.Controllers.TicketsController).Assembly),
-                  <span class="hljs-comment">// ...add the same five lines per additional module (e.g. Identity).</span>
-              ];
-          }</code></pre>
-          <p>Each test class is then a tiny sealed subclass of a framework <code>*TestsBase</code> that supplies your map:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">LayerDependencyTests</span> : <span class="hljs-title">LayerDependencyTestsBase</span>
-          {
-              <span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> IArchitectureMap Map { <span class="hljs-keyword">get</span>; } = <span class="hljs-keyword">new</span> HelpdeskArchitectureMap();
-          }</code></pre>
-          <p>The package ships far more bases than the four structural ones (the authoritative base and method
-          counts live in <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a>), and the
-          reference app subclasses nineteen. That is the realistic target for a new app, not a stretch goal:
-          each base is a few lines. Start with the structural group and add the rest as the corresponding
-          feature appears:</p>
+          <h2 id="what-you-were-handed">What you were handed</h2>
+          <pre class="doc-pre"><code class="">Contoso.Support.slnx
+          .editorconfig                 the five analyzers at error severity
+          Directory.Build.props         language settings, analyzers, the identifier-alias links
+          Directory.Build.targets       the local-source PackageReference -&gt; ProjectReference swap
+          Directory.Packages.props      Central Package Management
+          Source/
+            Modules/Orders/             Shared, Domain, Application, Infrastructure, API
+            Hosts/Contoso.Support.Web           the monolith REST API host
+            Hosts/UI/Contoso.Support.UI.Web     Blazor Server + MudBlazor
+            Hosting/Contoso.Support.AppHost     Aspire orchestration
+            Hosting/Contoso.Support.Migrations.SqlServer.Orders
+          Tests/
+            Modules/Orders/             domain + application tests
+            Architecture/               the fitness functions, parameterized by SupportArchitectureMap</code></pre>
+          <p>The <code>Order</code> aggregate arrives fully worked: a <code>Result</code>-returning factory, invariants, guarded
+          mutations raising domain events, a child entity, soft-delete cascade, the caching pair, an
+          integration event through the outbox, <code>en-US</code> and <code>es</code> resource pairs, a REST controller, and two
+          Blazor pages.</p>
+          <p>Eight of those lines are load-bearing and quiet about it. Read the linked phase before you touch the
+          code around them:</p>
           <div class="table-wrap"><table>
           <thead>
           <tr>
-          <th>Group</th>
-          <th>Bases</th>
-          <th>What it catches</th>
+          <th>Know this</th>
+          <th>Because</th>
+          <th>Detail</th>
           </tr>
           </thead>
           <tbody><tr>
-          <td>Structure (start here)</td>
-          <td><code>LayerDependencyTestsBase</code>, <code>DomainPurityTestsBase</code>, <code>ModuleIsolationTestsBase</code>, <code>SharedLayerTestsBase</code></td>
-          <td>the layer dependency flow, a Domain that reaches for infrastructure, cross-module internal references</td>
+          <td><code>AddApplicationDecorators()</code> is the <strong>last</strong> DI call</td>
+          <td>decorators wrap handlers that already exist, and modules register theirs during <code>ModuleLoader</code></td>
+          <td><a href="common-BUILD-BY-HAND.html#phase-5-compose-the-monolith-host-and-run-it">Phase 5</a></td>
           </tr>
           <tr>
-          <td>Extraction</td>
-          <td><code>MicroserviceExtractionTestsBase</code>, <code>IntegrationEventContractTestsBase</code>, <code>EventConventionTestsBase</code></td>
-          <td>MassTransit/gRPC leaking out of the edges; an integration event reshaped instead of versioned</td>
+          <td>the AppHost does <code>WaitFor(sql)</code>, never <code>WaitFor(db)</code></td>
+          <td>the host creates the database at startup, so waiting on the database resource deadlocks at &quot;Waiting&quot; forever</td>
+          <td><a href="common-BUILD-BY-HAND.html#the-aspire-apphost">Phase 5</a></td>
           </tr>
           <tr>
-          <td>Conventions</td>
-          <td><code>NamingConventionTestsBase</code>, <code>HandlerConventionTestsBase</code>, <code>ControllerConventionTestsBase</code>, <code>EntityConventionTestsBase</code>, <code>ImmutabilityTestsBase</code>, <code>SliceCohesionTestsBase</code>, <code>SpecificationConventionTestsBase</code></td>
-          <td>factory-name, handler, controller, and entity drift away from the framework shape</td>
+          <td>the AppHost needs its <code>Properties/launchSettings.json</code></td>
+          <td>without it the dashboard endpoints are never configured, and a missing dashboard presents as a hang</td>
+          <td><a href="common-BUILD-BY-HAND.html#the-aspire-apphost">Phase 5</a></td>
           </tr>
           <tr>
-          <td>Policy gates</td>
-          <td><code>ConcurrencyConventionTestsBase</code> (ADR-035), <code>FrameworkVersionConsistencyTestsBase</code> (ADR-016), <code>PiiConventionTestsBase</code> (ADR-005)</td>
-          <td>an <code>*UpdateRequest</code> with no <code>RowVersion</code>, a half-finished version sweep, unmarked personal data</td>
+          <td>every module must appear in <code>IArchitectureMap</code></td>
+          <td>a module missing from the map is <strong>silently</strong> not covered by the layering and isolation rules</td>
+          <td><a href="common-BUILD-BY-HAND.html#the-architecture-fitness-map-mandatory">Phase 6</a></td>
           </tr>
           <tr>
-          <td>i18n (ADR-027)</td>
-          <td><code>LocalizationResourceTestsBase</code>, <code>LocalizedTextConventionTestsBase</code></td>
-          <td>a base <code>.resx</code> with no complete <code>es</code> sibling; a hard-coded user-visible literal</td>
+          <td>caching is a <strong>pair</strong>, matched by string prefix</td>
+          <td>a cacheable query and its invalidating commands are wired independently, and half a pair fails silently forever</td>
+          <td><a href="common-BUILD-BY-HAND.html#caching-is-a-pair-and-you-wire-both-halves">Phase 3</a></td>
+          </tr>
+          <tr>
+          <td>the identifier alias is linked solution-wide</td>
+          <td><code>OrderIdentifierType</code> is one <code>global using</code> made visible everywhere by a <code>Directory.Build.props</code> block; always use the alias, never the raw <code>int</code></td>
+          <td><a href="common-BUILD-BY-HAND.html#directorybuildprops">Phase 1</a></td>
+          </tr>
+          <tr>
+          <td>there is <strong>one</strong> concrete DbContext per engine</td>
+          <td>module contexts are abstract and only list <code>DbSet</code>s; never write a concrete per-module context</td>
+          <td><a href="common-BUILD-BY-HAND.html#3d-infrastructure-ef-configuration-the-abstract-module-context-no-concrete-per-module-context">Phase 3d</a></td>
+          </tr>
+          <tr>
+          <td><code>Result&lt;T&gt;</code> replaces exceptions for business failure</td>
+          <td>factories and handlers return it, and <code>HandleFailure</code> maps <code>ErrorType</code> to RFC 9457 ProblemDetails at the edge</td>
+          <td><a href="common-BUILD-BY-HAND.html#3e-api-controller-and-error-mapping">Phase 3e</a></td>
           </tr>
           </tbody></table></div>
-          <p>Two things to know before you copy the list wholesale:</p>
+          <hr>
+          <h2 id="add-your-next-feature">Add your next feature</h2>
+          <p><strong>A vertical slice</strong> (the path every feature follows) is one command, run from the module&#39;s
+          <code>UseCases</code> folder:</p>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-built_in">cd</span> Source/Modules/Orders/Contoso.Support.Orders.Application/Orders/UseCases
+          
+          dotnet new mmca-command -n CancelOrder --app Contoso.Support --module Orders \
+            --aggregate Order --domain-method Cancel
+          
+          dotnet new mmca-query -n GetOrderByNumber --app Contoso.Support --module Orders \
+            --aggregate Order</code></pre>
+          <p>Handlers, validators, and mappers are convention-scanned, so there is no DI registration to add. Two
+          things do need you: the command calls <code>--domain-method</code> on your aggregate, so add that guarded
+          method returning <code>Result</code> first; and keep the query&#39;s <code>CacheKey</code> inside your module&#39;s
+          <code>*CacheKeys.Prefix</code>, because a key that drifts out of the prefix goes stale silently.</p>
+          <p><strong>A second module</strong> across all five layers plus its test and migrations projects:</p>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet new mmca-module -n Billing --app Contoso.Support --aggregate Invoice</code></pre>
+          <p><code>dotnet new</code> cannot patch files that already exist, so it <strong>prints five wire-ups</strong> for you to apply:
+          the solution entries, the host and architecture-test project references, the identifier-alias link,
+          the five architecture-map lines, and <code>AddErrorResources</code>. Until they are done the module is invisible
+          to the host and to the fitness rules. The <a href="common-TEMPLATES.html">templates guide</a> lists each one with
+          its exact command.</p>
+          <hr>
+          <h2 id="then-what">Then what</h2>
           <ul>
-          <li><strong><code>IntegrationEventContractTestsBase</code> freezes your wire contract.</strong> You override <code>ExpectedContract</code>
-          with the literal shape of every integration event (<code>&quot;...TicketOpenedIntegrationEvent { RequesterUserId:Int32, TicketId:Int32 }&quot;</code>).
-          Editing that list is the deliberate act of evolving the contract, so a silent reshape fails the build.</li>
-          <li><strong>Some bases fail deliberately when they find nothing</strong>, which is an anti-vacuity guard rather than a
-          bug. <code>ConstructorDependencyCountTestsBase</code> scans Application <code>*Service</code> classes and fails when there
-          are none, so the reference app leaves it unsubclassed until its first Application service exists.
-          Others (<code>DataResidencyTestsBase</code>, <code>BrandColorTokenTestsBase</code>, <code>FormsConventionTestsBase</code>) stay
-          unsubclassed for scope reasons. Record <em>why</em> you skipped one next to the ones you kept: an
-          unsubclassed rule is invisible otherwise.</li>
+          <li><strong>Upgrade the framework.</strong> Bump every <code>MMCA.Common.*</code> entry in <code>Directory.Packages.props</code> together,
+          in one pass. See <a href="common-BUILD-BY-HAND.html#phase-7-upgrading-the-framework-version">Phase 7</a> and the
+          <a href="common-VERSIONING.html">versioning policy</a>.</li>
+          <li><strong>Add real authentication.</strong> Copy MMCA.Store&#39;s or MMCA.ADC&#39;s Identity module and rename the
+          namespaces (Store&#39;s is local-credential + RS256 only, the simpler base), set
+          <code>Authentication:JwtBearer:Authority</code>, and flip the controller back to <code>[Authorize]</code>. See
+          <a href="common-BUILD-BY-HAND.html#phase-2-scaffold-the-module-project-set">Phase 2</a>.</li>
+          <li><strong>Extract a module into its own service.</strong> The generated solution already carries the plumbing (the
+          <code>.Contracts</code> proto convention and the <code>.Service</code> OpenAPI block). Your module code does not change:
+          only host wiring and transport are added. See
+          <a href="common-BUILD-BY-HAND.html#phase-8-extract-a-module-into-its-own-service-the-payoff">Phase 8</a>.</li>
           </ul>
-          <blockquote>
-          <p><strong>Register every layer assembly in the map.</strong> If you add a module or a layer and forget to add its
-          <code>Module(...)</code> / <code>Framework(...)</code> line here, the layering and isolation rules silently stop covering it.</p>
-          </blockquote>
-          <p><strong>Checkpoint:</strong> <code>dotnet build MMCA.Helpdesk.slnx</code> is warning-free (the five analyzers at error
-          severity), and all three test projects pass (<code>dotnet test --solution MMCA.Helpdesk.slnx</code>, no database
-          needed). To run one class or method, target the project and pass a Microsoft Testing Platform filter
-          after <code>--</code> (these solutions run on MTP, not VSTest, so a bare <code>--filter</code> silently matches nothing):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet <span class="hljs-built_in">test</span> --project Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/MMCA.Helpdesk.Architecture.Tests.csproj \
-            -- --filter-class <span class="hljs-string">&quot;*ModuleIsolationTests*&quot;</span></code></pre>
-          <hr>
-          <h2 id="phase-7-upgrading-the-framework-version">Phase 7: Upgrading the framework version</h2>
-          <blockquote>
-          <p><strong>Not scaffolded.</strong> <code>dotnet new mmca-app --framework-version</code> picks the version you START on;
-          moving to a later one is this phase.</p>
-          </blockquote>
-          <p>When a new MMCA.Common release ships, upgrade in <strong>one pass</strong>: bump <strong>every</strong> <code>MMCA.Common.*</code> entry in
-          <code>Directory.Packages.props</code> to the new version together. There is no phased rollout and no per-package
-          skew, and <code>FrameworkVersionConsistencyTestsBase</code> fails the build if you miss an entry. Keep MassTransit
-          at v8. See <a href="../adr/016-lockstep-versioning-masstransit-pin.html">ADR-016</a> and the
-          <a href="common-VERSIONING.html">versioning policy</a>.</p>
-          <p>If your app commits <code>packages.lock.json</code> files (the reference app deliberately does not), the pin bump
-          is only half the upgrade: regenerate the locks with <code>dotnet restore &lt;your.slnx&gt; --force-evaluate</code> and
-          commit them alongside the pins, with <code>local.props</code> set aside so the restore runs in package mode.</p>
-          <p>For local framework co-development, flip <code>UseLocalMMCA</code> in <code>local.props</code>, and remember to rebuild
-          MMCA.Common in Debug before your app after editing framework source.</p>
-          <hr>
-          <h2 id="phase-8-extract-a-module-into-its-own-service-the-payoff">Phase 8: Extract a module into its own service (the payoff)</h2>
-          <blockquote>
-          <p><strong>Not scaffolded.</strong> The generated solution carries the plumbing (the <code>.Contracts</code> proto
-          convention and the <code>.Service</code> OpenAPI block in <code>Directory.Build.props</code>), but the extraction itself
-          is a decision, not a rename.</p>
-          </blockquote>
-          <p>This phase is the documented next step beyond the reference app (which is build- and test-verified as
-          the monolith through Phase 6); the scaffold already carries the plumbing: the <code>.Contracts</code> proto
-          convention and the <code>.Service</code> OpenAPI block in <code>Directory.Build.props</code>. Now make the &quot;extract later,
-          without a rewrite&quot; promise concrete. We pull <strong>Tickets</strong> out of the monolith into its own service
-          behind a gateway. The Tickets Domain, Application, Shared, Infrastructure, and API code is
-          <strong>unchanged</strong>: only host wiring and transport are added. This works because the application talks to
-          abstractions (<code>IUnitOfWork</code>, <code>IMessageBus</code>, gRPC service interfaces) and the framework keeps transport
-          at the edges. See <a href="../adr/008-service-extraction-topology.html">ADR-008</a>. This is also where you add the
-          <strong>Identity</strong> module, since an extracted service needs a real JWKS issuer to validate tokens against.</p>
-          <h3 id="8a-a-service-host-per-module">8a. A service host per module</h3>
-          <p>Create <code>Source/Services/MMCA.Helpdesk.Tickets.Service</code> (and one for Identity). Each boots exactly one
-          module (<code>Modules:Tickets:Enabled=true</code>). Its <code>Program.cs</code> is the same DI sequence as the monolith host,
-          plus: <strong>Http2-only Kestrel</strong> on cleartext (h2c) for gRPC, <code>AddGrpcServiceDefaults()</code>, broker messaging,
-          and JWKS-validated auth. See <a href="../adr/012-grpc-host-transport.html">ADR-012</a> (Profile A). Pattern source:
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs</code>.</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">builder.WebHost.ConfigureKestrel(k =&gt; k.ConfigureEndpointDefaults(o =&gt; o.Protocols = HttpProtocols.Http2));
-          <span class="hljs-comment">// ...same AddApplication/AddInfrastructure/AddAPI/ModuleLoader sequence...</span>
-          services.AddGrpcServiceDefaults();
-          services.AddBrokerMessaging(builder.Configuration, x =&gt; x.RegisterIntegrationEventConsumer&lt;SomeEvent&gt;());</code></pre>
-          <h3 id="8b-a-contracts-project-for-synchronous-calls">8b. A <code>.Contracts</code> project for synchronous calls</h3>
-          <p>If Tickets needs a synchronous answer from Identity (for example, the requester&#39;s display name),
-          define it in <code>Source/Services/MMCA.Helpdesk.Identity.Contracts</code> as a <code>.proto</code>. The <code>.Contracts</code>
-          convention (from <code>Directory.Build.props</code>) auto-compiles it into server + client stubs. The consumer
-          registers a typed client with <code>AddTypedGrpcClient&lt;TClient&gt;(serviceName)</code> (from <code>MMCA.Common.Grpc</code>),
-          which resolves <code>http://identity</code> via Aspire service discovery over h2c, forwards the caller&#39;s JWT, and
-          wraps calls in the standard Polly pipeline. Failures cross the wire as <code>Result</code> via
-          <code>GrpcResultExceptionInterceptor</code>. See <a href="../adr/007-grpc-extraction.html">ADR-007</a>.</p>
-          <h3 id="8c-a-yarp-gateway">8c. A YARP gateway</h3>
-          <p><code>Source/Hosts/MMCA.Helpdesk.Gateway</code> is a pure reverse proxy (no DbContext, no controllers). It maps
-          URL prefixes to backend services. The route map here is the source of truth for which service owns
-          which endpoint:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">app.MapForwarder(<span class="hljs-string">&quot;/Tickets/{**catch-all}&quot;</span>, <span class="hljs-string">&quot;http://tickets&quot;</span>, http2Config);
-          app.MapForwarder(<span class="hljs-string">&quot;/Auth/{**catch-all}&quot;</span>, <span class="hljs-string">&quot;http://identity&quot;</span>, http2Config);
-          app.MapForwarder(<span class="hljs-string">&quot;/.well-known/{**catch-all}&quot;</span>, <span class="hljs-string">&quot;http://identity&quot;</span>, http2Config);   <span class="hljs-comment">// JWKS, routed through the gateway</span></code></pre>
-          <p>Set <code>ForwardHttp2 = true</code> (and <code>RequestVersionExact</code>) on the gRPC/JWKS routes so the proxy speaks
-          HTTP/2 to the Http2-only services. See <a href="../adr/012-grpc-host-transport.html">ADR-012</a>.</p>
-          <h3 id="8d-the-apphost-grows-up">8d. The AppHost grows up</h3>
-          <p>Now wire the distributed topology with the <code>MMCA.Common.Aspire.Hosting</code> extensions:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> sql = builder.AddSqlServer(<span class="hljs-string">&quot;sql&quot;</span>).WithLifetime(ContainerLifetime.Persistent);
-          <span class="hljs-keyword">var</span> identityDb = sql.AddDatabase(<span class="hljs-string">&quot;helpdesk-identity&quot;</span>, <span class="hljs-string">&quot;Helpdesk_Identity&quot;</span>);
-          <span class="hljs-keyword">var</span> ticketsDb  = sql.AddDatabase(<span class="hljs-string">&quot;helpdesk-tickets&quot;</span>,  <span class="hljs-string">&quot;Helpdesk_Tickets&quot;</span>);
-          <span class="hljs-keyword">var</span> redis  = builder.AddRedis(<span class="hljs-string">&quot;redis&quot;</span>).WithLifetime(ContainerLifetime.Persistent);
-          <span class="hljs-keyword">var</span> broker = builder.AddMessageBroker().WithLifetime(ContainerLifetime.Persistent);   <span class="hljs-comment">// RabbitMQ</span>
-          
-          <span class="hljs-keyword">var</span> identity = builder.AddProject&lt;Projects.MMCA_Helpdesk_Identity_Service&gt;(<span class="hljs-string">&quot;identity&quot;</span>)
-              .WithSQLServerDataSource(identityDb, <span class="hljs-string">&quot;Identity&quot;</span>).WithReference(redis).WithBroker(broker).WithExternalHttpEndpoints();
-          
-          <span class="hljs-keyword">var</span> tickets = builder.AddProject&lt;Projects.MMCA_Helpdesk_Tickets_Service&gt;(<span class="hljs-string">&quot;tickets&quot;</span>)
-              .WithSQLServerDataSource(ticketsDb, <span class="hljs-string">&quot;Tickets&quot;</span>).WithReference(redis).WithBroker(broker)
-              .WithReference(identity).WaitFor(identity).WithExternalHttpEndpoints();
-          
-          <span class="hljs-keyword">var</span> gateway = builder.AddProject&lt;Projects.MMCA_Helpdesk_Gateway&gt;(<span class="hljs-string">&quot;gateway&quot;</span>)
-              .WithReference(identity).WithReference(tickets).WithExternalHttpEndpoints()
-              .WithEndpoint(<span class="hljs-string">&quot;https&quot;</span>, e =&gt; e.Port = <span class="hljs-number">6001</span>);
-          
-          tickets.WithJwksDiscovery(identity, gateway);   <span class="hljs-comment">// two-arg gateway form: tickets validates Identity&#x27;s JWKS through the gateway</span></code></pre>
-          <blockquote>
-          <p>Use the <strong>two-argument</strong> <code>WithJwksDiscovery(identity, gateway)</code> form. The single-argument form points
-          the backchannel directly at the Http2-only Identity HTTPS endpoint and fails the local ALPN
-          negotiation; routing JWKS through the gateway (which terminates TLS) is what works.</p>
-          </blockquote>
-          <p>What changed for the application code: nothing. <code>WithSQLServerDataSource</code> now gives each service its own database
-          (<code>Helpdesk_Identity</code>, <code>Helpdesk_Tickets</code>, each with its own <code>OutboxMessages</code> table, so services never
-          race for each other&#39;s outbox rows, see <a href="../adr/006-database-per-service.html">ADR-006</a>). The
-          <code>TicketOpenedIntegrationEvent</code> you wrote in Phase 3 now flows monolith-to-broker over MassTransit
-          instead of in-process, selected purely by configuration. Cross-service references become scalar columns
-          plus eventual consistency through the outbox, never cross-database foreign keys.</p>
           <hr>
           <h2 id="verification-checklist">Verification checklist</h2>
-          <ol start="0">
-          <li><strong>Scaffolded:</strong> <code>dotnet new mmca-app -n &lt;YourApp&gt;</code> produced a solution that builds and tests
-          green before you changed anything. If it did not, that is a template bug, not yours.</li>
-          <li><strong>Build green:</strong> <code>dotnet build MMCA.Helpdesk.slnx</code> with no warnings (TreatWarningsAsErrors + five
-          analyzers). This is the primary automatable gate.</li>
-          <li><strong>Unit + architecture tests pass:</strong> <code>dotnet test --solution MMCA.Helpdesk.slnx</code> (all three
-          projects, no DB needed). The <code>IArchitectureMap</code> rules must be green. A scaffolded solution runs
-          one test fewer than the reference app until you freeze your own integration-event contract
-          (Phase 6).</li>
-          <li><strong>Migrations:</strong> <code>dotnet ef migrations add InitialCreate ...</code> succeeds for each migrations project
-          (generates the <code>Ticket</code>, <code>TicketComment</code>, and per-DB <code>OutboxMessages</code> tables).</li>
-          <li><strong>Run (interactive):</strong> <code>dotnet run --project ...AppHost</code>; the dashboard shows <code>sql</code>, <code>web</code>, and <code>ui</code>
-          healthy. Open <code>ui</code> to use the app, or hit <code>POST /Tickets</code> then <code>GET /Tickets</code> on <code>web</code>; confirm
-          201/200, stamped audit fields, soft-delete filtering, and an outbox row for the
-          <code>TicketOpenedIntegrationEvent</code>. (Issuer-less, so no token is needed.)</li>
-          <li><strong>Extraction smoke:</strong> after Phase 8, the dashboard shows Identity + Tickets + Gateway healthy; a
-          request through the gateway to Tickets succeeds and JWKS-validates; the integration event is
-          delivered over the broker.</li>
+          <ol>
+          <li><code>dotnet new mmca-app -n &lt;YourApp&gt;</code> produced a solution that <strong>builds and tests green before you
+          changed anything</strong>.</li>
+          <li><code>dotnet build &lt;YourApp&gt;.slnx</code> is warning-free (TreatWarningsAsErrors + five analyzers). This is
+          the primary automatable gate.</li>
+          <li><code>dotnet test --solution &lt;YourApp&gt;.slnx</code> passes all three projects with no database, including
+          your own frozen integration-event contract.</li>
+          <li><code>dotnet ef migrations add InitialCreate ...</code> succeeds and generates your aggregate, its child
+          entity, and the per-database <code>OutboxMessages</code> table.</li>
+          <li>Run interactively: the dashboard shows <code>sql</code>, <code>web</code>, and <code>ui</code> healthy; a <code>POST</code> then <code>GET</code> returns
+          201 then 200 with audit fields stamped, soft-deleted rows filtered, and an outbox row written.</li>
           </ol>
           <hr>
           <h2 id="where-to-look-next">Where to look next</h2>
           <ul>
-          <li><strong><a href="common-TEMPLATES.html">Templates</a></strong>: every parameter of <code>mmca-app</code>, <code>mmca-module</code>,
-          <code>mmca-command</code>, and <code>mmca-query</code>, plus the two one-time fixups a rename makes unavoidable.
-          <a href="../adr/065-scaffolding-templates.html">ADR-065</a> explains why the pack is derived from the reference
-          app rather than maintained beside it.</li>
-          <li><strong><a href="https://github.com/ivanball/MMCA.Helpdesk" target="_blank" rel="noopener">MMCA.Helpdesk</a></strong>: the minimal, build- and test-verified
-          monolith this guide is the companion to: every step above maps to real code there. Read its
-          <code>README.md</code> and <code>CLAUDE.md</code> for the Helpdesk-specific picture (issuer-less auth, the two event paths,
-          the abstract module DbContext).</li>
+          <li><strong><a href="common-TEMPLATES.html">Templates</a></strong>: every parameter of all four templates, dropping the Blazor UI
+          host, and how the pack is built. <a href="../adr/065-scaffolding-templates.html">ADR-065</a> explains why it is
+          derived from the reference app rather than maintained beside it.</li>
+          <li><strong><a href="common-BUILD-BY-HAND.html">Build by hand</a></strong>: the same solution, phase by phase, for retrofitting
+          an existing solution or for understanding what you were handed.</li>
+          <li><strong><a href="https://github.com/ivanball/MMCA.Helpdesk" target="_blank" rel="noopener">MMCA.Helpdesk</a></strong>: the runnable reference app. It <em>is</em>
+          the template content, staged at pack time, so what you generated is that repo under your own names.</li>
           <li><strong>The ADRs</strong> (<a href="../adr/index.html">index</a>): the <em>why</em> behind every pattern you just used.</li>
-          <li><strong><code>MMCA.Common/CLAUDE.md</code></strong>: the framework&#39;s layer rules, DI sequence, and extension points in depth.</li>
           <li><strong>The <a href="../onboarding/index.html">onboarding guide</a></strong>: a type-by-type tour of the framework internals.</li>
           <li><strong>MMCA.ADC and MMCA.Store</strong>: two complete, production apps to copy patterns from. ADC is the richer
-          template (four modules, OAuth social login, SignalR notifications); Store is the simpler one.</li>
+          one (four modules, OAuth social login, SignalR notifications); Store is the simpler one.</li>
           </ul>
           
         <div class="doc-foot btn-row">
@@ -1302,17 +372,16 @@
           <nav class="doc-toc" aria-label="On this page">
             <p class="doc-toc-title">On this page</p>
             <ul>
-            <li><a href="#scaffold-it-then-read-the-rest-of-this">Scaffold it, then read the rest of this</a></li>
-            <li><a href="#what-you-will-build">What you will build</a></li>
-            <li><a href="#phase-0-prerequisites-and-decisions">Phase 0: Prerequisites and decisions</a></li>
-            <li><a href="#phase-1-create-the-solution-and-the-build-plumbing">Phase 1: Create the solution and the build plumbing</a></li>
-            <li><a href="#phase-2-scaffold-the-module-project-set">Phase 2: Scaffold the module project set</a></li>
-            <li><a href="#phase-3-the-vertical-slice-end-to-end-the-heart-of-it">Phase 3: The vertical slice end-to-end (the heart of it)</a></li>
-            <li><a href="#phase-4-dbcontext-model-and-migrations">Phase 4: DbContext model and migrations</a></li>
-            <li><a href="#phase-5-compose-the-monolith-host-and-run-it">Phase 5: Compose the monolith host and run it</a></li>
-            <li><a href="#phase-6-tests-and-the-architecture-fitness-map">Phase 6: Tests and the architecture-fitness map</a></li>
-            <li><a href="#phase-7-upgrading-the-framework-version">Phase 7: Upgrading the framework version</a></li>
-            <li><a href="#phase-8-extract-a-module-into-its-own-service-the-payoff">Phase 8: Extract a module into its own service (the payoff)</a></li>
+            <li><a href="#before-you-start">Before you start</a></li>
+            <li><a href="#1-install-the-template-pack">1. Install the template pack</a></li>
+            <li><a href="#2-generate-the-solution">2. Generate the solution</a></li>
+            <li><a href="#3-build-and-test-before-you-change-anything">3. Build and test before you change anything</a></li>
+            <li><a href="#4-create-the-first-migration">4. Create the first migration</a></li>
+            <li><a href="#5-run-it">5. Run it</a></li>
+            <li><a href="#6-the-two-one-time-fixups">6. The two one-time fixups</a></li>
+            <li><a href="#what-you-were-handed">What you were handed</a></li>
+            <li><a href="#add-your-next-feature">Add your next feature</a></li>
+            <li><a href="#then-what">Then what</a></li>
             <li><a href="#verification-checklist">Verification checklist</a></li>
             <li><a href="#where-to-look-next">Where to look next</a></li>
             </ul>
