@@ -4,8 +4,9 @@
 [MMCA.Common](https://www.nuget.org/packages?q=MMCA.Common) framework. It exists because standing up
 a new app by hand meant 12 projects and roughly 5,300 lines before a line of business logic, several
 of them load-bearing in ways nothing tells you about until much later. See
-[ADR-065](../adr/065-scaffolding-templates.md) for the reasoning and
-[Getting Started](common-GETTING-STARTED.md) for what the generated code actually does.
+[ADR-065](../adr/065-scaffolding-templates.md) for the reasoning,
+[Getting Started](common-GETTING-STARTED.md) for the six-step path from nothing to a running app, and
+[Building by Hand](common-BUILD-BY-HAND.md) for what the generated code actually does, phase by phase.
 
 ```bash
 dotnet new install MMCA.Templates

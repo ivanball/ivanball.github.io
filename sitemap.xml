@@ -602,7 +602,7 @@
   </url>
   <url>
     <loc>https://ivanball.github.io/docs/guides/index.html</loc>
-    <lastmod>2026-07-20</lastmod>
+    <lastmod>2026-08-02</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
@@ -628,6 +628,11 @@
   <url>
     <loc>https://ivanball.github.io/docs/guides/common-ACCESSIBILITY.html</loc>
     <lastmod>2026-07-20</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://ivanball.github.io/docs/guides/common-BUILD-BY-HAND.html</loc>
+    <lastmod>2026-08-02</lastmod>
     <priority>0.6</priority>
   </url>
   <url>

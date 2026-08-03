@@ -104,6 +104,7 @@
         <li><a href="adc-NavigationFlow.html">ADC · Navigation Flow</a></li>
         <li><a href="adc-specifications.html">ADC · Business Specifications</a></li>
         <li><a href="common-ACCESSIBILITY.html">Common · Accessibility (rubric §21)</a></li>
+        <li><a href="common-BUILD-BY-HAND.html">Common · Building on MMCA.Common by Hand</a></li>
         <li><a href="common-COST.html">Common · Cost &amp; FinOps Notes (rubric §31)</a></li>
         <li><a href="common-GETTING-STARTED.html">Common · Getting Started: Build a New App on MMCA.Common</a></li>
         <li><a href="common-RESILIENCE.html">Common · Resilience &amp; Business Continuity (rubric §29)</a></li>
@@ -125,8 +126,9 @@
           <a href="https://www.nuget.org/packages?q=MMCA.Common" target="_blank" rel="noopener">MMCA.Common</a> framework. It exists because standing up
           a new app by hand meant 12 projects and roughly 5,300 lines before a line of business logic, several
           of them load-bearing in ways nothing tells you about until much later. See
-          <a href="../adr/065-scaffolding-templates.html">ADR-065</a> for the reasoning and
-          <a href="common-GETTING-STARTED.html">Getting Started</a> for what the generated code actually does.</p>
+          <a href="../adr/065-scaffolding-templates.html">ADR-065</a> for the reasoning,
+          <a href="common-GETTING-STARTED.html">Getting Started</a> for the six-step path from nothing to a running app, and
+          <a href="common-BUILD-BY-HAND.html">Building by Hand</a> for what the generated code actually does, phase by phase.</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet new install MMCA.Templates
           dotnet new mmca-app -n Contoso.Support --module Orders --aggregate Order
           <span class="hljs-built_in">cd</span> Contoso.Support
