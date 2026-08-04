@@ -203,7 +203,7 @@ dotnet new mmca-command -n CancelOrder --app Contoso.Support --module Orders \
   --aggregate Order --domain-method Cancel
 
 dotnet new mmca-query -n GetOrderByNumber --app Contoso.Support --module Orders \
-  --aggregate Order
+  --aggregate Order --child-collection Lines
 ```
 
 Handlers, validators, and mappers are convention-scanned, so there is no DI registration to add.
@@ -217,11 +217,10 @@ ProblemDetails), guarded by an `OrderInvariants` rule wherever the check is reus
 `AddDomainEvent(new OrderChanged(DomainEntityState.Updated, Id))` on success. `ChangeStatus` in
 [Phase 3a](common-BUILD-BY-HAND.md#3a-domain-aggregate-invariants-events) is the shape to copy.
 
-**Check the handler's `includes:`.** The command slice is a rename of the reference app's delete
-slice, which loads its aggregate's child collection, so the generated handler arrives with
-`includes: [nameof(Order.Comments)]`. The aggregate name is substituted, the navigation name is not,
-so that line compiles only while your aggregate still has the scaffolded `Comments` collection.
-Point it at your own child collection, or drop the argument when the method only touches the root.
+**Name a child collection when the handler needs one eager-loaded.** Both slices load through
+`GetByIdAsync`, whose `includes:` argument is required, so there is always a list. Add
+`--child-collection Lines` and the handler loads that navigation; leave it off and it passes an empty
+list, which is what you want when the command only touches the aggregate root.
 
 **Keep the query's `CacheKey` inside your module's `*CacheKeys.Prefix`,** because a key that drifts
 out of the prefix goes stale silently.
