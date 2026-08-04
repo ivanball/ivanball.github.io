@@ -371,11 +371,20 @@
           <td>the guarded method the command calls on the aggregate</td>
           </tr>
           </tbody></table></div>
-          <p>Handlers are convention-scanned by Scrutor, so there is no DI registration to add. Two things do
+          <p>Handlers are convention-scanned by Scrutor, so there is no DI registration to add. Three things do
           need you:</p>
           <ul>
           <li><strong>The command slice calls <code>--domain-method</code> on your aggregate</strong>, and the scaffold cannot invent it.
-          Add that method returning <code>Result</code> before the slice compiles.</li>
+          Add that method returning <code>Result</code> before the slice compiles, or the generated handler fails with
+          <code>&#39;Invoice&#39; does not contain a definition for &#39;Archive&#39;</code>. <code>dotnet new</code> prints the same reminder as a
+          post-action; the <a href="common-GETTING-STARTED.html#add-your-next-feature">getting-started guide</a> shows the
+          shape to copy.</li>
+          <li><strong>Check the handler&#39;s <code>includes:</code>.</strong> The command slice is a rename of the reference app&#39;s delete
+          slice, which loads its aggregate&#39;s child collection, so the generated handler arrives with
+          <code>includes: [nameof(Invoice.Comments)]</code>. <code>--aggregate</code> substitutes the aggregate name but nothing
+          substitutes the navigation name, so that line compiles only while your aggregate still has the
+          scaffolded <code>Comments</code> collection. Retarget it at your own child collection, or drop the argument
+          when the method only touches the root.</li>
           <li><strong>Keep the query&#39;s <code>CacheKey</code> inside your module&#39;s <code>*CacheKeys.Prefix</code>.</strong> The caching decorator
           matches cacheable reads to invalidating commands <strong>by string prefix</strong>, so a key that drifts out of
           the prefix goes stale silently and nothing fails.</li>

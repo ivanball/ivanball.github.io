@@ -206,10 +206,25 @@ dotnet new mmca-query -n GetOrderByNumber --app Contoso.Support --module Orders 
   --aggregate Order
 ```
 
-Handlers, validators, and mappers are convention-scanned, so there is no DI registration to add. Two
-things do need you: the command calls `--domain-method` on your aggregate, so add that guarded
-method returning `Result` first; and keep the query's `CacheKey` inside your module's
-`*CacheKeys.Prefix`, because a key that drifts out of the prefix goes stale silently.
+Handlers, validators, and mappers are convention-scanned, so there is no DI registration to add.
+Three things do need you.
+
+**Write the `--domain-method` on your aggregate first.** The generated handler *calls* it, and the
+scaffold cannot invent your business rule, so until the method exists the slice does not compile:
+`'Order' does not contain a definition for 'Cancel'`. Add it returning `Result` rather than throwing
+(that is what lets the handler short-circuit on `IsFailure` and the edge map the failure to RFC 9457
+ProblemDetails), guarded by an `OrderInvariants` rule wherever the check is reusable, and raising
+`AddDomainEvent(new OrderChanged(DomainEntityState.Updated, Id))` on success. `ChangeStatus` in
+[Phase 3a](common-BUILD-BY-HAND.md#3a-domain-aggregate-invariants-events) is the shape to copy.
+
+**Check the handler's `includes:`.** The command slice is a rename of the reference app's delete
+slice, which loads its aggregate's child collection, so the generated handler arrives with
+`includes: [nameof(Order.Comments)]`. The aggregate name is substituted, the navigation name is not,
+so that line compiles only while your aggregate still has the scaffolded `Comments` collection.
+Point it at your own child collection, or drop the argument when the method only touches the root.
+
+**Keep the query's `CacheKey` inside your module's `*CacheKeys.Prefix`,** because a key that drifts
+out of the prefix goes stale silently.
 
 **A second module** across all five layers plus its test and migrations projects:
 
