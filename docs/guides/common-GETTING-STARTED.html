@@ -302,63 +302,66 @@
           <code>UseCases</code> folder:</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-built_in">cd</span> Source/Modules/Orders/Contoso.Support.Orders.Application/Orders/UseCases
           
-          dotnet new mmca-command -n CancelOrder --app Contoso.Support --module Orders --aggregate Order --domain-method Cancel
+          dotnet new mmca-command -n TransferOrder --app Contoso.Support --module Orders --aggregate Order --domain-method TransferToRequester
           
           dotnet new mmca-query -n GetOrderByNumber --app Contoso.Support --module Orders --aggregate Order --child-collection Comments</code></pre>
           <p>Handlers, validators, and mappers are convention-scanned, so there is no DI registration to add.
-          Three things do need you.</p>
+          Four things do need you.</p>
           <p><strong>Write the <code>--domain-method</code> on your aggregate first.</strong> The generated handler <em>calls</em> it, and the
           scaffold cannot invent your business rule, so until the method exists the slice does not compile:
-          <code>&#39;Order&#39; does not contain a definition for &#39;Cancel&#39;</code>. Here is the whole of it for <code>--domain-method Cancel</code>, in the three files it touches.</p>
-          <p>A new lifecycle state needs a member. The scaffolded enum has four:</p>
-          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Orders/Contoso.Support.Orders.Shared/Orders/OrderStatus.cs</span>
-          <span class="hljs-keyword">public</span> <span class="hljs-built_in">enum</span> OrderStatus
-          {
-              Open = <span class="hljs-number">0</span>,
-              InProgress = <span class="hljs-number">1</span>,
-              Resolved = <span class="hljs-number">2</span>,
-              Closed = <span class="hljs-number">3</span>,
-              Cancelled = <span class="hljs-number">4</span>,
-          }</code></pre>
+          <code>&#39;Order&#39; does not contain a definition for &#39;TransferToRequester&#39;</code>. The example (the order was opened
+          on behalf of the wrong customer; move it) is deliberately not a status transition: the scaffolded
+          <code>ChangeStatus</code> already owns that axis, and a second door to the same state would let callers bypass
+          whichever rule the new method added. It moves <code>RequesterUserId</code>, a field the scaffold already
+          persists, so nothing changes in the Shared layer or the database. Here is the whole of it, in the
+          two files it touches.</p>
           <p>The rule goes in the invariants class, not in the method, so it can be composed with
-          <code>Result.Combine</code> and asserted directly in a domain test:</p>
+          <code>Result.Combine</code> and asserted directly in a domain test. It reuses a rule the scaffold already
+          enforces for comments: <code>Closed</code> is terminal:</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Orders/Contoso.Support.Orders.Domain/Orders/OrderInvariants.cs</span>
-          <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> Result <span class="hljs-title">EnsureStatusAllowsCancel</span>(<span class="hljs-params">OrderStatus status, <span class="hljs-built_in">string</span> source</span>)</span>
-              =&gt; status <span class="hljs-keyword">is</span> OrderStatus.Resolved <span class="hljs-keyword">or</span> OrderStatus.Closed
+          <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> Result <span class="hljs-title">EnsureStatusAllowsTransfer</span>(<span class="hljs-params">OrderStatus status, <span class="hljs-built_in">string</span> source</span>)</span>
+              =&gt; status == OrderStatus.Closed
                   ? Result.Failure(Error.Invariant(
-                      code: <span class="hljs-string">&quot;Order.Cancel.AlreadyFinished&quot;</span>,
-                      message: <span class="hljs-string">&quot;A resolved or closed order cannot be cancelled.&quot;</span>,
+                      code: <span class="hljs-string">&quot;Order.Transfer.Closed&quot;</span>,
+                      message: <span class="hljs-string">&quot;A closed order cannot be transferred to another requester.&quot;</span>,
                       source: source,
                       target: <span class="hljs-keyword">nameof</span>(status)))
                   : Result.Success();</code></pre>
           <p>And the method itself:</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Orders/Contoso.Support.Orders.Domain/Orders/Order.cs</span>
-          <span class="hljs-function"><span class="hljs-keyword">public</span> Result <span class="hljs-title">Cancel</span>()</span>
+          <span class="hljs-function"><span class="hljs-keyword">public</span> Result <span class="hljs-title">TransferToRequester</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> requesterUserId</span>)</span>
           {
-              <span class="hljs-keyword">if</span> (Status == OrderStatus.Cancelled)
+              <span class="hljs-keyword">if</span> (RequesterUserId == requesterUserId)
               {
                   <span class="hljs-keyword">return</span> Result.Success();
               }
           
-              <span class="hljs-keyword">var</span> validation = OrderInvariants.EnsureStatusAllowsCancel(Status, <span class="hljs-keyword">nameof</span>(Cancel));
+              <span class="hljs-keyword">var</span> validation = OrderInvariants.EnsureStatusAllowsTransfer(Status, <span class="hljs-keyword">nameof</span>(TransferToRequester));
               <span class="hljs-keyword">if</span> (validation.IsFailure)
               {
                   <span class="hljs-keyword">return</span> validation;
               }
           
-              Status = OrderStatus.Cancelled;
+              RequesterUserId = requesterUserId;
               AddDomainEvent(<span class="hljs-keyword">new</span> OrderChanged(DomainEntityState.Updated, Id));
           
               <span class="hljs-keyword">return</span> Result.Success();
           }</code></pre>
           <p>Four things in that shape are the conventions, not decoration. It returns <code>Result</code> rather than
           throwing, which is what lets the handler short-circuit on <code>IsFailure</code> and the edge map the failure to
-          RFC 9457 ProblemDetails. Cancelling an already-cancelled order succeeds rather than failing, so a
-          retried command is not an error. <code>AddDomainEvent</code> is what makes the change observable in-process
-          after <code>SaveChanges</code>. And the mutation goes through the aggregate, never through the handler setting
-          <code>Status</code> itself. <code>ChangeStatus</code> in
+          RFC 9457 ProblemDetails. Transferring an order to the requester it already has succeeds rather than
+          failing, so a retried command is not an error. <code>AddDomainEvent</code> is what makes the change observable
+          in-process after <code>SaveChanges</code>. And the mutation goes through the aggregate, never through the
+          handler setting <code>RequesterUserId</code> itself. <code>ChangeStatus</code> in
           <a href="common-BUILD-BY-HAND.html#3a-domain-aggregate-invariants-events">Phase 3a</a> is the same shape with a
           different rule.</p>
+          <p><strong>Give the command its payload.</strong> <code>--domain-method</code> carries only a name, so the scaffolded record
+          holds just the aggregate id and the generated handler calls <code>order.TransferToRequester()</code> with no
+          arguments. Two one-line edits finish the slice: add the field to the command record, and pass it at
+          the call site (rewrite the scaffolded summary comments while you are in there; they describe the
+          delete slice the template is staged from):</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">TransferOrderCommand</span>(<span class="hljs-params">OrderIdentifierType OrderId, <span class="hljs-built_in">int</span> RequesterUserId</span>) : ICacheInvalidating</span></code></pre>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> result = order.TransferToRequester(command.RequesterUserId);</code></pre>
           <p><strong>Name a child collection when the handler needs one eager-loaded.</strong> Both slices load through
           <code>GetByIdAsync</code>, whose <code>includes:</code> argument is required, so there is always a list. The
           <code>--child-collection Comments</code> above names the one collection a scaffolded <code>Order</code> owns; pass whichever
