@@ -199,43 +199,34 @@ code around them:
 ```bash
 cd Source/Modules/Orders/Contoso.Support.Orders.Application/Orders/UseCases
 
-dotnet new mmca-command -n CancelOrder --app Contoso.Support --module Orders --aggregate Order --domain-method Cancel
+dotnet new mmca-command -n TransferOrder --app Contoso.Support --module Orders --aggregate Order --domain-method TransferToRequester
 
 dotnet new mmca-query -n GetOrderByNumber --app Contoso.Support --module Orders --aggregate Order --child-collection Comments
 ```
 
 Handlers, validators, and mappers are convention-scanned, so there is no DI registration to add.
-Three things do need you.
+Four things do need you.
 
 **Write the `--domain-method` on your aggregate first.** The generated handler *calls* it, and the
 scaffold cannot invent your business rule, so until the method exists the slice does not compile:
-`'Order' does not contain a definition for 'Cancel'`. Here is the whole of it for `--domain-method
-Cancel`, in the three files it touches.
-
-A new lifecycle state needs a member. The scaffolded enum has four:
-
-```csharp
-// Source/Modules/Orders/Contoso.Support.Orders.Shared/Orders/OrderStatus.cs
-public enum OrderStatus
-{
-    Open = 0,
-    InProgress = 1,
-    Resolved = 2,
-    Closed = 3,
-    Cancelled = 4,
-}
-```
+`'Order' does not contain a definition for 'TransferToRequester'`. The example (the order was opened
+on behalf of the wrong customer; move it) is deliberately not a status transition: the scaffolded
+`ChangeStatus` already owns that axis, and a second door to the same state would let callers bypass
+whichever rule the new method added. It moves `RequesterUserId`, a field the scaffold already
+persists, so nothing changes in the Shared layer or the database. Here is the whole of it, in the
+two files it touches.
 
 The rule goes in the invariants class, not in the method, so it can be composed with
-`Result.Combine` and asserted directly in a domain test:
+`Result.Combine` and asserted directly in a domain test. It reuses a rule the scaffold already
+enforces for comments: `Closed` is terminal:
 
 ```csharp
 // Source/Modules/Orders/Contoso.Support.Orders.Domain/Orders/OrderInvariants.cs
-public static Result EnsureStatusAllowsCancel(OrderStatus status, string source)
-    => status is OrderStatus.Resolved or OrderStatus.Closed
+public static Result EnsureStatusAllowsTransfer(OrderStatus status, string source)
+    => status == OrderStatus.Closed
         ? Result.Failure(Error.Invariant(
-            code: "Order.Cancel.AlreadyFinished",
-            message: "A resolved or closed order cannot be cancelled.",
+            code: "Order.Transfer.Closed",
+            message: "A closed order cannot be transferred to another requester.",
             source: source,
             target: nameof(status)))
         : Result.Success();
@@ -245,20 +236,20 @@ And the method itself:
 
 ```csharp
 // Source/Modules/Orders/Contoso.Support.Orders.Domain/Orders/Order.cs
-public Result Cancel()
+public Result TransferToRequester(int requesterUserId)
 {
-    if (Status == OrderStatus.Cancelled)
+    if (RequesterUserId == requesterUserId)
     {
         return Result.Success();
     }
 
-    var validation = OrderInvariants.EnsureStatusAllowsCancel(Status, nameof(Cancel));
+    var validation = OrderInvariants.EnsureStatusAllowsTransfer(Status, nameof(TransferToRequester));
     if (validation.IsFailure)
     {
         return validation;
     }
 
-    Status = OrderStatus.Cancelled;
+    RequesterUserId = requesterUserId;
     AddDomainEvent(new OrderChanged(DomainEntityState.Updated, Id));
 
     return Result.Success();
@@ -267,12 +258,26 @@ public Result Cancel()
 
 Four things in that shape are the conventions, not decoration. It returns `Result` rather than
 throwing, which is what lets the handler short-circuit on `IsFailure` and the edge map the failure to
-RFC 9457 ProblemDetails. Cancelling an already-cancelled order succeeds rather than failing, so a
-retried command is not an error. `AddDomainEvent` is what makes the change observable in-process
-after `SaveChanges`. And the mutation goes through the aggregate, never through the handler setting
-`Status` itself. `ChangeStatus` in
+RFC 9457 ProblemDetails. Transferring an order to the requester it already has succeeds rather than
+failing, so a retried command is not an error. `AddDomainEvent` is what makes the change observable
+in-process after `SaveChanges`. And the mutation goes through the aggregate, never through the
+handler setting `RequesterUserId` itself. `ChangeStatus` in
 [Phase 3a](common-BUILD-BY-HAND.md#3a-domain-aggregate-invariants-events) is the same shape with a
 different rule.
+
+**Give the command its payload.** `--domain-method` carries only a name, so the scaffolded record
+holds just the aggregate id and the generated handler calls `order.TransferToRequester()` with no
+arguments. Two one-line edits finish the slice: add the field to the command record, and pass it at
+the call site (rewrite the scaffolded summary comments while you are in there; they describe the
+delete slice the template is staged from):
+
+```csharp
+public sealed record TransferOrderCommand(OrderIdentifierType OrderId, int RequesterUserId) : ICacheInvalidating
+```
+
+```csharp
+var result = order.TransferToRequester(command.RequesterUserId);
+```
 
 **Name a child collection when the handler needs one eager-loaded.** Both slices load through
 `GetByIdAsync`, whose `includes:` argument is required, so there is always a list. The
