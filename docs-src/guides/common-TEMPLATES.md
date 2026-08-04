@@ -204,11 +204,20 @@ dotnet new mmca-query -n GetInvoiceByNumber --app Contoso.Support --module Billi
 | `-a, --aggregate` | both | the aggregate the handler loads (required) |
 | `--domain-method` | `mmca-command` | the guarded method the command calls on the aggregate |
 
-Handlers are convention-scanned by Scrutor, so there is no DI registration to add. Two things do
+Handlers are convention-scanned by Scrutor, so there is no DI registration to add. Three things do
 need you:
 
 - **The command slice calls `--domain-method` on your aggregate**, and the scaffold cannot invent it.
-  Add that method returning `Result` before the slice compiles.
+  Add that method returning `Result` before the slice compiles, or the generated handler fails with
+  `'Invoice' does not contain a definition for 'Archive'`. `dotnet new` prints the same reminder as a
+  post-action; the [getting-started guide](common-GETTING-STARTED.md#add-your-next-feature) shows the
+  shape to copy.
+- **Check the handler's `includes:`.** The command slice is a rename of the reference app's delete
+  slice, which loads its aggregate's child collection, so the generated handler arrives with
+  `includes: [nameof(Invoice.Comments)]`. `--aggregate` substitutes the aggregate name but nothing
+  substitutes the navigation name, so that line compiles only while your aggregate still has the
+  scaffolded `Comments` collection. Retarget it at your own child collection, or drop the argument
+  when the method only touches the root.
 - **Keep the query's `CacheKey` inside your module's `*CacheKeys.Prefix`.** The caching decorator
   matches cacheable reads to invalidating commands **by string prefix**, so a key that drifts out of
   the prefix goes stale silently and nothing fails.
