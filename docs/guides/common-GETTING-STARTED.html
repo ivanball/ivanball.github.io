@@ -306,7 +306,7 @@
             --aggregate Order --domain-method Cancel
           
           dotnet new mmca-query -n GetOrderByNumber --app Contoso.Support --module Orders \
-            --aggregate Order</code></pre>
+            --aggregate Order --child-collection Lines</code></pre>
           <p>Handlers, validators, and mappers are convention-scanned, so there is no DI registration to add.
           Three things do need you.</p>
           <p><strong>Write the <code>--domain-method</code> on your aggregate first.</strong> The generated handler <em>calls</em> it, and the
@@ -316,11 +316,10 @@
           ProblemDetails), guarded by an <code>OrderInvariants</code> rule wherever the check is reusable, and raising
           <code>AddDomainEvent(new OrderChanged(DomainEntityState.Updated, Id))</code> on success. <code>ChangeStatus</code> in
           <a href="common-BUILD-BY-HAND.html#3a-domain-aggregate-invariants-events">Phase 3a</a> is the shape to copy.</p>
-          <p><strong>Check the handler&#39;s <code>includes:</code>.</strong> The command slice is a rename of the reference app&#39;s delete
-          slice, which loads its aggregate&#39;s child collection, so the generated handler arrives with
-          <code>includes: [nameof(Order.Comments)]</code>. The aggregate name is substituted, the navigation name is not,
-          so that line compiles only while your aggregate still has the scaffolded <code>Comments</code> collection.
-          Point it at your own child collection, or drop the argument when the method only touches the root.</p>
+          <p><strong>Name a child collection when the handler needs one eager-loaded.</strong> Both slices load through
+          <code>GetByIdAsync</code>, whose <code>includes:</code> argument is required, so there is always a list. Add
+          <code>--child-collection Lines</code> and the handler loads that navigation; leave it off and it passes an empty
+          list, which is what you want when the command only touches the aggregate root.</p>
           <p><strong>Keep the query&#39;s <code>CacheKey</code> inside your module&#39;s <code>*CacheKeys.Prefix</code>,</strong> because a key that drifts
           out of the prefix goes stale silently.</p>
           <p><strong>A second module</strong> across all five layers plus its test and migrations projects:</p>

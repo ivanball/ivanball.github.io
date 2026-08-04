@@ -193,7 +193,7 @@ dotnet new mmca-command -n ArchiveInvoice --app Contoso.Support --module Billing
   --aggregate Invoice --domain-method Archive
 
 dotnet new mmca-query -n GetInvoiceByNumber --app Contoso.Support --module Billing \
-  --aggregate Invoice
+  --aggregate Invoice --child-collection Lines
 ```
 
 | Parameter | Applies to | Meaning |
@@ -203,8 +203,15 @@ dotnet new mmca-query -n GetInvoiceByNumber --app Contoso.Support --module Billi
 | `-m, --module` | both | the module this slice goes into (required) |
 | `-a, --aggregate` | both | the aggregate the handler loads (required) |
 | `--domain-method` | `mmca-command` | the guarded method the command calls on the aggregate |
+| `--child-collection` | both | navigation to eager-load; unset loads the aggregate root alone |
 
-Handlers are convention-scanned by Scrutor, so there is no DI registration to add. Three things do
+`--child-collection` exists because both handlers load through `GetByIdAsync`, whose `includes:`
+argument is **required**: there is always a list, so the only question is what goes in it. Naming a
+navigation eager-loads it, and leaving the parameter off passes an empty list. (Before
+`MMCA.Templates` 1.1.0 the slices named the reference app's own child collection unconditionally,
+which did not compile on an aggregate shaped differently.)
+
+Handlers are convention-scanned by Scrutor, so there is no DI registration to add. Two things do
 need you:
 
 - **The command slice calls `--domain-method` on your aggregate**, and the scaffold cannot invent it.
@@ -212,12 +219,6 @@ need you:
   `'Invoice' does not contain a definition for 'Archive'`. `dotnet new` prints the same reminder as a
   post-action; the [getting-started guide](common-GETTING-STARTED.md#add-your-next-feature) shows the
   shape to copy.
-- **Check the handler's `includes:`.** The command slice is a rename of the reference app's delete
-  slice, which loads its aggregate's child collection, so the generated handler arrives with
-  `includes: [nameof(Invoice.Comments)]`. `--aggregate` substitutes the aggregate name but nothing
-  substitutes the navigation name, so that line compiles only while your aggregate still has the
-  scaffolded `Comments` collection. Retarget it at your own child collection, or drop the argument
-  when the method only touches the root.
 - **Keep the query's `CacheKey` inside your module's `*CacheKeys.Prefix`.** The caching decorator
   matches cacheable reads to invalidating commands **by string prefix**, so a key that drifts out of
   the prefix goes stale silently and nothing fails.
