@@ -302,24 +302,69 @@
           <code>UseCases</code> folder:</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-built_in">cd</span> Source/Modules/Orders/Contoso.Support.Orders.Application/Orders/UseCases
           
-          dotnet new mmca-command -n CancelOrder --app Contoso.Support --module Orders \
-            --aggregate Order --domain-method Cancel
+          dotnet new mmca-command -n CancelOrder --app Contoso.Support --module Orders --aggregate Order --domain-method Cancel
           
-          dotnet new mmca-query -n GetOrderByNumber --app Contoso.Support --module Orders \
-            --aggregate Order --child-collection Lines</code></pre>
+          dotnet new mmca-query -n GetOrderByNumber --app Contoso.Support --module Orders --aggregate Order --child-collection Comments</code></pre>
           <p>Handlers, validators, and mappers are convention-scanned, so there is no DI registration to add.
           Three things do need you.</p>
           <p><strong>Write the <code>--domain-method</code> on your aggregate first.</strong> The generated handler <em>calls</em> it, and the
           scaffold cannot invent your business rule, so until the method exists the slice does not compile:
-          <code>&#39;Order&#39; does not contain a definition for &#39;Cancel&#39;</code>. Add it returning <code>Result</code> rather than throwing
-          (that is what lets the handler short-circuit on <code>IsFailure</code> and the edge map the failure to RFC 9457
-          ProblemDetails), guarded by an <code>OrderInvariants</code> rule wherever the check is reusable, and raising
-          <code>AddDomainEvent(new OrderChanged(DomainEntityState.Updated, Id))</code> on success. <code>ChangeStatus</code> in
-          <a href="common-BUILD-BY-HAND.html#3a-domain-aggregate-invariants-events">Phase 3a</a> is the shape to copy.</p>
+          <code>&#39;Order&#39; does not contain a definition for &#39;Cancel&#39;</code>. Here is the whole of it for <code>--domain-method Cancel</code>, in the three files it touches.</p>
+          <p>A new lifecycle state needs a member. The scaffolded enum has four:</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Orders/Contoso.Support.Orders.Shared/Orders/OrderStatus.cs</span>
+          <span class="hljs-keyword">public</span> <span class="hljs-built_in">enum</span> OrderStatus
+          {
+              Open = <span class="hljs-number">0</span>,
+              InProgress = <span class="hljs-number">1</span>,
+              Resolved = <span class="hljs-number">2</span>,
+              Closed = <span class="hljs-number">3</span>,
+              Cancelled = <span class="hljs-number">4</span>,
+          }</code></pre>
+          <p>The rule goes in the invariants class, not in the method, so it can be composed with
+          <code>Result.Combine</code> and asserted directly in a domain test:</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Orders/Contoso.Support.Orders.Domain/Orders/OrderInvariants.cs</span>
+          <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> Result <span class="hljs-title">EnsureStatusAllowsCancel</span>(<span class="hljs-params">OrderStatus status, <span class="hljs-built_in">string</span> source</span>)</span>
+              =&gt; status <span class="hljs-keyword">is</span> OrderStatus.Resolved <span class="hljs-keyword">or</span> OrderStatus.Closed
+                  ? Result.Failure(Error.Invariant(
+                      code: <span class="hljs-string">&quot;Order.Cancel.AlreadyFinished&quot;</span>,
+                      message: <span class="hljs-string">&quot;A resolved or closed order cannot be cancelled.&quot;</span>,
+                      source: source,
+                      target: <span class="hljs-keyword">nameof</span>(status)))
+                  : Result.Success();</code></pre>
+          <p>And the method itself:</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Orders/Contoso.Support.Orders.Domain/Orders/Order.cs</span>
+          <span class="hljs-function"><span class="hljs-keyword">public</span> Result <span class="hljs-title">Cancel</span>()</span>
+          {
+              <span class="hljs-keyword">if</span> (Status == OrderStatus.Cancelled)
+              {
+                  <span class="hljs-keyword">return</span> Result.Success();
+              }
+          
+              <span class="hljs-keyword">var</span> validation = OrderInvariants.EnsureStatusAllowsCancel(Status, <span class="hljs-keyword">nameof</span>(Cancel));
+              <span class="hljs-keyword">if</span> (validation.IsFailure)
+              {
+                  <span class="hljs-keyword">return</span> validation;
+              }
+          
+              Status = OrderStatus.Cancelled;
+              AddDomainEvent(<span class="hljs-keyword">new</span> OrderChanged(DomainEntityState.Updated, Id));
+          
+              <span class="hljs-keyword">return</span> Result.Success();
+          }</code></pre>
+          <p>Four things in that shape are the conventions, not decoration. It returns <code>Result</code> rather than
+          throwing, which is what lets the handler short-circuit on <code>IsFailure</code> and the edge map the failure to
+          RFC 9457 ProblemDetails. Cancelling an already-cancelled order succeeds rather than failing, so a
+          retried command is not an error. <code>AddDomainEvent</code> is what makes the change observable in-process
+          after <code>SaveChanges</code>. And the mutation goes through the aggregate, never through the handler setting
+          <code>Status</code> itself. <code>ChangeStatus</code> in
+          <a href="common-BUILD-BY-HAND.html#3a-domain-aggregate-invariants-events">Phase 3a</a> is the same shape with a
+          different rule.</p>
           <p><strong>Name a child collection when the handler needs one eager-loaded.</strong> Both slices load through
-          <code>GetByIdAsync</code>, whose <code>includes:</code> argument is required, so there is always a list. Add
-          <code>--child-collection Lines</code> and the handler loads that navigation; leave it off and it passes an empty
-          list, which is what you want when the command only touches the aggregate root.</p>
+          <code>GetByIdAsync</code>, whose <code>includes:</code> argument is required, so there is always a list. The
+          <code>--child-collection Comments</code> above names the one collection a scaffolded <code>Order</code> owns; pass whichever
+          navigation that handler needs, and pass a name your aggregate actually has, since this is the argument
+          that ends up inside <code>nameof(...)</code>. Leave the parameter off and the handler passes an empty list, which
+          is what you want when the command only touches the aggregate root.</p>
           <p><strong>Keep the query&#39;s <code>CacheKey</code> inside your module&#39;s <code>*CacheKeys.Prefix</code>,</strong> because a key that drifts
           out of the prefix goes stale silently.</p>
           <p><strong>A second module</strong> across all five layers plus its test and migrations projects:</p>

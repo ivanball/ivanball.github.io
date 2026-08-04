@@ -336,7 +336,7 @@
             --aggregate Invoice --domain-method Archive
           
           dotnet new mmca-query -n GetInvoiceByNumber --app Contoso.Support --module Billing \
-            --aggregate Invoice --child-collection Lines</code></pre>
+            --aggregate Invoice --child-collection Comments</code></pre>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -378,9 +378,10 @@
           </tbody></table></div>
           <p><code>--child-collection</code> exists because both handlers load through <code>GetByIdAsync</code>, whose <code>includes:</code>
           argument is <strong>required</strong>: there is always a list, so the only question is what goes in it. Naming a
-          navigation eager-loads it, and leaving the parameter off passes an empty list. (Before
-          <code>MMCA.Templates</code> 1.1.0 the slices named the reference app&#39;s own child collection unconditionally,
-          which did not compile on an aggregate shaped differently.)</p>
+          navigation eager-loads it, and leaving the parameter off passes an empty list. The name goes straight
+          into <code>nameof(...)</code>, so pass one your aggregate actually has (<code>Comments</code> is the only one a scaffolded
+          aggregate owns). Before <code>MMCA.Templates</code> 1.1.0 the slices named the reference app&#39;s own child
+          collection unconditionally, which did not compile on an aggregate shaped differently.</p>
           <p>Handlers are convention-scanned by Scrutor, so there is no DI registration to add. Two things do
           need you:</p>
           <ul>

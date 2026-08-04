@@ -199,11 +199,9 @@ code around them:
 ```bash
 cd Source/Modules/Orders/Contoso.Support.Orders.Application/Orders/UseCases
 
-dotnet new mmca-command -n CancelOrder --app Contoso.Support --module Orders \
-  --aggregate Order --domain-method Cancel
+dotnet new mmca-command -n CancelOrder --app Contoso.Support --module Orders --aggregate Order --domain-method Cancel
 
-dotnet new mmca-query -n GetOrderByNumber --app Contoso.Support --module Orders \
-  --aggregate Order --child-collection Lines
+dotnet new mmca-query -n GetOrderByNumber --app Contoso.Support --module Orders --aggregate Order --child-collection Comments
 ```
 
 Handlers, validators, and mappers are convention-scanned, so there is no DI registration to add.
@@ -211,16 +209,77 @@ Three things do need you.
 
 **Write the `--domain-method` on your aggregate first.** The generated handler *calls* it, and the
 scaffold cannot invent your business rule, so until the method exists the slice does not compile:
-`'Order' does not contain a definition for 'Cancel'`. Add it returning `Result` rather than throwing
-(that is what lets the handler short-circuit on `IsFailure` and the edge map the failure to RFC 9457
-ProblemDetails), guarded by an `OrderInvariants` rule wherever the check is reusable, and raising
-`AddDomainEvent(new OrderChanged(DomainEntityState.Updated, Id))` on success. `ChangeStatus` in
-[Phase 3a](common-BUILD-BY-HAND.md#3a-domain-aggregate-invariants-events) is the shape to copy.
+`'Order' does not contain a definition for 'Cancel'`. Here is the whole of it for `--domain-method
+Cancel`, in the three files it touches.
+
+A new lifecycle state needs a member. The scaffolded enum has four:
+
+```csharp
+// Source/Modules/Orders/Contoso.Support.Orders.Shared/Orders/OrderStatus.cs
+public enum OrderStatus
+{
+    Open = 0,
+    InProgress = 1,
+    Resolved = 2,
+    Closed = 3,
+    Cancelled = 4,
+}
+```
+
+The rule goes in the invariants class, not in the method, so it can be composed with
+`Result.Combine` and asserted directly in a domain test:
+
+```csharp
+// Source/Modules/Orders/Contoso.Support.Orders.Domain/Orders/OrderInvariants.cs
+public static Result EnsureStatusAllowsCancel(OrderStatus status, string source)
+    => status is OrderStatus.Resolved or OrderStatus.Closed
+        ? Result.Failure(Error.Invariant(
+            code: "Order.Cancel.AlreadyFinished",
+            message: "A resolved or closed order cannot be cancelled.",
+            source: source,
+            target: nameof(status)))
+        : Result.Success();
+```
+
+And the method itself:
+
+```csharp
+// Source/Modules/Orders/Contoso.Support.Orders.Domain/Orders/Order.cs
+public Result Cancel()
+{
+    if (Status == OrderStatus.Cancelled)
+    {
+        return Result.Success();
+    }
+
+    var validation = OrderInvariants.EnsureStatusAllowsCancel(Status, nameof(Cancel));
+    if (validation.IsFailure)
+    {
+        return validation;
+    }
+
+    Status = OrderStatus.Cancelled;
+    AddDomainEvent(new OrderChanged(DomainEntityState.Updated, Id));
+
+    return Result.Success();
+}
+```
+
+Four things in that shape are the conventions, not decoration. It returns `Result` rather than
+throwing, which is what lets the handler short-circuit on `IsFailure` and the edge map the failure to
+RFC 9457 ProblemDetails. Cancelling an already-cancelled order succeeds rather than failing, so a
+retried command is not an error. `AddDomainEvent` is what makes the change observable in-process
+after `SaveChanges`. And the mutation goes through the aggregate, never through the handler setting
+`Status` itself. `ChangeStatus` in
+[Phase 3a](common-BUILD-BY-HAND.md#3a-domain-aggregate-invariants-events) is the same shape with a
+different rule.
 
 **Name a child collection when the handler needs one eager-loaded.** Both slices load through
-`GetByIdAsync`, whose `includes:` argument is required, so there is always a list. Add
-`--child-collection Lines` and the handler loads that navigation; leave it off and it passes an empty
-list, which is what you want when the command only touches the aggregate root.
+`GetByIdAsync`, whose `includes:` argument is required, so there is always a list. The
+`--child-collection Comments` above names the one collection a scaffolded `Order` owns; pass whichever
+navigation that handler needs, and pass a name your aggregate actually has, since this is the argument
+that ends up inside `nameof(...)`. Leave the parameter off and the handler passes an empty list, which
+is what you want when the command only touches the aggregate root.
 
 **Keep the query's `CacheKey` inside your module's `*CacheKeys.Prefix`,** because a key that drifts
 out of the prefix goes stale silently.
