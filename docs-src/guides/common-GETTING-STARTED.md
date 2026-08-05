@@ -303,6 +303,78 @@ its exact command.
 
 ---
 
+## Surface the slice at the edge
+
+The scaffold stops at the handler, and the template's closing instructions tell you to map the
+command in your module's controller. Every write in the generated app follows the same four touch
+points, with `ChangeStatus` as the worked example to mirror in each one.
+
+**A request record in Shared**, carrying only the payload; the order id comes from the route, the
+same split `ChangeOrderStatusRequest` uses:
+
+```csharp
+// Source/Modules/Orders/Contoso.Support.Orders.Shared/Orders/TransferOrderRequest.cs
+public sealed record TransferOrderRequest(int RequesterUserId);
+```
+
+**A controller endpoint.** Reads come from `EntityControllerBase`; writes inject their handler
+directly. Add `ICommandHandler<TransferOrderCommand, Result> transferHandler` to the controller's
+primary constructor and map it:
+
+```csharp
+/// <summary>Transfers an order to another requester.</summary>
+[HttpPut("{id}/transfer")]
+[ProducesResponseType(StatusCodes.Status204NoContent)]
+[ProducesResponseType(StatusCodes.Status400BadRequest)]
+[ProducesResponseType(StatusCodes.Status404NotFound)]
+public async Task<IActionResult> TransferAsync(
+    OrderIdentifierType id,
+    TransferOrderRequest request,
+    CancellationToken cancellationToken)
+{
+    ArgumentNullException.ThrowIfNull(request);
+
+    var result = await transferHandler.HandleAsync(
+        new TransferOrderCommand(id, request.RequesterUserId),
+        cancellationToken).ConfigureAwait(false);
+    return result.IsFailure ? HandleFailure(result.Errors) : NoContent();
+}
+```
+
+The command returns plain `Result`, so success maps to `204 No Content`; a command that returns the
+refreshed DTO maps to `Ok(result.Value)` the way `ChangeStatusAsync` does.
+
+**A method on the typed client** (`SupportApiClient` in the UI host), which runs server-side and
+reaches the API through Aspire service discovery, so there is no CORS and no token:
+
+```csharp
+public async Task TransferOrderAsync(int id, int requesterUserId, CancellationToken cancellationToken = default)
+{
+    using var response = await httpClient
+        .PutAsJsonAsync(string.Create(CultureInfo.InvariantCulture, $"/Orders/{id}/transfer"), new { RequesterUserId = requesterUserId }, cancellationToken)
+        .ConfigureAwait(false);
+    await ServiceExceptionHelper.ThrowIfDomainExceptionAsync(response, cancellationToken).ConfigureAwait(false);
+    response.EnsureSuccessStatusCode();
+}
+```
+
+`ThrowIfDomainExceptionAsync` is the half that matters: it reads the ProblemDetails body so the page
+surfaces the domain message instead of a bare 400.
+
+**The page plus its resource pair.** Add a panel to `OrderDetail.razor` shaped like the Status one (a
+`MudNumericField` for the new requester id and a button), with a `@code` handler shaped like
+`ChangeStatusAsync`: call `Api.TransferOrderAsync(Id, _transferRequesterUserId)`, `Snackbar` the
+outcome, reload. Every new `L[...]` key needs an entry in **both** `OrderDetail.resx` and
+`OrderDetail.es.resx`; a key missing from one language renders as the raw key name, not a fallback.
+
+Two conventions pay off here without extra work. The command's `ICacheInvalidating` prefix means the
+page's reload after a transfer reads fresh data, not a stale cache entry. And transferring a closed
+order exercises the whole error pipeline end to end: the invariant fails, `HandleFailure` maps it to
+RFC 9457 ProblemDetails, `ThrowIfDomainExceptionAsync` extracts it, and the snackbar shows "A closed
+order cannot be transferred to another requester."
+
+---
+
 ## Then what
 
 - **Upgrade the framework.** Bump every `MMCA.Common.*` entry in `Directory.Packages.props` together,
