@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>Build MMCA.ECommerce: a Two-Module Store from the Templates · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="MMCA.ECommerce is the simplest e-commerce application on the MMCA.Common framework: a Products catalog module and an Orders module with line items,…">
+  <link rel="canonical" href="https://ivanball.github.io/docs/guides/common-ECOMMERCE-SAMPLE.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="Build MMCA.ECommerce: a Two-Module Store from the Templates">
+  <meta property="og:description" content="MMCA.ECommerce is the simplest e-commerce application on the MMCA.Common framework: a Products catalog module and an Orders module with line items,…">
+  <meta property="og:url" content="https://ivanball.github.io/docs/guides/common-ECOMMERCE-SAMPLE.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Build MMCA.ECommerce: a Two-Module Store from the Templates">
+  <meta name="twitter:description" content="MMCA.ECommerce is the simplest e-commerce application on the MMCA.Common framework: a Products catalog module and an Orders module with line items,…">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Guides & Specifications","item":"https://ivanball.github.io/docs/guides/index.html"},{"@type":"ListItem","position":4,"name":"Common · Build MMCA.ECommerce: a Two-Module Store from the Templates","item":"https://ivanball.github.io/docs/guides/common-ECOMMERCE-SAMPLE.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/guides/index.html">Guides &amp; Specifications</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">Common · Build MMCA.ECommerce: a Two-Module Store from the Templates</span>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All guides</summary>
+        <nav class="doc-nav" aria-label="Guides &amp; Specifications">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="adc-ACCESSIBILITY-SCREENREADER-PASS.html">ADC · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="adc-IntegrationTestReworkPlan.html">ADC · Integration-Test Tier Rework Plan (RemediationBacklog #14)</a></li>
+        <li><a href="adc-NavigationFlow.html">ADC · Navigation Flow</a></li>
+        <li><a href="adc-specifications.html">ADC · Business Specifications</a></li>
+        <li><a href="common-ACCESSIBILITY.html">Common · Accessibility (rubric §21)</a></li>
+        <li><a href="common-BUILD-BY-HAND.html">Common · Building on MMCA.Common by Hand</a></li>
+        <li><a href="common-COST.html">Common · Cost &amp; FinOps Notes (rubric §31)</a></li>
+        <li><a href="common-ECOMMERCE-SAMPLE.html" aria-current="page">Common · Build MMCA.ECommerce: a Two-Module Store from the Templates</a></li>
+        <li><a href="common-GETTING-STARTED.html">Common · Getting Started: Build a New App on MMCA.Common</a></li>
+        <li><a href="common-RESILIENCE.html">Common · Resilience &amp; Business Continuity (rubric §29)</a></li>
+        <li><a href="common-RESPONSIVE.html">Common · Responsive Design &amp; Cross-Browser Support (rubric §22)</a></li>
+        <li><a href="common-TEMPLATES.html">Common · Templates: scaffolding an MMCA app</a></li>
+        <li><a href="common-VERSIONING.html">Common · Versioning &amp; Breaking-Change Policy</a></li>
+        <li><a href="store-ACCESSIBILITY-SCREENREADER-PASS.html">Store · Manual Screen-Reader Pass: Runbook (§21 Accessibility)</a></li>
+        <li><a href="store-BusinessWorkflows.html">Store · Business Workflow Analysis</a></li>
+        <li><a href="store-NavigationFlow.html">Store · Navigation Flow</a></li>
+        <li><a href="store-Specification.html">Store · Business Specification Document</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Guides &amp; specifications</p>
+          <h1 id="build-mmcaecommerce-a-two-module-store-from-the-templates">Build MMCA.ECommerce: a Two-Module Store from the Templates</h1>
+          <p><a href="https://github.com/ivanball/MMCA.ECommerce" target="_blank" rel="noopener">MMCA.ECommerce</a> is the simplest e-commerce application
+          on the <a href="https://www.nuget.org/packages?q=MMCA.Common" target="_blank" rel="noopener">MMCA.Common</a> framework: a <strong>Products</strong> catalog
+          module and an <strong>Orders</strong> module with line items, behind a REST API host and a Blazor Server +
+          MudBlazor UI host, orchestrated by Aspire. No Identity module, no payment provider, no search: two
+          aggregates, wired end to end through all five layers, with the architecture fitness rules watching.</p>
+          <p>This guide builds it from nothing, and the point is <em>how little of it you type</em>. The
+          <a href="common-GETTING-STARTED.html">getting-started guide</a> scaffolds one module and stops; this one takes
+          the same scaffold to a working two-module domain. The <code>MMCA.Templates</code> pack generates the solution,
+          both modules, the hosts, the tests, and the migrations projects; your hands touch three things: the
+          wire-ups <code>dotnet new</code> cannot patch into existing files, the domain code that is genuinely yours, and
+          the UI pages that show it. Every step below maps to real, build-verified code in the
+          <a href="https://github.com/ivanball/MMCA.ECommerce" target="_blank" rel="noopener">MMCA.ECommerce repo</a>, so wherever this guide abbreviates,
+          the repo is the full answer.</p>
+          <hr>
+          <h2 id="before-you-start">Before you start</h2>
+          <ul>
+          <li><strong>.NET 10 SDK</strong> (the framework targets <code>net10.0</code> with <code>LangVersion: preview</code>).</li>
+          <li><strong>Docker Desktop</strong> (Aspire provisions SQL Server as a container).</li>
+          <li><strong>EF Core tools</strong>: <code>dotnet tool install --global dotnet-ef</code>.</li>
+          </ul>
+          <p>No credentials, tokens, or extra feeds: <code>MMCA.Templates</code> and every <code>MMCA.Common.*</code> package restore
+          from nuget.org (<a href="../adr/053-dual-registry-package-publishing.html">ADR-053</a>).</p>
+          <hr>
+          <h2 id="1-install-the-template-pack">1. Install the template pack</h2>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet new install MMCA.Templates</code></pre>
+          <h2 id="2-generate-the-solution-with-the-products-module">2. Generate the solution with the Products module</h2>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet new mmca-app -n MMCA.ECommerce --module Products --aggregate Product
+          <span class="hljs-built_in">cd</span> MMCA.ECommerce</code></pre>
+          <p>One command, and the whole monolith exists: the Products module across Shared, Domain, Application,
+          Infrastructure, and API, the REST host, the Blazor UI host, the Aspire AppHost, a migrations project
+          for the module&#39;s database, and three test projects including the architecture fitness rules.</p>
+          <p>Get your green baseline before changing anything:</p>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet build MMCA.ECommerce.slnx
+          dotnet <span class="hljs-built_in">test</span>  --solution MMCA.ECommerce.slnx</code></pre>
+          <p>That is a warning-free build under five analyzers at error severity and 90 passing tests, with no
+          database needed. This baseline is the line you bisect against later.</p>
+          <h2 id="3-add-the-orders-module">3. Add the Orders module</h2>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet new mmca-module -n Orders --app MMCA.ECommerce --aggregate Order</code></pre>
+          <p>Eight more projects appear (the five layers, two test projects, one migrations project). <code>dotnet new</code>
+          cannot patch files that already exist, so the template prints the wire-ups it needs from you. Here
+          they are, concretely, for this app:</p>
+          <p><strong>a. Add the projects to the solution:</strong></p>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet sln MMCA.ECommerce.slnx add Source/Modules/Orders/*/*.csproj Tests/Modules/Orders/*/*.csproj Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Orders/*.csproj</code></pre>
+          <p><strong>b. Reference the module from the host and the fitness tests.</strong> In
+          <code>Source/Hosts/MMCA.ECommerce.Web/MMCA.ECommerce.Web.csproj</code>, add <code>ProjectReference</code>s to
+          <code>MMCA.ECommerce.Orders.API</code> and <code>MMCA.ECommerce.Migrations.SqlServer.Orders</code>. In
+          <code>Tests/Architecture/MMCA.ECommerce.Architecture.Tests/MMCA.ECommerce.Architecture.Tests.csproj</code>, add
+          <code>ProjectReference</code>s to <strong>all five</strong> Orders layer projects.</p>
+          <p><strong>c. Link the identifier alias solution-wide.</strong> In <code>Directory.Build.props</code>, duplicate the Products
+          <code>&lt;Compile Include ... Link&gt;</code> block for
+          <code>Source\Modules\Orders\MMCA.ECommerce.Orders.Shared\MMCA.ECommerce.Orders.GlobalUsings.IdentifierType.cs</code>
+          with <code>Condition=&quot;&#39;$(MSBuildProjectName)&#39; != &#39;MMCA.ECommerce.Orders.Shared&#39;&quot;</code>.</p>
+          <p><strong>d. Register the module in the architecture map.</strong> Five lines in
+          <code>Tests/Architecture/MMCA.ECommerce.Architecture.Tests/ECommerceArchitectureMap.cs</code>, one per layer. A
+          module missing from the map is silently not covered by the layering and isolation rules.</p>
+          <p><strong>e. Register the error translations.</strong> In <code>Source/Hosts/MMCA.ECommerce.Web/Program.cs</code>, next to the
+          Products line:</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">services.AddErrorResources&lt;OrdersErrorResources&gt;();</code></pre>
+          <p><strong>f. Give the module its own database.</strong> This is the one step the template&#39;s printed instructions do
+          not cover, and it matters: every module database carries its own <code>OutboxMessages</code>/<code>InboxMessages</code>
+          tables in <code>dbo</code>, so two modules migrated into one database would collide on them. One database per
+          module is also exactly the topology that makes extraction free later
+          (<a href="../adr/006-database-per-service.html">ADR-006</a>). In the AppHost:</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> productsDb = sql.AddDatabase(<span class="hljs-string">&quot;ecommerce-products&quot;</span>, <span class="hljs-string">&quot;ECommerce_Products&quot;</span>);
+          <span class="hljs-keyword">var</span> ordersDb = sql.AddDatabase(<span class="hljs-string">&quot;ecommerce-orders&quot;</span>, <span class="hljs-string">&quot;ECommerce_Orders&quot;</span>);
+          
+          <span class="hljs-keyword">var</span> web = builder.AddProject&lt;Projects.MMCA_ECommerce_Web&gt;(<span class="hljs-string">&quot;web&quot;</span>)
+              .WithSQLServerDataSource(productsDb, <span class="hljs-string">&quot;Products&quot;</span>)
+              .WithSQLServerDataSource(ordersDb, <span class="hljs-string">&quot;Orders&quot;</span>)
+              .WaitFor(sql)
+              .WithExternalHttpEndpoints();</code></pre>
+          <p>And in <code>Source/Hosts/MMCA.ECommerce.Web/appsettings.json</code>, enable the module and map each logical
+          source to its connection string and migrations assembly (the <code>DataSources</code> section is the
+          database-per-module routing table; Aspire overrides the connection strings at run time):</p>
+          <pre class="doc-pre" data-lang="JSON"><code class="language-json hljs"><span class="hljs-attr">&quot;Modules&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+            <span class="hljs-attr">&quot;Products&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;Enabled&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">true</span></span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;Orders&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;Enabled&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">true</span></span> <span class="hljs-punctuation">}</span>
+          <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+          <span class="hljs-attr">&quot;DataSources&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+            <span class="hljs-attr">&quot;Products&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+              <span class="hljs-attr">&quot;SQLServerConnectionString&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Server=localhost;Database=ECommerce_Products;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=True&quot;</span><span class="hljs-punctuation">,</span>
+              <span class="hljs-attr">&quot;SQLServerMigrationsAssembly&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;MMCA.ECommerce.Migrations.SqlServer.Products&quot;</span>
+            <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+            <span class="hljs-attr">&quot;Orders&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+              <span class="hljs-attr">&quot;SQLServerConnectionString&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Server=localhost;Database=ECommerce_Orders;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=True&quot;</span><span class="hljs-punctuation">,</span>
+              <span class="hljs-attr">&quot;SQLServerMigrationsAssembly&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;MMCA.ECommerce.Migrations.SqlServer.Orders&quot;</span>
+            <span class="hljs-punctuation">}</span>
+          <span class="hljs-punctuation">}</span></code></pre>
+          <p>In the same file, <strong>delete the <code>SQLServerMigrationsAssembly</code> line from the top-level
+          <code>ConnectionStrings</code> section</strong> (keep the connection string itself: it is the <code>Default</code> fallback the
+          <code>[Required]</code> validation and health checks use). The scaffold pinned the Products assembly there
+          because it had one module and no <code>DataSources</code> section. With two modules under Aspire, each
+          <code>WithSQLServerDataSource</code> call also rewrites the top-level connection string and the last one wins,
+          so one module always collapses onto the <code>Default</code> source; if <code>Default</code> still pins the <em>other</em>
+          module&#39;s migrations assembly, startup fails fast with &quot;conflicting SQLServerMigrationsAssembly
+          values&quot;. Once every module declares its assembly in its own <code>DataSources</code> entry, the top-level pin
+          has no remaining job.</p>
+          <p>Build and test again: still green, now with the Orders module&#39;s scaffolded tests included. There is
+          no new kind of thing in the solution, just a second copy of the shape you already had.</p>
+          <h2 id="4-reshape-products-into-a-catalog-product">4. Reshape Products into a catalog product</h2>
+          <p>Both scaffolded modules arrive as the template&#39;s worked example (a title, a description, a status,
+          a growable child collection): a placeholder domain in <em>your</em> namespaces, meant to be reshaped. The
+          reshape is ordinary editing, and every convention stays: <code>Result</code>-returning factory, invariants
+          composed with <code>Result.Combine</code>, guarded mutations raising domain events, the caching pair, the
+          integration event through the outbox.</p>
+          <p><code>Product</code> becomes the whole catalog entry: <code>Name</code>, <code>Description</code>, <code>Price</code>. The child entity and the
+          status go away entirely, which makes Products the minimal single-entity module:</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/Product.cs</span>
+          [<span class="hljs-meta">IdValueGenerated</span>]
+          <span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">Product</span> : <span class="hljs-title">AuditableAggregateRootEntity</span>&lt;<span class="hljs-title">ProductIdentifierType</span>&gt;
+          {
+              <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> Name { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }
+              <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> Description { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }
+              <span class="hljs-keyword">public</span> <span class="hljs-built_in">decimal</span> Price { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }
+          
+              <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> Result&lt;Product&gt; <span class="hljs-title">Create</span>(<span class="hljs-params">
+                  ProductIdentifierType? id, <span class="hljs-built_in">string</span> name, <span class="hljs-built_in">string</span> description, <span class="hljs-built_in">decimal</span> price</span>)</span>
+              { <span class="hljs-comment">/* Result.Combine of the three invariants; no &quot;Added&quot; domain event: the id is
+                   database-generated, creation is signalled after commit by ProductCreatedIntegrationEvent */</span> }
+          
+              <span class="hljs-function"><span class="hljs-keyword">public</span> Result <span class="hljs-title">UpdateDetails</span>(<span class="hljs-params"><span class="hljs-built_in">string</span> name, <span class="hljs-built_in">string</span> description, <span class="hljs-built_in">decimal</span> price</span>)</span> { <span class="hljs-comment">/* raises ProductChanged */</span> }
+              <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">override</span> Result <span class="hljs-title">Delete</span>()</span> { <span class="hljs-comment">/* soft delete; raises ProductChanged(Deleted) */</span> }
+          }</code></pre>
+          <p>The full change set, layer by layer (each file is small; follow the
+          <a href="https://github.com/ivanball/MMCA.ECommerce/tree/main/Source/Modules/Products" target="_blank" rel="noopener">repo</a> where this
+          table abbreviates):</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Layer</th>
+          <th>Change</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td>Domain</td>
+          <td><code>Product</code> as above; <code>ProductInvariants</code> gains <code>EnsurePriceIsValid</code>; delete <code>ProductComment</code></td>
+          </tr>
+          <tr>
+          <td>Shared</td>
+          <td><code>ProductDTO { Id, RowVersion, Name, Description, Price }</code>; create/update requests to match; <code>ProductOpenedIntegrationEvent</code> renamed <code>ProductCreatedIntegrationEvent(ProductId, Name, Price)</code>; delete comment/status DTOs and requests</td>
+          </tr>
+          <tr>
+          <td>Application</td>
+          <td>keep the Create/Update/Delete/GetById use cases (reshaped payloads); delete the comment and status slices; the caching pair stays keyed through <code>ProductCacheKeys</code></td>
+          </tr>
+          <tr>
+          <td>Infrastructure</td>
+          <td><code>ProductConfiguration</code>: <code>Name</code> max 200, <code>Description</code> max 4000, <code>Price decimal(18,2)</code>; delete the comment configuration; the module context drops to one <code>DbSet&lt;Product&gt;</code></td>
+          </tr>
+          <tr>
+          <td>API</td>
+          <td><code>ProductsController</code> keeps the inherited reads plus <code>POST /Products</code>, <code>PUT /Products/{id}</code>, <code>DELETE /Products/{id}</code>; error resources cover exactly the codes the invariants use, in both languages</td>
+          </tr>
+          <tr>
+          <td>Tests</td>
+          <td>the domain and application suites assert the new invariants and use cases (29 tests in the sample)</td>
+          </tr>
+          </tbody></table></div>
+          <h2 id="5-reshape-orders-into-an-order-with-line-items">5. Reshape Orders into an order with line items</h2>
+          <p>Orders keeps the child-collection pattern the template scaffolded, retargeted: <code>OrderComment</code>
+          becomes <code>OrderItem</code>, and the free-form status becomes a lifecycle.</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Orders/MMCA.ECommerce.Orders.Domain/Orders/Order.cs</span>
+          [<span class="hljs-meta">IdValueGenerated</span>]
+          <span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">Order</span> : <span class="hljs-title">AuditableAggregateRootEntity</span>&lt;<span class="hljs-title">OrderIdentifierType</span>&gt;
+          {
+              <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> CustomerName { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }
+              <span class="hljs-keyword">public</span> OrderStatus Status { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }          <span class="hljs-comment">// Pending -&gt; Paid -&gt; Shipped; Cancelled from Pending/Paid</span>
+          
+              [<span class="hljs-meta">Navigation(IsCollection = true)</span>]
+              <span class="hljs-keyword">public</span> IReadOnlyCollection&lt;OrderItem&gt; Items =&gt; _items.AsReadOnly();
+              <span class="hljs-keyword">public</span> <span class="hljs-built_in">decimal</span> Total =&gt; _items.Where(i =&gt; !i.IsDeleted).Sum(i =&gt; i.UnitPrice * i.Quantity);
+          
+              <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> Result&lt;Order&gt; <span class="hljs-title">Create</span>(<span class="hljs-params">OrderIdentifierType? id, <span class="hljs-built_in">string</span> customerName</span>)</span> { <span class="hljs-comment">/* Status = Pending */</span> }
+              <span class="hljs-function"><span class="hljs-keyword">public</span> Result&lt;OrderItem&gt; <span class="hljs-title">AddItem</span>(<span class="hljs-params">OrderItemIdentifierType? id, <span class="hljs-built_in">int</span> productId, <span class="hljs-built_in">string</span> productName, <span class="hljs-built_in">decimal</span> unitPrice, <span class="hljs-built_in">int</span> quantity</span>)</span> { }
+              <span class="hljs-function"><span class="hljs-keyword">public</span> Result <span class="hljs-title">ChangeItemQuantity</span>(<span class="hljs-params">OrderItemIdentifierType itemId, <span class="hljs-built_in">int</span> quantity</span>)</span> { }
+              <span class="hljs-function"><span class="hljs-keyword">public</span> Result <span class="hljs-title">RemoveItem</span>(<span class="hljs-params">OrderItemIdentifierType itemId</span>)</span> { }
+              <span class="hljs-function"><span class="hljs-keyword">public</span> Result <span class="hljs-title">ChangeStatus</span>(<span class="hljs-params">OrderStatus newStatus</span>)</span> { <span class="hljs-comment">/* transition guard; Shipped and Cancelled are terminal */</span> }
+          }</code></pre>
+          <p>Two decisions here carry the architecture lesson of the whole sample:</p>
+          <ul>
+          <li><strong><code>OrderItem</code> snapshots <code>ProductId</code>, <code>ProductName</code>, and <code>UnitPrice</code> at add time.</strong> The Orders
+          module has <strong>zero</strong> references to the Products module: the module isolation fitness rule fails the
+          build otherwise. What a customer ordered at yesterday&#39;s price is historical fact, so the snapshot
+          is not denormalization guilt: it is the correct domain model, and it is what keeps the module
+          extractable into its own service (<a href="../adr/008-service-extraction-topology.html">ADR-008</a>).</li>
+          <li><strong>Item mutations are Pending-only, enforced by an invariant</strong> (<code>Order.ItemsLocked</code>), and status
+          transitions follow a guarded lifecycle (<code>Order.InvalidStatusTransition</code>). Both surface through the
+          whole error pipeline: <code>Result.Failure</code> in the domain, RFC 9457 ProblemDetails at the edge, a
+          localized snackbar message in the UI.</li>
+          </ul>
+          <p>The layer-by-layer sweep mirrors the Products table (full files in the
+          <a href="https://github.com/ivanball/MMCA.ECommerce/tree/main/Source/Modules/Orders" target="_blank" rel="noopener">repo</a>): DTOs and
+          requests for items and status changes, <code>AddItem</code>/<code>ChangeItemQuantity</code>/<code>RemoveItem</code>/<code>ChangeStatus</code>
+          use cases beside the scaffolded Create/Update/Delete/GetById, <code>OrderItemConfiguration</code> with
+          <code>UnitPrice decimal(18,2)</code>, controller routes <code>POST /Orders/{id}/items</code>,
+          <code>PUT /Orders/{id}/items/{itemId}</code>, <code>DELETE /Orders/{id}/items/{itemId}</code>, <code>PUT /Orders/{id}/status</code>,
+          and the renamed <code>OrderPlacedIntegrationEvent</code>. The sample&#39;s Orders suites hold 56 tests, including
+          the full status lifecycle and the cascade soft-delete of items.</p>
+          <h2 id="6-point-the-ui-at-the-new-domain">6. Point the UI at the new domain</h2>
+          <p>The scaffolded Blazor host already has the load-bearing parts: the typed <code>ECommerceApiClient</code>
+          calling the API server-side through Aspire service discovery (no CORS, no token), the
+          <code>en</code>/<code>es</code> resource pairs, and the theme/culture chrome. Reshape the Products pages to
+          Name/Description/Price, and add two Orders pages that mirror them:</p>
+          <ul>
+          <li><code>Orders.razor</code>: create an order by customer name, list orders.</li>
+          <li><code>OrderDetail.razor</code>: edit the customer name, walk the status lifecycle (the page offers only the
+          transitions the domain allows), and manage items while the order is Pending. The add-item form is
+          a product picker filled from <code>GetProductsAsync()</code>: selecting a product snapshots its id, name, and
+          price into the request, which is the UI half of the module-isolation decision above.</li>
+          </ul>
+          <p>Every string goes through the <code>L[...]</code> localizer, and every key needs an entry in both the <code>.resx</code>
+          and <code>.es.resx</code> file beside the page. The
+          <a href="https://github.com/ivanball/MMCA.ECommerce/tree/main/Source/Hosts/UI/MMCA.ECommerce.UI.Web" target="_blank" rel="noopener">UI host in the repo</a>
+          is the complete reference.</p>
+          <h2 id="7-regenerate-the-migrations">7. Regenerate the migrations</h2>
+          <p>The scaffolded Products migration still describes the template&#39;s shape, and Orders has none yet.
+          Delete the files under
+          <code>Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Products/Migrations/</code> and generate both fresh
+          (<code>migrations add</code> never opens a database connection):</p>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet ef migrations add InitialCreate \
+            --project Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Products \
+            --startup-project Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Products \
+            --context SQLServerDbContext
+          
+          dotnet ef migrations add InitialCreate \
+            --project Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Orders \
+            --startup-project Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Orders \
+            --context SQLServerDbContext</code></pre>
+          <p>Each migration creates its module&#39;s tables in the module schema plus that database&#39;s own
+          outbox/inbox tables: two databases, two outboxes, no contention.</p>
+          <h2 id="8-the-two-one-time-fixups-then-run-it">8. The two one-time fixups, then run it</h2>
+          <p>Apply the two fixups the scaffold deliberately leaves to you (they are name-dependent, so no
+          generated value could be right): re-sort the using directives and freeze your integration-event
+          wire contract. Both are described in the
+          <a href="common-GETTING-STARTED.html#6-the-two-one-time-fixups">getting-started guide</a>; the sample has both
+          applied, so its <code>IntegrationEventContractTests</code> freezes <code>ProductCreatedIntegrationEvent</code> and
+          <code>OrderPlacedIntegrationEvent</code> exactly as shipped.</p>
+          <p>Then, from a <strong>real, interactive terminal</strong> (launched headless, the AppHost stalls at control-plane
+          init and looks like a hang):</p>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet run --project Source/Hosting/MMCA.ECommerce.AppHost</code></pre>
+          <p>The dashboard shows <code>sql</code>, <code>web</code>, and <code>ui</code>. Open <strong><code>ui</code></strong>: create a couple of products with prices,
+          place an order, add items from the product picker, watch the total, mark it Paid then Shipped, and
+          try to add an item afterwards to see the domain say no, in your browser&#39;s language. The app runs
+          issuer-less by design: no Identity module ships in this sample, the API is <code>[AllowAnonymous]</code>, and
+          adding real RS256/JWKS auth later is the getting-started guide&#39;s &quot;Then what&quot; path.</p>
+          <hr>
+          <h2 id="verification-checklist">Verification checklist</h2>
+          <ol>
+          <li>Baseline green immediately after <code>mmca-app</code>, before any edit.</li>
+          <li>After the Orders wire-ups: still green, both modules&#39; tests running.</li>
+          <li>After both reshapes: <code>dotnet build MMCA.ECommerce.slnx</code> warning-free and
+          <code>dotnet test --solution MMCA.ECommerce.slnx</code> fully green (the sample lands at 158 tests), with
+          the architecture rules passing: layering, module isolation, event conventions, and your frozen
+          wire contract.</li>
+          <li>Both <code>InitialCreate</code> migrations generated, each with its module&#39;s tables plus its own
+          <code>OutboxMessages</code> table.</li>
+          <li>Interactively: products created, an order walked Pending to Shipped, items locked after Pending,
+          and an outbox row written per placed order.</li>
+          </ol>
+          <hr>
+          <h2 id="where-to-look-next">Where to look next</h2>
+          <ul>
+          <li><strong><a href="https://github.com/ivanball/MMCA.ECommerce" target="_blank" rel="noopener">MMCA.ECommerce</a></strong>: the finished result of this
+          guide, build- and test-verified.</li>
+          <li><strong><a href="common-GETTING-STARTED.html">Getting started</a></strong>: the single-module path, the vertical-slice
+          templates (<code>mmca-command</code> / <code>mmca-query</code>), and the framework-upgrade and extraction notes.</li>
+          <li><strong><a href="common-TEMPLATES.html">Templates</a></strong>: every parameter of all four templates.</li>
+          <li><strong><a href="common-BUILD-BY-HAND.html">Building by hand</a></strong>: what each generated file does and why.</li>
+          <li><strong><a href="https://github.com/ivanball/MMCA.Helpdesk" target="_blank" rel="noopener">MMCA.Helpdesk</a></strong>: the reference app the templates
+          are staged from.</li>
+          </ul>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/guides/common-ECOMMERCE-SAMPLE.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#before-you-start">Before you start</a></li>
+            <li><a href="#1-install-the-template-pack">1. Install the template pack</a></li>
+            <li><a href="#2-generate-the-solution-with-the-products-module">2. Generate the solution with the Products module</a></li>
+            <li><a href="#3-add-the-orders-module">3. Add the Orders module</a></li>
+            <li><a href="#4-reshape-products-into-a-catalog-product">4. Reshape Products into a catalog product</a></li>
+            <li><a href="#5-reshape-orders-into-an-order-with-line-items">5. Reshape Orders into an order with line items</a></li>
+            <li><a href="#6-point-the-ui-at-the-new-domain">6. Point the UI at the new domain</a></li>
+            <li><a href="#7-regenerate-the-migrations">7. Regenerate the migrations</a></li>
+            <li><a href="#8-the-two-one-time-fixups-then-run-it">8. The two one-time fixups, then run it</a></li>
+            <li><a href="#verification-checklist">Verification checklist</a></li>
+            <li><a href="#where-to-look-next">Where to look next</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>
