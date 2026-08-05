@@ -164,8 +164,14 @@
           <p>Eight more projects appear (the five layers, two test projects, one migrations project). <code>dotnet new</code>
           cannot patch files that already exist, so the template prints the wire-ups it needs from you. Here
           they are, concretely, for this app:</p>
-          <p><strong>a. Add the projects to the solution:</strong></p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet sln MMCA.ECommerce.slnx add Source/Modules/Orders/*/*.csproj Tests/Modules/Orders/*/*.csproj Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Orders/*.csproj</code></pre>
+          <p><strong>a. Add the projects to the solution.</strong> <code>dotnet sln add</code> does not expand wildcards itself, so the
+          shell has to. In bash the globs below just work; in PowerShell (and cmd) they are passed through
+          literally and dotnet reports &quot;Could not find project or directory&quot;, so expand them explicitly:</p>
+          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-comment"># bash</span>
+          dotnet sln MMCA.ECommerce.slnx add Source/Modules/Orders/*/*.csproj Tests/Modules/Orders/*/*.csproj Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Orders/*.csproj</code></pre>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs"><span class="hljs-comment"># PowerShell</span>
+          dotnet sln MMCA.ECommerce.slnx add (<span class="hljs-built_in">Get-ChildItem</span> Source\Modules\Orders\*\*.csproj).FullName (<span class="hljs-built_in">Get-ChildItem</span> Tests\Modules\Orders\*\*.csproj).FullName (<span class="hljs-built_in">Get-ChildItem</span> Source\Hosting\MMCA.ECommerce.Migrations.SqlServer.Orders\*.csproj).FullName</code></pre>
+          <p>Either way, expect eight <code>Project ... added to the solution</code> lines.</p>
           <p><strong>b. Reference the module from the host and the fitness tests.</strong> In
           <code>Source/Hosts/MMCA.ECommerce.Web/MMCA.ECommerce.Web.csproj</code>, add <code>ProjectReference</code>s to
           <code>MMCA.ECommerce.Orders.API</code> and <code>MMCA.ECommerce.Migrations.SqlServer.Orders</code>. In

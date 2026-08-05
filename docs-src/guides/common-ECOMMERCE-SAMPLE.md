@@ -65,11 +65,21 @@ Eight more projects appear (the five layers, two test projects, one migrations p
 cannot patch files that already exist, so the template prints the wire-ups it needs from you. Here
 they are, concretely, for this app:
 
-**a. Add the projects to the solution:**
+**a. Add the projects to the solution.** `dotnet sln add` does not expand wildcards itself, so the
+shell has to. In bash the globs below just work; in PowerShell (and cmd) they are passed through
+literally and dotnet reports "Could not find project or directory", so expand them explicitly:
 
 ```bash
+# bash
 dotnet sln MMCA.ECommerce.slnx add Source/Modules/Orders/*/*.csproj Tests/Modules/Orders/*/*.csproj Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Orders/*.csproj
 ```
+
+```powershell
+# PowerShell
+dotnet sln MMCA.ECommerce.slnx add (Get-ChildItem Source\Modules\Orders\*\*.csproj).FullName (Get-ChildItem Tests\Modules\Orders\*\*.csproj).FullName (Get-ChildItem Source\Hosting\MMCA.ECommerce.Migrations.SqlServer.Orders\*.csproj).FullName
+```
+
+Either way, expect eight `Project ... added to the solution` lines.
 
 **b. Reference the module from the host and the fitness tests.** In
 `Source/Hosts/MMCA.ECommerce.Web/MMCA.ECommerce.Web.csproj`, add `ProjectReference`s to
