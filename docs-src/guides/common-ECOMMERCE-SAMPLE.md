@@ -131,6 +131,16 @@ database-per-module routing table; Aspire overrides the connection strings at ru
 }
 ```
 
+In the same file, **delete the `SQLServerMigrationsAssembly` line from the top-level
+`ConnectionStrings` section** (keep the connection string itself: it is the `Default` fallback the
+`[Required]` validation and health checks use). The scaffold pinned the Products assembly there
+because it had one module and no `DataSources` section. With two modules under Aspire, each
+`WithSQLServerDataSource` call also rewrites the top-level connection string and the last one wins,
+so one module always collapses onto the `Default` source; if `Default` still pins the *other*
+module's migrations assembly, startup fails fast with "conflicting SQLServerMigrationsAssembly
+values". Once every module declares its assembly in its own `DataSources` entry, the top-level pin
+has no remaining job.
+
 Build and test again: still green, now with the Orders module's scaffolded tests included. There is
 no new kind of thing in the solution, just a second copy of the shape you already had.
 

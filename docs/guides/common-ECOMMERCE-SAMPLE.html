@@ -211,6 +211,15 @@
               <span class="hljs-attr">&quot;SQLServerMigrationsAssembly&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;MMCA.ECommerce.Migrations.SqlServer.Orders&quot;</span>
             <span class="hljs-punctuation">}</span>
           <span class="hljs-punctuation">}</span></code></pre>
+          <p>In the same file, <strong>delete the <code>SQLServerMigrationsAssembly</code> line from the top-level
+          <code>ConnectionStrings</code> section</strong> (keep the connection string itself: it is the <code>Default</code> fallback the
+          <code>[Required]</code> validation and health checks use). The scaffold pinned the Products assembly there
+          because it had one module and no <code>DataSources</code> section. With two modules under Aspire, each
+          <code>WithSQLServerDataSource</code> call also rewrites the top-level connection string and the last one wins,
+          so one module always collapses onto the <code>Default</code> source; if <code>Default</code> still pins the <em>other</em>
+          module&#39;s migrations assembly, startup fails fast with &quot;conflicting SQLServerMigrationsAssembly
+          values&quot;. Once every module declares its assembly in its own <code>DataSources</code> entry, the top-level pin
+          has no remaining job.</p>
           <p>Build and test again: still green, now with the Orders module&#39;s scaffolded tests included. There is
           no new kind of thing in the solution, just a second copy of the shape you already had.</p>
           <h2 id="4-reshape-products-into-a-catalog-product">4. Reshape Products into a catalog product</h2>
