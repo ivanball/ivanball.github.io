@@ -415,6 +415,9 @@ order cannot be transferred to another requester."
   an existing solution or for understanding what you were handed.
 - **[MMCA.Helpdesk](https://github.com/ivanball/MMCA.Helpdesk)**: the runnable reference app. It *is*
   the template content, staged at pack time, so what you generated is that repo under your own names.
+- **[Build MMCA.ECommerce](common-ECOMMERCE-SAMPLE.md)**: the next step after this guide: the same
+  scaffold taken to a two-module store (Products + Orders with line items), with the minimum
+  hand-written code.
 - **The ADRs** ([index](../adr/README.md)): the *why* behind every pattern you just used.
 - **The [onboarding guide](../onboarding/00-index.md)**: a type-by-type tour of the framework internals.
 - **MMCA.ADC and MMCA.Store**: two complete, production apps to copy patterns from. ADC is the richer
