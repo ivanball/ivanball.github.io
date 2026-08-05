@@ -378,6 +378,59 @@
           to the host and to the fitness rules. The <a href="common-TEMPLATES.html">templates guide</a> lists each one with
           its exact command.</p>
           <hr>
+          <h2 id="surface-the-slice-at-the-edge">Surface the slice at the edge</h2>
+          <p>The scaffold stops at the handler, and the template&#39;s closing instructions tell you to map the
+          command in your module&#39;s controller. Every write in the generated app follows the same four touch
+          points, with <code>ChangeStatus</code> as the worked example to mirror in each one.</p>
+          <p><strong>A request record in Shared</strong>, carrying only the payload; the order id comes from the route, the
+          same split <code>ChangeOrderStatusRequest</code> uses:</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Orders/Contoso.Support.Orders.Shared/Orders/TransferOrderRequest.cs</span>
+          <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">record</span> <span class="hljs-title">TransferOrderRequest</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> RequesterUserId</span>)</span>;</code></pre>
+          <p><strong>A controller endpoint.</strong> Reads come from <code>EntityControllerBase</code>; writes inject their handler
+          directly. Add <code>ICommandHandler&lt;TransferOrderCommand, Result&gt; transferHandler</code> to the controller&#39;s
+          primary constructor and map it:</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment"><span class="hljs-doctag">///</span> <span class="hljs-doctag">&lt;summary&gt;</span>Transfers an order to another requester.<span class="hljs-doctag">&lt;/summary&gt;</span></span>
+          [<span class="hljs-meta">HttpPut(<span class="hljs-string">&quot;{id}/transfer&quot;</span>)</span>]
+          [<span class="hljs-meta">ProducesResponseType(StatusCodes.Status204NoContent)</span>]
+          [<span class="hljs-meta">ProducesResponseType(StatusCodes.Status400BadRequest)</span>]
+          [<span class="hljs-meta">ProducesResponseType(StatusCodes.Status404NotFound)</span>]
+          <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">async</span> Task&lt;IActionResult&gt; <span class="hljs-title">TransferAsync</span>(<span class="hljs-params">
+              OrderIdentifierType id,
+              TransferOrderRequest request,
+              CancellationToken cancellationToken</span>)</span>
+          {
+              ArgumentNullException.ThrowIfNull(request);
+          
+              <span class="hljs-keyword">var</span> result = <span class="hljs-keyword">await</span> transferHandler.HandleAsync(
+                  <span class="hljs-keyword">new</span> TransferOrderCommand(id, request.RequesterUserId),
+                  cancellationToken).ConfigureAwait(<span class="hljs-literal">false</span>);
+              <span class="hljs-keyword">return</span> result.IsFailure ? HandleFailure(result.Errors) : NoContent();
+          }</code></pre>
+          <p>The command returns plain <code>Result</code>, so success maps to <code>204 No Content</code>; a command that returns the
+          refreshed DTO maps to <code>Ok(result.Value)</code> the way <code>ChangeStatusAsync</code> does.</p>
+          <p><strong>A method on the typed client</strong> (<code>SupportApiClient</code> in the UI host), which runs server-side and
+          reaches the API through Aspire service discovery, so there is no CORS and no token:</p>
+          <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">async</span> Task <span class="hljs-title">TransferOrderAsync</span>(<span class="hljs-params"><span class="hljs-built_in">int</span> id, <span class="hljs-built_in">int</span> requesterUserId, CancellationToken cancellationToken = <span class="hljs-literal">default</span></span>)</span>
+          {
+              <span class="hljs-keyword">using</span> <span class="hljs-keyword">var</span> response = <span class="hljs-keyword">await</span> httpClient
+                  .PutAsJsonAsync(<span class="hljs-built_in">string</span>.Create(CultureInfo.InvariantCulture, <span class="hljs-string">$&quot;/Orders/<span class="hljs-subst">{id}</span>/transfer&quot;</span>), <span class="hljs-keyword">new</span> { RequesterUserId = requesterUserId }, cancellationToken)
+                  .ConfigureAwait(<span class="hljs-literal">false</span>);
+              <span class="hljs-keyword">await</span> ServiceExceptionHelper.ThrowIfDomainExceptionAsync(response, cancellationToken).ConfigureAwait(<span class="hljs-literal">false</span>);
+              response.EnsureSuccessStatusCode();
+          }</code></pre>
+          <p><code>ThrowIfDomainExceptionAsync</code> is the half that matters: it reads the ProblemDetails body so the page
+          surfaces the domain message instead of a bare 400.</p>
+          <p><strong>The page plus its resource pair.</strong> Add a panel to <code>OrderDetail.razor</code> shaped like the Status one (a
+          <code>MudNumericField</code> for the new requester id and a button), with a <code>@code</code> handler shaped like
+          <code>ChangeStatusAsync</code>: call <code>Api.TransferOrderAsync(Id, _transferRequesterUserId)</code>, <code>Snackbar</code> the
+          outcome, reload. Every new <code>L[...]</code> key needs an entry in <strong>both</strong> <code>OrderDetail.resx</code> and
+          <code>OrderDetail.es.resx</code>; a key missing from one language renders as the raw key name, not a fallback.</p>
+          <p>Two conventions pay off here without extra work. The command&#39;s <code>ICacheInvalidating</code> prefix means the
+          page&#39;s reload after a transfer reads fresh data, not a stale cache entry. And transferring a closed
+          order exercises the whole error pipeline end to end: the invariant fails, <code>HandleFailure</code> maps it to
+          RFC 9457 ProblemDetails, <code>ThrowIfDomainExceptionAsync</code> extracts it, and the snackbar shows &quot;A closed
+          order cannot be transferred to another requester.&quot;</p>
+          <hr>
           <h2 id="then-what">Then what</h2>
           <ul>
           <li><strong>Upgrade the framework.</strong> Bump every <code>MMCA.Common.*</code> entry in <code>Directory.Packages.props</code> together,
@@ -440,6 +493,7 @@
             <li><a href="#6-the-two-one-time-fixups">6. The two one-time fixups</a></li>
             <li><a href="#what-you-were-handed">What you were handed</a></li>
             <li><a href="#add-your-next-feature">Add your next feature</a></li>
+            <li><a href="#surface-the-slice-at-the-edge">Surface the slice at the edge</a></li>
             <li><a href="#then-what">Then what</a></li>
             <li><a href="#verification-checklist">Verification checklist</a></li>
             <li><a href="#where-to-look-next">Where to look next</a></li>
