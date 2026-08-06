@@ -226,6 +226,15 @@ dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</c
           module&#39;s migrations assembly, startup fails fast with &quot;conflicting SQLServerMigrationsAssembly
           values&quot;. Once every module declares its assembly in its own <code>DataSources</code> entry, the top-level pin
           has no remaining job.</p>
+          <p>Finally, add a top-level <code>Outbox</code> section pinning where handler-published integration events are
+          written. <code>IEventBus</code> persists them to ONE configured outbox source per host, defaulting to
+          <code>Default</code>, and with two modules under Aspire <code>Default</code> is whichever module&#39;s connection string
+          happened to win the top-level slot. Pin it explicitly so event publishing does not depend on wiring
+          order (and so, mid-guide, a created Product does not try to outbox into the not-yet-migrated Orders
+          database and fail with &quot;Invalid object name &#39;dbo.OutboxMessages&#39;&quot;):</p>
+          <pre class="doc-pre" data-lang="JSON"><code class="language-json hljs"><span class="hljs-attr">&quot;Outbox&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">&quot;DatabaseName&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Products&quot;</span>
+<span class="hljs-punctuation">}</span></code></pre>
           <p>Build and test again: still green, now with the Orders module&#39;s scaffolded tests included. There is
           no new kind of thing in the solution, just a second copy of the shape you already had. If curiosity
           makes you run the app now, know that the Orders database has no schema until step 7 creates its

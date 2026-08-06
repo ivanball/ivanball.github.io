@@ -148,6 +148,19 @@ module's migrations assembly, startup fails fast with "conflicting SQLServerMigr
 values". Once every module declares its assembly in its own `DataSources` entry, the top-level pin
 has no remaining job.
 
+Finally, add a top-level `Outbox` section pinning where handler-published integration events are
+written. `IEventBus` persists them to ONE configured outbox source per host, defaulting to
+`Default`, and with two modules under Aspire `Default` is whichever module's connection string
+happened to win the top-level slot. Pin it explicitly so event publishing does not depend on wiring
+order (and so, mid-guide, a created Product does not try to outbox into the not-yet-migrated Orders
+database and fail with "Invalid object name 'dbo.OutboxMessages'"):
+
+```json
+"Outbox": {
+  "DatabaseName": "Products"
+}
+```
+
 Build and test again: still green, now with the Orders module's scaffolded tests included. There is
 no new kind of thing in the solution, just a second copy of the shape you already had. If curiosity
 makes you run the app now, know that the Orders database has no schema until step 7 creates its
