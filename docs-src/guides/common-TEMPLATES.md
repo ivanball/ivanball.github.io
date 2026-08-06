@@ -34,7 +34,10 @@ architecture-fitness rules, with no database needed.
 |---|---|---|
 | `-n, --name` | `MMCA.App` | solution name and root namespace, for example `Contoso.Support` |
 | `-m, --module` | `Tickets` | the first business module, plural PascalCase |
-| `-a, --aggregate` | `Ticket` | that module's aggregate root, singular PascalCase |
+| `-p:a, --aggregate` | `Ticket` | that module's aggregate root, singular PascalCase |
+| `-c, --child` | `Comment` | the aggregate's child entity, singular PascalCase (1.3.0) |
+| `--flat` | off | generate the module with no child collection at all (1.3.0) |
+| `--no-status` | off | generate the module with no status axis (1.3.0) |
 | `-f, --framework-version` | the version the pack was cut against | the `MMCA.Common.*` version to pin |
 | `--local-mmca` | off | emit a `local.props` that builds against `../MMCA.Common/Source` instead of the published packages |
 | `--no-restore` | off | skip the restore after generation |
@@ -43,6 +46,37 @@ The module and aggregate names are independent, so `--module Billing --aggregate
 Everything derived from them follows: routes, the Aspire database resource, the design-time
 connection-string environment variable, the identifier alias, the cache-key prefix, the resource
 strings, and the Blazor pages.
+
+### Shaping the sample module
+
+The three options added in `MMCA.Templates` **1.3.0** decide what the generated aggregate is made of,
+so you stop deleting or renaming the sample's shape by hand after the fact.
+
+`--child` renames the child concept everywhere. The generated type is `<aggregate><child>`, so:
+
+```powershell
+dotnet new mmca-app -n Contoso.Shipping --module Shipments --aggregate Shipment --child Line
+```
+
+gives you a `ShipmentLine` entity and DTO, `AddLine` / `EditLine` / `RemoveLine` use-case slices,
+`/lines` routes on the controller, an `AddLineRequest` / `EditLineRequest` pair, and a
+`ShipmentLineIdentifierType` alias. The plural comes from an English pluralizer (`Line` to `Lines`,
+`Entry` to `Entries`, `Box` to `Boxes`), so an irregular noun is the one case you rename by hand.
+
+`--flat` and `--no-status` remove an axis rather than renaming it. `--flat` drops the child collection
+entirely: no child entity, DTO, requests, mapper, EF configuration, `Add`/`Edit`/`Remove` slices,
+controller endpoints, identifier alias, or tests. `--no-status` drops the status axis: no enum, no
+`ChangeStatus` slice, request or endpoint, no `Status` property, and no status invariant or tests.
+Reach for them when the aggregate genuinely has neither, which is more common than the sample
+suggests: a catalog product, a customer, a price list, a tax rate. Passing both leaves a leaf
+aggregate that is nothing but its own scalar fields, which is the smallest honest starting point the
+pack can generate, and it still arrives with the full five-layer wiring and a green test run.
+`--child` is ignored under `--flat`, since there is no child left to name.
+
+Either flag also drops the sample's checked-in migration, because that migration describes the full
+shape (child table, status column) and would be wrong on arrival. Generate your own `InitialCreate`
+against the shape you asked for; `Migrations/.editorconfig` still ships, since `dotnet ef` never
+recreates it.
 
 **What you get** (names shown for `-n Contoso.Support --module Orders --aggregate Order`):
 
@@ -66,7 +100,8 @@ Tests/
 The `Order` aggregate arrives fully worked: a `Result`-returning factory, invariants, guarded
 mutations raising domain events, a child entity, soft-delete cascade, the caching pair (a cacheable
 read plus invalidating commands, both keyed through one `*CacheKeys` type), an integration event
-through the outbox, `en-US` and `es` resource pairs, a REST controller, and two Blazor pages.
+through the outbox, `en-US` and `es` resource pairs, a REST controller, and two Blazor pages. The
+child entity and the status axis are optional: see the shape options below.
 
 ### Dropping the Blazor UI host
 
@@ -142,23 +177,41 @@ cd Contoso.Support
 dotnet new mmca-module -n Billing --app Contoso.Support --aggregate Invoice
 ```
 
-| Parameter | Meaning |
-|---|---|
-| `-n, --name` | the module, plural PascalCase, for example `Billing` |
-| `--app` | your solution / root namespace, for example `Contoso.Support` (required) |
-| `-a, --aggregate` | the module's aggregate root, singular PascalCase (required) |
+| Parameter | Default | Meaning |
+|---|---|---|
+| `-n, --name` | none | the module, plural PascalCase, for example `Billing` |
+| `--app` | none | your solution / root namespace, for example `Contoso.Support` (required) |
+| `-p:a, --aggregate` | none | the module's aggregate root, singular PascalCase (required) |
+| `-c, --child` | `Comment` | the aggregate's child entity, singular PascalCase (1.3.0) |
+| `--flat` | off | generate the module with no child collection at all (1.3.0) |
+| `--no-status` | off | generate the module with no status axis (1.3.0) |
+
+The three shape options behave exactly as they do for `mmca-app`, and they are per module: a solution
+can hold a flat, status-less catalog module beside one whose aggregate owns a growing child
+collection and a guarded lifecycle.
+
+```powershell
+dotnet new mmca-module -n Orders --app Contoso.Shop --aggregate Order --child Item
+```
+
+That produces an `OrderItem` entity and DTO, `AddItem` / `EditItem` / `RemoveItem` slices, `/items`
+routes, and an `OrderItemIdentifierType` alias, with no post-generation renaming.
 
 Generates eight projects into the right places: the five layer projects under
 `Source/Modules/<Module>/`, both test projects under `Tests/Modules/<Module>/`, and a migrations
 project under `Source/Hosting/`. The migrations project ships **without** a `Migrations/` folder: you
 create the first one against your own entities.
 
-### The five wire-ups it prints
+### The wire-ups it prints
 
-`dotnet new` cannot patch files that already exist, so it prints these. Until they are done the
-module is invisible to the host and to the fitness rules; the first two are what make it compile.
+`dotnet new` cannot patch files that already exist, so it prints these (since 1.3.0 the printed
+list runs to seven items, adding the per-module database wiring and the first migration). Until
+they are done the module is invisible to the host and to the fitness rules; the first two are what
+make it compile.
 
 1. **Solution.** `dotnet sln <App>.slnx add Source/Modules/<Module>/*/*.csproj Tests/Modules/<Module>/*/*.csproj Source/Hosting/<App>.Migrations.SqlServer.<Module>/*.csproj`
+   (bash globbing; in PowerShell expand with `(Get-ChildItem ...).FullName`, as the printed
+   instructions now show)
 2. **Project references.** `<App>.Web.csproj` needs `<App>.<Module>.API` and
    `<App>.Migrations.SqlServer.<Module>`. `<App>.Architecture.Tests.csproj` needs **all five** layer
    projects, because the map in step 4 names a type from each.
@@ -169,6 +222,11 @@ module is invisible to the host and to the fitness rules; the first two are what
    from the map is silently not covered by the layering and isolation rules** (ADR-015).
 5. **Host.** `services.AddErrorResources<<Module>ErrorResources>();` next to the existing ones.
    `ModuleLoader` discovers the `IModule` itself, so nothing else needs registering.
+6. **Database.** An AppHost database resource plus a `DataSources` entry per module in the Web
+   host's appsettings, the top-level `SQLServerMigrationsAssembly` pin deleted, and a top-level
+   `"Outbox": { "DatabaseName": "<FirstModule>" }` pin (IEventBus writes handler-published
+   integration events to one configured outbox source per host). The
+   [ecommerce sample guide](common-ECOMMERCE-SAMPLE.md) walks each edit.
 
 Then create the first migration:
 
@@ -201,7 +259,7 @@ dotnet new mmca-query -n GetInvoiceByNumber --app Contoso.Support --module Billi
 | `-n, --name` | both | the use case, PascalCase; names the folder, the namespace segment, and both types |
 | `--app` | both | your solution / root namespace (required) |
 | `-m, --module` | both | the module this slice goes into (required) |
-| `-a, --aggregate` | both | the aggregate the handler loads (required) |
+| `-p:a, --aggregate` | both | the aggregate the handler loads (required) |
 | `--domain-method` | `mmca-command` | the guarded method the command calls on the aggregate |
 | `--child-collection` | both | navigation to eager-load; unset loads the aggregate root alone |
 
