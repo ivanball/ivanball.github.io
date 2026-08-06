@@ -22,6 +22,9 @@ the repo is the full answer.
 - **.NET 10 SDK** (the framework targets `net10.0` with `LangVersion: preview`).
 - **Docker Desktop** (Aspire provisions SQL Server as a container).
 - **EF Core tools**: `dotnet tool install --global dotnet-ef`.
+- Commands are shown for **PowerShell** (`pwsh`, cross-platform). Almost everything is plain
+  `dotnet` CLI, so any shell works; the one step where the shell genuinely matters (3a) says so
+  inline. Plain cmd is the one to avoid: it cannot expand wildcards at all.
 
 No credentials, tokens, or extra feeds: `MMCA.Templates` and every `MMCA.Common.*` package restore
 from nuget.org ([ADR-053](../adr/053-dual-registry-package-publishing.md)).
@@ -30,13 +33,13 @@ from nuget.org ([ADR-053](../adr/053-dual-registry-package-publishing.md)).
 
 ## 1. Install the template pack
 
-```bash
+```powershell
 dotnet new install MMCA.Templates
 ```
 
 ## 2. Generate the solution with the Products module
 
-```bash
+```powershell
 dotnet new mmca-app -n MMCA.ECommerce --module Products --aggregate Product
 cd MMCA.ECommerce
 ```
@@ -47,7 +50,7 @@ for the module's database, and three test projects including the architecture fi
 
 Get your green baseline before changing anything:
 
-```bash
+```powershell
 dotnet build MMCA.ECommerce.slnx
 dotnet test  --solution MMCA.ECommerce.slnx
 ```
@@ -57,7 +60,7 @@ database needed. This baseline is the line you bisect against later.
 
 ## 3. Add the Orders module
 
-```bash
+```powershell
 dotnet new mmca-module -n Orders --app MMCA.ECommerce --aggregate Order
 ```
 
@@ -66,25 +69,14 @@ cannot patch files that already exist, so the template prints the wire-ups it ne
 they are, concretely, for this app:
 
 **a. Add the projects to the solution.** `dotnet sln add` does not expand wildcards itself, so the
-shell has to. In bash the globs below just work; in PowerShell and cmd they are passed through
-literally and dotnet reports "Could not find project or directory", so use the form for your shell:
-
-```bash
-# bash
-dotnet sln MMCA.ECommerce.slnx add Source/Modules/Orders/*/*.csproj Tests/Modules/Orders/*/*.csproj Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Orders/*.csproj
-```
+`Get-ChildItem` calls expand them before dotnet sees the paths (in bash, plain globs like
+`Source/Modules/Orders/*/*.csproj` work directly):
 
 ```powershell
-# PowerShell
 dotnet sln MMCA.ECommerce.slnx add (Get-ChildItem Source\Modules\Orders\*\*.csproj).FullName (Get-ChildItem Tests\Modules\Orders\*\*.csproj).FullName (Get-ChildItem Source\Hosting\MMCA.ECommerce.Migrations.SqlServer.Orders\*.csproj).FullName
 ```
 
-```cmd
-:: cmd (no glob support at all: list the eight projects explicitly, one line)
-dotnet sln MMCA.ECommerce.slnx add Source\Modules\Orders\MMCA.ECommerce.Orders.Shared\MMCA.ECommerce.Orders.Shared.csproj Source\Modules\Orders\MMCA.ECommerce.Orders.Domain\MMCA.ECommerce.Orders.Domain.csproj Source\Modules\Orders\MMCA.ECommerce.Orders.Application\MMCA.ECommerce.Orders.Application.csproj Source\Modules\Orders\MMCA.ECommerce.Orders.Infrastructure\MMCA.ECommerce.Orders.Infrastructure.csproj Source\Modules\Orders\MMCA.ECommerce.Orders.API\MMCA.ECommerce.Orders.API.csproj Tests\Modules\Orders\MMCA.ECommerce.Orders.Domain.Tests\MMCA.ECommerce.Orders.Domain.Tests.csproj Tests\Modules\Orders\MMCA.ECommerce.Orders.Application.Tests\MMCA.ECommerce.Orders.Application.Tests.csproj Source\Hosting\MMCA.ECommerce.Migrations.SqlServer.Orders\MMCA.ECommerce.Migrations.SqlServer.Orders.csproj
-```
-
-Whichever shell, expect eight `Project ... added to the solution` lines.
+Expect eight `Project ... added to the solution` lines.
 
 **b. Reference the module from the host and the fitness tests.** In
 `Source/Hosts/MMCA.ECommerce.Web/MMCA.ECommerce.Web.csproj`, add `ProjectReference`s to
@@ -269,19 +261,21 @@ is the complete reference.
 ## 7. Regenerate the migrations
 
 The scaffolded Products migration still describes the template's shape, and Orders has none yet.
-Delete the files under
-`Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Products/Migrations/` and generate both fresh
-(`migrations add` never opens a database connection):
+Delete the generated migration files, but only the `*.cs`: the folder's `.editorconfig` stays, it is
+what keeps analyzer enforcement off generated migration code, and `dotnet ef` never recreates it.
+Then generate both fresh (`migrations add` never opens a database connection):
 
-```bash
-dotnet ef migrations add InitialCreate \
-  --project Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Products \
-  --startup-project Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Products \
+```powershell
+Remove-Item Source\Hosting\MMCA.ECommerce.Migrations.SqlServer.Products\Migrations\*.cs
+
+dotnet ef migrations add InitialCreate `
+  --project Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Products `
+  --startup-project Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Products `
   --context SQLServerDbContext
 
-dotnet ef migrations add InitialCreate \
-  --project Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Orders \
-  --startup-project Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Orders \
+dotnet ef migrations add InitialCreate `
+  --project Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Orders `
+  --startup-project Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Orders `
   --context SQLServerDbContext
 ```
 
@@ -300,7 +294,7 @@ applied, so its `IntegrationEventContractTests` freezes `ProductCreatedIntegrati
 Then, from a **real, interactive terminal** (launched headless, the AppHost stalls at control-plane
 init and looks like a hang):
 
-```bash
+```powershell
 dotnet run --project Source/Hosting/MMCA.ECommerce.AppHost
 ```
 
