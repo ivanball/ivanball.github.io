@@ -154,11 +154,15 @@ function gitDates() {
   const dates = new Map();
   const dirty = new Set();
   try {
-    const log = execFileSync("git", ["log", "--name-only", "--no-renames", "--pretty=format:%cs"],
+    /* %cI (strict ISO with offset) converted to the UTC calendar date, NOT %cs: %cs formats the
+       date in the commit's own timezone, while BUILD_DATE and the CI runner are UTC. With %cs an
+       evening US-Eastern squash merge is dated one day earlier locally than the UTC rebuild
+       computes, and the freshness gate diffs on exactly that boundary (twice on 2026-08-05). */
+    const log = execFileSync("git", ["log", "--name-only", "--no-renames", "--pretty=format:%cI"],
       { cwd: WEBSITE_ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
     let current = null;
     for (const line of log.split(/\r?\n/)) {
-      if (/^\d{4}-\d{2}-\d{2}$/.test(line)) { current = line; continue; }
+      if (/^\d{4}-\d{2}-\d{2}T/.test(line)) { current = new Date(line).toISOString().slice(0, 10); continue; }
       if (!line.trim() || !current) { continue; }
       if (!dates.has(line)) { dates.set(line, current); }   // log is newest-first
     }
