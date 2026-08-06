@@ -130,8 +130,8 @@
           <p>Standing that up by hand means 12 projects and roughly 5,300 lines before a line of your own
           business logic, several of them load-bearing in ways nothing tells you about until much later. So
           you do not type it. One command writes the whole thing, green:</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet new install MMCA.Templates
-dotnet new mmca-app -n Contoso.Support --module Orders --aggregate Order</code></pre>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates
+dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> Contoso.Support <span class="hljs-literal">--module</span> Orders <span class="hljs-literal">--aggregate</span> Order</code></pre>
           <p>The six steps below take that from nothing to a running, migrated, browsable app. Everything after
           them is optional depth.</p>
           <blockquote>
@@ -150,11 +150,11 @@ dotnet new mmca-app -n Contoso.Support --module Orders --aggregate Order</code><
           from nuget.org (see <a href="../adr/053-dual-registry-package-publishing.html">ADR-053</a>).</p>
           <hr>
           <h2 id="1-install-the-template-pack">1. Install the template pack</h2>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet new install MMCA.Templates</code></pre>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates</code></pre>
           <p>Four templates arrive: <code>mmca-app</code> (a whole solution), <code>mmca-module</code> (a business module across all
           five layers), and <code>mmca-command</code> / <code>mmca-query</code> (a single vertical slice).</p>
           <h2 id="2-generate-the-solution">2. Generate the solution</h2>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet new mmca-app -n Contoso.Support --module Orders --aggregate Order
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> Contoso.Support <span class="hljs-literal">--module</span> Orders <span class="hljs-literal">--aggregate</span> Order
 <span class="hljs-built_in">cd</span> Contoso.Support</code></pre>
           <p>Three names, and they are independent: the <strong>solution</strong> (also your root namespace), the first
           <strong>module</strong> in plural PascalCase, and that module&#39;s <strong>aggregate root</strong> in singular PascalCase.
@@ -173,8 +173,8 @@ dotnet new mmca-app -n Contoso.Support --module Orders --aggregate Order</code><
           </ul>
           <p>The full parameter table is in the <a href="common-TEMPLATES.html">templates guide</a>.</p>
           <h2 id="3-build-and-test-before-you-change-anything">3. Build and test before you change anything</h2>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet build Contoso.Support.slnx
-dotnet <span class="hljs-built_in">test</span>  --solution Contoso.Support.slnx</code></pre>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet build Contoso.Support.slnx
+dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx</code></pre>
           <p>That is a warning-free build with <code>TreatWarningsAsErrors</code> and all five analyzers at error severity,
           and a passing test run including the architecture-fitness rules, with <strong>no database needed</strong>. If it
           is not green, that is a template bug rather than yours: the pack is generated from the reference app
@@ -185,17 +185,17 @@ dotnet <span class="hljs-built_in">test</span>  --solution Contoso.Support.slnx<
           <h2 id="4-create-the-first-migration">4. Create the first migration</h2>
           <p>The scaffold ships the migrations project and its design-time factory; the migration itself
           describes your entities, so it is yours to generate:</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet ef migrations add InitialCreate \
-  --project Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders \
-  --startup-project Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders \
-  --context SQLServerDbContext</code></pre>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet ef migrations add InitialCreate `
+  <span class="hljs-literal">--project</span> Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders `
+  <span class="hljs-literal">--startup-project</span> Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders `
+  <span class="hljs-literal">--context</span> SQLServerDbContext</code></pre>
           <p>Always pass <code>--context SQLServerDbContext</code>. There is exactly one concrete context class per database
           engine; module contexts are abstract and only declare their <code>DbSet</code>s
           (<a href="../adr/006-database-per-service.html">ADR-006</a>). You get <strong>one migrations project per (future)
           service database</strong> even while you are a monolith, which is what makes extraction later cost no
           migration rework.</p>
           <h2 id="5-run-it">5. Run it</h2>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet run --project Source/Hosting/Contoso.Support.AppHost</code></pre>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet run <span class="hljs-literal">--project</span> Source/Hosting/Contoso.Support.AppHost</code></pre>
           <blockquote>
           <p><strong>Run this from a real, interactive terminal.</strong> Launched from a headless or background shell the
           Aspire AppHost stalls at control-plane init and no dashboard appears.</p>
@@ -217,15 +217,15 @@ dotnet <span class="hljs-built_in">test</span>  --solution Contoso.Support.slnx<
           <code>using Zeta.App.Orders.Shared;</code> sorts below it, so no checked-in order survives every name. <code>SA1210</code>
           ships as a suggestion in a marked block at the bottom of the generated <code>.editorconfig</code>. Sort them,
           then delete the block once you have stopped scaffolding:</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet format analyzers Contoso.Support.slnx --diagnostics SA1210 --severity error</code></pre>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet format analyzers Contoso.Support.slnx <span class="hljs-literal">--diagnostics</span> SA1210 <span class="hljs-literal">--severity</span> error</code></pre>
           <p><strong>Your integration-event wire contract.</strong> Integration events cross service boundaries, so a renamed
           or retyped property breaks consumers elsewhere. <code>IntegrationEventContractTestsBase</code> fails the build
           on a silent reshape, but only against a contract <strong>you</strong> froze: its frozen literal lists members
           alphabetically, so one inherited from a sample module is wrong the moment your aggregate is not
           called <code>Ticket</code>. Add the subclass to <code>ArchitectureTests.cs</code>, run it once, and paste in what the
           failure prints:</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet <span class="hljs-built_in">test</span> --project Tests/Architecture/Contoso.Support.Architecture.Tests/Contoso.Support.Architecture.Tests.csproj \
-  -- --filter-class <span class="hljs-string">&quot;*IntegrationEventContract*&quot;</span></code></pre>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet test <span class="hljs-literal">--project</span> Tests/Architecture/Contoso.Support.Architecture.Tests/Contoso.Support.Architecture.Tests.csproj `
+  <span class="hljs-literal">--</span> <span class="hljs-literal">--filter-class</span> <span class="hljs-string">&quot;*IntegrationEventContract*&quot;</span></code></pre>
           <hr>
           <h2 id="what-you-were-handed">What you were handed</h2>
           <pre class="doc-pre"><code class="">Contoso.Support.slnx
@@ -301,11 +301,11 @@ Tests/
           <h2 id="add-your-next-feature">Add your next feature</h2>
           <p><strong>A vertical slice</strong> (the path every feature follows) is one command, run from the module&#39;s
           <code>UseCases</code> folder:</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-built_in">cd</span> Source/Modules/Orders/Contoso.Support.Orders.Application/Orders/UseCases
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs"><span class="hljs-built_in">cd</span> Source/Modules/Orders/Contoso.Support.Orders.Application/Orders/UseCases
 
-dotnet new mmca-command -n TransferOrder --app Contoso.Support --module Orders --aggregate Order --domain-method TransferToRequester
+dotnet new mmca<span class="hljs-literal">-command</span> <span class="hljs-literal">-n</span> TransferOrder <span class="hljs-literal">--app</span> Contoso.Support <span class="hljs-literal">--module</span> Orders <span class="hljs-literal">--aggregate</span> Order <span class="hljs-literal">--domain-method</span> TransferToRequester
 
-dotnet new mmca-query -n GetOrderByNumber --app Contoso.Support --module Orders --aggregate Order --child-collection Comments</code></pre>
+dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-literal">-n</span> GetOrderByNumber <span class="hljs-literal">--app</span> Contoso.Support <span class="hljs-literal">--module</span> Orders <span class="hljs-literal">--aggregate</span> Order <span class="hljs-literal">--child-collection</span> Comments</code></pre>
           <p>Handlers, validators, and mappers are convention-scanned, so there is no DI registration to add.
           Four things do need you.</p>
           <p><strong>Write the <code>--domain-method</code> on your aggregate first.</strong> The generated handler <em>calls</em> it, and the
@@ -372,7 +372,7 @@ dotnet new mmca-query -n GetOrderByNumber --app Contoso.Support --module Orders 
           <p><strong>Keep the query&#39;s <code>CacheKey</code> inside your module&#39;s <code>*CacheKeys.Prefix</code>,</strong> because a key that drifts
           out of the prefix goes stale silently.</p>
           <p><strong>A second module</strong> across all five layers plus its test and migrations projects:</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet new mmca-module -n Billing --app Contoso.Support --aggregate Invoice</code></pre>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-module</span> <span class="hljs-literal">-n</span> Billing <span class="hljs-literal">--app</span> Contoso.Support <span class="hljs-literal">--aggregate</span> Invoice</code></pre>
           <p><code>dotnet new</code> cannot patch files that already exist, so it <strong>prints five wire-ups</strong> for you to apply:
           the solution entries, the host and architecture-test project references, the identifier-alias link,
           the five architecture-map lines, and <code>AddErrorResources</code>. Until they are done the module is invisible

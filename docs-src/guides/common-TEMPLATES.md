@@ -8,7 +8,7 @@ of them load-bearing in ways nothing tells you about until much later. See
 [Getting Started](common-GETTING-STARTED.md) for the six-step path from nothing to a running app, and
 [Building by Hand](common-BUILD-BY-HAND.md) for what the generated code actually does, phase by phase.
 
-```bash
+```powershell
 dotnet new install MMCA.Templates
 dotnet new mmca-app -n Contoso.Support --module Orders --aggregate Order
 cd Contoso.Support
@@ -97,7 +97,7 @@ but `using Zeta.App.Orders.Shared;` sorts below it. `SA1210` has no notion of bl
 groups, so no checked-in order survives both. It ships as a suggestion, via a clearly marked block at
 the bottom of the generated `.editorconfig`. Sort them with:
 
-```bash
+```powershell
 dotnet format analyzers Contoso.Support.slnx --diagnostics SA1210 --severity error
 ```
 
@@ -128,8 +128,8 @@ public sealed class IntegrationEventContractTests : IntegrationEventContractTest
 
 then run it once and paste what the failure prints:
 
-```bash
-dotnet test --project Tests/Architecture/Contoso.Support.Architecture.Tests/Contoso.Support.Architecture.Tests.csproj \
+```powershell
+dotnet test --project Tests/Architecture/Contoso.Support.Architecture.Tests/Contoso.Support.Architecture.Tests.csproj `
   -- --filter-class "*IntegrationEventContract*"
 ```
 
@@ -137,7 +137,7 @@ dotnet test --project Tests/Architecture/Contoso.Support.Architecture.Tests/Cont
 
 ## `mmca-module`
 
-```bash
+```powershell
 cd Contoso.Support
 dotnet new mmca-module -n Billing --app Contoso.Support --aggregate Invoice
 ```
@@ -172,10 +172,10 @@ module is invisible to the host and to the fitness rules; the first two are what
 
 Then create the first migration:
 
-```bash
-dotnet ef migrations add InitialCreate \
-  --project Source/Hosting/Contoso.Support.Migrations.SqlServer.Billing \
-  --startup-project Source/Hosting/Contoso.Support.Migrations.SqlServer.Billing \
+```powershell
+dotnet ef migrations add InitialCreate `
+  --project Source/Hosting/Contoso.Support.Migrations.SqlServer.Billing `
+  --startup-project Source/Hosting/Contoso.Support.Migrations.SqlServer.Billing `
   --context SQLServerDbContext
 ```
 
@@ -186,13 +186,13 @@ dotnet ef migrations add InitialCreate \
 Run these from the module's `UseCases` folder. Each creates a folder named after the slice holding
 its two files.
 
-```bash
+```powershell
 cd Source/Modules/Billing/Contoso.Support.Billing.Application/Billing/UseCases
 
-dotnet new mmca-command -n ArchiveInvoice --app Contoso.Support --module Billing \
+dotnet new mmca-command -n ArchiveInvoice --app Contoso.Support --module Billing `
   --aggregate Invoice --domain-method Archive
 
-dotnet new mmca-query -n GetInvoiceByNumber --app Contoso.Support --module Billing \
+dotnet new mmca-query -n GetInvoiceByNumber --app Contoso.Support --module Billing `
   --aggregate Invoice --child-collection Comments
 ```
 
@@ -243,7 +243,7 @@ residual tokens, builds package-mode, runs the tests, and applies the five modul
 
 To work on the templates:
 
-```bash
+```powershell
 git clone https://github.com/ivanball/MMCA.Helpdesk
 cd MMCA.Helpdesk
 pwsh build/templates/smoke.ps1        # stage, pack, install, generate, build, test

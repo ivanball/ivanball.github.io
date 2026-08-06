@@ -9,7 +9,7 @@ Standing that up by hand means 12 projects and roughly 5,300 lines before a line
 business logic, several of them load-bearing in ways nothing tells you about until much later. So
 you do not type it. One command writes the whole thing, green:
 
-```bash
+```powershell
 dotnet new install MMCA.Templates
 dotnet new mmca-app -n Contoso.Support --module Orders --aggregate Order
 ```
@@ -36,7 +36,7 @@ from nuget.org (see [ADR-053](../adr/053-dual-registry-package-publishing.md)).
 
 ## 1. Install the template pack
 
-```bash
+```powershell
 dotnet new install MMCA.Templates
 ```
 
@@ -45,7 +45,7 @@ five layers), and `mmca-command` / `mmca-query` (a single vertical slice).
 
 ## 2. Generate the solution
 
-```bash
+```powershell
 dotnet new mmca-app -n Contoso.Support --module Orders --aggregate Order
 cd Contoso.Support
 ```
@@ -70,7 +70,7 @@ The full parameter table is in the [templates guide](common-TEMPLATES.md).
 
 ## 3. Build and test before you change anything
 
-```bash
+```powershell
 dotnet build Contoso.Support.slnx
 dotnet test  --solution Contoso.Support.slnx
 ```
@@ -89,10 +89,10 @@ later.
 The scaffold ships the migrations project and its design-time factory; the migration itself
 describes your entities, so it is yours to generate:
 
-```bash
-dotnet ef migrations add InitialCreate \
-  --project Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders \
-  --startup-project Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders \
+```powershell
+dotnet ef migrations add InitialCreate `
+  --project Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders `
+  --startup-project Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders `
   --context SQLServerDbContext
 ```
 
@@ -104,7 +104,7 @@ migration rework.
 
 ## 5. Run it
 
-```bash
+```powershell
 dotnet run --project Source/Hosting/Contoso.Support.AppHost
 ```
 
@@ -133,7 +133,7 @@ value is right for every name you could pick. Both are covered in full in the
 ships as a suggestion in a marked block at the bottom of the generated `.editorconfig`. Sort them,
 then delete the block once you have stopped scaffolding:
 
-```bash
+```powershell
 dotnet format analyzers Contoso.Support.slnx --diagnostics SA1210 --severity error
 ```
 
@@ -144,8 +144,8 @@ alphabetically, so one inherited from a sample module is wrong the moment your a
 called `Ticket`. Add the subclass to `ArchitectureTests.cs`, run it once, and paste in what the
 failure prints:
 
-```bash
-dotnet test --project Tests/Architecture/Contoso.Support.Architecture.Tests/Contoso.Support.Architecture.Tests.csproj \
+```powershell
+dotnet test --project Tests/Architecture/Contoso.Support.Architecture.Tests/Contoso.Support.Architecture.Tests.csproj `
   -- --filter-class "*IntegrationEventContract*"
 ```
 
@@ -196,7 +196,7 @@ code around them:
 **A vertical slice** (the path every feature follows) is one command, run from the module's
 `UseCases` folder:
 
-```bash
+```powershell
 cd Source/Modules/Orders/Contoso.Support.Orders.Application/Orders/UseCases
 
 dotnet new mmca-command -n TransferOrder --app Contoso.Support --module Orders --aggregate Order --domain-method TransferToRequester
@@ -291,7 +291,7 @@ out of the prefix goes stale silently.
 
 **A second module** across all five layers plus its test and migrations projects:
 
-```bash
+```powershell
 dotnet new mmca-module -n Billing --app Contoso.Support --aggregate Invoice
 ```
 
