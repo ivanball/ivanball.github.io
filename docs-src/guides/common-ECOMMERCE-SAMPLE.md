@@ -66,8 +66,8 @@ cannot patch files that already exist, so the template prints the wire-ups it ne
 they are, concretely, for this app:
 
 **a. Add the projects to the solution.** `dotnet sln add` does not expand wildcards itself, so the
-shell has to. In bash the globs below just work; in PowerShell (and cmd) they are passed through
-literally and dotnet reports "Could not find project or directory", so expand them explicitly:
+shell has to. In bash the globs below just work; in PowerShell and cmd they are passed through
+literally and dotnet reports "Could not find project or directory", so use the form for your shell:
 
 ```bash
 # bash
@@ -79,7 +79,12 @@ dotnet sln MMCA.ECommerce.slnx add Source/Modules/Orders/*/*.csproj Tests/Module
 dotnet sln MMCA.ECommerce.slnx add (Get-ChildItem Source\Modules\Orders\*\*.csproj).FullName (Get-ChildItem Tests\Modules\Orders\*\*.csproj).FullName (Get-ChildItem Source\Hosting\MMCA.ECommerce.Migrations.SqlServer.Orders\*.csproj).FullName
 ```
 
-Either way, expect eight `Project ... added to the solution` lines.
+```cmd
+:: cmd (no glob support at all: list the eight projects explicitly, one line)
+dotnet sln MMCA.ECommerce.slnx add Source\Modules\Orders\MMCA.ECommerce.Orders.Shared\MMCA.ECommerce.Orders.Shared.csproj Source\Modules\Orders\MMCA.ECommerce.Orders.Domain\MMCA.ECommerce.Orders.Domain.csproj Source\Modules\Orders\MMCA.ECommerce.Orders.Application\MMCA.ECommerce.Orders.Application.csproj Source\Modules\Orders\MMCA.ECommerce.Orders.Infrastructure\MMCA.ECommerce.Orders.Infrastructure.csproj Source\Modules\Orders\MMCA.ECommerce.Orders.API\MMCA.ECommerce.Orders.API.csproj Tests\Modules\Orders\MMCA.ECommerce.Orders.Domain.Tests\MMCA.ECommerce.Orders.Domain.Tests.csproj Tests\Modules\Orders\MMCA.ECommerce.Orders.Application.Tests\MMCA.ECommerce.Orders.Application.Tests.csproj Source\Hosting\MMCA.ECommerce.Migrations.SqlServer.Orders\MMCA.ECommerce.Migrations.SqlServer.Orders.csproj
+```
+
+Whichever shell, expect eight `Project ... added to the solution` lines.
 
 **b. Reference the module from the host and the fitness tests.** In
 `Source/Hosts/MMCA.ECommerce.Web/MMCA.ECommerce.Web.csproj`, add `ProjectReference`s to
