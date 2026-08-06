@@ -227,7 +227,11 @@ dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</c
           values&quot;. Once every module declares its assembly in its own <code>DataSources</code> entry, the top-level pin
           has no remaining job.</p>
           <p>Build and test again: still green, now with the Orders module&#39;s scaffolded tests included. There is
-          no new kind of thing in the solution, just a second copy of the shape you already had.</p>
+          no new kind of thing in the solution, just a second copy of the shape you already had. If curiosity
+          makes you run the app now, know that the Orders database has no schema until step 7 creates its
+          migration: Orders endpoints fail, and the background outbox poller logs &quot;Outbox processing failed
+          for data source SQLServer/Default&quot; every few seconds until then. Harmless, and it stops on the
+          first run after step 7.</p>
           <h2 id="4-reshape-products-into-a-catalog-product">4. Reshape Products into a catalog product</h2>
           <p>Both scaffolded modules arrive as the template&#39;s worked example (a title, a description, a status,
           a growable child collection): a placeholder domain in <em>your</em> namespaces, meant to be reshaped. The

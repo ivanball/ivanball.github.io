@@ -149,7 +149,11 @@ values". Once every module declares its assembly in its own `DataSources` entry,
 has no remaining job.
 
 Build and test again: still green, now with the Orders module's scaffolded tests included. There is
-no new kind of thing in the solution, just a second copy of the shape you already had.
+no new kind of thing in the solution, just a second copy of the shape you already had. If curiosity
+makes you run the app now, know that the Orders database has no schema until step 7 creates its
+migration: Orders endpoints fail, and the background outbox poller logs "Outbox processing failed
+for data source SQLServer/Default" every few seconds until then. Harmless, and it stops on the
+first run after step 7.
 
 ## 4. Reshape Products into a catalog product
 
