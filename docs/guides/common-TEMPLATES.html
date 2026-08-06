@@ -131,10 +131,10 @@
           <a href="common-GETTING-STARTED.html">Getting Started</a> for the six-step path from nothing to a running app, and
           <a href="common-BUILD-BY-HAND.html">Building by Hand</a> for what the generated code actually does, phase by phase.</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet new install MMCA.Templates
-          dotnet new mmca-app -n Contoso.Support --module Orders --aggregate Order
-          <span class="hljs-built_in">cd</span> Contoso.Support
-          dotnet build Contoso.Support.slnx
-          dotnet <span class="hljs-built_in">test</span>  --solution Contoso.Support.slnx</code></pre>
+dotnet new mmca-app -n Contoso.Support --module Orders --aggregate Order
+<span class="hljs-built_in">cd</span> Contoso.Support
+dotnet build Contoso.Support.slnx
+dotnet <span class="hljs-built_in">test</span>  --solution Contoso.Support.slnx</code></pre>
           <p>That is a warning-free build under all five analyzers and a passing test run, including the
           architecture-fitness rules, with no database needed.</p>
           <div class="table-wrap"><table>
@@ -213,19 +213,19 @@
           strings, and the Blazor pages.</p>
           <p><strong>What you get</strong> (names shown for <code>-n Contoso.Support --module Orders --aggregate Order</code>):</p>
           <pre class="doc-pre"><code class="">Contoso.Support.slnx
-          .editorconfig                 the five analyzers at error severity
-          Directory.Build.props         language settings, analyzers, the identifier-alias links
-          Directory.Build.targets       the local-source PackageReference -&gt; ProjectReference swap
-          Directory.Packages.props      Central Package Management
-          Source/
-            Modules/Orders/             Shared, Domain, Application, Infrastructure, API
-            Hosts/Contoso.Support.Web           the monolith REST API host
-            Hosts/UI/Contoso.Support.UI.Web     Blazor Server + MudBlazor
-            Hosting/Contoso.Support.AppHost     Aspire orchestration
-            Hosting/Contoso.Support.Migrations.SqlServer.Orders
-          Tests/
-            Modules/Orders/             domain + application tests
-            Architecture/               the fitness functions, parameterized by SupportArchitectureMap</code></pre>
+.editorconfig                 the five analyzers at error severity
+Directory.Build.props         language settings, analyzers, the identifier-alias links
+Directory.Build.targets       the local-source PackageReference -&gt; ProjectReference swap
+Directory.Packages.props      Central Package Management
+Source/
+  Modules/Orders/             Shared, Domain, Application, Infrastructure, API
+  Hosts/Contoso.Support.Web           the monolith REST API host
+  Hosts/UI/Contoso.Support.UI.Web     Blazor Server + MudBlazor
+  Hosting/Contoso.Support.AppHost     Aspire orchestration
+  Hosting/Contoso.Support.Migrations.SqlServer.Orders
+Tests/
+  Modules/Orders/             domain + application tests
+  Architecture/               the fitness functions, parameterized by SupportArchitectureMap</code></pre>
           <p>The <code>Order</code> aggregate arrives fully worked: a <code>Result</code>-returning factory, invariants, guarded
           mutations raising domain events, a child entity, soft-delete cascade, the caching pair (a cacheable
           read plus invalidating commands, both keyed through one <code>*CacheKeys</code> type), an integration event
@@ -265,23 +265,23 @@
           members alphabetically, so <code>{ RequesterUserId, TicketId }</code> stops being correct the moment <code>Ticket</code>
           becomes <code>Order</code>. Add the subclass to your <code>ArchitectureTests.cs</code>:</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">IntegrationEventContractTests</span> : <span class="hljs-title">IntegrationEventContractTestsBase</span>
-          {
-              <span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> IArchitectureMap Map { <span class="hljs-keyword">get</span>; } = <span class="hljs-keyword">new</span> SupportArchitectureMap();
-          
-              <span class="hljs-comment">// Frozen wire contract. Update DELIBERATELY when evolving an integration event</span>
-              <span class="hljs-comment">// (version it per ADR-010; never a silent reshape).</span>
-              <span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> IReadOnlyList&lt;<span class="hljs-built_in">string</span>&gt; ExpectedContract =&gt;
-              [
-                  <span class="hljs-comment">// paste the actual value from the failing run</span>
-              ];
-          }</code></pre>
+{
+    <span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> IArchitectureMap Map { <span class="hljs-keyword">get</span>; } = <span class="hljs-keyword">new</span> SupportArchitectureMap();
+
+    <span class="hljs-comment">// Frozen wire contract. Update DELIBERATELY when evolving an integration event</span>
+    <span class="hljs-comment">// (version it per ADR-010; never a silent reshape).</span>
+    <span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> IReadOnlyList&lt;<span class="hljs-built_in">string</span>&gt; ExpectedContract =&gt;
+    [
+        <span class="hljs-comment">// paste the actual value from the failing run</span>
+    ];
+}</code></pre>
           <p>then run it once and paste what the failure prints:</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet <span class="hljs-built_in">test</span> --project Tests/Architecture/Contoso.Support.Architecture.Tests/Contoso.Support.Architecture.Tests.csproj \
-            -- --filter-class <span class="hljs-string">&quot;*IntegrationEventContract*&quot;</span></code></pre>
+  -- --filter-class <span class="hljs-string">&quot;*IntegrationEventContract*&quot;</span></code></pre>
           <hr>
           <h2 id="mmca-module"><code>mmca-module</code></h2>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-built_in">cd</span> Contoso.Support
-          dotnet new mmca-module -n Billing --app Contoso.Support --aggregate Invoice</code></pre>
+dotnet new mmca-module -n Billing --app Contoso.Support --aggregate Invoice</code></pre>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -324,20 +324,20 @@
           </ol>
           <p>Then create the first migration:</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet ef migrations add InitialCreate \
-            --project Source/Hosting/Contoso.Support.Migrations.SqlServer.Billing \
-            --startup-project Source/Hosting/Contoso.Support.Migrations.SqlServer.Billing \
-            --context SQLServerDbContext</code></pre>
+  --project Source/Hosting/Contoso.Support.Migrations.SqlServer.Billing \
+  --startup-project Source/Hosting/Contoso.Support.Migrations.SqlServer.Billing \
+  --context SQLServerDbContext</code></pre>
           <hr>
           <h2 id="mmca-command-and-mmca-query"><code>mmca-command</code> and <code>mmca-query</code></h2>
           <p>Run these from the module&#39;s <code>UseCases</code> folder. Each creates a folder named after the slice holding
           its two files.</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-built_in">cd</span> Source/Modules/Billing/Contoso.Support.Billing.Application/Billing/UseCases
-          
-          dotnet new mmca-command -n ArchiveInvoice --app Contoso.Support --module Billing \
-            --aggregate Invoice --domain-method Archive
-          
-          dotnet new mmca-query -n GetInvoiceByNumber --app Contoso.Support --module Billing \
-            --aggregate Invoice --child-collection Comments</code></pre>
+
+dotnet new mmca-command -n ArchiveInvoice --app Contoso.Support --module Billing \
+  --aggregate Invoice --domain-method Archive
+
+dotnet new mmca-query -n GetInvoiceByNumber --app Contoso.Support --module Billing \
+  --aggregate Invoice --child-collection Comments</code></pre>
           <div class="table-wrap"><table>
           <thead>
           <tr>
@@ -409,8 +409,8 @@
           residual tokens, builds package-mode, runs the tests, and applies the five module wire-ups.</p>
           <p>To work on the templates:</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">git <span class="hljs-built_in">clone</span> https://github.com/ivanball/MMCA.Helpdesk
-          <span class="hljs-built_in">cd</span> MMCA.Helpdesk
-          pwsh build/templates/smoke.ps1        <span class="hljs-comment"># stage, pack, install, generate, build, test</span></code></pre>
+<span class="hljs-built_in">cd</span> MMCA.Helpdesk
+pwsh build/templates/smoke.ps1        <span class="hljs-comment"># stage, pack, install, generate, build, test</span></code></pre>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/guides/index.html">← Back to Guides &amp; Specifications</a>

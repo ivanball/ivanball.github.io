@@ -153,13 +153,13 @@
           <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates</code></pre>
           <h2 id="2-generate-the-solution-with-the-products-module">2. Generate the solution with the Products module</h2>
           <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> MMCA.ECommerce <span class="hljs-literal">--module</span> Products <span class="hljs-literal">--aggregate</span> Product
-          <span class="hljs-built_in">cd</span> MMCA.ECommerce</code></pre>
+<span class="hljs-built_in">cd</span> MMCA.ECommerce</code></pre>
           <p>One command, and the whole monolith exists: the Products module across Shared, Domain, Application,
           Infrastructure, and API, the REST host, the Blazor UI host, the Aspire AppHost, a migrations project
           for the module&#39;s database, and three test projects including the architecture fitness rules.</p>
           <p>Get your green baseline before changing anything:</p>
           <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet build MMCA.ECommerce.slnx
-          dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</code></pre>
+dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</code></pre>
           <p>That is a warning-free build under five analyzers at error severity and 90 passing tests, with no
           database needed. This baseline is the line you bisect against later.</p>
           <h2 id="3-add-the-orders-module">3. Add the Orders module</h2>
@@ -193,30 +193,30 @@
           module is also exactly the topology that makes extraction free later
           (<a href="../adr/006-database-per-service.html">ADR-006</a>). In the AppHost:</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> productsDb = sql.AddDatabase(<span class="hljs-string">&quot;ecommerce-products&quot;</span>, <span class="hljs-string">&quot;ECommerce_Products&quot;</span>);
-          <span class="hljs-keyword">var</span> ordersDb = sql.AddDatabase(<span class="hljs-string">&quot;ecommerce-orders&quot;</span>, <span class="hljs-string">&quot;ECommerce_Orders&quot;</span>);
-          
-          <span class="hljs-keyword">var</span> web = builder.AddProject&lt;Projects.MMCA_ECommerce_Web&gt;(<span class="hljs-string">&quot;web&quot;</span>)
-              .WithSQLServerDataSource(productsDb, <span class="hljs-string">&quot;Products&quot;</span>)
-              .WithSQLServerDataSource(ordersDb, <span class="hljs-string">&quot;Orders&quot;</span>)
-              .WaitFor(sql)
-              .WithExternalHttpEndpoints();</code></pre>
+<span class="hljs-keyword">var</span> ordersDb = sql.AddDatabase(<span class="hljs-string">&quot;ecommerce-orders&quot;</span>, <span class="hljs-string">&quot;ECommerce_Orders&quot;</span>);
+
+<span class="hljs-keyword">var</span> web = builder.AddProject&lt;Projects.MMCA_ECommerce_Web&gt;(<span class="hljs-string">&quot;web&quot;</span>)
+    .WithSQLServerDataSource(productsDb, <span class="hljs-string">&quot;Products&quot;</span>)
+    .WithSQLServerDataSource(ordersDb, <span class="hljs-string">&quot;Orders&quot;</span>)
+    .WaitFor(sql)
+    .WithExternalHttpEndpoints();</code></pre>
           <p>And in <code>Source/Hosts/MMCA.ECommerce.Web/appsettings.json</code>, enable the module and map each logical
           source to its connection string and migrations assembly (the <code>DataSources</code> section is the
           database-per-module routing table; Aspire overrides the connection strings at run time):</p>
           <pre class="doc-pre" data-lang="JSON"><code class="language-json hljs"><span class="hljs-attr">&quot;Modules&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-            <span class="hljs-attr">&quot;Products&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;Enabled&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">true</span></span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
-            <span class="hljs-attr">&quot;Orders&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;Enabled&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">true</span></span> <span class="hljs-punctuation">}</span>
-          <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
-          <span class="hljs-attr">&quot;DataSources&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-            <span class="hljs-attr">&quot;Products&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-              <span class="hljs-attr">&quot;SQLServerConnectionString&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Server=localhost;Database=ECommerce_Products;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=True&quot;</span><span class="hljs-punctuation">,</span>
-              <span class="hljs-attr">&quot;SQLServerMigrationsAssembly&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;MMCA.ECommerce.Migrations.SqlServer.Products&quot;</span>
-            <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
-            <span class="hljs-attr">&quot;Orders&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-              <span class="hljs-attr">&quot;SQLServerConnectionString&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Server=localhost;Database=ECommerce_Orders;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=True&quot;</span><span class="hljs-punctuation">,</span>
-              <span class="hljs-attr">&quot;SQLServerMigrationsAssembly&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;MMCA.ECommerce.Migrations.SqlServer.Orders&quot;</span>
-            <span class="hljs-punctuation">}</span>
-          <span class="hljs-punctuation">}</span></code></pre>
+  <span class="hljs-attr">&quot;Products&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;Enabled&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">true</span></span> <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;Orders&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span> <span class="hljs-attr">&quot;Enabled&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">true</span></span> <span class="hljs-punctuation">}</span>
+<span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+<span class="hljs-attr">&quot;DataSources&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">&quot;Products&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">&quot;SQLServerConnectionString&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Server=localhost;Database=ECommerce_Products;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=True&quot;</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">&quot;SQLServerMigrationsAssembly&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;MMCA.ECommerce.Migrations.SqlServer.Products&quot;</span>
+  <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">&quot;Orders&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">&quot;SQLServerConnectionString&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Server=localhost;Database=ECommerce_Orders;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=True&quot;</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">&quot;SQLServerMigrationsAssembly&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;MMCA.ECommerce.Migrations.SqlServer.Orders&quot;</span>
+  <span class="hljs-punctuation">}</span>
+<span class="hljs-punctuation">}</span></code></pre>
           <p>In the same file, <strong>delete the <code>SQLServerMigrationsAssembly</code> line from the top-level
           <code>ConnectionStrings</code> section</strong> (keep the connection string itself: it is the <code>Default</code> fallback the
           <code>[Required]</code> validation and health checks use). The scaffold pinned the Products assembly there
@@ -237,21 +237,21 @@
           <p><code>Product</code> becomes the whole catalog entry: <code>Name</code>, <code>Description</code>, <code>Price</code>. The child entity and the
           status go away entirely, which makes Products the minimal single-entity module:</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/Product.cs</span>
-          [<span class="hljs-meta">IdValueGenerated</span>]
-          <span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">Product</span> : <span class="hljs-title">AuditableAggregateRootEntity</span>&lt;<span class="hljs-title">ProductIdentifierType</span>&gt;
-          {
-              <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> Name { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }
-              <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> Description { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }
-              <span class="hljs-keyword">public</span> <span class="hljs-built_in">decimal</span> Price { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }
-          
-              <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> Result&lt;Product&gt; <span class="hljs-title">Create</span>(<span class="hljs-params">
-                  ProductIdentifierType? id, <span class="hljs-built_in">string</span> name, <span class="hljs-built_in">string</span> description, <span class="hljs-built_in">decimal</span> price</span>)</span>
-              { <span class="hljs-comment">/* Result.Combine of the three invariants; no &quot;Added&quot; domain event: the id is
-                   database-generated, creation is signalled after commit by ProductCreatedIntegrationEvent */</span> }
-          
-              <span class="hljs-function"><span class="hljs-keyword">public</span> Result <span class="hljs-title">UpdateDetails</span>(<span class="hljs-params"><span class="hljs-built_in">string</span> name, <span class="hljs-built_in">string</span> description, <span class="hljs-built_in">decimal</span> price</span>)</span> { <span class="hljs-comment">/* raises ProductChanged */</span> }
-              <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">override</span> Result <span class="hljs-title">Delete</span>()</span> { <span class="hljs-comment">/* soft delete; raises ProductChanged(Deleted) */</span> }
-          }</code></pre>
+[<span class="hljs-meta">IdValueGenerated</span>]
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">Product</span> : <span class="hljs-title">AuditableAggregateRootEntity</span>&lt;<span class="hljs-title">ProductIdentifierType</span>&gt;
+{
+    <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> Name { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }
+    <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> Description { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }
+    <span class="hljs-keyword">public</span> <span class="hljs-built_in">decimal</span> Price { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }
+
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> Result&lt;Product&gt; <span class="hljs-title">Create</span>(<span class="hljs-params">
+        ProductIdentifierType? id, <span class="hljs-built_in">string</span> name, <span class="hljs-built_in">string</span> description, <span class="hljs-built_in">decimal</span> price</span>)</span>
+    { <span class="hljs-comment">/* Result.Combine of the three invariants; no &quot;Added&quot; domain event: the id is
+         database-generated, creation is signalled after commit by ProductCreatedIntegrationEvent */</span> }
+
+    <span class="hljs-function"><span class="hljs-keyword">public</span> Result <span class="hljs-title">UpdateDetails</span>(<span class="hljs-params"><span class="hljs-built_in">string</span> name, <span class="hljs-built_in">string</span> description, <span class="hljs-built_in">decimal</span> price</span>)</span> { <span class="hljs-comment">/* raises ProductChanged */</span> }
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">override</span> Result <span class="hljs-title">Delete</span>()</span> { <span class="hljs-comment">/* soft delete; raises ProductChanged(Deleted) */</span> }
+}</code></pre>
           <p>The full change set, layer by layer (each file is small; follow the
           <a href="https://github.com/ivanball/MMCA.ECommerce/tree/main/Source/Modules/Products" target="_blank" rel="noopener">repo</a> where this
           table abbreviates):</p>
@@ -291,22 +291,22 @@
           <p>Orders keeps the child-collection pattern the template scaffolded, retargeted: <code>OrderComment</code>
           becomes <code>OrderItem</code>, and the free-form status becomes a lifecycle.</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Source/Modules/Orders/MMCA.ECommerce.Orders.Domain/Orders/Order.cs</span>
-          [<span class="hljs-meta">IdValueGenerated</span>]
-          <span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">Order</span> : <span class="hljs-title">AuditableAggregateRootEntity</span>&lt;<span class="hljs-title">OrderIdentifierType</span>&gt;
-          {
-              <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> CustomerName { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }
-              <span class="hljs-keyword">public</span> OrderStatus Status { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }          <span class="hljs-comment">// Pending -&gt; Paid -&gt; Shipped; Cancelled from Pending/Paid</span>
-          
-              [<span class="hljs-meta">Navigation(IsCollection = true)</span>]
-              <span class="hljs-keyword">public</span> IReadOnlyCollection&lt;OrderItem&gt; Items =&gt; _items.AsReadOnly();
-              <span class="hljs-keyword">public</span> <span class="hljs-built_in">decimal</span> Total =&gt; _items.Where(i =&gt; !i.IsDeleted).Sum(i =&gt; i.UnitPrice * i.Quantity);
-          
-              <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> Result&lt;Order&gt; <span class="hljs-title">Create</span>(<span class="hljs-params">OrderIdentifierType? id, <span class="hljs-built_in">string</span> customerName</span>)</span> { <span class="hljs-comment">/* Status = Pending */</span> }
-              <span class="hljs-function"><span class="hljs-keyword">public</span> Result&lt;OrderItem&gt; <span class="hljs-title">AddItem</span>(<span class="hljs-params">OrderItemIdentifierType? id, <span class="hljs-built_in">int</span> productId, <span class="hljs-built_in">string</span> productName, <span class="hljs-built_in">decimal</span> unitPrice, <span class="hljs-built_in">int</span> quantity</span>)</span> { }
-              <span class="hljs-function"><span class="hljs-keyword">public</span> Result <span class="hljs-title">ChangeItemQuantity</span>(<span class="hljs-params">OrderItemIdentifierType itemId, <span class="hljs-built_in">int</span> quantity</span>)</span> { }
-              <span class="hljs-function"><span class="hljs-keyword">public</span> Result <span class="hljs-title">RemoveItem</span>(<span class="hljs-params">OrderItemIdentifierType itemId</span>)</span> { }
-              <span class="hljs-function"><span class="hljs-keyword">public</span> Result <span class="hljs-title">ChangeStatus</span>(<span class="hljs-params">OrderStatus newStatus</span>)</span> { <span class="hljs-comment">/* transition guard; Shipped and Cancelled are terminal */</span> }
-          }</code></pre>
+[<span class="hljs-meta">IdValueGenerated</span>]
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">Order</span> : <span class="hljs-title">AuditableAggregateRootEntity</span>&lt;<span class="hljs-title">OrderIdentifierType</span>&gt;
+{
+    <span class="hljs-keyword">public</span> <span class="hljs-built_in">string</span> CustomerName { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }
+    <span class="hljs-keyword">public</span> OrderStatus Status { <span class="hljs-keyword">get</span>; <span class="hljs-keyword">private</span> <span class="hljs-keyword">set</span>; }          <span class="hljs-comment">// Pending -&gt; Paid -&gt; Shipped; Cancelled from Pending/Paid</span>
+
+    [<span class="hljs-meta">Navigation(IsCollection = true)</span>]
+    <span class="hljs-keyword">public</span> IReadOnlyCollection&lt;OrderItem&gt; Items =&gt; _items.AsReadOnly();
+    <span class="hljs-keyword">public</span> <span class="hljs-built_in">decimal</span> Total =&gt; _items.Where(i =&gt; !i.IsDeleted).Sum(i =&gt; i.UnitPrice * i.Quantity);
+
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> Result&lt;Order&gt; <span class="hljs-title">Create</span>(<span class="hljs-params">OrderIdentifierType? id, <span class="hljs-built_in">string</span> customerName</span>)</span> { <span class="hljs-comment">/* Status = Pending */</span> }
+    <span class="hljs-function"><span class="hljs-keyword">public</span> Result&lt;OrderItem&gt; <span class="hljs-title">AddItem</span>(<span class="hljs-params">OrderItemIdentifierType? id, <span class="hljs-built_in">int</span> productId, <span class="hljs-built_in">string</span> productName, <span class="hljs-built_in">decimal</span> unitPrice, <span class="hljs-built_in">int</span> quantity</span>)</span> { }
+    <span class="hljs-function"><span class="hljs-keyword">public</span> Result <span class="hljs-title">ChangeItemQuantity</span>(<span class="hljs-params">OrderItemIdentifierType itemId, <span class="hljs-built_in">int</span> quantity</span>)</span> { }
+    <span class="hljs-function"><span class="hljs-keyword">public</span> Result <span class="hljs-title">RemoveItem</span>(<span class="hljs-params">OrderItemIdentifierType itemId</span>)</span> { }
+    <span class="hljs-function"><span class="hljs-keyword">public</span> Result <span class="hljs-title">ChangeStatus</span>(<span class="hljs-params">OrderStatus newStatus</span>)</span> { <span class="hljs-comment">/* transition guard; Shipped and Cancelled are terminal */</span> }
+}</code></pre>
           <p>Two decisions here carry the architecture lesson of the whole sample:</p>
           <ul>
           <li><strong><code>OrderItem</code> snapshots <code>ProductId</code>, <code>ProductName</code>, and <code>UnitPrice</code> at add time.</strong> The Orders
@@ -349,16 +349,16 @@
           what keeps analyzer enforcement off generated migration code, and <code>dotnet ef</code> never recreates it.
           Then generate both fresh (<code>migrations add</code> never opens a database connection):</p>
           <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs"><span class="hljs-built_in">Remove-Item</span> Source\Hosting\MMCA.ECommerce.Migrations.SqlServer.Products\Migrations\*.cs
-          
-          dotnet ef migrations add InitialCreate `
-            <span class="hljs-literal">--project</span> Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Products `
-            <span class="hljs-literal">--startup-project</span> Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Products `
-            <span class="hljs-literal">--context</span> SQLServerDbContext
-          
-          dotnet ef migrations add InitialCreate `
-            <span class="hljs-literal">--project</span> Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Orders `
-            <span class="hljs-literal">--startup-project</span> Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Orders `
-            <span class="hljs-literal">--context</span> SQLServerDbContext</code></pre>
+
+dotnet ef migrations add InitialCreate `
+  <span class="hljs-literal">--project</span> Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Products `
+  <span class="hljs-literal">--startup-project</span> Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Products `
+  <span class="hljs-literal">--context</span> SQLServerDbContext
+
+dotnet ef migrations add InitialCreate `
+  <span class="hljs-literal">--project</span> Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Orders `
+  <span class="hljs-literal">--startup-project</span> Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Orders `
+  <span class="hljs-literal">--context</span> SQLServerDbContext</code></pre>
           <p>Each migration creates its module&#39;s tables in the module schema plus that database&#39;s own
           outbox/inbox tables: two databases, two outboxes, no contention.</p>
           <h2 id="8-the-two-one-time-fixups-then-run-it">8. The two one-time fixups, then run it</h2>

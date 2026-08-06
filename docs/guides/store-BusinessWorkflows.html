@@ -416,15 +416,15 @@
           <p><strong>Entry Point:</strong> <code>POST /auth/register</code>, <code>AuthController.RegisterAsync()</code>, AllowAnonymous</p>
           <p><strong>Execution Path:</strong></p>
           <pre class="doc-pre"><code class="">AuthController.RegisterAsync()
-            -&gt; AuthenticationService.RegisterAsync()
-              -&gt; Repository: check email uniqueness
-              -&gt; PasswordHasher.HashPassword() (PBKDF2-HMAC-SHA512, 600k iterations, per-user salt)
-              -&gt; User.Create() factory method
-              -&gt; Repository.AddAsync() + UnitOfWork.SaveChangesAsync()
-              -&gt; [Domain Event] UserRegisteredHandler
-                -&gt; Customer.Create() (creates linked customer profile)
-                -&gt; User.LinkCustomer(customerId)
-              -&gt; TokenService.GenerateTokens()</code></pre>
+  -&gt; AuthenticationService.RegisterAsync()
+    -&gt; Repository: check email uniqueness
+    -&gt; PasswordHasher.HashPassword() (PBKDF2-HMAC-SHA512, 600k iterations, per-user salt)
+    -&gt; User.Create() factory method
+    -&gt; Repository.AddAsync() + UnitOfWork.SaveChangesAsync()
+    -&gt; [Domain Event] UserRegisteredHandler
+      -&gt; Customer.Create() (creates linked customer profile)
+      -&gt; User.LinkCustomer(customerId)
+    -&gt; TokenService.GenerateTokens()</code></pre>
           <p><strong>Business Steps:</strong></p>
           <ol>
           <li>Validate registration input (email, password, first name, last name, optional address)</li>
@@ -452,13 +452,13 @@
           <p><strong>Entry Point:</strong> <code>POST /auth/login</code>, <code>AuthController.LoginAsync()</code>, AllowAnonymous</p>
           <p><strong>Execution Path:</strong></p>
           <pre class="doc-pre"><code class="">AuthController.LoginAsync()
-            -&gt; AuthenticationService.LoginAsync()
-              -&gt; Repository: find User by email
-              -&gt; PasswordHasher.VerifyPassword() (constant-time comparison)
-              -&gt; Check User.IsActive
-              -&gt; TokenService.GenerateTokens()
-              -&gt; Update User.RefreshToken + RefreshTokenExpiry
-              -&gt; UnitOfWork.SaveChangesAsync()</code></pre>
+  -&gt; AuthenticationService.LoginAsync()
+    -&gt; Repository: find User by email
+    -&gt; PasswordHasher.VerifyPassword() (constant-time comparison)
+    -&gt; Check User.IsActive
+    -&gt; TokenService.GenerateTokens()
+    -&gt; Update User.RefreshToken + RefreshTokenExpiry
+    -&gt; UnitOfWork.SaveChangesAsync()</code></pre>
           <p><strong>Business Steps:</strong></p>
           <ol>
           <li>Look up user by email</li>
@@ -480,11 +480,11 @@
           <p><strong>Entry Point:</strong> <code>POST /auth/refresh</code>, AllowAnonymous</p>
           <p><strong>Execution Path:</strong></p>
           <pre class="doc-pre"><code class="">AuthController.RefreshAsync()
-            -&gt; TokenService.GetPrincipalFromExpiredToken() (validates structure, allows expired)
-            -&gt; Extract user_id claim -&gt; fetch User
-            -&gt; Validate RefreshToken matches + not expired + user active
-            -&gt; Generate new tokens -&gt; update User.RefreshToken
-            -&gt; SaveChangesAsync()</code></pre>
+  -&gt; TokenService.GetPrincipalFromExpiredToken() (validates structure, allows expired)
+  -&gt; Extract user_id claim -&gt; fetch User
+  -&gt; Validate RefreshToken matches + not expired + user active
+  -&gt; Generate new tokens -&gt; update User.RefreshToken
+  -&gt; SaveChangesAsync()</code></pre>
           <p><strong>Decision Points:</strong></p>
           <ul>
           <li>Invalid/expired refresh token -&gt; Unauthorized</li>
@@ -500,11 +500,11 @@
           <p><strong>Entry Point:</strong> <code>PUT /auth/password</code>, Requires Authorization</p>
           <p><strong>Execution Path:</strong></p>
           <pre class="doc-pre"><code class="">AuthController.ChangePasswordAsync()
-            -&gt; ChangePasswordHandler.Handle()
-              -&gt; Verify current password
-              -&gt; Hash new password
-              -&gt; User.ChangePassword() -&gt; publishes UserPasswordChanged
-              -&gt; SaveChangesAsync()</code></pre>
+  -&gt; ChangePasswordHandler.Handle()
+    -&gt; Verify current password
+    -&gt; Hash new password
+    -&gt; User.ChangePassword() -&gt; publishes UserPasswordChanged
+    -&gt; SaveChangesAsync()</code></pre>
           <p><strong>Decision Points:</strong> Current password incorrect -&gt; Bad Request</p>
           <hr>
           <h3 id="16-customer-profile-management">1.6 Customer Profile Management</h3>
@@ -640,20 +640,20 @@
           <h4 id="create-category">Create Category</h4>
           <p><strong>Entry Point:</strong> <code>POST /categories</code>, Admin only, <code>[Idempotent]</code></p>
           <pre class="doc-pre"><code class="">CategoriesController.CreateAsync()
-            -&gt; CreateCategoryHandler
-              -&gt; CategoryCreateRequestValidator (name: required, max 255)
-              -&gt; Category.Create(id, name, parentCategoryId?) -&gt; publishes CategoryCreated
-              -&gt; Repository.AddAsync() + SaveChangesAsync()</code></pre>
+  -&gt; CreateCategoryHandler
+    -&gt; CategoryCreateRequestValidator (name: required, max 255)
+    -&gt; Category.Create(id, name, parentCategoryId?) -&gt; publishes CategoryCreated
+    -&gt; Repository.AddAsync() + SaveChangesAsync()</code></pre>
           <p><strong>Response:</strong> 201 Created with <code>CategoryDTO</code></p>
           <h4 id="rename-category">Rename Category</h4>
           <p><strong>Entry Point:</strong> <code>PUT /categories/{id}/name</code>, Admin only</p>
           <pre class="doc-pre"><code class="">CategoriesController.RenameAsync()
-            -&gt; RenameCategoryHandler
-              -&gt; Validate name (max 255)
-              -&gt; Fetch category -&gt; category.Rename(name)
-              -&gt; Only updates if name differs (case-insensitive comparison)
-              -&gt; Publishes CategoryNameChanged if changed
-              -&gt; Cache invalidation</code></pre>
+  -&gt; RenameCategoryHandler
+    -&gt; Validate name (max 255)
+    -&gt; Fetch category -&gt; category.Rename(name)
+    -&gt; Only updates if name differs (case-insensitive comparison)
+    -&gt; Publishes CategoryNameChanged if changed
+    -&gt; Cache invalidation</code></pre>
           <h4 id="assign-parent-category">Assign Parent Category</h4>
           <p><strong>Entry Point:</strong> <code>PUT /categories/{id}/parentcategory</code>, Admin only</p>
           <p>Sets or clears <code>ParentCategoryId</code> to establish hierarchy. No domain event raised.</p>
@@ -695,10 +695,10 @@
           <h4 id="create-product">Create Product</h4>
           <p><strong>Entry Point:</strong> <code>POST /products</code>, Admin only, <code>[Idempotent]</code></p>
           <pre class="doc-pre"><code class="">ProductsController.CreateAsync()
-            -&gt; CreateProductHandler
-              -&gt; Validate: name (required, max 100), description (max 4000), brand (max 100, no whitespace if provided)
-              -&gt; Product.Create() factory -&gt; publishes ProductCreated
-              -&gt; Repository.AddAsync() + SaveChangesAsync()</code></pre>
+  -&gt; CreateProductHandler
+    -&gt; Validate: name (required, max 100), description (max 4000), brand (max 100, no whitespace if provided)
+    -&gt; Product.Create() factory -&gt; publishes ProductCreated
+    -&gt; Repository.AddAsync() + SaveChangesAsync()</code></pre>
           <h4 id="update-operations">Update Operations</h4>
           <div class="table-wrap"><table>
           <thead>
@@ -776,14 +776,14 @@
           <h4 id="add-product-variant">Add Product Variant</h4>
           <p><strong>Entry Point:</strong> <code>POST /products/{id}/productvariants</code>, Admin only</p>
           <pre class="doc-pre"><code class="">ProductVariantsController.CreateAsync()
-            -&gt; AddVariantHandler
-              -&gt; Validate: SKU (max 50), Price (positive Money)
-              -&gt; IProductVariantService.SkuExistsAsync() -&gt; global SKU uniqueness check
-              -&gt; Fetch Product with variants
-              -&gt; product.AddProductVariant(variantId, sku, price)
-                -&gt; ProductVariant.Create() validates price not negative
-                -&gt; Publishes ProductVariantAdded
-              -&gt; SaveChangesAsync()</code></pre>
+  -&gt; AddVariantHandler
+    -&gt; Validate: SKU (max 50), Price (positive Money)
+    -&gt; IProductVariantService.SkuExistsAsync() -&gt; global SKU uniqueness check
+    -&gt; Fetch Product with variants
+    -&gt; product.AddProductVariant(variantId, sku, price)
+      -&gt; ProductVariant.Create() validates price not negative
+      -&gt; Publishes ProductVariantAdded
+    -&gt; SaveChangesAsync()</code></pre>
           <p><strong>Cross-Module:</strong> SKU uniqueness checked via <code>IProductVariantService</code></p>
           <h4 id="change-variant-sku">Change Variant SKU</h4>
           <p><strong>Entry Point:</strong> <code>PUT /products/{id}/productvariants/{variantId}/sku</code>, Admin only</p>
@@ -859,16 +859,16 @@
           <h4 id="add-item-to-cart">Add Item to Cart</h4>
           <p><strong>Entry Point:</strong> <code>POST /shoppingcarts/{customerId}/shoppingcartitems</code>, Authenticated (owner or admin via <code>OwnerOrAdminFilter</code>)</p>
           <pre class="doc-pre"><code class="">ShoppingCartsController.CreateShoppingCartItemAsync()
-            -&gt; AddItemHandler
-              -&gt; Validate quantity &gt; 0
-              -&gt; IProductVariantService.ExistsAsync() [cross-module: Catalog]
-              -&gt; Fetch ShoppingCart by CustomerId
-              -&gt; If no cart exists -&gt; ShoppingCart.Create(customerId) -&gt; ShoppingCartCreated event
-              -&gt; If cart is CheckedOut -&gt; shoppingCart.Reactivate() (clears items, resets to Active)
-              -&gt; shoppingCart.AddShoppingCartItem(variantId, quantity)
-                -&gt; If item already in cart -&gt; IncreaseQuantity -&gt; ShoppingCartItemQuantityAdjusted
-                -&gt; If new item -&gt; ShoppingCartItem.Create() -&gt; ShoppingCartItemAdded
-              -&gt; SaveChangesAsync()</code></pre>
+  -&gt; AddItemHandler
+    -&gt; Validate quantity &gt; 0
+    -&gt; IProductVariantService.ExistsAsync() [cross-module: Catalog]
+    -&gt; Fetch ShoppingCart by CustomerId
+    -&gt; If no cart exists -&gt; ShoppingCart.Create(customerId) -&gt; ShoppingCartCreated event
+    -&gt; If cart is CheckedOut -&gt; shoppingCart.Reactivate() (clears items, resets to Active)
+    -&gt; shoppingCart.AddShoppingCartItem(variantId, quantity)
+      -&gt; If item already in cart -&gt; IncreaseQuantity -&gt; ShoppingCartItemQuantityAdjusted
+      -&gt; If new item -&gt; ShoppingCartItem.Create() -&gt; ShoppingCartItemAdded
+    -&gt; SaveChangesAsync()</code></pre>
           <p><strong>Decision Points:</strong></p>
           <ul>
           <li>Product variant doesn&#39;t exist -&gt; NotFound</li>
@@ -918,36 +918,36 @@
           owner parameter to compare, so the specification narrows the rows before they are read.</p>
           <h4 id="shopping-cart-status-state-machine">Shopping Cart Status State Machine</h4>
           <pre class="doc-pre"><code class="">Active --(MarkAsCheckedOut)--&gt; CheckedOut
-            ^                                |
-            +----(Reactivate on AddItem)-----+
-                  (clears all items)</code></pre>
+  ^                                |
+  +----(Reactivate on AddItem)-----+
+        (clears all items)</code></pre>
           <hr>
           <h3 id="32-checkout-cart-to-order-primary-business-workflow">3.2 Checkout (Cart to Order): Primary Business Workflow</h3>
           <p><strong>Entry Point:</strong> <code>PUT /shoppingcarts/{customerId}/checkout</code>, authenticated, marked <code>ICacheInvalidating</code>.
           <code>CheckOutCommand</code> is <strong>deliberately NOT <code>ITransactional</code></strong> (<code>CheckOutCommand.cs:9</code>): the handler opens its
           own transaction around the write phase only, so the cross-module price fetch never holds database locks.</p>
           <pre class="doc-pre"><code class="">ShoppingCartsController.CheckOutAsync()
-            -&gt; CheckOutHandler
-              -&gt; Fetch ShoppingCart with items (tracking)
-              -&gt; Collect productVariantIds from cart items
-              -&gt; IProductVariantService.GetUnitPricesAsync(ids) [cross-module: Catalog, OUTSIDE the transaction]
-              -&gt; Reject any variant missing from the price map (soft-deleted between add and checkout)
-              -&gt; Fetch InventoryItems for all variants
-              -&gt; CheckOutDomainService.Execute():
-                  1. Validate cart not empty
-                  2. Validate inventory exists for all items
-                  3. Fail-fast sufficiency check per item against the point-in-time snapshot
-                     (NOT the oversell guard: that is the atomic decrement below)
-                  4. Build order items (variant + price + quantity)
-                  5. Order.Create(customerId, items) -&gt; publishes OrderPlaced
-                  6. shoppingCart.MarkAsCheckedOut() -&gt; publishes ShoppingCartCheckedOut
-              -&gt; orderRepository.AddAsync(order)
-              -&gt; unitOfWork.ExecuteInTransactionAsync:            &lt;-- the whole write phase, one transaction
-                   -&gt; IInventoryAllocationService.DecrementAsync(decrements)
-                        atomic conditional UPDATE per variant (ExecuteUpdateAsync); a row that no longer has
-                        enough stock matches zero rows and fails the Result, rolling the transaction back
-                   -&gt; unitOfWork.SaveChangesAsync()               &lt;-- order insert + cart transition
-              -&gt; Return OrderDTO</code></pre>
+  -&gt; CheckOutHandler
+    -&gt; Fetch ShoppingCart with items (tracking)
+    -&gt; Collect productVariantIds from cart items
+    -&gt; IProductVariantService.GetUnitPricesAsync(ids) [cross-module: Catalog, OUTSIDE the transaction]
+    -&gt; Reject any variant missing from the price map (soft-deleted between add and checkout)
+    -&gt; Fetch InventoryItems for all variants
+    -&gt; CheckOutDomainService.Execute():
+        1. Validate cart not empty
+        2. Validate inventory exists for all items
+        3. Fail-fast sufficiency check per item against the point-in-time snapshot
+           (NOT the oversell guard: that is the atomic decrement below)
+        4. Build order items (variant + price + quantity)
+        5. Order.Create(customerId, items) -&gt; publishes OrderPlaced
+        6. shoppingCart.MarkAsCheckedOut() -&gt; publishes ShoppingCartCheckedOut
+    -&gt; orderRepository.AddAsync(order)
+    -&gt; unitOfWork.ExecuteInTransactionAsync:            &lt;-- the whole write phase, one transaction
+         -&gt; IInventoryAllocationService.DecrementAsync(decrements)
+              atomic conditional UPDATE per variant (ExecuteUpdateAsync); a row that no longer has
+              enough stock matches zero rows and fails the Result, rolling the transaction back
+         -&gt; unitOfWork.SaveChangesAsync()               &lt;-- order insert + cart transition
+    -&gt; Return OrderDTO</code></pre>
           <p><strong>Business Steps:</strong></p>
           <ol>
           <li>Validate cart exists and has items</li>
@@ -983,59 +983,59 @@
           <h3 id="33-order-lifecycle">3.3 Order Lifecycle</h3>
           <h4 id="order-status-state-machine">Order Status State Machine</h4>
           <pre class="doc-pre"><code class="">                    +------------------------------------------+
-                              |                                          |
-                              v                                          |
-          PendingPayment --&gt; PaymentInitiated --&gt; Paid -----------&gt; Delivered
-              |                    |               ^
-              |                    |               |
-              |                    v        (MarkAsPaidManually)
-              |              PaymentFailed --------+
-              |                    |
-              |                    v (retry)
-              |              PaymentInitiated
-              |                    |
-              v                    v
-           Cancelled &lt;------- Cancelled
-          (from PendingPayment, PaymentInitiated, or PaymentFailed)</code></pre>
+                    |                                          |
+                    v                                          |
+PendingPayment --&gt; PaymentInitiated --&gt; Paid -----------&gt; Delivered
+    |                    |               ^
+    |                    |               |
+    |                    v        (MarkAsPaidManually)
+    |              PaymentFailed --------+
+    |                    |
+    |                    v (retry)
+    |              PaymentInitiated
+    |                    |
+    v                    v
+ Cancelled &lt;------- Cancelled
+(from PendingPayment, PaymentInitiated, or PaymentFailed)</code></pre>
           <p><strong>Terminal States:</strong> Cancelled, Delivered</p>
           <h4 id="create-stripe-checkout-session">Create Stripe Checkout Session</h4>
           <p><strong>Entry Point:</strong> <code>POST /orders/{id}/checkout</code>, Authenticated (owner or admin)</p>
           <pre class="doc-pre"><code class="">OrdersController.CreateCheckoutSessionAsync()
-            -&gt; CreateCheckoutSessionHandler
-              -&gt; Fetch Order with OrderLines
-              -&gt; IPaymentService.CreateCheckoutSessionAsync()
-                -&gt; StripePaymentService creates Stripe Checkout Session
-                -&gt; Converts Money to smallest currency unit (amount * 100)
-                -&gt; Sets success/cancel URIs, stores orderId in metadata
-                -&gt; Returns sessionId + checkoutUri
-              -&gt; order.InitiatePayment(sessionId)
-                -&gt; Validates status is PendingPayment or PaymentFailed
-                -&gt; Validates order not empty
-                -&gt; Sets StripeSessionId, status -&gt; PaymentInitiated
-                -&gt; Publishes OrderPaymentInitiated
-              -&gt; SaveChangesAsync()
-              -&gt; Return sessionId + checkoutUri</code></pre>
+  -&gt; CreateCheckoutSessionHandler
+    -&gt; Fetch Order with OrderLines
+    -&gt; IPaymentService.CreateCheckoutSessionAsync()
+      -&gt; StripePaymentService creates Stripe Checkout Session
+      -&gt; Converts Money to smallest currency unit (amount * 100)
+      -&gt; Sets success/cancel URIs, stores orderId in metadata
+      -&gt; Returns sessionId + checkoutUri
+    -&gt; order.InitiatePayment(sessionId)
+      -&gt; Validates status is PendingPayment or PaymentFailed
+      -&gt; Validates order not empty
+      -&gt; Sets StripeSessionId, status -&gt; PaymentInitiated
+      -&gt; Publishes OrderPaymentInitiated
+    -&gt; SaveChangesAsync()
+    -&gt; Return sessionId + checkoutUri</code></pre>
           <p><strong>External Interaction:</strong> Stripe API: creates payment session with order line items</p>
           <h4 id="stripe-payment-webhook">Stripe Payment Webhook</h4>
           <p><strong>Entry Point:</strong> <code>POST /payments/webhook</code>, AllowAnonymous, <code>ITransactional</code>, <code>ICacheInvalidating</code></p>
           <pre class="doc-pre"><code class="">PaymentsController.HandleWebhookAsync()
-            -&gt; ProcessPaymentWebhookHandler
-              -&gt; IPaymentService.ParseWebhookEvent() (Stripe signature verification)
-              -&gt; Route by event type:
-          
-                checkout.session.completed:
-                  -&gt; Find Order by StripeSessionId
-                  -&gt; Idempotent: if already Paid, return success
-                  -&gt; order.MarkAsPaid(paymentIntentId)
-                  -&gt; Status -&gt; Paid, publishes OrderPaid
-          
-                checkout.session.expired / payment_intent.payment_failed:
-                  -&gt; Find Order by StripeSessionId
-                  -&gt; Idempotent: if already PaymentFailed or Cancelled, return success
-                  -&gt; order.MarkAsPaymentFailed()
-                  -&gt; Status -&gt; PaymentFailed, publishes OrderPaymentFailed
-          
-                Other events: silently ignored (returns success)</code></pre>
+  -&gt; ProcessPaymentWebhookHandler
+    -&gt; IPaymentService.ParseWebhookEvent() (Stripe signature verification)
+    -&gt; Route by event type:
+
+      checkout.session.completed:
+        -&gt; Find Order by StripeSessionId
+        -&gt; Idempotent: if already Paid, return success
+        -&gt; order.MarkAsPaid(paymentIntentId)
+        -&gt; Status -&gt; Paid, publishes OrderPaid
+
+      checkout.session.expired / payment_intent.payment_failed:
+        -&gt; Find Order by StripeSessionId
+        -&gt; Idempotent: if already PaymentFailed or Cancelled, return success
+        -&gt; order.MarkAsPaymentFailed()
+        -&gt; Status -&gt; PaymentFailed, publishes OrderPaymentFailed
+
+      Other events: silently ignored (returns success)</code></pre>
           <p><strong>Idempotency:</strong> Already-paid or already-failed orders return success without modification.</p>
           <p><strong>Controller behavior:</strong> Returns 400 only for signature verification failures; returns 200 for all other cases (including handler errors) to prevent Stripe retries.</p>
           <h4 id="manual-admin-payment">Manual Admin Payment</h4>
@@ -1055,19 +1055,19 @@
           <h4 id="cancel-order">Cancel Order</h4>
           <p><strong>Entry Point:</strong> <code>PUT /orders/{id}/cancel</code>, Owner or Admin</p>
           <pre class="doc-pre"><code class="">OrdersController.CancelAsync()
-            -&gt; CancelOrderHandler
-              -&gt; Fetch Order with OrderLines
-              -&gt; order.MarkAsCancelled()
-                -&gt; Validates status is PendingPayment, PaymentInitiated, or PaymentFailed
-                -&gt; Status -&gt; Cancelled, publishes OrderCancelled
-              -&gt; SaveChangesAsync()          &lt;-- cancellation commits here; no inventory work inline
-          
-            (then, after commit)
-            -&gt; OrderCancelledSagaHandler  [ADR-054 compensating action, own DI scope]
-              -&gt; Skip if order.InventoryRestored is already set (idempotent under redelivery)
-              -&gt; Restore stock for each OrderLine
-              -&gt; order.MarkInventoryRestored()
-              -&gt; ONE SaveChangesAsync commits the marker and the inventory increases together</code></pre>
+  -&gt; CancelOrderHandler
+    -&gt; Fetch Order with OrderLines
+    -&gt; order.MarkAsCancelled()
+      -&gt; Validates status is PendingPayment, PaymentInitiated, or PaymentFailed
+      -&gt; Status -&gt; Cancelled, publishes OrderCancelled
+    -&gt; SaveChangesAsync()          &lt;-- cancellation commits here; no inventory work inline
+
+  (then, after commit)
+  -&gt; OrderCancelledSagaHandler  [ADR-054 compensating action, own DI scope]
+    -&gt; Skip if order.InventoryRestored is already set (idempotent under redelivery)
+    -&gt; Restore stock for each OrderLine
+    -&gt; order.MarkInventoryRestored()
+    -&gt; ONE SaveChangesAsync commits the marker and the inventory increases together</code></pre>
           <p><strong>Inventory Impact:</strong> All reserved inventory is restored on cancellation, by a <strong>compensating handler
           that runs after</strong> the cancellation transaction, not inside it (<a href="../adr/054-saga-compensation-and-reconciliation.html">ADR-054</a>).
           <code>Order.InventoryRestored</code> is the idempotency marker, committed by the same <code>SaveChangesAsync</code> as the
@@ -1452,13 +1452,13 @@
           <hr>
           <h2 id="8-end-to-end-customer-journey">8. End-to-End Customer Journey</h2>
           <pre class="doc-pre"><code class="">1. Register          POST /auth/register        -&gt; User + Customer created, tokens issued
-          2. Browse Catalog    GET /products               -&gt; View products with variants and prices
-          3. Add to Cart       POST /shoppingcarts/{id}/shoppingcartitems  -&gt; Cart created/updated
-          4. Adjust Cart       PUT/DELETE cart items        -&gt; Modify quantities or remove items
-          5. Checkout          PUT /shoppingcarts/{id}/checkout  -&gt; Order created, inventory reserved
-          6. Pay               POST /orders/{id}/checkout   -&gt; Stripe session created, redirect to payment
-          7. Payment Complete  POST /payments/webhook        -&gt; Stripe confirms, order marked Paid
-          8. Delivery          PUT /orders/{id}/deliver      -&gt; Admin marks as Delivered</code></pre>
+2. Browse Catalog    GET /products               -&gt; View products with variants and prices
+3. Add to Cart       POST /shoppingcarts/{id}/shoppingcartitems  -&gt; Cart created/updated
+4. Adjust Cart       PUT/DELETE cart items        -&gt; Modify quantities or remove items
+5. Checkout          PUT /shoppingcarts/{id}/checkout  -&gt; Order created, inventory reserved
+6. Pay               POST /orders/{id}/checkout   -&gt; Stripe session created, redirect to payment
+7. Payment Complete  POST /payments/webhook        -&gt; Stripe confirms, order marked Paid
+8. Delivery          PUT /orders/{id}/deliver      -&gt; Admin marks as Delivered</code></pre>
           <p><strong>Alternative Flows:</strong></p>
           <ul>
           <li>Payment fails -&gt; Order status <code>PaymentFailed</code> -&gt; customer can retry (create new Stripe session)</li>

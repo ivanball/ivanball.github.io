@@ -1240,13 +1240,13 @@
           <hr>
           <h2 id="6-how-to-regenerate-this-audit">6. How to regenerate this audit</h2>
           <pre class="doc-pre"><code class=""># from C:\Projects\MMCA\Tools\invtool
-          dotnet run -- out  ../../MMCA.Common/Source ../../MMCA.Common/Tests ../../MMCA.ADC/Source ../../MMCA.ADC/Tests
-          pwsh -File classify.ps1   # -&gt; 00-group-taxonomy.md + _groups.tsv (0 unmapped check)
-          pwsh -File plan.ps1       # -&gt; _typemap.tsv + _units/* + _workplan.json
-          pwsh -File concat.ps1     # parts/* -&gt; group-NN-*.md
-          pwsh -File fixanchors.ps1 # inject &lt;a id&gt; aliases for sibling-family members (from _typemap.tsv)
-          pwsh -File fixanchors2.ps1 # conservative cross-link repair (unique-heading-token match)
-          pwsh -File verify.ps1     # 0-missing coverage check + rubric 34/34 check</code></pre>
+dotnet run -- out  ../../MMCA.Common/Source ../../MMCA.Common/Tests ../../MMCA.ADC/Source ../../MMCA.ADC/Tests
+pwsh -File classify.ps1   # -&gt; 00-group-taxonomy.md + _groups.tsv (0 unmapped check)
+pwsh -File plan.ps1       # -&gt; _typemap.tsv + _units/* + _workplan.json
+pwsh -File concat.ps1     # parts/* -&gt; group-NN-*.md
+pwsh -File fixanchors.ps1 # inject &lt;a id&gt; aliases for sibling-family members (from _typemap.tsv)
+pwsh -File fixanchors2.ps1 # conservative cross-link repair (unique-heading-token match)
+pwsh -File verify.ps1     # 0-missing coverage check + rubric 34/34 check</code></pre>
           <p>Then copy the refreshed <code>out/00-inventory.md</code> and <code>out/00-dependency-manifest.md</code> into
           <code>Docs/Onboarding/</code> (the <code>00-group-taxonomy.md</code> is written there directly by <code>classify.ps1</code>).</p>
           

@@ -887,6 +887,17 @@ for (const col of collections) {
         });
       }
     }
+    /* Pretty-print the body by indenting it into the page shell, EXCEPT inside <pre> blocks:
+       there the whitespace is literal, so the indent used to render every code line after the
+       first shifted ten spaces right on all 119+ doc pages. The line carrying the opening <pre>
+       tag may still be indented (the tag itself is outside the content); every line up to and
+       including the one carrying </pre> starts with code content and must stay flush left. */
+    let preDepth = 0;
+    const indentedBody = body.split("\n").map((l) => {
+      const out = preDepth > 0 ? l : "          " + l;
+      preDepth += (l.match(/<pre\b/g) || []).length - (l.match(/<\/pre>/g) || []).length;
+      return out;
+    }).join("\n");
     const content =
 `    <div class="container doc-container">
 ${breadcrumbHtml(col, prefix, currentLabel)}
@@ -894,7 +905,7 @@ ${breadcrumbHtml(col, prefix, currentLabel)}
 ${sidebarHtml(col, doc.outRel)}
         <article class="doc-content">
           <p class="eyebrow doc-kicker">${escapeHtml(col.kicker)}</p>
-${body.split("\n").map((l) => "          " + l).join("\n")}
+${indentedBody}
 ${docFootHtml(col, doc)}
         </article>
 ${aside}

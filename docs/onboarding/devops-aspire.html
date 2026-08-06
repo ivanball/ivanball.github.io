@@ -196,9 +196,9 @@
           data and avoiding re-seeding during inner-loop development (Program.cs:12-13 comment). Four databases are
           carved from it (Program.cs:32-35):</p>
           <pre class="doc-pre"><code class="">adc-identity    →  ADC_Identity     (Identity service)
-          adc-conference  →  ADC_Conference   (Conference service)
-          adc-engagement  →  ADC_Engagement   (Engagement service)
-          adc-notification →  ADC_Notification (Notification service)</code></pre>
+adc-conference  →  ADC_Conference   (Conference service)
+adc-engagement  →  ADC_Engagement   (Engagement service)
+adc-notification →  ADC_Notification (Notification service)</code></pre>
           <p>One database per service is the direct implementation of <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a> (database-per-service). No service
           touches another service&#39;s database; no service races for another service&#39;s outbox rows.</p>
           <p><strong>Redis</strong> is also persistent (Program.cs:39-40), used by service hosts for distributed output-caching
@@ -206,7 +206,7 @@
           and <code>WaitFor(redis)</code>.</p>
           <p><strong>RabbitMQ</strong> is provisioned via a framework helper (Program.cs:60-61):</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> rabbit = builder.AddMessageBroker()
-              .WithLifetime(ContainerLifetime.Persistent);</code></pre>
+    .WithLifetime(ContainerLifetime.Persistent);</code></pre>
           <p><code>AddMessageBroker()</code> lives in <code>MMCA.Common.Aspire.Hosting</code> (Common.Aspire.Hosting/Extensions.cs:39-44)
           and wraps <code>builder.AddRabbitMQ(name).WithManagementPlugin()</code> with the resource name defaulting to
           <code>&quot;rabbitmq&quot;</code> (<code>DefaultBrokerResourceName</code>, Extensions.cs:27); the management plugin exposes the admin
@@ -217,9 +217,9 @@
           AppHost no longer creates or migrates it.</p>
           <p><strong>MailDev</strong> is a plain Docker container (Program.cs:67-70):</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> mailDev = builder.AddContainer(<span class="hljs-string">&quot;maildev&quot;</span>, <span class="hljs-string">&quot;maildev/maildev&quot;</span>)
-              .WithLifetime(ContainerLifetime.Persistent)
-              .WithHttpEndpoint(targetPort: <span class="hljs-number">1080</span>, port: <span class="hljs-number">1080</span>, name: <span class="hljs-string">&quot;http&quot;</span>)
-              .WithEndpoint(targetPort: <span class="hljs-number">1025</span>, port: <span class="hljs-number">1025</span>, name: <span class="hljs-string">&quot;smtp&quot;</span>, scheme: <span class="hljs-string">&quot;tcp&quot;</span>);</code></pre>
+    .WithLifetime(ContainerLifetime.Persistent)
+    .WithHttpEndpoint(targetPort: <span class="hljs-number">1080</span>, port: <span class="hljs-number">1080</span>, name: <span class="hljs-string">&quot;http&quot;</span>)
+    .WithEndpoint(targetPort: <span class="hljs-number">1025</span>, port: <span class="hljs-number">1025</span>, name: <span class="hljs-string">&quot;smtp&quot;</span>, scheme: <span class="hljs-string">&quot;tcp&quot;</span>);</code></pre>
           <p>The web UI at <code>http://localhost:1080</code> lets developers inspect every email the app sends. The SMTP port
           1025 matches the <code>Smtp:Port</code> in <code>appsettings.json</code>. No other Aspire helper was needed because MailDev
           is a third-party image with no matching Aspire hosting package.</p>
@@ -237,23 +237,23 @@
           <p>It is declared inside a C# preview <code>extension(...)</code> block rather than as a classic <code>this</code>-parameter
           static method (Extensions.cs:147), which is why the receiver does not appear in the signature:</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">extension(IResourceBuilder&lt;ProjectResource&gt; service)
-          {
-              <span class="hljs-function"><span class="hljs-keyword">public</span> IResourceBuilder&lt;ProjectResource&gt; <span class="hljs-title">WithSQLServerDataSource</span>(<span class="hljs-params">
-                  IResourceBuilder&lt;SqlServerDatabaseResource&gt; database,
-                  <span class="hljs-built_in">string</span> logicalName</span>)</span>
-              {
-                  ArgumentNullException.ThrowIfNull(service);
-                  ArgumentNullException.ThrowIfNull(database);
-          
-                  <span class="hljs-keyword">return</span> service
-                      .WithReference(database)
-                      .WaitFor(database)
-                      .WithEnvironment(<span class="hljs-string">$&quot;DataSources__<span class="hljs-subst">{logicalName}</span>__SQLServerConnectionString&quot;</span>,
-                                       database.Resource.ConnectionStringExpression)
-                      .WithEnvironment(<span class="hljs-string">&quot;ConnectionStrings__SQLServerConnectionString&quot;</span>,
-                                       database.Resource.ConnectionStringExpression);
-              }
-          }</code></pre>
+{
+    <span class="hljs-function"><span class="hljs-keyword">public</span> IResourceBuilder&lt;ProjectResource&gt; <span class="hljs-title">WithSQLServerDataSource</span>(<span class="hljs-params">
+        IResourceBuilder&lt;SqlServerDatabaseResource&gt; database,
+        <span class="hljs-built_in">string</span> logicalName</span>)</span>
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        ArgumentNullException.ThrowIfNull(database);
+
+        <span class="hljs-keyword">return</span> service
+            .WithReference(database)
+            .WaitFor(database)
+            .WithEnvironment(<span class="hljs-string">$&quot;DataSources__<span class="hljs-subst">{logicalName}</span>__SQLServerConnectionString&quot;</span>,
+                             database.Resource.ConnectionStringExpression)
+            .WithEnvironment(<span class="hljs-string">&quot;ConnectionStrings__SQLServerConnectionString&quot;</span>,
+                             database.Resource.ConnectionStringExpression);
+    }
+}</code></pre>
           <p>It injects the connection string twice. <code>DataSources__{logicalName}__SQLServerConnectionString</code> feeds
           the MMCA.Common multi-database routing: entities whose logical source matches <code>logicalName</code> are routed
           to this database. <code>ConnectionStrings__SQLServerConnectionString</code> satisfies the framework&#39;s <code>[Required]</code>
@@ -280,12 +280,12 @@
           Declaration order matters because the gateway and UI references are added after all four are declared
           (Program.cs:254-293). Each service follows the same pattern:</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">builder.AddProject&lt;Projects.MMCA_ADC_{Module}_Service&gt;(<span class="hljs-string">&quot;{name}&quot;</span>, launchProfileName: <span class="hljs-string">&quot;https&quot;</span>)
-              .WithSQLServerDataSource({moduleDb}, <span class="hljs-string">&quot;{Module}&quot;</span>)
-              .WithReference(redis)
-              .WithBroker(rabbit)
-              .WaitFor(redis)
-              .WaitFor(mailDev)
-              .WithExternalHttpEndpoints();</code></pre>
+    .WithSQLServerDataSource({moduleDb}, <span class="hljs-string">&quot;{Module}&quot;</span>)
+    .WithReference(redis)
+    .WithBroker(rabbit)
+    .WaitFor(redis)
+    .WaitFor(mailDev)
+    .WithExternalHttpEndpoints();</code></pre>
           <p><code>launchProfileName: &quot;https&quot;</code> selects the HTTPS launch profile from <code>launchSettings.json</code> so Aspire
           registers both HTTP and HTTPS endpoints for service discovery (Program.cs:78-80 comment). <code>WithBroker</code> is
           called from <code>MMCA.Common.Aspire.Hosting</code> and chains <code>.WithReference(broker).WaitFor(broker) .WithEnvironment(&quot;MessageBus__Provider&quot;, &quot;RabbitMq&quot;)</code> (Common.Aspire.Hosting/Extensions.cs:58-68),
@@ -309,16 +309,16 @@
           <h3 id="grpc-cross-service-references">gRPC cross-service references</h3>
           <p>Six directed edges express the gRPC topology (Program.cs:215-239):</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// Notification → Identity</span>
-          notificationService.WithReference(identityService).WaitFor(identityService);
-          <span class="hljs-comment">// Engagement → Conference</span>
-          engagementService.WithReference(conferenceService).WaitFor(conferenceService);
-          <span class="hljs-comment">// Conference → Engagement (reverse edge, deliberately no WaitFor)</span>
-          conferenceService.WithReference(engagementService);
-          <span class="hljs-comment">// Engagement → Notification (live-channel push, deliberately no WaitFor)</span>
-          engagementService.WithReference(notificationService);
-          <span class="hljs-comment">// Identity → Engagement and Identity → Notification (data-subject export aggregation, no WaitFor)</span>
-          identityService.WithReference(engagementService);
-          identityService.WithReference(notificationService);</code></pre>
+notificationService.WithReference(identityService).WaitFor(identityService);
+<span class="hljs-comment">// Engagement → Conference</span>
+engagementService.WithReference(conferenceService).WaitFor(conferenceService);
+<span class="hljs-comment">// Conference → Engagement (reverse edge, deliberately no WaitFor)</span>
+conferenceService.WithReference(engagementService);
+<span class="hljs-comment">// Engagement → Notification (live-channel push, deliberately no WaitFor)</span>
+engagementService.WithReference(notificationService);
+<span class="hljs-comment">// Identity → Engagement and Identity → Notification (data-subject export aggregation, no WaitFor)</span>
+identityService.WithReference(engagementService);
+identityService.WithReference(notificationService);</code></pre>
           <p><code>WithReference</code> on a project resource injects <code>services__{name}__http__0</code> (and <code>https__0</code>) environment
           variables into the consumer. The <code>AddTypedGrpcClient&lt;T&gt;(serviceName)</code> call in each service&#39;s
           <code>Program.cs</code> uses <code>serviceName</code> to resolve <code>http://{name}</code> through Aspire&#39;s service discovery. The
@@ -360,16 +360,16 @@
           healthy state.</p>
           <h3 id="the-gateway">The Gateway</h3>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> gateway = builder.AddProject&lt;Projects.MMCA_ADC_Gateway&gt;(<span class="hljs-string">&quot;gateway&quot;</span>)
-              .WithReference(notificationService)
-              .WithReference(engagementService)
-              .WithReference(conferenceService)
-              .WithReference(identityService)
-              .WaitFor(notificationService)
-              .WaitFor(engagementService)
-              .WaitFor(conferenceService)
-              .WaitFor(identityService)
-              .WithExternalHttpEndpoints()
-              .WithEndpoint(<span class="hljs-string">&quot;https&quot;</span>, endpoint =&gt; endpoint.Port = <span class="hljs-number">6001</span>);</code></pre>
+    .WithReference(notificationService)
+    .WithReference(engagementService)
+    .WithReference(conferenceService)
+    .WithReference(identityService)
+    .WaitFor(notificationService)
+    .WaitFor(engagementService)
+    .WaitFor(conferenceService)
+    .WaitFor(identityService)
+    .WithExternalHttpEndpoints()
+    .WithEndpoint(<span class="hljs-string">&quot;https&quot;</span>, endpoint =&gt; endpoint.Port = <span class="hljs-number">6001</span>);</code></pre>
           <p>Program.cs:254-264. The gateway has no <code>WithSQLServerDataSource</code>, no <code>WithReference(redis)</code>, and no
           <code>WithBroker</code>. It is stateless: no database, no cache, no broker traffic. The four <code>WithReference</code> calls
           are purely for Aspire service-discovery injection, they make the gateway able to resolve
@@ -386,8 +386,8 @@
           Common.Aspire.Hosting/Extensions.cs:85-113) is <code>WithJwksDiscovery</code>, which sets
           <code>Authentication__JwtBearer__Authority</code> to the <strong>gateway&#39;s</strong> HTTPS endpoint rather than Identity&#39;s:</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs">notificationService.WithJwksDiscovery(identityService, gateway);
-          engagementService.WithJwksDiscovery(identityService, gateway);
-          conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
+engagementService.WithJwksDiscovery(identityService, gateway);
+conferenceService.WithJwksDiscovery(identityService, gateway);</code></pre>
           <p>The gateway accepts both HTTP/1.1 and HTTP/2 via ALPN, and its <code>/.well-known/*</code> forwarder routes the
           discovery fetch on to Identity over h2c internally. So the JwtBearer middleware&#39;s HTTP/1.1 metadata
           fetch works end-to-end without any workaround on the services themselves.</p>
@@ -397,16 +397,16 @@
           (cleartext h2c) invisible to callers.</p>
           <h3 id="the-blazor-ui">The Blazor UI</h3>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">var</span> ui = builder.AddProject&lt;Projects.MMCA_ADC_UI_Web&gt;(<span class="hljs-string">&quot;ui&quot;</span>, launchProfileName: <span class="hljs-string">&quot;https&quot;</span>)
-              .WithExternalHttpEndpoints()
-              .WithReference(gateway)
-              .WithReference(notificationService)
-              .WithReference(engagementService)
-              .WithReference(conferenceService)
-              .WithReference(identityService)
-              .WaitFor(gateway)
-              ...
-              .WithEndpoint(<span class="hljs-string">&quot;https&quot;</span>, endpoint =&gt; endpoint.Port = <span class="hljs-number">6002</span>);
-          identityService.WithEnvironment(<span class="hljs-string">&quot;OAuth__UIBaseUrl&quot;</span>, ui.GetEndpoint(<span class="hljs-string">&quot;https&quot;</span>));</code></pre>
+    .WithExternalHttpEndpoints()
+    .WithReference(gateway)
+    .WithReference(notificationService)
+    .WithReference(engagementService)
+    .WithReference(conferenceService)
+    .WithReference(identityService)
+    .WaitFor(gateway)
+    ...
+    .WithEndpoint(<span class="hljs-string">&quot;https&quot;</span>, endpoint =&gt; endpoint.Port = <span class="hljs-number">6002</span>);
+identityService.WithEnvironment(<span class="hljs-string">&quot;OAuth__UIBaseUrl&quot;</span>, ui.GetEndpoint(<span class="hljs-string">&quot;https&quot;</span>));</code></pre>
           <p>Program.cs:281-293. The UI waits for the gateway (and transitively the four services), ensuring it
           does not open to traffic while the backend is still cold. Port 6002 is pinned for the same reason as
           6001, E2E tests and out-of-Aspire clients need a stable address. The <code>identityService.WithEnvironment</code>
@@ -823,15 +823,15 @@
           Identity without any explicit <code>WaitFor</code> in the AppHost: <code>WithJwksDiscovery</code> adds it
           (Common.Aspire.Hosting/Extensions.cs:92-94).</p>
           <pre class="doc-pre"><code class="">SQL Server container health
-            └─ Database resources health (adc-identity, adc-conference, adc-engagement, adc-notification)
-                 └─ Identity Service  (WaitFor: identityDb, redis, mailDev, rabbit)
-                      ├─ Conference Service (WaitFor: conferenceDb, redis, mailDev, rabbit, identity via JWKS)
-                      │    └─ Engagement Service (WaitFor: engagementDb, redis, mailDev, rabbit,
-                      │         conferenceService, identity via JWKS)
-                      └─ Notification Service (WaitFor: notificationDb, redis, mailDev, rabbit,
-                           identityService twice over: explicit at Program.cs:215 and again via JWKS)
-                           └─ Gateway (WaitFor: all four services)
-                                └─ UI (WaitFor: gateway + all four services)</code></pre>
+  └─ Database resources health (adc-identity, adc-conference, adc-engagement, adc-notification)
+       └─ Identity Service  (WaitFor: identityDb, redis, mailDev, rabbit)
+            ├─ Conference Service (WaitFor: conferenceDb, redis, mailDev, rabbit, identity via JWKS)
+            │    └─ Engagement Service (WaitFor: engagementDb, redis, mailDev, rabbit,
+            │         conferenceService, identity via JWKS)
+            └─ Notification Service (WaitFor: notificationDb, redis, mailDev, rabbit,
+                 identityService twice over: explicit at Program.cs:215 and again via JWKS)
+                 └─ Gateway (WaitFor: all four services)
+                      └─ UI (WaitFor: gateway + all four services)</code></pre>
           <p>Four edges deliberately carry a <code>WithReference</code> with no <code>WaitFor</code>: Conference→Engagement (the reverse
           half of the bidirectional gRPC pair, Program.cs:220), Engagement→Notification (fire-and-forget live
           channel, Program.cs:228), and Identity→Engagement / Identity→Notification (the export aggregation,

@@ -165,26 +165,26 @@
           <h2 id="how-the-pieces-fit-together">How the pieces fit together</h2>
           <p>Before diving into individual files, here is the end-to-end picture:</p>
           <pre class="doc-pre"><code class="">GitHub Actions (deploy.yml)
-            │
-            ├─ Phase 1 ─ job `foundation` ─ azure/arm-deploy → infra/foundation.bicep
-            │               (ACR + Log Analytics, long-lived, rarely changes)
-            │               outputs: acrName, acrLoginServer, logAnalyticsName
-            │
-            ├─ Phase 2 ─ job `build-images` ─ 6-leg matrix, docker build &amp; push
-            │               (sha-tagged + :latest, registry-backed buildx cache)
-            │
-            ├─ Phase 3 ─ job `deploy` ─ azure/arm-deploy → infra/main.bicep   ← this chapter
-            │               (everything else: App Insights, alerts + availability web
-            │                test + workbook, SQL, Service Bus, Redis, avatar storage,
-            │                Container Apps, Key Vault secrets, budget)
-            │               inputs: acrName + logAnalyticsName from Phase 1
-            │               outputs: gatewayFqdn, uiFqdn, sqlServerFqdn, …
-            │
-            ├─ Phase 4 ─ (no migration step, each service self-applies its own
-            │               migrations at startup as the SOLE migrator; minReplicas:1
-            │               guarantees a single applier, see the CI/CD chapter)
-            │
-            └─ Phase 5 ─ smoke-test probe + rollback on failure</code></pre>
+  │
+  ├─ Phase 1 ─ job `foundation` ─ azure/arm-deploy → infra/foundation.bicep
+  │               (ACR + Log Analytics, long-lived, rarely changes)
+  │               outputs: acrName, acrLoginServer, logAnalyticsName
+  │
+  ├─ Phase 2 ─ job `build-images` ─ 6-leg matrix, docker build &amp; push
+  │               (sha-tagged + :latest, registry-backed buildx cache)
+  │
+  ├─ Phase 3 ─ job `deploy` ─ azure/arm-deploy → infra/main.bicep   ← this chapter
+  │               (everything else: App Insights, alerts + availability web
+  │                test + workbook, SQL, Service Bus, Redis, avatar storage,
+  │                Container Apps, Key Vault secrets, budget)
+  │               inputs: acrName + logAnalyticsName from Phase 1
+  │               outputs: gatewayFqdn, uiFqdn, sqlServerFqdn, …
+  │
+  ├─ Phase 4 ─ (no migration step, each service self-applies its own
+  │               migrations at startup as the SOLE migrator; minReplicas:1
+  │               guarantees a single applier, see the CI/CD chapter)
+  │
+  └─ Phase 5 ─ smoke-test probe + rollback on failure</code></pre>
           <p>Phases 1 and 2 are their own jobs (<code>deploy.yml:747</code>, <code>deploy.yml:795</code>) rather than steps inside
           <code>deploy</code>, so they overlap the ~20-minute chromium <code>e2e-gate</code> instead of sitting on the critical
           path (<code>deploy.yml:875-877</code>). Nothing is rolled out there: <code>build-images</code> only pushes tags, and the
@@ -305,9 +305,9 @@
           attribution covers the foundation resources as well as the application ones.</p>
           <h3 id="log-analytics-workspace-foundationbicep28-45">Log Analytics Workspace (<code>foundation.bicep:28-45</code>)</h3>
           <pre class="doc-pre"><code class="">name: &#39;${prefix}-logs-${resourceToken}&#39;
-          sku:  PerGB2018
-          retentionInDays: 30
-          workspaceCapping: { dailyQuotaGb: 1 }</code></pre>
+sku:  PerGB2018
+retentionInDays: 30
+workspaceCapping: { dailyQuotaGb: 1 }</code></pre>
           <p>PerGB2018 is the pay-as-you-go tier. The 30-day minimum is Azure&#39;s floor for this SKU, shorter
           retention is rejected (and the memory note <code>reference_log_analytics_sku_limits.md</code> records this
           hard constraint). All six container apps ship their logs here via the Container Apps environment&#39;s
@@ -324,7 +324,7 @@
           land in the same Log Analytics table set, queryable with Kusto.</p>
           <h3 id="azure-container-registry-foundationbicep50-62">Azure Container Registry (<code>foundation.bicep:50-62</code>)</h3>
           <pre class="doc-pre"><code class="">sku: Basic
-          adminUserEnabled: false   // #11/#17, managed-identity pull only</code></pre>
+adminUserEnabled: false   // #11/#17, managed-identity pull only</code></pre>
           <p>The <code>adminUserEnabled: false</code> setting (<code>foundation.bicep:60</code>) is the central credential-hardening
           decision for image pull. Without it, every container app would need a stored registry admin
           password. With it disabled, images are pulled exclusively via the shared UAMI&#39;s <code>AcrPull</code> role
@@ -454,13 +454,13 @@
           <h3 id="application-insights-mainbicep185-195">Application Insights (<code>main.bicep:185-195</code>)</h3>
           <p>A workspace-based App Insights component backed by the foundation Log Analytics workspace:</p>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">resource appInsights &#39;Microsoft.Insights/components@2020-02-02&#39; = {
-            kind: &#39;web&#39;
-            properties: {
-              Application_Type: &#39;web&#39;
-              WorkspaceResourceId: logAnalytics.id
-              IngestionMode: &#39;LogAnalytics&#39;
-            }
-          }</code></pre>
+  kind: &#39;web&#39;
+  properties: {
+    Application_Type: &#39;web&#39;
+    WorkspaceResourceId: logAnalytics.id
+    IngestionMode: &#39;LogAnalytics&#39;
+  }
+}</code></pre>
           <p><code>IngestionMode: &#39;LogAnalytics&#39;</code> routes all telemetry into the workspace tables
           (<code>AppRequests</code>, <code>AppDependencies</code>, <code>AppTraces</code>, …) rather than the legacy Classic mode.
           Every container app receives <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> (<code>main.bicep:200-203</code>) and a
@@ -591,15 +591,15 @@
           somewhere else, and the JSON stays independently validatable as a file.</p>
           <h3 id="cost-budget-mainbicep529-564">Cost budget (<code>main.bicep:529-564</code>)</h3>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">resource costBudget &#39;Microsoft.Consumption/budgets@2023-11-01&#39; = if (enableBudget) {
-            properties: {
-              amount: monthlyBudgetAmount      // default: $200 USD
-              timeGrain: &#39;Monthly&#39;
-              notifications: {
-                Actual_GreaterThan_80_Percent: { threshold: 80, thresholdType: &#39;Actual&#39; }
-                Forecasted_GreaterThan_100_Percent: { threshold: 100, thresholdType: &#39;Forecasted&#39; }
-              }
-            }
-          }</code></pre>
+  properties: {
+    amount: monthlyBudgetAmount      // default: $200 USD
+    timeGrain: &#39;Monthly&#39;
+    notifications: {
+      Actual_GreaterThan_80_Percent: { threshold: 80, thresholdType: &#39;Actual&#39; }
+      Forecasted_GreaterThan_100_Percent: { threshold: 100, thresholdType: &#39;Forecasted&#39; }
+    }
+  }
+}</code></pre>
           <p>The budget is scoped to the entire resource group (no tag filter) and covers the whole ADC
           footprint. It fires at 80% of actual spend and 100% of forecasted spend, notifying both the email
           address and the SLO action group. The primary guard this budget provides is against an un-reverted
@@ -623,9 +623,9 @@
           <h3 id="sql-server-and-databases-mainbicep566-679">SQL Server and databases (<code>main.bicep:566-679</code>)</h3>
           <p><strong>SQL Server</strong> (<code>main.bicep:569-580</code>):</p>
           <pre class="doc-pre"><code class="">name: &#39;${prefix}-sql-${resourceToken}&#39;
-          version: &#39;12.0&#39;
-          minimalTlsVersion: &#39;1.2&#39;
-          publicNetworkAccess: &#39;Enabled&#39;</code></pre>
+version: &#39;12.0&#39;
+minimalTlsVersion: &#39;1.2&#39;
+publicNetworkAccess: &#39;Enabled&#39;</code></pre>
           <p><code>publicNetworkAccess: &#39;Enabled&#39;</code> (<code>main.bicep:578</code>) combined with the firewall rule
           <code>AllowAzureServices</code> (<code>main.bicep:582-589</code>, startIpAddress/endIpAddress both <code>0.0.0.0</code>) is the
           Azure-standard pattern for allowing Container Apps to reach SQL without a VNet/private endpoint.
@@ -649,18 +649,18 @@
           store.</p>
           <p><strong>Per-service databases</strong> (<code>main.bicep:639-662</code>), <code>[Rubric §8, Data Architecture]</code>:</p>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">var serviceDatabaseNames = [
-            &#39;ADC_Identity&#39;
-            &#39;ADC_Conference&#39;
-            &#39;ADC_Engagement&#39;
-            &#39;ADC_Notification&#39;
-          ]
-          
-          resource serviceDatabases &#39;…/databases@…&#39; = [
-            for dbName in serviceDatabaseNames: {
-              sku: { name: &#39;Basic&#39;, tier: &#39;Basic&#39;, capacity: 5 }
-              properties: { maxSizeBytes: 2147483648 }  // 2 GB Basic cap, must be exact
-            }
-          ]</code></pre>
+  &#39;ADC_Identity&#39;
+  &#39;ADC_Conference&#39;
+  &#39;ADC_Engagement&#39;
+  &#39;ADC_Notification&#39;
+]
+
+resource serviceDatabases &#39;…/databases@…&#39; = [
+  for dbName in serviceDatabaseNames: {
+    sku: { name: &#39;Basic&#39;, tier: &#39;Basic&#39;, capacity: 5 }
+    properties: { maxSizeBytes: 2147483648 }  // 2 GB Basic cap, must be exact
+  }
+]</code></pre>
           <p>[Rubric §8, Data Architecture] assesses deliberate persistence strategy including transactions,
           isolation, migrations, and bounded ownership. The four separate databases implement <a href="https://ivanball.github.io/docs/adr/006-database-per-service.html" target="_blank" rel="noopener">ADR-006</a>: each
           service owns exactly its data; no cross-database foreign keys exist; each service&#39;s outbox
@@ -674,15 +674,15 @@
           changes.</p>
           <p><strong>Long-term backup retention (LTR)</strong> (<code>main.bicep:668-679</code>):</p>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">resource serviceDatabaseLtr &#39;…/backupLongTermRetentionPolicies@…&#39; = [
-            for (dbName, i) in serviceDatabaseNames: {
-              properties: {
-                weeklyRetention:  &#39;P4W&#39;
-                monthlyRetention: &#39;P12M&#39;
-                yearlyRetention:  &#39;P1Y&#39;
-                weekOfYear: 1
-              }
-            }
-          ]</code></pre>
+  for (dbName, i) in serviceDatabaseNames: {
+    properties: {
+      weeklyRetention:  &#39;P4W&#39;
+      monthlyRetention: &#39;P12M&#39;
+      yearlyRetention:  &#39;P1Y&#39;
+      weekOfYear: 1
+    }
+  }
+]</code></pre>
           <p>Basic tier already provides 7-day PITR (point-in-time recovery) with geo-redundant backups; LTR
           adds weekly (4-week), monthly (12-month), and yearly (1-year) archival on top. The practical
           value: a corrupted migration or a data-loss bug discovered three weeks after the fact is still
@@ -695,7 +695,7 @@
           drilled restore procedure (<a href="https://ivanball.github.io/docs/adr/009-resilience-and-recovery-objectives.html" target="_blank" rel="noopener">ADR-009</a>).</p>
           <h3 id="azure-service-bus-mainbicep681-723">Azure Service Bus (<code>main.bicep:681-723</code>)</h3>
           <pre class="doc-pre"><code class="">sku: Standard   // Basic rejected: MassTransit requires topics, Basic supports queues only
-          minimumTlsVersion: &#39;1.2&#39;</code></pre>
+minimumTlsVersion: &#39;1.2&#39;</code></pre>
           <p>The Standard tier comment at <code>main.bicep:689-693</code> is the explanation of a constraint that has
           bitten the project before (it was absent in early production and is now documented in the memory
           note <code>project_adc_no_broker_in_azure.md</code>): MassTransit&#39;s <code>UsingAzureServiceBus</code> auto-provisions
@@ -764,16 +764,16 @@
           </ol>
           <h3 id="container-apps-environment-mainbicep863-879">Container Apps environment (<code>main.bicep:863-879</code>)</h3>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">resource containerAppEnv &#39;…/managedEnvironments@2024-03-01&#39; = {
-            properties: {
-              appLogsConfiguration: {
-                destination: &#39;log-analytics&#39;
-                logAnalyticsConfiguration: {
-                  customerId: logAnalytics.properties.customerId
-                  sharedKey: logAnalytics.listKeys().primarySharedKey
-                }
-              }
-            }
-          }</code></pre>
+  properties: {
+    appLogsConfiguration: {
+      destination: &#39;log-analytics&#39;
+      logAnalyticsConfiguration: {
+        customerId: logAnalytics.properties.customerId
+        sharedKey: logAnalytics.listKeys().primarySharedKey
+      }
+    }
+  }
+}</code></pre>
           <p>All six container apps share one managed environment, which means they share the same virtual
           network, the same Log Analytics sink for container-level logs (stdout/stderr), and the same
           internal DNS resolution. An app can reach another by its Container App name (e.g.
@@ -782,13 +782,13 @@
           <h3 id="uami-and-acr-credential-model-mainbicep881-894">UAMI and ACR credential model (<code>main.bicep:881-894</code>)</h3>
           <p>[Rubric §11, Security] assesses credential handling as one of its primary axes.</p>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">resource appsIdentity &#39;Microsoft.ManagedIdentity/userAssignedIdentities@…&#39; existing = {
-            name: &#39;adc-prod-apps-identity&#39;
-          }
-          
-          var acrRegistry = {
-            server: acr.properties.loginServer
-            identity: appsIdentity.id    // pull via UAMI, no admin password
-          }</code></pre>
+  name: &#39;adc-prod-apps-identity&#39;
+}
+
+var acrRegistry = {
+  server: acr.properties.loginServer
+  identity: appsIdentity.id    // pull via UAMI, no admin password
+}</code></pre>
           <p><code>appsIdentity</code> is a User-Assigned Managed Identity (UAMI) bootstrapped out-of-band (one-time admin
           operation) with <code>AcrPull</code> on the registry and <code>Key Vault Secrets User</code> on the vault. The Bicep
           template only <em>references</em> it (<code>existing</code> keyword), not creates it, because the deploy identity
@@ -796,9 +796,9 @@
           withheld from the CI identity.</p>
           <p>Every container app resource declares the same identity:</p>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">identity: {
-            type: &#39;UserAssigned&#39;
-            userAssignedIdentities: { &#39;${appsIdentity.id}&#39;: {} }
-          }</code></pre>
+  type: &#39;UserAssigned&#39;
+  userAssignedIdentities: { &#39;${appsIdentity.id}&#39;: {} }
+}</code></pre>
           <p>This makes the UAMI the app&#39;s runtime identity. At startup, when Kestrel calls
           <code>AddAzureKeyVault(...)</code>, it authenticates via the UAMI, no connection strings, no certificates,
           no long-lived secrets in the container environment. Image pull from ACR works the same way: the
@@ -807,11 +807,11 @@
           <p>The GitHub Actions deploy identity authenticates to Azure via <strong>OIDC</strong> (<code>deploy.yml:901-906</code>, and
           the same block in the <code>foundation</code> and <code>build-images</code> jobs at <code>deploy.yml:766-771</code>, <code>:821-826</code>):</p>
           <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-bullet">-</span> <span class="hljs-attr">name:</span> <span class="hljs-string">Log</span> <span class="hljs-string">in</span> <span class="hljs-string">to</span> <span class="hljs-string">Azure</span>
-            <span class="hljs-attr">uses:</span> <span class="hljs-string">azure/login@v3</span>
-            <span class="hljs-attr">with:</span>
-              <span class="hljs-attr">client-id:</span> <span class="hljs-string">${{</span> <span class="hljs-string">secrets.AZURE_CLIENT_ID</span> <span class="hljs-string">}}</span>
-              <span class="hljs-attr">tenant-id:</span> <span class="hljs-string">${{</span> <span class="hljs-string">secrets.AZURE_TENANT_ID</span> <span class="hljs-string">}}</span>
-              <span class="hljs-attr">subscription-id:</span> <span class="hljs-string">${{</span> <span class="hljs-string">secrets.AZURE_SUBSCRIPTION_ID</span> <span class="hljs-string">}}</span></code></pre>
+  <span class="hljs-attr">uses:</span> <span class="hljs-string">azure/login@v3</span>
+  <span class="hljs-attr">with:</span>
+    <span class="hljs-attr">client-id:</span> <span class="hljs-string">${{</span> <span class="hljs-string">secrets.AZURE_CLIENT_ID</span> <span class="hljs-string">}}</span>
+    <span class="hljs-attr">tenant-id:</span> <span class="hljs-string">${{</span> <span class="hljs-string">secrets.AZURE_TENANT_ID</span> <span class="hljs-string">}}</span>
+    <span class="hljs-attr">subscription-id:</span> <span class="hljs-string">${{</span> <span class="hljs-string">secrets.AZURE_SUBSCRIPTION_ID</span> <span class="hljs-string">}}</span></code></pre>
           <p>No <code>client-secret</code> is present, this is the OIDC federated credential flow: GitHub&#39;s OIDC
           provider issues a short-lived JWT for the workflow run, Azure AD validates it against the
           registered federation, and issues a scoped access token that expires when the workflow ends. There
@@ -823,20 +823,20 @@
           (<code>deploy.yml:752-757</code>). Every job that runs <code>azure/login</code> therefore declares it.</p>
           <h3 id="key-vault-and-runtime-secrets-mainbicep896-976-adr-061">Key Vault and runtime secrets (<code>main.bicep:896-976</code>), <a href="https://ivanball.github.io/docs/adr/061-runtime-secret-management.html" target="_blank" rel="noopener">ADR-061</a></h3>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">resource keyVault &#39;…/vaults@…&#39; existing = {
-            name: &#39;adckv${resourceToken}&#39;
-          }</code></pre>
+  name: &#39;adckv${resourceToken}&#39;
+}</code></pre>
           <p><strong>Every production secret lives in Key Vault and reaches a Container App as a reference, never as a
           value.</strong> Key Vault is bootstrapped out-of-band like the identity: the template declares it <code>existing</code>
           (<code>main.bicep:903-905</code>) and then writes fourteen secret child resources into it
           (<code>main.bicep:907-976</code>). Each Container App references them by Key Vault URI through the shared UAMI:</p>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">secrets: [
-            {
-              name: &#39;sql-connection-string&#39;
-              keyVaultUrl: kvIdentitySqlConn.properties.secretUri
-              identity: appsIdentity.id
-            }
-            ...
-          ]</code></pre>
+  {
+    name: &#39;sql-connection-string&#39;
+    keyVaultUrl: kvIdentitySqlConn.properties.secretUri
+    identity: appsIdentity.id
+  }
+  ...
+]</code></pre>
           <p>This is the <code>keyVaultUrl</code> + <code>identity</code> pattern in ACA (Container Apps Secrets backed by Key Vault):
           the secret value never appears in the Container App definition, the ARM deployment history, or
           deployment logs. Not one <code>secrets</code> entry in this template carries an inline <code>value</code>. Containers then
@@ -1033,10 +1033,10 @@
           <h4 id="identity-service-specifics-mainbicep978-1156">Identity Service specifics (<code>main.bicep:978-1156</code>)</h4>
           <p>Identity is the JWT issuer and JWKS endpoint. Its JWT configuration (<code>main.bicep:1056-1060</code>):</p>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">{ name: &#39;Jwt__SigningAlgorithm&#39;,   value: useRs256 ? &#39;RS256&#39; : &#39;HS256&#39; }
-          { name: &#39;Jwt__Issuer&#39;,            value: &#39;https://${prefix}-gateway.${...defaultDomain}&#39; }
-          { name: &#39;Jwt__Audience&#39;,          value: &#39;AtlDevConapi&#39; }
-          { name: &#39;Jwt__AccessTokenExpirationMinutes&#39;, value: &#39;15&#39; }
-          { name: &#39;Jwt__RefreshTokenExpirationDays&#39;,   value: &#39;7&#39; }</code></pre>
+{ name: &#39;Jwt__Issuer&#39;,            value: &#39;https://${prefix}-gateway.${...defaultDomain}&#39; }
+{ name: &#39;Jwt__Audience&#39;,          value: &#39;AtlDevConapi&#39; }
+{ name: &#39;Jwt__AccessTokenExpirationMinutes&#39;, value: &#39;15&#39; }
+{ name: &#39;Jwt__RefreshTokenExpirationDays&#39;,   value: &#39;7&#39; }</code></pre>
           <p>When <code>useRs256 = true</code>, the RSA private key (from Key Vault) signs tokens and the public key is
           published at <code>/.well-known/jwks.json</code> (<code>main.bicep:1094-1099</code>). Otherwise the HS256 branch injects
           <code>Jwt__SecretForKey</code> and sets <code>Jwks__Enabled: &#39;false&#39;</code> (<code>main.bicep:1100-1103</code>). Other services fetch
@@ -1056,9 +1056,9 @@
           the event/session catalog. The Anthropic API key is injected only when <code>hasAnthropic = true</code>
           (<code>main.bicep:1184-1191</code>, <code>:1233</code>):</p>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">secrets: union(
-            [ ... sql, redis and service bus ... ],
-            hasAnthropic ? [{ name: &#39;anthropic-api-key&#39;, keyVaultUrl: ..., identity: appsIdentity.id }] : []
-          )</code></pre>
+  [ ... sql, redis and service bus ... ],
+  hasAnthropic ? [{ name: &#39;anthropic-api-key&#39;, keyVaultUrl: ..., identity: appsIdentity.id }] : []
+)</code></pre>
           <p>This is the <code>union()</code> + conditional array pattern used throughout <code>main.bicep</code> to keep optional
           secrets and env vars out of the resource definition when not configured, rather than passing empty
           strings to the container.</p>
@@ -1098,7 +1098,7 @@
           circuit drops. Sticky session affinity pins each browser session to one replica.</p>
           <p><strong>Dual API endpoints</strong> (<code>main.bicep:1682-1684</code>):</p>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">{ name: &#39;Api__ApiEndpoint&#39;,     value: &#39;http://${gatewayApp.name}&#39; }
-          { name: &#39;Api__WasmApiEndpoint&#39;, value: &#39;https://${gatewayApp.properties.configuration.ingress.fqdn}&#39; }</code></pre>
+{ name: &#39;Api__WasmApiEndpoint&#39;, value: &#39;https://${gatewayApp.properties.configuration.ingress.fqdn}&#39; }</code></pre>
           <p>Server-side Blazor rendering uses the internal Gateway URL (skipping public DNS, TLS termination,
           and the Envoy round-trip). WebAssembly code running in the browser must use the external FQDN,
           it has no access to the internal ACA DNS. The UI serves the WASM endpoint URL via a <code>/client-config</code>
@@ -1107,11 +1107,11 @@
           the client secrets stay on Identity, which is the app that completes the exchange.</p>
           <h3 id="outputs-mainbicep1741-1749">Outputs (<code>main.bicep:1741-1749</code>)</h3>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">output acrLoginServer     string = acr.properties.loginServer
-          output gatewayFqdn        string = gatewayApp.properties.configuration.ingress.fqdn
-          output uiFqdn             string = uiApp.properties.configuration.ingress.fqdn
-          output sqlServerFqdn      string = sqlServer.properties.fullyQualifiedDomainName
-          output serviceBusEndpoint string = serviceBus.properties.serviceBusEndpoint
-          output appInsightsName    string = appInsights.name</code></pre>
+output gatewayFqdn        string = gatewayApp.properties.configuration.ingress.fqdn
+output uiFqdn             string = uiApp.properties.configuration.ingress.fqdn
+output sqlServerFqdn      string = sqlServer.properties.fullyQualifiedDomainName
+output serviceBusEndpoint string = serviceBus.properties.serviceBusEndpoint
+output appInsightsName    string = appInsights.name</code></pre>
           <p><code>gatewayFqdn</code> and <code>uiFqdn</code> are consumed by the smoke-test step (<code>deploy.yml:1099-1179</code>) to probe
           the deployed revision. That step probes every service through the Gateway, and for the two
           auth-gated endpoints the asserted status is exactly <strong>401</strong>, not 2xx: an anonymous request must be
@@ -1127,13 +1127,13 @@
           <h2 id="deployment-model-summary">Deployment model summary</h2>
           <p>The complete credential chain:</p>
           <pre class="doc-pre"><code class="">GitHub OIDC token (ephemeral, per-workflow-run)
-            → Azure AD federated credential → deploy UAMI access token
-              → Bicep deployment (Contributor on acc-rg)
-                → writes Key Vault secrets (Key Vault Secrets Officer on adckv…)
-                → pulls images from ACR (AcrPush on deploy side)
-                  → Container Apps pull images via apps UAMI (AcrPull, bootstrapped out-of-band)
-                    → Container Apps read secrets from Key Vault via apps UAMI
-                      (Key Vault Secrets User, bootstrapped out-of-band)</code></pre>
+  → Azure AD federated credential → deploy UAMI access token
+    → Bicep deployment (Contributor on acc-rg)
+      → writes Key Vault secrets (Key Vault Secrets Officer on adckv…)
+      → pulls images from ACR (AcrPush on deploy side)
+        → Container Apps pull images via apps UAMI (AcrPull, bootstrapped out-of-band)
+          → Container Apps read secrets from Key Vault via apps UAMI
+            (Key Vault Secrets User, bootstrapped out-of-band)</code></pre>
           <p>No static credential exists at any link in this chain. The GitHub secrets
           <code>AZURE_CLIENT_ID</code>, <code>AZURE_TENANT_ID</code>, <code>AZURE_SUBSCRIPTION_ID</code> are the OIDC registration
           parameters, public identifiers, not secrets. The only genuine secrets (<code>SQL_ADMIN_PASSWORD</code>,

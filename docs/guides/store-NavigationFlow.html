@@ -156,28 +156,28 @@
           <h2 id="1-anonymous-user">1. Anonymous User</h2>
           <p>Pages accessible without authentication: home, login, register, and the public catalog.</p>
           <pre class="mermaid">flowchart TD
-              subgraph Auth[&quot;Authentication&quot;]
-                  Login[&quot;/login&lt;br/&gt;Login&quot;]
-                  Register[&quot;/register&lt;br/&gt;Register&quot;]
-              end
-          
-              subgraph Catalog[&quot;Public Catalog&quot;]
-                  Browse[&quot;/catalog&lt;br/&gt;Catalog Browse&quot;]
-                  ProductDetail[&quot;/catalog/{Id}&lt;br/&gt;Product Detail&quot;]
-              end
-          
-              Home[&quot;/  Store Home&quot;]
-          
-              Home --&gt;|hero / nav menu| Browse
-              Home --&gt;|auth links| Login
-              Home --&gt;|auth links| Register
-          
-              Login --&gt;|on success| Home
-              Register --&gt;|on success| Home
-          
-              Browse --&gt;|card click| ProductDetail
-              ProductDetail --&gt;|back| Browse
-              ProductDetail --&gt;|add to cart| Login</pre>
+    subgraph Auth[&quot;Authentication&quot;]
+        Login[&quot;/login&lt;br/&gt;Login&quot;]
+        Register[&quot;/register&lt;br/&gt;Register&quot;]
+    end
+
+    subgraph Catalog[&quot;Public Catalog&quot;]
+        Browse[&quot;/catalog&lt;br/&gt;Catalog Browse&quot;]
+        ProductDetail[&quot;/catalog/{Id}&lt;br/&gt;Product Detail&quot;]
+    end
+
+    Home[&quot;/  Store Home&quot;]
+
+    Home --&gt;|hero / nav menu| Browse
+    Home --&gt;|auth links| Login
+    Home --&gt;|auth links| Register
+
+    Login --&gt;|on success| Home
+    Register --&gt;|on success| Home
+
+    Browse --&gt;|card click| ProductDetail
+    ProductDetail --&gt;|back| Browse
+    ProductDetail --&gt;|add to cart| Login</pre>
           <blockquote>
           <p>Add-to-cart on the product detail page sits inside an <code>AuthorizeView</code>; an anonymous visitor is prompted to log in instead.</p>
           </blockquote>
@@ -185,38 +185,38 @@
           <h2 id="2-customer-authenticated-user">2. Customer (Authenticated User)</h2>
           <p>Inherits all anonymous pages. Gains the profile page, the cart drawer (a layout component, not a route), checkout, and their own orders. Unauthenticated visitors deep-linking to these pages are redirected to login (SSR session-cookie auth keeps <code>[Authorize]</code> enforced on fresh GETs and F5, ADR-022).</p>
           <pre class="mermaid">flowchart TD
-              subgraph Auth[&quot;Authentication&quot;]
-                  Login[&quot;/login&lt;br/&gt;Login&quot;]
-              end
-          
-              subgraph Catalog[&quot;Public Catalog&quot;]
-                  Browse[&quot;/catalog&lt;br/&gt;Catalog Browse&quot;]
-                  ProductDetail[&quot;/catalog/{Id}&lt;br/&gt;Product Detail&quot;]
-              end
-          
-              subgraph Sales[&quot;Cart and Orders&quot;]
-                  Cart[&quot;Cart Drawer&lt;br/&gt;(layout component)&quot;]
-                  Orders[&quot;/orders&lt;br/&gt;My Orders&quot;]
-                  OrderDetail[&quot;/orders/{Id}&lt;br/&gt;Order Detail&quot;]
-              end
-          
-              subgraph Identity[&quot;Profile&quot;]
-                  Profile[&quot;/profile&lt;br/&gt;My Profile&quot;]
-              end
-          
-              Home[&quot;/  Store Home&quot;]
-          
-              Home --&gt;|nav menu| Browse
-              Home --&gt;|nav menu| Orders
-              Home --&gt;|nav menu| Profile
-          
-              Browse --&gt;|card click| ProductDetail
-              ProductDetail --&gt;|add to cart| Cart
-              Cart --&gt;|checkout| Orders
-              Cart --&gt;|Stripe payment| OrderDetail
-          
-              Orders --&gt;|row click| OrderDetail
-              OrderDetail --&gt;|back| Orders</pre>
+    subgraph Auth[&quot;Authentication&quot;]
+        Login[&quot;/login&lt;br/&gt;Login&quot;]
+    end
+
+    subgraph Catalog[&quot;Public Catalog&quot;]
+        Browse[&quot;/catalog&lt;br/&gt;Catalog Browse&quot;]
+        ProductDetail[&quot;/catalog/{Id}&lt;br/&gt;Product Detail&quot;]
+    end
+
+    subgraph Sales[&quot;Cart and Orders&quot;]
+        Cart[&quot;Cart Drawer&lt;br/&gt;(layout component)&quot;]
+        Orders[&quot;/orders&lt;br/&gt;My Orders&quot;]
+        OrderDetail[&quot;/orders/{Id}&lt;br/&gt;Order Detail&quot;]
+    end
+
+    subgraph Identity[&quot;Profile&quot;]
+        Profile[&quot;/profile&lt;br/&gt;My Profile&quot;]
+    end
+
+    Home[&quot;/  Store Home&quot;]
+
+    Home --&gt;|nav menu| Browse
+    Home --&gt;|nav menu| Orders
+    Home --&gt;|nav menu| Profile
+
+    Browse --&gt;|card click| ProductDetail
+    ProductDetail --&gt;|add to cart| Cart
+    Cart --&gt;|checkout| Orders
+    Cart --&gt;|Stripe payment| OrderDetail
+
+    Orders --&gt;|row click| OrderDetail
+    OrderDetail --&gt;|back| Orders</pre>
           <blockquote>
           <p><code>/orders</code> lists only the caller&#39;s own orders (ownership <code>Specification</code> row-scoping); an admin on the same route sees all orders. The order detail data is ownership-checked server-side with 404-not-403 semantics so foreign order ids do not leak existence. Abandoned Stripe payments are recovered by the <code>OrphanOrderRecovery</code> component on return.</p>
           </blockquote>
@@ -224,50 +224,50 @@
           <h2 id="3-admin">3. Admin</h2>
           <p>Inherits all customer pages, plus the admin CRUD surfaces for all three modules. Every page below carries <code>[Authorize(Roles = &quot;Admin&quot;)]</code>; a customer deep-linking to any of them gets Forbidden on both fresh GET and F5.</p>
           <pre class="mermaid">flowchart TD
-              subgraph CatalogAdmin[&quot;Catalog Admin&quot;]
-                  Categories[&quot;/categories&lt;br/&gt;Category List&quot;]
-                  CategoryCreate[&quot;/categories/create&lt;br/&gt;Create Category&quot;]
-                  CategoryDetail[&quot;/categories/{Id}&lt;br/&gt;Category Detail&quot;]
-                  Products[&quot;/products&lt;br/&gt;Product List&quot;]
-                  ProductCreate[&quot;/products/create&lt;br/&gt;Create Product&quot;]
-                  ProductDetailAdm[&quot;/products/{Id}&lt;br/&gt;Product Detail&quot;]
-              end
-          
-              subgraph SalesAdmin[&quot;Sales Admin&quot;]
-                  Inventory[&quot;/inventory&lt;br/&gt;Inventory List&quot;]
-                  InventoryCreate[&quot;/inventory/create&lt;br/&gt;Create Inventory Item&quot;]
-                  InventoryDetail[&quot;/inventory/{Id}&lt;br/&gt;Inventory Detail&quot;]
-                  Carts[&quot;/shoppingcarts&lt;br/&gt;Shopping Cart List&quot;]
-                  CartDetail[&quot;/shoppingcarts/{Id}&lt;br/&gt;Shopping Cart Detail&quot;]
-                  OrdersAll[&quot;/orders&lt;br/&gt;All Orders&quot;]
-                  OrderDetailAdm[&quot;/orders/{Id}&lt;br/&gt;Order Detail&quot;]
-              end
-          
-              subgraph IdentityAdmin[&quot;Identity Admin&quot;]
-                  Customers[&quot;/customers&lt;br/&gt;Customer List&quot;]
-                  CustomerCreate[&quot;/customers/create&lt;br/&gt;Create Customer&quot;]
-                  CustomerDetail[&quot;/customers/{Id}&lt;br/&gt;Customer Detail&quot;]
-              end
-          
-              Home[&quot;/  Store Home&quot;]
-          
-              Home --&gt;|nav menu| Categories
-              Home --&gt;|nav menu| Products
-              Home --&gt;|nav menu| Inventory
-              Home --&gt;|nav menu| Carts
-              Home --&gt;|nav menu| OrdersAll
-              Home --&gt;|nav menu| Customers
-          
-              Categories --&gt;|row click| CategoryDetail
-              Categories --&gt;|create| CategoryCreate
-              Products --&gt;|row click| ProductDetailAdm
-              Products --&gt;|create| ProductCreate
-              Inventory --&gt;|row click| InventoryDetail
-              Inventory --&gt;|create| InventoryCreate
-              Carts --&gt;|row click| CartDetail
-              OrdersAll --&gt;|row click| OrderDetailAdm
-              Customers --&gt;|row click| CustomerDetail
-              Customers --&gt;|create| CustomerCreate</pre>
+    subgraph CatalogAdmin[&quot;Catalog Admin&quot;]
+        Categories[&quot;/categories&lt;br/&gt;Category List&quot;]
+        CategoryCreate[&quot;/categories/create&lt;br/&gt;Create Category&quot;]
+        CategoryDetail[&quot;/categories/{Id}&lt;br/&gt;Category Detail&quot;]
+        Products[&quot;/products&lt;br/&gt;Product List&quot;]
+        ProductCreate[&quot;/products/create&lt;br/&gt;Create Product&quot;]
+        ProductDetailAdm[&quot;/products/{Id}&lt;br/&gt;Product Detail&quot;]
+    end
+
+    subgraph SalesAdmin[&quot;Sales Admin&quot;]
+        Inventory[&quot;/inventory&lt;br/&gt;Inventory List&quot;]
+        InventoryCreate[&quot;/inventory/create&lt;br/&gt;Create Inventory Item&quot;]
+        InventoryDetail[&quot;/inventory/{Id}&lt;br/&gt;Inventory Detail&quot;]
+        Carts[&quot;/shoppingcarts&lt;br/&gt;Shopping Cart List&quot;]
+        CartDetail[&quot;/shoppingcarts/{Id}&lt;br/&gt;Shopping Cart Detail&quot;]
+        OrdersAll[&quot;/orders&lt;br/&gt;All Orders&quot;]
+        OrderDetailAdm[&quot;/orders/{Id}&lt;br/&gt;Order Detail&quot;]
+    end
+
+    subgraph IdentityAdmin[&quot;Identity Admin&quot;]
+        Customers[&quot;/customers&lt;br/&gt;Customer List&quot;]
+        CustomerCreate[&quot;/customers/create&lt;br/&gt;Create Customer&quot;]
+        CustomerDetail[&quot;/customers/{Id}&lt;br/&gt;Customer Detail&quot;]
+    end
+
+    Home[&quot;/  Store Home&quot;]
+
+    Home --&gt;|nav menu| Categories
+    Home --&gt;|nav menu| Products
+    Home --&gt;|nav menu| Inventory
+    Home --&gt;|nav menu| Carts
+    Home --&gt;|nav menu| OrdersAll
+    Home --&gt;|nav menu| Customers
+
+    Categories --&gt;|row click| CategoryDetail
+    Categories --&gt;|create| CategoryCreate
+    Products --&gt;|row click| ProductDetailAdm
+    Products --&gt;|create| ProductCreate
+    Inventory --&gt;|row click| InventoryDetail
+    Inventory --&gt;|create| InventoryCreate
+    Carts --&gt;|row click| CartDetail
+    OrdersAll --&gt;|row click| OrderDetailAdm
+    Customers --&gt;|row click| CustomerDetail
+    Customers --&gt;|create| CustomerCreate</pre>
           <hr>
           <h2 id="authorization-model">Authorization Model</h2>
           <p>Three cooperating layers; the API is always the boundary:</p>
