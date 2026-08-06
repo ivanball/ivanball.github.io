@@ -291,6 +291,12 @@ wire contract. Both are described in the
 applied, so its `IntegrationEventContractTests` freezes `ProductCreatedIntegrationEvent` and
 `OrderPlacedIntegrationEvent` exactly as shipped.
 
+> **Re-running the walkthrough on the same machine?** The Aspire SQL container is persistent by
+> design, so databases created by an earlier MMCA.ECommerce build survive a re-scaffold, and their
+> migration history will not match your fresh migrations: startup then fails with "There is already
+> an object named 'InboxMessages' in the database". Drop the stale `ECommerce_*` databases (or
+> remove the `sql-*` container in Docker) before the first run.
+
 Then, from a **real, interactive terminal** (launched headless, the AppHost stalls at control-plane
 init and looks like a hang):
 

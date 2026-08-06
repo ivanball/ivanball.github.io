@@ -368,6 +368,13 @@ dotnet ef migrations add InitialCreate `
           <a href="common-GETTING-STARTED.html#6-the-two-one-time-fixups">getting-started guide</a>; the sample has both
           applied, so its <code>IntegrationEventContractTests</code> freezes <code>ProductCreatedIntegrationEvent</code> and
           <code>OrderPlacedIntegrationEvent</code> exactly as shipped.</p>
+          <blockquote>
+          <p><strong>Re-running the walkthrough on the same machine?</strong> The Aspire SQL container is persistent by
+          design, so databases created by an earlier MMCA.ECommerce build survive a re-scaffold, and their
+          migration history will not match your fresh migrations: startup then fails with &quot;There is already
+          an object named &#39;InboxMessages&#39; in the database&quot;. Drop the stale <code>ECommerce_*</code> databases (or
+          remove the <code>sql-*</code> container in Docker) before the first run.</p>
+          </blockquote>
           <p>Then, from a <strong>real, interactive terminal</strong> (launched headless, the AppHost stalls at control-plane
           init and looks like a hang):</p>
           <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet run <span class="hljs-literal">--project</span> Source/Hosting/MMCA.ECommerce.AppHost</code></pre>
