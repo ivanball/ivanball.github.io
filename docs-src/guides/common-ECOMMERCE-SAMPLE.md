@@ -40,9 +40,18 @@ dotnet new install MMCA.Templates
 ## 2. Generate the solution with the Products module
 
 ```powershell
-dotnet new mmca-app -n MMCA.ECommerce --module Products --aggregate Product
+dotnet new mmca-app -n MMCA.ECommerce --module Products --aggregate Product --flat --no-status
 cd MMCA.ECommerce
 ```
+
+Two flags do most of this guide's old work for you. `--flat` generates the module without a child
+collection: no child entity, DTO, requests, mapper, EF configuration, `Add`/`Edit`/`Remove` slices,
+controller endpoints, identifier alias, or tests. `--no-status` generates it without a status axis: no
+status enum, no `ChangeStatus` slice, request or endpoint, no `Status` property, and no status
+invariant or tests. A catalog product is exactly that shape: it is a leaf aggregate with no growable
+children, and it has no lifecycle state, so asking for the sample's ticket-shaped child collection and
+four-state enum only to delete them again is work with no payoff. Both flags arrived in
+`MMCA.Templates` 1.3.0.
 
 One command, and the whole monolith exists: the Products module across Shared, Domain, Application,
 Infrastructure, and API, the REST host, the Blazor UI host, the Aspire AppHost, a migrations project
@@ -55,18 +64,31 @@ dotnet build MMCA.ECommerce.slnx
 dotnet test  --solution MMCA.ECommerce.slnx
 ```
 
-That is a warning-free build under five analyzers at error severity and 90 passing tests, with no
-database needed. This baseline is the line you bisect against later.
+That is a warning-free build under five analyzers at error severity and **81 passing tests**, with no
+database needed. (The unflagged scaffold ships more, because the child and status axes carry tests of
+their own; 81 is the flat, status-less baseline.) This is the line you bisect against later.
 
 ## 3. Add the Orders module
 
 ```powershell
-dotnet new mmca-module -n Orders --app MMCA.ECommerce --aggregate Order
+dotnet new mmca-module -n Orders --app MMCA.ECommerce --aggregate Order --child Item
 ```
 
+`--child` renames the child concept throughout the generated module. The type it produces is
+`<aggregate><child>`, so `--aggregate Order --child Item` gives you an `OrderItem` entity, an
+`OrderItemDTO`, `AddItem` / `EditItem` / `RemoveItem` use-case slices, `/items` routes on the
+controller, and an `OrderItemIdentifierType` alias. Nothing here needs a find-and-replace pass
+afterwards. `EditItem` is the one name that does not survive the reshape: an order line is not edited
+freely, only re-quantified, so step 5 renames that slice to `ChangeItemQuantity`. Orders keeps the
+status axis, because an order genuinely has a lifecycle, so `--no-status` is deliberately absent here.
+`--child` is ignored under `--flat`, which is why step 2 did not pass one.
+
 Eight more projects appear (the five layers, two test projects, one migrations project). `dotnet new`
-cannot patch files that already exist, so the template prints the wire-ups it needs from you. Here
-they are, concretely, for this app:
+cannot patch files that already exist, so the template prints the wire-ups it needs from you. Its
+first six printed items map one for one onto sub-steps a to f below, including the top-level `Outbox`
+pin in 3f, and the printed solution command now carries a PowerShell no-glob form beside the bash
+one; the seventh printed item is the first migration, which this guide defers to step 7 because both
+modules get theirs in one pass there. Here they are, concretely, for this app:
 
 **a. Add the projects to the solution.** `dotnet sln add` does not expand wildcards itself, so the
 `Get-ChildItem` calls expand them before dotnet sees the paths (in bash, plain globs like
@@ -100,16 +122,18 @@ Products line:
 services.AddErrorResources<OrdersErrorResources>();
 ```
 
-**f. Give the module its own database.** This is the one step the template's printed instructions do
-not cover, and it matters: every module database carries its own `OutboxMessages`/`InboxMessages`
-tables in `dbo`, so two modules migrated into one database would collide on them. One database per
-module is also exactly the topology that makes extraction free later
+**f. Give the module its own database.** Every module database carries its own
+`OutboxMessages`/`InboxMessages` tables in `dbo`, so two modules migrated into one database would
+collide on them. One database per module is also exactly the topology that makes extraction free later
 ([ADR-006](../adr/006-database-per-service.md)). In the AppHost:
 
 ```csharp
 var productsDb = sql.AddDatabase("ecommerce-products", "ECommerce_Products");
 var ordersDb = sql.AddDatabase("ecommerce-orders", "ECommerce_Orders");
 
+// WaitFor the SQL server (healthy once the container accepts connections), not the database
+// resource. The web host CREATES the database via EF Migrate at startup, so waiting on the
+// database's existence would deadlock: it never exists until the app that is waiting runs.
 var web = builder.AddProject<Projects.MMCA_ECommerce_Web>("web")
     .WithSQLServerDataSource(productsDb, "Products")
     .WithSQLServerDataSource(ordersDb, "Orders")
@@ -162,62 +186,137 @@ database and fail with "Invalid object name 'dbo.OutboxMessages'"):
 ```
 
 Build and test again: still green, now with the Orders module's scaffolded tests included. There is
-no new kind of thing in the solution, just a second copy of the shape you already had. If curiosity
-makes you run the app now, know that the Orders database has no schema until step 7 creates its
-migration: Orders endpoints fail, and the background outbox poller logs "Outbox processing failed
-for data source SQLServer/Default" every few seconds until then. Harmless, and it stops on the
-first run after step 7.
+no new kind of thing in the solution, just a second copy of the shape you already had, this time with
+its child collection and status axis intact. If curiosity makes you run the app now, know that the
+Orders database has no schema until step 7 creates its migration: Orders endpoints fail, and the
+background outbox poller logs "Outbox processing failed for data source SQLServer/Default" every few
+seconds until then. Harmless, and it stops on the first run after step 7.
 
 ## 4. Reshape Products into a catalog product
 
-Both scaffolded modules arrive as the template's worked example (a title, a description, a status,
-a growable child collection): a placeholder domain in *your* namespaces, meant to be reshaped. The
-reshape is ordinary editing, and every convention stays: `Result`-returning factory, invariants
-composed with `Result.Combine`, guarded mutations raising domain events, the caching pair, the
-integration event through the outbox.
+The scaffolded module arrives as the template's worked example (a title, a description, a requester
+id): a placeholder domain in *your* namespaces, meant to be reshaped. The flags in step 2 already
+removed the parts a catalog product would never own, so what is left is a genuine property reshape
+rather than a demolition. Every convention stays: `Result`-returning factory, invariants composed with
+`Result.Combine`, guarded mutations raising domain events, the caching pair, the integration event
+through the outbox.
 
-`Product` becomes the whole catalog entry: `Name`, `Description`, `Price`. The child entity and the
-status go away entirely, which makes Products the minimal single-entity module. Work the phases
-below in order: the deletions first (so nothing compiles against a type you are about to reshape),
-then Domain, Shared, Application, Infrastructure, API, and the tests. Every file shown is the
-finished file from the build-verified sample, so you can paste it as-is.
+`Product` becomes the whole catalog entry: `Name`, `Description`, `Price`. Concretely, `Title` becomes
+`Name` and the scaffold's `RequesterUserId` becomes a `decimal Price`. Work the layers below in order:
+Shared first (every layer above compiles against those contracts), then Domain, Application,
+Infrastructure, API, and the tests. Every file shown is the finished file from the build-verified
+sample, so you can paste it as-is.
 
 All paths are relative to the solution root (`MMCA.ECommerce`), and every command is PowerShell.
 
-### 4.1 Delete the ticket-shaped surface
+### 4.1 Shared contracts
 
-The scaffold's child entity, its status enum, and the four child/status use-case slices have no place
-in a catalog product. Delete them in one pass, before touching anything else, so the compiler errors
-you see afterwards are only the ones the reshape is supposed to produce. The four `UseCases` folders
-hold two files each, so this removes 18 files:
+**Edit** `Source/Modules/Products/MMCA.ECommerce.Products.Shared/MMCA.ECommerce.Products.GlobalUsings.IdentifierType.cs`.
+`--flat` already left you a single alias; only the comment still speaks in the plural. The whole file
+is now:
 
-```powershell
-Remove-Item -Recurse `
-  Source\Modules\Products\MMCA.ECommerce.Products.Domain\Products\ProductComment.cs, `
-  Source\Modules\Products\MMCA.ECommerce.Products.Shared\Products\ProductStatus.cs, `
-  Source\Modules\Products\MMCA.ECommerce.Products.Shared\Products\ProductCommentDTO.cs, `
-  Source\Modules\Products\MMCA.ECommerce.Products.Shared\Products\AddCommentRequest.cs, `
-  Source\Modules\Products\MMCA.ECommerce.Products.Shared\Products\EditCommentRequest.cs, `
-  Source\Modules\Products\MMCA.ECommerce.Products.Shared\Products\ChangeProductStatusRequest.cs, `
-  Source\Modules\Products\MMCA.ECommerce.Products.Shared\Products\IntegrationEvents\ProductOpenedIntegrationEvent.cs, `
-  Source\Modules\Products\MMCA.ECommerce.Products.Application\Products\DTOs\ProductCommentDTOMapper.cs, `
-  Source\Modules\Products\MMCA.ECommerce.Products.Application\Products\IntegrationEventHandlers\ProductOpenedHandler.cs, `
-  Source\Modules\Products\MMCA.ECommerce.Products.Application\Products\UseCases\AddComment, `
-  Source\Modules\Products\MMCA.ECommerce.Products.Application\Products\UseCases\ChangeStatus, `
-  Source\Modules\Products\MMCA.ECommerce.Products.Application\Products\UseCases\EditComment, `
-  Source\Modules\Products\MMCA.ECommerce.Products.Application\Products\UseCases\RemoveComment, `
-  Source\Modules\Products\MMCA.ECommerce.Products.Infrastructure\Persistence\EntityConfiguration\ProductCommentConfiguration.cs
+```csharp
+// Products module entity identifier type aliases.
+// The Product aggregate uses a database-generated integer ID (the [IdValueGenerated] attribute on the
+// domain entity). This file is linked into every project solution-wide via Directory.Build.props,
+// so the aliases are visible everywhere. Always use the alias instead of the raw type.
+global using ProductIdentifierType = int;
 ```
 
-Nothing else references those files by path: the module's DI is convention-scanned, so a deleted
-handler simply stops being discovered. The solution will not build again until 4.6 is done.
+**Rewrite** `Source/Modules/Products/MMCA.ECommerce.Products.Shared/Products/ProductDTO.cs`. The
+scaffold's `Title` and `RequesterUserId` become `Name` and `Price`:
+
+```csharp
+using MMCA.Common.Shared.DTOs;
+
+namespace MMCA.ECommerce.Products.Shared.Products;
+
+/// <summary>
+/// Read model for a <c>Product</c> aggregate returned by the API. Exposes the current
+/// <see cref="RowVersion"/> so a client can echo it back on <c>ProductUpdateRequest</c> (ADR-035).
+/// </summary>
+public record class ProductDTO : IBaseDTO<ProductIdentifierType>, IConcurrencyAware
+{
+    public required ProductIdentifierType Id { get; init; }
+
+    /// <inheritdoc />
+    public byte[]? RowVersion { get; init; }
+    public required string Name { get; init; }
+    public required string Description { get; init; }
+    public required decimal Price { get; init; }
+}
+```
+
+**Rewrite** `Source/Modules/Products/MMCA.ECommerce.Products.Shared/Products/ProductUpdateRequest.cs`.
+Same rename, and `Price` is `required` like the other two, so a client cannot silently blank a price by
+omitting it. Keep the `*UpdateRequest` suffix exactly: the shared `UpdateRequestsAreConcurrencyAware`
+fitness rule finds it by name, and a rename silently drops the request out of that rule's scope:
+
+```csharp
+using MMCA.Common.Shared.DTOs;
+
+namespace MMCA.ECommerce.Products.Shared.Products;
+
+/// <summary>
+/// Request body for updating a product's name, description, and price (the product id comes from the
+/// route). Round-trips the optimistic-concurrency token per ADR-035: the client echoes the
+/// <see cref="RowVersion"/> it last read so a conflicting concurrent edit surfaces as 409 instead
+/// of silently last-write-winning. Named with the <c>*UpdateRequest</c> suffix so the shared
+/// <c>UpdateRequestsAreConcurrencyAware</c> fitness rule covers it.
+/// </summary>
+public sealed record class ProductUpdateRequest : IConcurrencyAware
+{
+    /// <inheritdoc />
+    public byte[]? RowVersion { get; init; }
+
+    /// <summary>The new name.</summary>
+    public required string Name { get; init; }
+
+    /// <summary>The new description.</summary>
+    public required string Description { get; init; }
+
+    /// <summary>The new price; must be greater than zero.</summary>
+    public required decimal Price { get; init; }
+}
+```
+
+**Create** `Source/Modules/Products/MMCA.ECommerce.Products.Shared/Products/IntegrationEvents/ProductCreatedIntegrationEvent.cs`:
+
+```csharp
+using MMCA.Common.Domain.DomainEvents;
+
+namespace MMCA.ECommerce.Products.Shared.Products.IntegrationEvents;
+
+/// <summary>
+/// Raised when a product is created. Lives in the Shared layer so other modules (or extracted
+/// services) can consume it without referencing Products.Domain. Carries the framework
+/// <see cref="BaseIntegrationEvent.SchemaVersion"/> (default 1, ADR-010): a breaking change uses a
+/// new event type plus an upcaster, never a silent reshape of this contract.
+/// </summary>
+/// <param name="ProductId">The newly created product's database-generated identifier.</param>
+/// <param name="Name">The product name at creation time.</param>
+/// <param name="Price">The product price at creation time.</param>
+public sealed record class ProductCreatedIntegrationEvent(
+    ProductIdentifierType ProductId,
+    string Name,
+    decimal Price)
+    : BaseIntegrationEvent;
+```
+
+**Delete** the scaffolded event it replaces, which carried `RequesterUserId` and a name nobody in a
+catalog would use:
+
+```powershell
+Remove-Item Source\Modules\Products\MMCA.ECommerce.Products.Shared\Products\IntegrationEvents\ProductOpenedIntegrationEvent.cs
+```
 
 ### 4.2 Domain
 
 **Rewrite** `Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/ProductInvariants.cs`
-with the complete file below. The string rules still delegate to the framework's `CommonInvariants`
-(so each field keeps its distinct empty vs too-long error code); the only app-specific rule is the
-price:
+with the complete file below. `EnsureTitleIsValid` becomes `EnsureNameIsValid` (codes
+`Product.Name.Empty` and `Product.Name.TooLong`), the description rule is untouched, and
+`EnsurePriceIsValid` is new. The string rules still delegate to the framework's `CommonInvariants`, so
+each field keeps its distinct empty vs too-long error code; the price is the only app-specific rule:
 
 ```csharp
 using MMCA.Common.Domain.Invariants;
@@ -275,7 +374,7 @@ namespace MMCA.ECommerce.Products.Domain.Products;
 /// <summary>
 /// Catalog product aggregate root. Created through the <see cref="Create"/> factory (returns a
 /// <see cref="Result{T}"/>), mutated through guarded methods that raise <see cref="ProductChanged"/>
-/// domain events. A flat aggregate: name, description, and price, with no child entities.
+/// domain events. A leaf aggregate: it owns no child entities.
 /// </summary>
 [IdValueGenerated]
 public sealed class Product : AuditableAggregateRootEntity<ProductIdentifierType>
@@ -362,156 +461,7 @@ mutated, or deleted"):
 /// Domain event raised when a <c>Product</c> is mutated or deleted. Captured into the
 ```
 
-### 4.3 Shared contracts
-
-**Edit** `Source/Modules/Products/MMCA.ECommerce.Products.Shared/MMCA.ECommerce.Products.GlobalUsings.IdentifierType.cs`.
-Only one entity survives, so the child alias goes and the comment drops to the singular. The whole
-file is now:
-
-```csharp
-// Products module entity identifier type aliases.
-// The aggregate uses a database-generated integer ID (the [IdValueGenerated] attribute on the
-// domain entity). This file is linked into every project solution-wide via Directory.Build.props,
-// so the alias is visible everywhere. Always use the alias instead of the raw type.
-global using ProductIdentifierType = int;
-```
-
-**Rewrite** `Source/Modules/Products/MMCA.ECommerce.Products.Shared/Products/ProductDTO.cs`:
-
-```csharp
-using MMCA.Common.Shared.DTOs;
-
-namespace MMCA.ECommerce.Products.Shared.Products;
-
-/// <summary>
-/// Read model for a <c>Product</c> aggregate returned by the API. Exposes the current
-/// <see cref="RowVersion"/> so a client can echo it back on <c>ProductUpdateRequest</c> (ADR-035).
-/// </summary>
-public record class ProductDTO : IBaseDTO<ProductIdentifierType>, IConcurrencyAware
-{
-    public required ProductIdentifierType Id { get; init; }
-
-    /// <inheritdoc />
-    public byte[]? RowVersion { get; init; }
-    public required string Name { get; init; }
-    public required string Description { get; init; }
-    public required decimal Price { get; init; }
-}
-```
-
-**Rewrite** `Source/Modules/Products/MMCA.ECommerce.Products.Shared/Products/ProductUpdateRequest.cs`.
-Keep the `*UpdateRequest` suffix exactly: the shared `UpdateRequestsAreConcurrencyAware` fitness rule
-finds it by name, and a rename silently drops the request out of that rule's scope:
-
-```csharp
-using MMCA.Common.Shared.DTOs;
-
-namespace MMCA.ECommerce.Products.Shared.Products;
-
-/// <summary>
-/// Request body for updating a product's name, description, and price (the product id comes from
-/// the route). Round-trips the optimistic-concurrency token per ADR-035: the client echoes the
-/// <see cref="RowVersion"/> it last read so a conflicting concurrent edit surfaces as 409 instead
-/// of silently last-write-winning. Named with the <c>*UpdateRequest</c> suffix so the shared
-/// <c>UpdateRequestsAreConcurrencyAware</c> fitness rule covers it.
-/// </summary>
-public sealed record class ProductUpdateRequest : IConcurrencyAware
-{
-    /// <inheritdoc />
-    public byte[]? RowVersion { get; init; }
-
-    /// <summary>The new name.</summary>
-    public required string Name { get; init; }
-
-    /// <summary>The new description.</summary>
-    public required string Description { get; init; }
-
-    /// <summary>The new unit price.</summary>
-    public required decimal Price { get; init; }
-}
-```
-
-**Create** `Source/Modules/Products/MMCA.ECommerce.Products.Shared/Products/IntegrationEvents/ProductCreatedIntegrationEvent.cs`
-(replacing the `ProductOpenedIntegrationEvent` you deleted in 4.1):
-
-```csharp
-using MMCA.Common.Domain.DomainEvents;
-
-namespace MMCA.ECommerce.Products.Shared.Products.IntegrationEvents;
-
-/// <summary>
-/// Raised when a product is added to the catalog. Lives in the Shared layer so other modules (or
-/// extracted services) can consume it without referencing Products.Domain. Carries the framework
-/// <see cref="BaseIntegrationEvent.SchemaVersion"/> (default 1, ADR-010): a breaking change uses a
-/// new event type plus an upcaster, never a silent reshape of this contract.
-/// </summary>
-/// <param name="ProductId">The new product's database-generated identifier.</param>
-/// <param name="Name">The product name at creation time.</param>
-/// <param name="Price">The product price at creation time.</param>
-public sealed record class ProductCreatedIntegrationEvent(
-    ProductIdentifierType ProductId,
-    string Name,
-    decimal Price)
-    : BaseIntegrationEvent;
-```
-
-### 4.4 Application
-
-**Edit** `Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/DTOs/ProductDTOMapper.cs`.
-There is no child mapper any more, so the primary-constructor parameter and the `[UseMapper]` field
-both go. Replace everything from the doc comment down to the `MapToDTO` declaration with:
-
-```csharp
-/// <summary>
-/// Maps the <see cref="Product"/> aggregate to <see cref="ProductDTO"/> (Mapperly).
-/// </summary>
-[Mapper]
-public sealed partial class ProductDTOMapper
-    : IEntityDTOMapper<Product, ProductDTO, ProductIdentifierType>
-{
-    public partial ProductDTO MapToDTO(Product entity);
-```
-
-**Create** `Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/IntegrationEventHandlers/ProductCreatedHandler.cs`
-(replacing the deleted `ProductOpenedHandler`):
-
-```csharp
-using Microsoft.Extensions.Logging;
-using MMCA.Common.Application.Interfaces;
-using MMCA.ECommerce.Products.Shared.Products.IntegrationEvents;
-
-namespace MMCA.ECommerce.Products.Application.Products.IntegrationEventHandlers;
-
-/// <summary>
-/// Consumes <see cref="ProductCreatedIntegrationEvent"/>. In this monolith seed it just logs; in a real
-/// system this is where a search-index/pricing/analytics side effect would live. The same handler runs
-/// in-process now and over the broker once the Products module is extracted (ADR-003 / ADR-008).
-/// Auto-discovered by Scrutor (singleton lifetime); the dispatcher routes the outbox-published event here.
-/// </summary>
-public sealed partial class ProductCreatedHandler(ILogger<ProductCreatedHandler> logger)
-    : IIntegrationEventHandler<ProductCreatedIntegrationEvent>
-{
-    public Task HandleAsync(ProductCreatedIntegrationEvent integrationEvent, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(integrationEvent);
-
-        LogProductCreated(logger, integrationEvent.ProductId, integrationEvent.Name, integrationEvent.Price, integrationEvent.SchemaVersion);
-
-        return Task.CompletedTask;
-    }
-
-    [LoggerMessage(Level = LogLevel.Information,
-        Message = "Integration event: product {ProductId} '{Name}' created at price {Price} (schema v{SchemaVersion}).")]
-    private static partial void LogProductCreated(ILogger logger, int productId, string name, decimal price, int schemaVersion);
-}
-```
-
-**Edit** `Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/DomainEventHandlers/ProductChangedAuditHandler.cs`:
-one doc line, naming the handler that now audits creation. Change the second-to-last summary line to:
-
-```csharp
-/// Creation is audited separately by the integration-event consumer (<c>ProductCreatedHandler</c>),
-```
+### 4.3 Application
 
 **Rewrite** `Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Create/ProductCreateRequest.cs`:
 
@@ -522,8 +472,8 @@ using MMCA.Common.Application.UseCases;
 namespace MMCA.ECommerce.Products.Application.Products.UseCases.Create;
 
 /// <summary>
-/// Command/request to add a new product to the catalog. Used directly as the command (validated by the
-/// pipeline's Validating decorator via <see cref="ProductCreateRequestValidator"/>); implements
+/// Command/request to create a new product. Used directly as the command (validated by the pipeline's
+/// Validating decorator via <see cref="ProductCreateRequestValidator"/>); implements
 /// <see cref="ICacheInvalidating"/> so cached product reads are evicted after a successful create.
 /// </summary>
 public record class ProductCreateRequest : ICreateRequest, ICacheInvalidating
@@ -566,14 +516,15 @@ public sealed class ProductCreateRequestValidator : AbstractValidator<ProductCre
     {
         RuleFor(x => x.Name).NotEmpty().MaximumLength(ProductInvariants.NameMaxLength);
         RuleFor(x => x.Description).NotEmpty().MaximumLength(ProductInvariants.DescriptionMaxLength);
-        RuleFor(x => x.Price).GreaterThan(0);
+        RuleFor(x => x.Price).GreaterThan(0m);
     }
 }
 ```
 
 **Rewrite** `Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Create/CreateProductHandler.cs`.
 This is the file that shows the whole write path in one screen, so it is worth reading rather than
-just pasting: domain factory, unit of work, then the integration event published *after* the commit:
+just pasting: domain factory, unit of work, then the renamed integration event published *after* the
+commit, carrying the name and the price instead of a requester id:
 
 ```csharp
 using MMCA.Common.Application.Interfaces;
@@ -588,8 +539,8 @@ using MMCA.ECommerce.Products.Shared.Products.IntegrationEvents;
 namespace MMCA.ECommerce.Products.Application.Products.UseCases.Create;
 
 /// <summary>
-/// Adds a new product to the catalog: maps the request through the domain factory, persists via the
-/// unit of work (which stamps audit fields and dispatches domain events), then publishes the
+/// Creates a new product: maps the request through the domain factory, persists via the unit of work
+/// (which stamps audit fields and dispatches domain events), then publishes the
 /// <see cref="ProductCreatedIntegrationEvent"/> for cross-module/cross-service consumers. Wrapped by
 /// the decorator pipeline (logging, caching, validating, transactional) once
 /// <c>AddApplicationDecorators()</c> runs.
@@ -666,8 +617,8 @@ namespace MMCA.ECommerce.Products.Application.Products.UseCases.Update;
 
 /// <summary>
 /// FluentValidation rules for <see cref="UpdateProductCommand"/>, applied by the pipeline's
-/// Validating decorator before the transaction opens. Mirrors the create validator so a bad payload
-/// is rejected at the edge on both write paths, not only on create.
+/// Validating decorator before the transaction opens. Mirrors the create-side rules so a bad payload
+/// is rejected at the boundary instead of reaching the aggregate.
 /// </summary>
 public sealed class UpdateProductCommandValidator : AbstractValidator<UpdateProductCommand>
 {
@@ -675,14 +626,13 @@ public sealed class UpdateProductCommandValidator : AbstractValidator<UpdateProd
     {
         RuleFor(x => x.Name).NotEmpty().MaximumLength(ProductInvariants.NameMaxLength);
         RuleFor(x => x.Description).NotEmpty().MaximumLength(ProductInvariants.DescriptionMaxLength);
-        RuleFor(x => x.Price).GreaterThan(0);
+        RuleFor(x => x.Price).GreaterThan(0m);
     }
 }
 ```
 
 **Edit** `Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Update/UpdateProductHandler.cs`.
-The aggregate is flat now, so the read needs no includes, and `UpdateDetails` takes a third argument.
-Change the summary line, the `includes:` argument, and the call:
+`UpdateDetails` takes a third argument now. Change the summary and the call:
 
 ```csharp
 /// Updates a product's name, description, and price through the aggregate root, then returns the
@@ -690,80 +640,109 @@ Change the summary line, the `includes:` argument, and the call:
 ```
 
 ```csharp
-            includes: [],
-```
-
-```csharp
         var result = product.UpdateDetails(command.Name, command.Description, command.Price);
 ```
 
-**Edit** the Delete slice. In
+The `includes: []` argument is already right: `--flat` generated this handler against an aggregate
+with nothing to eager-load.
+
+**Edit** the Delete slice, both doc-only. In
 `Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Delete/DeleteProductCommand.cs`,
-change the summary (there are no children to cascade to):
+drop the mention of cascading children:
 
 ```csharp
-/// <summary>
 /// Command to soft-delete a product. Evicts cached reads on success.
-/// </summary>
 ```
 
-In `.../UseCases/Delete/DeleteProductHandler.cs`, change the summary and drop the include:
+In `.../UseCases/Delete/DeleteProductHandler.cs`, replace the two summary lines with:
 
 ```csharp
-/// <summary>
-/// Soft-deletes a product through the aggregate root (loaded tracked so the flag is persisted).
+/// Soft-deletes a product through the aggregate root (loaded tracked so the state change is captured).
 /// The EF global query filter then excludes it from subsequent reads.
-/// </summary>
 ```
 
+**Edit** the GetById slice, also doc-only. In
+`.../UseCases/GetById/GetProductByIdQuery.cs`, change the first summary line:
+
 ```csharp
-            includes: [],
+/// Query for a single product.
 ```
 
-**Edit** the GetById slice. In
-`Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/GetById/GetProductByIdQuery.cs`,
-change the first summary line:
+In `.../UseCases/GetById/GetProductByIdHandler.cs`, change the summary line:
 
 ```csharp
-/// Query for a single (non-deleted) product.
+/// Loads a single product and maps it to a DTO.
 ```
 
-In `.../UseCases/GetById/GetProductByIdHandler.cs`, the read has no children to eager-load and never
-writes, so it moves to the **read** repository and its two-argument `GetByIdAsync` overload. Replace
-the summary and the two lines that obtain the product:
+Both handlers resolve their repository through `IUnitOfWork`, never by constructor-injecting
+`IRepository<,>`: a directly injected repository is not enlisted in the unit of work's transaction, and
+mocks happily hide the difference until a real database run. The scaffold already does this; keep it.
+
+**Create** `Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/IntegrationEventHandlers/ProductCreatedHandler.cs`:
 
 ```csharp
+using Microsoft.Extensions.Logging;
+using MMCA.Common.Application.Interfaces;
+using MMCA.ECommerce.Products.Shared.Products.IntegrationEvents;
+
+namespace MMCA.ECommerce.Products.Application.Products.IntegrationEventHandlers;
+
 /// <summary>
-/// Loads a single product and maps it to a DTO. The aggregate is flat, so the read needs no includes.
+/// Consumes <see cref="ProductCreatedIntegrationEvent"/>. In this monolith seed it just logs; in a real
+/// system this is where a search-index/notification/analytics side effect would live. The same handler
+/// runs in-process now and over the broker once the Products module is extracted (ADR-003 / ADR-008).
+/// Auto-discovered by Scrutor (singleton lifetime); the dispatcher routes the outbox-published event here.
 /// </summary>
+public sealed partial class ProductCreatedHandler(ILogger<ProductCreatedHandler> logger)
+    : IIntegrationEventHandler<ProductCreatedIntegrationEvent>
+{
+    public Task HandleAsync(ProductCreatedIntegrationEvent integrationEvent, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(integrationEvent);
+
+        LogProductCreated(logger, integrationEvent.ProductId, integrationEvent.Name, integrationEvent.SchemaVersion);
+
+        return Task.CompletedTask;
+    }
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "Integration event: product {ProductId} '{Name}' created (schema v{SchemaVersion}).")]
+    private static partial void LogProductCreated(ILogger logger, int productId, string name, int schemaVersion);
+}
 ```
+
+**Delete** the handler it replaces. The module's DI is convention-scanned, so a deleted handler simply
+stops being discovered; there is no registration to unpick:
+
+```powershell
+Remove-Item Source\Modules\Products\MMCA.ECommerce.Products.Application\Products\IntegrationEventHandlers\ProductOpenedHandler.cs
+```
+
+**Edit** `Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/DomainEventHandlers/ProductChangedAuditHandler.cs`:
+one doc line, naming the handler that now audits creation. Change the second-to-last summary line to:
 
 ```csharp
-        var repository = unitOfWork.GetReadRepository<Product, ProductIdentifierType>();
-        var product = await repository.GetByIdAsync(query.Id, cancellationToken).ConfigureAwait(false);
+/// Creation is audited separately by the integration-event consumer (<c>ProductCreatedHandler</c>),
 ```
-
-Resolve the repository through `IUnitOfWork` like this, never by constructor-injecting
-`IRepository<,>`: a directly injected repository is not enlisted in the unit of work's transaction,
-and mocks happily hide the difference until a real database run.
 
 **Edit** `Source/Modules/Products/MMCA.ECommerce.Products.Application/DependencyInjection.cs`: one
-comment, because the aggregate no longer has children. Replace the three-line comment above the
-`TryAddScoped<INavigationPopulator<Product>, ...>` call with:
+comment, because the aggregate is now known to be a leaf rather than merely un-eager-loaded. Replace
+the three-line comment above the `TryAddScoped<INavigationPopulator<Product>, ...>` call with:
 
 ```csharp
-            // The Product aggregate is flat (no navigation properties), so a null populator suffices
-            // here (swap for a custom INavigationPopulator<Product> once the query service needs to
-            // batch-load a related aggregate).
+            // The Product aggregate is a leaf (no child entities and no cross-source navigations), so a
+            // null populator suffices here (swap for a custom INavigationPopulator<Product> once the
+            // query service needs to batch-load related data).
 ```
 
-### 4.5 Infrastructure
+### 4.4 Infrastructure
 
 **Rewrite** `Source/Modules/Products/MMCA.ECommerce.Products.Infrastructure/Persistence/EntityConfiguration/ProductConfiguration.cs`.
 `base.Configure` still supplies the id, the soft-delete flag and its query filter, the audit columns,
 and the concurrency token, so only the product's own columns are here. `Price` is
 `decimal(18,2)` explicitly: SQL Server's default for a mapped decimal is `decimal(18,0)`, which would
-round every price to whole currency units:
+round every price to whole currency units. The filtered index moves from the scaffold's
+`RequesterUserId` to `Name`, which is what a catalog is actually browsed by:
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -791,153 +770,69 @@ internal sealed class ProductConfiguration : EntityTypeConfigurationSQLServer<Pr
             .HasMaxLength(ProductInvariants.DescriptionMaxLength)
             .IsRequired();
 
+        // Money column: fixed precision so rounding is decided by the schema, not by the provider default.
         builder.Property(p => p.Price)
             .HasColumnType("decimal(18,2)")
             .IsRequired();
 
-        // Filtered to live rows only: the catalog is browsed and searched by name, and soft-deleted
-        // products are excluded by the global query filter anyway.
         builder.HasIndex(p => p.Name)
             .HasFilter("[IsDeleted] = 0");
     }
 }
 ```
 
-**Edit** `Source/Modules/Products/MMCA.ECommerce.Products.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs`:
-delete the child `DbSet` line so the body is exactly:
+Nothing else in Infrastructure changes: `--flat` already emitted a `ModuleApplicationDbContext` with
+one `DbSet`.
+
+### 4.5 API
+
+**Edit** `Source/Modules/Products/MMCA.ECommerce.Products.API/Controllers/ProductsController.cs`. The
+routes, the injected handlers, and the inherited list/paged reads are all unchanged; five small edits
+retarget the wording and the one call that names the reshaped fields. The class summary becomes:
 
 ```csharp
-    internal DbSet<Product> Products { get; set; }
+/// REST API for catalog products. Read endpoints (GetAll / paged) come from
+/// <see cref="EntityControllerBase{TEntity, TDTO, TId}"/>; create, update, and delete operations
+/// inject handlers directly. Failures map to RFC 9457 ProblemDetails via <c>HandleFailure</c>.
 ```
 
-### 4.6 API
-
-**Rewrite** `Source/Modules/Products/MMCA.ECommerce.Products.API/Controllers/ProductsController.cs`.
-The list and paged reads are inherited from `EntityControllerBase`; only the detail read and the
-three writes are declared here:
+and the three action summaries lose their references to children and to a title:
 
 ```csharp
-using System.Globalization;
-using Asp.Versioning;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
-using MMCA.Common.API.Controllers;
-using MMCA.Common.Application.Interfaces;
-using MMCA.Common.Application.UseCases;
-using MMCA.Common.Shared.Abstractions;
-using MMCA.ECommerce.Products.Application.Products.UseCases.Create;
-using MMCA.ECommerce.Products.Application.Products.UseCases.Delete;
-using MMCA.ECommerce.Products.Application.Products.UseCases.GetById;
-using MMCA.ECommerce.Products.Application.Products.UseCases.Update;
-using MMCA.ECommerce.Products.Domain.Products;
-using MMCA.ECommerce.Products.Shared.Products;
-
-namespace MMCA.ECommerce.Products.API.Controllers;
-
-/// <summary>
-/// REST API for catalog products. Read endpoints (GetAll / paged) come from
-/// <see cref="EntityControllerBase{TEntity, TDTO, TId}"/>; create, update, and delete inject handlers
-/// directly. Failures map to RFC 9457 ProblemDetails via <c>HandleFailure</c>.
-/// </summary>
-[ApiController]
-[Route("[controller]")]
-[ApiVersion("1.0")]
-// [AllowAnonymous] because this monolith seed ships without an Identity issuer. Once you add the
-// Identity module (GETTING-STARTED.md Phase 8) and set Authentication:JwtBearer:Authority, switch
-// this to [Authorize] (optionally with a policy) to require authenticated callers.
-[AllowAnonymous]
-public sealed class ProductsController(
-    IEntityQueryService<Product, ProductDTO, ProductIdentifierType> queryService,
-    IQueryHandler<GetProductByIdQuery, Result<ProductDTO>> getByIdHandler,
-    ICommandHandler<ProductCreateRequest, Result<ProductDTO>> createHandler,
-    ICommandHandler<UpdateProductCommand, Result<ProductDTO>> updateHandler,
-    ICommandHandler<DeleteProductCommand, Result> deleteHandler,
-    ILogger<ProductsController> logger)
-    : EntityControllerBase<Product, ProductDTO, ProductIdentifierType>(queryService, logger)
-{
     /// <summary>Gets a single product.</summary>
-    [HttpGet("{id}/details")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<ProductDTO>> GetDetailsAsync(
-        ProductIdentifierType id,
-        CancellationToken cancellationToken)
-    {
-        var result = await getByIdHandler.HandleAsync(new GetProductByIdQuery(id), cancellationToken).ConfigureAwait(false);
-        return result.IsFailure ? HandleFailure(result.Errors) : Ok(result.Value);
-    }
+```
 
-    [HttpPost]
-    [ProducesResponseType(StatusCodes.Status201Created)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<ProductDTO>> CreateAsync(
-        ProductCreateRequest request,
-        CancellationToken cancellationToken)
-    {
-        var result = await createHandler.HandleAsync(request, cancellationToken).ConfigureAwait(false);
-        if (result.IsFailure)
-        {
-            return HandleFailure(result.Errors);
-        }
-
-        // Build a relative Location URI directly rather than CreatedAtAction(nameof(GetByIdAsync), ...):
-        // route-link generation against the versioned base GetById route throws "No route matches the
-        // supplied values".
-        var dto = result.Value!;
-        var locationUri = new Uri(string.Create(CultureInfo.InvariantCulture, $"Products/{dto.Id}"), UriKind.Relative);
-        return Created(locationUri, dto);
-    }
-
+```csharp
     /// <summary>Updates a product's name, description, and price.</summary>
-    [HttpPut("{id}")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<ProductDTO>> UpdateAsync(
-        ProductIdentifierType id,
-        ProductUpdateRequest request,
-        CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(request);
+```
 
-        var result = await updateHandler.HandleAsync(
-            new UpdateProductCommand(id, request.Name, request.Description, request.Price) { RowVersion = request.RowVersion },
-            cancellationToken).ConfigureAwait(false);
-        return result.IsFailure ? HandleFailure(result.Errors) : Ok(result.Value);
-    }
-
+```csharp
     /// <summary>Soft-deletes a product.</summary>
-    [HttpDelete("{id}")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> DeleteAsync(
-        ProductIdentifierType id,
-        CancellationToken cancellationToken)
-    {
-        var result = await deleteHandler.HandleAsync(new DeleteProductCommand(id), cancellationToken).ConfigureAwait(false);
-        return result.IsFailure ? HandleFailure(result.Errors) : NoContent();
-    }
-}
+```
+
+The one line of real code is the command construction in `UpdateAsync`:
+
+```csharp
+            new UpdateProductCommand(id, request.Name, request.Description, request.Price) { RowVersion = request.RowVersion },
 ```
 
 **Edit** the two error-resource files. In
 `Source/Modules/Products/MMCA.ECommerce.Products.API/Resources/ProductsErrorResources.resx` and its
-`.es.resx` sibling, keep the resx envelope exactly as generated (the `<xsd:schema>` block and the
-four `<resheader>` elements) and replace **only** the `<data>` elements: delete the seven scaffolded
-ones (`Product.Closed`, `Product.Title.*`, `Product.Description.*`, `Product.Comment.Body.*`) and add
-the five below, in this order. Every code here is one an invariant in 4.2 actually emits, and an
-unmapped code degrades gracefully to its English message, so a typo shows up as English text in a
-Spanish browser rather than as an exception:
+`.es.resx` sibling, keep the resx envelope exactly as generated (the `<xsd:schema>` block and the four
+`<resheader>` elements) and replace **only** the `<data>` elements: the scaffold ships four
+(`Product.Description.*`, `Product.Title.*`), and the reshaped module needs the five below. Every code
+here is one an invariant in 4.2 actually emits, and an unmapped code degrades gracefully to its English
+message, so a typo shows up as English text in a Spanish browser rather than as an exception. The
+Spanish descriptions also need a pass: the scaffold's token substitution left them saying "del
+product":
 
 | `data name` | `.resx` value (en) | `.es.resx` value (es) |
 |---|---|---|
 | `Product.Description.Empty` | Product description cannot be empty. | La descripción del producto no puede estar vacía. |
 | `Product.Description.TooLong` | Product description cannot exceed 4000 characters. | La descripción del producto no puede superar los 4000 caracteres. |
-| `Product.InvalidPrice` | Product price must be greater than zero. | El precio del producto debe ser mayor que cero. |
 | `Product.Name.Empty` | Product name cannot be empty. | El nombre del producto no puede estar vacío. |
 | `Product.Name.TooLong` | Product name cannot exceed 200 characters. | El nombre del producto no puede superar los 200 caracteres. |
+| `Product.InvalidPrice` | Product price must be greater than zero. | El precio del producto debe ser mayor que cero. |
 
 Each entry is a `<data name="..." xml:space="preserve">` element wrapping a single `<value>`, exactly
 like the ones you are replacing.
@@ -946,18 +841,32 @@ like the ones you are replacing.
 the doc comment cites a code that no longer exists. Change the example code and the constant it names:
 
 ```csharp
-/// domain error <c>Code</c> (e.g. <c>"Product.InvalidPrice"</c>, see <c>ProductInvariants</c>) and
-/// resolved by the shared <c>IErrorLocalizer</c> after the host registers this type via
+/// domain error <c>Code</c> (e.g. <c>"Product.InvalidPrice"</c>, see <c>ProductInvariants</c>) and resolved
+/// by the shared <c>IErrorLocalizer</c> after the host registers this type via
 /// <c>AddErrorResources&lt;ProductsErrorResources&gt;()</c>. The length limits are baked into the values
 /// because they are compile-time constants (<c>ProductInvariants.NameMaxLength</c> etc.); an unmapped
 ```
 
 At this point the solution builds again. The tests do not yet.
 
-### 4.7 Tests
+### 4.6 Tests
+
+**Edit** `Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/MMCA.ECommerce.Products.Application.Tests.csproj`.
+The handler tests need the framework's test base and a mocking library, neither of which the
+application-test scaffold references. Add two lines at the top of the package `ItemGroup` so it reads:
+
+```xml
+  <ItemGroup>
+    <PackageReference Include="MMCA.Common.Testing" />
+    <PackageReference Include="Moq" />
+    <PackageReference Include="xunit.v3" />
+```
+
+No version attributes: both packages are already pinned in the solution's `Directory.Packages.props`
+under Central Package Management, so a version here would be an error rather than a nicety.
 
 **Rewrite** `Tests/Modules/Products/MMCA.ECommerce.Products.Domain.Tests/Products/ProductTests.cs`
-with the complete file below (13 tests). Read the accumulation test in the middle: `Result.Combine`
+with the complete file below (13 tests). Read the accumulation test near the end: `Result.Combine`
 reports every broken invariant at once, which is the behavior that makes one round trip enough for a
 form:
 
@@ -974,18 +883,18 @@ public class ProductTests
     [Fact]
     public void Create_WithValidData_ReturnsSuccess()
     {
-        var result = Product.Create(id: null, "Espresso Machine", "A compact home espresso machine.", price: 499.99m);
+        var result = Product.Create(id: null, "Mechanical keyboard", "Hot-swappable, 87 keys.", price: 129.99m);
 
         result.IsSuccess.Should().BeTrue();
-        result.Value!.Name.Should().Be("Espresso Machine");
-        result.Value.Description.Should().Be("A compact home espresso machine.");
-        result.Value.Price.Should().Be(499.99m);
+        result.Value!.Name.Should().Be("Mechanical keyboard");
+        result.Value.Description.Should().Be("Hot-swappable, 87 keys.");
+        result.Value.Price.Should().Be(129.99m);
     }
 
     [Fact]
     public void Create_DoesNotRaiseDomainEvent_CreationIsSignalledByIntegrationEvent()
     {
-        var result = Product.Create(id: null, "Espresso Machine", "A compact home espresso machine.", price: 499.99m);
+        var result = Product.Create(id: null, "Name", "Description", price: 10m);
 
         result.IsSuccess.Should().BeTrue();
         // The aggregate omits an "Added" domain event because the Id is DB-generated; the create
@@ -996,18 +905,18 @@ public class ProductTests
     [Fact]
     public void Create_WithEmptyName_ReturnsFailure()
     {
-        var result = Product.Create(id: null, "   ", "A compact home espresso machine.", price: 499.99m);
+        var result = Product.Create(id: null, "   ", "Description", price: 10m);
 
         result.IsFailure.Should().BeTrue();
         result.Errors.Should().Contain(e => e.Code == "Product.Name.Empty");
     }
 
     [Fact]
-    public void Create_WithTooLongName_ReturnsFailure()
+    public void Create_WithNameOverMaxLength_ReturnsFailure()
     {
-        string name = new('n', ProductInvariants.NameMaxLength + 1);
+        string name = new('x', ProductInvariants.NameMaxLength + 1);
 
-        var result = Product.Create(id: null, name, "A compact home espresso machine.", price: 499.99m);
+        var result = Product.Create(id: null, name, "Description", price: 10m);
 
         result.IsFailure.Should().BeTrue();
         result.Errors.Should().Contain(e => e.Code == "Product.Name.TooLong");
@@ -1016,36 +925,19 @@ public class ProductTests
     [Fact]
     public void Create_WithEmptyDescription_ReturnsFailure()
     {
-        var result = Product.Create(id: null, "Espresso Machine", "   ", price: 499.99m);
+        var result = Product.Create(id: null, "Name", "   ", price: 10m);
 
         result.IsFailure.Should().BeTrue();
         result.Errors.Should().Contain(e => e.Code == "Product.Description.Empty");
     }
 
-    [Fact]
-    public void Create_WithTooLongDescription_ReturnsFailure()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(-0.01)]
+    public void Create_WithNonPositivePrice_ReturnsFailure(decimal price)
     {
-        string description = new('d', ProductInvariants.DescriptionMaxLength + 1);
-
-        var result = Product.Create(id: null, "Espresso Machine", description, price: 499.99m);
-
-        result.IsFailure.Should().BeTrue();
-        result.Errors.Should().Contain(e => e.Code == "Product.Description.TooLong");
-    }
-
-    [Fact]
-    public void Create_WithZeroPrice_ReturnsFailure()
-    {
-        var result = Product.Create(id: null, "Espresso Machine", "A compact home espresso machine.", price: 0m);
-
-        result.IsFailure.Should().BeTrue();
-        result.Errors.Should().Contain(e => e.Code == "Product.InvalidPrice");
-    }
-
-    [Fact]
-    public void Create_WithNegativePrice_ReturnsFailure()
-    {
-        var result = Product.Create(id: null, "Espresso Machine", "A compact home espresso machine.", price: -1m);
+        var result = Product.Create(id: null, "Name", "Description", price);
 
         result.IsFailure.Should().BeTrue();
         result.Errors.Should().Contain(e => e.Code == "Product.InvalidPrice");
@@ -1054,8 +946,9 @@ public class ProductTests
     [Fact]
     public void Create_ReportsEveryBrokenInvariant_NotJustTheFirst()
     {
-        // Result.Combine accumulates: one round trip tells the caller everything that is wrong.
-        var result = Product.Create(id: null, "   ", "   ", price: 0m);
+        // Result.Combine accumulates: an empty name, an empty description, and a zero price all
+        // surface together so the caller sees one complete failure instead of three round trips.
+        var result = Product.Create(id: null, "  ", "  ", price: 0m);
 
         result.IsFailure.Should().BeTrue();
         result.Errors.Should().Contain(e => e.Code == "Product.Name.Empty");
@@ -1064,39 +957,42 @@ public class ProductTests
     }
 
     [Fact]
-    public void UpdateDetails_WithValidData_UpdatesNameDescriptionAndPrice()
+    public void UpdateDetails_WithValidData_UpdatesFieldsAndRaisesEvent()
     {
         var product = CreateProduct();
 
-        var result = product.UpdateDetails("Espresso Machine Pro", "Now with a milk frother.", price: 649.00m);
+        var result = product.UpdateDetails("New name", "New description", price: 49.50m);
 
         result.IsSuccess.Should().BeTrue();
-        product.Name.Should().Be("Espresso Machine Pro");
-        product.Description.Should().Be("Now with a milk frother.");
-        product.Price.Should().Be(649.00m);
-    }
-
-    [Fact]
-    public void UpdateDetails_RaisesProductChangedUpdated()
-    {
-        var product = CreateProduct();
-
-        product.UpdateDetails("Espresso Machine Pro", "Now with a milk frother.", price: 649.00m);
-
+        product.Name.Should().Be("New name");
+        product.Description.Should().Be("New description");
+        product.Price.Should().Be(49.50m);
         product.DomainEvents.OfType<ProductChanged>()
-            .Should().ContainSingle().Which.State.Should().Be(DomainEntityState.Updated);
+            .Should().Contain(e => e.State == DomainEntityState.Updated);
     }
 
     [Fact]
-    public void UpdateDetails_WithEmptyName_ReturnsFailureAndRaisesNoEvent()
+    public void UpdateDetails_WithEmptyName_ReturnsFailure()
     {
         var product = CreateProduct();
 
-        var result = product.UpdateDetails("   ", "Now with a milk frother.", price: 649.00m);
+        var result = product.UpdateDetails("   ", "New description", price: 49.50m);
 
         result.IsFailure.Should().BeTrue();
         result.Errors.Should().Contain(e => e.Code == "Product.Name.Empty");
-        product.DomainEvents.Should().BeEmpty("a rejected update must not announce a change that never happened");
+        product.DomainEvents.Should().BeEmpty("a rejected mutation raises nothing");
+    }
+
+    [Fact]
+    public void UpdateDetails_WithNonPositivePrice_ReturnsFailure()
+    {
+        var product = CreateProduct();
+
+        var result = product.UpdateDetails("New name", "New description", price: 0m);
+
+        result.IsFailure.Should().BeTrue();
+        result.Errors.Should().Contain(e => e.Code == "Product.InvalidPrice");
+        product.Price.Should().Be(10m, "the aggregate is unchanged when an invariant fails");
     }
 
     [Fact]
@@ -1109,27 +1005,13 @@ public class ProductTests
         result.IsSuccess.Should().BeTrue();
         product.IsDeleted.Should().BeTrue();
         product.DomainEvents.OfType<ProductChanged>()
-            .Should().ContainSingle().Which.State.Should().Be(DomainEntityState.Deleted);
+            .Should().Contain(e => e.State == DomainEntityState.Deleted);
     }
 
     private static Product CreateProduct() =>
-        Product.Create(id: null, "Espresso Machine", "A compact home espresso machine.", price: 499.99m).Value!;
+        Product.Create(id: null, "Name", "Description", price: 10m).Value!;
 }
 ```
-
-**Edit** `Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/MMCA.ECommerce.Products.Application.Tests.csproj`.
-The handler tests need the framework's test base and a mocking library, neither of which the
-application-test scaffold references. Add two lines at the top of the package `ItemGroup` so it reads:
-
-```xml
-  <ItemGroup>
-    <PackageReference Include="MMCA.Common.Testing" />
-    <PackageReference Include="Moq" />
-    <PackageReference Include="xunit.v3" />
-```
-
-No version attributes: both packages are already pinned in the solution's `Directory.Packages.props`
-under Central Package Management, so a version here would be an error rather than a nicety.
 
 **Rewrite** `Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/Caching/ProductCacheInvalidationTests.cs`
 with the complete file below (4 tests). The last test is the one that earns its keep: nothing at
@@ -1190,7 +1072,7 @@ public class ProductCacheInvalidationTests
         var queryHandler = new CountingQueryHandler(ProductResult());
         var read = new CachingQueryDecorator<GetProductByIdQuery, Result<ProductDTO>>(queryHandler, cache);
         var write = new CachingCommandDecorator<UpdateProductCommand, Result<ProductDTO>>(
-            new StubCommandHandler(ProductResult(price: 649.00m)), cache);
+            new StubCommandHandler(ProductResult(price: 19.99m)), cache);
 
         await read.HandleAsync(new GetProductByIdQuery(ProductId));
         await read.HandleAsync(new GetProductByIdQuery(ProductId));
@@ -1246,20 +1128,20 @@ public class ProductCacheInvalidationTests
 
     private static IEnumerable<ICacheInvalidating> AllProductCommands() =>
     [
-        new ProductCreateRequest { Name = "Espresso Machine", Description = "A compact home espresso machine.", Price = 499.99m },
+        new ProductCreateRequest { Name = "Mechanical keyboard", Description = "Hot-swappable, 87 keys.", Price = 129.99m },
         UpdateCommand(),
         new DeleteProductCommand(ProductId),
     ];
 
     private static UpdateProductCommand UpdateCommand() =>
-        new(ProductId, "Espresso Machine Pro", "Now with a milk frother.", Price: 649.00m);
+        new(ProductId, "Mechanical keyboard", "Hot-swappable, 87 keys.", Price: 129.99m);
 
-    private static Result<ProductDTO> ProductResult(decimal price = 499.99m) =>
+    private static Result<ProductDTO> ProductResult(decimal price = 129.99m) =>
         Result.Success(new ProductDTO
         {
             Id = ProductId,
-            Name = "Espresso Machine",
-            Description = "A compact home espresso machine.",
+            Name = "Mechanical keyboard",
+            Description = "Hot-swappable, 87 keys.",
             Price = price,
         });
 
@@ -1338,16 +1220,17 @@ public class ProductCacheInvalidationTests
 ```
 
 **Create** the four handler test classes, one per use case, under
-`Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/Products/UseCases/`. They all
-extend the framework's `HandlerTestBase<THandler>`, whose `RegisterRepository` wires a mocked
-repository into a mocked unit of work, so the handler resolves it exactly the way it does at run time.
+`Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/UseCases/`. They all extend the
+framework's `HandlerTestBase<THandler>`, whose `RegisterRepository` wires a mocked repository into a
+mocked unit of work, so the handler resolves it exactly the way it does at run time.
 
-`.../Products/UseCases/Create/CreateProductHandlerTests.cs`:
+`.../UseCases/CreateProductHandlerTests.cs` (3 tests):
 
 ```csharp
 using AwesomeAssertions;
 using MMCA.Common.Application.Interfaces;
 using MMCA.Common.Application.Interfaces.Infrastructure;
+using MMCA.Common.Domain.Interfaces;
 using MMCA.Common.Testing;
 using MMCA.ECommerce.Products.Application.Products.DTOs;
 using MMCA.ECommerce.Products.Application.Products.UseCases.Create;
@@ -1355,22 +1238,22 @@ using MMCA.ECommerce.Products.Domain.Products;
 using MMCA.ECommerce.Products.Shared.Products.IntegrationEvents;
 using Moq;
 
-namespace MMCA.ECommerce.Products.Application.Tests.Products.UseCases.Create;
+namespace MMCA.ECommerce.Products.Application.Tests.UseCases;
 
 /// <summary>
-/// Unit tests for <see cref="CreateProductHandler"/>. The repository and the event bus are mocks
-/// (via the framework's <see cref="HandlerTestBase{THandler}"/>); the request mapper and the DTO
-/// mapper are the real ones, so the domain factory really runs.
+/// Unit tests for <see cref="CreateProductHandler"/>: the request maps through the domain factory, the
+/// aggregate is added and committed, and the integration event is published AFTER the save so it
+/// carries the database-generated id.
 /// </summary>
-public sealed class CreateProductHandlerTests : HandlerTestBase<CreateProductHandler>
+public class CreateProductHandlerTests : HandlerTestBase<CreateProductHandler>
 {
-    private readonly Mock<IRepository<Product, ProductIdentifierType>> _products;
+    private readonly Mock<IRepository<Product, ProductIdentifierType>> _repository;
     private readonly Mock<IEventBus> _eventBus = new();
     private readonly CreateProductHandler _sut;
 
     public CreateProductHandlerTests()
     {
-        _products = RegisterRepository<Product, ProductIdentifierType>();
+        _repository = RegisterRepository<Product, ProductIdentifierType>();
         _sut = new CreateProductHandler(
             UnitOfWork.Object,
             new ProductCreateRequestMapper(),
@@ -1379,318 +1262,304 @@ public sealed class CreateProductHandlerTests : HandlerTestBase<CreateProductHan
     }
 
     [Fact]
-    public async Task HandleAsync_WithAValidRequest_AddsTheProductAndSaves()
+    public async Task HandleAsync_WithValidRequest_PersistsAndReturnsTheDTO()
     {
-        var result = await _sut.HandleAsync(ValidRequest());
+        var result = await _sut.HandleAsync(Request());
 
         result.IsSuccess.Should().BeTrue();
-        result.Value!.Name.Should().Be("Espresso Machine");
-        result.Value.Price.Should().Be(499.99m);
-        _products.Verify(r => r.AddAsync(It.IsAny<Product>(), It.IsAny<CancellationToken>()), Times.Once);
+        result.Value!.Name.Should().Be("Mechanical keyboard");
+        result.Value.Description.Should().Be("Hot-swappable, 87 keys.");
+        result.Value.Price.Should().Be(129.99m);
+        _repository.Verify(r => r.AddAsync(It.IsAny<Product>(), It.IsAny<CancellationToken>()), Times.Once);
         UnitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task HandleAsync_PublishesProductCreated_AfterTheCommit()
+    public async Task HandleAsync_WithValidRequest_PublishesTheCreatedIntegrationEvent()
     {
-        await _sut.HandleAsync(ValidRequest());
+        await _sut.HandleAsync(Request());
 
         _eventBus.Verify(
             b => b.PublishAsync(
-                It.Is<ProductCreatedIntegrationEvent>(e => e.Name == "Espresso Machine" && e.Price == 499.99m),
+                It.Is<IIntegrationEvent>(e =>
+                    e is ProductCreatedIntegrationEvent
+                    && ((ProductCreatedIntegrationEvent)e).Name == "Mechanical keyboard"
+                    && ((ProductCreatedIntegrationEvent)e).Price == 129.99m),
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
     [Fact]
-    public async Task HandleAsync_WhenTheDomainFactoryRejectsTheRequest_PersistsAndPublishesNothing()
+    public async Task HandleAsync_WithNonPositivePrice_FailsWithoutTouchingPersistence()
     {
-        var request = ValidRequest() with { Price = 0m };
-
-        var result = await _sut.HandleAsync(request);
+        var result = await _sut.HandleAsync(Request(price: 0m));
 
         result.IsFailure.Should().BeTrue();
         result.Errors.Should().Contain(e => e.Code == "Product.InvalidPrice");
-        _products.Verify(r => r.AddAsync(It.IsAny<Product>(), It.IsAny<CancellationToken>()), Times.Never);
+        _repository.Verify(r => r.AddAsync(It.IsAny<Product>(), It.IsAny<CancellationToken>()), Times.Never);
         UnitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
         _eventBus.Verify(
-            b => b.PublishAsync(It.IsAny<ProductCreatedIntegrationEvent>(), It.IsAny<CancellationToken>()),
+            b => b.PublishAsync(It.IsAny<IIntegrationEvent>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
-    private static ProductCreateRequest ValidRequest() => new()
+    private static ProductCreateRequest Request(decimal price = 129.99m) => new()
     {
-        Name = "Espresso Machine",
-        Description = "A compact home espresso machine.",
-        Price = 499.99m,
+        Name = "Mechanical keyboard",
+        Description = "Hot-swappable, 87 keys.",
+        Price = price,
     };
 }
 ```
 
-`.../Products/UseCases/Update/UpdateProductHandlerTests.cs`:
+`.../UseCases/UpdateProductHandlerTests.cs` (4 tests):
 
 ```csharp
 using AwesomeAssertions;
 using MMCA.Common.Application.Interfaces.Infrastructure;
-using MMCA.Common.Shared.Abstractions;
 using MMCA.Common.Testing;
 using MMCA.ECommerce.Products.Application.Products.DTOs;
 using MMCA.ECommerce.Products.Application.Products.UseCases.Update;
 using MMCA.ECommerce.Products.Domain.Products;
 using Moq;
 
-namespace MMCA.ECommerce.Products.Application.Tests.Products.UseCases.Update;
+namespace MMCA.ECommerce.Products.Application.Tests.UseCases;
 
 /// <summary>
-/// Unit tests for <see cref="UpdateProductHandler"/>: the happy path, the ADR-035 concurrency stamp,
-/// and the missing-aggregate path.
+/// Unit tests for <see cref="UpdateProductHandler"/>: a missing aggregate is a NotFound failure, an
+/// invariant breach never reaches the save, and the client's concurrency token is stamped back per
+/// ADR-035 before the mutation.
 /// </summary>
-public sealed class UpdateProductHandlerTests : HandlerTestBase<UpdateProductHandler>
+public class UpdateProductHandlerTests : HandlerTestBase<UpdateProductHandler>
 {
-    private const ProductIdentifierType ProductId = 7;
+    private static readonly byte[] RowVersion = [1, 2, 3, 4];
 
-    private readonly Mock<IRepository<Product, ProductIdentifierType>> _products;
+    private readonly Mock<IRepository<Product, ProductIdentifierType>> _repository;
     private readonly UpdateProductHandler _sut;
 
     public UpdateProductHandlerTests()
     {
-        _products = RegisterRepository<Product, ProductIdentifierType>();
+        _repository = RegisterRepository<Product, ProductIdentifierType>();
         _sut = new UpdateProductHandler(UnitOfWork.Object, new ProductDTOMapper());
     }
 
     [Fact]
-    public async Task HandleAsync_WithAnExistingProduct_UpdatesAndReturnsTheRefreshedDTO()
+    public async Task HandleAsync_WithValidCommand_UpdatesAndReturnsTheRefreshedDTO()
     {
         var product = ExistingProduct();
+        GivenProductIsFound(product);
 
-        var result = await _sut.HandleAsync(UpdateCommand());
+        var result = await _sut.HandleAsync(Command());
 
         result.IsSuccess.Should().BeTrue();
-        result.Value!.Name.Should().Be("Espresso Machine Pro");
-        result.Value.Price.Should().Be(649.00m);
-        product.Description.Should().Be("Now with a milk frother.");
+        result.Value!.Name.Should().Be("Wireless mouse");
+        result.Value.Price.Should().Be(59.95m);
+        product.Name.Should().Be("Wireless mouse");
         UnitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task HandleAsync_StampsTheClientsRowVersion_SoAConflictingEditFails()
+    public async Task HandleAsync_StampsTheClientRowVersionBeforeMutating()
     {
         var product = ExistingProduct();
-        byte[] rowVersion = [1, 2, 3];
+        GivenProductIsFound(product);
 
-        await _sut.HandleAsync(UpdateCommand() with { RowVersion = rowVersion });
+        await _sut.HandleAsync(Command());
 
-        _products.Verify(r => r.SetOriginalRowVersion(product, rowVersion), Times.Once);
+        _repository.Verify(r => r.SetOriginalRowVersion(product, RowVersion), Times.Once);
     }
 
     [Fact]
-    public async Task HandleAsync_WithAnUnknownProduct_ReturnsNotFoundAndSavesNothing()
+    public async Task HandleAsync_WhenTheProductIsMissing_ReturnsNotFound()
     {
-        _products
-            .Setup(r => r.GetByIdAsync(
-                ProductId,
-                It.IsAny<IEnumerable<string>>(),
-                It.IsAny<bool>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Product?)null);
+        GivenProductIsFound(null);
 
-        var result = await _sut.HandleAsync(UpdateCommand());
+        var result = await _sut.HandleAsync(Command());
 
         result.IsFailure.Should().BeTrue();
-        result.Errors.Should().Contain(e => e.Code == Error.NotFound.Code);
         UnitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    private static UpdateProductCommand UpdateCommand() =>
-        new(ProductId, "Espresso Machine Pro", "Now with a milk frother.", Price: 649.00m);
-
-    private Product ExistingProduct()
+    [Fact]
+    public async Task HandleAsync_WithNonPositivePrice_FailsWithoutSaving()
     {
-        var product = Product
-            .Create(id: null, "Espresso Machine", "A compact home espresso machine.", price: 499.99m).Value!;
+        var product = ExistingProduct();
+        GivenProductIsFound(product);
 
-        _products
+        var result = await _sut.HandleAsync(Command(price: -1m));
+
+        result.IsFailure.Should().BeTrue();
+        result.Errors.Should().Contain(e => e.Code == "Product.InvalidPrice");
+        product.Price.Should().Be(129.99m, "a rejected mutation leaves the aggregate untouched");
+        UnitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    private static Product ExistingProduct() =>
+        Product.Create(id: null, "Mechanical keyboard", "Hot-swappable, 87 keys.", price: 129.99m).Value!;
+
+    private static UpdateProductCommand Command(decimal price = 59.95m) =>
+        new(ProductId: 7, "Wireless mouse", "Silent click, 4000 dpi.", price) { RowVersion = RowVersion };
+
+    private void GivenProductIsFound(Product? product) =>
+        _repository
             .Setup(r => r.GetByIdAsync(
-                ProductId,
+                7,
                 It.IsAny<IEnumerable<string>>(),
-                It.IsAny<bool>(),
+                true,
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(product);
-
-        return product;
-    }
 }
 ```
 
-`.../Products/UseCases/Delete/DeleteProductHandlerTests.cs`:
+`.../UseCases/DeleteProductHandlerTests.cs` (2 tests):
 
 ```csharp
 using AwesomeAssertions;
 using MMCA.Common.Application.Interfaces.Infrastructure;
-using MMCA.Common.Shared.Abstractions;
+using MMCA.Common.Domain.Enums;
 using MMCA.Common.Testing;
 using MMCA.ECommerce.Products.Application.Products.UseCases.Delete;
 using MMCA.ECommerce.Products.Domain.Products;
+using MMCA.ECommerce.Products.Domain.Products.DomainEvents;
 using Moq;
 
-namespace MMCA.ECommerce.Products.Application.Tests.Products.UseCases.Delete;
+namespace MMCA.ECommerce.Products.Application.Tests.UseCases;
 
 /// <summary>
-/// Unit tests for <see cref="DeleteProductHandler"/>. Delete is a soft delete through the aggregate
-/// root, so the assertions are about the flag and the save, not about a row disappearing.
+/// Unit tests for <see cref="DeleteProductHandler"/>: the aggregate is loaded tracked, soft-deleted
+/// through its own guarded method (which raises the Deleted domain event), and committed once.
 /// </summary>
-public sealed class DeleteProductHandlerTests : HandlerTestBase<DeleteProductHandler>
+public class DeleteProductHandlerTests : HandlerTestBase<DeleteProductHandler>
 {
-    private const ProductIdentifierType ProductId = 7;
-
-    private readonly Mock<IRepository<Product, ProductIdentifierType>> _products;
+    private readonly Mock<IRepository<Product, ProductIdentifierType>> _repository;
     private readonly DeleteProductHandler _sut;
 
     public DeleteProductHandlerTests()
     {
-        _products = RegisterRepository<Product, ProductIdentifierType>();
+        _repository = RegisterRepository<Product, ProductIdentifierType>();
         _sut = new DeleteProductHandler(UnitOfWork.Object);
     }
 
     [Fact]
-    public async Task HandleAsync_WithAnExistingProduct_SoftDeletesTheAggregate()
+    public async Task HandleAsync_SoftDeletesTheProductAndRaisesTheDeletedEvent()
     {
         var product = ExistingProduct();
+        GivenProductIsFound(product);
 
-        var result = await _sut.HandleAsync(new DeleteProductCommand(ProductId));
+        var result = await _sut.HandleAsync(new DeleteProductCommand(7));
 
         result.IsSuccess.Should().BeTrue();
         product.IsDeleted.Should().BeTrue();
-    }
-
-    [Fact]
-    public async Task HandleAsync_WithAnExistingProduct_SavesOnce()
-    {
-        ExistingProduct();
-
-        await _sut.HandleAsync(new DeleteProductCommand(ProductId));
-
+        product.DomainEvents.OfType<ProductChanged>()
+            .Should().Contain(e => e.State == DomainEntityState.Deleted);
         UnitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task HandleAsync_WithAnUnknownProduct_ReturnsNotFoundAndSavesNothing()
+    public async Task HandleAsync_WhenTheProductIsMissing_ReturnsNotFound()
     {
-        _products
-            .Setup(r => r.GetByIdAsync(
-                ProductId,
-                It.IsAny<IEnumerable<string>>(),
-                It.IsAny<bool>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Product?)null);
+        GivenProductIsFound(null);
 
-        var result = await _sut.HandleAsync(new DeleteProductCommand(ProductId));
+        var result = await _sut.HandleAsync(new DeleteProductCommand(7));
 
         result.IsFailure.Should().BeTrue();
-        result.Errors.Should().Contain(e => e.Code == Error.NotFound.Code);
         UnitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    private Product ExistingProduct()
-    {
-        var product = Product
-            .Create(id: null, "Espresso Machine", "A compact home espresso machine.", price: 499.99m).Value!;
+    private static Product ExistingProduct() =>
+        Product.Create(id: null, "Mechanical keyboard", "Hot-swappable, 87 keys.", price: 129.99m).Value!;
 
-        _products
+    private void GivenProductIsFound(Product? product) =>
+        _repository
             .Setup(r => r.GetByIdAsync(
-                ProductId,
+                7,
                 It.IsAny<IEnumerable<string>>(),
-                It.IsAny<bool>(),
+                true,
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(product);
-
-        return product;
-    }
 }
 ```
 
-`.../Products/UseCases/GetById/GetProductByIdHandlerTests.cs`. Its two-argument `GetByIdAsync` setup
-and the `GetReadRepository` verification are what pin the read-path change you made in 4.4:
+`.../UseCases/GetProductByIdHandlerTests.cs` (3 tests). Its `GetReadRepository` assertion is what pins
+the read path to a non-tracking read:
 
 ```csharp
 using AwesomeAssertions;
 using MMCA.Common.Application.Interfaces.Infrastructure;
-using MMCA.Common.Shared.Abstractions;
 using MMCA.Common.Testing;
 using MMCA.ECommerce.Products.Application.Products.DTOs;
 using MMCA.ECommerce.Products.Application.Products.UseCases.GetById;
 using MMCA.ECommerce.Products.Domain.Products;
 using Moq;
 
-namespace MMCA.ECommerce.Products.Application.Tests.Products.UseCases.GetById;
+namespace MMCA.ECommerce.Products.Application.Tests.UseCases;
 
 /// <summary>
-/// Unit tests for <see cref="GetProductByIdHandler"/>: the read maps every field, misses surface as
-/// a NotFound failure rather than a null, and a query never writes.
+/// Unit tests for <see cref="GetProductByIdHandler"/>: a no-tracking read that maps the aggregate to
+/// its DTO, or reports NotFound when the id resolves to nothing (soft-deleted rows are filtered out
+/// by the EF global query filter, so they arrive here as null).
 /// </summary>
-public sealed class GetProductByIdHandlerTests : HandlerTestBase<GetProductByIdHandler>
+public class GetProductByIdHandlerTests : HandlerTestBase<GetProductByIdHandler>
 {
-    private const ProductIdentifierType ProductId = 7;
-
-    private readonly Mock<IRepository<Product, ProductIdentifierType>> _products;
+    private readonly Mock<IRepository<Product, ProductIdentifierType>> _repository;
     private readonly GetProductByIdHandler _sut;
 
     public GetProductByIdHandlerTests()
     {
-        _products = RegisterRepository<Product, ProductIdentifierType>();
+        _repository = RegisterRepository<Product, ProductIdentifierType>();
         _sut = new GetProductByIdHandler(UnitOfWork.Object, new ProductDTOMapper());
     }
 
     [Fact]
-    public async Task HandleAsync_WithAnExistingProduct_MapsEveryField()
+    public async Task HandleAsync_WhenTheProductExists_ReturnsTheMappedDTO()
     {
-        GivenAnExistingProduct();
+        GivenProductIsFound(ExistingProduct());
 
-        var result = await _sut.HandleAsync(new GetProductByIdQuery(ProductId));
+        var result = await _sut.HandleAsync(new GetProductByIdQuery(7));
 
         result.IsSuccess.Should().BeTrue();
-        result.Value!.Name.Should().Be("Espresso Machine");
-        result.Value.Description.Should().Be("A compact home espresso machine.");
-        result.Value.Price.Should().Be(499.99m);
+        result.Value!.Name.Should().Be("Mechanical keyboard");
+        result.Value.Description.Should().Be("Hot-swappable, 87 keys.");
+        result.Value.Price.Should().Be(129.99m);
     }
 
     [Fact]
-    public async Task HandleAsync_WithAnUnknownProduct_ReturnsNotFound()
+    public async Task HandleAsync_ReadsWithoutTracking()
     {
-        _products
-            .Setup(r => r.GetByIdAsync(ProductId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Product?)null);
+        GivenProductIsFound(ExistingProduct());
 
-        var result = await _sut.HandleAsync(new GetProductByIdQuery(ProductId));
+        await _sut.HandleAsync(new GetProductByIdQuery(7));
+
+        _repository.Verify(
+            r => r.GetByIdAsync(7, It.IsAny<IEnumerable<string>>(), false, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task HandleAsync_WhenTheProductIsMissing_ReturnsNotFound()
+    {
+        GivenProductIsFound(null);
+
+        var result = await _sut.HandleAsync(new GetProductByIdQuery(7));
 
         result.IsFailure.Should().BeTrue();
-        result.Errors.Should().Contain(e => e.Code == Error.NotFound.Code);
     }
 
-    [Fact]
-    public async Task HandleAsync_ReadsThroughTheReadRepository_AndWritesNothing()
-    {
-        GivenAnExistingProduct();
+    private static Product ExistingProduct() =>
+        Product.Create(id: null, "Mechanical keyboard", "Hot-swappable, 87 keys.", price: 129.99m).Value!;
 
-        await _sut.HandleAsync(new GetProductByIdQuery(ProductId));
-
-        UnitOfWork.Verify(u => u.GetReadRepository<Product, ProductIdentifierType>(), Times.Once);
-        UnitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
-    }
-
-    private void GivenAnExistingProduct()
-    {
-        var product = Product
-            .Create(id: null, "Espresso Machine", "A compact home espresso machine.", price: 499.99m).Value;
-
-        _products
-            .Setup(r => r.GetByIdAsync(ProductId, It.IsAny<CancellationToken>()))
+    private void GivenProductIsFound(Product? product) =>
+        _repository
+            .Setup(r => r.GetByIdAsync(
+                7,
+                It.IsAny<IEnumerable<string>>(),
+                false,
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(product);
-    }
 }
 ```
 
-### 4.8 Verify the Products reshape
+### 4.7 Verify the Products reshape
 
 ```powershell
 dotnet build MMCA.ECommerce.slnx
@@ -1715,8 +1584,10 @@ suites are about to be replaced in step 5.
 
 ## 5. Reshape Orders into an order with line items
 
-Orders keeps the child-collection pattern the template scaffolded, retargeted: `OrderComment`
-becomes `OrderItem`, and the free-form status becomes a lifecycle.
+Orders keeps the child-collection pattern the template scaffolded, retargeted. `--child Item` already
+did the naming for you: the entity is `OrderItem`, the slices are `AddItem` / `EditItem` /
+`RemoveItem`, the routes are `/items`. What is left is the domain itself, and the free-form status
+becomes a lifecycle.
 
 Two decisions here carry the architecture lesson of the whole sample:
 
@@ -1730,29 +1601,19 @@ Two decisions here carry the architecture lesson of the whole sample:
   whole error pipeline: `Result.Failure` in the domain, RFC 9457 ProblemDetails at the edge, a
   localized snackbar message in the UI.
 
-The phase order is different from step 4 on purpose. Orders grows new types rather than only
-shedding them, and every layer above compiles against the Shared contracts, so those come first;
-the domain follows, then the application slices that orchestrate it, then persistence, the API, and
-the tests. As before, every file shown is the finished file from the build-verified sample. All
-paths are relative to the solution root, and every command is PowerShell.
+The phase order matches step 4, with Infrastructure pulled up ahead of Application: Orders grows new
+types rather than only renaming them, and it is easier to settle the entities and their mapping before
+the slices that orchestrate them. As before, every file shown is the finished file from the
+build-verified sample. All paths are relative to the solution root, and every command is PowerShell.
+
+The scaffolded before-state, for orientation: `OrderItem` carries `Body` and `AuthorUserId`,
+`OrderStatus` is `Open` / `InProgress` / `Resolved` / `Closed`, and the aggregate has `Title`,
+`Description`, and `RequesterUserId`.
 
 ### 5.1 Shared contracts
 
-**Edit** `Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/MMCA.ECommerce.Orders.GlobalUsings.IdentifierType.cs`:
-rename the child alias from the scaffold's `OrderCommentIdentifierType`, and put the aggregate first.
-The whole file is now:
-
-```csharp
-// Orders module entity identifier type aliases.
-// Both entities use database-generated integer IDs (the [IdValueGenerated] attribute on the
-// domain entities). This file is linked into every project solution-wide via Directory.Build.props,
-// so the aliases are visible everywhere. Always use the alias instead of the raw type.
-global using OrderIdentifierType = int;
-global using OrderItemIdentifierType = int;
-```
-
-This file is linked into every project by `Directory.Build.props` (step 3c), so the rename lands
-solution-wide the moment you save it.
+The identifier aliases need no edit at all: `--child Item` already emitted `OrderIdentifierType` and
+`OrderItemIdentifierType`.
 
 **Rewrite** `Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/OrderStatus.cs`. The scaffold
 ships a flat set of ticket states; this is a lifecycle, and the doc comment is where the legal
@@ -1762,49 +1623,21 @@ transitions are written down for a reader who will not go looking for the invari
 namespace MMCA.ECommerce.Orders.Shared.Orders;
 
 /// <summary>
-/// Lifecycle status of a customer order. The aggregate owns the legal transitions:
-/// Pending to Paid to Shipped, with Cancelled reachable from Pending or Paid.
-/// Shipped and Cancelled are terminal, and items can only change while the order is Pending.
+/// Lifecycle status of an order. The legal transitions are Pending to Paid to Shipped, with
+/// Cancelled reachable from Pending or Paid; Shipped and Cancelled are terminal.
+/// <c>OrderInvariants.EnsureStatusTransitionIsValid</c> is the single place that rule is enforced.
 /// </summary>
 public enum OrderStatus
 {
-    /// <summary>Placed but not yet paid. The only status in which line items can change.</summary>
     Pending = 0,
-
-    /// <summary>Payment cleared. The line items are locked from here on.</summary>
     Paid = 1,
-
-    /// <summary>Handed to the carrier. Terminal.</summary>
     Shipped = 2,
-
-    /// <summary>Cancelled before shipping. Terminal.</summary>
     Cancelled = 3,
 }
 ```
 
-**Create** `Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/OrderItemDTO.cs`:
-
-```csharp
-using MMCA.Common.Shared.DTOs;
-
-namespace MMCA.ECommerce.Orders.Shared.Orders;
-
-/// <summary>
-/// Read model for an <c>OrderItem</c> line. <see cref="ProductName"/> and <see cref="UnitPrice"/>
-/// are the values snapshotted when the line was added, not a live catalog lookup, so an order shows
-/// what the customer actually bought at the price they actually paid.
-/// </summary>
-public record class OrderItemDTO : IBaseDTO<OrderItemIdentifierType>
-{
-    public required OrderItemIdentifierType Id { get; init; }
-    public required int ProductId { get; init; }
-    public required string ProductName { get; init; }
-    public required decimal UnitPrice { get; init; }
-    public required int Quantity { get; init; }
-}
-```
-
-**Rewrite** `Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/OrderDTO.cs`. The `Total`
+**Rewrite** `Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/OrderDTO.cs`. `Title`,
+`Description`, and `RequesterUserId` collapse into `CustomerName`, and `Total` is new. The `Total`
 remarks are load-bearing documentation, not decoration: only the detail read eager-loads `Items`, so
 `Total` is 0 on the list and paged projections, and the fix for a caller who needs the number is to
 ask the detail endpoint, not to widen the list query:
@@ -1817,6 +1650,12 @@ namespace MMCA.ECommerce.Orders.Shared.Orders;
 /// <summary>
 /// Read model for an <c>Order</c> aggregate returned by the API. Exposes the current
 /// <see cref="RowVersion"/> so a client can echo it back on <c>OrderUpdateRequest</c> (ADR-035).
+/// <para>
+/// <see cref="Total"/> is computed by the aggregate from its live items, so it only carries a
+/// meaningful figure when <see cref="Items"/> was loaded. The list path (GetAll / paged) does not
+/// include the child collection, so <see cref="Items"/> comes back empty there and
+/// <see cref="Total"/> reads 0. Call the details endpoint when the total matters.
+/// </para>
 /// </summary>
 public record class OrderDTO : IBaseDTO<OrderIdentifierType>, IConcurrencyAware
 {
@@ -1827,19 +1666,31 @@ public record class OrderDTO : IBaseDTO<OrderIdentifierType>, IConcurrencyAware
     public required string CustomerName { get; init; }
     public required OrderStatus Status { get; init; }
 
-    /// <summary>
-    /// The order total, computed by the aggregate as the sum of unit price times quantity across its
-    /// still-active line items.
-    /// <para>
-    /// Only the detail read (<c>GET /Orders/{id}/details</c>) eager-loads <see cref="Items"/>. The
-    /// inherited list and paged reads do not, so on those paths <see cref="Items"/> comes back empty
-    /// and this reads 0. That is the intended shape of a list projection rather than a defect: ask
-    /// the detail endpoint when the total matters, and do not widen the list query to chase it.
-    /// </para>
-    /// </summary>
+    /// <summary>Sum of unit price times quantity over the live items; 0 on the list path.</summary>
     public decimal Total { get; init; }
-
     public IReadOnlyCollection<OrderItemDTO> Items { get; init; } = [];
+}
+```
+
+**Rewrite** `Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/OrderItemDTO.cs`. The
+scaffold's `Body` and `AuthorUserId` become the four snapshot properties:
+
+```csharp
+using MMCA.Common.Shared.DTOs;
+
+namespace MMCA.ECommerce.Orders.Shared.Orders;
+
+/// <summary>
+/// Read model for an <c>OrderItem</c> child entity. Carries the product snapshot the order captured
+/// when the item was added, not a live lookup against another module.
+/// </summary>
+public record class OrderItemDTO : IBaseDTO<OrderItemIdentifierType>
+{
+    public required OrderItemIdentifierType Id { get; init; }
+    public required int ProductId { get; init; }
+    public required string ProductName { get; init; }
+    public required decimal UnitPrice { get; init; }
+    public required int Quantity { get; init; }
 }
 ```
 
@@ -1877,38 +1728,31 @@ of the module-isolation decision above:
 namespace MMCA.ECommerce.Orders.Shared.Orders;
 
 /// <summary>
-/// Request body for appending a line item to an order (the order id comes from the route). The
-/// caller supplies the product name and unit price to snapshot; the Orders module never reads them
-/// back from the catalog, which is what keeps it free of any reference to the Products module.
+/// Request body for adding an item to an order (the order id comes from the route). The caller
+/// supplies the product snapshot, so the Orders module never has to reach into another module.
 /// </summary>
-/// <param name="ProductId">The catalog product identifier.</param>
-/// <param name="ProductName">The product name to snapshot onto the line.</param>
-/// <param name="UnitPrice">The unit price to snapshot onto the line.</param>
-/// <param name="Quantity">The number of units.</param>
-public sealed record AddOrderItemRequest(int ProductId, string ProductName, decimal UnitPrice, int Quantity);
+/// <param name="ProductId">The identifier of the product being ordered.</param>
+/// <param name="ProductName">The product name as of the moment the item was added.</param>
+/// <param name="UnitPrice">The unit price as of the moment the item was added.</param>
+/// <param name="Quantity">How many units were ordered.</param>
+public sealed record AddOrderItemRequest(
+    int ProductId,
+    string ProductName,
+    decimal UnitPrice,
+    int Quantity);
 ```
 
-**Create** `Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/ChangeOrderItemQuantityRequest.cs`:
+**Create** `Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/ChangeOrderItemQuantityRequest.cs`,
+which replaces the scaffold's free-text `EditItemRequest(string Body)`:
 
 ```csharp
 namespace MMCA.ECommerce.Orders.Shared.Orders;
 
 /// <summary>
-/// Request body for re-quantifying a line item (the order id and item id come from the route).
+/// Request body for changing an item's quantity (the order id and item id come from the route).
 /// </summary>
-/// <param name="Quantity">The new number of units.</param>
+/// <param name="Quantity">The new quantity; must be greater than zero.</param>
 public sealed record ChangeOrderItemQuantityRequest(int Quantity);
-```
-
-**Edit** `Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/ChangeOrderStatusRequest.cs`:
-the record itself already has the right shape, so only the doc comment changes, to say who owns the
-rules:
-
-```csharp
-/// <summary>
-/// Request body for changing an order's status (the order id comes from the route). The aggregate
-/// rejects anything that is not a legal transition.
-/// </summary>
 ```
 
 **Create** `Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/IntegrationEvents/OrderPlacedIntegrationEvent.cs`:
@@ -1932,23 +1776,27 @@ public sealed record class OrderPlacedIntegrationEvent(
     : BaseIntegrationEvent;
 ```
 
-**Delete** the four Shared files the reshape replaces:
+**Delete** the three Shared files the reshape replaces. `ChangeOrderStatusRequest.cs` stays exactly as
+generated: `record ChangeOrderStatusRequest(OrderStatus Status)` is already the right shape, and the
+enum it names is the one you just rewrote.
 
 ```powershell
 Remove-Item `
-  Source\Modules\Orders\MMCA.ECommerce.Orders.Shared\Orders\IntegrationEvents\OrderOpenedIntegrationEvent.cs, `
-  Source\Modules\Orders\MMCA.ECommerce.Orders.Shared\Orders\OrderCommentDTO.cs, `
-  Source\Modules\Orders\MMCA.ECommerce.Orders.Shared\Orders\AddCommentRequest.cs, `
-  Source\Modules\Orders\MMCA.ECommerce.Orders.Shared\Orders\EditCommentRequest.cs
+  Source\Modules\Orders\MMCA.ECommerce.Orders.Shared\Orders\AddItemRequest.cs, `
+  Source\Modules\Orders\MMCA.ECommerce.Orders.Shared\Orders\EditItemRequest.cs, `
+  Source\Modules\Orders\MMCA.ECommerce.Orders.Shared\Orders\IntegrationEvents\OrderOpenedIntegrationEvent.cs
 ```
 
 ### 5.2 Domain
 
 **Rewrite** `Source/Modules/Orders/MMCA.ECommerce.Orders.Domain/Orders/OrderInvariants.cs` with the
-complete file below. Eight error codes live here, and every one of them is a code you will localize
-in 5.5: the two customer-name codes, the two product-name codes, the unit price, the quantity, the
-item lock, and the status transition. The two app-specific rules at the bottom (`Order.ItemsLocked`
-and `Order.InvalidStatusTransition`) are the invariant half of the second architecture decision:
+complete file below. Six methods, eight error codes, and every one of those codes is a code you will
+localize in 5.5: the two customer-name codes, the two product-name codes, the unit price, the
+quantity, the item lock, and the status transition. The two app-specific rules at the bottom
+(`Order.ItemsLocked` and `Order.InvalidStatusTransition`) are the invariant half of the second
+architecture decision. The transition switch lists every enum member explicitly rather than leaning on
+the discard arm, which is both what `IDE0072` asks for and what turns adding a status into a
+compile-time prompt to decide where it can go:
 
 ```csharp
 using MMCA.Common.Domain.Invariants;
@@ -1961,109 +1809,85 @@ namespace MMCA.ECommerce.Orders.Domain.Orders;
 /// Business invariants for the <c>Order</c> aggregate. Each method returns a <see cref="Result"/>
 /// so callers can compose them with <see cref="Result.Combine(System.ReadOnlySpan{Result})"/>.
 /// The string checks delegate to the framework's <see cref="CommonInvariants"/> helpers, so each
-/// field reports a distinct empty vs too-long error; only the app-specific rules (the item lock and
-/// the status lifecycle) and the length constants live here.
+/// field reports a distinct empty vs too-long error; only the app-specific rules and the
+/// length constants live here.
 /// </summary>
 public static class OrderInvariants
 {
-    /// <summary>Maximum length of <c>Order.CustomerName</c>.</summary>
     public const int CustomerNameMaxLength = 200;
+    public const int ItemProductNameMaxLength = 200;
 
-    /// <summary>Maximum length of <c>OrderItem.ProductName</c>.</summary>
-    public const int ProductNameMaxLength = 200;
-
-    /// <summary>Rejects an empty or over-long customer name.</summary>
-    /// <param name="customerName">The candidate customer name.</param>
-    /// <param name="source">The calling member, echoed into the error for diagnostics.</param>
-    /// <returns>Success, or a failure carrying <c>Order.CustomerName.Empty</c> / <c>Order.CustomerName.TooLong</c>.</returns>
     public static Result EnsureCustomerNameIsValid(string customerName, string source)
         => Result.Combine(
-            CommonInvariants.EnsureStringIsNotEmpty(customerName, "Order.CustomerName.Empty", "Customer name cannot be empty.", source, nameof(customerName)),
-            CommonInvariants.EnsureStringMaxLength(customerName, CustomerNameMaxLength, "Order.CustomerName.TooLong", $"Customer name cannot exceed {CustomerNameMaxLength} characters.", source, nameof(customerName)));
+            CommonInvariants.EnsureStringIsNotEmpty(customerName, "Order.CustomerName.Empty", "Order customer name cannot be empty.", source, nameof(customerName)),
+            CommonInvariants.EnsureStringMaxLength(customerName, CustomerNameMaxLength, "Order.CustomerName.TooLong", $"Order customer name cannot exceed {CustomerNameMaxLength} characters.", source, nameof(customerName)));
 
-    /// <summary>Rejects an empty or over-long product name on a line item.</summary>
-    /// <param name="productName">The candidate product name snapshot.</param>
-    /// <param name="source">The calling member, echoed into the error for diagnostics.</param>
-    /// <returns>Success, or a failure carrying <c>Order.Item.ProductName.Empty</c> / <c>Order.Item.ProductName.TooLong</c>.</returns>
-    public static Result EnsureProductNameIsValid(string productName, string source)
+    public static Result EnsureItemProductNameIsValid(string productName, string source)
         => Result.Combine(
-            CommonInvariants.EnsureStringIsNotEmpty(productName, "Order.Item.ProductName.Empty", "Order item product name cannot be empty.", source, nameof(productName)),
-            CommonInvariants.EnsureStringMaxLength(productName, ProductNameMaxLength, "Order.Item.ProductName.TooLong", $"Order item product name cannot exceed {ProductNameMaxLength} characters.", source, nameof(productName)));
+            CommonInvariants.EnsureStringIsNotEmpty(productName, "Order.Item.ProductName.Empty", "Item product name cannot be empty.", source, nameof(productName)),
+            CommonInvariants.EnsureStringMaxLength(productName, ItemProductNameMaxLength, "Order.Item.ProductName.TooLong", $"Item product name cannot exceed {ItemProductNameMaxLength} characters.", source, nameof(productName)));
 
-    /// <summary>Rejects a non-positive unit price. A zero-price line is a pricing bug, not a discount.</summary>
-    /// <param name="unitPrice">The candidate unit price.</param>
-    /// <param name="source">The calling member, echoed into the error for diagnostics.</param>
-    /// <returns>Success, or a failure carrying <c>Order.InvalidUnitPrice</c>.</returns>
     public static Result EnsureUnitPriceIsValid(decimal unitPrice, string source)
-        => unitPrice <= 0
-            ? Result.Failure(Error.Invariant(
+        => unitPrice > 0m
+            ? Result.Success()
+            : Result.Failure(Error.Invariant(
                 code: "Order.InvalidUnitPrice",
-                message: "Order item unit price must be greater than zero.",
+                message: "Item unit price must be greater than zero.",
                 source: source,
-                target: nameof(unitPrice)))
-            : Result.Success();
+                target: nameof(unitPrice)));
 
-    /// <summary>Rejects a non-positive quantity. Removing a line is <c>RemoveItem</c>, not a zero quantity.</summary>
-    /// <param name="quantity">The candidate quantity.</param>
-    /// <param name="source">The calling member, echoed into the error for diagnostics.</param>
-    /// <returns>Success, or a failure carrying <c>Order.InvalidQuantity</c>.</returns>
     public static Result EnsureQuantityIsValid(int quantity, string source)
-        => quantity <= 0
-            ? Result.Failure(Error.Invariant(
-                code: "Order.InvalidQuantity",
-                message: "Order item quantity must be greater than zero.",
-                source: source,
-                target: nameof(quantity)))
-            : Result.Success();
+        => CommonInvariants.EnsureIntIsPositive(
+            quantity,
+            "Order.InvalidQuantity",
+            "Item quantity must be greater than zero.",
+            source,
+            nameof(quantity));
 
     /// <summary>
-    /// Guards every line-item mutation: an order's contents are only editable while it is Pending,
-    /// because once payment has cleared the total the customer was charged is settled.
+    /// Item add / change / remove is only legal while the order is still Pending: once it is paid
+    /// the line items are what was charged, so they stop being editable.
     /// </summary>
-    /// <param name="status">The order's current status.</param>
-    /// <param name="source">The calling member, echoed into the error for diagnostics.</param>
-    /// <returns>Success, or a failure carrying <c>Order.ItemsLocked</c>.</returns>
     public static Result EnsureStatusAllowsItemChanges(OrderStatus status, string source)
         => status == OrderStatus.Pending
             ? Result.Success()
             : Result.Failure(Error.Invariant(
                 code: "Order.ItemsLocked",
-                message: "Order items can only be changed while the order is pending.",
+                message: "Items can only be changed while the order is pending.",
                 source: source,
                 target: nameof(status)));
 
     /// <summary>
-    /// Guards the status lifecycle: Pending to Paid to Shipped, with Cancelled reachable from
-    /// Pending or Paid. Shipped and Cancelled are terminal.
+    /// The one place the order lifecycle is encoded: Pending to Paid to Shipped, Cancelled from
+    /// Pending or Paid, and nothing at all out of the two terminal states. Every enum member has
+    /// its own arm so adding a status is a compile-time prompt to decide where it can go.
     /// </summary>
-    /// <param name="currentStatus">The order's current status.</param>
-    /// <param name="newStatus">The requested status.</param>
-    /// <param name="source">The calling member, echoed into the error for diagnostics.</param>
-    /// <returns>Success, or a failure carrying <c>Order.InvalidStatusTransition</c>.</returns>
-    public static Result EnsureStatusTransitionIsValid(OrderStatus currentStatus, OrderStatus newStatus, string source)
-        => IsTransitionAllowed(currentStatus, newStatus)
-            ? Result.Success()
-            : Result.Failure(Error.Invariant(
-                code: "Order.InvalidStatusTransition",
-                message: "That order status transition is not allowed.",
-                source: source,
-                target: nameof(newStatus)));
-
-    private static bool IsTransitionAllowed(OrderStatus currentStatus, OrderStatus newStatus) =>
-        currentStatus switch
+    public static Result EnsureStatusTransitionIsValid(OrderStatus current, OrderStatus next, string source)
+    {
+        bool allowed = current switch
         {
-            OrderStatus.Pending => newStatus is OrderStatus.Paid or OrderStatus.Cancelled,
-            OrderStatus.Paid => newStatus is OrderStatus.Shipped or OrderStatus.Cancelled,
+            OrderStatus.Pending => next is OrderStatus.Paid or OrderStatus.Cancelled,
+            OrderStatus.Paid => next is OrderStatus.Shipped or OrderStatus.Cancelled,
             OrderStatus.Shipped => false,
             OrderStatus.Cancelled => false,
             _ => false,
         };
+
+        return allowed
+            ? Result.Success()
+            : Result.Failure(Error.Invariant(
+                code: "Order.InvalidStatusTransition",
+                message: "The order cannot move to that status from its current one.",
+                source: source,
+                target: nameof(next)));
+    }
 }
 ```
 
-**Create** `Source/Modules/Orders/MMCA.ECommerce.Orders.Domain/Orders/OrderItem.cs`. `ProductId` is a
-plain `int`, deliberately not a `ProductIdentifierType` and deliberately not a foreign key: the
-Orders module must not name a Products type at all:
+**Rewrite** `Source/Modules/Orders/MMCA.ECommerce.Orders.Domain/Orders/OrderItem.cs`. `Body` and
+`AuthorUserId` become the four snapshot properties, and `EditBody` becomes `ChangeQuantity`.
+`ProductId` is a plain `int`, deliberately not a `ProductIdentifierType` and deliberately not a
+foreign key: the Orders module must not name a Products type at all:
 
 ```csharp
 using MMCA.Common.Domain.Attributes;
@@ -2076,14 +1900,6 @@ namespace MMCA.ECommerce.Orders.Domain.Orders;
 /// <summary>
 /// A line item on an <see cref="Order"/>. Child entity of the Order aggregate; created and managed
 /// through the aggregate root, never directly.
-/// <para>
-/// <see cref="ProductName"/> and <see cref="UnitPrice"/> are deliberately snapshotted onto the line
-/// rather than read back from the Products module: an order records what the customer bought at the
-/// price they paid, so a later catalog rename or repricing must not rewrite history. That snapshot
-/// is also why the Orders module holds zero references to Products, which is what keeps the
-/// module-isolation fitness rules green. <see cref="ProductId"/> is a scalar reference, not a
-/// cross-module foreign key.
-/// </para>
 /// </summary>
 [IdValueGenerated]
 public sealed class OrderItem : AuditableBaseEntity<OrderItemIdentifierType>
@@ -2093,16 +1909,16 @@ public sealed class OrderItem : AuditableBaseEntity<OrderItemIdentifierType>
 
     public OrderIdentifierType OrderId { get; init; }
 
-    /// <summary>The catalog product this line refers to, held as a plain scalar (no FK to Products).</summary>
+    // Product snapshot, not a live reference: the name and the price are copied in at the moment
+    // the item is added, so a later catalog rename or repricing cannot rewrite what was ordered.
+    // It is also what keeps this module free of any reference to the Products module: the caller
+    // hands over the four scalars and the order owns them from then on.
     public int ProductId { get; private set; }
 
-    /// <summary>The product name as it read when the line was added.</summary>
     public string ProductName { get; private set; }
 
-    /// <summary>The price per unit as it read when the line was added.</summary>
     public decimal UnitPrice { get; private set; }
 
-    /// <summary>How many units of the product this line covers. Always greater than zero.</summary>
     public int Quantity { get; private set; }
 
     private OrderItem(int productId, string productName, decimal unitPrice, int quantity)
@@ -2113,13 +1929,6 @@ public sealed class OrderItem : AuditableBaseEntity<OrderItemIdentifierType>
         Quantity = quantity;
     }
 
-    /// <summary>Factory for a new line item. Called by <see cref="Order.AddItem"/>, never directly.</summary>
-    /// <param name="id">The explicit id, ignored because this entity uses database-generated ids.</param>
-    /// <param name="productId">The catalog product identifier.</param>
-    /// <param name="productName">The product name to snapshot onto the line.</param>
-    /// <param name="unitPrice">The unit price to snapshot onto the line.</param>
-    /// <param name="quantity">The number of units.</param>
-    /// <returns>The new line item, or the composed invariant failures.</returns>
     public static Result<OrderItem> Create(
         OrderItemIdentifierType? id,
         int productId,
@@ -2128,7 +1937,7 @@ public sealed class OrderItem : AuditableBaseEntity<OrderItemIdentifierType>
         int quantity)
     {
         var validation = Result.Combine(
-            OrderInvariants.EnsureProductNameIsValid(productName, nameof(Create)),
+            OrderInvariants.EnsureItemProductNameIsValid(productName, nameof(Create)),
             OrderInvariants.EnsureUnitPriceIsValid(unitPrice, nameof(Create)),
             OrderInvariants.EnsureQuantityIsValid(quantity, nameof(Create)));
         if (validation.IsFailure)
@@ -2146,9 +1955,10 @@ public sealed class OrderItem : AuditableBaseEntity<OrderItemIdentifierType>
         return Result.Success(item);
     }
 
-    /// <summary>Re-quantifies the line. The price snapshot is untouched.</summary>
-    /// <param name="quantity">The new number of units.</param>
-    /// <returns>Success, or <c>Order.InvalidQuantity</c>.</returns>
+    /// <summary>
+    /// Changes how many units were ordered. The unit price stays frozen at its snapshot value: a
+    /// quantity edit is not a repricing.
+    /// </summary>
     public Result ChangeQuantity(int quantity)
     {
         var validation = OrderInvariants.EnsureQuantityIsValid(quantity, nameof(ChangeQuantity));
@@ -2168,7 +1978,8 @@ public sealed class OrderItem : AuditableBaseEntity<OrderItemIdentifierType>
 file below. Three things to notice while pasting: every item mutation asks
 `EnsureStatusAllowsItemChanges` **first**, `Total` is computed rather than stored (so it cannot drift
 from the lines), and re-asserting the current status is an idempotent no-op success that raises no
-event, which is what makes a retried status call safe:
+event, which is what makes a retried status call safe. The cascade soft-delete in `Delete()` is the
+scaffold's, kept as generated:
 
 ```csharp
 using MMCA.Common.Domain.Attributes;
@@ -2182,16 +1993,16 @@ using MMCA.ECommerce.Orders.Shared.Orders;
 namespace MMCA.ECommerce.Orders.Domain.Orders;
 
 /// <summary>
-/// Customer order aggregate root. Created through the <see cref="Create"/> factory (returns a
+/// Customer-order aggregate root. Created through the <see cref="Create"/> factory (returns a
 /// <see cref="Result{T}"/>), mutated through guarded methods that raise <see cref="OrderChanged"/>
-/// domain events. Line items are growable children managed via <see cref="AddItem"/>,
-/// <see cref="ChangeItemQuantity"/>, and <see cref="RemoveItem"/>, and only while the order is
-/// <see cref="OrderStatus.Pending"/>.
+/// domain events. Line items are growable children managed via <see cref="AddItem"/>, and only
+/// while the order is still Pending.
 /// </summary>
 [IdValueGenerated]
 public sealed class Order : AuditableAggregateRootEntity<OrderIdentifierType>
 {
     public string CustomerName { get; private set; }
+
     public OrderStatus Status { get; private set; }
 
     private readonly List<OrderItem> _items = [];
@@ -2200,10 +2011,10 @@ public sealed class Order : AuditableAggregateRootEntity<OrderIdentifierType>
     public IReadOnlyCollection<OrderItem> Items => _items.AsReadOnly();
 
     /// <summary>
-    /// The order total, computed from the live line items rather than stored, so it can never drift
-    /// out of step with them. Soft-deleted (removed) lines are excluded. Not a mapped column:
-    /// <c>OrderConfiguration</c> ignores it, and a read that did not eager-load
-    /// <see cref="Items"/> reads 0 here.
+    /// The order total, derived from the live items rather than stored: a persisted copy is one
+    /// more thing that can disagree with the rows it summarizes. Soft-deleted items are excluded,
+    /// and <c>OrderConfiguration</c> tells EF to ignore this property so no column is mapped.
+    /// It therefore reads 0 whenever the item collection was not loaded (the list query path).
     /// </summary>
     public decimal Total => _items.Where(i => !i.IsDeleted).Sum(i => i.UnitPrice * i.Quantity);
 
@@ -2213,11 +2024,9 @@ public sealed class Order : AuditableAggregateRootEntity<OrderIdentifierType>
         Status = OrderStatus.Pending;
     }
 
-    /// <summary>Places a new, empty order for a customer.</summary>
-    /// <param name="id">The explicit id, ignored because this aggregate uses database-generated ids.</param>
-    /// <param name="customerName">The customer the order is for.</param>
-    /// <returns>A Pending order with no items, or the invariant failures.</returns>
-    public static Result<Order> Create(OrderIdentifierType? id, string customerName)
+    public static Result<Order> Create(
+        OrderIdentifierType? id,
+        string customerName)
     {
         var validation = OrderInvariants.EnsureCustomerNameIsValid(customerName, nameof(Create));
         if (validation.IsFailure)
@@ -2239,13 +2048,6 @@ public sealed class Order : AuditableAggregateRootEntity<OrderIdentifierType>
         return Result.Success(order);
     }
 
-    /// <summary>Appends a line item. Allowed only while the order is Pending.</summary>
-    /// <param name="id">The explicit child id, ignored because line items use database-generated ids.</param>
-    /// <param name="productId">The catalog product identifier.</param>
-    /// <param name="productName">The product name to snapshot onto the line.</param>
-    /// <param name="unitPrice">The unit price to snapshot onto the line.</param>
-    /// <param name="quantity">The number of units.</param>
-    /// <returns>The new line, or <c>Order.ItemsLocked</c> / the line's own invariant failures.</returns>
     public Result<OrderItem> AddItem(
         OrderItemIdentifierType? id,
         int productId,
@@ -2253,10 +2055,10 @@ public sealed class Order : AuditableAggregateRootEntity<OrderIdentifierType>
         decimal unitPrice,
         int quantity)
     {
-        var statusValidation = OrderInvariants.EnsureStatusAllowsItemChanges(Status, nameof(AddItem));
-        if (statusValidation.IsFailure)
+        var validation = OrderInvariants.EnsureStatusAllowsItemChanges(Status, nameof(AddItem));
+        if (validation.IsFailure)
         {
-            return Result.Failure<OrderItem>(statusValidation.Errors);
+            return Result.Failure<OrderItem>(validation.Errors);
         }
 
         var itemResult = OrderItem.Create(id, productId, productName, unitPrice, quantity);
@@ -2272,9 +2074,6 @@ public sealed class Order : AuditableAggregateRootEntity<OrderIdentifierType>
         return Result.Success(item);
     }
 
-    /// <summary>Renames the customer on the order. Allowed in any status.</summary>
-    /// <param name="customerName">The new customer name.</param>
-    /// <returns>Success, or the customer-name invariant failures.</returns>
     public Result UpdateDetails(string customerName)
     {
         var validation = OrderInvariants.EnsureCustomerNameIsValid(customerName, nameof(UpdateDetails));
@@ -2289,10 +2088,6 @@ public sealed class Order : AuditableAggregateRootEntity<OrderIdentifierType>
         return Result.Success();
     }
 
-    /// <summary>Re-quantifies an existing line. Allowed only while the order is Pending.</summary>
-    /// <param name="itemId">The line item identifier.</param>
-    /// <param name="quantity">The new number of units.</param>
-    /// <returns>Success, or <c>Order.ItemsLocked</c> / NotFound / <c>Order.InvalidQuantity</c>.</returns>
     public Result ChangeItemQuantity(OrderItemIdentifierType itemId, int quantity)
     {
         var statusValidation = OrderInvariants.EnsureStatusAllowsItemChanges(Status, nameof(ChangeItemQuantity));
@@ -2318,9 +2113,6 @@ public sealed class Order : AuditableAggregateRootEntity<OrderIdentifierType>
         return Result.Success();
     }
 
-    /// <summary>Removes (soft-deletes) a line. Allowed only while the order is Pending.</summary>
-    /// <param name="itemId">The line item identifier.</param>
-    /// <returns>Success, or <c>Order.ItemsLocked</c> / NotFound.</returns>
     public Result RemoveItem(OrderItemIdentifierType itemId)
     {
         var statusValidation = OrderInvariants.EnsureStatusAllowsItemChanges(Status, nameof(RemoveItem));
@@ -2346,15 +2138,10 @@ public sealed class Order : AuditableAggregateRootEntity<OrderIdentifierType>
         return Result.Success();
     }
 
-    /// <summary>
-    /// Moves the order along its lifecycle. Re-asserting the current status is a no-op success (an
-    /// idempotent retry is not an error and raises no event); anything else must be a legal
-    /// transition per <see cref="OrderInvariants.EnsureStatusTransitionIsValid"/>.
-    /// </summary>
-    /// <param name="newStatus">The requested status.</param>
-    /// <returns>Success, or <c>Order.InvalidStatusTransition</c>.</returns>
     public Result ChangeStatus(OrderStatus newStatus)
     {
+        // Re-asserting the status the order already has is a no-op success, not a transition:
+        // an at-least-once delivered command must not fail on its second arrival.
         if (Status == newStatus)
         {
             return Result.Success();
@@ -2372,8 +2159,6 @@ public sealed class Order : AuditableAggregateRootEntity<OrderIdentifierType>
         return Result.Success();
     }
 
-    /// <summary>Soft-deletes the order and cascade-soft-deletes its still-active line items.</summary>
-    /// <returns>The base result, with the cascade and the Deleted domain event applied on success.</returns>
     public override Result Delete()
     {
         var result = base.Delete();
@@ -2382,7 +2167,7 @@ public sealed class Order : AuditableAggregateRootEntity<OrderIdentifierType>
             return result;
         }
 
-        foreach (var item in _items.Where(i => !i.IsDeleted))
+        foreach (var item in _items.Where(c => !c.IsDeleted))
         {
             item.Delete();
         }
@@ -2394,108 +2179,104 @@ public sealed class Order : AuditableAggregateRootEntity<OrderIdentifierType>
 }
 ```
 
-**Edit** `Source/Modules/Orders/MMCA.ECommerce.Orders.Domain/Orders/DomainEvents/OrderChanged.cs`:
-the event no longer fires on creation, so change the first summary line (the scaffold says "opened,
-mutated, or deleted"):
+`OrderChanged.cs` needs no edit: unlike Products, the scaffolded Orders event summary already reads
+correctly for an aggregate whose creation is signalled by an integration event.
+
+### 5.3 Infrastructure
+
+**Rewrite** `Source/Modules/Orders/MMCA.ECommerce.Orders.Infrastructure/Persistence/EntityConfiguration/OrderConfiguration.cs`.
+Two lines here are easy to skip and expensive to omit: `Status` is persisted as a **string** (that is
+the scaffold's line, kept), so a later reordering of the enum cannot silently reinterpret stored rows,
+and `builder.Ignore(o => o.Total)` keeps EF from trying to map the computed getter (without it the
+model build fails outright):
 
 ```csharp
-/// Domain event raised when an <c>Order</c> is mutated or deleted. Captured into the outbox by
-```
-
-**Delete** the scaffolded child entity:
-
-```powershell
-Remove-Item Source\Modules\Orders\MMCA.ECommerce.Orders.Domain\Orders\OrderComment.cs
-```
-
-### 5.3 Application
-
-**Create** `Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/DTOs/OrderItemDTOMapper.cs`:
-
-```csharp
-using MMCA.Common.Application.Interfaces;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration;
 using MMCA.ECommerce.Orders.Domain.Orders;
-using MMCA.ECommerce.Orders.Shared.Orders;
-using Riok.Mapperly.Abstractions;
 
-namespace MMCA.ECommerce.Orders.Application.Orders.DTOs;
+namespace MMCA.ECommerce.Orders.Infrastructure.Persistence.EntityConfiguration;
 
 /// <summary>
-/// Maps <see cref="OrderItem"/> child entities to <see cref="OrderItemDTO"/> (Mapperly).
+/// EF Core configuration for the <see cref="Order"/> aggregate. <c>base.Configure</c> wires the Id,
+/// soft-delete flag + query filter, audit fields, and concurrency token from the framework base.
 /// </summary>
-[Mapper]
-public sealed partial class OrderItemDTOMapper
-    : IEntityDTOMapper<OrderItem, OrderItemDTO, OrderItemIdentifierType>
+internal sealed class OrderConfiguration : EntityTypeConfigurationSQLServer<Order, OrderIdentifierType>
 {
-    public partial OrderItemDTO MapToDTO(OrderItem entity);
-
-    public IReadOnlyCollection<OrderItemDTO> MapToDTOs(IReadOnlyCollection<OrderItem> entityCollection)
+    public override void Configure(EntityTypeBuilder<Order> builder)
     {
-        ArgumentNullException.ThrowIfNull(entityCollection);
-        return [.. entityCollection.Select(MapToDTO)];
+        base.Configure(builder);
+
+        builder.Property(p => p.CustomerName)
+            .HasMaxLength(OrderInvariants.CustomerNameMaxLength)
+            .IsRequired();
+
+        builder.Property(p => p.Status)
+            .HasConversion<string>()
+            .HasMaxLength(32)
+            .IsRequired();
+
+        // Total is derived from the items in the domain, so there is no column to map. Without this
+        // EF would try to persist a read-only property and fail at model build.
+        builder.Ignore(o => o.Total);
+
+        builder.HasIndex(p => p.CustomerName)
+            .HasFilter("[IsDeleted] = 0");
+
+        builder.HasMany(p => p.Items)
+            .WithOne(c => c.Order)
+            .HasForeignKey(c => c.OrderId)
+            .IsRequired();
     }
 }
 ```
 
-**Edit** `Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/DTOs/OrderDTOMapper.cs`:
-retarget the child mapper and extend the doc comment to record why a list-projection DTO carries a
-zero total. Replace the doc comment, the class declaration, and the `[UseMapper]` field with:
+**Rewrite** `Source/Modules/Orders/MMCA.ECommerce.Orders.Infrastructure/Persistence/EntityConfiguration/OrderItemConfiguration.cs`.
+The `using Microsoft.EntityFrameworkCore;` at the top is new, because `HasColumnType` needs it:
 
 ```csharp
-/// <summary>
-/// Maps the <see cref="Order"/> aggregate to <see cref="OrderDTO"/> (Mapperly), delegating child
-/// line-item mapping to <see cref="OrderItemDTOMapper"/>. The aggregate's computed
-/// <see cref="Order.Total"/> maps onto <see cref="OrderDTO.Total"/> by name, so a DTO built from an
-/// order whose items were not eager-loaded carries a total of 0 (see the remarks on the DTO).
-/// </summary>
-[Mapper]
-public sealed partial class OrderDTOMapper(OrderItemDTOMapper orderItemDTOMapper)
-    : IEntityDTOMapper<Order, OrderDTO, OrderIdentifierType>
-{
-    [UseMapper]
-    private readonly OrderItemDTOMapper _orderItemDTOMapper = orderItemDTOMapper;
-```
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration;
+using MMCA.ECommerce.Orders.Domain.Orders;
 
-**Create** `Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/IntegrationEventHandlers/OrderPlacedHandler.cs`:
-
-```csharp
-using Microsoft.Extensions.Logging;
-using MMCA.Common.Application.Interfaces;
-using MMCA.ECommerce.Orders.Shared.Orders.IntegrationEvents;
-
-namespace MMCA.ECommerce.Orders.Application.Orders.IntegrationEventHandlers;
+namespace MMCA.ECommerce.Orders.Infrastructure.Persistence.EntityConfiguration;
 
 /// <summary>
-/// Consumes <see cref="OrderPlacedIntegrationEvent"/>. In this monolith seed it just logs; in a real
-/// system this is where a confirmation email, a fulfilment hand-off, or an analytics side effect
-/// would live. The same handler runs in-process now and over the broker once the Orders module is
-/// extracted (ADR-003 / ADR-008). Auto-discovered by Scrutor (singleton lifetime); the dispatcher
-/// routes the outbox-published event here.
+/// EF Core configuration for the <see cref="OrderItem"/> child entity. The parent
+/// <see cref="OrderConfiguration"/> owns the relationship; this configures the item's own columns.
 /// </summary>
-public sealed partial class OrderPlacedHandler(ILogger<OrderPlacedHandler> logger)
-    : IIntegrationEventHandler<OrderPlacedIntegrationEvent>
+internal sealed class OrderItemConfiguration
+    : EntityTypeConfigurationSQLServer<OrderItem, OrderItemIdentifierType>
 {
-    public Task HandleAsync(OrderPlacedIntegrationEvent integrationEvent, CancellationToken cancellationToken = default)
+    public override void Configure(EntityTypeBuilder<OrderItem> builder)
     {
-        ArgumentNullException.ThrowIfNull(integrationEvent);
+        base.Configure(builder);
 
-        LogOrderPlaced(logger, integrationEvent.OrderId, integrationEvent.CustomerName, integrationEvent.SchemaVersion);
+        builder.Property(p => p.ProductId)
+            .IsRequired();
 
-        return Task.CompletedTask;
+        builder.Property(p => p.ProductName)
+            .HasMaxLength(OrderInvariants.ItemProductNameMaxLength)
+            .IsRequired();
+
+        // Money column: an explicit scale, not the SQL Server decimal default, so a price never
+        // silently rounds on the way in.
+        builder.Property(p => p.UnitPrice)
+            .HasColumnType("decimal(18,2)")
+            .IsRequired();
+
+        builder.Property(p => p.Quantity)
+            .IsRequired();
     }
-
-    [LoggerMessage(Level = LogLevel.Information,
-        Message = "Integration event: order {OrderId} placed for {CustomerName} (schema v{SchemaVersion}).")]
-    private static partial void LogOrderPlaced(ILogger logger, int orderId, string customerName, int schemaVersion);
 }
 ```
 
-**Edit** `Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/DomainEventHandlers/OrderChangedAuditHandler.cs`:
-one doc line, naming the handler that now audits creation. Change the second-to-last summary line to:
+`ModuleApplicationDbContext` needs no edit: `--child Item` already declared `DbSet<OrderItem>`
+alongside `DbSet<Order>`.
 
-```csharp
-/// Creation is audited separately by the integration-event consumer (<c>OrderPlacedHandler</c>),
-```
+### 5.4 Application
 
 **Rewrite** the Create slice. An order is placed empty and grows lines afterwards, so the create
 payload is just a customer name.
@@ -2512,7 +2293,7 @@ namespace MMCA.ECommerce.Orders.Application.Orders.UseCases.Create;
 /// Command/request to place a new order. Used directly as the command (validated by the pipeline's
 /// Validating decorator via <see cref="OrderCreateRequestValidator"/>); implements
 /// <see cref="ICacheInvalidating"/> so cached order reads are evicted after a successful create.
-/// An order is created empty: line items are appended afterwards through <c>AddItemCommand</c>.
+/// The order starts Pending and empty; items are added afterwards through the items endpoints.
 /// </summary>
 public record class OrderCreateRequest : ICreateRequest, ICacheInvalidating
 {
@@ -2522,34 +2303,21 @@ public record class OrderCreateRequest : ICreateRequest, ICacheInvalidating
 }
 ```
 
-`.../UseCases/Create/OrderCreateRequestMapper.cs`:
+In `.../UseCases/Create/OrderCreateRequestMapper.cs`, the doc comment gains an `n` and the factory
+call loses two arguments:
 
 ```csharp
-using MMCA.Common.Application.Interfaces;
-using MMCA.Common.Shared.Abstractions;
-using MMCA.ECommerce.Orders.Domain.Orders;
-
-namespace MMCA.ECommerce.Orders.Application.Orders.UseCases.Create;
-
-/// <summary>
 /// Maps an <see cref="OrderCreateRequest"/> to a new <see cref="Order"/> via the domain factory.
-/// </summary>
-public sealed class OrderCreateRequestMapper
-    : IEntityRequestMapper<Order, OrderCreateRequest, OrderIdentifierType>
-{
-    public Task<Result<Order>> CreateEntityAsync(OrderCreateRequest request, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(request);
+```
 
+```csharp
         return Task.FromResult(Order.Create(
             id: null,
             customerName: request.CustomerName));
-    }
-}
 ```
 
-`.../UseCases/Create/OrderCreateRequestValidator.cs` (one rule now, so the constructor is an
-expression body):
+`.../UseCases/Create/OrderCreateRequestValidator.cs` drops to one rule, so the constructor becomes an
+expression body:
 
 ```csharp
 using FluentValidation;
@@ -2568,167 +2336,57 @@ public sealed class OrderCreateRequestValidator : AbstractValidator<OrderCreateR
 }
 ```
 
-`.../UseCases/Create/CreateOrderHandler.cs`:
+In `.../UseCases/Create/CreateOrderHandler.cs`, two summary lines and one call change. The handler
+still publishes after the commit, so the database-generated id is populated by the time the event
+reaches consumers:
 
 ```csharp
-using MMCA.Common.Application.Interfaces;
-using MMCA.Common.Application.Interfaces.Infrastructure;
-using MMCA.Common.Application.UseCases;
-using MMCA.Common.Shared.Abstractions;
-using MMCA.ECommerce.Orders.Application.Orders.DTOs;
-using MMCA.ECommerce.Orders.Domain.Orders;
-using MMCA.ECommerce.Orders.Shared.Orders;
-using MMCA.ECommerce.Orders.Shared.Orders.IntegrationEvents;
-
-namespace MMCA.ECommerce.Orders.Application.Orders.UseCases.Create;
-
-/// <summary>
 /// Places a new order: maps the request through the domain factory, persists via the unit of work
-/// (which stamps audit fields and dispatches domain events), then publishes the
-/// <see cref="OrderPlacedIntegrationEvent"/> for cross-module/cross-service consumers. Wrapped by
-/// the decorator pipeline (logging, caching, validating, transactional) once
-/// <c>AddApplicationDecorators()</c> runs.
-/// </summary>
-public sealed class CreateOrderHandler(
-    IUnitOfWork unitOfWork,
-    IEntityRequestMapper<Order, OrderCreateRequest, OrderIdentifierType> requestMapper,
-    IEventBus eventBus,
-    OrderDTOMapper dtoMapper) : ICommandHandler<OrderCreateRequest, Result<OrderDTO>>
-{
-    public async Task<Result<OrderDTO>> HandleAsync(OrderCreateRequest command, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(command);
-
-        var result = await requestMapper.CreateEntityAsync(command, cancellationToken).ConfigureAwait(false);
-        if (result.IsFailure)
-        {
-            return Result.Failure<OrderDTO>(result.Errors);
-        }
-
-        var entity = result.Value!;
-        var repository = unitOfWork.GetRepository<Order, OrderIdentifierType>();
-
-        await repository.AddAsync(entity, cancellationToken).ConfigureAwait(false);
-        await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
-        // Published after the commit so the database-generated order id is populated by the time the
-        // event reaches consumers. The publisher persists the event to the outbox and dispatches it
-        // in-process today, and will route it over a broker once Orders is extracted, with no handler
-        // code change required.
-        await eventBus.PublishAsync(
-            new OrderPlacedIntegrationEvent(entity.Id, entity.CustomerName),
-            cancellationToken).ConfigureAwait(false);
-
-        return Result.Success(dtoMapper.MapToDTO(entity));
-    }
-}
 ```
 
-**Edit** the four scaffolded slices that survive. Every one of them keeps
-`includes: [nameof(Order.Items)]`: the aggregate has to have its lines in memory to enforce the item
-lock and recompute the total, and a rename of `Items` would break these silently if they were
-strings, which is why `nameof` is used.
-
-In `.../UseCases/Update/UpdateOrderCommand.cs`, the record loses the description parameter. The full
-signature and its doc parameters are now:
+```csharp
+/// <see cref="OrderPlacedIntegrationEvent"/> for cross-module/cross-service consumers. Wrapped by
+```
 
 ```csharp
-/// <param name="OrderId">The order to update.</param>
-/// <param name="CustomerName">The new customer name.</param>
+            new OrderPlacedIntegrationEvent(entity.Id, entity.CustomerName),
+```
+
+**Rewrite** `.../UseCases/Update/UpdateOrderCommand.cs`: the record loses two parameters.
+
+```csharp
+using MMCA.Common.Application.UseCases;
+
+namespace MMCA.ECommerce.Orders.Application.Orders.UseCases.Update;
+
+/// <summary>
+/// Command to update an order's customer name. Evicts cached order reads on success.
+/// Carries the client's last-seen concurrency token (ADR-035); null skips the conflict check.
+/// </summary>
 public sealed record UpdateOrderCommand(
     OrderIdentifierType OrderId,
     string CustomerName)
     : ICacheInvalidating
+{
+    /// <summary>The client's last-seen concurrency token; null skips the conflict check (ADR-035).</summary>
+    public byte[]? RowVersion { get; init; }
+
+    public string CachePrefix => OrderCacheKeys.Prefix;
+}
 ```
 
 In `.../UseCases/Update/UpdateOrderHandler.cs`, change the summary and the call into the aggregate:
 
 ```csharp
-/// <summary>
 /// Updates an order's customer name through the aggregate root, then returns the refreshed DTO.
-/// Loads the items too so the returned DTO carries the real total.
-/// </summary>
-```
-
-```csharp
-            includes: [nameof(Order.Items)],
 ```
 
 ```csharp
         var result = order.UpdateDetails(command.CustomerName);
 ```
 
-In `.../UseCases/Delete/DeleteOrderCommand.cs`, change the summary and add the parameter doc:
-
-```csharp
-/// <summary>
-/// Command to soft-delete an order (and cascade-soft-delete its line items). Evicts cached reads on success.
-/// </summary>
-/// <param name="OrderId">The order to soft-delete.</param>
-```
-
-In `.../UseCases/Delete/DeleteOrderHandler.cs`, change the summary and the include:
-
-```csharp
-/// <summary>
-/// Soft-deletes an order through the aggregate root (loaded tracked with its line items so the
-/// cascade soft-deletes them too). The EF global query filter then excludes it from subsequent reads.
-/// </summary>
-```
-
-```csharp
-            includes: [nameof(Order.Items)],
-```
-
-In `.../UseCases/GetById/GetOrderByIdQuery.cs`, change the first summary line:
-
-```csharp
-/// Query for a single order including its (non-deleted) line items and computed total.
-```
-
-In `.../UseCases/GetById/GetOrderByIdHandler.cs`, change the summary and the include:
-
-```csharp
-/// <summary>
-/// Loads a single order with its line items (the list endpoint omits children, and therefore reports
-/// a total of 0) and maps it to a DTO.
-/// </summary>
-```
-
-```csharp
-            includes: [nameof(Order.Items)],
-```
-
-In `.../UseCases/ChangeStatus/ChangeOrderStatusCommand.cs`, change the doc comment (the record shape
-is already right):
-
-```csharp
-/// <summary>
-/// Command to move an order along its lifecycle. Evicts cached order reads on success. The
-/// aggregate, not this command, decides whether the transition is legal.
-/// </summary>
-/// <param name="OrderId">The order to move.</param>
-/// <param name="Status">The requested status.</param>
-```
-
-In `.../UseCases/ChangeStatus/ChangeOrderStatusHandler.cs`, change the summary and the include:
-
-```csharp
-/// <summary>
-/// Changes an order's status through the aggregate root, then returns the refreshed DTO. An illegal
-/// transition comes back as <c>Order.InvalidStatusTransition</c> and nothing is saved.
-/// </summary>
-```
-
-```csharp
-            includes: [nameof(Order.Items)],
-```
-
-**Create** the three line-item slices. Each is a command plus a handler, and each handler follows the
-same shape: load the order tracked with its items, call the aggregate, save only if the aggregate
-said yes.
-
-`.../UseCases/AddItem/AddItemCommand.cs`:
+**Rewrite** `.../UseCases/AddItem/AddItemCommand.cs`. The two scaffolded scalars become four, and the
+doc comment records why they travel on the command instead of being looked up:
 
 ```csharp
 using MMCA.Common.Application.UseCases;
@@ -2736,79 +2394,43 @@ using MMCA.Common.Application.UseCases;
 namespace MMCA.ECommerce.Orders.Application.Orders.UseCases.AddItem;
 
 /// <summary>
-/// Command to append a line item to an existing order. Implements <see cref="ICacheInvalidating"/>
-/// so cached order reads are evicted after a successful add (the total moves with every line).
+/// Command to append an item to an existing order. Carries the product snapshot (id, name, unit
+/// price) rather than only a product id, so the Orders module never calls into another module to
+/// resolve it. Implements <see cref="ICacheInvalidating"/> so cached order reads are evicted after
+/// a successful add.
 /// </summary>
-/// <param name="OrderId">The order to append to.</param>
-/// <param name="ProductId">The catalog product identifier.</param>
-/// <param name="ProductName">The product name to snapshot onto the line.</param>
-/// <param name="UnitPrice">The unit price to snapshot onto the line.</param>
-/// <param name="Quantity">The number of units.</param>
 public sealed record AddItemCommand(
     OrderIdentifierType OrderId,
     int ProductId,
     string ProductName,
     decimal UnitPrice,
-    int Quantity) : ICacheInvalidating
+    int Quantity)
+    : ICacheInvalidating
 {
     public string CachePrefix => OrderCacheKeys.Prefix;
 }
 ```
 
-`.../UseCases/AddItem/AddItemHandler.cs`:
+In `.../UseCases/AddItem/AddItemHandler.cs`, the summary gains an `n` and the aggregate call takes the
+four scalars. The handler already returns `Result<OrderItemDTO>` and already loads
+`includes: [nameof(Order.Items)]` tracked, which is what lets the aggregate enforce the item lock and
+recompute the total, so neither changes:
 
 ```csharp
-using MMCA.Common.Application.Interfaces.Infrastructure;
-using MMCA.Common.Application.UseCases;
-using MMCA.Common.Shared.Abstractions;
-using MMCA.ECommerce.Orders.Application.Orders.DTOs;
-using MMCA.ECommerce.Orders.Domain.Orders;
-using MMCA.ECommerce.Orders.Shared.Orders;
+/// Loads the order (tracked, with its items), appends an item through the aggregate root, and
+```
 
-namespace MMCA.ECommerce.Orders.Application.Orders.UseCases.AddItem;
-
-/// <summary>
-/// Loads the order (tracked, with its line items), appends a line through the aggregate root, and
-/// saves. Demonstrates the canonical eager-load-then-mutate idiom for adding a child to an aggregate:
-/// the items have to be in memory for the aggregate to enforce its own rules and recompute the total.
-/// </summary>
-public sealed class AddItemHandler(
-    IUnitOfWork unitOfWork,
-    OrderItemDTOMapper itemDTOMapper) : ICommandHandler<AddItemCommand, Result<OrderItemDTO>>
-{
-    public async Task<Result<OrderItemDTO>> HandleAsync(AddItemCommand command, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(command);
-
-        var repository = unitOfWork.GetRepository<Order, OrderIdentifierType>();
-        var order = await repository.GetByIdAsync(
-            command.OrderId,
-            includes: [nameof(Order.Items)],
-            asTracking: true,
-            cancellationToken: cancellationToken).ConfigureAwait(false);
-        if (order is null)
-        {
-            return Result.Failure<OrderItemDTO>(
-                Error.NotFound.WithSource(nameof(AddItemHandler)).WithTarget(nameof(Order)));
-        }
-
+```csharp
         var result = order.AddItem(
             id: null,
             command.ProductId,
             command.ProductName,
             command.UnitPrice,
             command.Quantity);
-        if (result.IsFailure)
-        {
-            return Result.Failure<OrderItemDTO>(result.Errors);
-        }
-
-        await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
-        return Result.Success(itemDTOMapper.MapToDTO(result.Value!));
-    }
-}
 ```
+
+**Create** the `ChangeItemQuantity` slice, which replaces the scaffold's `EditItem`. Quantity is the
+only mutable field on a line: the product snapshot and its price stay as captured.
 
 `.../UseCases/ChangeItemQuantity/ChangeItemQuantityCommand.cs`:
 
@@ -2818,11 +2440,9 @@ using MMCA.Common.Application.UseCases;
 namespace MMCA.ECommerce.Orders.Application.Orders.UseCases.ChangeItemQuantity;
 
 /// <summary>
-/// Command to re-quantify an existing line item on an order. Evicts cached order reads on success.
+/// Command to change the quantity of an existing item on an order. Quantity is the only mutable
+/// field on an item: the product snapshot and its price stay as captured.
 /// </summary>
-/// <param name="OrderId">The order that owns the line.</param>
-/// <param name="ItemId">The line item to re-quantify.</param>
-/// <param name="Quantity">The new number of units.</param>
 public sealed record ChangeItemQuantityCommand(
     OrderIdentifierType OrderId,
     OrderItemIdentifierType ItemId,
@@ -2843,7 +2463,7 @@ using MMCA.ECommerce.Orders.Domain.Orders;
 namespace MMCA.ECommerce.Orders.Application.Orders.UseCases.ChangeItemQuantity;
 
 /// <summary>
-/// Re-quantifies a line item through the order aggregate (loaded tracked with its line items).
+/// Changes an item's quantity through the order aggregate (loaded tracked with its items).
 /// </summary>
 public sealed class ChangeItemQuantityHandler(IUnitOfWork unitOfWork)
     : ICommandHandler<ChangeItemQuantityCommand, Result>
@@ -2877,202 +2497,66 @@ public sealed class ChangeItemQuantityHandler(IUnitOfWork unitOfWork)
 }
 ```
 
-`.../UseCases/RemoveItem/RemoveItemCommand.cs`:
+**Create** `Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/IntegrationEventHandlers/OrderPlacedHandler.cs`:
 
 ```csharp
-using MMCA.Common.Application.UseCases;
+using Microsoft.Extensions.Logging;
+using MMCA.Common.Application.Interfaces;
+using MMCA.ECommerce.Orders.Shared.Orders.IntegrationEvents;
 
-namespace MMCA.ECommerce.Orders.Application.Orders.UseCases.RemoveItem;
-
-/// <summary>
-/// Command to remove (soft-delete) a line item from an order. Evicts cached order reads on success.
-/// </summary>
-/// <param name="OrderId">The order that owns the line.</param>
-/// <param name="ItemId">The line item to remove.</param>
-public sealed record RemoveItemCommand(
-    OrderIdentifierType OrderId,
-    OrderItemIdentifierType ItemId) : ICacheInvalidating
-{
-    public string CachePrefix => OrderCacheKeys.Prefix;
-}
-```
-
-`.../UseCases/RemoveItem/RemoveItemHandler.cs`:
-
-```csharp
-using MMCA.Common.Application.Interfaces.Infrastructure;
-using MMCA.Common.Application.UseCases;
-using MMCA.Common.Shared.Abstractions;
-using MMCA.ECommerce.Orders.Domain.Orders;
-
-namespace MMCA.ECommerce.Orders.Application.Orders.UseCases.RemoveItem;
+namespace MMCA.ECommerce.Orders.Application.Orders.IntegrationEventHandlers;
 
 /// <summary>
-/// Removes (soft-deletes) a line item through the order aggregate (loaded tracked with its line
-/// items). The line stays in the table with <c>IsDeleted</c> set and drops out of the total.
+/// Consumes <see cref="OrderPlacedIntegrationEvent"/>. In this monolith seed it just logs; in a real
+/// system this is where a notification/email/analytics side effect would live. The same handler runs
+/// in-process now and over the broker once the Orders module is extracted (ADR-003 / ADR-008).
+/// Auto-discovered by Scrutor (singleton lifetime); the dispatcher routes the outbox-published event here.
 /// </summary>
-public sealed class RemoveItemHandler(IUnitOfWork unitOfWork)
-    : ICommandHandler<RemoveItemCommand, Result>
+public sealed partial class OrderPlacedHandler(ILogger<OrderPlacedHandler> logger)
+    : IIntegrationEventHandler<OrderPlacedIntegrationEvent>
 {
-    public async Task<Result> HandleAsync(RemoveItemCommand command, CancellationToken cancellationToken = default)
+    public Task HandleAsync(OrderPlacedIntegrationEvent integrationEvent, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(integrationEvent);
 
-        var repository = unitOfWork.GetRepository<Order, OrderIdentifierType>();
-        var order = await repository.GetByIdAsync(
-            command.OrderId,
-            includes: [nameof(Order.Items)],
-            asTracking: true,
-            cancellationToken: cancellationToken).ConfigureAwait(false);
-        if (order is null)
-        {
-            return Result.Failure(
-                Error.NotFound.WithSource(nameof(RemoveItemHandler)).WithTarget(nameof(Order)));
-        }
+        LogOrderPlaced(logger, integrationEvent.OrderId, integrationEvent.CustomerName, integrationEvent.SchemaVersion);
 
-        var result = order.RemoveItem(command.ItemId);
-        if (result.IsFailure)
-        {
-            return result;
-        }
-
-        await unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
-        return Result.Success();
+        return Task.CompletedTask;
     }
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "Integration event: order {OrderId} placed for {CustomerName} (schema v{SchemaVersion}).")]
+    private static partial void LogOrderPlaced(ILogger logger, int orderId, string customerName, int schemaVersion);
 }
 ```
 
-**Delete** the comment mapper, the old integration-event handler, and the three comment slices (six
-files across the three folders, eight items in all):
+**Delete** the slice and the handler they replace. The `EditItem` folder holds two files, so this
+removes three items:
 
 ```powershell
 Remove-Item -Recurse `
-  Source\Modules\Orders\MMCA.ECommerce.Orders.Application\Orders\DTOs\OrderCommentDTOMapper.cs, `
-  Source\Modules\Orders\MMCA.ECommerce.Orders.Application\Orders\IntegrationEventHandlers\OrderOpenedHandler.cs, `
-  Source\Modules\Orders\MMCA.ECommerce.Orders.Application\Orders\UseCases\AddComment, `
-  Source\Modules\Orders\MMCA.ECommerce.Orders.Application\Orders\UseCases\EditComment, `
-  Source\Modules\Orders\MMCA.ECommerce.Orders.Application\Orders\UseCases\RemoveComment
+  Source\Modules\Orders\MMCA.ECommerce.Orders.Application\Orders\UseCases\EditItem, `
+  Source\Modules\Orders\MMCA.ECommerce.Orders.Application\Orders\IntegrationEventHandlers\OrderOpenedHandler.cs
 ```
 
-**Edit** `Source/Modules/Orders/MMCA.ECommerce.Orders.Application/DependencyInjection.cs`: one
-comment, so it names line items rather than comments. Replace the three-line comment above the
-`TryAddScoped<INavigationPopulator<Order>, ...>` call with:
+**Edit** `Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/DomainEventHandlers/OrderChangedAuditHandler.cs`:
+one doc line, naming the handler that now audits creation. Change the second-to-last summary line to:
 
 ```csharp
-            // The Order aggregate has children but eager loading goes through repository includes,
-            // so a null populator suffices here (swap for a custom INavigationPopulator<Order> if the
-            // query service needs to batch-load line items).
+/// Creation is audited separately by the integration-event consumer (<c>OrderPlacedHandler</c>),
 ```
 
-### 5.4 Infrastructure
-
-**Rewrite** `Source/Modules/Orders/MMCA.ECommerce.Orders.Infrastructure/Persistence/EntityConfiguration/OrderConfiguration.cs`.
-Two lines here are easy to skip and expensive to omit: `Status` is persisted as a **string**, so a
-later reordering of the enum cannot silently reinterpret stored rows, and `builder.Ignore(o => o.Total)`
-keeps EF from trying to map the computed getter (without it the model build fails outright):
-
-```csharp
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration;
-using MMCA.ECommerce.Orders.Domain.Orders;
-
-namespace MMCA.ECommerce.Orders.Infrastructure.Persistence.EntityConfiguration;
-
-/// <summary>
-/// EF Core configuration for the <see cref="Order"/> aggregate. <c>base.Configure</c> wires the Id,
-/// soft-delete flag + query filter, audit fields, and concurrency token from the framework base.
-/// </summary>
-internal sealed class OrderConfiguration : EntityTypeConfigurationSQLServer<Order, OrderIdentifierType>
-{
-    public override void Configure(EntityTypeBuilder<Order> builder)
-    {
-        base.Configure(builder);
-
-        builder.Property(p => p.CustomerName)
-            .HasMaxLength(OrderInvariants.CustomerNameMaxLength)
-            .IsRequired();
-
-        builder.Property(p => p.Status)
-            .HasConversion<string>()
-            .HasMaxLength(32)
-            .IsRequired();
-
-        // Total is derived from the line items on every read, so there is no column to keep in sync.
-        // Without this Ignore, EF would try to map a getter-only property and fail the model build.
-        builder.Ignore(o => o.Total);
-
-        builder.HasIndex(p => p.CustomerName)
-            .HasFilter("[IsDeleted] = 0");
-
-        builder.HasMany(p => p.Items)
-            .WithOne(i => i.Order)
-            .HasForeignKey(i => i.OrderId)
-            .IsRequired();
-    }
-}
-```
-
-**Create** `Source/Modules/Orders/MMCA.ECommerce.Orders.Infrastructure/Persistence/EntityConfiguration/OrderItemConfiguration.cs`:
-
-```csharp
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using MMCA.Common.Infrastructure.Persistence.Configuration.EntityTypeConfiguration;
-using MMCA.ECommerce.Orders.Domain.Orders;
-
-namespace MMCA.ECommerce.Orders.Infrastructure.Persistence.EntityConfiguration;
-
-/// <summary>
-/// EF Core configuration for the <see cref="OrderItem"/> child entity. The parent
-/// <see cref="OrderConfiguration"/> owns the relationship; this configures the line's own columns.
-/// </summary>
-internal sealed class OrderItemConfiguration
-    : EntityTypeConfigurationSQLServer<OrderItem, OrderItemIdentifierType>
-{
-    public override void Configure(EntityTypeBuilder<OrderItem> builder)
-    {
-        base.Configure(builder);
-
-        builder.Property(p => p.ProductId)
-            .IsRequired();
-
-        builder.Property(p => p.ProductName)
-            .HasMaxLength(OrderInvariants.ProductNameMaxLength)
-            .IsRequired();
-
-        // Money is decimal(18,2), never the SQL Server default decimal(18,0), which would silently
-        // round every cent off the line and therefore off the order total.
-        builder.Property(p => p.UnitPrice)
-            .HasColumnType("decimal(18,2)")
-            .IsRequired();
-
-        builder.Property(p => p.Quantity)
-            .IsRequired();
-    }
-}
-```
-
-**Delete** the scaffolded comment configuration:
-
-```powershell
-Remove-Item Source\Modules\Orders\MMCA.ECommerce.Orders.Infrastructure\Persistence\EntityConfiguration\OrderCommentConfiguration.cs
-```
-
-**Edit** `Source/Modules/Orders/MMCA.ECommerce.Orders.Infrastructure/Persistence/DbContexts/ModuleApplicationDbContext.cs`:
-retarget the child `DbSet` so the body is exactly:
-
-```csharp
-    internal DbSet<Order> Orders { get; set; }
-    internal DbSet<OrderItem> OrderItems { get; set; }
-```
+Nothing else in the Application layer moves. The Delete, GetById, and ChangeStatus slices, both DTO
+mappers, `OrderCacheKeys`, and `DependencyInjection.cs` are all correct exactly as `--child Item`
+generated them, because each of them talks about items and none of them names a renamed field.
 
 ### 5.5 API
 
 **Rewrite** `Source/Modules/Orders/MMCA.ECommerce.Orders.API/Controllers/OrdersController.cs`. The
-list and paged reads still come from `EntityControllerBase`; everything else is an injected handler,
-one per use case, which is why the constructor is long and each action is three lines:
+routes are unchanged, including `POST /Orders/{id}/items`, `PUT /Orders/{id}/items/{itemId}`, and
+`DELETE /Orders/{id}/items/{itemId}`: `--child Item` produced them. What changes is the injected
+`ChangeItemQuantityCommand` handler in place of the `EditItemCommand` one, the action renamed from
+`EditItemAsync` to `ChangeItemQuantityAsync`, and the two new request types:
 
 ```csharp
 using System.Globalization;
@@ -3100,8 +2584,8 @@ namespace MMCA.ECommerce.Orders.API.Controllers;
 
 /// <summary>
 /// REST API for customer orders. Read endpoints (GetAll / paged) come from
-/// <see cref="EntityControllerBase{TEntity, TDTO, TId}"/>; create, update, status, and line-item
-/// operations inject handlers directly. Failures map to RFC 9457 ProblemDetails via <c>HandleFailure</c>.
+/// <see cref="EntityControllerBase{TEntity, TDTO, TId}"/>; the write operations inject their
+/// handlers directly. Failures map to RFC 9457 ProblemDetails via <c>HandleFailure</c>.
 /// </summary>
 [ApiController]
 [Route("[controller]")]
@@ -3123,7 +2607,7 @@ public sealed class OrdersController(
     ILogger<OrdersController> logger)
     : EntityControllerBase<Order, OrderDTO, OrderIdentifierType>(queryService, logger)
 {
-    /// <summary>Gets a single order including its line items and computed total.</summary>
+    /// <summary>Gets a single order by id, with its items (and therefore a real Total).</summary>
     [HttpGet("{id}/details")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -3135,7 +2619,6 @@ public sealed class OrdersController(
         return result.IsFailure ? HandleFailure(result.Errors) : Ok(result.Value);
     }
 
-    /// <summary>Places a new (empty) order for a customer.</summary>
     [HttpPost]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -3175,7 +2658,7 @@ public sealed class OrdersController(
         return result.IsFailure ? HandleFailure(result.Errors) : Ok(result.Value);
     }
 
-    /// <summary>Moves an order along its lifecycle. An illegal transition comes back as 400.</summary>
+    /// <summary>Changes an order's status.</summary>
     [HttpPut("{id}/status")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -3193,7 +2676,7 @@ public sealed class OrdersController(
         return result.IsFailure ? HandleFailure(result.Errors) : Ok(result.Value);
     }
 
-    /// <summary>Soft-deletes an order (and cascade-soft-deletes its line items).</summary>
+    /// <summary>Soft-deletes an order, cascading to its children.</summary>
     [HttpDelete("{id}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -3205,7 +2688,6 @@ public sealed class OrdersController(
         return result.IsFailure ? HandleFailure(result.Errors) : NoContent();
     }
 
-    /// <summary>Appends a line item to a pending order.</summary>
     [HttpPost("{id}/items")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -3228,7 +2710,7 @@ public sealed class OrdersController(
         return Ok(result.Value);
     }
 
-    /// <summary>Re-quantifies a line item on a pending order.</summary>
+    /// <summary>Changes the quantity of an existing item.</summary>
     [HttpPut("{id}/items/{itemId}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -3247,10 +2729,9 @@ public sealed class OrdersController(
         return result.IsFailure ? HandleFailure(result.Errors) : NoContent();
     }
 
-    /// <summary>Removes (soft-deletes) a line item from a pending order.</summary>
+    /// <summary>Removes (soft-deletes) an item from an order.</summary>
     [HttpDelete("{id}/items/{itemId}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RemoveItemAsync(
         OrderIdentifierType id,
@@ -3267,23 +2748,23 @@ public sealed class OrdersController(
 
 **Edit** the two error-resource files. In
 `Source/Modules/Orders/MMCA.ECommerce.Orders.API/Resources/OrdersErrorResources.resx` and its
-`.es.resx` sibling, keep the resx envelope exactly as generated (the `<xsd:schema>` block and the
-four `<resheader>` elements) and replace **only** the `<data>` elements: delete the seven scaffolded
-ones (`Order.Closed`, `Order.Title.*`, `Order.Description.*`, `Order.Comment.Body.*`) and add the
-eight below, in this order. That is one entry per code `OrderInvariants` can emit, which is what
-makes the Pending-only lock and the lifecycle guard reach the user in their own language rather than
-as a raw code:
+`.es.resx` sibling, keep the resx envelope exactly as generated (the `<xsd:schema>` block and the four
+`<resheader>` elements) and replace **only** the `<data>` elements: delete the seven scaffolded ones
+(`Order.Closed`, `Order.Title.*`, `Order.Description.*`, `Order.Item.Body.*`) and add the eight below,
+in this order. That is one entry per code `OrderInvariants` can emit, which is what makes the
+Pending-only lock and the lifecycle guard reach the user in their own language rather than as a raw
+code:
 
 | `data name` | `.resx` value (en) | `.es.resx` value (es) |
 |---|---|---|
-| `Order.CustomerName.Empty` | Customer name cannot be empty. | El nombre del cliente no puede estar vacío. |
-| `Order.CustomerName.TooLong` | Customer name cannot exceed 200 characters. | El nombre del cliente no puede superar los 200 caracteres. |
-| `Order.InvalidQuantity` | Order item quantity must be greater than zero. | La cantidad de la línea del pedido debe ser mayor que cero. |
-| `Order.InvalidStatusTransition` | That order status transition is not allowed. | Ese cambio de estado del pedido no está permitido. |
-| `Order.InvalidUnitPrice` | Order item unit price must be greater than zero. | El precio unitario de la línea del pedido debe ser mayor que cero. |
-| `Order.Item.ProductName.Empty` | Order item product name cannot be empty. | El nombre del producto de la línea del pedido no puede estar vacío. |
-| `Order.Item.ProductName.TooLong` | Order item product name cannot exceed 200 characters. | El nombre del producto de la línea del pedido no puede superar los 200 caracteres. |
-| `Order.ItemsLocked` | Order items can only be changed while the order is pending. | Las líneas del pedido solo se pueden modificar mientras el pedido está pendiente. |
+| `Order.CustomerName.Empty` | Order customer name cannot be empty. | El nombre del cliente del pedido no puede estar vacío. |
+| `Order.CustomerName.TooLong` | Order customer name cannot exceed 200 characters. | El nombre del cliente del pedido no puede superar los 200 caracteres. |
+| `Order.Item.ProductName.Empty` | Item product name cannot be empty. | El nombre del producto de la línea no puede estar vacío. |
+| `Order.Item.ProductName.TooLong` | Item product name cannot exceed 200 characters. | El nombre del producto de la línea no puede superar los 200 caracteres. |
+| `Order.InvalidUnitPrice` | Item unit price must be greater than zero. | El precio unitario de la línea debe ser mayor que cero. |
+| `Order.InvalidQuantity` | Item quantity must be greater than zero. | La cantidad de la línea debe ser mayor que cero. |
+| `Order.ItemsLocked` | Items can only be changed while the order is pending. | Las líneas solo se pueden modificar mientras el pedido está pendiente. |
+| `Order.InvalidStatusTransition` | The order cannot move to that status from its current one. | El pedido no puede pasar a ese estado desde el estado actual. |
 
 Each entry is a `<data name="..." xml:space="preserve">` element wrapping a single `<value>`, exactly
 like the ones you are replacing.
@@ -3292,20 +2773,38 @@ like the ones you are replacing.
 comment cites a code that no longer exists. Change the example code and the constant it names:
 
 ```csharp
-/// domain error <c>Code</c> (e.g. <c>"Order.ItemsLocked"</c>, see <c>OrderInvariants</c>) and resolved
-/// by the shared <c>IErrorLocalizer</c> after the host registers this type via
+/// domain error <c>Code</c> (e.g. <c>"Order.CustomerName.Empty"</c>, see <c>OrderInvariants</c>) and
+/// resolved by the shared <c>IErrorLocalizer</c> after the host registers this type via
 /// <c>AddErrorResources&lt;OrdersErrorResources&gt;()</c>. The length limits are baked into the values
 /// because they are compile-time constants (<c>OrderInvariants.CustomerNameMaxLength</c> etc.); an
+/// unmapped code degrades gracefully to its English message.
 ```
 
 The solution builds again at this point.
 
 ### 5.6 Tests
 
+**Edit** `Tests/Modules/Orders/MMCA.ECommerce.Orders.Application.Tests/MMCA.ECommerce.Orders.Application.Tests.csproj`.
+The handler tests mock the unit of work directly, so this project needs Moq (and nothing else new).
+Add one entry to the package `ItemGroup` so it reads:
+
+```xml
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="AwesomeAssertions" />
+    <!-- Moq for the handler tier: the repository / unit-of-work / event-bus boundaries are faked so
+         the handler tests stay database-free. Version is centrally pinned in Directory.Packages.props. -->
+    <PackageReference Include="Moq" />
+```
+
+No version attribute: `Moq` is already pinned in the solution's `Directory.Packages.props` under
+Central Package Management.
+
 **Rewrite** `Tests/Modules/Orders/MMCA.ECommerce.Orders.Domain.Tests/Orders/OrderTests.cs` with the
-complete file below (33 tests). Keep the class remarks verbatim: they document a real consequence of
-database-generated ids that the tests then lean on deliberately, and without them the two tests that
-pass an id of 0 look like mistakes:
+complete file below (33 tests). Keep the comment inside `Total_ExcludesSoftDeletedItems` verbatim: it
+documents a real consequence of database-generated ids (every unpersisted line still carries Id 0, so
+`GetChildOrNotFound` resolves the first live one), and without it the `RemoveItem(itemId: 0)` call
+below it looks like a mistake:
 
 ```csharp
 using AwesomeAssertions;
@@ -3316,23 +2815,11 @@ using MMCA.ECommerce.Orders.Shared.Orders;
 
 namespace MMCA.ECommerce.Orders.Domain.Tests.Orders;
 
-/// <summary>
-/// Aggregate tests for <see cref="Order"/>.
-/// <para>
-/// One thing to know before reading the line-item tests: <see cref="OrderItem"/> is
-/// <c>[IdValueGenerated]</c>, so a line that has never been persisted still carries Id 0, and every
-/// unpersisted line on the same order therefore shares that Id. The framework's
-/// <c>GetChildOrNotFound</c> resolves the FIRST non-deleted match, so <c>ChangeItemQuantity(0, ...)</c>
-/// and <c>RemoveItem(0)</c> address the first still-active line. That is the real behavior of a
-/// database-generated key in a pure in-memory test, not a defect to work around: the tests below
-/// lean on it deliberately rather than faking ids the database would have assigned.
-/// </para>
-/// </summary>
 public class OrderTests
 {
-    // ── Create ──
+    // ---- Create -------------------------------------------------------------------------------
     [Fact]
-    public void Create_WithValidCustomerName_ReturnsPendingOrderWithNoItems()
+    public void Create_WithValidData_StartsPendingAndEmpty()
     {
         var result = Order.Create(id: null, "Ada Lovelace");
 
@@ -3340,7 +2827,6 @@ public class OrderTests
         result.Value!.CustomerName.Should().Be("Ada Lovelace");
         result.Value.Status.Should().Be(OrderStatus.Pending);
         result.Value.Items.Should().BeEmpty();
-        result.Value.Total.Should().Be(0m);
     }
 
     [Fact]
@@ -3372,9 +2858,9 @@ public class OrderTests
         result.Errors.Should().Contain(e => e.Code == "Order.CustomerName.TooLong");
     }
 
-    // ── UpdateDetails ──
+    // ---- UpdateDetails ------------------------------------------------------------------------
     [Fact]
-    public void UpdateDetails_WithValidCustomerName_UpdatesAndRaisesEvent()
+    public void UpdateDetails_WithValidName_UpdatesCustomerNameAndRaisesEvent()
     {
         var order = CreatePendingOrder();
 
@@ -3387,7 +2873,7 @@ public class OrderTests
     }
 
     [Fact]
-    public void UpdateDetails_WithEmptyCustomerName_ReturnsFailure()
+    public void UpdateDetails_WithEmptyName_ReturnsFailure()
     {
         var order = CreatePendingOrder();
 
@@ -3395,31 +2881,22 @@ public class OrderTests
 
         result.IsFailure.Should().BeTrue();
         result.Errors.Should().Contain(e => e.Code == "Order.CustomerName.Empty");
+        order.CustomerName.Should().Be("Ada Lovelace");
     }
 
-    [Fact]
-    public void UpdateDetails_WithTooLongCustomerName_ReturnsFailure()
-    {
-        var order = CreatePendingOrder();
-
-        var result = order.UpdateDetails(new string('x', OrderInvariants.CustomerNameMaxLength + 1));
-
-        result.IsFailure.Should().BeTrue();
-        result.Errors.Should().Contain(e => e.Code == "Order.CustomerName.TooLong");
-    }
-
-    // ── AddItem ──
+    // ---- AddItem ------------------------------------------------------------------------------
     [Fact]
     public void AddItem_OnPendingOrder_AddsItemAndRaisesEvent()
     {
         var order = CreatePendingOrder();
 
-        var result = order.AddItem(id: null, productId: 11, "Blue Widget", unitPrice: 9.99m, quantity: 3);
+        var result = order.AddItem(id: null, productId: 11, "Keyboard", unitPrice: 49.99m, quantity: 2);
 
         result.IsSuccess.Should().BeTrue();
-        result.Value!.ProductName.Should().Be("Blue Widget");
-        result.Value.UnitPrice.Should().Be(9.99m);
-        result.Value.Quantity.Should().Be(3);
+        result.Value!.ProductId.Should().Be(11);
+        result.Value.ProductName.Should().Be("Keyboard");
+        result.Value.UnitPrice.Should().Be(49.99m);
+        result.Value.Quantity.Should().Be(2);
         order.Items.Should().ContainSingle();
         order.DomainEvents.OfType<OrderChanged>()
             .Should().Contain(e => e.State == DomainEntityState.Updated);
@@ -3430,7 +2907,7 @@ public class OrderTests
     {
         var order = CreatePendingOrder();
 
-        var result = order.AddItem(id: null, productId: 11, "   ", unitPrice: 9.99m, quantity: 1);
+        var result = order.AddItem(id: null, productId: 11, "  ", unitPrice: 10m, quantity: 1);
 
         result.IsFailure.Should().BeTrue();
         result.Errors.Should().Contain(e => e.Code == "Order.Item.ProductName.Empty");
@@ -3441,13 +2918,9 @@ public class OrderTests
     public void AddItem_WithTooLongProductName_ReturnsFailure()
     {
         var order = CreatePendingOrder();
+        string name = new('x', OrderInvariants.ItemProductNameMaxLength + 1);
 
-        var result = order.AddItem(
-            id: null,
-            productId: 11,
-            new string('x', OrderInvariants.ProductNameMaxLength + 1),
-            unitPrice: 9.99m,
-            quantity: 1);
+        var result = order.AddItem(id: null, productId: 11, name, unitPrice: 10m, quantity: 1);
 
         result.IsFailure.Should().BeTrue();
         result.Errors.Should().Contain(e => e.Code == "Order.Item.ProductName.TooLong");
@@ -3458,18 +2931,7 @@ public class OrderTests
     {
         var order = CreatePendingOrder();
 
-        var result = order.AddItem(id: null, productId: 11, "Blue Widget", unitPrice: 0m, quantity: 1);
-
-        result.IsFailure.Should().BeTrue();
-        result.Errors.Should().Contain(e => e.Code == "Order.InvalidUnitPrice");
-    }
-
-    [Fact]
-    public void AddItem_WithNegativeUnitPrice_ReturnsFailure()
-    {
-        var order = CreatePendingOrder();
-
-        var result = order.AddItem(id: null, productId: 11, "Blue Widget", unitPrice: -1m, quantity: 1);
+        var result = order.AddItem(id: null, productId: 11, "Keyboard", unitPrice: 0m, quantity: 1);
 
         result.IsFailure.Should().BeTrue();
         result.Errors.Should().Contain(e => e.Code == "Order.InvalidUnitPrice");
@@ -3480,7 +2942,7 @@ public class OrderTests
     {
         var order = CreatePendingOrder();
 
-        var result = order.AddItem(id: null, productId: 11, "Blue Widget", unitPrice: 9.99m, quantity: 0);
+        var result = order.AddItem(id: null, productId: 11, "Keyboard", unitPrice: 10m, quantity: 0);
 
         result.IsFailure.Should().BeTrue();
         result.Errors.Should().Contain(e => e.Code == "Order.InvalidQuantity");
@@ -3491,85 +2953,94 @@ public class OrderTests
     {
         var order = CreatePaidOrder();
 
-        var result = order.AddItem(id: null, productId: 12, "Red Widget", unitPrice: 5m, quantity: 1);
+        var result = order.AddItem(id: null, productId: 11, "Keyboard", unitPrice: 10m, quantity: 1);
 
         result.IsFailure.Should().BeTrue();
         result.Errors.Should().Contain(e => e.Code == "Order.ItemsLocked");
     }
 
-    // ── ChangeItemQuantity ──
+    // ---- ChangeItemQuantity -------------------------------------------------------------------
     [Fact]
-    public void ChangeItemQuantity_OnPendingOrder_UpdatesQuantityAndRaisesEvent()
+    public void ChangeItemQuantity_UpdatesQuantityAndLeavesTheSnapshotPriceAlone()
     {
         var order = CreatePendingOrder();
-        var item = order.AddItem(id: null, productId: 11, "Blue Widget", unitPrice: 9.99m, quantity: 1).Value!;
+        var item = order.AddItem(id: null, productId: 11, "Keyboard", unitPrice: 49.99m, quantity: 1).Value!;
 
-        var result = order.ChangeItemQuantity(item.Id, quantity: 4);
+        var result = order.ChangeItemQuantity(item.Id, quantity: 3);
 
         result.IsSuccess.Should().BeTrue();
-        item.Quantity.Should().Be(4);
-        order.DomainEvents.OfType<OrderChanged>()
-            .Should().Contain(e => e.State == DomainEntityState.Updated);
+        item.Quantity.Should().Be(3);
+        item.UnitPrice.Should().Be(49.99m, "a quantity edit is not a repricing");
     }
 
     [Fact]
-    public void ChangeItemQuantity_WithUnknownId_ReturnsFailure()
+    public void ChangeItemQuantity_RaisesUpdatedDomainEvent()
     {
         var order = CreatePendingOrder();
-        order.AddItem(id: null, productId: 11, "Blue Widget", unitPrice: 9.99m, quantity: 1);
+        var item = order.AddItem(id: null, productId: 11, "Keyboard", unitPrice: 10m, quantity: 1).Value!;
+        order.ClearDomainEvents();
 
-        var result = order.ChangeItemQuantity(itemId: 999, quantity: 4);
+        var result = order.ChangeItemQuantity(item.Id, quantity: 2);
 
-        result.IsFailure.Should().BeTrue();
+        result.IsSuccess.Should().BeTrue();
+        order.DomainEvents.OfType<OrderChanged>()
+            .Should().ContainSingle(e => e.State == DomainEntityState.Updated);
     }
 
     [Fact]
     public void ChangeItemQuantity_WithZeroQuantity_ReturnsFailure()
     {
         var order = CreatePendingOrder();
-        var item = order.AddItem(id: null, productId: 11, "Blue Widget", unitPrice: 9.99m, quantity: 2).Value!;
+        var item = order.AddItem(id: null, productId: 11, "Keyboard", unitPrice: 10m, quantity: 1).Value!;
 
         var result = order.ChangeItemQuantity(item.Id, quantity: 0);
 
         result.IsFailure.Should().BeTrue();
         result.Errors.Should().Contain(e => e.Code == "Order.InvalidQuantity");
-        item.Quantity.Should().Be(2);
+        item.Quantity.Should().Be(1);
+    }
+
+    [Fact]
+    public void ChangeItemQuantity_UnknownId_ReturnsFailure()
+    {
+        var order = CreatePendingOrder();
+
+        var result = order.ChangeItemQuantity(itemId: 999, quantity: 2);
+
+        result.IsFailure.Should().BeTrue();
     }
 
     [Fact]
     public void ChangeItemQuantity_OnPaidOrder_ReturnsItemsLocked()
     {
         var order = CreatePendingOrder();
-        var item = order.AddItem(id: null, productId: 11, "Blue Widget", unitPrice: 9.99m, quantity: 2).Value!;
+        var item = order.AddItem(id: null, productId: 11, "Keyboard", unitPrice: 10m, quantity: 1).Value!;
         order.ChangeStatus(OrderStatus.Paid);
 
         var result = order.ChangeItemQuantity(item.Id, quantity: 5);
 
         result.IsFailure.Should().BeTrue();
         result.Errors.Should().Contain(e => e.Code == "Order.ItemsLocked");
-        item.Quantity.Should().Be(2);
+        item.Quantity.Should().Be(1);
     }
 
-    // ── RemoveItem ──
+    // ---- RemoveItem ---------------------------------------------------------------------------
     [Fact]
-    public void RemoveItem_OnPendingOrder_SoftDeletesItemAndRaisesEvent()
+    public void RemoveItem_SoftDeletesItem()
     {
         var order = CreatePendingOrder();
-        var item = order.AddItem(id: null, productId: 11, "Blue Widget", unitPrice: 9.99m, quantity: 1).Value!;
+        var item = order.AddItem(id: null, productId: 11, "Keyboard", unitPrice: 10m, quantity: 1).Value!;
 
         var result = order.RemoveItem(item.Id);
 
         result.IsSuccess.Should().BeTrue();
         item.IsDeleted.Should().BeTrue();
-        order.DomainEvents.OfType<OrderChanged>()
-            .Should().Contain(e => e.State == DomainEntityState.Updated);
     }
 
     [Fact]
-    public void RemoveItem_WithUnknownId_ReturnsFailure()
+    public void RemoveItem_UnknownId_ReturnsFailure()
     {
         var order = CreatePendingOrder();
-        order.AddItem(id: null, productId: 11, "Blue Widget", unitPrice: 9.99m, quantity: 1);
 
         var result = order.RemoveItem(itemId: 999);
 
@@ -3580,7 +3051,7 @@ public class OrderTests
     public void RemoveItem_OnPaidOrder_ReturnsItemsLocked()
     {
         var order = CreatePendingOrder();
-        var item = order.AddItem(id: null, productId: 11, "Blue Widget", unitPrice: 9.99m, quantity: 1).Value!;
+        var item = order.AddItem(id: null, productId: 11, "Keyboard", unitPrice: 10m, quantity: 1).Value!;
         order.ChangeStatus(OrderStatus.Paid);
 
         var result = order.RemoveItem(item.Id);
@@ -3590,7 +3061,7 @@ public class OrderTests
         item.IsDeleted.Should().BeFalse();
     }
 
-    // ── ChangeStatus ──
+    // ---- Lifecycle ----------------------------------------------------------------------------
     [Fact]
     public void ChangeStatus_PendingToPaid_Succeeds()
     {
@@ -3600,6 +3071,8 @@ public class OrderTests
 
         result.IsSuccess.Should().BeTrue();
         order.Status.Should().Be(OrderStatus.Paid);
+        order.DomainEvents.OfType<OrderChanged>()
+            .Should().Contain(e => e.State == DomainEntityState.Updated);
     }
 
     [Fact]
@@ -3636,7 +3109,7 @@ public class OrderTests
     }
 
     [Fact]
-    public void ChangeStatus_PendingToShipped_ReturnsInvalidTransition()
+    public void ChangeStatus_PendingToShipped_ReturnsInvalidStatusTransition()
     {
         var order = CreatePendingOrder();
 
@@ -3644,132 +3117,137 @@ public class OrderTests
 
         result.IsFailure.Should().BeTrue();
         result.Errors.Should().Contain(e => e.Code == "Order.InvalidStatusTransition");
-        order.Status.Should().Be(OrderStatus.Pending);
-    }
-
-    [Fact]
-    public void ChangeStatus_ToTheSameStatus_IsANoOpSuccessAndRaisesNoEvent()
-    {
-        var order = CreatePendingOrder();
-
-        var result = order.ChangeStatus(OrderStatus.Pending);
-
-        result.IsSuccess.Should().BeTrue();
-        order.Status.Should().Be(OrderStatus.Pending);
-        order.DomainEvents.Should().BeEmpty("re-asserting the current status is an idempotent retry, not a change");
+        order.Status.Should().Be(OrderStatus.Pending, "a rejected transition leaves the order where it was");
     }
 
     [Fact]
     public void ChangeStatus_FromShipped_IsTerminal()
     {
-        var order = CreatePaidOrder();
-        order.ChangeStatus(OrderStatus.Shipped);
+        foreach (var target in OtherStatuses(OrderStatus.Shipped))
+        {
+            var order = CreatePaidOrder();
+            order.ChangeStatus(OrderStatus.Shipped);
 
-        var result = order.ChangeStatus(OrderStatus.Cancelled);
+            var result = order.ChangeStatus(target);
 
-        result.IsFailure.Should().BeTrue();
-        result.Errors.Should().Contain(e => e.Code == "Order.InvalidStatusTransition");
-        order.Status.Should().Be(OrderStatus.Shipped);
+            result.IsFailure.Should().BeTrue($"Shipped is terminal, so it cannot move to {target}");
+            result.Errors.Should().Contain(e => e.Code == "Order.InvalidStatusTransition");
+        }
     }
 
     [Fact]
     public void ChangeStatus_FromCancelled_IsTerminal()
     {
-        var order = CreatePendingOrder();
-        order.ChangeStatus(OrderStatus.Cancelled);
+        foreach (var target in OtherStatuses(OrderStatus.Cancelled))
+        {
+            var order = CreatePendingOrder();
+            order.ChangeStatus(OrderStatus.Cancelled);
 
-        var result = order.ChangeStatus(OrderStatus.Paid);
+            var result = order.ChangeStatus(target);
 
-        result.IsFailure.Should().BeTrue();
-        result.Errors.Should().Contain(e => e.Code == "Order.InvalidStatusTransition");
-        order.Status.Should().Be(OrderStatus.Cancelled);
+            result.IsFailure.Should().BeTrue($"Cancelled is terminal, so it cannot move to {target}");
+            result.Errors.Should().Contain(e => e.Code == "Order.InvalidStatusTransition");
+        }
     }
 
     [Fact]
-    public void ChangeStatus_RaisesUpdatedDomainEvent()
+    public void ChangeStatus_ToTheSameStatus_IsANoOpSuccess()
     {
-        var order = CreatePendingOrder();
+        var order = CreatePaidOrder();
+        order.ClearDomainEvents();
 
-        order.ChangeStatus(OrderStatus.Paid);
+        var result = order.ChangeStatus(OrderStatus.Paid);
 
-        order.DomainEvents.OfType<OrderChanged>()
-            .Should().Contain(e => e.State == DomainEntityState.Updated);
+        result.IsSuccess.Should().BeTrue("a redelivered command must not fail on its second arrival");
+        order.Status.Should().Be(OrderStatus.Paid);
+        order.DomainEvents.Should().BeEmpty("nothing changed, so nothing is announced");
     }
 
-    // ── Delete ──
+    // ---- Delete -------------------------------------------------------------------------------
     [Fact]
     public void Delete_SoftDeletesOrderAndCascadesToItems()
     {
         var order = CreatePendingOrder();
-        order.AddItem(id: null, productId: 11, "Blue Widget", unitPrice: 9.99m, quantity: 1);
-        order.AddItem(id: null, productId: 12, "Red Widget", unitPrice: 4.50m, quantity: 2);
+        order.AddItem(id: null, productId: 11, "Keyboard", unitPrice: 10m, quantity: 1);
+        order.AddItem(id: null, productId: 12, "Mouse", unitPrice: 5m, quantity: 2);
 
         var result = order.Delete();
 
         result.IsSuccess.Should().BeTrue();
         order.IsDeleted.Should().BeTrue();
-        order.Items.Should().OnlyContain(i => i.IsDeleted);
-        order.DomainEvents.OfType<OrderChanged>()
-            .Should().Contain(e => e.State == DomainEntityState.Deleted);
+        order.Items.Should().OnlyContain(c => c.IsDeleted);
     }
 
-    // ── Total ──
+    [Fact]
+    public void Delete_RaisesDeletedDomainEvent()
+    {
+        var order = CreatePendingOrder();
+        order.ClearDomainEvents();
+
+        var result = order.Delete();
+
+        result.IsSuccess.Should().BeTrue();
+        order.DomainEvents.OfType<OrderChanged>()
+            .Should().ContainSingle(e => e.State == DomainEntityState.Deleted);
+    }
+
+    // ---- Total --------------------------------------------------------------------------------
+    [Fact]
+    public void Total_OnANewOrder_IsZero()
+    {
+        var order = CreatePendingOrder();
+
+        order.Total.Should().Be(0m);
+    }
+
     [Fact]
     public void Total_SumsUnitPriceTimesQuantityAcrossItems()
     {
         var order = CreatePendingOrder();
-        order.AddItem(id: null, productId: 11, "Blue Widget", unitPrice: 9.99m, quantity: 3);
-        order.AddItem(id: null, productId: 12, "Red Widget", unitPrice: 4.50m, quantity: 2);
+        order.AddItem(id: null, productId: 11, "Keyboard", unitPrice: 49.99m, quantity: 2);
+        order.AddItem(id: null, productId: 12, "Mouse", unitPrice: 25.50m, quantity: 3);
 
-        order.Total.Should().Be(9.99m * 3 + 4.50m * 2);
+        order.Total.Should().Be(99.98m + 76.50m);
     }
 
     [Fact]
-    public void Total_ExcludesRemovedItems()
+    public void Total_ExcludesSoftDeletedItems()
     {
         var order = CreatePendingOrder();
-        order.AddItem(id: null, productId: 11, "Blue Widget", unitPrice: 9.99m, quantity: 3);
-        order.AddItem(id: null, productId: 12, "Red Widget", unitPrice: 4.50m, quantity: 2);
+        order.AddItem(id: null, productId: 11, "Keyboard", unitPrice: 50m, quantity: 2);
+        order.AddItem(id: null, productId: 12, "Mouse", unitPrice: 25m, quantity: 1);
+        order.Total.Should().Be(125m);
 
-        // Both lines are unpersisted and therefore share Id 0, so this removes the FIRST still-active
-        // line (see the class remarks): the Blue Widget line, leaving only the Red Widget line.
-        var result = order.RemoveItem(itemId: 0);
+        // Ids are database-generated, so every item created in memory still carries Id 0. The
+        // framework's GetChildOrNotFound matches on id among the live children, so RemoveItem(0)
+        // resolves to the FIRST live item rather than to a chosen one: an in-memory test can only
+        // remove them in order. Against a real database each item has a distinct id and the lookup
+        // is exact. The assertion below is written against that first-live-item behavior on purpose.
+        var removed = order.RemoveItem(itemId: 0);
 
-        result.IsSuccess.Should().BeTrue();
-        order.Total.Should().Be(4.50m * 2);
+        removed.IsSuccess.Should().BeTrue();
+        order.Total.Should().Be(25m, "the soft-deleted keyboard line no longer counts");
     }
 
-    // ── Helpers ──
+    // ---- Helpers ------------------------------------------------------------------------------
     private static Order CreatePendingOrder() =>
         Order.Create(id: null, "Ada Lovelace").Value!;
 
     private static Order CreatePaidOrder()
     {
         var order = CreatePendingOrder();
-        order.AddItem(id: null, productId: 11, "Blue Widget", unitPrice: 9.99m, quantity: 1);
         order.ChangeStatus(OrderStatus.Paid);
         return order;
     }
+
+    private static IEnumerable<OrderStatus> OtherStatuses(OrderStatus current) =>
+        Enum.GetValues<OrderStatus>().Where(s => s != current);
 }
 ```
 
-**Edit** `Tests/Modules/Orders/MMCA.ECommerce.Orders.Application.Tests/MMCA.ECommerce.Orders.Application.Tests.csproj`.
-The handler tests mock the unit of work directly, so this project needs Moq (and nothing else new).
-Add one line to the package `ItemGroup` so it reads:
-
-```xml
-  <ItemGroup>
-    <PackageReference Include="xunit.v3" />
-    <PackageReference Include="AwesomeAssertions" />
-    <PackageReference Include="Moq" />
-```
-
-No version attribute: `Moq` is already pinned in the solution's `Directory.Packages.props` under
-Central Package Management.
-
 **Rewrite** `Tests/Modules/Orders/MMCA.ECommerce.Orders.Application.Tests/Caching/OrderCacheInvalidationTests.cs`
-with the complete file below (4 tests). The last one enumerates **all seven** order commands, so a
-new slice added later without a `CachePrefix` is caught here rather than in production:
+with the complete file below (4 tests). The last one enumerates **all seven** order commands, so a new
+slice added later without a `CachePrefix` is caught here rather than in production:
 
 ```csharp
 using AwesomeAssertions;
@@ -3828,14 +3306,14 @@ public class OrderCacheInvalidationTests
         var cache = new DictionaryCache();
         var queryHandler = new CountingQueryHandler(OrderResult());
         var read = new CachingQueryDecorator<GetOrderByIdQuery, Result<OrderDTO>>(queryHandler, cache);
-        var write = new CachingCommandDecorator<ChangeOrderStatusCommand, Result<OrderDTO>>(
-            new StubCommandHandler(OrderResult(OrderStatus.Paid)), cache);
+        var write = new CachingCommandDecorator<UpdateOrderCommand, Result<OrderDTO>>(
+            new StubCommandHandler(OrderResult()), cache);
 
         await read.HandleAsync(new GetOrderByIdQuery(OrderId));
         await read.HandleAsync(new GetOrderByIdQuery(OrderId));
         queryHandler.Invocations.Should().Be(1, "the cache is warm before the write");
 
-        var written = await write.HandleAsync(new ChangeOrderStatusCommand(OrderId, OrderStatus.Paid));
+        var written = await write.HandleAsync(new UpdateOrderCommand(OrderId, "Grace Hopper"));
 
         written.IsSuccess.Should().BeTrue();
         cache.Keys.Should().BeEmpty("a successful command evicts everything under its CachePrefix");
@@ -3852,12 +3330,12 @@ public class OrderCacheInvalidationTests
         var cache = new DictionaryCache();
         var queryHandler = new CountingQueryHandler(OrderResult());
         var read = new CachingQueryDecorator<GetOrderByIdQuery, Result<OrderDTO>>(queryHandler, cache);
-        var write = new CachingCommandDecorator<ChangeOrderStatusCommand, Result<OrderDTO>>(
+        var write = new CachingCommandDecorator<UpdateOrderCommand, Result<OrderDTO>>(
             new StubCommandHandler(Result.Failure<OrderDTO>(Error.NotFound)), cache);
 
         await read.HandleAsync(new GetOrderByIdQuery(OrderId));
 
-        var written = await write.HandleAsync(new ChangeOrderStatusCommand(OrderId, OrderStatus.Paid));
+        var written = await write.HandleAsync(new UpdateOrderCommand(OrderId, "Grace Hopper"));
 
         written.IsFailure.Should().BeTrue();
         cache.RemoveByPrefixCalls.Should().Be(0, "a command that persisted nothing must not evict valid entries");
@@ -3886,32 +3364,21 @@ public class OrderCacheInvalidationTests
     private static IEnumerable<ICacheInvalidating> AllOrderCommands() =>
     [
         new OrderCreateRequest { CustomerName = "Ada Lovelace" },
-        new UpdateOrderCommand(OrderId, "Grace Hopper"),
+        new UpdateOrderCommand(OrderId, "Ada Lovelace"),
         new DeleteOrderCommand(OrderId),
         new ChangeOrderStatusCommand(OrderId, OrderStatus.Paid),
-        new AddItemCommand(OrderId, ProductId: 11, "Blue Widget", UnitPrice: 9.99m, Quantity: 3),
-        new ChangeItemQuantityCommand(OrderId, ItemId: 1, Quantity: 5),
+        new AddItemCommand(OrderId, ProductId: 11, "Keyboard", UnitPrice: 49.99m, Quantity: 2),
+        new ChangeItemQuantityCommand(OrderId, ItemId: 1, Quantity: 3),
         new RemoveItemCommand(OrderId, ItemId: 1),
     ];
 
-    private static Result<OrderDTO> OrderResult(OrderStatus status = OrderStatus.Pending) =>
+    private static Result<OrderDTO> OrderResult() =>
         Result.Success(new OrderDTO
         {
             Id = OrderId,
             CustomerName = "Ada Lovelace",
-            Status = status,
-            Total = 29.97m,
-            Items =
-            [
-                new OrderItemDTO
-                {
-                    Id = 1,
-                    ProductId = 11,
-                    ProductName = "Blue Widget",
-                    UnitPrice = 9.99m,
-                    Quantity = 3,
-                },
-            ],
+            Status = OrderStatus.Pending,
+            Total = 99.98m,
         });
 
     /// <summary>Counts how often the real handler is reached, which is what a cache hit prevents.</summary>
@@ -3931,10 +3398,10 @@ public class OrderCacheInvalidationTests
 
     /// <summary>Stands in for the persistence-backed command handler, returning a fixed outcome.</summary>
     private sealed class StubCommandHandler(Result<OrderDTO> result)
-        : ICommandHandler<ChangeOrderStatusCommand, Result<OrderDTO>>
+        : ICommandHandler<UpdateOrderCommand, Result<OrderDTO>>
     {
         public Task<Result<OrderDTO>> HandleAsync(
-            ChangeOrderStatusCommand command,
+            UpdateOrderCommand command,
             CancellationToken cancellationToken = default) => Task.FromResult(result);
     }
 
@@ -3989,14 +3456,15 @@ public class OrderCacheInvalidationTests
 ```
 
 **Create** `Tests/Modules/Orders/MMCA.ECommerce.Orders.Application.Tests/Orders/OrderHandlerTests.cs`
-(19 tests, one class covering every Orders use case). Note the single `SetupGetById` helper: its
-`asTracking` argument is what distinguishes the read handler from the write handlers, so a handler
-that silently switched tracking mode would fail here:
+(19 tests, one class covering every Orders use case). Every handler in the module has the same shape,
+so one set of fakes covers all of them, and the shared `HandlerMocks` helper is what keeps the file
+from repeating that setup nine times:
 
 ```csharp
 using AwesomeAssertions;
 using MMCA.Common.Application.Interfaces;
 using MMCA.Common.Application.Interfaces.Infrastructure;
+using MMCA.Common.Domain.Interfaces;
 using MMCA.Common.Shared.Abstractions;
 using MMCA.ECommerce.Orders.Application.Orders.DTOs;
 using MMCA.ECommerce.Orders.Application.Orders.UseCases.AddItem;
@@ -4015,318 +3483,373 @@ using Moq;
 namespace MMCA.ECommerce.Orders.Application.Tests.Orders;
 
 /// <summary>
-/// Handler-level tests for every Orders use case. The unit of work and its repository are mocked, so
-/// these cover the handler's own job (load, delegate to the aggregate, save or not, shape the result)
-/// without a database; the aggregate's rules themselves are covered in the Domain tests.
+/// One class for the whole Orders handler tier. Every handler follows the same shape (resolve the
+/// repository off the unit of work, load the aggregate tracked with its items, mutate through the
+/// root, save), so a single set of fakes covers all of them and the tests stay database-free.
 /// </summary>
-public sealed class OrderHandlerTests
+public class OrderHandlerTests
 {
     private const OrderIdentifierType OrderId = 7;
 
-    private readonly Mock<IUnitOfWork> _unitOfWork = new();
-    private readonly Mock<IRepository<Order, OrderIdentifierType>> _repository = new();
-    private readonly Mock<IEventBus> _eventBus = new();
-    private readonly OrderItemDTOMapper _itemDTOMapper = new();
-    private readonly OrderDTOMapper _dtoMapper;
-
-    public OrderHandlerTests()
-    {
-        _dtoMapper = new OrderDTOMapper(_itemDTOMapper);
-
-        _unitOfWork.Setup(u => u.GetRepository<Order, OrderIdentifierType>()).Returns(_repository.Object);
-        _unitOfWork.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
-        _eventBus
-            .Setup(b => b.PublishAsync(It.IsAny<OrderPlacedIntegrationEvent>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
-    }
-
-    // ── CreateOrderHandler ──
+    // ---- Create -------------------------------------------------------------------------------
     [Fact]
-    public async Task CreateOrder_WithValidRequest_SavesAndPublishesOrderPlaced()
+    public async Task CreateOrder_PersistsThenPublishesOrderPlacedWithTheGeneratedId()
     {
-        var sut = CreateOrderSut();
+        var mocks = new HandlerMocks();
+        var handler = new CreateOrderHandler(
+            mocks.UnitOfWork.Object,
+            new OrderCreateRequestMapper(),
+            mocks.EventBus.Object,
+            OrderMapper());
 
-        var result = await sut.HandleAsync(new OrderCreateRequest { CustomerName = "Ada Lovelace" });
+        var result = await handler.HandleAsync(new OrderCreateRequest { CustomerName = "Ada Lovelace" });
 
         result.IsSuccess.Should().BeTrue();
-        _repository.Verify(r => r.AddAsync(It.IsAny<Order>(), It.IsAny<CancellationToken>()), Times.Once);
-        _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
-        _eventBus.Verify(
-            b => b.PublishAsync(
-                It.Is<OrderPlacedIntegrationEvent>(e => e.CustomerName == "Ada Lovelace"),
+        result.Value!.CustomerName.Should().Be("Ada Lovelace");
+        result.Value.Status.Should().Be(OrderStatus.Pending);
+        mocks.Repository.Verify(x => x.AddAsync(It.IsAny<Order>(), It.IsAny<CancellationToken>()), Times.Once);
+        mocks.UnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        mocks.EventBus.Verify(
+            x => x.PublishAsync(
+                It.Is<IIntegrationEvent>(e => ((OrderPlacedIntegrationEvent)e).CustomerName == "Ada Lovelace"),
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
     [Fact]
-    public async Task CreateOrder_WithValidRequest_ReturnsPendingDTOWithNoItems()
+    public async Task CreateOrder_WhenTheFactoryRejectsTheRequest_SavesNothingAndPublishesNothing()
     {
-        var sut = CreateOrderSut();
+        var mocks = new HandlerMocks();
+        var handler = new CreateOrderHandler(
+            mocks.UnitOfWork.Object,
+            new OrderCreateRequestMapper(),
+            mocks.EventBus.Object,
+            OrderMapper());
 
-        var result = await sut.HandleAsync(new OrderCreateRequest { CustomerName = "Ada Lovelace" });
-
-        result.IsSuccess.Should().BeTrue();
-        result.Value!.CustomerName.Should().Be("Ada Lovelace");
-        result.Value.Status.Should().Be(OrderStatus.Pending);
-        result.Value.Items.Should().BeEmpty();
-        result.Value.Total.Should().Be(0m);
-    }
-
-    [Fact]
-    public async Task CreateOrder_WithEmptyCustomerName_ReturnsFailureAndPublishesNothing()
-    {
-        var sut = CreateOrderSut();
-
-        var result = await sut.HandleAsync(new OrderCreateRequest { CustomerName = "   " });
+        var result = await handler.HandleAsync(new OrderCreateRequest { CustomerName = "   " });
 
         result.IsFailure.Should().BeTrue();
         result.Errors.Should().Contain(e => e.Code == "Order.CustomerName.Empty");
-        _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
-        _eventBus.Verify(
-            b => b.PublishAsync(It.IsAny<OrderPlacedIntegrationEvent>(), It.IsAny<CancellationToken>()),
+        mocks.UnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+        mocks.EventBus.Verify(
+            x => x.PublishAsync(It.IsAny<IIntegrationEvent>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
-    // ── UpdateOrderHandler ──
+    // ---- Update -------------------------------------------------------------------------------
     [Fact]
-    public async Task UpdateOrder_WhenOrderMissing_ReturnsNotFound()
+    public async Task UpdateOrder_WhenFound_ChangesTheCustomerNameAndSaves()
     {
-        SetupGetById(null);
-        var sut = new UpdateOrderHandler(_unitOfWork.Object, _dtoMapper);
+        var mocks = new HandlerMocks();
+        mocks.GivenOrder(PendingOrder());
+        var handler = new UpdateOrderHandler(mocks.UnitOfWork.Object, OrderMapper());
 
-        var result = await sut.HandleAsync(new UpdateOrderCommand(OrderId, "Grace Hopper"));
-
-        result.IsFailure.Should().BeTrue();
-        result.Errors.Should().Contain(e => e.Type == ErrorType.NotFound);
-    }
-
-    [Fact]
-    public async Task UpdateOrder_WithValidCommand_UpdatesCustomerNameAndSaves()
-    {
-        var order = PendingOrderWithOneItem();
-        SetupGetById(order);
-        var sut = new UpdateOrderHandler(_unitOfWork.Object, _dtoMapper);
-
-        var result = await sut.HandleAsync(new UpdateOrderCommand(OrderId, "Grace Hopper"));
+        var result = await handler.HandleAsync(new UpdateOrderCommand(OrderId, "Grace Hopper"));
 
         result.IsSuccess.Should().BeTrue();
         result.Value!.CustomerName.Should().Be("Grace Hopper");
-        order.CustomerName.Should().Be("Grace Hopper");
-        _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        mocks.UnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task UpdateOrder_WithEmptyCustomerName_ReturnsFailureAndDoesNotSave()
+    public async Task UpdateOrder_WhenNotFound_ReturnsNotFound()
     {
-        SetupGetById(PendingOrderWithOneItem());
-        var sut = new UpdateOrderHandler(_unitOfWork.Object, _dtoMapper);
+        var mocks = new HandlerMocks();
+        mocks.GivenNoOrder();
+        var handler = new UpdateOrderHandler(mocks.UnitOfWork.Object, OrderMapper());
 
-        var result = await sut.HandleAsync(new UpdateOrderCommand(OrderId, "   "));
+        var result = await handler.HandleAsync(new UpdateOrderCommand(OrderId, "Grace Hopper"));
+
+        result.IsFailure.Should().BeTrue();
+        result.Errors.Should().ContainSingle(e => e.Type == ErrorType.NotFound);
+        mocks.UnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateOrder_StampsTheClientRowVersionBeforeMutating()
+    {
+        var mocks = new HandlerMocks();
+        var order = PendingOrder();
+        mocks.GivenOrder(order);
+        byte[] rowVersion = [1, 2, 3];
+        var handler = new UpdateOrderHandler(mocks.UnitOfWork.Object, OrderMapper());
+
+        var result = await handler.HandleAsync(
+            new UpdateOrderCommand(OrderId, "Grace Hopper") { RowVersion = rowVersion });
+
+        result.IsSuccess.Should().BeTrue();
+        mocks.Repository.Verify(x => x.SetOriginalRowVersion(order, rowVersion), Times.Once);
+    }
+
+    [Fact]
+    public async Task UpdateOrder_WhenTheDomainRejectsTheName_DoesNotSave()
+    {
+        var mocks = new HandlerMocks();
+        mocks.GivenOrder(PendingOrder());
+        var handler = new UpdateOrderHandler(mocks.UnitOfWork.Object, OrderMapper());
+
+        var result = await handler.HandleAsync(new UpdateOrderCommand(OrderId, "   "));
 
         result.IsFailure.Should().BeTrue();
         result.Errors.Should().Contain(e => e.Code == "Order.CustomerName.Empty");
-        _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+        mocks.UnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    // ── DeleteOrderHandler ──
+    // ---- ChangeStatus -------------------------------------------------------------------------
     [Fact]
-    public async Task DeleteOrder_WhenOrderMissing_ReturnsNotFound()
+    public async Task ChangeStatus_OnALegalTransition_MovesTheOrderAndSaves()
     {
-        SetupGetById(null);
-        var sut = new DeleteOrderHandler(_unitOfWork.Object);
+        var mocks = new HandlerMocks();
+        var order = PendingOrder();
+        mocks.GivenOrder(order);
+        var handler = new ChangeOrderStatusHandler(mocks.UnitOfWork.Object, OrderMapper());
 
-        var result = await sut.HandleAsync(new DeleteOrderCommand(OrderId));
+        var result = await handler.HandleAsync(new ChangeOrderStatusCommand(OrderId, OrderStatus.Paid));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.Status.Should().Be(OrderStatus.Paid);
+        order.Status.Should().Be(OrderStatus.Paid);
+        mocks.UnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ChangeStatus_OnAnIllegalTransition_ReturnsFailureAndDoesNotSave()
+    {
+        var mocks = new HandlerMocks();
+        mocks.GivenOrder(PendingOrder());
+        var handler = new ChangeOrderStatusHandler(mocks.UnitOfWork.Object, OrderMapper());
+
+        var result = await handler.HandleAsync(new ChangeOrderStatusCommand(OrderId, OrderStatus.Shipped));
 
         result.IsFailure.Should().BeTrue();
-        result.Errors.Should().Contain(e => e.Type == ErrorType.NotFound);
+        result.Errors.Should().Contain(e => e.Code == "Order.InvalidStatusTransition");
+        mocks.UnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
-    public async Task DeleteOrder_SoftDeletesOrderAndItsItems()
+    public async Task ChangeStatus_WhenNotFound_ReturnsNotFound()
     {
-        var order = PendingOrderWithOneItem();
-        SetupGetById(order);
-        var sut = new DeleteOrderHandler(_unitOfWork.Object);
+        var mocks = new HandlerMocks();
+        mocks.GivenNoOrder();
+        var handler = new ChangeOrderStatusHandler(mocks.UnitOfWork.Object, OrderMapper());
 
-        var result = await sut.HandleAsync(new DeleteOrderCommand(OrderId));
+        var result = await handler.HandleAsync(new ChangeOrderStatusCommand(OrderId, OrderStatus.Paid));
+
+        result.IsFailure.Should().BeTrue();
+        result.Errors.Should().ContainSingle(e => e.Type == ErrorType.NotFound);
+    }
+
+    // ---- Delete -------------------------------------------------------------------------------
+    [Fact]
+    public async Task DeleteOrder_WhenFound_SoftDeletesTheAggregateAndSaves()
+    {
+        var mocks = new HandlerMocks();
+        var order = PendingOrder();
+        order.AddItem(id: null, productId: 11, "Keyboard", unitPrice: 10m, quantity: 1);
+        mocks.GivenOrder(order);
+        var handler = new DeleteOrderHandler(mocks.UnitOfWork.Object);
+
+        var result = await handler.HandleAsync(new DeleteOrderCommand(OrderId));
 
         result.IsSuccess.Should().BeTrue();
         order.IsDeleted.Should().BeTrue();
         order.Items.Should().OnlyContain(i => i.IsDeleted);
-        _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        mocks.UnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    // ── GetOrderByIdHandler ──
     [Fact]
-    public async Task GetOrderById_WhenOrderMissing_ReturnsNotFound()
+    public async Task DeleteOrder_WhenNotFound_ReturnsNotFound()
     {
-        SetupGetById(null, asTracking: false);
-        var sut = new GetOrderByIdHandler(_unitOfWork.Object, _dtoMapper);
+        var mocks = new HandlerMocks();
+        mocks.GivenNoOrder();
+        var handler = new DeleteOrderHandler(mocks.UnitOfWork.Object);
 
-        var result = await sut.HandleAsync(new GetOrderByIdQuery(OrderId));
+        var result = await handler.HandleAsync(new DeleteOrderCommand(OrderId));
 
         result.IsFailure.Should().BeTrue();
-        result.Errors.Should().Contain(e => e.Type == ErrorType.NotFound);
+        result.Errors.Should().ContainSingle(e => e.Type == ErrorType.NotFound);
+        mocks.UnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // ---- AddItem ------------------------------------------------------------------------------
     [Fact]
-    public async Task GetOrderById_ReturnsDTOWithItemsAndComputedTotal()
+    public async Task AddItem_OnAPendingOrder_AppendsTheSnapshotAndReturnsTheItemDTO()
     {
-        SetupGetById(PendingOrderWithOneItem(), asTracking: false);
-        var sut = new GetOrderByIdHandler(_unitOfWork.Object, _dtoMapper);
+        var mocks = new HandlerMocks();
+        var order = PendingOrder();
+        mocks.GivenOrder(order);
+        var handler = new AddItemHandler(mocks.UnitOfWork.Object, new OrderItemDTOMapper());
 
-        var result = await sut.HandleAsync(new GetOrderByIdQuery(OrderId));
+        var result = await handler.HandleAsync(
+            new AddItemCommand(OrderId, ProductId: 11, "Keyboard", UnitPrice: 49.99m, Quantity: 2));
 
         result.IsSuccess.Should().BeTrue();
-        result.Value!.Items.Should().ContainSingle();
-        result.Value.Items.Single().ProductName.Should().Be("Blue Widget");
-        result.Value.Total.Should().Be(9.99m * 3);
-    }
-
-    // ── AddItemHandler ──
-    [Fact]
-    public async Task AddItem_WhenOrderMissing_ReturnsNotFound()
-    {
-        SetupGetById(null);
-        var sut = new AddItemHandler(_unitOfWork.Object, _itemDTOMapper);
-
-        var result = await sut.HandleAsync(new AddItemCommand(OrderId, 12, "Red Widget", 4.50m, 2));
-
-        result.IsFailure.Should().BeTrue();
-        result.Errors.Should().Contain(e => e.Type == ErrorType.NotFound);
-    }
-
-    [Fact]
-    public async Task AddItem_OnPendingOrder_ReturnsLineDTOAndSaves()
-    {
-        var order = PendingOrderWithOneItem();
-        SetupGetById(order);
-        var sut = new AddItemHandler(_unitOfWork.Object, _itemDTOMapper);
-
-        var result = await sut.HandleAsync(new AddItemCommand(OrderId, 12, "Red Widget", 4.50m, 2));
-
-        result.IsSuccess.Should().BeTrue();
-        result.Value!.ProductName.Should().Be("Red Widget");
-        result.Value.UnitPrice.Should().Be(4.50m);
+        result.Value!.ProductId.Should().Be(11);
+        result.Value.ProductName.Should().Be("Keyboard");
+        result.Value.UnitPrice.Should().Be(49.99m);
         result.Value.Quantity.Should().Be(2);
-        order.Items.Should().HaveCount(2);
-        _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        order.Items.Should().ContainSingle();
+        mocks.UnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
-    public async Task AddItem_OnPaidOrder_ReturnsItemsLockedAndDoesNotSave()
+    public async Task AddItem_WhenNotFound_ReturnsNotFound()
     {
-        var order = PendingOrderWithOneItem();
-        order.ChangeStatus(OrderStatus.Paid);
-        SetupGetById(order);
-        var sut = new AddItemHandler(_unitOfWork.Object, _itemDTOMapper);
+        var mocks = new HandlerMocks();
+        mocks.GivenNoOrder();
+        var handler = new AddItemHandler(mocks.UnitOfWork.Object, new OrderItemDTOMapper());
 
-        var result = await sut.HandleAsync(new AddItemCommand(OrderId, 12, "Red Widget", 4.50m, 2));
+        var result = await handler.HandleAsync(
+            new AddItemCommand(OrderId, ProductId: 11, "Keyboard", UnitPrice: 49.99m, Quantity: 2));
+
+        result.IsFailure.Should().BeTrue();
+        result.Errors.Should().ContainSingle(e => e.Type == ErrorType.NotFound);
+    }
+
+    [Fact]
+    public async Task AddItem_OnAPaidOrder_ReturnsItemsLockedAndDoesNotSave()
+    {
+        var mocks = new HandlerMocks();
+        mocks.GivenOrder(PaidOrder());
+        var handler = new AddItemHandler(mocks.UnitOfWork.Object, new OrderItemDTOMapper());
+
+        var result = await handler.HandleAsync(
+            new AddItemCommand(OrderId, ProductId: 11, "Keyboard", UnitPrice: 49.99m, Quantity: 2));
 
         result.IsFailure.Should().BeTrue();
         result.Errors.Should().Contain(e => e.Code == "Order.ItemsLocked");
-        _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+        mocks.UnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    // ── ChangeItemQuantityHandler ──
+    // ---- ChangeItemQuantity -------------------------------------------------------------------
     [Fact]
-    public async Task ChangeItemQuantity_WhenOrderMissing_ReturnsNotFound()
+    public async Task ChangeItemQuantity_WhenFound_ChangesTheQuantityAndSaves()
     {
-        SetupGetById(null);
-        var sut = new ChangeItemQuantityHandler(_unitOfWork.Object);
+        var mocks = new HandlerMocks();
+        var order = PendingOrder();
+        var item = order.AddItem(id: null, productId: 11, "Keyboard", unitPrice: 10m, quantity: 1).Value!;
+        mocks.GivenOrder(order);
+        var handler = new ChangeItemQuantityHandler(mocks.UnitOfWork.Object);
 
-        var result = await sut.HandleAsync(new ChangeItemQuantityCommand(OrderId, ItemId: 0, Quantity: 5));
-
-        result.IsFailure.Should().BeTrue();
-        result.Errors.Should().Contain(e => e.Type == ErrorType.NotFound);
-    }
-
-    [Fact]
-    public async Task ChangeItemQuantity_OnPendingOrder_UpdatesQuantityAndSaves()
-    {
-        var order = PendingOrderWithOneItem();
-        SetupGetById(order);
-        var sut = new ChangeItemQuantityHandler(_unitOfWork.Object);
-
-        var result = await sut.HandleAsync(new ChangeItemQuantityCommand(OrderId, order.Items.Single().Id, Quantity: 5));
+        var result = await handler.HandleAsync(new ChangeItemQuantityCommand(OrderId, item.Id, Quantity: 4));
 
         result.IsSuccess.Should().BeTrue();
-        order.Items.Single().Quantity.Should().Be(5);
-        _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        item.Quantity.Should().Be(4);
+        mocks.UnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    // ── RemoveItemHandler ──
     [Fact]
-    public async Task RemoveItem_WhenOrderMissing_ReturnsNotFound()
+    public async Task ChangeItemQuantity_WhenTheOrderIsNotFound_ReturnsNotFound()
     {
-        SetupGetById(null);
-        var sut = new RemoveItemHandler(_unitOfWork.Object);
+        var mocks = new HandlerMocks();
+        mocks.GivenNoOrder();
+        var handler = new ChangeItemQuantityHandler(mocks.UnitOfWork.Object);
 
-        var result = await sut.HandleAsync(new RemoveItemCommand(OrderId, ItemId: 0));
+        var result = await handler.HandleAsync(new ChangeItemQuantityCommand(OrderId, ItemId: 1, Quantity: 4));
 
         result.IsFailure.Should().BeTrue();
-        result.Errors.Should().Contain(e => e.Type == ErrorType.NotFound);
+        result.Errors.Should().ContainSingle(e => e.Type == ErrorType.NotFound);
+        mocks.UnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // ---- RemoveItem ---------------------------------------------------------------------------
     [Fact]
-    public async Task RemoveItem_OnPendingOrder_SoftDeletesLineAndSaves()
+    public async Task RemoveItem_WhenFound_SoftDeletesTheItemAndSaves()
     {
-        var order = PendingOrderWithOneItem();
-        SetupGetById(order);
-        var sut = new RemoveItemHandler(_unitOfWork.Object);
+        var mocks = new HandlerMocks();
+        var order = PendingOrder();
+        var item = order.AddItem(id: null, productId: 11, "Keyboard", unitPrice: 10m, quantity: 1).Value!;
+        mocks.GivenOrder(order);
+        var handler = new RemoveItemHandler(mocks.UnitOfWork.Object);
 
-        var result = await sut.HandleAsync(new RemoveItemCommand(OrderId, order.Items.Single().Id));
+        var result = await handler.HandleAsync(new RemoveItemCommand(OrderId, item.Id));
 
         result.IsSuccess.Should().BeTrue();
-        order.Items.Single().IsDeleted.Should().BeTrue();
-        order.Total.Should().Be(0m);
-        _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+        item.IsDeleted.Should().BeTrue();
+        mocks.UnitOfWork.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    // ── ChangeOrderStatusHandler ──
-    [Fact]
-    public async Task ChangeOrderStatus_WhenOrderMissing_ReturnsNotFound()
-    {
-        SetupGetById(null);
-        var sut = new ChangeOrderStatusHandler(_unitOfWork.Object, _dtoMapper);
+    // The Pending-only guard on removal is proven at the domain tier (OrderTests) and, at this tier,
+    // by AddItem_OnAPaidOrder above: the handler does not re-implement the rule, it just relays it.
 
-        var result = await sut.HandleAsync(new ChangeOrderStatusCommand(OrderId, OrderStatus.Paid));
+    // ---- GetById ------------------------------------------------------------------------------
+    [Fact]
+    public async Task GetOrderById_WhenFound_MapsTheItemsAndTheComputedTotal()
+    {
+        var mocks = new HandlerMocks();
+        var order = PendingOrder();
+        order.AddItem(id: null, productId: 11, "Keyboard", unitPrice: 50m, quantity: 2);
+        order.AddItem(id: null, productId: 12, "Mouse", unitPrice: 25m, quantity: 1);
+        mocks.GivenOrder(order);
+        var handler = new GetOrderByIdHandler(mocks.UnitOfWork.Object, OrderMapper());
+
+        var result = await handler.HandleAsync(new GetOrderByIdQuery(OrderId));
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value!.Items.Should().HaveCount(2);
+        result.Value.Total.Should().Be(125m, "the details path loads the items, so the total is real");
+    }
+
+    [Fact]
+    public async Task GetOrderById_WhenNotFound_ReturnsNotFound()
+    {
+        var mocks = new HandlerMocks();
+        mocks.GivenNoOrder();
+        var handler = new GetOrderByIdHandler(mocks.UnitOfWork.Object, OrderMapper());
+
+        var result = await handler.HandleAsync(new GetOrderByIdQuery(OrderId));
 
         result.IsFailure.Should().BeTrue();
-        result.Errors.Should().Contain(e => e.Type == ErrorType.NotFound);
+        result.Errors.Should().ContainSingle(e => e.Type == ErrorType.NotFound);
     }
 
-    [Fact]
-    public async Task ChangeOrderStatus_WithIllegalTransition_ReturnsFailureAndDoesNotSave()
+    // ---- Helpers ------------------------------------------------------------------------------
+    private static Order PendingOrder() => Order.Create(id: null, "Ada Lovelace").Value!;
+
+    private static Order PaidOrder()
     {
-        SetupGetById(PendingOrderWithOneItem());
-        var sut = new ChangeOrderStatusHandler(_unitOfWork.Object, _dtoMapper);
-
-        var result = await sut.HandleAsync(new ChangeOrderStatusCommand(OrderId, OrderStatus.Shipped));
-
-        result.IsFailure.Should().BeTrue();
-        result.Errors.Should().Contain(e => e.Code == "Order.InvalidStatusTransition");
-        _unitOfWork.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
-    }
-
-    // ── Helpers ──
-    private CreateOrderHandler CreateOrderSut() =>
-        new(_unitOfWork.Object, new OrderCreateRequestMapper(), _eventBus.Object, _dtoMapper);
-
-    private void SetupGetById(Order? order, bool asTracking = true) =>
-        _repository
-            .Setup(r => r.GetByIdAsync(
-                OrderId,
-                It.IsAny<IEnumerable<string>>(),
-                asTracking,
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(order);
-
-    private static Order PendingOrderWithOneItem()
-    {
-        var order = Order.Create(id: null, "Ada Lovelace").Value!;
-        order.AddItem(id: null, productId: 11, "Blue Widget", unitPrice: 9.99m, quantity: 3);
+        var order = PendingOrder();
+        order.ChangeStatus(OrderStatus.Paid);
         return order;
+    }
+
+    private static OrderDTOMapper OrderMapper() => new(new OrderItemDTOMapper());
+
+    /// <summary>
+    /// The three infrastructure boundaries every Orders handler sits on, pre-wired: the unit of work
+    /// hands back the repository, and a save reports one affected row.
+    /// </summary>
+    private sealed class HandlerMocks
+    {
+        public HandlerMocks()
+        {
+            UnitOfWork.Setup(x => x.GetRepository<Order, OrderIdentifierType>()).Returns(Repository.Object);
+            UnitOfWork.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        }
+
+        public Mock<IUnitOfWork> UnitOfWork { get; } = new();
+
+        public Mock<IRepository<Order, OrderIdentifierType>> Repository { get; } = new();
+
+        public Mock<IEventBus> EventBus { get; } = new();
+
+        public void GivenOrder(Order order) =>
+            Repository
+                .Setup(x => x.GetByIdAsync(
+                    It.IsAny<OrderIdentifierType>(),
+                    It.IsAny<IEnumerable<string>>(),
+                    It.IsAny<bool>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(order);
+
+        public void GivenNoOrder() =>
+            Repository
+                .Setup(x => x.GetByIdAsync(
+                    It.IsAny<OrderIdentifierType>(),
+                    It.IsAny<IEnumerable<string>>(),
+                    It.IsAny<bool>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync((Order?)null);
     }
 }
 ```
@@ -4341,13 +3864,15 @@ dotnet test --project Tests/Architecture/MMCA.ECommerce.Architecture.Tests/MMCA.
 ```
 
 Expect a warning-free build, then **33/33** passing in the Orders domain suite, **23/23** in the
-Orders application suite, and **72/72** in the architecture suite now that both modules are reshaped.
-No database is involved in any of them.
+Orders application suite, and **72/72** in the architecture suite. No database is involved in any of
+them.
 
-That last run is the one worth watching: it is where layering, module isolation, and the event
-conventions are enforced. If it reds on isolation, the cause is almost always an accidental `using`
-of a Products type inside Orders, which is exactly the mistake the `ProductName` / `UnitPrice`
-snapshot exists to make unnecessary.
+That last run is the one worth watching, and it is only worth watching because *both* modules were
+reshaped: a flat, status-less catalog module beside an aggregate that owns a growing child collection
+and a guarded lifecycle is what makes the layering, module-isolation, and event-convention rules say
+something. Two copies of the same generated shape would pass them vacuously. If it reds on isolation,
+the cause is almost always an accidental `using` of a Products type inside Orders, which is exactly the
+mistake the `ProductName` / `UnitPrice` snapshot exists to make unnecessary.
 
 As in step 4, a single class or method needs a Microsoft Testing Platform filter **after a bare `--`**
 (these projects are MTP, not VSTest, so a filter placed before the separator runs zero tests):
@@ -4356,8 +3881,8 @@ As in step 4, a single class or method needs a Microsoft Testing Platform filter
 dotnet test --project Tests/Modules/Orders/MMCA.ECommerce.Orders.Domain.Tests/MMCA.ECommerce.Orders.Domain.Tests.csproj -- --filter-method "*ChangeStatus*"
 ```
 
-The whole solution is green from here: `dotnet test --solution MMCA.ECommerce.slnx` runs everything
-in one pass.
+The whole solution is green from here: `dotnet test --solution MMCA.ECommerce.slnx` runs everything in
+one pass and lands at **157** tests (158 once step 8 freezes your integration-event wire contract).
 
 ## 6. Point the UI at the new domain
 
@@ -4377,16 +3902,15 @@ and `.es.resx` file beside the page. The
 [UI host in the repo](https://github.com/ivanball/MMCA.ECommerce/tree/main/Source/Hosts/UI/MMCA.ECommerce.UI.Web)
 is the complete reference.
 
-## 7. Regenerate the migrations
+## 7. Create the migrations
 
-The scaffolded Products migration still describes the template's shape, and Orders has none yet.
-Delete the generated migration files, but only the `*.cs`: the folder's `.editorconfig` stays, it is
-what keeps analyzer enforcement off generated migration code, and `dotnet ef` never recreates it.
-Then generate both fresh (`migrations add` never opens a database connection):
+Neither module has a migration yet: a `--flat` or `--no-status` scaffold deliberately drops the
+template's sample migration (it described the sample shape), and `mmca-module` never ships one.
+Each `Migrations` folder does carry an `.editorconfig` that keeps analyzer enforcement off
+generated migration code; `dotnet ef` never creates that file, so leave it alone. Generate both
+migrations fresh (`migrations add` never opens a database connection):
 
 ```powershell
-Remove-Item Source\Hosting\MMCA.ECommerce.Migrations.SqlServer.Products\Migrations\*.cs
-
 dotnet ef migrations add InitialCreate `
   --project Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Products `
   --startup-project Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Products `
