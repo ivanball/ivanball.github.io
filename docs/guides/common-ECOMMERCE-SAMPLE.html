@@ -142,38 +142,36 @@
           <li><strong>.NET 10 SDK</strong> (the framework targets <code>net10.0</code> with <code>LangVersion: preview</code>).</li>
           <li><strong>Docker Desktop</strong> (Aspire provisions SQL Server as a container).</li>
           <li><strong>EF Core tools</strong>: <code>dotnet tool install --global dotnet-ef</code>.</li>
+          <li>Commands are shown for <strong>PowerShell</strong> (<code>pwsh</code>, cross-platform). Almost everything is plain
+          <code>dotnet</code> CLI, so any shell works; the one step where the shell genuinely matters (3a) says so
+          inline. Plain cmd is the one to avoid: it cannot expand wildcards at all.</li>
           </ul>
           <p>No credentials, tokens, or extra feeds: <code>MMCA.Templates</code> and every <code>MMCA.Common.*</code> package restore
           from nuget.org (<a href="../adr/053-dual-registry-package-publishing.html">ADR-053</a>).</p>
           <hr>
           <h2 id="1-install-the-template-pack">1. Install the template pack</h2>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet new install MMCA.Templates</code></pre>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new install MMCA.Templates</code></pre>
           <h2 id="2-generate-the-solution-with-the-products-module">2. Generate the solution with the Products module</h2>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet new mmca-app -n MMCA.ECommerce --module Products --aggregate Product
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> MMCA.ECommerce <span class="hljs-literal">--module</span> Products <span class="hljs-literal">--aggregate</span> Product
           <span class="hljs-built_in">cd</span> MMCA.ECommerce</code></pre>
           <p>One command, and the whole monolith exists: the Products module across Shared, Domain, Application,
           Infrastructure, and API, the REST host, the Blazor UI host, the Aspire AppHost, a migrations project
           for the module&#39;s database, and three test projects including the architecture fitness rules.</p>
           <p>Get your green baseline before changing anything:</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet build MMCA.ECommerce.slnx
-          dotnet <span class="hljs-built_in">test</span>  --solution MMCA.ECommerce.slnx</code></pre>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet build MMCA.ECommerce.slnx
+          dotnet test  <span class="hljs-literal">--solution</span> MMCA.ECommerce.slnx</code></pre>
           <p>That is a warning-free build under five analyzers at error severity and 90 passing tests, with no
           database needed. This baseline is the line you bisect against later.</p>
           <h2 id="3-add-the-orders-module">3. Add the Orders module</h2>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet new mmca-module -n Orders --app MMCA.ECommerce --aggregate Order</code></pre>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-module</span> <span class="hljs-literal">-n</span> Orders <span class="hljs-literal">--app</span> MMCA.ECommerce <span class="hljs-literal">--aggregate</span> Order</code></pre>
           <p>Eight more projects appear (the five layers, two test projects, one migrations project). <code>dotnet new</code>
           cannot patch files that already exist, so the template prints the wire-ups it needs from you. Here
           they are, concretely, for this app:</p>
           <p><strong>a. Add the projects to the solution.</strong> <code>dotnet sln add</code> does not expand wildcards itself, so the
-          shell has to. In bash the globs below just work; in PowerShell and cmd they are passed through
-          literally and dotnet reports &quot;Could not find project or directory&quot;, so use the form for your shell:</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-comment"># bash</span>
-          dotnet sln MMCA.ECommerce.slnx add Source/Modules/Orders/*/*.csproj Tests/Modules/Orders/*/*.csproj Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Orders/*.csproj</code></pre>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs"><span class="hljs-comment"># PowerShell</span>
-          dotnet sln MMCA.ECommerce.slnx add (<span class="hljs-built_in">Get-ChildItem</span> Source\Modules\Orders\*\*.csproj).FullName (<span class="hljs-built_in">Get-ChildItem</span> Tests\Modules\Orders\*\*.csproj).FullName (<span class="hljs-built_in">Get-ChildItem</span> Source\Hosting\MMCA.ECommerce.Migrations.SqlServer.Orders\*.csproj).FullName</code></pre>
-          <pre class="doc-pre" data-lang="cmd"><code class="language-cmd hljs">:: <span class="hljs-built_in">cmd</span> (no glob support <span class="hljs-built_in">at</span> all: list the eight projects explicitly, one line)
-          dotnet sln MMCA.ECommerce.slnx add Source\Modules\Orders\MMCA.ECommerce.Orders.Shared\MMCA.ECommerce.Orders.Shared.csproj Source\Modules\Orders\MMCA.ECommerce.Orders.Domain\MMCA.ECommerce.Orders.Domain.csproj Source\Modules\Orders\MMCA.ECommerce.Orders.Application\MMCA.ECommerce.Orders.Application.csproj Source\Modules\Orders\MMCA.ECommerce.Orders.Infrastructure\MMCA.ECommerce.Orders.Infrastructure.csproj Source\Modules\Orders\MMCA.ECommerce.Orders.API\MMCA.ECommerce.Orders.API.csproj Tests\Modules\Orders\MMCA.ECommerce.Orders.Domain.Tests\MMCA.ECommerce.Orders.Domain.Tests.csproj Tests\Modules\Orders\MMCA.ECommerce.Orders.Application.Tests\MMCA.ECommerce.Orders.Application.Tests.csproj Source\Hosting\MMCA.ECommerce.Migrations.SqlServer.Orders\MMCA.ECommerce.Migrations.SqlServer.Orders.csproj</code></pre>
-          <p>Whichever shell, expect eight <code>Project ... added to the solution</code> lines.</p>
+          <code>Get-ChildItem</code> calls expand them before dotnet sees the paths (in bash, plain globs like
+          <code>Source/Modules/Orders/*/*.csproj</code> work directly):</p>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet sln MMCA.ECommerce.slnx add (<span class="hljs-built_in">Get-ChildItem</span> Source\Modules\Orders\*\*.csproj).FullName (<span class="hljs-built_in">Get-ChildItem</span> Tests\Modules\Orders\*\*.csproj).FullName (<span class="hljs-built_in">Get-ChildItem</span> Source\Hosting\MMCA.ECommerce.Migrations.SqlServer.Orders\*.csproj).FullName</code></pre>
+          <p>Expect eight <code>Project ... added to the solution</code> lines.</p>
           <p><strong>b. Reference the module from the host and the fitness tests.</strong> In
           <code>Source/Hosts/MMCA.ECommerce.Web/MMCA.ECommerce.Web.csproj</code>, add <code>ProjectReference</code>s to
           <code>MMCA.ECommerce.Orders.API</code> and <code>MMCA.ECommerce.Migrations.SqlServer.Orders</code>. In
@@ -347,18 +345,20 @@
           is the complete reference.</p>
           <h2 id="7-regenerate-the-migrations">7. Regenerate the migrations</h2>
           <p>The scaffolded Products migration still describes the template&#39;s shape, and Orders has none yet.
-          Delete the files under
-          <code>Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Products/Migrations/</code> and generate both fresh
-          (<code>migrations add</code> never opens a database connection):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet ef migrations add InitialCreate \
-            --project Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Products \
-            --startup-project Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Products \
-            --context SQLServerDbContext
+          Delete the generated migration files, but only the <code>*.cs</code>: the folder&#39;s <code>.editorconfig</code> stays, it is
+          what keeps analyzer enforcement off generated migration code, and <code>dotnet ef</code> never recreates it.
+          Then generate both fresh (<code>migrations add</code> never opens a database connection):</p>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs"><span class="hljs-built_in">Remove-Item</span> Source\Hosting\MMCA.ECommerce.Migrations.SqlServer.Products\Migrations\*.cs
           
-          dotnet ef migrations add InitialCreate \
-            --project Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Orders \
-            --startup-project Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Orders \
-            --context SQLServerDbContext</code></pre>
+          dotnet ef migrations add InitialCreate `
+            <span class="hljs-literal">--project</span> Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Products `
+            <span class="hljs-literal">--startup-project</span> Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Products `
+            <span class="hljs-literal">--context</span> SQLServerDbContext
+          
+          dotnet ef migrations add InitialCreate `
+            <span class="hljs-literal">--project</span> Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Orders `
+            <span class="hljs-literal">--startup-project</span> Source/Hosting/MMCA.ECommerce.Migrations.SqlServer.Orders `
+            <span class="hljs-literal">--context</span> SQLServerDbContext</code></pre>
           <p>Each migration creates its module&#39;s tables in the module schema plus that database&#39;s own
           outbox/inbox tables: two databases, two outboxes, no contention.</p>
           <h2 id="8-the-two-one-time-fixups-then-run-it">8. The two one-time fixups, then run it</h2>
@@ -370,7 +370,7 @@
           <code>OrderPlacedIntegrationEvent</code> exactly as shipped.</p>
           <p>Then, from a <strong>real, interactive terminal</strong> (launched headless, the AppHost stalls at control-plane
           init and looks like a hang):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet run --project Source/Hosting/MMCA.ECommerce.AppHost</code></pre>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet run <span class="hljs-literal">--project</span> Source/Hosting/MMCA.ECommerce.AppHost</code></pre>
           <p>The dashboard shows <code>sql</code>, <code>web</code>, and <code>ui</code>. Open <strong><code>ui</code></strong>: create a couple of products with prices,
           place an order, add items from the product picker, watch the total, mark it Paid then Shipped, and
           try to add an item afterwards to see the domain say no, in your browser&#39;s language. The app runs
