@@ -8,12 +8,13 @@ aggregates, wired end to end through all five layers, with the architecture fitn
 
 This guide builds it from nothing, and the point is *how little of it you type*. The
 [getting-started guide](common-GETTING-STARTED.md) scaffolds one module and stops; this one takes
-the same scaffold to a working two-module domain. The `MMCA.Templates` pack generates the solution,
-both modules, the hosts, the tests, and the migrations projects; your hands touch three things: the
-wire-ups `dotnet new` cannot patch into existing files, the domain code that is genuinely yours, and
-the UI pages that show it. Every step below maps to real, build-verified code in the
-[MMCA.ECommerce repo](https://github.com/ivanball/MMCA.ECommerce), so wherever this guide abbreviates,
-the repo is the full answer.
+the same scaffold to a working two-module domain. `MMCA.Templates` 1.4.0 generates the solution,
+both modules, the hosts, the tests, and the migrations projects, and the `build/add-module.ps1`
+script it ships inside every generated app performs the wire-ups `dotnet new` cannot patch into
+existing files. That leaves your hands on two things only: the domain code that is genuinely yours,
+and the UI pages that show it. Every step below maps to real, build-verified code in the
+[MMCA.ECommerce repo](https://github.com/ivanball/MMCA.ECommerce), so wherever this guide
+abbreviates, the repo is the full answer.
 
 ---
 
@@ -23,8 +24,11 @@ the repo is the full answer.
 - **Docker Desktop** (Aspire provisions SQL Server as a container).
 - **EF Core tools**: `dotnet tool install --global dotnet-ef`.
 - Commands are shown for **PowerShell** (`pwsh`, cross-platform). Almost everything is plain
-  `dotnet` CLI, so any shell works; the one step where the shell genuinely matters (3a) says so
-  inline. Plain cmd is the one to avoid: it cannot expand wildcards at all.
+  `dotnet` CLI, so any shell works, but step 3 runs a `.ps1` script, so `pwsh` has to be on PATH.
+
+`MMCA.Templates` **1.4.0** is the floor for this guide: `--title`, `--event-verb`, `--no-owner`,
+`--no-description` and the shipped `build/add-module.ps1` all arrive in it, and each one deletes a
+step the 1.3.0 version of this walkthrough asked you to do by hand.
 
 No credentials, tokens, or extra feeds: `MMCA.Templates` and every `MMCA.Common.*` package restore
 from nuget.org ([ADR-053](../adr/053-dual-registry-package-publishing.md)).
@@ -40,22 +44,25 @@ dotnet new install MMCA.Templates
 ## 2. Generate the solution with the Products module
 
 ```powershell
-dotnet new mmca-app -n MMCA.ECommerce --module Products --aggregate Product --flat --no-status
+dotnet new mmca-app -n MMCA.ECommerce --module Products --aggregate Product `
+  --flat --no-status --no-owner --title Name --event-verb Created
 cd MMCA.ECommerce
 ```
 
-Two flags do most of this guide's old work for you. `--flat` generates the module without a child
-collection: no child entity, DTO, requests, mapper, EF configuration, `Add`/`Edit`/`Remove` slices,
-controller endpoints, identifier alias, or tests. `--no-status` generates it without a status axis: no
-status enum, no `ChangeStatus` slice, request or endpoint, no `Status` property, and no status
-invariant or tests. A catalog product is exactly that shape: it is a leaf aggregate with no growable
-children, and it has no lifecycle state, so asking for the sample's ticket-shaped child collection and
-four-state enum only to delete them again is work with no payoff. Both flags arrived in
-`MMCA.Templates` 1.3.0.
+Five options do most of this guide's old work. Three remove an axis a catalog product does not have,
+and the code for an axis you turn off is never generated: `--flat` drops the child collection
+entirely, `--no-status` drops the status axis, and `--no-owner` drops the `RequesterUserId` property
+and everything that named it. Two are renames: `--title Name` renames the aggregate's main text
+property everywhere (property, invariant, error codes, max-length constant, DTO, requests, EF column,
+validator rule, UI resources, domain tests), and `--event-verb Created` gives you
+`ProductCreatedIntegrationEvent` and its `ProductCreatedHandler` instead of the sample's `Opened`
+pair. The [templates guide](common-TEMPLATES.md) lists exactly what each one generates or omits.
+Together those two are the entire rename pass this guide used to spend a section on, so step 4 has
+exactly one property left to add.
 
-One command, and the whole monolith exists: the Products module across Shared, Domain, Application,
-Infrastructure, and API, the REST host, the Blazor UI host, the Aspire AppHost, a migrations project
-for the module's database, and three test projects including the architecture fitness rules.
+One command, and the whole monolith exists: the Products module across all five layers, the REST
+host, the Blazor UI host, the Aspire AppHost, a migrations project, three test projects including the
+architecture fitness rules, and `build/add-module.ps1`.
 
 Get your green baseline before changing anything:
 
@@ -65,149 +72,100 @@ dotnet test  --solution MMCA.ECommerce.slnx
 ```
 
 That is a warning-free build under five analyzers at error severity and **81 passing tests**, with no
-database needed. (The unflagged scaffold ships more, because the child and status axes carry tests of
-their own; 81 is the flat, status-less baseline.) This is the line you bisect against later.
+database needed. (The unflagged scaffold ships more, because each axis carries tests of its own; 81
+is the flat, status-less, owner-less baseline.) This is the line you bisect against later.
 
 ## 3. Add the Orders module
 
 ```powershell
-dotnet new mmca-module -n Orders --app MMCA.ECommerce --aggregate Order --child Item
+pwsh build/add-module.ps1 -Name Orders -Aggregate Order -Child Item `
+  -NoOwner -NoDescription -Title CustomerName -EventVerb Placed -SkipMigration
 ```
 
-`--child` renames the child concept throughout the generated module. The type it produces is
-`<aggregate><child>`, so `--aggregate Order --child Item` gives you an `OrderItem` entity, an
-`OrderItemDTO`, `AddItem` / `EditItem` / `RemoveItem` use-case slices, `/items` routes on the
-controller, and an `OrderItemIdentifierType` alias. Nothing here needs a find-and-replace pass
-afterwards. `EditItem` is the one name that does not survive the reshape: an order line is not edited
-freely, only re-quantified, so step 5 renames that slice to `ChangeItemQuantity`. Orders keeps the
-status axis, because an order genuinely has a lifecycle, so `--no-status` is deliberately absent here.
-`--child` is ignored under `--flat`, which is why step 2 did not pass one.
+`build/add-module.ps1` ships inside the solution you just generated. It runs `dotnet new mmca-module`
+with the shape options passed through, then performs every wire-up the template can only print. Run
+it from the solution root: it refuses to run anywhere else, and discovers everything else there at
+run time.
 
-Eight more projects appear (the five layers, two test projects, one migrations project). `dotnet new`
-cannot patch files that already exist, so the template prints the wire-ups it needs from you. Its
-first six printed items map one for one onto sub-steps a to f below, including the top-level `Outbox`
-pin in 3f, and the printed solution command now carries a PowerShell no-glob form beside the bash
-one; the seventh printed item is the first migration, which this guide defers to step 7 because both
-modules get theirs in one pass there. Here they are, concretely, for this app:
+`-Child Item` gives an `OrderItem` entity and DTO, `AddItem` / `EditItem` / `RemoveItem` slices,
+`/items` routes, and an `OrderItemIdentifierType` alias. `-Title CustomerName` and `-EventVerb
+Placed` are the two renames. `-NoOwner` and `-NoDescription` drop the two axes an order does not
+need, while `-NoStatus` is deliberately absent because an order genuinely has a lifecycle.
+`EditItem` is the one generated name that does not survive the reshape: an order line is not edited
+freely, only re-quantified, so step 5 renames that slice to `ChangeItemQuantity`. `-SkipMigration`
+avoids creating the Orders migration against the still-unreshaped scaffold, since step 7 would delete
+and regenerate it anyway.
 
-**a. Add the projects to the solution.** `dotnet sln add` does not expand wildcards itself, so the
-`Get-ChildItem` calls expand them before dotnet sees the paths (in bash, plain globs like
-`Source/Modules/Orders/*/*.csproj` work directly):
+### What the script just wired
 
-```powershell
-dotnet sln MMCA.ECommerce.slnx add (Get-ChildItem Source\Modules\Orders\*\*.csproj).FullName (Get-ChildItem Tests\Modules\Orders\*\*.csproj).FullName (Get-ChildItem Source\Hosting\MMCA.ECommerce.Migrations.SqlServer.Orders\*.csproj).FullName
-```
+`git diff` shows six existing files touched: the eight new projects in `MMCA.ECommerce.slnx`; the
+Orders `ProjectReference`s on the web host and **all five** layers on the architecture-test project;
+the identifier-alias `<Compile Include ... Link>` block in `Directory.Build.props`; five
+`Module(...)` lines in `ECommerceArchitectureMap.cs`, without which the layering and isolation rules
+silently stop covering the module
+([ADR-015](../adr/015-architecture-fitness-functions.md)); the
+`services.AddErrorResources<OrdersErrorResources>();` call in the web host's `Program.cs`, the one
+registration the host still owns because `ModuleLoader` discovers the `IModule` itself; and the
+AppHost plus `appsettings.json` database wiring below. Every edit is anchored on something the
+scaffold generated, and a missing anchor aborts the run with the manual edit printed instead, so a
+half-wired solution is never the outcome of a silent skip. The
+[templates guide](common-TEMPLATES.md) documents the script in full.
 
-Expect eight `Project ... added to the solution` lines.
+### The database wiring, and why it is per module
 
-**b. Reference the module from the host and the fitness tests.** In
-`Source/Hosts/MMCA.ECommerce.Web/MMCA.ECommerce.Web.csproj`, add `ProjectReference`s to
-`MMCA.ECommerce.Orders.API` and `MMCA.ECommerce.Migrations.SqlServer.Orders`. In
-`Tests/Architecture/MMCA.ECommerce.Architecture.Tests/MMCA.ECommerce.Architecture.Tests.csproj`, add
-`ProjectReference`s to **all five** Orders layer projects.
+Every module database carries its own `OutboxMessages`/`InboxMessages` tables in `dbo`, so two
+modules migrated into one database collide on them. One database per module is also exactly the
+topology that makes extraction free later
+([ADR-006](../adr/006-database-per-service.md)). In
+[the AppHost](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Hosting/MMCA.ECommerce.AppHost/Program.cs)
+the script added `sql.AddDatabase("ecommerce-orders", "ECommerce_Orders")` and chained
+`.WithSQLServerDataSource(ordersDb, "Orders")` onto the web project. Note what it did **not** do: the
+first module keeps the database the scaffold gave it, so the pair is `ecommerce` / `ECommerce` for
+Products, not a matched `_Products` / `_Orders` set. The `WaitFor(sql)` on the web project stays as
+generated: the host CREATES the databases via EF `Migrate` at startup, so waiting on a database
+resource would deadlock, because it never exists until the app that is waiting runs.
 
-**c. Link the identifier alias solution-wide.** In `Directory.Build.props`, duplicate the Products
-`<Compile Include ... Link>` block for
-`Source\Modules\Orders\MMCA.ECommerce.Orders.Shared\MMCA.ECommerce.Orders.GlobalUsings.IdentifierType.cs`
-with `Condition="'$(MSBuildProjectName)' != 'MMCA.ECommerce.Orders.Shared'"`.
+In
+[appsettings.json](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Hosts/MMCA.ECommerce.Web/appsettings.json)
+the script enabled the module under `Modules` and added a `DataSources` section with an entry per
+module, each holding a connection string (derived from the one already there with the database name
+swapped) and that module's `SQLServerMigrationsAssembly`. Those connection strings are the
+design-time and no-Aspire fallback: under Aspire every `WithSQLServerDataSource` call overrides them,
+which is why the Products module actually lands in `ECommerce` and not in the `ECommerce_Products`
+the file names. The migrations assembly per entry is what matters in both modes.
 
-**d. Register the module in the architecture map.** Five lines in
-`Tests/Architecture/MMCA.ECommerce.Architecture.Tests/ECommerceArchitectureMap.cs`, one per layer. A
-module missing from the map is silently not covered by the layering and isolation rules.
+Two normalizations in the same file are easy to miss and expensive to omit, and the script does both.
+First, the top-level `SQLServerMigrationsAssembly` pin is **deleted** (the connection string itself
+stays: it is the `Default` fallback the `[Required]` validation and health checks use). The scaffold
+pinned the Products assembly there because it had one module and no `DataSources` section. With two
+modules under Aspire, every `WithSQLServerDataSource` call also rewrites the top-level connection
+string and the last one wins, so one module always collapses onto `Default`; a top-level pin naming
+the *other* module's assembly then fails startup with "conflicting SQLServerMigrationsAssembly
+values". Second, a top-level `"Outbox": { "DatabaseName": "Products" }` is added, pinning where
+handler-published integration events are written. `IEventBus` persists them to ONE configured outbox
+source per host, defaulting to `Default`, and `Default` is whichever module's call ran last. Pinned
+to the first module, event publishing no longer depends on wiring order (and, mid-guide, a created
+Product does not try to outbox into the not-yet-migrated Orders database).
 
-**e. Register the error translations.** In `Source/Hosts/MMCA.ECommerce.Web/Program.cs`, next to the
-Products line:
-
-```csharp
-services.AddErrorResources<OrdersErrorResources>();
-```
-
-**f. Give the module its own database.** Every module database carries its own
-`OutboxMessages`/`InboxMessages` tables in `dbo`, so two modules migrated into one database would
-collide on them. One database per module is also exactly the topology that makes extraction free later
-([ADR-006](../adr/006-database-per-service.md)). In the AppHost:
-
-```csharp
-var productsDb = sql.AddDatabase("ecommerce-products", "ECommerce_Products");
-var ordersDb = sql.AddDatabase("ecommerce-orders", "ECommerce_Orders");
-
-// WaitFor the SQL server (healthy once the container accepts connections), not the database
-// resource. The web host CREATES the database via EF Migrate at startup, so waiting on the
-// database's existence would deadlock: it never exists until the app that is waiting runs.
-var web = builder.AddProject<Projects.MMCA_ECommerce_Web>("web")
-    .WithSQLServerDataSource(productsDb, "Products")
-    .WithSQLServerDataSource(ordersDb, "Orders")
-    .WaitFor(sql)
-    .WithExternalHttpEndpoints();
-```
-
-And in `Source/Hosts/MMCA.ECommerce.Web/appsettings.json`, enable the module and map each logical
-source to its connection string and migrations assembly (the `DataSources` section is the
-database-per-module routing table; Aspire overrides the connection strings at run time):
-
-```json
-"Modules": {
-  "Products": { "Enabled": true },
-  "Orders": { "Enabled": true }
-},
-"DataSources": {
-  "Products": {
-    "SQLServerConnectionString": "Server=localhost;Database=ECommerce_Products;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=True",
-    "SQLServerMigrationsAssembly": "MMCA.ECommerce.Migrations.SqlServer.Products"
-  },
-  "Orders": {
-    "SQLServerConnectionString": "Server=localhost;Database=ECommerce_Orders;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=True",
-    "SQLServerMigrationsAssembly": "MMCA.ECommerce.Migrations.SqlServer.Orders"
-  }
-}
-```
-
-In the same file, **delete the `SQLServerMigrationsAssembly` line from the top-level
-`ConnectionStrings` section** (keep the connection string itself: it is the `Default` fallback the
-`[Required]` validation and health checks use). The scaffold pinned the Products assembly there
-because it had one module and no `DataSources` section. With two modules under Aspire, each
-`WithSQLServerDataSource` call also rewrites the top-level connection string and the last one wins,
-so one module always collapses onto the `Default` source; if `Default` still pins the *other*
-module's migrations assembly, startup fails fast with "conflicting SQLServerMigrationsAssembly
-values". Once every module declares its assembly in its own `DataSources` entry, the top-level pin
-has no remaining job.
-
-Finally, add a top-level `Outbox` section pinning where handler-published integration events are
-written. `IEventBus` persists them to ONE configured outbox source per host, defaulting to
-`Default`, and with two modules under Aspire `Default` is whichever module's connection string
-happened to win the top-level slot. Pin it explicitly so event publishing does not depend on wiring
-order (and so, mid-guide, a created Product does not try to outbox into the not-yet-migrated Orders
-database and fail with "Invalid object name 'dbo.OutboxMessages'"):
-
-```json
-"Outbox": {
-  "DatabaseName": "Products"
-}
-```
-
-Build and test again: still green, now with the Orders module's scaffolded tests included. There is
-no new kind of thing in the solution, just a second copy of the shape you already had, this time with
-its child collection and status axis intact. If curiosity makes you run the app now, know that the
-Orders database has no schema until step 7 creates its migration: Orders endpoints fail, and the
-background outbox poller logs "Outbox processing failed for data source SQLServer/Default" every few
-seconds until then. Harmless, and it stops on the first run after step 7.
+Build and test again: still green, now at **99 tests** with the Orders module's scaffolded suites
+included. There is no new kind of thing in the solution, just a second copy of the shape you already
+had, this time with its child collection and status axis intact. Neither database has a schema until
+step 7 creates the migrations.
 
 ## 4. Reshape Products into a catalog product
 
-The scaffolded module arrives as the template's worked example (a title, a description, a requester
-id): a placeholder domain in *your* namespaces, meant to be reshaped. The flags in step 2 already
-removed the parts a catalog product would never own, so what is left is a genuine property reshape
-rather than a demolition. Every convention stays: `Result`-returning factory, invariants composed with
-`Result.Combine`, guarded mutations raising domain events, the caching pair, the integration event
-through the outbox.
+The scaffolded module arrives as the template's worked example in *your* namespaces, already shaped
+by the flags in step 2: no children, no status, no requester, `Name` instead of `Title`, and a
+`ProductCreated` event. What is left is a single property. A catalog entry is `Name`, `Description`,
+**`Price`**, and `Price` is the one thing no flag could have generated, because the invariant it
+needs is yours. Every convention stays as generated: `Result`-returning factory, invariants composed
+with `Result.Combine`, guarded mutations raising domain events, the caching pair, the integration
+event through the outbox.
 
-`Product` becomes the whole catalog entry: `Name`, `Description`, `Price`. Concretely, `Title` becomes
-`Name` and the scaffold's `RequesterUserId` becomes a `decimal Price`. Each table below is one layer's
-edit sequence, top to bottom: Shared first (every layer above compiles against those contracts), then
-Domain, Application, Infrastructure, API, and the tests. "Replace with" means the linked file is the
-whole finished file from the build-verified sample, so you can copy it as-is.
-
-All paths are relative to the solution root (`MMCA.ECommerce`), and every command is PowerShell.
+Each table below is one layer's edit sequence, top to bottom: Shared first (every layer above
+compiles against those contracts), then Domain, Application, Infrastructure, API, and the tests.
+"Replace with" means the linked file is the whole finished file from the build-verified sample, so
+you can copy it as-is. All paths are relative to the solution root, and every command is PowerShell.
 
 ### 4.1 Shared contracts
 
@@ -215,15 +173,9 @@ Under `Source/Modules/Products/MMCA.ECommerce.Products.Shared/`:
 
 | File | Action | What changes |
 |---|---|---|
-| [MMCA.ECommerce.Products.GlobalUsings.IdentifierType.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Shared/MMCA.ECommerce.Products.GlobalUsings.IdentifierType.cs) | edit | `--flat` already left a single alias, so only the comment still speaks in the plural; the alias stays `global using ProductIdentifierType = int;` |
-| `Products/`[ProductDTO.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Shared/Products/ProductDTO.cs) | replace with | the scaffold's `Title` and `RequesterUserId` become `Name` and `Price` |
-| `Products/`[ProductUpdateRequest.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Shared/Products/ProductUpdateRequest.cs) | replace with | same rename, and `Price` is `required` like the other two, so a client cannot silently blank a price by omitting it. Keep the `*UpdateRequest` suffix exactly: the shared `UpdateRequestsAreConcurrencyAware` fitness rule finds it by name, and a rename silently drops the request out of that rule's scope |
-| `Products/IntegrationEvents/`[ProductCreatedIntegrationEvent.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Shared/Products/IntegrationEvents/ProductCreatedIntegrationEvent.cs) | create | the creation event, carrying the product id, the name, and the price |
-| `Products/IntegrationEvents/ProductOpenedIntegrationEvent.cs` | delete | the scaffolded event it replaces, which carried `RequesterUserId` and a name nobody in a catalog would use |
-
-```powershell
-Remove-Item Source\Modules\Products\MMCA.ECommerce.Products.Shared\Products\IntegrationEvents\ProductOpenedIntegrationEvent.cs
-```
+| `Products/`[ProductDTO.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Shared/Products/ProductDTO.cs) | edit | one line: `public required decimal Price { get; init; }` |
+| `Products/`[ProductUpdateRequest.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Shared/Products/ProductUpdateRequest.cs) | edit | `Price` is `required` like the other two, so a client cannot silently blank a price by omitting it. Keep the `*UpdateRequest` suffix exactly: the shared `UpdateRequestsAreConcurrencyAware` fitness rule finds it by name, and a rename silently drops the request out of that rule's scope |
+| `Products/IntegrationEvents/`[ProductCreatedIntegrationEvent.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Shared/Products/IntegrationEvents/ProductCreatedIntegrationEvent.cs) | edit | the event was generated carrying the product id alone; it gains `Name` and `Price` |
 
 ### 4.2 Domain
 
@@ -231,12 +183,11 @@ Under `Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/`:
 
 | File | Action | What changes |
 |---|---|---|
-| [ProductInvariants.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/ProductInvariants.cs) | replace with | `EnsureTitleIsValid` becomes `EnsureNameIsValid` (codes `Product.Name.Empty` and `Product.Name.TooLong`), the description rule is untouched, and `EnsurePriceIsValid` is new |
-| [Product.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/Product.cs) | replace with | the three reshaped properties, the `Create` factory, `UpdateDetails`, and the soft-delete override |
-| `DomainEvents/`[ProductChanged.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/DomainEvents/ProductChanged.cs) | edit | the event no longer fires on creation, so the first summary line (the scaffold says "opened, mutated, or deleted") becomes `/// Domain event raised when a <c>Product</c> is mutated or deleted. Captured into the` |
+| [ProductInvariants.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/ProductInvariants.cs) | edit | the two string rules arrive correct; `EnsurePriceIsValid` is new |
+| [Product.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/Product.cs) | replace with | the `Price` property, the private constructor, the `Create` factory, and `UpdateDetails` |
 
-The string rules still delegate to the framework's `CommonInvariants`, so each field keeps its distinct
-empty vs too-long error code. The price is the only app-specific rule, and the one part of
+The string rules still delegate to the framework's `CommonInvariants`, so each field keeps its
+distinct empty vs too-long error code. The price is the only app-specific rule, and the one part of
 [ProductInvariants.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/ProductInvariants.cs)
 worth reading rather than pasting:
 
@@ -251,60 +202,29 @@ worth reading rather than pasting:
             : Result.Success();
 ```
 
-The aggregate is the other one. This is an **excerpt** of
+The aggregate is the other one, and
 [Product.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Domain/Products/Product.cs)
-(`/* ... */` marks elided members): a `Result`-returning factory that accumulates every invariant
-before it constructs anything, and a guarded mutation that raises its domain event only once the
-validation passed. Note what is deliberately absent: there is no "Added" domain event, because the id
-is database-generated and would still be 0 at factory time.
+is worth reading rather than pasting blind. `Create` accumulates all three invariants through
+`Result.Combine` before it constructs anything, `UpdateDetails` runs the same three and raises
+`ProductChanged(DomainEntityState.Updated, Id)` only once they passed, and `Delete()` calls
+`base.Delete()` then raises the Deleted event. The signature and the one comment that explains an
+absence:
 
 ```csharp
-[IdValueGenerated]
-public sealed class Product : AuditableAggregateRootEntity<ProductIdentifierType>
-{
-    public string Name { get; private set; }
-    public string Description { get; private set; }
-    public decimal Price { get; private set; }
-
-    /* private Product(name, description, price) assigns the three fields */
-
     public static Result<Product> Create(
         ProductIdentifierType? id,
         string name,
         string description,
         decimal price)
     {
-        var validation = Result.Combine(
-            ProductInvariants.EnsureNameIsValid(name, nameof(Create)),
-            ProductInvariants.EnsureDescriptionIsValid(description, nameof(Create)),
-            ProductInvariants.EnsurePriceIsValid(price, nameof(Create)));
-        if (validation.IsFailure)
-        {
-            return Result.Failure<Product>(validation.Errors);
-        }
-
-        /* construct, with Id = isIdValueGenerated ? default : id!.Value */
+        /* Result.Combine over the three invariants, returning Result.Failure<Product> on breach,
+           then construct with Id = isIdValueGenerated ? default : id!.Value */
 
         // No "Added" domain event here: the Id is database-generated (still 0 at this point), so an
         // event captured now would carry a meaningless id. Creation is signalled by the
-        // ProductCreatedIntegrationEvent that CreateProductHandler publishes AFTER the commit, with the
-        // real id.
+        // ProductCreatedIntegrationEvent that CreateProductHandler publishes AFTER the commit.
         return Result.Success(product);
     }
-
-    public Result UpdateDetails(string name, string description, decimal price)
-    {
-        /* the same three invariants, combined and returned on failure, then: */
-        Name = name;
-        Description = description;
-        Price = price;
-        AddDomainEvent(new ProductChanged(DomainEntityState.Updated, Id));
-
-        return Result.Success();
-    }
-
-    /* Delete() calls base.Delete(), then raises ProductChanged(DomainEntityState.Deleted, Id) */
-}
 ```
 
 ### 4.3 Application
@@ -313,26 +233,16 @@ Under `Source/Modules/Products/MMCA.ECommerce.Products.Application/`:
 
 | File | Action | What changes |
 |---|---|---|
-| `Products/UseCases/Create/`[ProductCreateRequest.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Create/ProductCreateRequest.cs) | replace with | the create command carries `Name`, `Description`, `Price` |
-| `Products/UseCases/Create/`[ProductCreateRequestMapper.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Create/ProductCreateRequestMapper.cs) | edit | only the factory call changes (fragment below) |
-| `Products/UseCases/Create/`[ProductCreateRequestValidator.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Create/ProductCreateRequestValidator.cs) | replace with | the rules mirror the invariants and reuse their constants, so a limit is stated once |
-| `Products/UseCases/Create/`[CreateProductHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Create/CreateProductHandler.cs) | replace with | the whole write path on one screen, worth reading rather than just pasting: domain factory, unit of work, then the renamed integration event published *after* the commit, carrying the name and the price instead of a requester id |
-| `Products/UseCases/Update/`[UpdateProductCommand.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Update/UpdateProductCommand.cs) | replace with | the same three fields, plus the client's last-seen `RowVersion` (ADR-035) |
+| `Products/UseCases/Create/`[ProductCreateRequest.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Create/ProductCreateRequest.cs) | edit | the create command gains `Price` |
+| `Products/UseCases/Create/`[ProductCreateRequestMapper.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Create/ProductCreateRequestMapper.cs) | edit | the factory call gains `price:` (fragment below). The scaffold keeps that call on one line and says why in a comment: an argument list cannot lose a middle element to a whole-line conditional, so the staging script rewrites it per shape. Once the shape is yours, the comment goes with it |
+| `Products/UseCases/Create/`[ProductCreateRequestValidator.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Create/ProductCreateRequestValidator.cs) | edit | one rule, `RuleFor(x => x.Price).GreaterThan(0m);`. The other two mirror the invariants and reuse their constants, so a limit is stated once |
+| `Products/UseCases/Create/`[CreateProductHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Create/CreateProductHandler.cs) | edit | the whole write path on one screen, worth reading rather than just pasting: domain factory, unit of work, then the integration event published *after* the commit, now carrying the name and the price |
+| `Products/UseCases/Update/`[UpdateProductCommand.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Update/UpdateProductCommand.cs) | edit | a fourth positional parameter, `decimal Price`; the client's last-seen `RowVersion` ([ADR-035](../adr/035-optimistic-concurrency.md)) stays as generated |
 | `Products/UseCases/Update/`[UpdateProductCommandValidator.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Update/UpdateProductCommandValidator.cs) | create | the scaffold validates only the create path, and a catalog that accepts a negative price on update is a catalog with a hole in it |
-| `Products/UseCases/Update/`[UpdateProductHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Update/UpdateProductHandler.cs) | edit | `UpdateDetails` takes a third argument now, so the call becomes `var result = product.UpdateDetails(command.Name, command.Description, command.Price);` and the summary follows it (fragment below). The `includes: []` argument is already right, because `--flat` generated this handler against an aggregate with nothing to eager-load |
-| `Products/UseCases/Delete/`[DeleteProductCommand.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Delete/DeleteProductCommand.cs) | edit | doc-only: drop the mention of cascading children, so the summary reads `/// Command to soft-delete a product. Evicts cached reads on success.` |
-| `Products/UseCases/Delete/`[DeleteProductHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Delete/DeleteProductHandler.cs) | edit | doc-only: two summary lines (fragment below) |
-| `Products/UseCases/GetById/`[GetProductByIdQuery.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/GetById/GetProductByIdQuery.cs) | edit | doc-only: the first summary line becomes `/// Query for a single product.` |
-| `Products/UseCases/GetById/`[GetProductByIdHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/GetById/GetProductByIdHandler.cs) | edit | doc-only: the summary line becomes `/// Loads a single product and maps it to a DTO.` |
-| `Products/IntegrationEventHandlers/`[ProductCreatedHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/IntegrationEventHandlers/ProductCreatedHandler.cs) | create | consumes the new event; in this monolith seed it just logs, and it is where a search-index, notification, or analytics side effect would live |
-| `Products/IntegrationEventHandlers/ProductOpenedHandler.cs` | delete | the handler it replaces; the module's DI is convention-scanned, so a deleted handler simply stops being discovered and there is no registration to unpick |
-| `Products/DomainEventHandlers/`[ProductChangedAuditHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/DomainEventHandlers/ProductChangedAuditHandler.cs) | edit | one doc line, naming the handler that now audits creation: the second-to-last summary line becomes `/// Creation is audited separately by the integration-event consumer (<c>ProductCreatedHandler</c>),` |
-| [DependencyInjection.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/DependencyInjection.cs) | edit | one comment, because the aggregate is now known to be a leaf rather than merely un-eager-loaded (fragment below) |
+| `Products/UseCases/Update/`[UpdateProductHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/UseCases/Update/UpdateProductHandler.cs) | edit | `UpdateDetails` takes a third argument now: `var result = product.UpdateDetails(command.Name, command.Description, command.Price);` |
+| `Products/IntegrationEventHandlers/`[ProductCreatedHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Application/Products/IntegrationEventHandlers/ProductCreatedHandler.cs) | edit | the consumer arrives generated and wired; it logs the new `Name` too, and it is where a search-index, notification, or analytics side effect would live |
 
-The fragments, in table order: the `ProductCreateRequestMapper` return statement, the
-`UpdateProductHandler` summary, the two `DeleteProductHandler` summary lines, the deletion, and the
-three-line `DependencyInjection` comment above the `TryAddScoped<INavigationPopulator<Product>, ...>`
-call.
+The `ProductCreateRequestMapper` fragment:
 
 ```csharp
         return Task.FromResult(Product.Create(
@@ -342,76 +252,52 @@ call.
             price: request.Price));
 ```
 
-```csharp
-/// Updates a product's name, description, and price through the aggregate root, then returns the
-/// refreshed DTO.
-```
-
-```csharp
-/// Soft-deletes a product through the aggregate root (loaded tracked so the state change is captured).
-/// The EF global query filter then excludes it from subsequent reads.
-```
-
-```powershell
-Remove-Item Source\Modules\Products\MMCA.ECommerce.Products.Application\Products\IntegrationEventHandlers\ProductOpenedHandler.cs
-```
-
-```csharp
-            // The Product aggregate is a leaf (no child entities and no cross-source navigations), so a
-            // null populator suffices here (swap for a custom INavigationPopulator<Product> once the
-            // query service needs to batch-load related data).
-```
-
 Both the Delete and GetById handlers resolve their repository through `IUnitOfWork`, never by
 constructor-injecting `IRepository<,>`: a directly injected repository is not enlisted in the unit of
 work's transaction, and mocks happily hide the difference until a real database run. The scaffold
 already does this; keep it.
 
+**Doc-comment-only touch-ups**, if you want a tree identical to the sample's, none of which changes
+behavior: four summaries in `UseCases/Delete/` and `UseCases/GetById/` still mention children,
+`ProductChanged.cs` still says the event fires on creation, the identifier-alias file speaks of
+aliases in the plural where it now declares one, and `DependencyInjection.cs`'s populator comment can
+now say the aggregate is a leaf rather than merely un-eager-loaded.
+
 ### 4.4 Infrastructure
 
-**Replace** `Source/Modules/Products/MMCA.ECommerce.Products.Infrastructure/Persistence/EntityConfiguration/ProductConfiguration.cs`
-with [ProductConfiguration.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Infrastructure/Persistence/EntityConfiguration/ProductConfiguration.cs).
+**Edit** `Source/Modules/Products/MMCA.ECommerce.Products.Infrastructure/Persistence/EntityConfiguration/ProductConfiguration.cs`
+([finished file](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.Infrastructure/Persistence/EntityConfiguration/ProductConfiguration.cs)).
 `base.Configure` still supplies the id, the soft-delete flag and its query filter, the audit columns,
-and the concurrency token, so only the product's own columns are there. `Price` is `decimal(18,2)`
-explicitly: SQL Server's default for a mapped decimal is `decimal(18,0)`, which would round every price
-to whole currency units. The filtered index moves from the scaffold's `RequesterUserId` to `Name`,
-which is what a catalog is actually browsed by. Nothing else in Infrastructure changes: `--flat`
-already emitted a `ModuleApplicationDbContext` with one `DbSet`.
+and the concurrency token, so only the product's own columns are there. Three additions: a
+`using Microsoft.EntityFrameworkCore;` (which `HasColumnType` needs), `Price` as `decimal(18,2)`
+explicitly, because SQL Server's default for a mapped decimal is `decimal(18,0)` and would round
+every price to whole currency units, and a filtered index on `Name`, which is what a catalog is
+actually browsed by. Nothing else in Infrastructure changes: `--flat` already emitted a
+`ModuleApplicationDbContext` with one `DbSet`.
 
 ### 4.5 API
 
 **Edit** `Source/Modules/Products/MMCA.ECommerce.Products.API/Controllers/ProductsController.cs`
 ([finished file](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.API/Controllers/ProductsController.cs)).
-The routes, the injected handlers, and the inherited list/paged reads are all unchanged; five small
-edits retarget the wording and the one call that names the reshaped fields. The three action summaries
-lose their references to children and to a title, becoming
-`/// <summary>Gets a single product.</summary>`,
-`/// <summary>Updates a product's name, description, and price.</summary>`, and
-`/// <summary>Soft-deletes a product.</summary>`. The class summary becomes:
-
-```csharp
-/// REST API for catalog products. Read endpoints (GetAll / paged) come from
-/// <see cref="EntityControllerBase{TEntity, TDTO, TId}"/>; create, update, and delete operations
-/// inject handlers directly. Failures map to RFC 9457 ProblemDetails via <c>HandleFailure</c>.
-```
-
-and the one line of real code is the command construction in `UpdateAsync`:
+The routes, the injected handlers, and the inherited list/paged reads are all unchanged. One line of
+real code changes, the command construction in `UpdateAsync`:
 
 ```csharp
             new UpdateProductCommand(id, request.Name, request.Description, request.Price) { RowVersion = request.RowVersion },
 ```
 
+The rest is wording: the class summary says "support products" and the three action summaries still
+mention children and a generic "editable details".
+
 **Edit** the two error-resource files,
 [ProductsErrorResources.resx](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.API/Resources/ProductsErrorResources.resx)
 and
 [ProductsErrorResources.es.resx](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.API/Resources/ProductsErrorResources.es.resx).
-Keep the resx envelope exactly as generated (the `<xsd:schema>` block and the four
-`<resheader>` elements) and replace **only** the `<data>` elements: the scaffold ships four
-(`Product.Description.*`, `Product.Title.*`), and the reshaped module needs the five below. Every code
-here is one an invariant in 4.2 actually emits, and an unmapped code degrades gracefully to its English
-message, so a typo shows up as English text in a Spanish browser rather than as an exception. The
-Spanish descriptions also need a pass: the scaffold's token substitution left them saying "del
-product":
+Keep the resx envelope exactly as generated (the `<xsd:schema>` block and the four `<resheader>`
+elements) and touch only the `<data>` elements. `--title Name` already named the four scaffolded
+codes correctly, so the English file needs a single new entry; the Spanish file needs that entry plus
+a pass over the four it shipped, because the template's token substitution left them saying "del
+product" and "el titulo" where the property is now a name:
 
 | `data name` | `.resx` value (en) | `.es.resx` value (es) |
 |---|---|---|
@@ -421,19 +307,10 @@ product":
 | `Product.Name.TooLong` | Product name cannot exceed 200 characters. | El nombre del producto no puede superar los 200 caracteres. |
 | `Product.InvalidPrice` | Product price must be greater than zero. | El precio del producto debe ser mayor que cero. |
 
-Each entry is a `<data name="..." xml:space="preserve">` element wrapping a single `<value>`, exactly
-like the ones you are replacing.
-
-**Edit** `Source/Modules/Products/MMCA.ECommerce.Products.API/Resources/ProductsErrorResources.cs`
-([finished file](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Products/MMCA.ECommerce.Products.API/Resources/ProductsErrorResources.cs)):
-the doc comment cites a code that no longer exists. Change the example code and the constant it names:
-
-```csharp
-/// domain error <c>Code</c> (e.g. <c>"Product.InvalidPrice"</c>, see <c>ProductInvariants</c>) and resolved
-/// by the shared <c>IErrorLocalizer</c> after the host registers this type via
-/// <c>AddErrorResources&lt;ProductsErrorResources&gt;()</c>. The length limits are baked into the values
-/// because they are compile-time constants (<c>ProductInvariants.NameMaxLength</c> etc.); an unmapped
-```
+Every code here is one an invariant in 4.2 actually emits, and an unmapped code degrades gracefully
+to its English message, so a typo shows up as English text in a Spanish browser rather than as an
+exception. Each entry is a `<data name="..." xml:space="preserve">` element wrapping a single
+`<value>`, exactly like the ones you are editing.
 
 At this point the solution builds again. The tests do not yet.
 
@@ -457,7 +334,7 @@ test files themselves, under `Tests/Modules/Products/`:
 | File | Action | What it covers |
 |---|---|---|
 | `MMCA.ECommerce.Products.Domain.Tests/Products/`[ProductTests.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Products/MMCA.ECommerce.Products.Domain.Tests/Products/ProductTests.cs) | replace with | 13 tests over the aggregate. Read the accumulation test near the end: `Result.Combine` reports every broken invariant at once, which is the behavior that makes one round trip enough for a form |
-| `MMCA.ECommerce.Products.Application.Tests/Caching/`[ProductCacheInvalidationTests.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/Caching/ProductCacheInvalidationTests.cs) | replace with | 4 tests wiring the two real framework decorators around stub handlers. The last one earns its keep: nothing at compile time ties a command's `CachePrefix` to a query's `CacheKey`, so this is what stops a rename from quietly leaving stale reads behind |
+| `MMCA.ECommerce.Products.Application.Tests/Caching/`[ProductCacheInvalidationTests.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/Caching/ProductCacheInvalidationTests.cs) | edit | the 4 scaffolded tests still pass; their fixtures gain a price and become a catalog product instead of a support ticket. The last one earns its keep: nothing at compile time ties a command's `CachePrefix` to a query's `CacheKey`, so this is what stops a rename from quietly leaving stale reads behind |
 | `MMCA.ECommerce.Products.Application.Tests/UseCases/`[CreateProductHandlerTests.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/UseCases/CreateProductHandlerTests.cs) | create | 3 tests: the request maps through the domain factory, the aggregate is added and committed, and the integration event is published AFTER the save so it carries the database-generated id |
 | `MMCA.ECommerce.Products.Application.Tests/UseCases/`[UpdateProductHandlerTests.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/UseCases/UpdateProductHandlerTests.cs) | create | 4 tests: a missing aggregate is a NotFound failure, an invariant breach never reaches the save, and the client's concurrency token is stamped back per ADR-035 before the mutation |
 | `MMCA.ECommerce.Products.Application.Tests/UseCases/`[DeleteProductHandlerTests.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Tests/Modules/Products/MMCA.ECommerce.Products.Application.Tests/UseCases/DeleteProductHandlerTests.cs) | create | 2 tests: the aggregate is loaded tracked, soft-deleted through its own guarded method, and committed once |
@@ -492,10 +369,11 @@ suites are about to be replaced in step 5.
 
 ## 5. Reshape Orders into an order with line items
 
-Orders keeps the child-collection pattern the template scaffolded, retargeted. `--child Item` already
-did the naming for you: the entity is `OrderItem`, the slices are `AddItem` / `EditItem` /
-`RemoveItem`, the routes are `/items`. What is left is the domain itself, and the free-form status
-becomes a lifecycle.
+Orders keeps the child-collection pattern the template scaffolded, retargeted. `-Child Item` already
+did the naming (the entity is `OrderItem`, the slices are `AddItem` / `EditItem` / `RemoveItem`, the
+routes are `/items`), `-Title CustomerName` already named the text property, and `-EventVerb Placed`
+already produced `OrderPlacedIntegrationEvent`. What is left is the domain itself: the free-form
+status becomes a lifecycle, and the child entity becomes a snapshot of something another module owns.
 
 Two decisions here carry the architecture lesson of the whole sample:
 
@@ -512,34 +390,34 @@ Two decisions here carry the architecture lesson of the whole sample:
 The phase order matches step 4, with Infrastructure pulled up ahead of Application: Orders grows new
 types rather than only renaming them, and it is easier to settle the entities and their mapping before
 the slices that orchestrate them. The scaffolded before-state, for orientation: `OrderItem` carries
-`Body` and `AuthorUserId`, `OrderStatus` is `Open` / `InProgress` / `Resolved` / `Closed`, and the
-aggregate has `Title`, `Description`, and `RequesterUserId`.
+`Body` and `AuthorUserId`, and `OrderStatus` is `Open` / `InProgress` / `Resolved` / `Closed`.
 
 ### 5.1 Shared contracts
 
-The identifier aliases need no edit at all: `--child Item` already emitted `OrderIdentifierType` and
-`OrderItemIdentifierType`. Under `Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/`:
+The identifier aliases need no edit: `-Child Item` emitted both `OrderIdentifierType` and
+`OrderItemIdentifierType`, and the one thing that is off about that file (their sort order) is what
+the `SA1211` fixup in step 8 settles. Under
+`Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/`:
 
 | File | Action | What changes |
 |---|---|---|
 | [OrderStatus.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/OrderStatus.cs) | replace with | the scaffold ships a flat set of ticket states; this is a lifecycle (`Pending`, `Paid`, `Shipped`, `Cancelled`), and its doc comment is where the legal transitions are written down for a reader who will not go looking for the invariant |
-| [OrderDTO.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/OrderDTO.cs) | replace with | `Title`, `Description`, and `RequesterUserId` collapse into `CustomerName`, and `Total` is new. The `Total` remarks are load-bearing documentation, not decoration: only the detail read eager-loads `Items`, so `Total` is 0 on the list and paged projections, and the fix for a caller who needs the number is to ask the detail endpoint, not to widen the list query |
+| [OrderDTO.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/OrderDTO.cs) | edit | `Total` is new. Its remarks are load-bearing documentation, not decoration: only the detail read eager-loads `Items`, so `Total` is 0 on the list and paged projections, and the fix for a caller who needs the number is to ask the detail endpoint, not to widen the list query |
 | [OrderItemDTO.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/OrderItemDTO.cs) | replace with | the scaffold's `Body` and `AuthorUserId` become the four snapshot properties |
-| [OrderUpdateRequest.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/OrderUpdateRequest.cs) | replace with | small, and the `*UpdateRequest` suffix must survive: the shared `UpdateRequestsAreConcurrencyAware` fitness rule matches on that name |
+| [OrderUpdateRequest.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/OrderUpdateRequest.cs) | edit | doc-only, but the `*UpdateRequest` suffix must survive: the shared `UpdateRequestsAreConcurrencyAware` fitness rule matches on that name |
 | [AddOrderItemRequest.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/AddOrderItemRequest.cs) | create | read its doc comment: the caller supplies the name and price to snapshot, and that is the wire-level half of the module-isolation decision above |
 | [ChangeOrderItemQuantityRequest.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/ChangeOrderItemQuantityRequest.cs) | create | replaces the scaffold's free-text `EditItemRequest(string Body)` |
-| `IntegrationEvents/`[OrderPlacedIntegrationEvent.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/IntegrationEvents/OrderPlacedIntegrationEvent.cs) | create | the placement event, carrying the order id and the customer name |
-| `AddItemRequest.cs`, `EditItemRequest.cs`, `IntegrationEvents/OrderOpenedIntegrationEvent.cs` | delete | the three Shared files the reshape replaces |
+| `IntegrationEvents/`[OrderPlacedIntegrationEvent.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/IntegrationEvents/OrderPlacedIntegrationEvent.cs) | edit | the event name and its consumer arrived generated; the payload gains `CustomerName` |
+| `AddItemRequest.cs`, `EditItemRequest.cs` | delete | the two the new request records replace |
 
-[ChangeOrderStatusRequest.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Shared/Orders/ChangeOrderStatusRequest.cs)
-stays exactly as generated: `record ChangeOrderStatusRequest(OrderStatus Status)` is already the right
-shape, and the enum it names is the one you just rewrote.
+`ChangeOrderStatusRequest.cs` stays exactly as generated:
+`record ChangeOrderStatusRequest(OrderStatus Status)` is already the right shape, and the enum it
+names is the one you just rewrote.
 
 ```powershell
 Remove-Item `
   Source\Modules\Orders\MMCA.ECommerce.Orders.Shared\Orders\AddItemRequest.cs, `
-  Source\Modules\Orders\MMCA.ECommerce.Orders.Shared\Orders\EditItemRequest.cs, `
-  Source\Modules\Orders\MMCA.ECommerce.Orders.Shared\Orders\IntegrationEvents\OrderOpenedIntegrationEvent.cs
+  Source\Modules\Orders\MMCA.ECommerce.Orders.Shared\Orders\EditItemRequest.cs
 ```
 
 ### 5.2 Domain
@@ -550,8 +428,13 @@ Under `Source/Modules/Orders/MMCA.ECommerce.Orders.Domain/Orders/`:
 |---|---|---|
 | [OrderInvariants.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Domain/Orders/OrderInvariants.cs) | replace with | six methods and eight error codes: the two customer-name codes, the two product-name codes, the unit price, the quantity, the item lock, and the status transition. Every one of them is a code you will localize in 5.5 |
 | [OrderItem.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Domain/Orders/OrderItem.cs) | replace with | `Body` and `AuthorUserId` become the four snapshot properties, and `EditBody` becomes `ChangeQuantity` |
-| [Order.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Domain/Orders/Order.cs) | replace with | `CustomerName` plus a guarded `Status`, a computed `Total`, and item mutations that ask the status first |
+| [Order.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Domain/Orders/Order.cs) | replace with | a guarded `Status`, a computed `Total`, and item mutations that ask the status first |
 | `DomainEvents/OrderChanged.cs` | leave | unlike Products, the scaffolded Orders event summary already reads correctly for an aggregate whose creation is signalled by an integration event |
+
+`EnsureCustomerNameIsValid` is generated but its two messages are not quite English: `--title` is a
+substring replacement, so the camel-case identifier form reaches the shipped prose and the message
+arrives as "Order customerName cannot be empty." Fixing those two strings (and their resx twins in
+5.5) is a documented one-line consequence of a multi-word `--title`, not a surprise.
 
 The two app-specific rules at the bottom of `OrderInvariants` (`Order.ItemsLocked` and
 `Order.InvalidStatusTransition`) are the invariant half of the second architecture decision. Its
@@ -578,84 +461,24 @@ the comment above them are the point of the file:
     public int Quantity { get; private set; }
 ```
 
-Below is an **excerpt** of
+Paste
 [Order.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Domain/Orders/Order.cs)
-(`/* ... */` marks elided bodies and members). Three things to notice while pasting the real file:
-every item mutation asks `EnsureStatusAllowsItemChanges` **first**, `Total` is computed rather than
-stored (so it cannot drift from the lines), and re-asserting the current status is an idempotent no-op
-success that raises no event, which is what makes a retried status call safe. The cascade soft-delete
-in `Delete()` is the scaffold's, kept as generated.
+whole, and notice three things on the way past:
 
-```csharp
-[IdValueGenerated]
-public sealed class Order : AuditableAggregateRootEntity<OrderIdentifierType>
-{
-    public string CustomerName { get; private set; }
+- **Every item mutation asks `EnsureStatusAllowsItemChanges` first.** `AddItem`,
+  `ChangeItemQuantity` and `RemoveItem` all open with that guard and return its errors before they
+  touch the collection, which is where the Pending-only rule actually lives. `UpdateDetails` does
+  not: renaming the customer is legal at any point in the lifecycle.
+- **`Total` is computed, never stored**
+  (`_items.Where(i => !i.IsDeleted).Sum(i => i.UnitPrice * i.Quantity)`), so it cannot drift from the
+  lines it summarizes, and it reads 0 whenever the collection was not loaded.
+- **Re-asserting the current status is an idempotent no-op success that raises no event.**
+  `ChangeStatus` returns `Result.Success()` before consulting the transition rule when
+  `Status == newStatus`, which is what makes an at-least-once delivered command safe on its second
+  arrival.
 
-    public OrderStatus Status { get; private set; }
-
-    private readonly List<OrderItem> _items = [];
-
-    [Navigation(IsCollection = true)]
-    public IReadOnlyCollection<OrderItem> Items => _items.AsReadOnly();
-
-    /// <summary>
-    /// The order total, derived from the live items rather than stored: a persisted copy is one
-    /// more thing that can disagree with the rows it summarizes. Soft-deleted items are excluded,
-    /// and <c>OrderConfiguration</c> tells EF to ignore this property so no column is mapped.
-    /// It therefore reads 0 whenever the item collection was not loaded (the list query path).
-    /// </summary>
-    public decimal Total => _items.Where(i => !i.IsDeleted).Sum(i => i.UnitPrice * i.Quantity);
-
-    /* private Order(customerName) sets the name and Status = OrderStatus.Pending; Create(id,
-       customerName) validates the name and raises no "Added" event, because the Id is
-       database-generated and still 0 there: OrderPlacedIntegrationEvent carries the real one */
-
-    public Result<OrderItem> AddItem(
-        OrderItemIdentifierType? id,
-        int productId,
-        string productName,
-        decimal unitPrice,
-        int quantity)
-    {
-        var validation = OrderInvariants.EnsureStatusAllowsItemChanges(Status, nameof(AddItem));
-        if (validation.IsFailure)
-        {
-            return Result.Failure<OrderItem>(validation.Errors);
-        }
-
-        /* OrderItem.Create(...), _items.Add(item), then OrderChanged(DomainEntityState.Updated, Id) */
-    }
-
-    /* UpdateDetails(customerName) validates and assigns; ChangeItemQuantity(itemId, quantity) and
-       RemoveItem(itemId) open with the same EnsureStatusAllowsItemChanges guard, then
-       GetChildOrNotFound(_items, itemId, ...) and either item.ChangeQuantity(quantity) or
-       item.Delete(). Each raises OrderChanged(DomainEntityState.Updated, Id) on success */
-
-    public Result ChangeStatus(OrderStatus newStatus)
-    {
-        // Re-asserting the status the order already has is a no-op success, not a transition:
-        // an at-least-once delivered command must not fail on its second arrival.
-        if (Status == newStatus)
-        {
-            return Result.Success();
-        }
-
-        var validation = OrderInvariants.EnsureStatusTransitionIsValid(Status, newStatus, nameof(ChangeStatus));
-        if (validation.IsFailure)
-        {
-            return validation;
-        }
-
-        Status = newStatus;
-        AddDomainEvent(new OrderChanged(DomainEntityState.Updated, Id));
-
-        return Result.Success();
-    }
-
-    /* Delete() calls base.Delete(), soft-deletes every live item, then raises the Deleted event */
-}
-```
+`Create` raises no "Added" event for the same reason `Product.Create` does not, and the cascade
+soft-delete in `Delete()` is the scaffold's, kept as generated.
 
 ### 5.3 Infrastructure
 
@@ -663,47 +486,32 @@ Under `Source/Modules/Orders/MMCA.ECommerce.Orders.Infrastructure/Persistence/En
 
 | File | Action | What changes |
 |---|---|---|
-| [OrderConfiguration.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Infrastructure/Persistence/EntityConfiguration/OrderConfiguration.cs) | replace with | the customer-name column and filtered index, the string-persisted status, `builder.Ignore(o => o.Total)`, and the items relationship |
-| [OrderItemConfiguration.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Infrastructure/Persistence/EntityConfiguration/OrderItemConfiguration.cs) | replace with | the item's own columns; the `using Microsoft.EntityFrameworkCore;` at the top is new, because `HasColumnType` needs it |
+| [OrderConfiguration.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Infrastructure/Persistence/EntityConfiguration/OrderConfiguration.cs) | edit | `builder.Ignore(o => o.Total)`, a filtered index on `CustomerName`, and the `using Microsoft.EntityFrameworkCore;` those need. The customer-name column, the string-persisted status, and the items relationship all arrive generated |
+| [OrderItemConfiguration.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Infrastructure/Persistence/EntityConfiguration/OrderItemConfiguration.cs) | replace with | the item's four columns; the `using Microsoft.EntityFrameworkCore;` at the top is new, because `HasColumnType` needs it |
 
-Two lines in `OrderConfiguration` are easy to skip and expensive to omit: `Status` is persisted as a
-**string** (that is the scaffold's line, kept), so a later reordering of the enum cannot silently
-reinterpret stored rows, and `builder.Ignore(o => o.Total)` keeps EF from trying to map the computed
-getter (without it the model build fails outright). On the item, `UnitPrice` gets an explicit
-`decimal(18,2)` rather than the SQL Server default, so a price never silently rounds on the way in.
-`ModuleApplicationDbContext` needs no edit: `--child Item` already declared `DbSet<OrderItem>`
-alongside `DbSet<Order>`.
+`builder.Ignore(o => o.Total)` is the one line you cannot skip: without it the model build fails
+outright on the computed getter. `Status` stays persisted as a **string** (the scaffold's line, kept),
+so a later reordering of the enum cannot silently reinterpret stored rows, and `UnitPrice` gets an
+explicit `decimal(18,2)` so a price never rounds on the way in. `ModuleApplicationDbContext` needs no
+edit: `-Child Item` already declared `DbSet<OrderItem>` alongside `DbSet<Order>`.
 
 ### 5.4 Application
 
-An order is placed empty and grows lines afterwards, so the create payload is just a customer name.
-Under `Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/`:
+An order is placed empty and grows lines afterwards, so the create payload is just a customer name,
+which is what `-NoDescription -NoOwner -Title CustomerName` already generated. Under
+`Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/`:
 
 | File | Action | What changes |
 |---|---|---|
-| `UseCases/Create/`[OrderCreateRequest.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/Create/OrderCreateRequest.cs) | replace with | one field, `CustomerName`; the order starts Pending and empty |
-| `UseCases/Create/`[OrderCreateRequestMapper.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/Create/OrderCreateRequestMapper.cs) | edit | the doc comment gains an `n` (`/// Maps an <see cref="OrderCreateRequest"/> to a new <see cref="Order"/> via the domain factory.`) and the factory call loses two arguments (fragment below) |
-| `UseCases/Create/`[OrderCreateRequestValidator.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/Create/OrderCreateRequestValidator.cs) | replace with | drops to one rule, so the constructor becomes an expression body |
-| `UseCases/Create/`[CreateOrderHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/Create/CreateOrderHandler.cs) | edit | two summary lines, `/// Places a new order: maps the request through the domain factory, persists via the unit of work` and `/// <see cref="OrderPlacedIntegrationEvent"/> for cross-module/cross-service consumers. Wrapped by`, plus the published event: `new OrderPlacedIntegrationEvent(entity.Id, entity.CustomerName),`. The handler still publishes after the commit, so the database-generated id is populated by the time the event reaches consumers |
-| `UseCases/Update/`[UpdateOrderCommand.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/Update/UpdateOrderCommand.cs) | replace with | the record loses two parameters |
-| `UseCases/Update/`[UpdateOrderHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/Update/UpdateOrderHandler.cs) | edit | the summary becomes `/// Updates an order's customer name through the aggregate root, then returns the refreshed DTO.` and the call into the aggregate becomes `var result = order.UpdateDetails(command.CustomerName);` |
+| `UseCases/Create/`[OrderCreateRequestMapper.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/Create/OrderCreateRequestMapper.cs) | edit | the one-line factory call and its staging comment become the plain `Order.Create(id: null, customerName: request.CustomerName)` form |
+| `UseCases/Create/`[CreateOrderHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/Create/CreateOrderHandler.cs) | edit | one line of code, the published event: `new OrderPlacedIntegrationEvent(entity.Id, entity.CustomerName),`. The handler still publishes after the commit, so the database-generated id is populated by the time the event reaches consumers |
+| `UseCases/Update/`[UpdateOrderCommand.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/Update/UpdateOrderCommand.cs) | edit | the positional list is already right; the scaffold's one-line form and its `<remarks>` about optional axes are what go |
 | `UseCases/AddItem/`[AddItemCommand.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/AddItem/AddItemCommand.cs) | replace with | the two scaffolded scalars become four, and the doc comment records why they travel on the command instead of being looked up |
-| `UseCases/AddItem/`[AddItemHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/AddItem/AddItemHandler.cs) | edit | the summary gains an `n` (`/// Loads the order (tracked, with its items), appends an item through the aggregate root, and`) and the aggregate call takes the four scalars (fragment below). It already returns `Result<OrderItemDTO>` and already loads `includes: [nameof(Order.Items)]` tracked, which is what lets the aggregate enforce the item lock and recompute the total, so neither changes |
+| `UseCases/AddItem/`[AddItemHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/AddItem/AddItemHandler.cs) | edit | the aggregate call takes the four scalars (fragment below). It already returns `Result<OrderItemDTO>` and already loads `includes: [nameof(Order.Items)]` tracked, which is what lets the aggregate enforce the item lock and recompute the total, so neither changes |
 | `UseCases/ChangeItemQuantity/`[ChangeItemQuantityCommand.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/ChangeItemQuantity/ChangeItemQuantityCommand.cs) | create | quantity is the only mutable field on a line: the product snapshot and its price stay as captured |
 | `UseCases/ChangeItemQuantity/`[ChangeItemQuantityHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/UseCases/ChangeItemQuantity/ChangeItemQuantityHandler.cs) | create | loads the order tracked with its items, then changes the quantity through the aggregate root |
 | `UseCases/EditItem/` | delete | the slice `ChangeItemQuantity` replaces (the folder holds two files) |
-| `IntegrationEventHandlers/`[OrderPlacedHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/IntegrationEventHandlers/OrderPlacedHandler.cs) | create | consumes the placement event; in this seed it just logs, and it is where a notification, email, or analytics side effect would live |
-| `IntegrationEventHandlers/OrderOpenedHandler.cs` | delete | the handler it replaces |
-| `DomainEventHandlers/`[OrderChangedAuditHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/DomainEventHandlers/OrderChangedAuditHandler.cs) | edit | one doc line, naming the handler that now audits creation: the second-to-last summary line becomes `/// Creation is audited separately by the integration-event consumer (<c>OrderPlacedHandler</c>),` |
-
-The two multi-line fragments, in table order: the `OrderCreateRequestMapper` factory call, then the
-`AddItemHandler` call into the aggregate.
-
-```csharp
-        return Task.FromResult(Order.Create(
-            id: null,
-            customerName: request.CustomerName));
-```
+| `IntegrationEventHandlers/`[OrderPlacedHandler.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.Application/Orders/IntegrationEventHandlers/OrderPlacedHandler.cs) | edit | the consumer arrives generated and wired; it logs the new `CustomerName` too |
 
 ```csharp
         var result = order.AddItem(
@@ -714,24 +522,23 @@ The two multi-line fragments, in table order: the `OrderCreateRequestMapper` fac
             command.Quantity);
 ```
 
-The deletions remove three items, because the `EditItem` folder holds two files:
-
 ```powershell
 Remove-Item -Recurse `
-  Source\Modules\Orders\MMCA.ECommerce.Orders.Application\Orders\UseCases\EditItem, `
-  Source\Modules\Orders\MMCA.ECommerce.Orders.Application\Orders\IntegrationEventHandlers\OrderOpenedHandler.cs
+  Source\Modules\Orders\MMCA.ECommerce.Orders.Application\Orders\UseCases\EditItem
 ```
 
-Nothing else in the Application layer moves. The Delete, GetById, and ChangeStatus slices, both DTO
-mappers, `OrderCacheKeys`, and `DependencyInjection.cs` are all correct exactly as `--child Item`
-generated them, because each of them talks about items and none of them names a renamed field.
+Nothing else in the Application layer moves. The Delete, GetById, RemoveItem and ChangeStatus slices,
+the create validator, both DTO mappers, `OrderCacheKeys`, the audit domain-event handler, and
+`DependencyInjection.cs` are all correct exactly as generated, because each of them talks about items
+and none of them names a renamed field. `OrderCreateRequest.cs` and `UpdateOrderHandler.cs` differ
+from the sample only in doc comments, which you can skip.
 
 ### 5.5 API
 
 **Replace** `Source/Modules/Orders/MMCA.ECommerce.Orders.API/Controllers/OrdersController.cs` with
 [OrdersController.cs](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.API/Controllers/OrdersController.cs).
 The routes are unchanged, including `POST /Orders/{id}/items`, `PUT /Orders/{id}/items/{itemId}`, and
-`DELETE /Orders/{id}/items/{itemId}`: `--child Item` produced them. What changes is the injected
+`DELETE /Orders/{id}/items/{itemId}`: `-Child Item` produced them. What changes is the injected
 `ChangeItemQuantityCommand` handler in place of the `EditItemCommand` one, the action renamed from
 `EditItemAsync` to `ChangeItemQuantityAsync`, and the two new request types.
 
@@ -739,12 +546,12 @@ The routes are unchanged, including `POST /Orders/{id}/items`, `PUT /Orders/{id}
 [OrdersErrorResources.resx](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.API/Resources/OrdersErrorResources.resx)
 and
 [OrdersErrorResources.es.resx](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.API/Resources/OrdersErrorResources.es.resx).
-Keep the resx envelope exactly as generated (the `<xsd:schema>` block and the four
-`<resheader>` elements) and replace **only** the `<data>` elements: delete the seven scaffolded ones
-(`Order.Closed`, `Order.Title.*`, `Order.Description.*`, `Order.Item.Body.*`) and add the eight below,
-in this order. That is one entry per code `OrderInvariants` can emit, which is what makes the
-Pending-only lock and the lifecycle guard reach the user in their own language rather than as a raw
-code:
+Keep the resx envelope exactly as generated (the `<xsd:schema>` block and the four `<resheader>`
+elements) and touch only the `<data>` elements: delete the three the reshape retires
+(`Order.Closed`, `Order.Item.Body.*`), reword the two `Order.CustomerName.*` values the camel-case
+substitution left as "customerName", and add the six new ones. The eight below, in this order, are
+one entry per code `OrderInvariants` can emit, which is what makes the Pending-only lock and the
+lifecycle guard reach the user in their own language rather than as a raw code:
 
 | `data name` | `.resx` value (en) | `.es.resx` value (es) |
 |---|---|---|
@@ -758,19 +565,8 @@ code:
 | `Order.InvalidStatusTransition` | The order cannot move to that status from its current one. | El pedido no puede pasar a ese estado desde el estado actual. |
 
 Each entry is a `<data name="..." xml:space="preserve">` element wrapping a single `<value>`, exactly
-like the ones you are replacing.
-
-**Edit** `Source/Modules/Orders/MMCA.ECommerce.Orders.API/Resources/OrdersErrorResources.cs`
-([the finished file](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Modules/Orders/MMCA.ECommerce.Orders.API/Resources/OrdersErrorResources.cs)):
-the doc comment cites a code that no longer exists. Change the example code and the constant it names:
-
-```csharp
-/// domain error <c>Code</c> (e.g. <c>"Order.CustomerName.Empty"</c>, see <c>OrderInvariants</c>) and
-/// resolved by the shared <c>IErrorLocalizer</c> after the host registers this type via
-/// <c>AddErrorResources&lt;OrdersErrorResources&gt;()</c>. The length limits are baked into the values
-/// because they are compile-time constants (<c>OrderInvariants.CustomerNameMaxLength</c> etc.); an
-/// unmapped code degrades gracefully to its English message.
-```
+like the ones you are replacing. The module's `OrdersErrorResources.cs` anchor type needs no edit:
+`-Title CustomerName` already made its example code the one that exists.
 
 The solution builds again at this point.
 
@@ -790,9 +586,7 @@ Add one entry to the package `ItemGroup` so it reads:
 ```
 
 No version attribute: `Moq` is already pinned in the solution's `Directory.Packages.props` under
-Central Package Management.
-
-Then the test files themselves, all under `Tests/Modules/Orders/`:
+Central Package Management. Then the test files themselves, all under `Tests/Modules/Orders/`:
 
 | File | Action | What it covers |
 |---|---|---|
@@ -818,14 +612,9 @@ reshaped: a flat, status-less catalog module beside an aggregate that owns a gro
 and a guarded lifecycle is what makes the layering, module-isolation, and event-convention rules say
 something. Two copies of the same generated shape would pass them vacuously. If it reds on isolation,
 the cause is almost always an accidental `using` of a Products type inside Orders, which is exactly the
-mistake the `ProductName` / `UnitPrice` snapshot exists to make unnecessary.
-
-As in step 4, a single class or method needs a Microsoft Testing Platform filter **after a bare `--`**
-(these projects are MTP, not VSTest, so a filter placed before the separator runs zero tests):
-
-```powershell
-dotnet test --project Tests/Modules/Orders/MMCA.ECommerce.Orders.Domain.Tests/MMCA.ECommerce.Orders.Domain.Tests.csproj -- --filter-method "*ChangeStatus*"
-```
+mistake the `ProductName` / `UnitPrice` snapshot exists to make unnecessary. Single-test runs need the
+same MTP filter after a bare `--` as in 4.7, for example
+`-- --filter-method "*ChangeStatus*"`.
 
 The whole solution is green from here: `dotnet test --solution MMCA.ECommerce.slnx` runs everything in
 one pass and lands at **157** tests (158 once step 8 freezes your integration-event wire contract).
@@ -843,30 +632,38 @@ Name/Description/Price, and add two Orders pages that mirror them. All four live
   and
   [ProductDetail.razor](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Hosts/UI/MMCA.ECommerce.UI.Web/Components/Pages/ProductDetail.razor):
   the catalog list and the create/edit form, on Name/Description/Price.
-- [Orders.razor](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Hosts/UI/MMCA.ECommerce.UI.Web/Components/Pages/Orders.razor):
-  create an order by customer name, list orders.
-- [OrderDetail.razor](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Hosts/UI/MMCA.ECommerce.UI.Web/Components/Pages/OrderDetail.razor):
-  edit the customer name, walk the status lifecycle (the page offers only the
-  transitions the domain allows), and manage items while the order is Pending. The add-item form is
-  a product picker filled from `GetProductsAsync()`: selecting a product snapshots its id, name, and
-  price into the request, which is the UI half of the module-isolation decision above.
+- [Orders.razor](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Hosts/UI/MMCA.ECommerce.UI.Web/Components/Pages/Orders.razor)
+  and
+  [OrderDetail.razor](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Hosts/UI/MMCA.ECommerce.UI.Web/Components/Pages/OrderDetail.razor):
+  create and list orders, then edit the customer name, walk the status lifecycle (the page offers
+  only the transitions the domain allows), and manage items while the order is Pending. The add-item
+  form is a product picker filled from `GetProductsAsync()`: selecting a product snapshots its id,
+  name, and price into the request, which is the UI half of the module-isolation decision above.
 
+Mirror the scaffold's page conventions, because an older sample would not have them: a page opens
+with `<PageHeading Text="@(L["Browser.Tab"].Value)" />` and marks its panels with `<SectionHeading>`
+(both generated components, not MudBlazor ones), the delete dialog and the required-field warning
+read the fixed chrome keys `Dialog.Delete.Heading` and `Snackbar.RequiredFields`, and the
+required-field check accumulates one line at a time
+(`missingRequired = missingRequired || string.IsNullOrWhiteSpace(_field);`) rather than as one
+compound condition, so an optional axis can drop a line without breaking the expression.
+
+Three files outside `Pages/` also move: the UI project needs a `ProjectReference` to
+`MMCA.ECommerce.Orders.Shared` (contracts only, never a module's Application or Domain layer),
+`Components/_Imports.razor` gains `@using System.Globalization` for the currency formatting, and
 [MainLayout.razor](https://github.com/ivanball/MMCA.ECommerce/blob/main/Source/Hosts/UI/MMCA.ECommerce.UI.Web/Components/Layout/MainLayout.razor)
-carries the chrome around them: the Products and Orders app-bar links, the culture switcher, and the
-theme toggle, over the framework's `MmcaThemeProviders`.
-
-Every string goes through the `L[...]` localizer, and every key needs an entry in both the `.resx`
-and `.es.resx` file beside the page. The
+gains the Products and Orders app-bar links. Every string goes through the `L[...]` localizer, and
+every key needs an entry in both the `.resx` and `.es.resx` file beside the page; the
 [UI host in the repo](https://github.com/ivanball/MMCA.ECommerce/tree/main/Source/Hosts/UI/MMCA.ECommerce.UI.Web)
 is the complete reference.
 
 ## 7. Create the migrations
 
-Neither module has a migration yet: a `--flat` or `--no-status` scaffold deliberately drops the
-template's sample migration (it described the sample shape), and `mmca-module` never ships one.
-Each `Migrations` folder does carry an `.editorconfig` that keeps analyzer enforcement off
-generated migration code; `dotnet ef` never creates that file, so leave it alone. Generate both
-migrations fresh (`migrations add` never opens a database connection):
+Neither module has a migration yet: any shape flag makes `mmca-app` drop the template's sample one
+(it described the sample shape), and `-SkipMigration` deferred the Orders one to here. Each
+`Migrations` folder does carry an `.editorconfig` that keeps analyzer enforcement off generated
+migration code, and `dotnet ef` never recreates it, so leave it alone. Generate both fresh
+(`migrations add` never opens a database connection):
 
 ```powershell
 dotnet ef migrations add InitialCreate `
@@ -886,20 +683,34 @@ outbox/inbox tables: two databases, two outboxes, no contention.
 ## 8. The two one-time fixups, then run it
 
 Apply the two fixups the scaffold deliberately leaves to you (they are name-dependent, so no
-generated value could be right): re-sort the using directives and freeze your integration-event
-wire contract. Both are described in the
+generated value could be right). First, sort the using directives and the identifier aliases:
+
+```powershell
+dotnet format analyzers MMCA.ECommerce.slnx --diagnostics SA1210 SA1211 --severity info
+```
+
+Then delete the `SCAFFOLD DELTA` block at the bottom of `.editorconfig`, which restores the full
+analyzer baseline. It relaxes three rules, not two: `SA1210` and `SA1211` for the sort order the
+command above just fixed, and `IDE0021` because a heavily flagged aggregate can end up with a private
+constructor holding a single statement, which the baseline would require you to write as an
+expression body. This sample never trips that: both aggregates assign at least two fields, so the
+`IDE0021` line has nothing to relax and goes with the rest of the block.
+
+Second, freeze your integration-event wire contract by adding the `IntegrationEventContractTests`
+subclass to `ArchitectureTests.cs`, running it once, and pasting in what the failure prints. Both
+fixups are described in full in the
 [getting-started guide](common-GETTING-STARTED.md#6-the-two-one-time-fixups); the sample has both
-applied, so its `IntegrationEventContractTests` freezes `ProductCreatedIntegrationEvent` and
-`OrderPlacedIntegrationEvent` exactly as shipped.
+applied, so its frozen list names `ProductCreatedIntegrationEvent` and `OrderPlacedIntegrationEvent`
+exactly as shipped, and the suite goes from 72 to 73.
 
 > **Re-running the walkthrough on the same machine?** The Aspire SQL container is persistent by
 > design, so databases created by an earlier MMCA.ECommerce build survive a re-scaffold, and their
 > migration history will not match your fresh migrations: startup then fails with "There is already
-> an object named 'InboxMessages' in the database". Drop the stale `ECommerce_*` databases (or
+> an object named 'InboxMessages' in the database". Drop the stale `ECommerce*` databases (or
 > remove the `sql-*` container in Docker) before the first run.
 
-Then, from a **real, interactive terminal** (launched headless, the AppHost stalls at control-plane
-init and looks like a hang):
+Then, from a **real, interactive terminal** (headless, the AppHost stalls at control-plane init and
+looks like a hang):
 
 ```powershell
 dotnet run --project Source/Hosting/MMCA.ECommerce.AppHost
@@ -915,10 +726,10 @@ adding real RS256/JWKS auth later is the getting-started guide's "Then what" pat
 
 ## Verification checklist
 
-1. Baseline green immediately after `mmca-app`, before any edit.
-2. After the Orders wire-ups: still green, both modules' tests running.
+1. Baseline green immediately after `mmca-app`, before any edit: **81 tests**.
+2. After `build/add-module.ps1`: still green at **99 tests**, both modules' scaffolded suites running.
 3. After both reshapes: `dotnet build MMCA.ECommerce.slnx` warning-free and
-   `dotnet test --solution MMCA.ECommerce.slnx` fully green (the sample lands at 158 tests), with
+   `dotnet test --solution MMCA.ECommerce.slnx` fully green (the sample lands at **158 tests**), with
    the architecture rules passing: layering, module isolation, event conventions, and your frozen
    wire contract.
 4. Both `InitialCreate` migrations generated, each with its module's tables plus its own
@@ -934,7 +745,8 @@ adding real RS256/JWKS auth later is the getting-started guide's "Then what" pat
   guide, build- and test-verified.
 - **[Getting started](common-GETTING-STARTED.md)**: the single-module path, the vertical-slice
   templates (`mmca-command` / `mmca-query`), and the framework-upgrade and extraction notes.
-- **[Templates](common-TEMPLATES.md)**: every parameter of all four templates.
+- **[Templates](common-TEMPLATES.md)**: every parameter of all four templates, plus
+  `build/add-module.ps1`.
 - **[Building by hand](common-BUILD-BY-HAND.md)**: what each generated file does and why.
 - **[MMCA.Helpdesk](https://github.com/ivanball/MMCA.Helpdesk)**: the reference app the templates
   are staged from.

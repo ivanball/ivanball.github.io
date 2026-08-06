@@ -213,11 +213,14 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx</
           <p>The scaffold deliberately does not hand these over, because renaming invalidates them and no fixed
           value is right for every name you could pick. Both are covered in full in the
           <a href="common-TEMPLATES.html">templates guide</a>.</p>
-          <p><strong>Using-directive order.</strong> <code>using Contoso.Support.Orders.Shared;</code> sorts above <code>MMCA.Common.*</code>, but
-          <code>using Zeta.App.Orders.Shared;</code> sorts below it, so no checked-in order survives every name. <code>SA1210</code>
-          ships as a suggestion in a marked block at the bottom of the generated <code>.editorconfig</code>. Sort them,
-          then delete the block once you have stopped scaffolding:</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet format analyzers Contoso.Support.slnx <span class="hljs-literal">--diagnostics</span> SA1210 <span class="hljs-literal">--severity</span> error</code></pre>
+          <p><strong>Using-directive and alias order.</strong> <code>using Contoso.Support.Orders.Shared;</code> sorts above
+          <code>MMCA.Common.*</code>, but <code>using Zeta.App.Orders.Shared;</code> sorts below it, so no checked-in order survives
+          every name; <code>SA1211</code> is the same story for the identifier-alias file. Both ship as suggestions in a
+          marked <code>SCAFFOLD DELTA</code> block at the bottom of the generated <code>.editorconfig</code>, alongside <code>IDE0021</code>
+          (which is there for the shape flags: turning several axes off can leave the aggregate&#39;s private
+          constructor with a single statement). Sort them, then delete the whole block once you have stopped
+          scaffolding:</p>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet format analyzers Contoso.Support.slnx <span class="hljs-literal">--diagnostics</span> SA1210 SA1211 <span class="hljs-literal">--severity</span> info</code></pre>
           <p><strong>Your integration-event wire contract.</strong> Integration events cross service boundaries, so a renamed
           or retyped property breaks consumers elsewhere. <code>IntegrationEventContractTestsBase</code> fails the build
           on a silent reshape, but only against a contract <strong>you</strong> froze: its frozen literal lists members
@@ -372,12 +375,15 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           <p><strong>Keep the query&#39;s <code>CacheKey</code> inside your module&#39;s <code>*CacheKeys.Prefix</code>,</strong> because a key that drifts
           out of the prefix goes stale silently.</p>
           <p><strong>A second module</strong> across all five layers plus its test and migrations projects:</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-module</span> <span class="hljs-literal">-n</span> Billing <span class="hljs-literal">--app</span> Contoso.Support <span class="hljs-literal">--aggregate</span> Invoice</code></pre>
-          <p><code>dotnet new</code> cannot patch files that already exist, so it <strong>prints five wire-ups</strong> for you to apply:
-          the solution entries, the host and architecture-test project references, the identifier-alias link,
-          the five architecture-map lines, and <code>AddErrorResources</code>. Until they are done the module is invisible
-          to the host and to the fitness rules. The <a href="common-TEMPLATES.html">templates guide</a> lists each one with
-          its exact command.</p>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">pwsh build/<span class="hljs-built_in">add-module</span>.ps1 <span class="hljs-literal">-Name</span> Billing <span class="hljs-literal">-Aggregate</span> Invoice</code></pre>
+          <p>That script ships inside every solution <code>mmca-app</code> generates. It runs <code>dotnet new mmca-module</code> (the
+          same shape options, as PowerShell switches) and then applies all seven wire-ups the template can only
+          print, because <code>dotnet new</code> cannot patch files that already exist: the solution entries, the host and
+          architecture-test project references, the identifier-alias link, the five architecture-map lines,
+          <code>AddErrorResources</code>, the module&#39;s own Aspire database and data-source routing, and the first EF
+          migration. Until those are done the module is invisible to the host and to the fitness rules. The
+          <a href="common-TEMPLATES.html">templates guide</a> documents the script and lists each wire-up as the manual
+          fallback.</p>
           <hr>
           <h2 id="surface-the-slice-at-the-edge">Surface the slice at the edge</h2>
           <p>The scaffold stops at the handler, and the template&#39;s closing instructions tell you to map the

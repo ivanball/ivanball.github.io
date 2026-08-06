@@ -128,13 +128,16 @@ The scaffold deliberately does not hand these over, because renaming invalidates
 value is right for every name you could pick. Both are covered in full in the
 [templates guide](common-TEMPLATES.md).
 
-**Using-directive order.** `using Contoso.Support.Orders.Shared;` sorts above `MMCA.Common.*`, but
-`using Zeta.App.Orders.Shared;` sorts below it, so no checked-in order survives every name. `SA1210`
-ships as a suggestion in a marked block at the bottom of the generated `.editorconfig`. Sort them,
-then delete the block once you have stopped scaffolding:
+**Using-directive and alias order.** `using Contoso.Support.Orders.Shared;` sorts above
+`MMCA.Common.*`, but `using Zeta.App.Orders.Shared;` sorts below it, so no checked-in order survives
+every name; `SA1211` is the same story for the identifier-alias file. Both ship as suggestions in a
+marked `SCAFFOLD DELTA` block at the bottom of the generated `.editorconfig`, alongside `IDE0021`
+(which is there for the shape flags: turning several axes off can leave the aggregate's private
+constructor with a single statement). Sort them, then delete the whole block once you have stopped
+scaffolding:
 
 ```powershell
-dotnet format analyzers Contoso.Support.slnx --diagnostics SA1210 --severity error
+dotnet format analyzers Contoso.Support.slnx --diagnostics SA1210 SA1211 --severity info
 ```
 
 **Your integration-event wire contract.** Integration events cross service boundaries, so a renamed
@@ -292,14 +295,17 @@ out of the prefix goes stale silently.
 **A second module** across all five layers plus its test and migrations projects:
 
 ```powershell
-dotnet new mmca-module -n Billing --app Contoso.Support --aggregate Invoice
+pwsh build/add-module.ps1 -Name Billing -Aggregate Invoice
 ```
 
-`dotnet new` cannot patch files that already exist, so it **prints five wire-ups** for you to apply:
-the solution entries, the host and architecture-test project references, the identifier-alias link,
-the five architecture-map lines, and `AddErrorResources`. Until they are done the module is invisible
-to the host and to the fitness rules. The [templates guide](common-TEMPLATES.md) lists each one with
-its exact command.
+That script ships inside every solution `mmca-app` generates. It runs `dotnet new mmca-module` (the
+same shape options, as PowerShell switches) and then applies all seven wire-ups the template can only
+print, because `dotnet new` cannot patch files that already exist: the solution entries, the host and
+architecture-test project references, the identifier-alias link, the five architecture-map lines,
+`AddErrorResources`, the module's own Aspire database and data-source routing, and the first EF
+migration. Until those are done the module is invisible to the host and to the fitness rules. The
+[templates guide](common-TEMPLATES.md) documents the script and lists each wire-up as the manual
+fallback.
 
 ---
 

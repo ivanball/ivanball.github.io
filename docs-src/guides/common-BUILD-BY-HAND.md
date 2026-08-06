@@ -295,9 +295,11 @@ the plumbing parses).
 ## Phase 2: Scaffold the module project set
 
 > **Scaffolded.** `dotnet new mmca-app` creates this project set for your first module, and
-> `dotnet new mmca-module` adds another one later (it prints the five wire-ups it cannot perform:
-> the solution entries, the host and architecture-test project references, the identifier-alias
-> link, the map lines, and `AddErrorResources`). See the [templates guide](common-TEMPLATES.md).
+> `pwsh build/add-module.ps1` adds another one later: it drives `dotnet new mmca-module` and then
+> applies the seven wire-ups the template can only print (the solution entries, the host and
+> architecture-test project references, the identifier-alias link, the map lines,
+> `AddErrorResources`, the per-module database wiring, and the first migration). See the
+> [templates guide](common-TEMPLATES.md).
 
 Each business module is a set of layered projects under `Source/Modules/<Module>/`. Pattern source:
 `MMCA.Helpdesk/Source/Modules/Tickets/` (or the richer `MMCA.ADC/Source/Modules/Conference/`). For
