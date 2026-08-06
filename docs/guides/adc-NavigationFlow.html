@@ -161,397 +161,397 @@
           <h2 id="1-anonymous-user">1. Anonymous User</h2>
           <p>Pages accessible without authentication: home, login, register, and all public conference pages.</p>
           <pre class="mermaid">flowchart TD
-              subgraph Auth[&quot;Authentication&quot;]
-                  Login[&quot;/login&lt;br/&gt;Login&quot;]
-                  Register[&quot;/register&lt;br/&gt;Register&quot;]
-              end
-          
-              subgraph Public[&quot;Public Conference&quot;]
-                  PubEvents[&quot;/conference/events&lt;br/&gt;Event List&quot;]
-                  PubEventDetail[&quot;/conference/events/{Id}&lt;br/&gt;Event Detail&quot;]
-                  PubSessions[&quot;/conference/sessions&lt;br/&gt;Session List&quot;]
-                  PubSessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;]
-                  PubSpeakers[&quot;/conference/speakers&lt;br/&gt;Speaker List&quot;]
-                  PubSpeakerDetail[&quot;/conference/speakers/{Id}&lt;br/&gt;Speaker Detail&quot;]
-              end
-          
-              Home[&quot;/  Home Page&quot;]
-          
-              Home --&gt;|nav menu| PubEvents
-              Home --&gt;|nav menu| PubSessions
-              Home --&gt;|nav menu| PubSpeakers
-              Home --&gt;|auth links| Login
-              Home --&gt;|auth links| Register
-          
-              Login --&gt;|on success| Home
-              Register --&gt;|on success| Home
-          
-              PubEvents --&gt;|row click| PubEventDetail
-              PubEventDetail --&gt;|back| PubEvents
-              PubEventDetail --&gt;|view sessions| PubSessions
-          
-              PubSessions --&gt;|row click| PubSessionDetail
-              PubSessionDetail --&gt;|back| PubSessions
-              PubSessionDetail --&gt;|speaker link| PubSpeakerDetail
-          
-              PubSpeakers --&gt;|row click| PubSpeakerDetail
-              PubSpeakerDetail --&gt;|back| PubSpeakers</pre>
+    subgraph Auth[&quot;Authentication&quot;]
+        Login[&quot;/login&lt;br/&gt;Login&quot;]
+        Register[&quot;/register&lt;br/&gt;Register&quot;]
+    end
+
+    subgraph Public[&quot;Public Conference&quot;]
+        PubEvents[&quot;/conference/events&lt;br/&gt;Event List&quot;]
+        PubEventDetail[&quot;/conference/events/{Id}&lt;br/&gt;Event Detail&quot;]
+        PubSessions[&quot;/conference/sessions&lt;br/&gt;Session List&quot;]
+        PubSessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;]
+        PubSpeakers[&quot;/conference/speakers&lt;br/&gt;Speaker List&quot;]
+        PubSpeakerDetail[&quot;/conference/speakers/{Id}&lt;br/&gt;Speaker Detail&quot;]
+    end
+
+    Home[&quot;/  Home Page&quot;]
+
+    Home --&gt;|nav menu| PubEvents
+    Home --&gt;|nav menu| PubSessions
+    Home --&gt;|nav menu| PubSpeakers
+    Home --&gt;|auth links| Login
+    Home --&gt;|auth links| Register
+
+    Login --&gt;|on success| Home
+    Register --&gt;|on success| Home
+
+    PubEvents --&gt;|row click| PubEventDetail
+    PubEventDetail --&gt;|back| PubEvents
+    PubEventDetail --&gt;|view sessions| PubSessions
+
+    PubSessions --&gt;|row click| PubSessionDetail
+    PubSessionDetail --&gt;|back| PubSessions
+    PubSessionDetail --&gt;|speaker link| PubSpeakerDetail
+
+    PubSpeakers --&gt;|row click| PubSpeakerDetail
+    PubSpeakerDetail --&gt;|back| PubSpeakers</pre>
           <hr>
           <h2 id="2-attendee-authenticated-user">2. Attendee (Authenticated User)</h2>
           <p>Inherits all anonymous pages. Gains access to profile, feedback submission, and session bookmarking. Unauthenticated visitors are redirected to login.</p>
           <pre class="mermaid">flowchart TD
-              subgraph Auth[&quot;Authentication&quot;]
-                  Login[&quot;/login&lt;br/&gt;Login&quot;]
-                  Register[&quot;/register&lt;br/&gt;Register&quot;]
-              end
-          
-              subgraph Profile[&quot;Identity / Profile&quot;]
-                  MyProfile[&quot;/profile&lt;br/&gt;My Profile&quot;]
-                  Claims[&quot;/profile/claims&lt;br/&gt;User Claims&quot;]
-              end
-          
-              subgraph Public[&quot;Public Conference&quot;]
-                  PubEvents[&quot;/conference/events&lt;br/&gt;Event List&quot;]
-                  PubEventDetail[&quot;/conference/events/{Id}&lt;br/&gt;Event Detail&quot;]
-                  PubSessions[&quot;/conference/sessions&lt;br/&gt;Session List&quot;]
-                  PubSessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;]
-                  PubSpeakers[&quot;/conference/speakers&lt;br/&gt;Speaker List&quot;]
-                  PubSpeakerDetail[&quot;/conference/speakers/{Id}&lt;br/&gt;Speaker Detail&quot;]
-              end
-          
-              subgraph Engagement[&quot;Engagement / Feedback&quot;]
-                  EventFeedback[&quot;/feedback/event/{EventId}&lt;br/&gt;Event Feedback&quot;]
-                  SessionFeedback[&quot;/feedback/session/{SessionId}&lt;br/&gt;Session Feedback&quot;]
-              end
-          
-              subgraph Live[&quot;Conference-Day Live Layer&quot;]
-                  HappeningNow[&quot;/happening-now&lt;br/&gt;Happening Now&quot;]
-                  SessionLive[&quot;/conference/sessions/{Id}/live&lt;br/&gt;Live Session (Q and A, polls)&quot;]
-              end
-          
-              Home[&quot;/  Home Page&quot;]
-          
-              Home --&gt;|nav menu| PubEvents
-              Home --&gt;|nav menu| PubSessions
-              Home --&gt;|nav menu| PubSpeakers
-              Home --&gt;|nav menu| MyProfile
-              Home --&gt;|nav menu| HappeningNow
-          
-              HappeningNow --&gt;|join a running session| SessionLive
-              PubSessionDetail --&gt;|join live| SessionLive
-              SessionLive --&gt;|back| PubSessionDetail
-          
-              Login --&gt;|on success| Home
-              Register --&gt;|on success| Home
-              MyProfile --&gt;|logout| Home
-          
-              PubEvents --&gt;|row click| PubEventDetail
-              PubEventDetail --&gt;|back| PubEvents
-              PubEventDetail --&gt;|view sessions| PubSessions
-              PubEventDetail --&gt;|submit feedback| EventFeedback
-          
-              PubSessions --&gt;|row click| PubSessionDetail
-              PubSessionDetail --&gt;|back| PubSessions
-              PubSessionDetail --&gt;|speaker link| PubSpeakerDetail
-              PubSessionDetail --&gt;|submit feedback| SessionFeedback
-          
-              PubSpeakers --&gt;|row click| PubSpeakerDetail
-              PubSpeakerDetail --&gt;|back| PubSpeakers
-          
-              EventFeedback --&gt;|cancel| PubEventDetail
-              SessionFeedback --&gt;|cancel| PubSessionDetail</pre>
+    subgraph Auth[&quot;Authentication&quot;]
+        Login[&quot;/login&lt;br/&gt;Login&quot;]
+        Register[&quot;/register&lt;br/&gt;Register&quot;]
+    end
+
+    subgraph Profile[&quot;Identity / Profile&quot;]
+        MyProfile[&quot;/profile&lt;br/&gt;My Profile&quot;]
+        Claims[&quot;/profile/claims&lt;br/&gt;User Claims&quot;]
+    end
+
+    subgraph Public[&quot;Public Conference&quot;]
+        PubEvents[&quot;/conference/events&lt;br/&gt;Event List&quot;]
+        PubEventDetail[&quot;/conference/events/{Id}&lt;br/&gt;Event Detail&quot;]
+        PubSessions[&quot;/conference/sessions&lt;br/&gt;Session List&quot;]
+        PubSessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;]
+        PubSpeakers[&quot;/conference/speakers&lt;br/&gt;Speaker List&quot;]
+        PubSpeakerDetail[&quot;/conference/speakers/{Id}&lt;br/&gt;Speaker Detail&quot;]
+    end
+
+    subgraph Engagement[&quot;Engagement / Feedback&quot;]
+        EventFeedback[&quot;/feedback/event/{EventId}&lt;br/&gt;Event Feedback&quot;]
+        SessionFeedback[&quot;/feedback/session/{SessionId}&lt;br/&gt;Session Feedback&quot;]
+    end
+
+    subgraph Live[&quot;Conference-Day Live Layer&quot;]
+        HappeningNow[&quot;/happening-now&lt;br/&gt;Happening Now&quot;]
+        SessionLive[&quot;/conference/sessions/{Id}/live&lt;br/&gt;Live Session (Q and A, polls)&quot;]
+    end
+
+    Home[&quot;/  Home Page&quot;]
+
+    Home --&gt;|nav menu| PubEvents
+    Home --&gt;|nav menu| PubSessions
+    Home --&gt;|nav menu| PubSpeakers
+    Home --&gt;|nav menu| MyProfile
+    Home --&gt;|nav menu| HappeningNow
+
+    HappeningNow --&gt;|join a running session| SessionLive
+    PubSessionDetail --&gt;|join live| SessionLive
+    SessionLive --&gt;|back| PubSessionDetail
+
+    Login --&gt;|on success| Home
+    Register --&gt;|on success| Home
+    MyProfile --&gt;|logout| Home
+
+    PubEvents --&gt;|row click| PubEventDetail
+    PubEventDetail --&gt;|back| PubEvents
+    PubEventDetail --&gt;|view sessions| PubSessions
+    PubEventDetail --&gt;|submit feedback| EventFeedback
+
+    PubSessions --&gt;|row click| PubSessionDetail
+    PubSessionDetail --&gt;|back| PubSessions
+    PubSessionDetail --&gt;|speaker link| PubSpeakerDetail
+    PubSessionDetail --&gt;|submit feedback| SessionFeedback
+
+    PubSpeakers --&gt;|row click| PubSpeakerDetail
+    PubSpeakerDetail --&gt;|back| PubSpeakers
+
+    EventFeedback --&gt;|cancel| PubEventDetail
+    SessionFeedback --&gt;|cancel| PubSessionDetail</pre>
           <hr>
           <h2 id="3-speaker">3. Speaker</h2>
           <p>Inherits all attendee pages. Gains access to the speaker dashboard for managing their own profile, viewing assigned sessions, and reviewing feedback ratings.</p>
           <pre class="mermaid">flowchart TD
-              subgraph Auth[&quot;Authentication&quot;]
-                  Login[&quot;/login&lt;br/&gt;Login&quot;]
-              end
-          
-              subgraph Profile[&quot;Identity / Profile&quot;]
-                  MyProfile[&quot;/profile&lt;br/&gt;My Profile&quot;]
-                  Claims[&quot;/profile/claims&lt;br/&gt;User Claims&quot;]
-              end
-          
-              subgraph Speaker[&quot;Speaker Area&quot;]
-                  Dashboard[&quot;/speaker/dashboard&lt;br/&gt;Speaker Dashboard&quot;]
-                  Presenter[&quot;/conference/sessions/{Id}/present&lt;br/&gt;Presenter View&quot;]
-              end
-          
-              subgraph Public[&quot;Public Conference&quot;]
-                  PubEvents[&quot;/conference/events&lt;br/&gt;Event List&quot;]
-                  PubEventDetail[&quot;/conference/events/{Id}&lt;br/&gt;Event Detail&quot;]
-                  PubSessions[&quot;/conference/sessions&lt;br/&gt;Session List&quot;]
-                  PubSessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;]
-                  PubSpeakers[&quot;/conference/speakers&lt;br/&gt;Speaker List&quot;]
-                  PubSpeakerDetail[&quot;/conference/speakers/{Id}&lt;br/&gt;Speaker Detail&quot;]
-              end
-          
-              subgraph Engagement[&quot;Engagement / Feedback&quot;]
-                  EventFeedback[&quot;/feedback/event/{EventId}&lt;br/&gt;Event Feedback&quot;]
-                  SessionFeedback[&quot;/feedback/session/{SessionId}&lt;br/&gt;Session Feedback&quot;]
-              end
-          
-              Home[&quot;/  Home Page&quot;]
-          
-              Home --&gt;|nav menu| PubEvents
-              Home --&gt;|nav menu| PubSessions
-              Home --&gt;|nav menu| PubSpeakers
-              Home --&gt;|nav menu| MyProfile
-              Home --&gt;|nav menu| Dashboard
-          
-              Dashboard --&gt;|present a session| Presenter
-          
-              Login --&gt;|on success| Home
-              MyProfile --&gt;|logout| Home
-          
-              PubEvents --&gt;|row click| PubEventDetail
-              PubEventDetail --&gt;|back| PubEvents
-              PubEventDetail --&gt;|view sessions| PubSessions
-              PubEventDetail --&gt;|submit feedback| EventFeedback
-          
-              PubSessions --&gt;|row click| PubSessionDetail
-              PubSessionDetail --&gt;|back| PubSessions
-              PubSessionDetail --&gt;|speaker link| PubSpeakerDetail
-              PubSessionDetail --&gt;|submit feedback| SessionFeedback
-          
-              PubSpeakers --&gt;|row click| PubSpeakerDetail
-              PubSpeakerDetail --&gt;|back| PubSpeakers
-          
-              EventFeedback --&gt;|cancel| PubEventDetail
-              SessionFeedback --&gt;|cancel| PubSessionDetail</pre>
+    subgraph Auth[&quot;Authentication&quot;]
+        Login[&quot;/login&lt;br/&gt;Login&quot;]
+    end
+
+    subgraph Profile[&quot;Identity / Profile&quot;]
+        MyProfile[&quot;/profile&lt;br/&gt;My Profile&quot;]
+        Claims[&quot;/profile/claims&lt;br/&gt;User Claims&quot;]
+    end
+
+    subgraph Speaker[&quot;Speaker Area&quot;]
+        Dashboard[&quot;/speaker/dashboard&lt;br/&gt;Speaker Dashboard&quot;]
+        Presenter[&quot;/conference/sessions/{Id}/present&lt;br/&gt;Presenter View&quot;]
+    end
+
+    subgraph Public[&quot;Public Conference&quot;]
+        PubEvents[&quot;/conference/events&lt;br/&gt;Event List&quot;]
+        PubEventDetail[&quot;/conference/events/{Id}&lt;br/&gt;Event Detail&quot;]
+        PubSessions[&quot;/conference/sessions&lt;br/&gt;Session List&quot;]
+        PubSessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;]
+        PubSpeakers[&quot;/conference/speakers&lt;br/&gt;Speaker List&quot;]
+        PubSpeakerDetail[&quot;/conference/speakers/{Id}&lt;br/&gt;Speaker Detail&quot;]
+    end
+
+    subgraph Engagement[&quot;Engagement / Feedback&quot;]
+        EventFeedback[&quot;/feedback/event/{EventId}&lt;br/&gt;Event Feedback&quot;]
+        SessionFeedback[&quot;/feedback/session/{SessionId}&lt;br/&gt;Session Feedback&quot;]
+    end
+
+    Home[&quot;/  Home Page&quot;]
+
+    Home --&gt;|nav menu| PubEvents
+    Home --&gt;|nav menu| PubSessions
+    Home --&gt;|nav menu| PubSpeakers
+    Home --&gt;|nav menu| MyProfile
+    Home --&gt;|nav menu| Dashboard
+
+    Dashboard --&gt;|present a session| Presenter
+
+    Login --&gt;|on success| Home
+    MyProfile --&gt;|logout| Home
+
+    PubEvents --&gt;|row click| PubEventDetail
+    PubEventDetail --&gt;|back| PubEvents
+    PubEventDetail --&gt;|view sessions| PubSessions
+    PubEventDetail --&gt;|submit feedback| EventFeedback
+
+    PubSessions --&gt;|row click| PubSessionDetail
+    PubSessionDetail --&gt;|back| PubSessions
+    PubSessionDetail --&gt;|speaker link| PubSpeakerDetail
+    PubSessionDetail --&gt;|submit feedback| SessionFeedback
+
+    PubSpeakers --&gt;|row click| PubSpeakerDetail
+    PubSpeakerDetail --&gt;|back| PubSpeakers
+
+    EventFeedback --&gt;|cancel| PubEventDetail
+    SessionFeedback --&gt;|cancel| PubSessionDetail</pre>
           <hr>
           <h2 id="4-organizer">4. Organizer</h2>
           <p>Authenticated users with the <code>Organizer</code> role. Inherits all attendee and public pages. Adds CRUD management for every conference entity (events, sessions, speakers, categories, questions, rooms), user management, feedback analytics, and the AI-assisted <strong>Session Selection Dashboard</strong>. These items appear under the nav menu&#39;s <em>Admin</em> section (most grouped under &quot;Conference&quot;).</p>
           <pre class="mermaid">flowchart TD
-              subgraph Auth[&quot;Authentication&quot;]
-                  Login[&quot;/login&lt;br/&gt;Login&quot;]
-              end
-          
-              subgraph Profile[&quot;Identity&quot;]
-                  MyProfile[&quot;/profile&lt;br/&gt;My Profile&quot;]
-                  Users[&quot;/users&lt;br/&gt;User Management&quot;]
-              end
-          
-              subgraph Public[&quot;Public Conference&quot;]
-                  PubEvents[&quot;/conference/events&lt;br/&gt;Public Event List&quot;]
-                  PubEventDetail[&quot;/conference/events/{Id}&lt;br/&gt;Public Event Detail&quot;]
-                  PubSessions[&quot;/conference/sessions&lt;br/&gt;Public Session List&quot;]
-                  PubSessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Public Session Detail&quot;]
-                  PubSpeakers[&quot;/conference/speakers&lt;br/&gt;Public Speaker List&quot;]
-                  PubSpeakerDetail[&quot;/conference/speakers/{Id}&lt;br/&gt;Public Speaker Detail&quot;]
-              end
-          
-              subgraph Engagement[&quot;Engagement / Feedback&quot;]
-                  EventFeedback[&quot;/feedback/event/{EventId}&lt;br/&gt;Submit Event Feedback&quot;]
-                  SessionFeedback[&quot;/feedback/session/{SessionId}&lt;br/&gt;Submit Session Feedback&quot;]
-              end
-          
-              subgraph EventMgmt[&quot;Organizer: Event Management&quot;]
-                  EventList[&quot;/events&lt;br/&gt;Event List&quot;]
-                  EventCreate[&quot;/events/create&lt;br/&gt;Create Event&quot;]
-                  EventDetail[&quot;/events/{Id}&lt;br/&gt;Edit Event&quot;]
-                  AdminEventFB[&quot;/events/{EventId}/feedback&lt;br/&gt;Event Feedback Analytics&quot;]
-              end
-          
-              subgraph SessionMgmt[&quot;Organizer: Session Management&quot;]
-                  SessionList[&quot;/sessions&lt;br/&gt;Session List&quot;]
-                  SessionCreate[&quot;/sessions/create&lt;br/&gt;Create Session&quot;]
-                  SessionDetail[&quot;/sessions/{Id}&lt;br/&gt;Edit Session&quot;]
-                  AdminSessionFB[&quot;/sessions/{SessionId}/feedback&lt;br/&gt;Session Feedback Analytics&quot;]
-              end
-          
-              subgraph SpeakerMgmt[&quot;Organizer: Speaker Management&quot;]
-                  SpeakerList[&quot;/speakers&lt;br/&gt;Speaker List&quot;]
-                  SpeakerCreate[&quot;/speakers/create&lt;br/&gt;Create Speaker&quot;]
-                  SpeakerDetail[&quot;/speakers/{Id}&lt;br/&gt;Edit Speaker&quot;]
-              end
-          
-              subgraph RefData[&quot;Organizer: Reference Data&quot;]
-                  CatList[&quot;/conferencecategories&lt;br/&gt;Category List&quot;]
-                  CatCreate[&quot;/conferencecategories/create&lt;br/&gt;Create Category&quot;]
-                  CatDetail[&quot;/conferencecategories/{Id}&lt;br/&gt;Edit Category&quot;]
-                  QuestionList[&quot;/questions&lt;br/&gt;Question List&quot;]
-                  QuestionCreate[&quot;/questions/create&lt;br/&gt;Create Question&quot;]
-                  QuestionDetail[&quot;/questions/{Id}&lt;br/&gt;Edit Question&quot;]
-                  RoomList[&quot;/rooms&lt;br/&gt;Room List&quot;]
-                  RoomCreate[&quot;/rooms/create&lt;br/&gt;Create Room&quot;]
-                  RoomDetail[&quot;/rooms/{Id}&lt;br/&gt;Edit Room&quot;]
-              end
-          
-              subgraph Decision[&quot;Organizer: Session Selection&quot;]
-                  SessionSelection[&quot;/sessions/selection-dashboard&lt;br/&gt;Session Selection Dashboard&lt;br/&gt;status mix, AI scoring&quot;]
-              end
-          
-              Home[&quot;/  Home Page&quot;]
-          
-              %% Top-level navigation
-              Home --&gt;|nav menu| PubEvents
-              Home --&gt;|nav menu| PubSessions
-              Home --&gt;|nav menu| PubSpeakers
-              Home --&gt;|nav menu| MyProfile
-              Home --&gt;|nav menu| Users
-              Home --&gt;|nav menu| EventList
-              Home --&gt;|nav menu| SessionList
-              Home --&gt;|nav menu| SpeakerList
-              Home --&gt;|nav menu| CatList
-              Home --&gt;|nav menu| QuestionList
-              Home --&gt;|nav menu| RoomList
-              Home --&gt;|nav menu| SessionSelection
-          
-              Login --&gt;|on success| Home
-              MyProfile --&gt;|logout| Home
-          
-              %% Public flows
-              PubEvents --&gt;|row click| PubEventDetail
-              PubEventDetail --&gt;|back| PubEvents
-              PubEventDetail --&gt;|view sessions| PubSessions
-              PubEventDetail --&gt;|submit feedback| EventFeedback
-              PubSessions --&gt;|row click| PubSessionDetail
-              PubSessionDetail --&gt;|back| PubSessions
-              PubSessionDetail --&gt;|speaker link| PubSpeakerDetail
-              PubSessionDetail --&gt;|submit feedback| SessionFeedback
-              PubSpeakers --&gt;|row click| PubSpeakerDetail
-              PubSpeakerDetail --&gt;|back| PubSpeakers
-              EventFeedback --&gt;|cancel| PubEventDetail
-              SessionFeedback --&gt;|cancel| PubSessionDetail
-          
-              %% Event CRUD
-              EventList --&gt;|create| EventCreate
-              EventList --&gt;|row click| EventDetail
-              EventCreate --&gt;|on success| EventDetail
-              EventCreate --&gt;|back| EventList
-              EventDetail --&gt;|back| EventList
-              EventDetail --&gt;|view feedback| AdminEventFB
-          
-              %% Session CRUD
-              SessionList --&gt;|create| SessionCreate
-              SessionList --&gt;|row click| SessionDetail
-              SessionCreate --&gt;|on success| SessionDetail
-              SessionCreate --&gt;|back| SessionList
-              SessionDetail --&gt;|back| SessionList
-              SessionDetail --&gt;|view feedback| AdminSessionFB
-          
-              %% Speaker CRUD
-              SpeakerList --&gt;|create| SpeakerCreate
-              SpeakerList --&gt;|row click| SpeakerDetail
-              SpeakerCreate --&gt;|on success| SpeakerDetail
-              SpeakerCreate --&gt;|back| SpeakerList
-              SpeakerDetail --&gt;|back| SpeakerList
-          
-              %% Cross-entity navigation
-              EventDetail --&gt;|click speaker| SpeakerDetail
-              EventDetail --&gt;|click room| RoomDetail
-              SpeakerDetail --&gt;|click session| SessionDetail
-              SessionSelection --&gt;|click speaker| SpeakerDetail
-              SessionSelection --&gt;|click session| SessionDetail
-          
-              %% Category CRUD
-              CatList --&gt;|create| CatCreate
-              CatList --&gt;|row click| CatDetail
-              CatCreate --&gt;|on success| CatDetail
-              CatCreate --&gt;|back| CatList
-              CatDetail --&gt;|back| CatList
-          
-              %% Question CRUD
-              QuestionList --&gt;|create| QuestionCreate
-              QuestionList --&gt;|row click| QuestionDetail
-              QuestionCreate --&gt;|on success| QuestionDetail
-              QuestionCreate --&gt;|back| QuestionList
-              QuestionDetail --&gt;|back| QuestionList
-          
-              %% Room CRUD
-              RoomList --&gt;|create| RoomCreate
-              RoomList --&gt;|row click| RoomDetail
-              RoomCreate --&gt;|on success| RoomDetail
-              RoomCreate --&gt;|back| RoomList
-              RoomDetail --&gt;|back| RoomList</pre>
+    subgraph Auth[&quot;Authentication&quot;]
+        Login[&quot;/login&lt;br/&gt;Login&quot;]
+    end
+
+    subgraph Profile[&quot;Identity&quot;]
+        MyProfile[&quot;/profile&lt;br/&gt;My Profile&quot;]
+        Users[&quot;/users&lt;br/&gt;User Management&quot;]
+    end
+
+    subgraph Public[&quot;Public Conference&quot;]
+        PubEvents[&quot;/conference/events&lt;br/&gt;Public Event List&quot;]
+        PubEventDetail[&quot;/conference/events/{Id}&lt;br/&gt;Public Event Detail&quot;]
+        PubSessions[&quot;/conference/sessions&lt;br/&gt;Public Session List&quot;]
+        PubSessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Public Session Detail&quot;]
+        PubSpeakers[&quot;/conference/speakers&lt;br/&gt;Public Speaker List&quot;]
+        PubSpeakerDetail[&quot;/conference/speakers/{Id}&lt;br/&gt;Public Speaker Detail&quot;]
+    end
+
+    subgraph Engagement[&quot;Engagement / Feedback&quot;]
+        EventFeedback[&quot;/feedback/event/{EventId}&lt;br/&gt;Submit Event Feedback&quot;]
+        SessionFeedback[&quot;/feedback/session/{SessionId}&lt;br/&gt;Submit Session Feedback&quot;]
+    end
+
+    subgraph EventMgmt[&quot;Organizer: Event Management&quot;]
+        EventList[&quot;/events&lt;br/&gt;Event List&quot;]
+        EventCreate[&quot;/events/create&lt;br/&gt;Create Event&quot;]
+        EventDetail[&quot;/events/{Id}&lt;br/&gt;Edit Event&quot;]
+        AdminEventFB[&quot;/events/{EventId}/feedback&lt;br/&gt;Event Feedback Analytics&quot;]
+    end
+
+    subgraph SessionMgmt[&quot;Organizer: Session Management&quot;]
+        SessionList[&quot;/sessions&lt;br/&gt;Session List&quot;]
+        SessionCreate[&quot;/sessions/create&lt;br/&gt;Create Session&quot;]
+        SessionDetail[&quot;/sessions/{Id}&lt;br/&gt;Edit Session&quot;]
+        AdminSessionFB[&quot;/sessions/{SessionId}/feedback&lt;br/&gt;Session Feedback Analytics&quot;]
+    end
+
+    subgraph SpeakerMgmt[&quot;Organizer: Speaker Management&quot;]
+        SpeakerList[&quot;/speakers&lt;br/&gt;Speaker List&quot;]
+        SpeakerCreate[&quot;/speakers/create&lt;br/&gt;Create Speaker&quot;]
+        SpeakerDetail[&quot;/speakers/{Id}&lt;br/&gt;Edit Speaker&quot;]
+    end
+
+    subgraph RefData[&quot;Organizer: Reference Data&quot;]
+        CatList[&quot;/conferencecategories&lt;br/&gt;Category List&quot;]
+        CatCreate[&quot;/conferencecategories/create&lt;br/&gt;Create Category&quot;]
+        CatDetail[&quot;/conferencecategories/{Id}&lt;br/&gt;Edit Category&quot;]
+        QuestionList[&quot;/questions&lt;br/&gt;Question List&quot;]
+        QuestionCreate[&quot;/questions/create&lt;br/&gt;Create Question&quot;]
+        QuestionDetail[&quot;/questions/{Id}&lt;br/&gt;Edit Question&quot;]
+        RoomList[&quot;/rooms&lt;br/&gt;Room List&quot;]
+        RoomCreate[&quot;/rooms/create&lt;br/&gt;Create Room&quot;]
+        RoomDetail[&quot;/rooms/{Id}&lt;br/&gt;Edit Room&quot;]
+    end
+
+    subgraph Decision[&quot;Organizer: Session Selection&quot;]
+        SessionSelection[&quot;/sessions/selection-dashboard&lt;br/&gt;Session Selection Dashboard&lt;br/&gt;status mix, AI scoring&quot;]
+    end
+
+    Home[&quot;/  Home Page&quot;]
+
+    %% Top-level navigation
+    Home --&gt;|nav menu| PubEvents
+    Home --&gt;|nav menu| PubSessions
+    Home --&gt;|nav menu| PubSpeakers
+    Home --&gt;|nav menu| MyProfile
+    Home --&gt;|nav menu| Users
+    Home --&gt;|nav menu| EventList
+    Home --&gt;|nav menu| SessionList
+    Home --&gt;|nav menu| SpeakerList
+    Home --&gt;|nav menu| CatList
+    Home --&gt;|nav menu| QuestionList
+    Home --&gt;|nav menu| RoomList
+    Home --&gt;|nav menu| SessionSelection
+
+    Login --&gt;|on success| Home
+    MyProfile --&gt;|logout| Home
+
+    %% Public flows
+    PubEvents --&gt;|row click| PubEventDetail
+    PubEventDetail --&gt;|back| PubEvents
+    PubEventDetail --&gt;|view sessions| PubSessions
+    PubEventDetail --&gt;|submit feedback| EventFeedback
+    PubSessions --&gt;|row click| PubSessionDetail
+    PubSessionDetail --&gt;|back| PubSessions
+    PubSessionDetail --&gt;|speaker link| PubSpeakerDetail
+    PubSessionDetail --&gt;|submit feedback| SessionFeedback
+    PubSpeakers --&gt;|row click| PubSpeakerDetail
+    PubSpeakerDetail --&gt;|back| PubSpeakers
+    EventFeedback --&gt;|cancel| PubEventDetail
+    SessionFeedback --&gt;|cancel| PubSessionDetail
+
+    %% Event CRUD
+    EventList --&gt;|create| EventCreate
+    EventList --&gt;|row click| EventDetail
+    EventCreate --&gt;|on success| EventDetail
+    EventCreate --&gt;|back| EventList
+    EventDetail --&gt;|back| EventList
+    EventDetail --&gt;|view feedback| AdminEventFB
+
+    %% Session CRUD
+    SessionList --&gt;|create| SessionCreate
+    SessionList --&gt;|row click| SessionDetail
+    SessionCreate --&gt;|on success| SessionDetail
+    SessionCreate --&gt;|back| SessionList
+    SessionDetail --&gt;|back| SessionList
+    SessionDetail --&gt;|view feedback| AdminSessionFB
+
+    %% Speaker CRUD
+    SpeakerList --&gt;|create| SpeakerCreate
+    SpeakerList --&gt;|row click| SpeakerDetail
+    SpeakerCreate --&gt;|on success| SpeakerDetail
+    SpeakerCreate --&gt;|back| SpeakerList
+    SpeakerDetail --&gt;|back| SpeakerList
+
+    %% Cross-entity navigation
+    EventDetail --&gt;|click speaker| SpeakerDetail
+    EventDetail --&gt;|click room| RoomDetail
+    SpeakerDetail --&gt;|click session| SessionDetail
+    SessionSelection --&gt;|click speaker| SpeakerDetail
+    SessionSelection --&gt;|click session| SessionDetail
+
+    %% Category CRUD
+    CatList --&gt;|create| CatCreate
+    CatList --&gt;|row click| CatDetail
+    CatCreate --&gt;|on success| CatDetail
+    CatCreate --&gt;|back| CatList
+    CatDetail --&gt;|back| CatList
+
+    %% Question CRUD
+    QuestionList --&gt;|create| QuestionCreate
+    QuestionList --&gt;|row click| QuestionDetail
+    QuestionCreate --&gt;|on success| QuestionDetail
+    QuestionCreate --&gt;|back| QuestionList
+    QuestionDetail --&gt;|back| QuestionList
+
+    %% Room CRUD
+    RoomList --&gt;|create| RoomCreate
+    RoomList --&gt;|row click| RoomDetail
+    RoomCreate --&gt;|on success| RoomDetail
+    RoomCreate --&gt;|back| RoomList
+    RoomDetail --&gt;|back| RoomList</pre>
           <hr>
           <h2 id="5-functionality-flows-attendee--speaker">5. Functionality Flows (Attendee &amp; Speaker)</h2>
           <p>The diagrams in sections 1-4 map <em>which pages</em> each actor can reach. The diagrams below map <em>how attendees and speakers accomplish each functionality</em>, including inline actions (bookmarking, schedule filtering, dashboard editing) that are not separate pages. Pages appear as <code>route</code> nodes; edge labels are user actions. Flows in 5.3-5.5 require authentication.</p>
           <h3 id="51-account--identity">5.1 Account &amp; Identity</h3>
           <pre class="mermaid">flowchart TD
-              Visitor([&quot;Visitor&quot;]) --&gt;|Register| Register[&quot;/register&lt;br/&gt;Register&quot;]
-              Visitor --&gt;|Login| Login[&quot;/login&lt;br/&gt;Login&quot;]
-              Register --&gt;|submit, auto-links speaker by email| Home[&quot;/&lt;br/&gt;Home, signed in&quot;]
-              Login --&gt;|submit| Home
-              Home --&gt;|My Profile| Profile[&quot;/profile&lt;br/&gt;Change Password&quot;]
-              Profile --&gt;|Change Password| Profile
-              Profile -.-&gt;|direct route| Claims[&quot;/profile/claims&lt;br/&gt;My Claims, incl. speaker_id&quot;]
-              Claims --&gt;|Back to Profile| Profile
-              Home --&gt;|Logout| Login</pre>
+    Visitor([&quot;Visitor&quot;]) --&gt;|Register| Register[&quot;/register&lt;br/&gt;Register&quot;]
+    Visitor --&gt;|Login| Login[&quot;/login&lt;br/&gt;Login&quot;]
+    Register --&gt;|submit, auto-links speaker by email| Home[&quot;/&lt;br/&gt;Home, signed in&quot;]
+    Login --&gt;|submit| Home
+    Home --&gt;|My Profile| Profile[&quot;/profile&lt;br/&gt;Change Password&quot;]
+    Profile --&gt;|Change Password| Profile
+    Profile -.-&gt;|direct route| Claims[&quot;/profile/claims&lt;br/&gt;My Claims, incl. speaker_id&quot;]
+    Claims --&gt;|Back to Profile| Profile
+    Home --&gt;|Logout| Login</pre>
           <h3 id="52-discover-the-schedule-also-available-anonymously">5.2 Discover the Schedule (also available anonymously)</h3>
           <pre class="mermaid">flowchart LR
-              Home[&quot;/&lt;br/&gt;Home&quot;] --&gt;|Events| Events[&quot;/conference/events&lt;br/&gt;Event List&quot;]
-              Home --&gt;|Sessions| Sessions[&quot;/conference/sessions&lt;br/&gt;Session List&quot;]
-              Home --&gt;|Speakers| Speakers[&quot;/conference/speakers&lt;br/&gt;Speaker List&quot;]
-              Events --&gt;|row click| EventDetail[&quot;/conference/events/{Id}&lt;br/&gt;Event Detail: dates, venue, map, WiFi&quot;]
-              EventDetail --&gt;|View Schedule| Sessions
-              Sessions --&gt;|search title - list auto-scoped to the current or next event| Sessions
-              Sessions --&gt;|row click| SessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail: time, room, accessibility, resources&quot;]
-              Speakers --&gt;|row click| SpeakerDetail[&quot;/conference/speakers/{Id}&lt;br/&gt;Speaker Detail: bio, social links, sessions&quot;]
-              SessionDetail --&gt;|speaker link| SpeakerDetail
-              SpeakerDetail --&gt;|session link| SessionDetail</pre>
+    Home[&quot;/&lt;br/&gt;Home&quot;] --&gt;|Events| Events[&quot;/conference/events&lt;br/&gt;Event List&quot;]
+    Home --&gt;|Sessions| Sessions[&quot;/conference/sessions&lt;br/&gt;Session List&quot;]
+    Home --&gt;|Speakers| Speakers[&quot;/conference/speakers&lt;br/&gt;Speaker List&quot;]
+    Events --&gt;|row click| EventDetail[&quot;/conference/events/{Id}&lt;br/&gt;Event Detail: dates, venue, map, WiFi&quot;]
+    EventDetail --&gt;|View Schedule| Sessions
+    Sessions --&gt;|search title - list auto-scoped to the current or next event| Sessions
+    Sessions --&gt;|row click| SessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail: time, room, accessibility, resources&quot;]
+    Speakers --&gt;|row click| SpeakerDetail[&quot;/conference/speakers/{Id}&lt;br/&gt;Speaker Detail: bio, social links, sessions&quot;]
+    SessionDetail --&gt;|speaker link| SpeakerDetail
+    SpeakerDetail --&gt;|session link| SessionDetail</pre>
           <h3 id="53-personal-schedule--bookmarking">5.3 Personal Schedule / Bookmarking</h3>
           <pre class="mermaid">flowchart TD
-              Sessions[&quot;/conference/sessions&lt;br/&gt;Session List&quot;] --&gt;|star icon on row| Toggle{{&quot;Toggle bookmark - eligible, non-service sessions only&quot;}}
-              SessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;] --&gt;|Add to or Remove from Schedule| Toggle
-              Toggle --&gt;|added| Saved[&quot;Bookmark saved&quot;]
-              Toggle --&gt;|removed| Removed[&quot;Bookmark removed&quot;]
-              Sessions --&gt;|switch All Sessions to My Schedule| MySchedule[&quot;Session List filtered to my starred sessions&quot;]
-              MySchedule --&gt;|star icon| Toggle</pre>
+    Sessions[&quot;/conference/sessions&lt;br/&gt;Session List&quot;] --&gt;|star icon on row| Toggle{{&quot;Toggle bookmark - eligible, non-service sessions only&quot;}}
+    SessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;] --&gt;|Add to or Remove from Schedule| Toggle
+    Toggle --&gt;|added| Saved[&quot;Bookmark saved&quot;]
+    Toggle --&gt;|removed| Removed[&quot;Bookmark removed&quot;]
+    Sessions --&gt;|switch All Sessions to My Schedule| MySchedule[&quot;Session List filtered to my starred sessions&quot;]
+    MySchedule --&gt;|star icon| Toggle</pre>
           <h3 id="54-submit--manage-feedback">5.4 Submit &amp; Manage Feedback</h3>
           <pre class="mermaid">flowchart TD
-              EventDetail[&quot;/conference/events/{Id}&lt;br/&gt;Event Detail&quot;] --&gt;|Submit Feedback| EventFB[&quot;/feedback/event/{EventId}&lt;br/&gt;Event Feedback Form&quot;]
-              SessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;] --&gt;|Submit Feedback| SessionFB[&quot;/feedback/session/{SessionId}&lt;br/&gt;Session Feedback Form&quot;]
-              SessionFB --&gt;|not eligible, e.g. time window or service session| Blocked[&quot;Warning shown, no form&quot;]
-              Blocked --&gt;|Back to Session| SessionDetail
-              EventFB --&gt; Answer[&quot;Answer questions: Rating 1-5, Text, Email. Existing answers pre-filled&quot;]
-              SessionFB --&gt; Answer
-              Answer --&gt;|Submit, upsert| Done[&quot;Saved, back to detail&quot;]
-              Answer --&gt;|Clear answer| Deleted[&quot;Answer removed&quot;]
-              Answer --&gt;|Cancel| Back[&quot;Return to detail, guards unsaved&quot;]</pre>
+    EventDetail[&quot;/conference/events/{Id}&lt;br/&gt;Event Detail&quot;] --&gt;|Submit Feedback| EventFB[&quot;/feedback/event/{EventId}&lt;br/&gt;Event Feedback Form&quot;]
+    SessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;] --&gt;|Submit Feedback| SessionFB[&quot;/feedback/session/{SessionId}&lt;br/&gt;Session Feedback Form&quot;]
+    SessionFB --&gt;|not eligible, e.g. time window or service session| Blocked[&quot;Warning shown, no form&quot;]
+    Blocked --&gt;|Back to Session| SessionDetail
+    EventFB --&gt; Answer[&quot;Answer questions: Rating 1-5, Text, Email. Existing answers pre-filled&quot;]
+    SessionFB --&gt; Answer
+    Answer --&gt;|Submit, upsert| Done[&quot;Saved, back to detail&quot;]
+    Answer --&gt;|Clear answer| Deleted[&quot;Answer removed&quot;]
+    Answer --&gt;|Cancel| Back[&quot;Return to detail, guards unsaved&quot;]</pre>
           <h3 id="55-speaker-dashboard-requires-speaker_id-claim">5.5 Speaker Dashboard (requires <code>speaker_id</code> claim)</h3>
           <pre class="mermaid">flowchart TD
-              Home[&quot;/&lt;br/&gt;Home&quot;] --&gt;|Speaker Dashboard| Dash[&quot;/speaker/dashboard&lt;br/&gt;Speaker Dashboard&quot;]
-              Dash --&gt;|account not linked| NotLinked[&quot;Info: contact organizer to link account&quot;]
-              Dash --&gt; Profile[&quot;Profile card: photo, tagline, bio&quot;]
-              Profile --&gt;|Edit| EditProfile[&quot;Edit bio, tagline, social links&quot;]
-              EditProfile --&gt;|Save| Profile
-              EditProfile --&gt;|Cancel| Profile
-              EditProfile -.-&gt;|warning| Overwrite[&quot;Edits may be overwritten on next Sessionize refresh&quot;]
-              Dash --&gt; MySessions[&quot;My Sessions list&quot;]
-              MySessions --&gt;|bookmark-count badge| Counts[&quot;See attendee bookmark counts&quot;]
-              MySessions --&gt;|expand review icon| Feedback[&quot;View ratings avg and count, plus text comments&quot;]
-              MySessions --&gt;|session title| SessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;]</pre>
+    Home[&quot;/&lt;br/&gt;Home&quot;] --&gt;|Speaker Dashboard| Dash[&quot;/speaker/dashboard&lt;br/&gt;Speaker Dashboard&quot;]
+    Dash --&gt;|account not linked| NotLinked[&quot;Info: contact organizer to link account&quot;]
+    Dash --&gt; Profile[&quot;Profile card: photo, tagline, bio&quot;]
+    Profile --&gt;|Edit| EditProfile[&quot;Edit bio, tagline, social links&quot;]
+    EditProfile --&gt;|Save| Profile
+    EditProfile --&gt;|Cancel| Profile
+    EditProfile -.-&gt;|warning| Overwrite[&quot;Edits may be overwritten on next Sessionize refresh&quot;]
+    Dash --&gt; MySessions[&quot;My Sessions list&quot;]
+    MySessions --&gt;|bookmark-count badge| Counts[&quot;See attendee bookmark counts&quot;]
+    MySessions --&gt;|expand review icon| Feedback[&quot;View ratings avg and count, plus text comments&quot;]
+    MySessions --&gt;|session title| SessionDetail[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;]</pre>
           <h3 id="56-conference-day-live-layer-adr-039">5.6 Conference-Day Live Layer (ADR-039)</h3>
           <p>The live layer is the conference-day surface: it appears for any authenticated user, and the
           moderation controls appear only for the session&#39;s presenter or an Organizer. The client renders
           optimistically and the server is the real authority on who may moderate (BR-236).</p>
           <pre class="mermaid">flowchart TD
-              Home[&quot;/&lt;br/&gt;Home&quot;] --&gt;|nav menu, Happening Now| HN[&quot;/happening-now&lt;br/&gt;Happening Now&quot;]
-          
-              HN --&gt; NowNext[&quot;Tab: Now and Next, live and upcoming sessions&quot;]
-              HN --&gt; Polls[&quot;Tab: Polls, open event-wide polls with live tallies&quot;]
-              HN -.-&gt;|organizer or presenter only| Manage[&quot;Tab: Manage, author, open and close polls&quot;]
-          
-              NowNext --&gt;|Go live| Live[&quot;/conference/sessions/{Id}/live&lt;br/&gt;Live Session&quot;]
-              SessionDetail2[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;] --&gt;|join live| Live
-          
-              Live --&gt; LivePolls[&quot;Poll panel: vote, change vote while open&quot;]
-              Live --&gt; LiveQA[&quot;Q and A panel: submit a question, upvote approved ones&quot;]
-              Live -.-&gt;|presenter or organizer only| Moderate[&quot;Moderation panel: approve, dismiss, mark answered&quot;]
-          
-              Dash2[&quot;/speaker/dashboard&lt;br/&gt;Speaker Dashboard&quot;] --&gt;|present| Present[&quot;/conference/sessions/{Id}/present&lt;br/&gt;Presenter View&quot;]
-              Present --&gt; PresentPolls[&quot;Presenter layout: open poll results and the approved question queue&quot;]</pre>
+    Home[&quot;/&lt;br/&gt;Home&quot;] --&gt;|nav menu, Happening Now| HN[&quot;/happening-now&lt;br/&gt;Happening Now&quot;]
+
+    HN --&gt; NowNext[&quot;Tab: Now and Next, live and upcoming sessions&quot;]
+    HN --&gt; Polls[&quot;Tab: Polls, open event-wide polls with live tallies&quot;]
+    HN -.-&gt;|organizer or presenter only| Manage[&quot;Tab: Manage, author, open and close polls&quot;]
+
+    NowNext --&gt;|Go live| Live[&quot;/conference/sessions/{Id}/live&lt;br/&gt;Live Session&quot;]
+    SessionDetail2[&quot;/conference/sessions/{Id}&lt;br/&gt;Session Detail&quot;] --&gt;|join live| Live
+
+    Live --&gt; LivePolls[&quot;Poll panel: vote, change vote while open&quot;]
+    Live --&gt; LiveQA[&quot;Q and A panel: submit a question, upvote approved ones&quot;]
+    Live -.-&gt;|presenter or organizer only| Moderate[&quot;Moderation panel: approve, dismiss, mark answered&quot;]
+
+    Dash2[&quot;/speaker/dashboard&lt;br/&gt;Speaker Dashboard&quot;] --&gt;|present| Present[&quot;/conference/sessions/{Id}/present&lt;br/&gt;Presenter View&quot;]
+    Present --&gt; PresentPolls[&quot;Presenter layout: open poll results and the approved question queue&quot;]</pre>
           <h3 id="57-device-settings-maui-head-only">5.7 Device Settings (MAUI head only)</h3>
           <p><code>/settings/device</code> ships <strong>only in the MAUI head</strong> (a host-owned page routed via <code>DeviceUIModule</code>),
           so it can assume native capabilities exist. It is not reachable from the web heads.</p>
           <pre class="mermaid">flowchart TD
-              MauiHome[&quot;/&lt;br/&gt;Home, MAUI head&quot;] --&gt;|nav menu| Device[&quot;/settings/device&lt;br/&gt;Device Settings&quot;]
-              Device --&gt; Reminders[&quot;Session reminders: schedule local notifications for bookmarked sessions&quot;]
-              Device --&gt; Biometrics[&quot;Biometric unlock toggle&quot;]
-              Device --&gt; Prefs[&quot;Device preferences persisted on-device&quot;]</pre>
+    MauiHome[&quot;/&lt;br/&gt;Home, MAUI head&quot;] --&gt;|nav menu| Device[&quot;/settings/device&lt;br/&gt;Device Settings&quot;]
+    Device --&gt; Reminders[&quot;Session reminders: schedule local notifications for bookmarked sessions&quot;]
+    Device --&gt; Biometrics[&quot;Biometric unlock toggle&quot;]
+    Device --&gt; Prefs[&quot;Device preferences persisted on-device&quot;]</pre>
           <hr>
           <h2 id="navigation-patterns">Navigation Patterns</h2>
           <h3 id="authentication-redirects">Authentication Redirects</h3>
@@ -577,10 +577,10 @@
           <h3 id="crud-pattern-organizer">CRUD Pattern (Organizer)</h3>
           <p>All admin entity management follows the same navigation pattern:</p>
           <pre class="doc-pre"><code class="">List ──row click──► Detail ──back──► List
-           │                    ▲
-           └──create──► Create ─┘ (on success)
-                        │
-                        └──back──► List</code></pre>
+ │                    ▲
+ └──create──► Create ─┘ (on success)
+              │
+              └──back──► List</code></pre>
           <h3 id="cross-entity-links-organizer">Cross-Entity Links (Organizer)</h3>
           <ul>
           <li><strong>Event Detail</strong> links to Speaker Detail and Room Detail for associated entities.</li>

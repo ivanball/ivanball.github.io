@@ -185,7 +185,7 @@
           external NuGet packages are <em>not</em> first-party, they are &quot;external Level 0&quot;, explained <strong>once</strong> in the
           <a href="00-primer.html">primer</a>, never per class.</p>
           <pre class="doc-pre"><code class="">Level(C) = 0                              if C references only external (BCL/NuGet) types
-          Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pre>
+Level(C) = 1 + max(Level(D)) over all first-party D that C depends on</code></pre>
           <p>When a type must reference a first-party type whose home group appears <strong>later</strong>, that forward
           reference is allowed (functional cohesion can outrank strict progressive disclosure) and is
           cross-linked. Twenty dependency <strong>cycles</strong> exist (mutually-dependent types, e.g. an aggregate root and
@@ -502,8 +502,8 @@
           <hr>
           <h2 id="the-companion-projects-context">The companion projects (context)</h2>
           <pre class="doc-pre"><code class="">MMCA.Common , shared framework, published as 15 NuGet packages (DDD/Clean Arch/CQRS base classes)
-             ├── consumed by MMCA.ADC   (Atlanta Developers Conference app, the focus of this guide)
-             └── consumed by MMCA.Store  (e-commerce app, out of scope here)</code></pre>
+   ├── consumed by MMCA.ADC   (Atlanta Developers Conference app, the focus of this guide)
+   └── consumed by MMCA.Store  (e-commerce app, out of scope here)</code></pre>
           <p>This guide covers <strong>MMCA.Common</strong> (the framework) and <strong>MMCA.ADC</strong> (one consumer). <code>MMCA.Store</code> is out
           of scope. The dependency arrow is why the Common framework groups (1–16) come before the ADC
           business-module groups (17–25); the late-added Common Device Capability layer (26, a framework concern

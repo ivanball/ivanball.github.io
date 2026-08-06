@@ -172,14 +172,14 @@
           <h3 id="the-layered-dependency-flow-clean-architecture">The layered dependency flow (Clean Architecture)</h3>
           <p><code>MMCA.Common</code>&#39;s own layering, enforced top-to-bottom (<code>MMCA.Common/CLAUDE.md</code>, &quot;Architecture&quot;):</p>
           <pre class="doc-pre"><code class="">API / Grpc        (presentation / transport)
-               ↓
-          Infrastructure    (EF Core, caching, JWT, JWKS, outbox, message bus, SignalR)
-               ↓
-          Application       (CQRS handlers, decorators, module system, IMessageBus)
-               ↓
-          Domain            (entities, aggregates, domain events, specifications)
-               ↓
-          Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
+     ↓
+Infrastructure    (EF Core, caching, JWT, JWKS, outbox, message bus, SignalR)
+     ↓
+Application       (CQRS handlers, decorators, module system, IMessageBus)
+     ↓
+Domain            (entities, aggregates, domain events, specifications)
+     ↓
+Shared            (Result pattern, errors, DTOs, value objects)</code></pre>
           <p>Each layer references only layers <strong>below</strong> it, the <strong>dependency rule</strong> of Clean Architecture: source
           dependencies point inward, toward the domain, and the domain depends on nothing framework-specific.
           Two deliberate exceptions: <strong><code>UI</code></strong> and <strong><code>Grpc</code></strong> depend on <strong><code>Shared</code> only</strong>, <code>UI</code> for Blazor
@@ -759,12 +759,12 @@
           <p>C# 14 (preview) <strong>extension members</strong> let a static class add members to a type via an <code>extension</code>
           block:</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">class</span> <span class="hljs-title">DomainHelper</span>
-          {
-              extension(<span class="hljs-built_in">string</span>? id)                 <span class="hljs-comment">// receiver: the &quot;this&quot; value</span>
-              {
-                  <span class="hljs-function"><span class="hljs-keyword">public</span> TIdentifier <span class="hljs-title">Parse</span>&lt;<span class="hljs-title">TIdentifier</span>&gt;()</span> { ... }   <span class="hljs-comment">// usable as someString.Parse&lt;int&gt;()</span>
-              }
-          }</code></pre>
+{
+    extension(<span class="hljs-built_in">string</span>? id)                 <span class="hljs-comment">// receiver: the &quot;this&quot; value</span>
+    {
+        <span class="hljs-function"><span class="hljs-keyword">public</span> TIdentifier <span class="hljs-title">Parse</span>&lt;<span class="hljs-title">TIdentifier</span>&gt;()</span> { ... }   <span class="hljs-comment">// usable as someString.Parse&lt;int&gt;()</span>
+    }
+}</code></pre>
           <p>The codebase uses this heavily for <strong>DI registration</strong>, every <code>DependencyInjection.cs</code> adds methods
           like <code>AddApplication()</code> directly onto <code>IServiceCollection</code> through an <code>extension(IServiceCollection)</code>
           block. You&#39;ll first meet the syntax in <a href="group-02-domain-building-blocks.html"><code>group-02</code></a>
@@ -797,7 +797,7 @@
           a subset fast (<code>MMCA.Store.CI.slnf</code>, <code>MMCA.ADC.CI.slnf</code>).</li>
           <li><strong>Microsoft Testing Platform</strong>, not VSTest. To run one test class/method you target the test
           project and pass an MTP filter after <code>--</code>:<pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet <span class="hljs-built_in">test</span> --project Tests/&lt;path&gt;/&lt;Name&gt;.Tests.csproj -- --filter-method <span class="hljs-string">&quot;*Pattern*&quot;</span>
-          <span class="hljs-comment">#                                                      -- --filter-class  &quot;*FooTests*&quot;</span></code></pre>
+<span class="hljs-comment">#                                                      -- --filter-class  &quot;*FooTests*&quot;</span></code></pre>
           Always <code>--project &lt;csproj&gt;</code>, never a bare path, and get the flag right: a wrong filter flag exits
           5 having run zero tests instead of erroring out loudly. Every test project must contain at least
           one test or MTP exits 8, so CI passes <code>--minimum-expected-tests</code> on every run: <code>1</code> on the ADC legs

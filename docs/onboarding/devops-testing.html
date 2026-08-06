@@ -259,10 +259,10 @@
           <h3 id="microsoft-testing-platform-mtp-not-vstest">Microsoft Testing Platform (MTP), not VSTest</h3>
           <p>All four repos share one <code>global.json</code> structure:</p>
           <pre class="doc-pre" data-lang="JSON"><code class="language-json hljs"><span class="hljs-punctuation">{</span>
-            <span class="hljs-attr">&quot;test&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-              <span class="hljs-attr">&quot;runner&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Microsoft.Testing.Platform&quot;</span>
-            <span class="hljs-punctuation">}</span>
-          <span class="hljs-punctuation">}</span></code></pre>
+  <span class="hljs-attr">&quot;test&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">&quot;runner&quot;</span><span class="hljs-punctuation">:</span> <span class="hljs-string">&quot;Microsoft.Testing.Platform&quot;</span>
+  <span class="hljs-punctuation">}</span>
+<span class="hljs-punctuation">}</span></code></pre>
           <p>(<code>MMCA.Common/global.json:1-5</code>, identical in <code>MMCA.ADC/global.json</code>, <code>MMCA.Store/global.json</code> and
           <code>MMCA.Helpdesk/global.json</code>)</p>
           <p>This selects <strong>MTP</strong> as the test runner instead of the legacy VSTest runner. The practical
@@ -277,12 +277,12 @@
           </li>
           <li><p><strong>Filter syntax differs.</strong> You pass a <code>--</code> separator and then MTP&#39;s own filter flags:</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-comment"># Run a single test class</span>
-          dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/MMCA.ADC.Identity.Domain.Tests/MMCA.ADC.Identity.Domain.Tests.csproj \
-            -- --filter-class <span class="hljs-string">&quot;*UserTests*&quot;</span>
-          
-          <span class="hljs-comment"># Run a single test method</span>
-          dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/MMCA.ADC.Identity.Domain.Tests/MMCA.ADC.Identity.Domain.Tests.csproj \
-            -- --filter-method <span class="hljs-string">&quot;*Create_WithValidData_ReturnsSuccess*&quot;</span></code></pre>
+dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/MMCA.ADC.Identity.Domain.Tests/MMCA.ADC.Identity.Domain.Tests.csproj \
+  -- --filter-class <span class="hljs-string">&quot;*UserTests*&quot;</span>
+
+<span class="hljs-comment"># Run a single test method</span>
+dotnet <span class="hljs-built_in">test</span> --project Tests/Modules/Identity/MMCA.ADC.Identity.Domain.Tests/MMCA.ADC.Identity.Domain.Tests.csproj \
+  -- --filter-method <span class="hljs-string">&quot;*Create_WithValidData_ReturnsSuccess*&quot;</span></code></pre>
           <p>The flags are <code>--filter-class</code> and <code>--filter-method</code>, not the VSTest <code>--filter FullyQualifiedName~...</code>
           form. Always target <code>--project &lt;csproj&gt;</code>, never a bare directory path. Passing the wrong flag is a
           quiet failure mode: the run exits non-zero having discovered zero tests rather than telling you the
@@ -1140,9 +1140,9 @@
           <code>StoreArchitectureMap</code> and <code>HelpdeskArchitectureMap</code>. A concrete test class is then a short sealed
           subclass, e.g.:</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">LayerDependencyTests</span> : <span class="hljs-title">LayerDependencyTestsBase</span>
-          {
-              <span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> IArchitectureMap Map { <span class="hljs-keyword">get</span>; } = <span class="hljs-keyword">new</span> CommonArchitectureMap();
-          }</code></pre>
+{
+    <span class="hljs-keyword">protected</span> <span class="hljs-keyword">override</span> IArchitectureMap Map { <span class="hljs-keyword">get</span>; } = <span class="hljs-keyword">new</span> CommonArchitectureMap();
+}</code></pre>
           <p>(<code>MMCA.Common.Architecture.Tests/LayerDependencyTests.cs:9-12</code>). The map&#39;s anchor types
           (<code>CommonArchitectureMap.cs:21-27</code>, e.g. <code>typeof(Common.Domain.Entities.BaseEntity&lt;&gt;).Assembly</code> at
           line 22) mean the assembly path is always the one actually compiled into the test run, not a
@@ -1558,28 +1558,28 @@
           <p>The per-repo class is a bare subclass; the facts, the package lists and the parsing live once in the
           shared base:</p>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// MMCA.Common/Tests/Architecture/MMCA.Common.Architecture.Tests/DependencyVersionTests.cs:9</span>
-          <span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">DependencyVersionTests</span> : <span class="hljs-title">DependencyVersionTestsBase</span>;
-          
-          <span class="hljs-comment">// the lists + parsing live in the shipped package:</span>
-          <span class="hljs-comment">// MMCA.Common.Testing.Architecture/Bases/DependencyVersionTestsBase.cs:17-37</span>
-          <span class="hljs-keyword">protected</span> <span class="hljs-keyword">virtual</span> IReadOnlyList&lt;<span class="hljs-built_in">string</span>&gt; MassTransitPackageIds =&gt;
-          [
-              <span class="hljs-string">&quot;MassTransit&quot;</span>,
-              <span class="hljs-string">&quot;MassTransit.RabbitMQ&quot;</span>,
-              <span class="hljs-string">&quot;MassTransit.Azure.ServiceBus.Core&quot;</span>,
-          ];
-          
-          [<span class="hljs-meta">Fact</span>]
-          <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title">MassTransit_MustNotExceed_MajorVersion8</span>()</span>
-          {
-              <span class="hljs-keyword">foreach</span> (<span class="hljs-keyword">var</span> packageId <span class="hljs-keyword">in</span> MassTransitPackageIds)
-              {
-                  ArchitectureRules.PinnedPackageMajorBelow(   <span class="hljs-comment">// parses Directory.Packages.props</span>
-                      packageId,
-                      exclusiveMajorCeiling: <span class="hljs-number">9</span>,
-                      reason: <span class="hljs-string">&quot;MassTransit v9 requires a commercial license (MT_LICENSE); ...&quot;</span>);
-              }
-          }</code></pre>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">DependencyVersionTests</span> : <span class="hljs-title">DependencyVersionTestsBase</span>;
+
+<span class="hljs-comment">// the lists + parsing live in the shipped package:</span>
+<span class="hljs-comment">// MMCA.Common.Testing.Architecture/Bases/DependencyVersionTestsBase.cs:17-37</span>
+<span class="hljs-keyword">protected</span> <span class="hljs-keyword">virtual</span> IReadOnlyList&lt;<span class="hljs-built_in">string</span>&gt; MassTransitPackageIds =&gt;
+[
+    <span class="hljs-string">&quot;MassTransit&quot;</span>,
+    <span class="hljs-string">&quot;MassTransit.RabbitMQ&quot;</span>,
+    <span class="hljs-string">&quot;MassTransit.Azure.ServiceBus.Core&quot;</span>,
+];
+
+[<span class="hljs-meta">Fact</span>]
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title">MassTransit_MustNotExceed_MajorVersion8</span>()</span>
+{
+    <span class="hljs-keyword">foreach</span> (<span class="hljs-keyword">var</span> packageId <span class="hljs-keyword">in</span> MassTransitPackageIds)
+    {
+        ArchitectureRules.PinnedPackageMajorBelow(   <span class="hljs-comment">// parses Directory.Packages.props</span>
+            packageId,
+            exclusiveMajorCeiling: <span class="hljs-number">9</span>,
+            reason: <span class="hljs-string">&quot;MassTransit v9 requires a commercial license (MT_LICENSE); ...&quot;</span>);
+    }
+}</code></pre>
           <p><strong>Why this test exists and what it protects.</strong> MassTransit v9 introduced a mandatory commercial
           license check (<code>MT_LICENSE</code>). A broker-enabled service that starts without it crashes at startup,
           but the crash happens at runtime, not at compile time, and CI never starts the broker. So a blanket
@@ -1599,16 +1599,16 @@
           of §32 in the codebase, a deliberate, documented pin with an automated gate.</p>
           <h3 id="example-b-integration-test-base-usage-identityintegrationtestbase">Example B, Integration test base usage (<code>IdentityIntegrationTestBase</code>)</h3>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// MMCA.ADC/Tests/Integration/MMCA.ADC.Identity.IntegrationTests/Infrastructure/IdentityIntegrationTestBase.cs:11-19</span>
-          [<span class="hljs-meta">Collection(IdentityIntegrationTestCollection.Name)</span>]
-          <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">abstract</span> <span class="hljs-keyword">class</span> <span class="hljs-title">IdentityIntegrationTestBase</span>(<span class="hljs-params">IdentityIntegrationTestFixture fixture</span>)
-              : <span class="hljs-title">IntegrationTestBase</span>&lt;<span class="hljs-title">IdentityIntegrationTestFixture</span>&gt;(<span class="hljs-params">fixture</span>)</span>
-          {
-              <span class="hljs-keyword">private</span> <span class="hljs-keyword">const</span> <span class="hljs-built_in">string</span> Audience = <span class="hljs-string">&quot;AtlDevConapi&quot;</span>;
-          
-              <span class="hljs-function"><span class="hljs-keyword">protected</span> <span class="hljs-keyword">void</span> <span class="hljs-title">AuthenticateAsOrganizer</span>(<span class="hljs-params">UserIdentifierType userId = <span class="hljs-number">1</span></span>)</span>
-                  =&gt; SetBearerToken(JwtTokenGenerator.GenerateToken(Audience, userId, <span class="hljs-string">&quot;Organizer&quot;</span>));
-              <span class="hljs-comment">// ...</span>
-          }</code></pre>
+[<span class="hljs-meta">Collection(IdentityIntegrationTestCollection.Name)</span>]
+<span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">abstract</span> <span class="hljs-keyword">class</span> <span class="hljs-title">IdentityIntegrationTestBase</span>(<span class="hljs-params">IdentityIntegrationTestFixture fixture</span>)
+    : <span class="hljs-title">IntegrationTestBase</span>&lt;<span class="hljs-title">IdentityIntegrationTestFixture</span>&gt;(<span class="hljs-params">fixture</span>)</span>
+{
+    <span class="hljs-keyword">private</span> <span class="hljs-keyword">const</span> <span class="hljs-built_in">string</span> Audience = <span class="hljs-string">&quot;AtlDevConapi&quot;</span>;
+
+    <span class="hljs-function"><span class="hljs-keyword">protected</span> <span class="hljs-keyword">void</span> <span class="hljs-title">AuthenticateAsOrganizer</span>(<span class="hljs-params">UserIdentifierType userId = <span class="hljs-number">1</span></span>)</span>
+        =&gt; SetBearerToken(JwtTokenGenerator.GenerateToken(Audience, userId, <span class="hljs-string">&quot;Organizer&quot;</span>));
+    <span class="hljs-comment">// ...</span>
+}</code></pre>
           <p>A concrete test (<code>AttendeeAuthTests</code>, <code>AttendeeProfileTests</code>, etc.) inherits
           <code>IdentityIntegrationTestBase</code>. The lifecycle is:</p>
           <ol>
@@ -1627,32 +1627,32 @@
           of the §14 &quot;integration test isolation&quot; criterion.</p>
           <h3 id="example-c-bunit-component-test-profiletests">Example C, bUnit component test (<code>ProfileTests</code>)</h3>
           <pre class="doc-pre" data-lang="C#"><code class="language-csharp hljs"><span class="hljs-comment">// MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.UI.Tests/Pages/Profile/ProfileTests.cs:16-60</span>
-          <span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">ProfileTests</span> : <span class="hljs-title">BunitTestBase</span>
-          {
-              <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-title">ProfileTests</span>()</span>
-              {
-                  Services.AddSingleton(Mock.Of&lt;IUserUIService&gt;());
-                  Services.AddSingleton(Mock.Of&lt;IAuthUIService&gt;());
-              }
-          
-              [<span class="hljs-meta">Fact</span>]
-              <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title">WhenAuthenticatedWithUserId_RendersProfileActions</span>()</span>
-              {
-                  <span class="hljs-keyword">var</span> cut = RenderAs&lt;ProfilePage&gt;(UserWithId, _ =&gt; { });
-                  cut.WaitForAssertion(() =&gt;
-                  {
-                      cut.Markup.Should().Contain(<span class="hljs-string">&quot;Change Password&quot;</span>);
-                      cut.Markup.Should().Contain(<span class="hljs-string">&quot;Delete My Account&quot;</span>);
-                  });
-              }
-          
-              [<span class="hljs-meta">Fact</span>]
-              <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title">WhenUserIdClaimMissing_RendersErrorState</span>()</span>
-              {
-                  <span class="hljs-keyword">var</span> cut = RenderAs&lt;ProfilePage&gt;(UserWithoutId, _ =&gt; { });
-                  cut.WaitForAssertion(() =&gt; cut.Markup.Should().Contain(<span class="hljs-string">&quot;Unable to load profile.&quot;</span>));
-              }
-          }</code></pre>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">sealed</span> <span class="hljs-keyword">class</span> <span class="hljs-title">ProfileTests</span> : <span class="hljs-title">BunitTestBase</span>
+{
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-title">ProfileTests</span>()</span>
+    {
+        Services.AddSingleton(Mock.Of&lt;IUserUIService&gt;());
+        Services.AddSingleton(Mock.Of&lt;IAuthUIService&gt;());
+    }
+
+    [<span class="hljs-meta">Fact</span>]
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title">WhenAuthenticatedWithUserId_RendersProfileActions</span>()</span>
+    {
+        <span class="hljs-keyword">var</span> cut = RenderAs&lt;ProfilePage&gt;(UserWithId, _ =&gt; { });
+        cut.WaitForAssertion(() =&gt;
+        {
+            cut.Markup.Should().Contain(<span class="hljs-string">&quot;Change Password&quot;</span>);
+            cut.Markup.Should().Contain(<span class="hljs-string">&quot;Delete My Account&quot;</span>);
+        });
+    }
+
+    [<span class="hljs-meta">Fact</span>]
+    <span class="hljs-function"><span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title">WhenUserIdClaimMissing_RendersErrorState</span>()</span>
+    {
+        <span class="hljs-keyword">var</span> cut = RenderAs&lt;ProfilePage&gt;(UserWithoutId, _ =&gt; { });
+        cut.WaitForAssertion(() =&gt; cut.Markup.Should().Contain(<span class="hljs-string">&quot;Unable to load profile.&quot;</span>));
+    }
+}</code></pre>
           <p><strong>Almost none of the harness is in this repo.</strong> The repo-local <code>BunitTestBase</code>
           (<code>MMCA.ADC/Tests/Modules/Identity/MMCA.ADC.Identity.UI.Tests/BunitTestBase.cs:17</code>) is four lines: it
           inherits <code>BunitComponentTestBase</code> from the shipped <code>MMCA.Common.Testing.UI</code> package and adds exactly

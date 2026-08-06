@@ -278,9 +278,9 @@
           it comes back Online, record the measured restore time, then delete the copy. The live databases are
           never touched. Run it <strong>per release train</strong> and after any backup/retention change.</p>
           <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs"><span class="hljs-comment"># PITR restore of a throwaway COPY (Azure SQL example: adapt to your store)</span>
-          az sql db restore -g &lt;rg&gt; -s &lt;sqlServer&gt; -n &lt;Db&gt; --dest-name &lt;Db&gt;-drill --<span class="hljs-keyword">time</span> <span class="hljs-string">&quot;&lt;recent-utc&gt;&quot;</span>
-          <span class="hljs-comment"># verify status Online (and a row/table spot-check for a deeper check), record elapsed minutes, then:</span>
-          az sql db delete -g &lt;rg&gt; -s &lt;sqlServer&gt; -n &lt;Db&gt;-drill --<span class="hljs-built_in">yes</span></code></pre>
+az sql db restore -g &lt;rg&gt; -s &lt;sqlServer&gt; -n &lt;Db&gt; --dest-name &lt;Db&gt;-drill --<span class="hljs-keyword">time</span> <span class="hljs-string">&quot;&lt;recent-utc&gt;&quot;</span>
+<span class="hljs-comment"># verify status Online (and a row/table spot-check for a deeper check), record elapsed minutes, then:</span>
+az sql db delete -g &lt;rg&gt; -s &lt;sqlServer&gt; -n &lt;Db&gt;-drill --<span class="hljs-built_in">yes</span></code></pre>
           <p>Wire this as a manual/scheduled workflow + script (worked example: MMCA.ADC&#39;s
           <code>.github/workflows/dr-drill.yml</code> + <code>scripts/dr-restore-drill.ps1</code>, which restore a copy, measure RTO,
           verify Online, clean up, and emit a drill-result row). Record each run:</p>

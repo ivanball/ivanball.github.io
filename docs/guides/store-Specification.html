@@ -730,29 +730,29 @@
           <hr>
           <h2 id="4-order-status-state-machine">4. Order Status State Machine</h2>
           <pre class="doc-pre"><code class="">                    +------------------------------------------+
-                              |                                          |
-                              v                                          |
-           +-----------------+----+    InitiatePayment    +--------------+------+
-           |   PendingPayment     |---------------------&gt;|  PaymentInitiated    |
-           +----------------------+                      +---------------------+
-                  |       ^                                    |           |
-                  |       |                                    |           |
-                  |       +------------ PaymentFailed &lt;--------+           |
-                  |                    (can retry)                         |
-                  |                         |                              |
-             MarkAsCancelled           MarkAsCancelled               MarkAsPaid
-                  |                         |                       (webhook or manual)
-                  v                         v                              |
-           +--------------+                                    +-----------+-----+
-           |  Cancelled   | &lt;---- MarkAsCancelled ------------ |      Paid       |
-           +--------------+   (from PaymentInitiated)          +-----------------+
-                                                                       |
-                                                                  MarkAsDelivered
-                                                                       |
-                                                                       v
-                                                               +-----------------+
-                                                               |    Delivered    |
-                                                               +-----------------+</code></pre>
+                    |                                          |
+                    v                                          |
+ +-----------------+----+    InitiatePayment    +--------------+------+
+ |   PendingPayment     |---------------------&gt;|  PaymentInitiated    |
+ +----------------------+                      +---------------------+
+        |       ^                                    |           |
+        |       |                                    |           |
+        |       +------------ PaymentFailed &lt;--------+           |
+        |                    (can retry)                         |
+        |                         |                              |
+   MarkAsCancelled           MarkAsCancelled               MarkAsPaid
+        |                         |                       (webhook or manual)
+        v                         v                              |
+ +--------------+                                    +-----------+-----+
+ |  Cancelled   | &lt;---- MarkAsCancelled ------------ |      Paid       |
+ +--------------+   (from PaymentInitiated)          +-----------------+
+                                                             |
+                                                        MarkAsDelivered
+                                                             |
+                                                             v
+                                                     +-----------------+
+                                                     |    Delivered    |
+                                                     +-----------------+</code></pre>
           <p><strong>Cancellable States:</strong> PendingPayment, PaymentInitiated, PaymentFailed
           <strong>Manual Payment States:</strong> PendingPayment, PaymentInitiated, PaymentFailed
           <strong>Terminal States:</strong> Cancelled, Delivered</p>

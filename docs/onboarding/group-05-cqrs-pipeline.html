@@ -199,17 +199,17 @@
           <em>reverse</em> registration order, the <strong>last</strong> one registered becomes the <strong>outermost</strong> wrapper. So the
           command registrations (<code>DependencyInjection.cs:94-98</code>), read top-to-bottom, list innermost-first:</p>
           <pre class="doc-pre"><code class="">FeatureGateCommandDecorator         ← outermost (registered last)
-            → LoggingCommandDecorator
-              → CachingCommandDecorator
-                → ValidatingCommandDecorator
-                  → TransactionalCommandDecorator   ← innermost (registered first)
-                    → ConcreteHandler               ← the actual business logic</code></pre>
+  → LoggingCommandDecorator
+    → CachingCommandDecorator
+      → ValidatingCommandDecorator
+        → TransactionalCommandDecorator   ← innermost (registered first)
+          → ConcreteHandler               ← the actual business logic</code></pre>
           <p>The query side (<code>DependencyInjection.cs:101-103</code>) is lighter, there is nothing to validate or commit
           on a read:</p>
           <pre class="doc-pre"><code class="">FeatureGateQueryDecorator
-            → LoggingQueryDecorator
-              → CachingQueryDecorator
-                → ConcreteHandler</code></pre>
+  → LoggingQueryDecorator
+    → CachingQueryDecorator
+      → ConcreteHandler</code></pre>
           <p>A separate optional call, <code>AddApplicationProfiling()</code> (<code>DependencyInjection.cs:186-192</code>), layers
           <a href="#profilingcommanddecoratortcommand-tresult"><code>ProfilingCommandDecorator&lt;TCommand, TResult&gt;</code></a> /
           <a href="#profilingquerydecoratortquery-tresult"><code>ProfilingQueryDecorator&lt;TQuery, TResult&gt;</code></a> (MiniProfiler)

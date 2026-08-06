@@ -193,33 +193,33 @@
           <p><strong>Cost-attribution tags</strong>: stamp every billable resource with a consistent tag set so Azure Cost
           Analysis can group by application / environment / cost-centre:</p>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">var commonTags = {
-            application: &#39;myapp&#39;          // groups the whole app&#39;s spend
-            environment: environmentName  // prod / staging / dev
-            component: &#39;my-component&#39;
-            managedBy: &#39;bicep&#39;
-            costCenter: &#39;my-cost-center&#39;
-          }
-          // apply to every resource: resource x &#39;...&#39; = { ..., tags: commonTags }</code></pre>
+  application: &#39;myapp&#39;          // groups the whole app&#39;s spend
+  environment: environmentName  // prod / staging / dev
+  component: &#39;my-component&#39;
+  managedBy: &#39;bicep&#39;
+  costCenter: &#39;my-cost-center&#39;
+}
+// apply to every resource: resource x &#39;...&#39; = { ..., tags: commonTags }</code></pre>
           <p>Add a budget with alerts so the bill cannot surprise you:</p>
           <pre class="doc-pre" data-lang="Bicep"><code class="language-bicep">resource budget &#39;Microsoft.Consumption/budgets@2023-11-01&#39; = if (enableBudget) {
-            name: &#39;myapp-monthly&#39;
-            properties: {
-              amount: monthlyBudgetAmount       // e.g. 200
-              timeGrain: &#39;Monthly&#39;
-              notifications: { /* 80% actual + 100% forecasted → action group */ }
-            }
-          }</code></pre>
+  name: &#39;myapp-monthly&#39;
+  properties: {
+    amount: monthlyBudgetAmount       // e.g. 200
+    timeGrain: &#39;Monthly&#39;
+    notifications: { /* 80% actual + 100% forecasted → action group */ }
+  }
+}</code></pre>
           <p><strong>Surge-revert guard</strong>: a scheduled, read-only check that fails if a temporary scale-up was left
           running (the rubric&#39;s &quot;scale-ups left running after the event&quot; red flag). Distilled from
           <code>cost-guard.yml</code>:</p>
           <pre class="doc-pre" data-lang="YAML"><code class="language-yaml hljs"><span class="hljs-comment"># .github/workflows/cost-guard.yml: weekly + manual; READ-ONLY, never deploys.</span>
-          <span class="hljs-attr">on:</span> { <span class="hljs-attr">schedule:</span> [{ <span class="hljs-attr">cron:</span> <span class="hljs-string">&#x27;0 7 * * 1&#x27;</span> }], <span class="hljs-attr">workflow_dispatch:</span> {} }
-          <span class="hljs-attr">jobs:</span>
-            <span class="hljs-attr">drift:</span>
-              <span class="hljs-attr">steps:</span>
-                <span class="hljs-bullet">-</span> <span class="hljs-attr">run:</span> <span class="hljs-string">az</span> <span class="hljs-string">login</span> <span class="hljs-string">--service-principal</span> <span class="hljs-string">--federated-token</span> <span class="hljs-string">...</span> <span class="hljs-comment"># OIDC, read-only role</span>
-                <span class="hljs-comment"># Fail the run if any Container App maxReplicas &gt; baseline (e.g. 2)</span>
-                <span class="hljs-comment"># or any SQL DB tier != the agreed cheap tier (e.g. Basic), and print reset steps.</span></code></pre>
+<span class="hljs-attr">on:</span> { <span class="hljs-attr">schedule:</span> [{ <span class="hljs-attr">cron:</span> <span class="hljs-string">&#x27;0 7 * * 1&#x27;</span> }], <span class="hljs-attr">workflow_dispatch:</span> {} }
+<span class="hljs-attr">jobs:</span>
+  <span class="hljs-attr">drift:</span>
+    <span class="hljs-attr">steps:</span>
+      <span class="hljs-bullet">-</span> <span class="hljs-attr">run:</span> <span class="hljs-string">az</span> <span class="hljs-string">login</span> <span class="hljs-string">--service-principal</span> <span class="hljs-string">--federated-token</span> <span class="hljs-string">...</span> <span class="hljs-comment"># OIDC, read-only role</span>
+      <span class="hljs-comment"># Fail the run if any Container App maxReplicas &gt; baseline (e.g. 2)</span>
+      <span class="hljs-comment"># or any SQL DB tier != the agreed cheap tier (e.g. Basic), and print reset steps.</span></code></pre>
           <h2 id="out-of-scope-for-the-framework-by-design">Out of scope for the framework (by design)</h2>
           <p>Provisioning, scale rules, budgets, per-service cost attribution, and surge/revert automation are
           consumer/IaC concerns and are <em>not</em> added to the library: see also <a href="../adr/009-resilience-and-recovery-objectives.html">ADR-009</a> (resilience/recovery
