@@ -377,9 +377,11 @@
           <h2 id="phase-2-scaffold-the-module-project-set">Phase 2: Scaffold the module project set</h2>
           <blockquote>
           <p><strong>Scaffolded.</strong> <code>dotnet new mmca-app</code> creates this project set for your first module, and
-          <code>dotnet new mmca-module</code> adds another one later (it prints the five wire-ups it cannot perform:
-          the solution entries, the host and architecture-test project references, the identifier-alias
-          link, the map lines, and <code>AddErrorResources</code>). See the <a href="common-TEMPLATES.html">templates guide</a>.</p>
+          <code>pwsh build/add-module.ps1</code> adds another one later: it drives <code>dotnet new mmca-module</code> and then
+          applies the seven wire-ups the template can only print (the solution entries, the host and
+          architecture-test project references, the identifier-alias link, the map lines,
+          <code>AddErrorResources</code>, the per-module database wiring, and the first migration). See the
+          <a href="common-TEMPLATES.html">templates guide</a>.</p>
           </blockquote>
           <p>Each business module is a set of layered projects under <code>Source/Modules/&lt;Module&gt;/</code>. Pattern source:
           <code>MMCA.Helpdesk/Source/Modules/Tickets/</code> (or the richer <code>MMCA.ADC/Source/Modules/Conference/</code>). For

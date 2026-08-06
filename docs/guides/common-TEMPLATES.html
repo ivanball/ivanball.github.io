@@ -166,6 +166,8 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx</
           <td>your module&#39;s <code>UseCases</code> folder</td>
           </tr>
           </tbody></table></div>
+          <p><code>mmca-app</code> also lays down <code>build/add-module.ps1</code> inside the solution it generates (its own section
+          below): it drives <code>mmca-module</code> and then performs every wire-up <code>dotnet new</code> cannot reach.</p>
           <hr>
           <h2 id="mmca-app"><code>mmca-app</code></h2>
           <div class="table-wrap"><table>
@@ -197,6 +199,16 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx</
           <td>the aggregate&#39;s child entity, singular PascalCase (1.3.0)</td>
           </tr>
           <tr>
+          <td><code>--title</code></td>
+          <td><code>Title</code></td>
+          <td>the aggregate&#39;s main text property, singular PascalCase (1.4.0)</td>
+          </tr>
+          <tr>
+          <td><code>--event-verb</code></td>
+          <td><code>Opened</code></td>
+          <td>verb naming the creation integration event, past tense PascalCase (1.4.0)</td>
+          </tr>
+          <tr>
           <td><code>--flat</code></td>
           <td>off</td>
           <td>generate the module with no child collection at all (1.3.0)</td>
@@ -205,6 +217,16 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx</
           <td><code>--no-status</code></td>
           <td>off</td>
           <td>generate the module with no status axis (1.3.0)</td>
+          </tr>
+          <tr>
+          <td><code>--no-description</code></td>
+          <td>off</td>
+          <td>generate the module with no long-text property (1.4.0)</td>
+          </tr>
+          <tr>
+          <td><code>--no-owner</code></td>
+          <td>off</td>
+          <td>generate the module with no owning-user property (1.4.0)</td>
           </tr>
           <tr>
           <td><code>-f, --framework-version</code></td>
@@ -227,27 +249,66 @@ dotnet test  <span class="hljs-literal">--solution</span> Contoso.Support.slnx</
           connection-string environment variable, the identifier alias, the cache-key prefix, the resource
           strings, and the Blazor pages.</p>
           <h3 id="shaping-the-sample-module">Shaping the sample module</h3>
-          <p>The three options added in <code>MMCA.Templates</code> <strong>1.3.0</strong> decide what the generated aggregate is made of,
-          so you stop deleting or renaming the sample&#39;s shape by hand after the fact.</p>
-          <p><code>--child</code> renames the child concept everywhere. The generated type is <code>&lt;aggregate&gt;&lt;child&gt;</code>, so:</p>
+          <p>Six options decide what the generated aggregate is made of, so you stop deleting or renaming the
+          sample&#39;s shape by hand after the fact. <code>--child</code>, <code>--flat</code> and <code>--no-status</code> arrived in
+          <code>MMCA.Templates</code> <strong>1.3.0</strong>; <code>--title</code>, <code>--event-verb</code>, <code>--no-description</code> and <code>--no-owner</code> in
+          <strong>1.4.0</strong>. Four of them are shape decisions and two are renames.</p>
+          <p><strong>The four shape flags</strong> remove an axis. The code for an axis you turn off is never generated, so
+          there is nothing to delete afterwards:</p>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Option</th>
+          <th>What it drops</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>--flat</code></td>
+          <td>the child collection entirely: no child entity, DTO, requests, mapper, EF configuration, <code>Add</code>/<code>Edit</code>/<code>Remove</code> slices, controller endpoints, identifier alias, or tests</td>
+          </tr>
+          <tr>
+          <td><code>--no-status</code></td>
+          <td>the status axis: no status enum, no <code>ChangeStatus</code> slice, request, or endpoint, no <code>Status</code> property, no status invariant or tests</td>
+          </tr>
+          <tr>
+          <td><code>--no-description</code></td>
+          <td>the long-text property: no <code>Description</code> property or invariant, no max-length constant, no DTO, request, or command field, no validator rule, no EF max-length configuration, no error-resource entries, no UI field, no tests</td>
+          </tr>
+          <tr>
+          <td><code>--no-owner</code></td>
+          <td>the owning-user property: no <code>RequesterUserId</code> property, no create-request field or validator rule, no member on the creation integration event, no EF index, no UI field or column, no tests</td>
+          </tr>
+          </tbody></table></div>
+          <p>Reach for them when the aggregate genuinely lacks the axis, which is more common than the sample
+          suggests: a catalog product, a customer, a price list, a tax rate. Passing all four leaves a leaf
+          aggregate that is nothing but its own scalar fields, which is the smallest honest starting point the
+          pack can generate, and it still arrives with the full five-layer wiring and a green test run.</p>
+          <p><strong>The two renames</strong> are plain substring replacements rather than shape decisions. <code>--child</code> renames
+          the child concept everywhere; the generated type is <code>&lt;aggregate&gt;&lt;child&gt;</code>, so:</p>
           <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-app</span> <span class="hljs-literal">-n</span> Contoso.Shipping <span class="hljs-literal">--module</span> Shipments <span class="hljs-literal">--aggregate</span> Shipment <span class="hljs-literal">--child</span> Line</code></pre>
           <p>gives you a <code>ShipmentLine</code> entity and DTO, <code>AddLine</code> / <code>EditLine</code> / <code>RemoveLine</code> use-case slices,
           <code>/lines</code> routes on the controller, an <code>AddLineRequest</code> / <code>EditLineRequest</code> pair, and a
           <code>ShipmentLineIdentifierType</code> alias. The plural comes from an English pluralizer (<code>Line</code> to <code>Lines</code>,
-          <code>Entry</code> to <code>Entries</code>, <code>Box</code> to <code>Boxes</code>), so an irregular noun is the one case you rename by hand.</p>
-          <p><code>--flat</code> and <code>--no-status</code> remove an axis rather than renaming it. <code>--flat</code> drops the child collection
-          entirely: no child entity, DTO, requests, mapper, EF configuration, <code>Add</code>/<code>Edit</code>/<code>Remove</code> slices,
-          controller endpoints, identifier alias, or tests. <code>--no-status</code> drops the status axis: no enum, no
-          <code>ChangeStatus</code> slice, request or endpoint, no <code>Status</code> property, and no status invariant or tests.
-          Reach for them when the aggregate genuinely has neither, which is more common than the sample
-          suggests: a catalog product, a customer, a price list, a tax rate. Passing both leaves a leaf
-          aggregate that is nothing but its own scalar fields, which is the smallest honest starting point the
-          pack can generate, and it still arrives with the full five-layer wiring and a green test run.
+          <code>Entry</code> to <code>Entries</code>, <code>Box</code> to <code>Boxes</code>), so an irregular noun is the one case you rename by hand.
           <code>--child</code> is ignored under <code>--flat</code>, since there is no child left to name.</p>
-          <p>Either flag also drops the sample&#39;s checked-in migration, because that migration describes the full
-          shape (child table, status column) and would be wrong on arrival. Generate your own <code>InitialCreate</code>
-          against the shape you asked for; <code>Migrations/.editorconfig</code> still ships, since <code>dotnet ef</code> never
-          recreates it.</p>
+          <p><code>--title</code> renames the aggregate&#39;s main text property, and everything that names it moves with it: the
+          domain property and its invariant, the <code>&lt;Aggregate&gt;.&lt;Title&gt;.Empty</code> / <code>.TooLong</code> error codes, the
+          <code>&lt;Title&gt;MaxLength</code> constant, the DTO and request properties, the EF column, the FluentValidation
+          rule, the UI field and column resources, and the domain tests. A camel-case form is derived for
+          parameters, private fields, named arguments and <code>nameof()</code> targets, using first-letter lowering
+          rather than full lowering so a multi-word value stays a valid identifier (<code>CustomerName</code> to
+          <code>customerName</code>, not <code>customername</code>). The price of a substring replacement is that the camel-case form
+          also reaches <strong>English prose</strong>: with a multi-word <code>--title</code>, the two shipped error messages arrive
+          reading &quot;Order customerName cannot be empty.&quot; Identifiers have to compile; those two strings are a
+          one-line edit in the module&#39;s error resources after generating.</p>
+          <p><code>--event-verb</code> names the creation integration event&#39;s verb, past tense. <code>--aggregate Order --event-verb Placed</code> gives <code>OrderPlacedIntegrationEvent</code> and its <code>OrderPlacedHandler</code> consumer. The
+          id is database-generated, so this event is published AFTER the commit by the create handler rather
+          than raised as a domain event by the factory, which is why naming it is a rename and not a shape
+          decision.</p>
+          <p>Passing <strong>any</strong> of the four shape flags also drops the sample&#39;s checked-in migration, because that
+          migration describes the full shape (child table, status column, owner index) and would be wrong on
+          arrival. Generate your own <code>InitialCreate</code> against the shape you asked for;
+          <code>Migrations/.editorconfig</code> still ships, since <code>dotnet ef</code> never recreates it.</p>
           <p><strong>What you get</strong> (names shown for <code>-n Contoso.Support --module Orders --aggregate Order</code>):</p>
           <pre class="doc-pre"><code class="">Contoso.Support.slnx
 .editorconfig                 the five analyzers at error severity
@@ -288,14 +349,21 @@ Tests/
           <h3 id="the-two-one-time-fixups">The two one-time fixups</h3>
           <p>The scaffold deliberately does not hand these over, because renaming invalidates them and no fixed
           value is right for every name you could pick.</p>
-          <p><strong>1. Using-directive order.</strong> <code>using Contoso.Support.Orders.Shared;</code> sorts above <code>MMCA.Common.*</code>,
-          but <code>using Zeta.App.Orders.Shared;</code> sorts below it. <code>SA1210</code> has no notion of blank-line-separated
-          groups, so no checked-in order survives both. It ships as a suggestion, via a clearly marked block at
-          the bottom of the generated <code>.editorconfig</code>. Sort them with:</p>
-          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet format analyzers Contoso.Support.slnx <span class="hljs-literal">--diagnostics</span> SA1210 <span class="hljs-literal">--severity</span> error</code></pre>
-          <p>Every <code>mmca-command</code> / <code>mmca-query</code> slice arrives with the same skew, so either re-run that after
-          scaffolding, or leave the block until you have stopped scaffolding and then delete it. Every other
-          analyzer stays at error severity throughout.</p>
+          <p><strong>1. Using-directive and alias order.</strong> <code>using Contoso.Support.Orders.Shared;</code> sorts above
+          <code>MMCA.Common.*</code>, but <code>using Zeta.App.Orders.Shared;</code> sorts below it. <code>SA1210</code> has no notion of
+          blank-line-separated groups, so no checked-in order survives both, and <code>SA1211</code> is the same story for
+          the identifier-alias file, whose aliases sort differently depending on the aggregate and child names
+          you asked for. Both ship as suggestions, via a clearly marked <code>SCAFFOLD DELTA</code> block at the bottom of
+          the generated <code>.editorconfig</code>. Sort them with:</p>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet format analyzers Contoso.Support.slnx <span class="hljs-literal">--diagnostics</span> SA1210 SA1211 <span class="hljs-literal">--severity</span> info</code></pre>
+          <p>That block relaxes a <strong>third</strong> rule, <code>IDE0021</code>, and it is there for the shape flags rather than the
+          renames: the aggregate&#39;s private constructor assigns one property per optional axis, so turning
+          several of them off can leave it with a single statement, which the baseline would then require you
+          to write as an expression body. Fold it to an expression body by hand (or add your own second
+          property) and the line has nothing left to relax. Only those three rules are relaxed; every other
+          analyzer stays at error severity throughout. Every <code>mmca-command</code> / <code>mmca-query</code> slice arrives with
+          the same using skew, so either re-run the format command after scaffolding, or leave the block until
+          you have stopped scaffolding and then delete the whole thing.</p>
           <p><strong>2. Your integration-event wire contract.</strong> Integration events cross service boundaries over the
           broker, so a renamed, removed, or retyped property breaks consumers in another service.
           <code>IntegrationEventContractTestsBase</code> fails the build on a silent reshape, but only against a contract
@@ -349,6 +417,16 @@ dotnet new mmca<span class="hljs-literal">-module</span> <span class="hljs-liter
           <td>the aggregate&#39;s child entity, singular PascalCase (1.3.0)</td>
           </tr>
           <tr>
+          <td><code>--title</code></td>
+          <td><code>Title</code></td>
+          <td>the aggregate&#39;s main text property, singular PascalCase (1.4.0)</td>
+          </tr>
+          <tr>
+          <td><code>--event-verb</code></td>
+          <td><code>Opened</code></td>
+          <td>verb naming the creation integration event, past tense PascalCase (1.4.0)</td>
+          </tr>
+          <tr>
           <td><code>--flat</code></td>
           <td>off</td>
           <td>generate the module with no child collection at all (1.3.0)</td>
@@ -358,10 +436,23 @@ dotnet new mmca<span class="hljs-literal">-module</span> <span class="hljs-liter
           <td>off</td>
           <td>generate the module with no status axis (1.3.0)</td>
           </tr>
+          <tr>
+          <td><code>--no-description</code></td>
+          <td>off</td>
+          <td>generate the module with no long-text property (1.4.0)</td>
+          </tr>
+          <tr>
+          <td><code>--no-owner</code></td>
+          <td>off</td>
+          <td>generate the module with no owning-user property (1.4.0)</td>
+          </tr>
           </tbody></table></div>
-          <p>The three shape options behave exactly as they do for <code>mmca-app</code>, and they are per module: a solution
-          can hold a flat, status-less catalog module beside one whose aggregate owns a growing child
-          collection and a guarded lifecycle.</p>
+          <p>All six behave exactly as they do for <code>mmca-app</code>, and they are per module: a solution can hold a
+          flat, status-less catalog module beside one whose aggregate owns a growing child collection and a
+          guarded lifecycle. The one difference is that <code>--title</code> here does not reach UI resources, because
+          <code>mmca-module</code> generates no Blazor pages.</p>
+          <p><strong>If your solution came from <code>mmca-app</code>, use <code>build/add-module.ps1</code> instead</strong> (below): it runs this
+          template and then applies every wire-up the template can only print.</p>
           <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet new mmca<span class="hljs-literal">-module</span> <span class="hljs-literal">-n</span> Orders <span class="hljs-literal">--app</span> Contoso.Shop <span class="hljs-literal">--aggregate</span> Order <span class="hljs-literal">--child</span> Item</code></pre>
           <p>That produces an <code>OrderItem</code> entity and DTO, <code>AddItem</code> / <code>EditItem</code> / <code>RemoveItem</code> slices, <code>/items</code>
           routes, and an <code>OrderItemIdentifierType</code> alias, with no post-generation renaming.</p>
@@ -370,10 +461,11 @@ dotnet new mmca<span class="hljs-literal">-module</span> <span class="hljs-liter
           project under <code>Source/Hosting/</code>. The migrations project ships <strong>without</strong> a <code>Migrations/</code> folder: you
           create the first one against your own entities.</p>
           <h3 id="the-wire-ups-it-prints">The wire-ups it prints</h3>
-          <p><code>dotnet new</code> cannot patch files that already exist, so it prints these (since 1.3.0 the printed
-          list runs to seven items, adding the per-module database wiring and the first migration). Until
-          they are done the module is invisible to the host and to the fitness rules; the first two are what
-          make it compile.</p>
+          <p><code>dotnet new</code> cannot patch files that already exist, so it prints seven items (the six below plus the
+          first migration). <strong><code>build/add-module.ps1</code> performs all of them for you</strong>, so read this list as the
+          manual fallback, or as the answer to &quot;what did that script just do to my solution&quot;. Until they are
+          done the module is invisible to the host and to the fitness rules; the first two are what make it
+          compile.</p>
           <ol>
           <li><strong>Solution.</strong> <code>dotnet sln &lt;App&gt;.slnx add Source/Modules/&lt;Module&gt;/*/*.csproj Tests/Modules/&lt;Module&gt;/*/*.csproj Source/Hosting/&lt;App&gt;.Migrations.SqlServer.&lt;Module&gt;/*.csproj</code>
           (bash globbing; in PowerShell expand with <code>(Get-ChildItem ...).FullName</code>, as the printed
@@ -399,6 +491,97 @@ dotnet new mmca<span class="hljs-literal">-module</span> <span class="hljs-liter
   <span class="hljs-literal">--project</span> Source/Hosting/Contoso.Support.Migrations.SqlServer.Billing `
   <span class="hljs-literal">--startup-project</span> Source/Hosting/Contoso.Support.Migrations.SqlServer.Billing `
   <span class="hljs-literal">--context</span> SQLServerDbContext</code></pre>
+          <hr>
+          <h2 id="buildadd-moduleps1"><code>build/add-module.ps1</code></h2>
+          <p>Since <strong>1.4.0</strong> every solution <code>mmca-app</code> generates ships this script, and it is the supported way to
+          add a second module. It runs <code>mmca-module</code> with your shape options passed through, then performs all
+          seven printed wire-ups:</p>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">pwsh build/<span class="hljs-built_in">add-module</span>.ps1 <span class="hljs-literal">-Name</span> Orders <span class="hljs-literal">-Aggregate</span> Order <span class="hljs-literal">-Child</span> Item <span class="hljs-literal">-EventVerb</span> Placed</code></pre>
+          <div class="table-wrap"><table>
+          <thead>
+          <tr>
+          <th>Parameter</th>
+          <th>Maps to</th>
+          <th>Meaning</th>
+          </tr>
+          </thead>
+          <tbody><tr>
+          <td><code>-Name</code></td>
+          <td><code>-n</code></td>
+          <td>the module, plural PascalCase</td>
+          </tr>
+          <tr>
+          <td><code>-Aggregate</code></td>
+          <td><code>--aggregate</code></td>
+          <td>the module&#39;s aggregate root, singular PascalCase</td>
+          </tr>
+          <tr>
+          <td><code>-Child</code></td>
+          <td><code>--child</code></td>
+          <td>rename the child entity</td>
+          </tr>
+          <tr>
+          <td><code>-Title</code></td>
+          <td><code>--title</code></td>
+          <td>rename the aggregate&#39;s main text property</td>
+          </tr>
+          <tr>
+          <td><code>-EventVerb</code></td>
+          <td><code>--event-verb</code></td>
+          <td>verb of the creation integration event</td>
+          </tr>
+          <tr>
+          <td><code>-Flat</code></td>
+          <td><code>--flat</code></td>
+          <td>no child collection</td>
+          </tr>
+          <tr>
+          <td><code>-NoStatus</code></td>
+          <td><code>--no-status</code></td>
+          <td>no status axis</td>
+          </tr>
+          <tr>
+          <td><code>-NoOwner</code></td>
+          <td><code>--no-owner</code></td>
+          <td>no owning-user property</td>
+          </tr>
+          <tr>
+          <td><code>-NoDescription</code></td>
+          <td><code>--no-description</code></td>
+          <td>no long-text property</td>
+          </tr>
+          <tr>
+          <td><code>-SkipMigration</code></td>
+          <td></td>
+          <td>print the <code>dotnet ef migrations add</code> command instead of running it</td>
+          </tr>
+          </tbody></table></div>
+          <p>Run it with <code>-?</code> for the full help, and run it <strong>from the solution root</strong>: it refuses to run anywhere
+          else, and everything else it discovers there at run time (the solution file, which is also the app&#39;s
+          root namespace, the modules already present, and the web host, AppHost and architecture-test projects
+          by glob). Nothing about the app that generated it is baked in, which is why it ships <code>copyOnly</code>,
+          verbatim, with no token replacement at all: the flag names it passes through have to survive whatever
+          <code>--title</code> / <code>--event-verb</code> / <code>--child</code> values your solution was generated with.</p>
+          <p>Three properties worth knowing before you run it:</p>
+          <ul>
+          <li><strong>It fails fast rather than half-applying.</strong> A <code>Name</code> already under <code>Source/Modules</code> is refused
+          before anything is generated, and a <code>.slnx</code> count other than one, a missing host project, or an
+          ambiguous architecture map all stop the run at preflight.</li>
+          <li><strong>Every edit is anchored, and a missing anchor throws with the manual edit printed.</strong> The edits are
+          anchored text insertions, never a parse-and-reserialize round trip, so <code>git diff</code> after the run
+          shows the added lines and nothing else. If the scaffold&#39;s shape has moved (or you reworked a file
+          by hand), the script writes nothing and hands you the exact edit to make instead.</li>
+          <li><strong>A rerun is safe.</strong> Each step detects its own work and skips it with a note, so a run that died at
+          step 7 can be fixed and rerun from the top.</li>
+          </ul>
+          <p><code>-SkipMigration</code> is worth passing when the module is about to be reshaped: the migration would
+          describe the scaffolded entities, and you would delete and regenerate it anyway. The script also
+          degrades to printing the command on its own when the <code>dotnet-ef</code> tool is not installed, rather than
+          failing a run whose other steps landed.</p>
+          <p>Two things it deliberately does not do: the Blazor UI pages for the new module, and re-freezing the
+          <code>IntegrationEventContractTests</code> list once the new module has integration events of its own. It prints
+          both reminders when it finishes. The
+          <a href="common-ECOMMERCE-SAMPLE.html">ecommerce sample guide</a> is a worked two-module run.</p>
           <hr>
           <h2 id="mmca-command-and-mmca-query"><code>mmca-command</code> and <code>mmca-query</code></h2>
           <p>Run these from the module&#39;s <code>UseCases</code> folder. Each creates a folder named after the slice holding
@@ -478,7 +661,8 @@ dotnet new mmca<span class="hljs-literal">-query</span> <span class="hljs-litera
           mode against <code>MMCA.Common@main</code>, while a generated app builds in package mode against a released
           version, and a source-mode build can pass where package-mode Release fails on an analyzer. A separate
           <code>template-smoke</code> job generates two solutions whose names share no substring with the seed, sweeps for
-          residual tokens, builds package-mode, runs the tests, and applies the five module wire-ups.</p>
+          residual tokens, builds package-mode, runs the tests, and adds a second module <strong>through
+          <code>build/add-module.ps1</code></strong>, so the wire-ups are covered by the same code path adopters run.</p>
           <p>To work on the templates:</p>
           <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">git clone https://github.com/ivanball/MMCA.Helpdesk
 <span class="hljs-built_in">cd</span> MMCA.Helpdesk
@@ -495,6 +679,7 @@ pwsh build/templates/smoke.ps1        <span class="hljs-comment"># stage, pack, 
             <ul>
             <li><a href="#mmca-app">mmca-app</a></li>
             <li><a href="#mmca-module">mmca-module</a></li>
+            <li><a href="#buildadd-moduleps1">build/add-module.ps1</a></li>
             <li><a href="#mmca-command-and-mmca-query">mmca-command and mmca-query</a></li>
             <li><a href="#how-the-pack-is-built">How the pack is built</a></li>
             </ul>
