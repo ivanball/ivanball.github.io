@@ -802,10 +802,10 @@ public sealed class DesignTimeSQLServerDbContextFactory : IDesignTimeDbContextFa
 
 Add the first migration (run per migrations project, always `--context SQLServerDbContext`):
 
-```bash
-dotnet ef migrations add InitialCreate \
-  --project Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders \
-  --startup-project Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders \
+```powershell
+dotnet ef migrations add InitialCreate `
+  --project Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders `
+  --startup-project Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders `
   --context SQLServerDbContext
 ```
 
@@ -1028,7 +1028,7 @@ it its own ports:
 
 Run it:
 
-```bash
+```powershell
 dotnet run --project Source/Hosting/Contoso.Support.AppHost
 ```
 
@@ -1149,8 +1149,8 @@ severity), and all three test projects pass (`dotnet test --solution Contoso.Sup
 needed). To run one class or method, target the project and pass a Microsoft Testing Platform filter
 after `--` (these solutions run on MTP, not VSTest, so a bare `--filter` silently matches nothing):
 
-```bash
-dotnet test --project Tests/Architecture/Contoso.Support.Architecture.Tests/Contoso.Support.Architecture.Tests.csproj \
+```powershell
+dotnet test --project Tests/Architecture/Contoso.Support.Architecture.Tests/Contoso.Support.Architecture.Tests.csproj `
   -- --filter-class "*ModuleIsolationTests*"
 ```
 

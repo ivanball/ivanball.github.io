@@ -79,7 +79,7 @@ The only evidence backups actually restore is a periodic **drill**: restore a th
 it comes back Online, record the measured restore time, then delete the copy. The live databases are
 never touched. Run it **per release train** and after any backup/retention change.
 
-```bash
+```powershell
 # PITR restore of a throwaway COPY (Azure SQL example: adapt to your store)
 az sql db restore -g <rg> -s <sqlServer> -n <Db> --dest-name <Db>-drill --time "<recent-utc>"
 # verify status Online (and a row/table spot-check for a deeper check), record elapsed minutes, then:

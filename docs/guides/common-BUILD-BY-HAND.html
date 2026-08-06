@@ -816,10 +816,10 @@ handler.Invocations.Should().Be(<span class="hljs-number">2</span>);</code></pre
         });
 }</code></pre>
           <p>Add the first migration (run per migrations project, always <code>--context SQLServerDbContext</code>):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet ef migrations add InitialCreate \
-  --project Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders \
-  --startup-project Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders \
-  --context SQLServerDbContext</code></pre>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet ef migrations add InitialCreate `
+  <span class="hljs-literal">--project</span> Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders `
+  <span class="hljs-literal">--startup-project</span> Source/Hosting/Contoso.Support.Migrations.SqlServer.Orders `
+  <span class="hljs-literal">--context</span> SQLServerDbContext</code></pre>
           <p>At runtime the host applies migrations via the framework&#39;s <code>InitializeDatabaseAsync(...)</code> driven by
           <code>ApplicationSettings.DatabaseInitStrategy</code>: <code>Migrate</code> (production, the host is the sole migrator),
           <code>EnsureCreated</code> (quick local), or <code>None</code> (throws if migrations are pending, a safety check).</p>
@@ -1019,7 +1019,7 @@ builder.AddProject&lt;Projects.Contoso_Support_UI_Web&gt;(<span class="hljs-stri
   <span class="hljs-punctuation">}</span>
 <span class="hljs-punctuation">}</span></code></pre>
           <p>Run it:</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet run --project Source/Hosting/Contoso.Support.AppHost</code></pre>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet run <span class="hljs-literal">--project</span> Source/Hosting/Contoso.Support.AppHost</code></pre>
           <blockquote>
           <p><strong>Run it interactively, from a real terminal.</strong> The Aspire AppHost stalls at control-plane init if
           launched from a headless or background shell (no dashboard appears). Use an interactive terminal for
@@ -1150,8 +1150,8 @@ builder.AddProject&lt;Projects.Contoso_Support_UI_Web&gt;(<span class="hljs-stri
           severity), and all three test projects pass (<code>dotnet test --solution Contoso.Support.slnx</code>, no database
           needed). To run one class or method, target the project and pass a Microsoft Testing Platform filter
           after <code>--</code> (these solutions run on MTP, not VSTest, so a bare <code>--filter</code> silently matches nothing):</p>
-          <pre class="doc-pre" data-lang="Shell"><code class="language-bash hljs">dotnet <span class="hljs-built_in">test</span> --project Tests/Architecture/Contoso.Support.Architecture.Tests/Contoso.Support.Architecture.Tests.csproj \
-  -- --filter-class <span class="hljs-string">&quot;*ModuleIsolationTests*&quot;</span></code></pre>
+          <pre class="doc-pre" data-lang="PowerShell"><code class="language-powershell hljs">dotnet test <span class="hljs-literal">--project</span> Tests/Architecture/Contoso.Support.Architecture.Tests/Contoso.Support.Architecture.Tests.csproj `
+  <span class="hljs-literal">--</span> <span class="hljs-literal">--filter-class</span> <span class="hljs-string">&quot;*ModuleIsolationTests*&quot;</span></code></pre>
           <hr>
           <h2 id="phase-7-upgrading-the-framework-version">Phase 7: Upgrading the framework version</h2>
           <blockquote>
