@@ -118,7 +118,7 @@
         <div class="stats">
           <!-- BEGIN platform-stats -->
           <div class="stat"><div class="num">15</div><div class="label">NuGet packages</div></div>
-          <div class="stat"><div class="num">65</div><div class="label">Architecture Decision Records</div></div>
+          <div class="stat"><div class="num">70</div><div class="label">Architecture Decision Records</div></div>
           <div class="stat"><div class="num">93</div><div class="label">Architecture fitness tests</div></div>
           <div class="stat"><div class="num">3</div><div class="label">Reference applications</div></div>
           <!-- END platform-stats -->
@@ -359,7 +359,7 @@
           <p class="eyebrow">Why, not just what</p>
           <h2>Architecture Decision Records</h2>
           <!-- BEGIN adr-count -->
-          <p>65 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
+          <p>70 ADRs capture the context and trade-offs behind each cross-cutting pattern, so the design is teachable, not tribal knowledge. Every entry below links to the full record.</p>
           <!-- END adr-count -->
         </div>
         <div class="adr-list">
@@ -427,8 +427,13 @@
           <a class="adr" href="docs/adr/061-runtime-secret-management.html"><span class="adr-num">061</span><span><span class="adr-title">Runtime Secret Management via Key Vault References and Managed Identity</span><span class="adr-sum">Accepted (2026-08-01).</span></span></a>
           <a class="adr" href="docs/adr/062-slo-alerting-as-code.html"><span class="adr-num">062</span><span><span class="adr-title">SLO Alerting as Code with an Alert-to-Runbook Build Gate</span><span class="adr-sum">Accepted (2026-08-01).</span></span></a>
           <a class="adr" href="docs/adr/063-accessibility-conformance-gate.html"><span class="adr-num">063</span><span><span class="adr-title">WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</span><span class="adr-sum">Accepted (2026-08-01).</span></span></a>
-          <a class="adr" href="docs/adr/064-deploy-recency-gates.html"><span class="adr-num">064</span><span><span class="adr-title">Deploy Preconditions as Proof-of-Recency Gates</span><span class="adr-sum">Accepted (2026-08-01).</span></span></a>
-          <a class="adr" href="docs/adr/065-scaffolding-templates.html"><span class="adr-num">065</span><span><span class="adr-title">Scaffolding templates derived from the reference app</span><span class="adr-sum">Status: Accepted (2026-08-02)</span></span></a>
+          <a class="adr" href="docs/adr/064-deploy-recency-gates.html"><span class="adr-num">064</span><span><span class="adr-title">Deploy Preconditions as Proof-of-Recency Gates</span><span class="adr-sum">Accepted (2026-08-01). Revised 2026-08-07: the MMCA.Helpdesk workflow inventory below was corrected (it also carries release-templates.yml, and its…</span></span></a>
+          <a class="adr" href="docs/adr/065-scaffolding-templates.html"><span class="adr-num">065</span><span><span class="adr-title">Scaffolding templates derived from the reference app</span><span class="adr-sum">Status: Accepted (2026-08-02). Revised 2026-08-07: the staged analyzer delta relaxes three rules rather than one; mmca-module prints seven wire-ups…</span></span></a>
+          <a class="adr" href="docs/adr/066-broker-transport-selection.html"><span class="adr-num">066</span><span><span class="adr-title">Broker Transport Selection and Dev/Prod Parity</span><span class="adr-sum">Accepted (2026-08-07).</span></span></a>
+          <a class="adr" href="docs/adr/067-ui-module-shell-composition.html"><span class="adr-num">067</span><span><span class="adr-title">Shared Blazor Application Shell and IUIModule Composition</span><span class="adr-sum">Accepted (2026-08-07).</span></span></a>
+          <a class="adr" href="docs/adr/068-value-objects-as-validated-primitives.html"><span class="adr-num">068</span><span><span class="adr-title">Value Objects as Validated Domain Primitives</span><span class="adr-sum">Accepted (2026-08-07).</span></span></a>
+          <a class="adr" href="docs/adr/069-shared-data-protection-key-ring.html"><span class="adr-num">069</span><span><span class="adr-title">Shared DataProtection Key Ring for Scaled-Out Hosts</span><span class="adr-sum">Accepted (2026-08-07).</span></span></a>
+          <a class="adr" href="docs/adr/070-fail-fast-configuration-contract.html"><span class="adr-num">070</span><span><span class="adr-title">Fail-Fast Configuration Contract</span><span class="adr-sum">Accepted (2026-08-07).</span></span></a>
           <!-- END adr-list -->
         </div>
 
@@ -453,7 +458,7 @@
         <div class="grid grid--2">
           <!-- BEGIN library-cards -->
           <a class="card card--link" href="docs/adr/index.html">
-            <span class="kicker kicker--accent">65 records</span>
+            <span class="kicker kicker--accent">70 records</span>
             <h3>Architecture Decision Records</h3>
             <p>The context, decision, rationale, and trade-offs behind every cross-cutting pattern, from manual DTO mapping and the outbox to JWKS auth, caching, and supply-chain provenance. Numbered, dated, and cross-linked.</p>
             <div class="card-foot"><span class="go">Browse the ADRs →</span></div>

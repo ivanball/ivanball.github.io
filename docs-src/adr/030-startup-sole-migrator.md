@@ -25,7 +25,7 @@ at startup, before the new revision serves traffic. There is deliberately **no**
 migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
 
 - **Set in prod for every service.** `MMCA.Store/infra/main.bicep:786,899,998` (Identity/Catalog/Sales)
-  and `MMCA.ADC/infra/main.bicep:1061,1222,1331,1466` (Identity/Conference/Engagement/Notification) all set
+  and `MMCA.ADC/infra/main.bicep:1081,1248,1358,1494` (Identity/Conference/Engagement/Notification) all set
   `DatabaseInitStrategy = 'Migrate'`.
 - **One applier per revision.** Each service runs `minReplicas: 1`, so the startup `MigrateAsync` is not
   racing sibling replicas of the same revision. (Since the 2026-07-19 outbox lease revision, ADR-003,
@@ -36,7 +36,7 @@ migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
   (`MMCA.Store/.github/workflows/deploy.yml:1037-1045`, `MMCA.ADC/.github/workflows/deploy.yml:1079-1087`). The
   `sqlcmd` that *is* installed in the pipeline is a connectivity/readiness probe, not a migration apply.
 - **Build-time drift gate, not a runtime apply.** CI runs
-  `dotnet ef migrations has-pending-model-changes` (Store `deploy.yml:221`, ADC `deploy.yml:272`) so a
+  `dotnet ef migrations has-pending-model-changes` (Store `deploy.yml:226`, ADC `deploy.yml:272`) so a
   model that has drifted from its migrations fails the build, but that gate only *detects*; it never
   applies anything. The container does the applying.
 - **This overrides the framework's documented "None for production" default**, accepting auto-migrate-on-
@@ -72,3 +72,52 @@ migration (no `sqlcmd` / `dotnet ef database update` apply in `deploy.yml`).
 ADR-006 (database-per-service: why each service owns and migrates its own database),
 ADR-025 (readiness gating keeps traffic off a still-migrating replica),
 ADR-009 (RTO/RPO + drilled restore is the recovery backstop for a bad migration).
+
+## Revision (2026-08-07)
+The sole-migrator decision **extends to seed data**: the same startup owner that applies the schema
+also runs the module seeders, in the same call, on the same boot. The Decision above covered
+migrations only, so the seeding half of that startup pipeline is recorded here, together with the
+trade-off it carries.
+
+1. **Seeding runs after the strategy switch, unconditionally.** `InitializeDatabaseAsync` ends with
+   `moduleLoader.SeedAllAsync(...)` placed *outside* the `DatabaseInitStrategy` switch
+   (`MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/DatabaseInitializationExtensions.cs:87`,
+   switch at `:70-85`). Every enabled module's `IModuleSeeder` therefore runs on every boot, in every
+   environment, under all three strategies including the production `"None"` guard: choosing `"None"`
+   opts out of applying migrations, not out of seeding. `ModuleLoader.SeedAllAsync` just walks its
+   seeder list in module registration order and awaits each one
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Modules/ModuleLoader.cs:270-276`; the list is
+   built only for enabled modules at `:133-136`). Nothing on that path consults the hosting
+   environment, and the service hosts call the extension method straight after `builder.Build()`
+   (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:295`,
+   `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:344`,
+   `MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:248`,
+   `MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:239`;
+   `MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:207`,
+   `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:232`,
+   `MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:215`), so production re-seeds on
+   every revision.
+2. **Idempotency is delegated entirely to each seeder.** There is no framework-side ledger for seed
+   data: no `__EFMigrationsHistory` equivalent, no marker row, no "already seeded" flag. The loop
+   above simply invokes; a seeder that inserts blindly inserts again on the next boot. Each seeder
+   owns the guard: `ConferenceModuleDbSeeder` opens each step with an `ExistsAsync` probe and returns
+   early when the row is present, matching the pre-rename event name too so a database seeded before
+   the rename stays idempotent
+   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Infrastructure/Persistence/DbContexts/Seeding/ConferenceModuleDbSeeder.cs:52-57`).
+3. **Deterministic seed identifiers are what make that guard cheap.** The `DbSeeder` base converts an
+   integer seed id to the module's identifier type: `int` passes through, and a `Guid` alias is
+   manufactured by writing the int into a zeroed 16-byte span, so the same seed integer yields the
+   same Guid on every boot, host and machine
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/DbContexts/Seeding/DbSeeder.cs:20-31`).
+   Re-running a seeder against a populated database collides with the existing keys by construction
+   instead of minting new ones.
+4. **The accepted trade-off is the same bargain as auto-migrate-on-boot.** One owner, one mechanism,
+   one fewer moving part, paid for with a correctness obligation on the seeder author rather than on
+   the pipeline: a seeder that omits its existence check ships duplicate rows to production on the
+   next deploy and no gate here will catch it. Volume-sensitive seed data is held back by
+   configuration, not by the framework: ADC's sample browse data sits behind
+   `Seeding:IncludeSampleConferenceData`, which production leaves unset, so prod databases receive
+   only the real events and questions
+   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/ConferenceModuleSeeder.cs:24-29`).
+   ADR-059 records how the loader discovers and orders those seeders; this record owns the policy of
+   running them in production on every boot.

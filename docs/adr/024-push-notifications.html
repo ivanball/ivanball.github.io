@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-024: Two-Channel User Notifications (Transient SignalR Push + Durable Inbox) · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted (2026-06-27, amended 2026-07-15).">
+  <meta name="description" content="Accepted (2026-06-27, amended 2026-07-15). Revised 2026-08-07 (transactional email recorded as an app-level concern outside the channel model; see…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/024-push-notifications.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-024: Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)">
-  <meta property="og:description" content="Accepted (2026-06-27, amended 2026-07-15).">
+  <meta property="og:description" content="Accepted (2026-06-27, amended 2026-07-15). Revised 2026-08-07 (transactional email recorded as an app-level concern outside the channel model; see…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/024-push-notifications.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-024: Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)">
-  <meta name="twitter:description" content="Accepted (2026-06-27, amended 2026-07-15).">
+  <meta name="twitter:description" content="Accepted (2026-06-27, amended 2026-07-15). Revised 2026-08-07 (transactional email recorded as an app-level concern outside the channel model; see…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)","item":"https://ivanball.github.io/docs/adr/024-push-notifications.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 65 ADRs</summary>
+        <summary>All 70 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -165,6 +165,11 @@
         <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
         <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
         <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -173,7 +178,8 @@
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-024-two-channel-user-notifications-transient-signalr-push--durable-inbox">ADR-024: Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted (2026-06-27, amended 2026-07-15).</p>
+          <p>Accepted (2026-06-27, amended 2026-07-15). Revised 2026-08-07 (transactional email recorded as an
+          app-level concern outside the channel model; see Revision below).</p>
           <h2 id="context">Context</h2>
           <p>The framework needs to deliver user-facing notifications (an organizer broadcasting a schedule change,
           a per-user alert). Two delivery models each fail on their own. A pure real-time push over a WebSocket
@@ -215,10 +221,10 @@
           the notification on next load. A send is never rolled back because the WebSocket fan-out failed.</li>
           <li><strong>An optional third, native-push leg (ADR-044).</strong> After the inbox write and the SignalR push,
           <code>SendPushNotificationHandler</code> also dispatches through <code>INativePushSender</code>
-          (<code>SendPushNotificationHandler.cs:88-105</code>), an OS-level native-push channel that reaches devices the
+          (<code>SendPushNotificationHandler.cs:134-152</code>), an OS-level native-push channel that reaches devices the
           SignalR hub cannot (the app backgrounded or killed). It is best-effort by the same logic as the live
           push (a throw is logged, never fatal, and the SignalR leg has already decided the audit status), and it
-          defaults to <code>NullNativePushSender</code> (<code>MMCA.Common.Infrastructure</code>, <code>DependencyInjection.cs:233</code>), so it
+          defaults to <code>NullNativePushSender</code> (<code>MMCA.Common.Infrastructure</code>, <code>DependencyInjection.cs:240</code>), so it
           stays inert until a native hub is configured. The design of that channel is ADR-044&#39;s scope; this ADR
           keeps its own on the inbox and SignalR channels, so the &quot;Two-Channel&quot; title names the durable and
           transient channels this record governs, not a hard cap on the number of delivery legs.</li>
@@ -268,6 +274,46 @@
           serves an inbound <code>Http2</code>-only h2c gRPC edge on a dedicated named endpoint per ADR-039), ADR-022 (the
           browser-edge auth context the UI client runs in), ADR-044 (the optional OS-level native-push channel
           <code>SendPushNotificationHandler</code> fires after the inbox and SignalR legs, defaulting to <code>NullNativePushSender</code>).</p>
+          <h2 id="revision-2026-08-07">Revision (2026-08-07)</h2>
+          <p>Records transactional email, a delivery path the channel model above never mentions. The decision is
+          unchanged: this closes a documentation gap so the asymmetry reads as deliberate rather than unnoticed.</p>
+          <ol>
+          <li><strong>Email is a framework-registered primitive, not a channel of this ADR.</strong> <code>IEmailSender</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IEmailSender.cs:6</code>) has a
+          single implementation, <code>SmtpEmailSender</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/SmtpEmailSender.cs:12</code>), and it is
+          TryAdd-registered in the same block as the push-sender defaults
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:234</code>, beside
+          <code>IPushNotificationSender</code> at <code>:235</code> and <code>INativePushSender</code> at <code>:240</code>). That block is <code>AddServices()</code>
+          (<code>:211</code>), which <code>AddInfrastructure</code> always calls (<code>:147</code>), so every host gets it. Unlike the two push
+          abstractions it has no null default and no opt-in <code>Add*</code> counterpart: the real SMTP sender is always
+          the registration, inert only because nothing resolves it.</li>
+          <li><strong>It sits outside the inbox / SignalR / native model.</strong> An email creates no <code>PushNotification</code> audit
+          record, writes no <code>UserNotification</code> inbox row, and is never dispatched by
+          <code>SendPushNotificationHandler</code>. Callers resolve <code>IEmailSender</code> from a scope and send directly, so none
+          of the guarantees this ADR makes (durable-first ordering, best-effort live layer, recorded send
+          status) apply to it.</li>
+          <li><strong>Adoption is two call sites, both in Store Sales.</strong> <code>OrderPaidHandler</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/DomainEventHandlers/OrderPaidHandler.cs:41</code>)
+          and <code>OrderPaymentFailedSagaHandler</code>
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/Saga/OrderPaymentFailedSagaHandler.cs:31</code>),
+          both <code>IDomainEventHandler&lt;T&gt;</code> implementations that open their own DI scope, build the HTML body
+          inline, and swallow-and-log a send failure so the order flow is never broken
+          (<code>OrderPaidHandler.cs:59-64</code>, <code>OrderPaymentFailedSagaHandler.cs:52-55</code>). No other module or repo
+          consumes the abstraction today.</li>
+          <li><strong>No templating, retry, or bounce posture.</strong> The contract is two <code>SendAsync</code> overloads over plain
+          <code>subject</code> / <code>body</code> strings with an <code>isHtml</code> flag (<code>IEmailSender.cs:15,23</code>); bodies are concatenated
+          at the call site. <code>SmtpEmailSender</code> constructs a fresh <code>SmtpClient</code> per call and awaits
+          <code>SendMailAsync</code> once (<code>SmtpEmailSender.cs:30-42</code>): no retry, no dead-letter, no bounce or
+          delivery-status handling, and no persisted send record equivalent to the <code>PushNotification</code>
+          aggregate.</li>
+          <li><strong>Accepted as-is.</strong> Email stays an app-level concern riding a framework-registered primitive.
+          Pulling it under this ADR&#39;s model (durable record, null default, opt-in registration, one dispatching
+          handler) is not justified by two call sites, and the point of recording it here is only that a reader
+          of ADR-024 or ADR-044 should not conclude the inbox, SignalR and native legs are the only delivery
+          paths in the platform. Wider adoption, or a requirement that email delivery be auditable or
+          retried, is the trigger to give it its own record instead of this amendment.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -284,6 +330,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#related">Related</a></li>
+            <li><a href="#revision-2026-08-07">Revision (2026-08-07)</a></li>
             </ul>
           </nav>
         </aside>

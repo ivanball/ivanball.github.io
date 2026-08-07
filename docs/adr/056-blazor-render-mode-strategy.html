@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 65 ADRs</summary>
+        <summary>All 70 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -165,6 +165,11 @@
         <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
         <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
         <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -212,7 +217,7 @@
           both sides of the pipeline: <code>AddInteractiveServerComponents()</code> + <code>AddInteractiveWebAssemblyComponents()</code>
           at service registration and <code>AddInteractiveServerRenderMode()</code> + <code>AddInteractiveWebAssemblyRenderMode()</code>
           on <code>MapRazorComponents&lt;App&gt;()</code>
-          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:33-35</code>, <code>Program.cs:187-189</code>;
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:34-36</code>, <code>Program.cs:188-190</code>;
           <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:67-69</code>, <code>Program.cs:180-188</code>).</li>
           <li><strong>Prerendering stays enabled.</strong> No host anywhere in the workspace passes <code>prerender: false</code> or
           constructs a render mode with prerendering disabled; every render mode in use is the stock static
@@ -245,7 +250,7 @@
           <code>if (!RendererInfo.IsInteractive) return;</code> guard in <code>OnParametersSetAsync</code> / <code>OnInitializedAsync</code> appears
           across both apps, with two different stated reasons: avoiding the doubled reads under <code>InteractiveAuto</code>
           (<code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicSessionDetail.razor.cs:81-90</code>,
-          <code>.../Pages/Public/PublicSpeakerDetail.razor.cs:59</code>, <code>.../Pages/Home/ADCHome.razor.cs:90</code>,
+          <code>.../Pages/Public/PublicSpeakerDetail.razor.cs:59</code>, <code>.../Pages/Home/ADCHome.razor.cs:92</code>,
           <code>.../Pages/Speaker/SpeakerDashboard.razor.cs:65</code>,
           <code>MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLive.razor.cs:69</code>,
           <code>.../Pages/SessionLive/PresenterView.razor.cs:56</code>) and the fact that no auth token can be read at
@@ -267,7 +272,7 @@
           <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/Program.cs:30-63</code> against
           <code>MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:61-108</code>), and each client bootstraps its thread
           culture from the same cookie before running so hydration does not disagree with the prerender
-          (<code>MMCA.ADC/.../MMCA.ADC.UI.Web.Client/Program.cs:74</code>,
+          (<code>MMCA.ADC/.../MMCA.ADC.UI.Web.Client/Program.cs:86</code>,
           <code>MMCA.Store/.../MMCA.Store.UI.Web.Client/Program.cs:69</code>, ADR-027).</li>
           <li><strong>A build-time layer rule is what keeps the shared UI package runnable in the browser.</strong>
           <code>MMCA.Common.UI</code> may not reference Domain, Application, Infrastructure or API, and the enforcement
@@ -295,7 +300,7 @@
           (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:14-15</code>, <code>Program.cs:85-86</code>). It has <strong>no <code>.Client</code> project at
           all</strong>, so <code>InteractiveAuto</code> is not available to it, and its two ticket pages use <code>MudTable</code> directly
           rather than the shared list-page base
-          (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Components/Pages/Tickets.razor:30</code>), so none of the
+          (<code>MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Components/Pages/Tickets.razor:32</code>), so none of the
           persistence machinery above applies there. The framework&#39;s own component gallery is likewise
           <code>InteractiveServer</code>-only (<code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/Components/App.razor:22</code>,
           <code>App.razor:26</code>, <code>MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/GalleryHost.cs:123-124</code>). ADR-028

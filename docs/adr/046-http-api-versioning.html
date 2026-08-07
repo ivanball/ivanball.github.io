@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 65 ADRs</summary>
+        <summary>All 70 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -165,6 +165,11 @@
         <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
         <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
         <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -249,9 +254,9 @@
           asserted rather than proven.</li>
           <li><strong>Every REST host adopts it the same way.</strong> The extracted services call <code>AddCommonApiVersioning</code>
           in their startup: ADC&#39;s Conference
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:159</code>) and Identity
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:143</code>) hosts, Store&#39;s Catalog host
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:120</code>), and the same call is made
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:171</code>) and Identity
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:152</code>) hosts, Store&#39;s Catalog host
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:122</code>), and the same call is made
           by the other extracted hosts and by the monolith reference host
           (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:33</code>).</li>
           </ul>

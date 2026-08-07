@@ -59,12 +59,12 @@ not as a wrapper struct.
   solution-wide alias is a new `GlobalUsings.*.cs` plus a matching `<Compile Include>` line, nothing more.
 - **The alias flows unchanged through every layer.** Tracing the ADC `User` aggregate: the domain
   entity is `User : AuditableAggregateRootEntity<UserIdentifierType>`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:18`); the cross-context
-  reference to a speaker is typed `SpeakerIdentifierType? LinkedSpeakerId` (same file, line 54); the EF
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:26`); the cross-context
+  reference to a speaker is typed `SpeakerIdentifierType? LinkedSpeakerId` (same file, line 63); the EF
   configuration is `EntityTypeConfigurationSQLServer<User, UserIdentifierType>`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/EntityConfiguration/UserConfiguration.cs:13`);
   the repository handle is `GetRepository<User, UserIdentifierType>()`
-  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/DbContexts/Seeding/IdentityModuleDbSeeder.cs:34`);
+  (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Infrastructure/Persistence/DbContexts/Seeding/IdentityModuleDbSeeder.cs:43`);
   the API contract is `UserDTO : IBaseDTO<UserIdentifierType>` with a `UserIdentifierType Id`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Shared/Users/UserDTO.cs:8,11`); and the
   integration event carries `UserIdentifierType UserId`

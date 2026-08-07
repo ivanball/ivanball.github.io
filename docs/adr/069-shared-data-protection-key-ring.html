@@ -5,24 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
-  <title>ADR-017: HTTP Request Idempotency via Client-Supplied Keys · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Accepted. Revised 2026-08-01: the guard around execute-and-store is now an IDistributedLock resolved from DI (Redis-backed wherever a connection…">
-  <link rel="canonical" href="https://ivanball.github.io/docs/adr/017-request-idempotency.html">
+  <title>ADR-069: Shared DataProtection Key Ring for Scaled-Out Hosts · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-08-07).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/069-shared-data-protection-key-ring.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
-  <meta property="og:title" content="ADR-017: HTTP Request Idempotency via Client-Supplied Keys">
-  <meta property="og:description" content="Accepted. Revised 2026-08-01: the guard around execute-and-store is now an IDistributedLock resolved from DI (Redis-backed wherever a connection…">
-  <meta property="og:url" content="https://ivanball.github.io/docs/adr/017-request-idempotency.html">
+  <meta property="og:title" content="ADR-069: Shared DataProtection Key Ring for Scaled-Out Hosts">
+  <meta property="og:description" content="Accepted (2026-08-07).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/069-shared-data-protection-key-ring.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="ADR-017: HTTP Request Idempotency via Client-Supplied Keys">
-  <meta name="twitter:description" content="Accepted. Revised 2026-08-01: the guard around execute-and-store is now an IDistributedLock resolved from DI (Redis-backed wherever a connection…">
+  <meta name="twitter:title" content="ADR-069: Shared DataProtection Key Ring for Scaled-Out Hosts">
+  <meta name="twitter:description" content="Accepted (2026-08-07).">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"017 · HTTP Request Idempotency via Client-Supplied Keys","item":"https://ivanball.github.io/docs/adr/017-request-idempotency.html"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"069 · Shared DataProtection Key Ring for Scaled-Out Hosts","item":"https://ivanball.github.io/docs/adr/069-shared-data-protection-key-ring.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
   <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -90,7 +90,7 @@
         <span aria-hidden="true">/</span>
         <a href="../../docs/adr/index.html">Architecture Decision Records</a>
         <span aria-hidden="true">/</span>
-        <span class="current">017 · HTTP Request Idempotency via Client-Supplied Keys</span>
+        <span class="current">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</span>
         <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
       <div class="doc-layout doc-layout--toc">
@@ -116,7 +116,7 @@
         <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
         <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
         <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
-        <li><a href="017-request-idempotency.html" aria-current="page">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
         <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
         <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
         <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
@@ -168,7 +168,7 @@
         <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
         <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
         <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
-        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html" aria-current="page">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
         <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
           </ol>
         </nav>
@@ -176,119 +176,135 @@
     </aside>
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
-          <h1 id="adr-017-http-request-idempotency-via-client-supplied-keys">ADR-017: HTTP Request Idempotency via Client-Supplied Keys</h1>
+          <h1 id="adr-069-shared-dataprotection-key-ring-for-scaled-out-hosts">ADR-069: Shared DataProtection Key Ring for Scaled-Out Hosts</h1>
           <h2 id="status">Status</h2>
-          <p>Accepted. Revised 2026-08-01: the guard around execute-and-store is now an <code>IDistributedLock</code> resolved
-          from DI (Redis-backed wherever a connection multiplexer is registered, which is every deployed service
-          host), with the striped semaphore kept only as the no-lock-registered fallback, and body-less 2xx
-          results (204/<code>NoContent()</code>) are cached and replayed as well as <code>ObjectResult</code> bodies. See Decision and
-          Trade-offs.</p>
+          <p>Accepted (2026-08-07).</p>
           <h2 id="context">Context</h2>
-          <p>Write endpoints (POST / PUT / PATCH) are exposed to <strong>client retries and double-submits</strong>: a flaky
-          network, an impatient user double-clicking, or a resilience pipeline re-issuing a request can cause the
-          same logical operation to execute twice (e.g. two orders, two payments). The <code>Result</code> pattern (ADR-013)
-          and domain invariants stop <em>invalid</em> states, but they do not stop a <em>valid</em> operation from being applied
-          twice when the second call is a genuine duplicate of the first.</p>
-          <p>This is a different concern from the <strong>handler idempotency</strong> of ADR-003: that is about domain-event
-          <em>consumers</em> tolerating at-least-once delivery from the outbox. ADR-017 is about the <strong>inbound HTTP edge</strong>
-          deduplicating <em>client</em> requests before the use case runs at all.</p>
+          <p>ASP.NET Core&#39;s DataProtection default keeps the key ring <strong>in memory, per process</strong>. That is correct
+          for a single-process host and wrong for a scaled-out one: every replica generates its own keys, so an
+          auth cookie or an antiforgery token minted by replica A cannot be decrypted by replica B. The symptom
+          is random sign-outs and &quot;The antiforgery token could not be decrypted&quot; errors that follow no pattern,
+          because they follow the load balancer rather than the user.</p>
+          <p>Two existing decisions put real payloads under that key ring. ADR-022 carries the browser session in
+          HttpOnly cookies read during Blazor SSR prerender, and the Blazor Server forms those pages render mint
+          antiforgery tokens; both are DataProtection payloads. ADR-008 then split the monolith into
+          independently scaled hosts, and in ADC the two hosts that mint those payloads (the UI host and the
+          Identity service, which also does OAuth correlation and state cookie cryptography) both run at
+          <code>maxReplicas: 2</code> with no session affinity (<code>MMCA.ADC/infra/main.bicep:1178</code>, <code>:1759-1761</code>).</p>
+          <p>Nothing in the record decided <strong>where the key ring lives</strong>. ADR-061 decides how a running app reaches
+          a secret (Key Vault reference resolved by a managed identity) and ADR-045 decides that blob storage is
+          reached with <code>DefaultAzureCredential</code> plus a data-plane role, but the key ring is neither an app secret
+          nor user content: it is process-local state that has to become deployment-wide state. This record
+          decides that, and it records which repos have adopted it.</p>
           <h2 id="decision">Decision</h2>
-          <p>Provide opt-in, client-driven request idempotency as an MVC action filter in <code>MMCA.Common.API</code>.</p>
+          <p>Add one opt-in registration call, <code>AddCommonDataProtection</code>, that persists the key ring to a single
+          Azure blob so every replica of a host shares one ring
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/DataProtection/DataProtectionExtensions.cs:52</code>).</p>
           <ul>
-          <li><strong>Opt-in per action.</strong> <code>[Idempotent]</code> (<code>IdempotentAttribute</code>, a <code>ServiceFilterAttribute</code> resolving
-          <code>IdempotencyFilter</code> from DI) marks an action. Nothing is deduplicated unless the action declares it.</li>
-          <li><strong>Client supplies the key.</strong> The caller sends an <code>Idempotency-Key</code> header. If the header is absent or
-          blank, the action runs normally with <strong>no</strong> deduplication: the key is the client&#39;s assertion that &quot;two
-          requests with this key are the same operation.&quot;</li>
-          <li><strong>The key is scoped to the caller and the endpoint, not taken bare.</strong> The cache key is
-          <code>idempotency:{SHA-256(subject | method | route template | client key)}</code>, where the subject is the
-          caller&#39;s <code>user_id</code> claim or, unauthenticated, <code>anon:{remote address}</code>. Keying on the bare
-          client-supplied value made the key space global: two callers who happened to choose the same value
-          shared an entry, so one user&#39;s serialized response body was replayed to another, and because
-          services can share a single cache instance the collision also reached across endpoints and across
-          services. Hashing keeps the stored key bounded regardless of what the client sends.</li>
-          <li><strong>Cache-backed replay.</strong> The first response (status code + serialized body) is stored via
-          <code>ICacheService</code> for a bounded window (default 24h, configurable via
-          <code>IdempotencySettings.CacheExpirationHours</code>). <code>ICacheService</code> resolves to the distributed (Redis) store
-          when the host wires one and otherwise to an in-process memory cache (ADR-026), so cross-instance /
-          cross-restart replay holds only when a distributed backing is configured. A later request with the same
-          key replays the cached response and adds an <code>X-Idempotent-Replay: true</code> header so clients can tell a
-          replay from a fresh execution.</li>
-          <li><strong>The lock spans execute-and-store, and it is an <code>IDistributedLock</code> when one is registered.</strong> The
-          filter takes a fast-path cache read (no lock), then holds a lock across the re-check, the action, and
-          the store, so a duplicate cannot slip in between the action finishing and its response reaching the
-          cache. The lock is whatever <code>IDistributedLock</code> DI resolves, and <code>AddInfrastructure</code> -&gt; <code>AddCaching</code>
-          registers one unconditionally: <code>RedisDistributedLock</code> when an <code>IConnectionMultiplexer</code> is present,
-          the process-local <code>InProcessDistributedLock</code> (which warns once that it is degraded) otherwise. The
-          Redis lock is the single-instance <code>SET key token NX PX ttl</code> acquire with a compare-and-delete release
-          script, held for a 30s time-to-live with a 5s wait for the current holder. A duplicate that cannot
-          acquire within that wait, and finds nothing cached when it gives up, gets <strong>409 Conflict</strong> with a
-          retry-with-the-same-key <code>ProblemDetails</code>: the original is still running somewhere, so executing would
-          be the double write this filter exists to prevent.</li>
-          <li><strong>The striped semaphore is the fallback for a host that registers no lock.</strong> Without an
-          <code>IDistributedLock</code> the filter serializes on a striped <code>SemaphoreSlim</code> (<code>KeyedSemaphoreStripe</code>, the
-          same double-check pattern), which is correct for a single replica and for tests. Striping is
-          deliberate: a dictionary of one semaphore per key forces a choice between two defects, since removing
-          the entry when the last holder releases lets a caller wait on a semaphore no longer in the table while
-          a second creates a fresh one (both then execute, defeating the lock), and never removing it lets a
-          caller-supplied key grow the table without bound. A fixed stripe width has neither problem.</li>
-          <li><strong>Only cache deterministic success shapes.</strong> A <strong>2xx</strong> response is cached when it is representable as
-          a status code plus an optional JSON body: an <code>ObjectResult</code> (200/201/202 with a payload), or a
-          body-less <code>StatusCodeResult</code> such as the 204 from <code>NoContent()</code>, which is stored with an empty body
-          and replayed as a bare status code rather than as JSON with no content. Redirects, file results, and
-          failures are not replayed. Caching a failure would replay it for the whole retention window, so a
-          client retrying the same key after a transient 500 would keep receiving that 500 for 24 hours instead
-          of the retry actually executing. The body-less case was originally skipped, which left every command
-          answering <code>NoContent()</code> with nothing stored at all: the writes most likely to be retried were the ones
-          idempotency did not actually cover.</li>
+          <li><strong>One configuration key is the gate, and absent means do nothing.</strong>
+          <code>DataProtection:BlobStorageUri</code> is read first (<code>DataProtectionExtensions.cs:54</code>); when it is absent
+          or whitespace the method returns the builder untouched (<code>:59-62</code>), so no DataProtection services are
+          registered at all. A developer machine, a test host, and the Helpdesk seed all run single-process,
+          where the in-memory default is correct and an unconditional Azure dependency at startup would be a
+          liability. Two tests pin that boundary: an unconfigured builder registers no <code>IDataProtectionProvider</code>
+          and leaves <code>KeyManagementOptions.XmlRepository</code> null, while a configured URI replaces the default
+          repository with the blob one
+          (<code>MMCA.Common/Tests/Hosting/MMCA.Common.Aspire.Tests/DataProtection/DataProtectionExtensionsTests.cs:22-37</code>,
+          <code>:40-61</code>). Neither test needs Azure credentials: the blob client is constructed lazily by the
+          repository, never at registration time.</li>
+          <li><strong>Blob persistence plus an application discriminator.</strong> A configured URI wires
+          <code>PersistKeysToAzureBlobStorage</code> and <code>SetApplicationName</code>
+          (<code>DataProtectionExtensions.cs:70-72</code>); the discriminator comes from <code>DataProtection:ApplicationName</code>
+          and falls back to the host application name (<code>:64-65</code>). The discriminator is what keeps two
+          applications sharing one blob or one key-ring directory from reading each other&#39;s keys.</li>
+          <li><strong>Encryption of the key ring at rest is a SECOND, deliberately independent gate.</strong>
+          <code>DataProtection:KeyVaultKeyUri</code> is read separately and only adds <code>ProtectKeysWithAzureKeyVault</code> when
+          present (<code>:81-85</code>). The two are uncoupled on purpose (<code>:74-80</code>): blob persistence is the part that
+          fixes cross-replica cookie and antiforgery decryption, and it has to work <strong>without</strong> the Key Vault
+          Crypto User role, because that role assignment is granted out of band and can lag a deployment.
+          Folding the second step into the first would turn an optional hardening gap into a total
+          authentication outage. The deployment template records the same reasoning as a follow-up
+          (<code>MMCA.ADC/infra/main.bicep:821-824</code>), and no deployed app sets <code>DataProtection__KeyVaultKeyUri</code>
+          today, so gate 2 is configured nowhere: the key ring is persisted but not encrypted at rest.</li>
+          <li><strong>One <code>DefaultAzureCredential</code> instance serves both sinks</strong> (<code>DataProtectionExtensions.cs:68</code>), so
+          they share a single token cache. A deployed host authenticates with its managed identity and a
+          developer machine falls back to the local Azure CLI or Visual Studio sign-in; ADC pins <strong>which</strong>
+          identity with <code>AZURE_CLIENT_ID</code> on both adopting apps (<code>MMCA.ADC/infra/main.bicep:1111</code>, <code>:1720</code>).</li>
+          <li><strong>ADC adopts it on exactly the two hosts that mint the payloads.</strong> The Identity service calls it
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:118</code>) and so does the Web UI host
+          (<code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:31</code>), both immediately after
+          <code>AddServiceDefaults()</code>. The Conference, Engagement, Notification and Gateway hosts do not, because
+          they mint neither a session cookie nor an antiforgery token.</li>
+          <li><strong>Infrastructure provisions one private container, not a new storage account.</strong>
+          <code>dataprotection-keys</code> is created on the existing avatar storage account with <code>publicAccess: &#39;None&#39;</code>
+          (<code>MMCA.ADC/infra/main.bicep:806-812</code>), deliberately unlike the public <code>avatars</code> container beside it,
+          and both apps are pointed at <code>.../dataprotection-keys/keys.xml</code> with the shared discriminator
+          <code>MMCA.ADC</code> (<code>:1109-1110</code>, <code>:1718-1719</code>). No extra role assignment is needed: the ADR-045 Storage Blob
+          Data Contributor grant is scoped to the storage <strong>account</strong>, so it already covers this container
+          (<code>:819-820</code>). That grant is itself guarded by <code>grantAvatarStorageRole</code>, default <code>false</code>, because the
+          deploy identity deliberately lacks role-assignment rights (<code>:113</code>, <code>:825</code>).</li>
+          <li><strong>The Azure dependencies live in the Aspire package only.</strong>
+          <code>Azure.Extensions.AspNetCore.DataProtection.Blobs</code> and <code>.Keys</code> are referenced by
+          <code>MMCA.Common.Aspire</code> (<code>MMCA.Common/Source/Hosting/MMCA.Common.Aspire/MMCA.Common.Aspire.csproj:23-24</code>)
+          and pinned centrally (<code>MMCA.Common/Directory.Packages.props:70-71</code>), alongside a direct
+          <code>System.Security.Cryptography.Xml</code> pin that lifts that chain&#39;s transitive off a vulnerable version
+          for consumers without the ASP.NET Core framework reference (<code>Directory.Packages.props:76</code>).</li>
           </ul>
+          <p><strong>Adoption is partial, and that is the current state, not an oversight in the record.</strong> MMCA.Store has
+          <strong>no</strong> call site and no <code>DataProtection</code> configuration anywhere in the repo, even though its UI and
+          Identity container apps also run at <code>maxReplicas: 2</code> (<code>MMCA.Store/infra/main.bicep:1169</code>, <code>:829</code>). The
+          capability ships in the framework package Store already consumes; adopting it there is a call site plus
+          a container and two environment variables. Recording a framework capability that one consumer has taken
+          up and another has not is the same posture as ADR-018 and ADR-020.</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
-          <li><strong>Safety at the edge, not in every handler.</strong> Deduplication lives in one filter, so a handler stays a
-          thin use case (ADR-014) and does not grow ad-hoc &quot;did I already do this?&quot; checks.</li>
-          <li><strong>Client owns the identity of an operation.</strong> Only the caller knows that a retry is the <em>same</em>
-          operation; a server-generated key cannot distinguish a retry from a legitimately-similar new request.</li>
-          <li><strong>Distributed-cache backing (when configured)</strong> makes replays work across instances and across a
-          service restart within the window, matching the database-per-service / multi-host deployment (ADR-006,
-          ADR-008); with the in-memory fallback (ADR-026) the replay is per-instance and lost on restart.</li>
-          <li><strong>Invariant-friendly default.</strong> Absent header ⇒ no behavior change, so adding <code>[Idempotent]</code> is a safe,
-          additive annotation.</li>
+          <li><strong>The key ring is the smallest thing that has to be shared.</strong> Sticky sessions would paper over the
+          symptom while making a replica restart a mass sign-out, and a shared cache would put auth keys in a
+          cache with an eviction policy. One blob, read by every replica, matches the actual lifetime of the
+          data.</li>
+          <li><strong>Uncoupling the two gates is the load-bearing choice.</strong> The correctness fix (persistence) and the
+          hardening step (encryption at rest) have different failure modes and different prerequisites. If they
+          were one switch, a role assignment that has not been applied yet would take authentication down for
+          everyone, which is strictly worse than a key ring that is stored under an account-scoped data-plane
+          grant and not additionally encrypted.</li>
+          <li><strong>A silent no-op keeps the framework&#39;s default posture.</strong> Local development, the test tiers and the
+          Helpdesk seed are all single-process. Making the Azure path opt-in through the presence of one
+          configuration value means no host pays an Azure dependency at startup for a problem it does not have.</li>
+          <li><strong>Reusing the avatar storage account avoids new infrastructure.</strong> The account, its managed-identity
+          grant and its deployment path already exist (ADR-045); a private container beside the public one is
+          the whole delta.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>Cross-instance mutual exclusion follows Redis, so it is a deployment property, not a guarantee.</strong>
-          Every ADC and Store service host registers a Redis <code>IConnectionMultiplexer</code> when a <code>redis</code> connection
-          string is present, and the Azure templates inject one into every service container, so the deployed
-          lock is the Redis one and two simultaneous duplicates landing on <em>different</em> replicas are genuinely
-          serialized. A host with no multiplexer (Helpdesk, a single-replica local run, tests) falls back to the
-          process-local lock or the striped semaphore, and there duplicates on different instances can both miss
-          the cache and execute, with a configured distributed cache making the <em>replay</em> consistent afterward
-          but not providing mutual exclusion. Even with Redis the lock is best-effort by design (one instance,
-          not Redlock, and a section that outruns the 30s time-to-live is no longer exclusive for the remainder),
-          so for exactly-once the operation itself should still be naturally idempotent or guarded by a unique
-          constraint.</li>
-          <li><strong>Bounded window.</strong> Replays only work within the retention window (default 24h); a duplicate after
-          expiry re-executes.</li>
-          <li><strong>Response-shape coupling.</strong> Only a 2xx <code>ObjectResult</code> or a body-less 2xx <code>StatusCodeResult</code> is cached,
-          and the cached body is the serialized value, so an endpoint whose response depends on per-request state
-          (other than the body) will replay the original, not a freshly-computed response. Response headers are
-          not part of the record either, so a replayed 201 does not carry the original <code>Location</code>.</li>
-          <li><strong>A key is only ever replayed to the caller that produced it.</strong> Scoping to the subject means a
-          client that retries under a different identity (a rotated anonymous address, or a token exchange
-          between the first attempt and the retry) misses the cache and re-executes. That is the correct
-          trade against replaying one caller&#39;s response to another.</li>
-          <li><strong>Opt-in.</strong> An action that should be idempotent but is missing <code>[Idempotent]</code> gets no protection: the
-          same audit-the-inventory caveat as ADR-005&#39;s <code>IAnonymizable</code>.</li>
+          <li><strong>The key ring is not encrypted at rest today.</strong> Gate 2 is implemented but configured nowhere, so the
+          ring is protected by the container being private and the account grant being narrow, not by a Key
+          Vault key. Closing that needs a Key Vault Crypto User grant plus one environment variable per app.</li>
+          <li><strong>Opt-in per host, so adoption must be audited.</strong> A scaled-out host that never calls
+          <code>AddCommonDataProtection</code> keeps the broken per-replica default and fails intermittently rather than
+          loudly, the same audit-the-inventory caveat as ADR-005 / ADR-017 / ADR-021. Store is exactly that
+          case today.</li>
+          <li><strong>Startup now depends on a credential resolving in the adopting hosts.</strong> In Azure that is the
+          user-assigned identity named by <code>AZURE_CLIENT_ID</code>; a missing or wrong identity turns a key-ring read
+          into a startup-time failure on the two hosts that opt in.</li>
+          <li><strong>A shared blob plus a shared discriminator means shared keys by design.</strong> ADC&#39;s Identity service and
+          UI host both use the discriminator <code>MMCA.ADC</code>, which is what makes their cookies mutually
+          decryptable; a future app that should NOT share keys must get its own blob or its own
+          <code>DataProtection:ApplicationName</code>, or it will silently join the same ring.</li>
+          <li><strong>Local and deployed behavior differ.</strong> Development runs the in-memory default, so a cross-replica
+          decryption bug is by construction not reproducible locally: the deployed configuration is the only
+          place the persisted path is exercised.</li>
           </ul>
           <h2 id="related">Related</h2>
-          <p>ADR-003 (handler idempotency for outbox/event consumers, a distinct concern), ADR-013 (Result is the
-          response the filter caches/replays), ADR-014 (the filter keeps the handler thin), ADR-009 (the resilience
-          pipeline that re-issues requests is the main source of the duplicates this filter absorbs), ADR-026 (the
-          <code>ICacheService</code> substrate whose distributed-vs-memory backing determines cross-instance replay).</p>
+          <p>ADR-022 (the browser session cookies whose decryption this makes replica-independent, together with
+          the antiforgery tokens the SSR pages mint), ADR-008 (the multi-host topology that created the problem;
+          the adopting hosts are the ones that mint auth payloads), ADR-061 (managed identity as the runtime
+          credential model, which this reuses for a payload that is state rather than a secret), ADR-045 (the
+          storage account, the account-scoped data-plane grant, and the <code>DefaultAzureCredential</code> pattern this
+          container rides on).</p>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
-          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/017-request-idempotency.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/069-shared-data-protection-key-ring.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
         <aside class="doc-aside" id="doc-rail">

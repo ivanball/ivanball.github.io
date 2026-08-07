@@ -1,7 +1,8 @@
 # ADR-024: Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)
 
 ## Status
-Accepted (2026-06-27, amended 2026-07-15).
+Accepted (2026-06-27, amended 2026-07-15). Revised 2026-08-07 (transactional email recorded as an
+app-level concern outside the channel model; see Revision below).
 
 ## Context
 The framework needs to deliver user-facing notifications (an organizer broadcasting a schedule change,
@@ -45,10 +46,10 @@ recipient policy both behind abstractions.
   the notification on next load. A send is never rolled back because the WebSocket fan-out failed.
 - **An optional third, native-push leg (ADR-044).** After the inbox write and the SignalR push,
   `SendPushNotificationHandler` also dispatches through `INativePushSender`
-  (`SendPushNotificationHandler.cs:88-105`), an OS-level native-push channel that reaches devices the
+  (`SendPushNotificationHandler.cs:134-152`), an OS-level native-push channel that reaches devices the
   SignalR hub cannot (the app backgrounded or killed). It is best-effort by the same logic as the live
   push (a throw is logged, never fatal, and the SignalR leg has already decided the audit status), and it
-  defaults to `NullNativePushSender` (`MMCA.Common.Infrastructure`, `DependencyInjection.cs:233`), so it
+  defaults to `NullNativePushSender` (`MMCA.Common.Infrastructure`, `DependencyInjection.cs:240`), so it
   stays inert until a native hub is configured. The design of that channel is ADR-044's scope; this ADR
   keeps its own on the inbox and SignalR channels, so the "Two-Channel" title names the durable and
   transient channels this record governs, not a hard cap on the number of delivery legs.
@@ -96,3 +97,43 @@ stays Profile-B `Http1AndHttp2` for the SignalR WebSocket/HTTP/1.1 path, and sin
 serves an inbound `Http2`-only h2c gRPC edge on a dedicated named endpoint per ADR-039), ADR-022 (the
 browser-edge auth context the UI client runs in), ADR-044 (the optional OS-level native-push channel
 `SendPushNotificationHandler` fires after the inbox and SignalR legs, defaulting to `NullNativePushSender`).
+
+## Revision (2026-08-07)
+Records transactional email, a delivery path the channel model above never mentions. The decision is
+unchanged: this closes a documentation gap so the asymmetry reads as deliberate rather than unnoticed.
+
+1. **Email is a framework-registered primitive, not a channel of this ADR.** `IEmailSender`
+   (`MMCA.Common/Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IEmailSender.cs:6`) has a
+   single implementation, `SmtpEmailSender`
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Services/SmtpEmailSender.cs:12`), and it is
+   TryAdd-registered in the same block as the push-sender defaults
+   (`MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:234`, beside
+   `IPushNotificationSender` at `:235` and `INativePushSender` at `:240`). That block is `AddServices()`
+   (`:211`), which `AddInfrastructure` always calls (`:147`), so every host gets it. Unlike the two push
+   abstractions it has no null default and no opt-in `Add*` counterpart: the real SMTP sender is always
+   the registration, inert only because nothing resolves it.
+2. **It sits outside the inbox / SignalR / native model.** An email creates no `PushNotification` audit
+   record, writes no `UserNotification` inbox row, and is never dispatched by
+   `SendPushNotificationHandler`. Callers resolve `IEmailSender` from a scope and send directly, so none
+   of the guarantees this ADR makes (durable-first ordering, best-effort live layer, recorded send
+   status) apply to it.
+3. **Adoption is two call sites, both in Store Sales.** `OrderPaidHandler`
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/DomainEventHandlers/OrderPaidHandler.cs:41`)
+   and `OrderPaymentFailedSagaHandler`
+   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/Saga/OrderPaymentFailedSagaHandler.cs:31`),
+   both `IDomainEventHandler<T>` implementations that open their own DI scope, build the HTML body
+   inline, and swallow-and-log a send failure so the order flow is never broken
+   (`OrderPaidHandler.cs:59-64`, `OrderPaymentFailedSagaHandler.cs:52-55`). No other module or repo
+   consumes the abstraction today.
+4. **No templating, retry, or bounce posture.** The contract is two `SendAsync` overloads over plain
+   `subject` / `body` strings with an `isHtml` flag (`IEmailSender.cs:15,23`); bodies are concatenated
+   at the call site. `SmtpEmailSender` constructs a fresh `SmtpClient` per call and awaits
+   `SendMailAsync` once (`SmtpEmailSender.cs:30-42`): no retry, no dead-letter, no bounce or
+   delivery-status handling, and no persisted send record equivalent to the `PushNotification`
+   aggregate.
+5. **Accepted as-is.** Email stays an app-level concern riding a framework-registered primitive.
+   Pulling it under this ADR's model (durable record, null default, opt-in registration, one dispatching
+   handler) is not justified by two call sites, and the point of recording it here is only that a reader
+   of ADR-024 or ADR-044 should not conclude the inbox, SignalR and native legs are the only delivery
+   paths in the platform. Wider adoption, or a requirement that email delivery be auditable or
+   retried, is the trigger to give it its own record instead of this amendment.

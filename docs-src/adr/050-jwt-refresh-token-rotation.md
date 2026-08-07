@@ -39,7 +39,7 @@ with a token mismatch triggering revocation.
   `user.UpdateRefreshToken(...)` before `SaveChangesAsync`
   (`AuthenticationServiceBase.cs:292,296,297,298,300`). Registration seeds the first refresh token the
   same way (`AuthenticationServiceBase.cs:167,168`). `UpdateRefreshToken` sets the token and its expiry
-  (`IAuthUser.cs:27`; ADC `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:234,236,237`,
+  (`IAuthUser.cs:27`; ADC `MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Domain/Users/User.cs:243,245,246`,
   Store `MMCA.Store/Source/Modules/Identity/MMCA.Store.Identity.Domain/Users/User.cs:129,131,132`). The
   previous refresh token is therefore invalid the moment a new one is issued.
 - **Refresh binds to the same principal via the expired access token.** `RefreshTokenAsync` requires the
@@ -64,13 +64,13 @@ with a token mismatch triggering revocation.
   stored `RefreshToken`, or the stored expiry is in the past, the workflow calls
   `user.RevokeRefreshToken()` and saves before returning a 401
   (`AuthenticationServiceBase.cs:259,261,262,264`). `RevokeRefreshToken` nulls both the token and its
-  expiry (`IAuthUser.cs:30`; ADC `User.cs:243,245,246`, Store `User.cs:139,141,142`), so a presented
+  expiry (`IAuthUser.cs:30`; ADC `User.cs:252,254,255`, Store `User.cs:139,141,142`), so a presented
   token that has already been rotated away (the signature of reuse or theft) invalidates the current
   stored token as well, forcing a fresh password login rather than silently reissuing.
 - **Explicit revocation and account-state changes clear the same slot.** `RevokeTokenAsync` loads the
   user and revokes the stored token on demand (`AuthenticationServiceBase.cs:276,282,283`). Both apps also
   revoke on account deactivation and erasure, so those transitions immediately end the refresh chain: ADC
-  in `Delete()` and `Anonymize()` (`MMCA.ADC/.../Identity.Domain/Users/User.cs:350,403`), Store in
+  in `Delete()` and `Anonymize()` (`MMCA.ADC/.../Identity.Domain/Users/User.cs:359,412`), Store in
   `Deactivate()` and `Anonymize()` (`MMCA.Store/.../Identity.Domain/Users/User.cs:217,249`).
 - **Both apps inherit the workflow through a sealed subclass.** ADC's `AuthenticationService`
   (`MMCA.ADC/Source/Modules/Identity/MMCA.ADC.Identity.Application/Users/AuthenticationService.cs:35`,

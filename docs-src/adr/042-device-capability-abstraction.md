@@ -101,7 +101,7 @@ Add a per-capability contract layer to `MMCA.Common.UI` and a fifteenth package,
   their UI and surface the gap visibly.
 - Biometrics, speech-to-text, and the external-auth broker now ship native MAUI implementations,
   all three registered by `AddMauiDeviceCapabilities()`
-  (`Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:43`, `:44`, `:58`). The residual
+  (`Source/Presentation/MMCA.Common.UI.Maui/DependencyInjection.cs:45`, `:46`, `:60`). The residual
   trade-off is configuration, not code: `MauiExternalAuthBroker` registers unconditionally but
   reports `IsAvailable == false` (`Source/Presentation/MMCA.Common.UI.Maui/Capabilities/MauiExternalAuthBroker.cs:39`)
   until the head supplies `OAuth:MobileRedirectScheme`, so a misconfigured head quietly keeps the web

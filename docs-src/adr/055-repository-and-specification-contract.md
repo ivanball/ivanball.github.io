@@ -5,7 +5,11 @@ Accepted (2026-07-25). Revised 2026-08-01 (qualified the "referenced nowhere" cl
 `IEntityReader` / `IEntityQuerier`: an ADC doc comment now names `IEntityQuerier`, though no code
 depends on either as a type; refreshed the ADC `SessionsController` and MMCA.Common
 `DependencyInjection` anchors, and the leak rationale, which now reads non-accepted sessions to
-non-privileged callers rather than declined sessions).
+non-privileged callers rather than declined sessions). Revised 2026-08-07 (withdrew that
+qualification: the ADC file it pointed at no longer exists, so neither interface has any reference
+outside its own declaration file; replaced the ADC concrete-specification example, which named a
+class that does not exist, with the specifications ADC actually ships; refreshed the
+`EFReadRepository`, `SessionsController`, and `IEntityQueryService` anchors).
 
 ## Context
 Every read an application handler performs has to come from somewhere, and the shape of that contract
@@ -47,7 +51,7 @@ keeps the raw `IQueryable` surfaces out of Application code.
 - **The raw queryables live on the composite only.** `Table`, `TableNoTracking`,
   `TableNoTrackingSingleQuery`, and `TableNoTrackingSplitQuery` are declared on `IReadRepository`
   (`IRepository.cs:116`, `:119`, `:122`, `:125`) and implemented as EF `DbSet` expressions
-  (`EFReadRepository.cs:245`, `:248`, `:251`, `:254`). They are deliberately absent from
+  (`EFReadRepository.cs:250`, `:253`, `:256`, `:259`). They are deliberately absent from
   `IEntityReader` and `IEntityQuerier`, so a handler that declares the narrow dependency cannot reach
   a queryable at all.
 - **Application code must not touch those queryables, and a fitness rule fails the build.**
@@ -65,9 +69,16 @@ keeps the raw `IQueryable` surfaces out of Application code.
   specification is a constructor argument plus one expression, for example
   `OrdersByCustomerSpecification`
   (`MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.Application/Orders/Specifications/OrdersByCustomerSpecification.cs:13`,
-  `:18`) and `OwnEventQuestionAnswerSpecification`
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Specifications/OwnEventQuestionAnswerSpecification.cs:11`,
-  `:15-16`).
+  `:18`). A business filter that takes no argument is smaller still, one overridden `Criteria`, as in
+  ADC's `PublishedEventSpecification`
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.Application/Events/Specifications/PublishedEventSpecification.cs:11`,
+  `:14`), the only class in that module's `Events/Specifications` directory. Row-scoping is not
+  hand-written per entity at all: the generic `OwnedByUserSpecification<TEntity, TIdentifierType>`
+  filters on the `CreatedBy` audit field once in the framework
+  (`Source/Core/MMCA.Common.Domain/Specifications/OwnedByUserSpecification.cs:20`, `:29-30`) and is
+  closed over the entity type at the call site, which is how ADC scopes an attendee to their own
+  answers
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/EventQuestionAnswersController.cs:66-67`).
 - **Specifications compose.** `AndSpecification` (`Specification.cs:62`), `OrSpecification` (`:88`),
   and `NotSpecification` (`:114`) build a new lambda over a fresh parameter with `Expression.Invoke`
   so the result stays an expression tree EF can translate (`:74-78`, `:100-104`, `:125-128`);
@@ -75,12 +86,12 @@ keeps the raw `IQueryable` surfaces out of Application code.
   hand-written class. Composition is used in production: ADC's paged session read ANDs the
   public-session specification with the speaker-scoped one rather than substituting, because dropping
   the public filter would leak non-accepted sessions to non-privileged callers
-  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:97`,
-  `:119`, rationale at `:92-94`).
+  (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/SessionsController.cs:96`,
+  `:118`, rationale at `:91-93`).
 - **The specification enters the same query pipeline, not a parallel one.** `IEntityQueryService`
   takes an optional `Specification<TEntity, TIdentifierType>` on every read
-  (`Source/Core/MMCA.Common.Application/Interfaces/IEntityQueryService.cs:40`, `:63`, `:106`,
-  `:127`), and `EntityQueryService` passes its `Criteria` into the query parameters
+  (`Source/Core/MMCA.Common.Application/Interfaces/IEntityQueryService.cs:40`, `:63`, `:110`,
+  `:131`), and `EntityQueryService` passes its `Criteria` into the query parameters
   (`Source/Core/MMCA.Common.Application/Services/EntityQueryService.cs:427`) alongside the dynamic
   filters, sorting, and paging. Cross-source predicates are produced the same way:
   `CrossSourceSpecification.BuildAsync`
@@ -112,13 +123,15 @@ out only the composites (`IRepository` at
 `Source/Core/MMCA.Common.Application/Interfaces/Infrastructure/IUnitOfWork.cs:19`, `IReadRepository`
 at `:29`), and the container registers only the open generic `IRepository<,>`
 (`Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:100`). `IEntityReader` and
-`IEntityQuerier` have no type-level reference outside their own declaration file across all four
-repositories. The one mention anywhere else is prose: an ADC doc comment explains that a public
-lookup helper takes the composite because `GetAllForLookupAsync` is declared on `IEntityQuerier`
-(`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.API/Controllers/PublicLookupReader.cs:33`),
-while the parameter it actually declares is `IReadRepository<TEntity, TIdentifierType>` (`:66`),
-matching what `IUnitOfWork.GetReadRepository` returns. So the ISP split is today the declared target
-that new handlers are pointed at, not the dependency shape any handler currently has.
+`IEntityQuerier` have no reference of any kind outside their own declaration file across all four
+repositories: not a type, not a parameter, and not a doc comment (`IRepository.cs:14`, `:64`). The
+only other occurrences of either name in the workspace describe the contract rather than depend on
+it: two comments in MMCA.Helpdesk's template staging script
+(`MMCA.Helpdesk/build/templates/stage.ps1:250`, `:958`) noting that `IEntityReader.GetByIdAsync`
+declares `includes` as a required parameter, which is why the generated conditional passes an empty
+list instead of omitting the argument. So the ISP split is today the declared target that new
+handlers are pointed at (`IRepository.cs:105-106`), not the dependency shape any handler currently
+has.
 
 ## Rationale
 - **A narrow interface is the enforcement, not a style preference.** A handler that asks for
@@ -132,7 +145,7 @@ that new handlers are pointed at, not the dependency shape any handler currently
   in a query and compiled in memory by `IsSatisfiedBy` (`Specification.cs:9-11`, `:32`), so an
   authorization predicate can be asserted in a domain test with no database at all.
 - **Composability keeps filters additive.** ANDing an authorization scope onto a business filter is a
-  two-line construction (`SessionsController.cs:119`) instead of a second hand-written query path,
+  two-line construction (`SessionsController.cs:118`) instead of a second hand-written query path,
   which is what makes "never substitute the public filter" a cheap rule to follow.
 - **A textual scan was chosen deliberately over IL analysis.** NetArchTest and reflection cannot see
   member usage inside method bodies, and the testing package carries no IL or Roslyn dependency on

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 65 ADRs</summary>
+        <summary>All 70 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -165,6 +165,11 @@
         <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
         <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
         <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -258,7 +263,7 @@
           (<code>.../Infrastructure/DependencyInjection.cs:34-36</code>). Each cycle selects the oldest orders that have
           sat in <code>PaymentInitiated</code> past a cutoff, ordered, bounded and projected to ids entirely in SQL
           (<code>PaymentReconciliationService.cs:101-109</code>) over a dedicated filtered index
-          (<code>.../Persistence/EntityConfiguration/OrderConfiguration.cs:74-80</code>), asks Stripe for the session&#39;s
+          (<code>.../Persistence/EntityConfiguration/OrderConfiguration.cs:46-52</code>), asks Stripe for the session&#39;s
           authoritative status, and applies the matching transition: paid to <code>MarkAsPaid</code>, expired to
           <code>MarkAsPaymentFailed</code>, still open to nothing (<code>PaymentReconciliationService.cs:180-202</code>). It is
           configuration-gated (<code>.../Infrastructure/Settings/PaymentReconciliationSettings.cs:13-36</code>, defaults
