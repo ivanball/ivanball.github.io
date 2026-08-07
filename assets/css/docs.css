@@ -5,6 +5,15 @@
    ========================================================================== */
 
 /* ----- Two-column doc layout ----- */
+/* This stylesheet loads only on reference-library pages, so widening the shared
+   containers here affects doc pages alone: with the site-wide 1140px cap, the
+   sidebar and on-this-page rail left the article column ~590px on a wide
+   monitor, forcing horizontal scroll on most tables. The header and footer are
+   widened with it so all three keep the same left/right edges. */
+.site-header > .container,
+.site-footer > .container,
+.doc-container { max-width: var(--maxw-wide); }
+
 .doc-container { padding-top: 1.5rem; padding-bottom: 3.5rem; }
 
 .doc-breadcrumb {
@@ -135,7 +144,10 @@
 }
 
 /* ----- Rendered markdown content ----- */
-.doc-content { min-width: 0; max-width: 80ch; }
+/* 92ch fills the column the 1440px container yields on three-column pages;
+   on two-column pages it caps the line length short of the full ~1050px,
+   which is past comfortable reading width. */
+.doc-content { min-width: 0; max-width: 92ch; }
 .doc-kicker { margin-bottom: 0.4rem; }
 
 .doc-content h1 { margin: 0 0 1rem; }

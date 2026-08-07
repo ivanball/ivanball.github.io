@@ -113,6 +113,7 @@
   --radius-sm: 8px;
   --radius-lg: 18px;
   --maxw: 1140px;
+  --maxw-wide: 1440px;
   --maxw-prose: 760px;
 }
 
