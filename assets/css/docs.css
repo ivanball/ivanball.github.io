@@ -5,14 +5,14 @@
    ========================================================================== */
 
 /* ----- Two-column doc layout ----- */
-/* This stylesheet loads only on reference-library pages, so widening the shared
-   containers here affects doc pages alone: with the site-wide 1140px cap, the
-   sidebar and on-this-page rail left the article column ~590px on a wide
-   monitor, forcing horizontal scroll on most tables. The header and footer are
-   widened with it so all three keep the same left/right edges. */
+/* This stylesheet loads only on reference-library pages, so the containers go
+   fluid on doc pages alone: the sidebar and on-this-page rail are fixed
+   widths, so the article column takes all the horizontal room the viewport
+   offers (the site-wide 1140px cap left it ~590px on a wide monitor). The
+   header and footer stretch with it so all three keep the same edges. */
 .site-header > .container,
 .site-footer > .container,
-.doc-container { max-width: var(--maxw-wide); }
+.doc-container { max-width: none; }
 
 .doc-container { padding-top: 1.5rem; padding-bottom: 3.5rem; }
 
@@ -144,10 +144,9 @@
 }
 
 /* ----- Rendered markdown content ----- */
-/* 92ch fills the column the 1440px container yields on three-column pages;
-   on two-column pages it caps the line length short of the full ~1050px,
-   which is past comfortable reading width. */
-.doc-content { min-width: 0; max-width: 92ch; }
+/* min-width: 0 lets the grid column shrink content instead of overflowing;
+   no width cap: the column is bounded only by the fluid layout above. */
+.doc-content { min-width: 0; }
 .doc-kicker { margin-bottom: 0.4rem; }
 
 .doc-content h1 { margin: 0 0 1rem; }
@@ -348,6 +347,4 @@
   .doc-layout { grid-template-columns: 1fr; gap: 1.25rem; }
   .doc-sidebar { position: static; top: auto; }
   .doc-nav { max-height: 55vh; }
-  /* Collapse the collection nav by default on small screens to keep content first */
-  .doc-content { max-width: none; }
 }
