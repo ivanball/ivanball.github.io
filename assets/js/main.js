@@ -149,6 +149,28 @@
     headings.forEach(function (h) { io.observe(h); });
   }
 
+  /* ----- On-this-page rail toggle -----
+     The button is stamped at build time only on pages that have a rail. The
+     hidden state lives on <html> (set before paint by the head script when a
+     preference is stored), so this only wires the click and keeps the button's
+     aria-expanded in step with it. */
+  function initRailToggle() {
+    var btn = document.querySelector("[data-rail-toggle]");
+    if (!btn) { return; }
+    var root = document.documentElement;
+    function sync() {
+      btn.setAttribute("aria-expanded", root.getAttribute("data-rail") === "hidden" ? "false" : "true");
+    }
+    btn.addEventListener("click", function () {
+      var hide = root.getAttribute("data-rail") !== "hidden";
+      if (hide) { root.setAttribute("data-rail", "hidden"); }
+      else { root.removeAttribute("data-rail"); }
+      try { localStorage.setItem("mmca-rail", hide ? "hidden" : "shown"); } catch (e) { /* private mode */ }
+      sync();
+    });
+    sync();
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     initThemeToggle();
     initNavToggle();
@@ -157,5 +179,6 @@
     initDocSidebar();
     initReveal();
     initDocToc();
+    initRailToggle();
   });
 })();

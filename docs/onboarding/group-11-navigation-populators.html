@@ -23,7 +23,7 @@
   <meta name="twitter:description" content="EF Core gives you .Include() for eager loading, and for a single SQL Server database that is the right tool. But this codebase is a…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"11. Navigation Metadata & Populators (EF-decoupled eager loading)","item":"https://ivanball.github.io/docs/onboarding/group-11-navigation-populators.html"}]}</script>
-  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
   <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
@@ -91,8 +91,9 @@
         <a href="../../docs/onboarding/index.html">Onboarding Guide</a>
         <span aria-hidden="true">/</span>
         <span class="current">11. Navigation Metadata &amp; Populators (EF-decoupled eager loading)</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Guide contents</summary>
@@ -673,7 +674,25 @@
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
         </div>
         </article>
-
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#navigationattribute">NavigationAttribute</a></li>
+            <li><a href="#navigationtype">NavigationType</a></li>
+            <li><a href="#navigationpropertyinfo">NavigationPropertyInfo</a></li>
+            <li><a href="#inavigationmetadata">INavigationMetadata</a></li>
+            <li><a href="#navigationmetadata">NavigationMetadata</a></li>
+            <li><a href="#inavigationpopulatorin-tentity">INavigationPopulator&lt;in TEntity&gt;</a></li>
+            <li><a href="#nullnavigationpopulatortentity">NullNavigationPopulator&lt;TEntity&gt;</a></li>
+            <li><a href="#navigationloader">NavigationLoader</a></li>
+            <li><a href="#inavigationdescriptorin-tentity">INavigationDescriptor&lt;in TEntity&gt;</a></li>
+            <li><a href="#childnavigationdescriptortentity-tparentid-tchild-tchildid">ChildNavigationDescriptor&lt;TEntity, TParentId, TChild, TChildId&gt;</a></li>
+            <li><a href="#fknavigationdescriptortentity-tchild-tchildid">FKNavigationDescriptor&lt;TEntity, TChild, TChildId&gt;</a></li>
+            <li><a href="#declarativenavigationpopulatortentity">DeclarativeNavigationPopulator&lt;TEntity&gt;</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

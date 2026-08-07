@@ -23,7 +23,7 @@
   <meta name="twitter:description" content="What this chapter covers. MMCA.Common.UI is the Blazor presentation package, the one layer in the framework that, like Grpc, is allowed to reference…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"15. Common UI Framework (MudBlazor components, theme, base pages)","item":"https://ivanball.github.io/docs/onboarding/group-15-common-ui-framework.html"}]}</script>
-  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
   <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
@@ -91,8 +91,9 @@
         <a href="../../docs/onboarding/index.html">Onboarding Guide</a>
         <span aria-hidden="true">/</span>
         <span class="current">15. Common UI Framework (MudBlazor components, theme, base pages)</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Guide contents</summary>
@@ -2239,7 +2240,98 @@
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
         </div>
         </article>
-
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#breakpointconstants">BreakpointConstants</a></li>
+            <li><a href="#iapisettings">IApiSettings</a></li>
+            <li><a href="#ihomepagecontent">IHomePageContent</a></li>
+            <li><a href="#layoutsettings">LayoutSettings</a></li>
+            <li><a href="#navsection">NavSection</a></li>
+            <li><a href="#notificationroutepaths">NotificationRoutePaths</a></li>
+            <li><a href="#routepaths">RoutePaths</a></li>
+            <li><a href="#uimoduleconfiguration">UIModuleConfiguration</a></li>
+            <li><a href="#uisharedassemblyreference">UISharedAssemblyReference</a></li>
+            <li><a href="#webapplicationextensions">WebApplicationExtensions</a></li>
+            <li><a href="#apisettings">ApiSettings</a></li>
+            <li><a href="#navitem">NavItem</a></li>
+            <li><a href="#ientityservicetentitydto-tidentifiertype">IEntityService&lt;TEntityDTO, TIdentifierType&gt;</a></li>
+            <li><a href="#iuimodule">IUIModule</a></li>
+            <li><a href="#moneyextensions">MoneyExtensions</a></li>
+            <li><a href="#dependencyinjection">DependencyInjection</a></li>
+            <li><a href="#loginmodel">LoginModel</a></li>
+            <li><a href="#mudtranslations">MudTranslations</a></li>
+            <li><a href="#passwordcomplexityattribute">PasswordComplexityAttribute</a></li>
+            <li><a href="#persistedgridstate">PersistedGridState</a></li>
+            <li><a href="#pseudolocalizer">PseudoLocalizer</a></li>
+            <li><a href="#registermodel">RegisterModel</a></li>
+            <li><a href="#sharedresource">SharedResource</a></li>
+            <li><a href="#pseudostringlocalizer">PseudoStringLocalizer</a></li>
+            <li><a href="#resxmudlocalizer">ResxMudLocalizer</a></li>
+            <li><a href="#errormessages">ErrorMessages</a></li>
+            <li><a href="#pseudostringlocalizerfactory">PseudoStringLocalizerFactory</a></li>
+            <li><a href="#datagridlistpagebasetdto">DataGridListPageBase&lt;TDto&gt;</a></li>
+            <li><a href="#culturedelegatinghandler">CultureDelegatingHandler</a></li>
+            <li><a href="#icultureapplier">ICultureApplier</a></li>
+            <li><a href="#iuserpreferencewriter">IUserPreferenceWriter</a></li>
+            <li><a href="#listpagestate">ListPageState</a></li>
+            <li><a href="#themeservice">ThemeService</a></li>
+            <li><a href="#userpreferences">UserPreferences</a></li>
+            <li><a href="#userpreferencesrequest">UserPreferencesRequest</a></li>
+            <li><a href="#apiuserpreferencewriter">ApiUserPreferenceWriter</a></li>
+            <li><a href="#authenticatedservicebase">AuthenticatedServiceBase</a></li>
+            <li><a href="#endpointcultureapplier">EndpointCultureApplier</a></li>
+            <li><a href="#iuserpreferencereader">IUserPreferenceReader</a></li>
+            <li><a href="#listpagequerystateservice">ListPageQueryStateService</a></li>
+            <li><a href="#listpagestateservice">ListPageStateService</a></li>
+            <li><a href="#mmcaculturebootstrap">MmcaCultureBootstrap</a></li>
+            <li><a href="#apiuserpreferencereader">ApiUserPreferenceReader</a></li>
+            <li><a href="#serviceexceptionhelper">ServiceExceptionHelper</a></li>
+            <li><a href="#childentityservicebase">ChildEntityServiceBase</a></li>
+            <li><a href="#entityservicebasetentitydto-tidentifiertype">EntityServiceBase&lt;TEntityDTO, TIdentifierType&gt;</a></li>
+            <li><a href="#ioauthuisettings">IOAuthUISettings</a></li>
+            <li><a href="#isessioncookiesync">ISessionCookieSync</a></li>
+            <li><a href="#itokenrefresher">ITokenRefresher</a></li>
+            <li><a href="#itokenstorageservice">ITokenStorageService</a></li>
+            <li><a href="#jwttokeninfo">JwtTokenInfo</a></li>
+            <li><a href="#authdelegatinghandler">AuthDelegatingHandler</a></li>
+            <li><a href="#configurationoauthuisettings">ConfigurationOAuthUISettings</a></li>
+            <li><a href="#defaultoauthuisettings">DefaultOAuthUISettings</a></li>
+            <li><a href="#directapitokenrefresher">DirectApiTokenRefresher</a></li>
+            <li><a href="#jsfetchsessioncookiesync">JsFetchSessionCookieSync</a></li>
+            <li><a href="#jwtauthenticationstateprovider">JwtAuthenticationStateProvider</a></li>
+            <li><a href="#sameoriginproxytokenrefresher">SameOriginProxyTokenRefresher</a></li>
+            <li><a href="#wasmtokenstorageservice">WasmTokenStorageService</a></li>
+            <li><a href="#iauthuiservice">IAuthUIService</a></li>
+            <li><a href="#authuiservice">AuthUIService</a></li>
+            <li><a href="#backnavigationresult">BackNavigationResult</a></li>
+            <li><a href="#brandcolors">BrandColors</a></li>
+            <li><a href="#channelreferencecounter">ChannelReferenceCounter</a></li>
+            <li><a href="#notificationstate">NotificationState</a></li>
+            <li><a href="#returnurlprotector">ReturnUrlProtector</a></li>
+            <li><a href="#mauibacknavigationbridge">MauiBackNavigationBridge</a></li>
+            <li><a href="#mobileinfinitescrolllisttitem">MobileInfiniteScrollList&lt;TItem&gt;</a></li>
+            <li><a href="#navigationhistoryservice">NavigationHistoryService</a></li>
+            <li><a href="#blazorcsppolicyprovider">BlazorCspPolicyProvider</a></li>
+            <li><a href="#channelsubscription">ChannelSubscription</a></li>
+            <li><a href="#inotificationinboxuiservice">INotificationInboxUIService</a></li>
+            <li><a href="#ipushnotificationuiservice">IPushNotificationUIService</a></li>
+            <li><a href="#mmcatheme">MMCATheme</a></li>
+            <li><a href="#notificationhubservice">NotificationHubService</a></li>
+            <li><a href="#notificationbell">NotificationBell</a></li>
+            <li><a href="#notificationinboxservice">NotificationInboxService</a></li>
+            <li><a href="#pushnotificationservice">PushNotificationService</a></li>
+            <li><a href="#notificationinbox">NotificationInbox</a></li>
+            <li><a href="#notificationlist">NotificationList</a></li>
+            <li><a href="#notificationsend">NotificationSend</a></li>
+            <li><a href="#notificationuimodule">NotificationUIModule</a></li>
+            <li><a href="#servertokenstorageservice">ServerTokenStorageService</a></li>
+            <li><a href="#dependencyinjection-1">DependencyInjection</a></li>
+            <li><a href="#dependencyinjection-2">DependencyInjection</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

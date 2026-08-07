@@ -23,7 +23,7 @@
   <meta name="twitter:description" content="What this group covers. A single Blazor UI codebase in MMCA.Common.UI renders on three very different heads: Blazor Server (server-side render +…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser & Fallback Adapters)","item":"https://ivanball.github.io/docs/onboarding/group-26-device-capability-layer.html"}]}</script>
-  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
   <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
@@ -91,8 +91,9 @@
         <a href="../../docs/onboarding/index.html">Onboarding Guide</a>
         <span aria-hidden="true">/</span>
         <span class="current">26. Device Capability Abstraction Layer (Native Contracts, MAUI, Browser &amp; Fallback Adapters)</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Guide contents</summary>
@@ -1935,7 +1936,103 @@
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
         </div>
         </article>
-
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#iformfactor">IFormFactor</a></li>
+            <li><a href="#wasmformfactor">WasmFormFactor</a></li>
+            <li><a href="#devicepreferencekeys">DevicePreferenceKeys</a></li>
+            <li><a href="#geopoint">GeoPoint</a></li>
+            <li><a href="#iaccessibilityannouncer">IAccessibilityAnnouncer</a></li>
+            <li><a href="#ibatterystatusservice">IBatteryStatusService</a></li>
+            <li><a href="#ibiometricauthenticator">IBiometricAuthenticator</a></li>
+            <li><a href="#iclipboardservice">IClipboardService</a></li>
+            <li><a href="#iconnectivitystatusservice">IConnectivityStatusService</a></li>
+            <li><a href="#idevicepreferences">IDevicePreferences</a></li>
+            <li><a href="#iexternalauthbroker">IExternalAuthBroker</a></li>
+            <li><a href="#iexternallinkservice">IExternalLinkService</a></li>
+            <li><a href="#ihapticfeedbackservice">IHapticFeedbackService</a></li>
+            <li><a href="#ilocalcachestore">ILocalCacheStore</a></li>
+            <li><a href="#imapnavigationservice">IMapNavigationService</a></li>
+            <li><a href="#ipushregistrationservice">IPushRegistrationService</a></li>
+            <li><a href="#iscreenshotservice">IScreenshotService</a></li>
+            <li><a href="#ishareservice">IShareService</a></li>
+            <li><a href="#ispeechtotextservice">ISpeechToTextService</a></li>
+            <li><a href="#itexttospeechservice">ITextToSpeechService</a></li>
+            <li><a href="#localnotificationrequest">LocalNotificationRequest</a></li>
+            <li><a href="#pickedmedia">PickedMedia</a></li>
+            <li><a href="#pushdevicetoken">PushDeviceToken</a></li>
+            <li><a href="#deeplinkrouteeventargs">DeepLinkRouteEventArgs</a></li>
+            <li><a href="#igeocodingservice">IGeocodingService</a></li>
+            <li><a href="#igeolocationservice">IGeolocationService</a></li>
+            <li><a href="#ilocalnotificationservice">ILocalNotificationService</a></li>
+            <li><a href="#imediapickerservice">IMediaPickerService</a></li>
+            <li><a href="#ipushdevicetokenprovider">IPushDeviceTokenProvider</a></li>
+            <li><a href="#ideeplinkdispatcher">IDeepLinkDispatcher</a></li>
+            <li><a href="#deeplinkdispatcher">DeepLinkDispatcher</a></li>
+            <li><a href="#dependencyinjection">DependencyInjection</a></li>
+            <li><a href="#capabilitiesjsmodule">CapabilitiesJsModule</a></li>
+            <li><a href="#browseraccessibilityannouncer">BrowserAccessibilityAnnouncer</a></li>
+            <li><a href="#browserclipboardservice">BrowserClipboardService</a></li>
+            <li><a href="#browserconnectivitystatusservice">BrowserConnectivityStatusService</a></li>
+            <li><a href="#browserdevicepreferences">BrowserDevicePreferences</a></li>
+            <li><a href="#browserexternallinkservice">BrowserExternalLinkService</a></li>
+            <li><a href="#browserlocalcachestore">BrowserLocalCacheStore</a></li>
+            <li><a href="#browsermapnavigationservice">BrowserMapNavigationService</a></li>
+            <li><a href="#browsershareservice">BrowserShareService</a></li>
+            <li><a href="#mauiaccessibilityannouncer">MauiAccessibilityAnnouncer</a></li>
+            <li><a href="#mauibatterystatusservice">MauiBatteryStatusService</a></li>
+            <li><a href="#mauibiometricauthenticator">MauiBiometricAuthenticator</a></li>
+            <li><a href="#mauiclipboardservice">MauiClipboardService</a></li>
+            <li><a href="#mauiconnectivitystatusservice">MauiConnectivityStatusService</a></li>
+            <li><a href="#mauidevicepreferences">MauiDevicePreferences</a></li>
+            <li><a href="#mauiexternallinkservice">MauiExternalLinkService</a></li>
+            <li><a href="#mauiformfactor">MauiFormFactor</a></li>
+            <li><a href="#mauihapticfeedbackservice">MauiHapticFeedbackService</a></li>
+            <li><a href="#mauilocalcachestore">MauiLocalCacheStore</a></li>
+            <li><a href="#mauimapnavigationservice">MauiMapNavigationService</a></li>
+            <li><a href="#mauiscreenshotservice">MauiScreenshotService</a></li>
+            <li><a href="#mauishareservice">MauiShareService</a></li>
+            <li><a href="#mauispeechtotextservice">MauiSpeechToTextService</a></li>
+            <li><a href="#mauitexttospeechservice">MauiTextToSpeechService</a></li>
+            <li><a href="#mauiexternalauthbroker">MauiExternalAuthBroker</a></li>
+            <li><a href="#mauiculturestore">MauiCultureStore</a></li>
+            <li><a href="#mauicultureapplier">MauiCultureApplier</a></li>
+            <li><a href="#mauicultureinitializer">MauiCultureInitializer</a></li>
+            <li><a href="#mauigeocodingservice">MauiGeocodingService</a></li>
+            <li><a href="#mauigeolocationservice">MauiGeolocationService</a></li>
+            <li><a href="#mauilocalnotificationservice">MauiLocalNotificationService</a></li>
+            <li><a href="#mauimediapickerservice">MauiMediaPickerService</a></li>
+            <li><a href="#mauipushregistrationservice">MauiPushRegistrationService</a></li>
+            <li><a href="#alwaysonlineconnectivitystatusservice">AlwaysOnlineConnectivityStatusService</a></li>
+            <li><a href="#inmemorydevicepreferences">InMemoryDevicePreferences</a></li>
+            <li><a href="#nullaccessibilityannouncer">NullAccessibilityAnnouncer</a></li>
+            <li><a href="#nullbatterystatusservice">NullBatteryStatusService</a></li>
+            <li><a href="#nullbiometricauthenticator">NullBiometricAuthenticator</a></li>
+            <li><a href="#nullclipboardservice">NullClipboardService</a></li>
+            <li><a href="#nullexternallinkservice">NullExternalLinkService</a></li>
+            <li><a href="#nullhapticfeedbackservice">NullHapticFeedbackService</a></li>
+            <li><a href="#nulllocalcachestore">NullLocalCacheStore</a></li>
+            <li><a href="#nullmapnavigationservice">NullMapNavigationService</a></li>
+            <li><a href="#nullpushregistrationservice">NullPushRegistrationService</a></li>
+            <li><a href="#nullscreenshotservice">NullScreenshotService</a></li>
+            <li><a href="#nullshareservice">NullShareService</a></li>
+            <li><a href="#nullspeechtotextservice">NullSpeechToTextService</a></li>
+            <li><a href="#nulltexttospeechservice">NullTextToSpeechService</a></li>
+            <li><a href="#unavailableexternalauthbroker">UnavailableExternalAuthBroker</a></li>
+            <li><a href="#nullgeocodingservice">NullGeocodingService</a></li>
+            <li><a href="#nullgeolocationservice">NullGeolocationService</a></li>
+            <li><a href="#nulllocalnotificationservice">NullLocalNotificationService</a></li>
+            <li><a href="#nullmediapickerservice">NullMediaPickerService</a></li>
+            <li><a href="#nullpushdevicetokenprovider">NullPushDeviceTokenProvider</a></li>
+            <li><a href="#webformfactor">WebFormFactor</a></li>
+            <li><a href="#dependencyinjection-1">DependencyInjection</a></li>
+            <li><a href="#devicecapabilitiesinitializer">DeviceCapabilitiesInitializer</a></li>
+            <li><a href="#hostingdependencyinjection">HostingDependencyInjection</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

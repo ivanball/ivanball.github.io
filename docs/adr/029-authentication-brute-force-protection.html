@@ -23,7 +23,7 @@
   <meta name="twitter:description" content="Accepted (2026-06-27). Updated 2026-07-02 (the check/increment/reset call sequence was hoisted into AuthenticationServiceBase&lt;TUser; the adoption note…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"029 · Authentication Brute-Force Protection and Registration Throttling","item":"https://ivanball.github.io/docs/adr/029-authentication-brute-force-protection.html"}]}</script>
-  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
   <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
@@ -91,6 +91,7 @@
         <a href="../../docs/adr/index.html">Architecture Decision Records</a>
         <span aria-hidden="true">/</span>
         <span class="current">029 · Authentication Brute-Force Protection and Registration Throttling</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
@@ -303,7 +304,7 @@
           <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/029-authentication-brute-force-protection.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
         </div>
         </article>
-        <aside class="doc-aside">
+        <aside class="doc-aside" id="doc-rail">
           <nav class="doc-toc" aria-label="On this page">
             <p class="doc-toc-title">On this page</p>
             <ul>

@@ -24,6 +24,25 @@
 .doc-breadcrumb .current { color: var(--text); font-weight: 600; }
 .doc-breadcrumb span[aria-hidden] { color: var(--border); }
 
+/* Show/hide toggle for the on-this-page rail. Stamped only on pages that have
+   a rail; the stored preference is applied to <html> by the pre-paint script
+   in the head, so the layout never flashes three columns before collapsing. */
+.rail-toggle {
+  margin-left: auto;
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  cursor: pointer;
+}
+.rail-toggle:hover { background: var(--bg-alt); }
+.rail-toggle[aria-expanded="false"] { color: var(--text-muted); border-color: var(--border); }
+html[data-rail="hidden"] .doc-layout--toc { grid-template-columns: 270px minmax(0, 1fr); }
+html[data-rail="hidden"] .doc-aside { display: none; }
+
 .doc-layout {
   display: grid;
   grid-template-columns: 270px minmax(0, 1fr);
@@ -37,6 +56,8 @@
 @media (max-width: 1180px) {
   .doc-layout--toc { grid-template-columns: 270px minmax(0, 1fr); }
   .doc-layout--toc .doc-aside { display: none; }
+  /* The rail is force-hidden at this width, so the toggle would be a no-op */
+  .rail-toggle { display: none; }
 }
 
 /* ----- Sidebar (collection nav) ----- */

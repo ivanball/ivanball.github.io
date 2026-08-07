@@ -23,7 +23,7 @@
   <meta name="twitter:description" content="What this chapter covers. Every ADC module described so far, Conference, Engagement, Identity, Notification, is consumed somewhere. This chapter is…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Onboarding Guide","item":"https://ivanball.github.io/docs/onboarding/index.html"},{"@type":"ListItem","position":4,"name":"25. ADC Application Host, UI Shell & Cross-Module Composition","item":"https://ivanball.github.io/docs/onboarding/group-25-adc-host-composition.html"}]}</script>
-  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
   <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="../../assets/css/styles.css">
@@ -91,8 +91,9 @@
         <a href="../../docs/onboarding/index.html">Onboarding Guide</a>
         <span aria-hidden="true">/</span>
         <span class="current">25. ADC Application Host, UI Shell &amp; Cross-Module Composition</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
       </nav>
-      <div class="doc-layout">
+      <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
         <summary>Guide contents</summary>
@@ -616,7 +617,31 @@
           <a class="btn btn--ghost" href="../../docs/onboarding/index.html">← Back to Onboarding Guide</a>
         </div>
         </article>
-
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#nownextsession">NowNextSession</a></li>
+            <li><a href="#webauthenticatorcallbackactivity">WebAuthenticatorCallbackActivity</a></li>
+            <li><a href="#adchomepagecontent">ADCHomePageContent</a></li>
+            <li><a href="#appactionsinitializer">AppActionsInitializer</a></li>
+            <li><a href="#mauipubliclinkbuilder">MauiPublicLinkBuilder</a></li>
+            <li><a href="#mauitokenstorageservice">MauiTokenStorageService</a></li>
+            <li><a href="#nownextsnapshot">NowNextSnapshot</a></li>
+            <li><a href="#mainpage">MainPage</a></li>
+            <li><a href="#app">App</a></li>
+            <li><a href="#deviceuimodule">DeviceUIModule</a></li>
+            <li><a href="#mainactivity">MainActivity</a></li>
+            <li><a href="#nownextwidgetprovider">NowNextWidgetProvider</a></li>
+            <li><a href="#mauiprogram">MauiProgram</a></li>
+            <li><a href="#appdelegate">AppDelegate</a></li>
+            <li><a href="#mainapplication">MainApplication</a></li>
+            <li><a href="#program">Program</a></li>
+            <li><a href="#adchomepagecontent-1">ADCHomePageContent</a></li>
+            <li><a href="#app-1">App</a></li>
+            </ul>
+          </nav>
+        </aside>
       </div>
     </div>
   </main>

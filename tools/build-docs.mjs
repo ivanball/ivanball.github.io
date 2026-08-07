@@ -371,10 +371,12 @@ function makeRenderer(slugCounts) {
       const id = uniqueId(text);
       const inner = this.parser.parseInline(tokens);
       /* Collect the H2s for the on-this-page rail. Plain text only: the rail is a
-         narrow column, so inline code and links inside a heading are flattened. */
-      if (depth === 2 && CTX.toc) {
-        CTX.toc.push({ id, text: String(text).replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[`*_]/g, "").trim() });
-      }
+         narrow column, so inline code and links inside a heading are flattened.
+         H3s are collected separately: a dozen onboarding chapters section with
+         H3s under a single H1 and would otherwise get no rail at all. */
+      const railText = () => String(text).replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[`*_]/g, "").trim();
+      if (depth === 2 && CTX.toc) { CTX.toc.push({ id, text: railText() }); }
+      if (depth === 3 && CTX.toc3) { CTX.toc3.push({ id, text: railText() }); }
       return `<h${depth} id="${escapeAttr(id)}">${inner}</h${depth}>\n`;
     },
     html({ text }) {
@@ -567,7 +569,7 @@ function headAssetsHtml(prefix, extraCss = "") {
      are only discovered when the stylesheet finishes parsing, which is a visible
      swap on the h1. `crossorigin` is required on a font preload even same-origin,
      or the browser fetches the file twice. */
-  return `  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+  return `  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
   <link rel="preload" href="${prefix}assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="${prefix}assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="${prefix}assets/css/styles.css">${css}
@@ -702,7 +704,13 @@ function breadcrumbJsonLd(col, currentLabel, outRel) {
   };
 }
 
-function breadcrumbHtml(col, prefix, currentLabel) {
+function breadcrumbHtml(col, prefix, currentLabel, hasRail = false) {
+  /* The rail toggle rides in the breadcrumb row, right-aligned, and is only
+     stamped on pages that actually have a rail. Its aria-expanded is corrected
+     by main.js when a stored preference hides the rail before first paint. */
+  const railBtn = hasRail
+    ? `\n        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>`
+    : "";
   return `      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
         <a href="${prefix}platform.html">Platform</a>
         <span aria-hidden="true">/</span>
@@ -710,7 +718,7 @@ function breadcrumbHtml(col, prefix, currentLabel) {
         <span aria-hidden="true">/</span>
         <a href="${prefix}${col.outDir}/index.html">${escapeHtml(col.title)}</a>
         <span aria-hidden="true">/</span>
-        <span class="current">${escapeHtml(currentLabel)}</span>
+        <span class="current">${escapeHtml(currentLabel)}</span>${railBtn}
       </nav>`;
 }
 
@@ -723,7 +731,7 @@ function tocHtml(toc) {
   const items = toc
     .map((h) => `            <li><a href="#${escapeAttr(h.id)}">${escapeHtml(h.text)}</a></li>`)
     .join("\n");
-  return `        <aside class="doc-aside">
+  return `        <aside class="doc-aside" id="doc-rail">
           <nav class="doc-toc" aria-label="On this page">
             <p class="doc-toc-title">On this page</p>
             <ul>
@@ -782,8 +790,10 @@ const MAX_SECTIONS_PER_DOC = 60;
    fence is not a heading, and the renderer does not treat it as one either).
    Returns the lead text before the first H2, then one entry per section, in
    document order, so it can be zipped with the ids the renderer already
-   assigned in ctx.toc. */
-function splitSections(md) {
+   assigned in ctx.toc. `level` follows the same H3 fallback the rail uses, so
+   the search records and the rail always agree on what a section is. */
+function splitSections(md, level = 2) {
+  const headingRe = level === 3 ? /^###\s+\S/ : /^##\s+\S/;
   const lines = md.split(/\r?\n/);
   const lead = [];
   const sections = [];
@@ -791,7 +801,7 @@ function splitSections(md) {
   let fenced = false;
   for (const line of lines) {
     if (/^\s{0,3}(```|~~~)/.test(line)) { fenced = !fenced; }
-    if (!fenced && /^##\s+\S/.test(line)) {
+    if (!fenced && headingRe.test(line)) {
       current = { body: [] };
       sections.push(current);
       continue;
@@ -863,28 +873,38 @@ function addSearchRecord({ url, section, doc, kind, source }) {
 const WRITTEN_DOCS = new Set();
 for (const col of collections) {
   for (const doc of col.docs) {
-    const ctx = { srcDir: col.srcDir, outRel: doc.outRel, hasMermaid: false, toc: [] };
+    const ctx = { srcDir: col.srcDir, outRel: doc.outRel, hasMermaid: false, toc: [], toc3: [] };
     const body = renderMarkdown(doc.md, ctx);
     if (ctx.hasMermaid) mermaidPages++;
     const isIndex = doc.file === col.indexSrc;
     const currentLabel = isIndex ? "Overview" : doc.label;
     const prefix = assetPrefix(doc.outRel);
-    const aside = tocHtml(ctx.toc);
+    /* H3 fallback: a document with NO H2s at all sections with H3s instead (a
+       dozen onboarding chapters do), so the rail and the search records fall
+       back to that level. Documents that merely have FEW H2s keep the H2
+       reading: mixing levels would put subsections beside their parents. */
+    let sectionLevel = 2;
+    let railToc = ctx.toc;
+    if (ctx.toc.length === 0 && ctx.toc3.length >= TOC_MIN_HEADINGS) {
+      sectionLevel = 3;
+      railToc = ctx.toc3;
+    }
+    const aside = tocHtml(railToc);
     if (aside) tocPages++;
 
     /* Index this document: one record for the document itself (its lead text),
-       then one per H2. ctx.toc holds the ids the renderer just assigned, in
-       document order, so zipping it with the split source keeps every anchor
+       then one per section. railToc holds the ids the renderer just assigned,
+       in document order, so zipping it with the split source keeps every anchor
        exactly in step with the page. */
     {
-      const { lead, sections } = splitSections(doc.md);
+      const { lead, sections } = splitSections(doc.md, sectionLevel);
       const docUrl = `/${toPosix(doc.outRel)}`;
       addSearchRecord({ url: docUrl, section: "", doc: doc.title, kind: col.title, source: lead });
-      const limit = Math.min(sections.length, ctx.toc.length, MAX_SECTIONS_PER_DOC);
+      const limit = Math.min(sections.length, railToc.length, MAX_SECTIONS_PER_DOC);
       for (let i = 0; i < limit; i++) {
         addSearchRecord({
-          url: `${docUrl}#${ctx.toc[i].id}`,
-          section: ctx.toc[i].text,
+          url: `${docUrl}#${railToc[i].id}`,
+          section: railToc[i].text,
           doc: doc.title,
           kind: col.title,
           source: sections[i],
@@ -904,7 +924,7 @@ for (const col of collections) {
     }).join("\n");
     const content =
 `    <div class="container doc-container">
-${breadcrumbHtml(col, prefix, currentLabel)}
+${breadcrumbHtml(col, prefix, currentLabel, Boolean(aside))}
       <div class="doc-layout${aside ? " doc-layout--toc" : ""}">
 ${sidebarHtml(col, doc.outRel)}
         <article class="doc-content">
