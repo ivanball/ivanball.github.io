@@ -88,7 +88,7 @@ saga-timeout backstop for steps that depend on an external system.
   (`.../Infrastructure/DependencyInjection.cs:34-36`). Each cycle selects the oldest orders that have
   sat in `PaymentInitiated` past a cutoff, ordered, bounded and projected to ids entirely in SQL
   (`PaymentReconciliationService.cs:101-109`) over a dedicated filtered index
-  (`.../Persistence/EntityConfiguration/OrderConfiguration.cs:74-80`), asks Stripe for the session's
+  (`.../Persistence/EntityConfiguration/OrderConfiguration.cs:46-52`), asks Stripe for the session's
   authoritative status, and applies the matching transition: paid to `MarkAsPaid`, expired to
   `MarkAsPaymentFailed`, still open to nothing (`PaymentReconciliationService.cs:180-202`). It is
   configuration-gated (`.../Infrastructure/Settings/PaymentReconciliationSettings.cs:13-36`, defaults

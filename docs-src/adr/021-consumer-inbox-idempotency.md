@@ -58,8 +58,8 @@ dedicated `AddInboxMessages` migration, whereas Store Sales creates the table an
 (`MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260621192808_InitialCreate.cs:21,179`),
 because that per-service project postdates the frozen combined-archive lineage that added the ADC
 migration. Of the services carrying the flag, only ADC Identity and ADC Conference register a broker
-consumer today (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:264-268`,
-`MMCA.ADC.Conference.Service/Program.cs:308-309`), and Store Sales consumes `ProductVariantChanged`
+consumer today (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:275-276`,
+`MMCA.ADC.Conference.Service/Program.cs:320-321`), and Store Sales consumes `ProductVariantChanged`
 (`MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:200-201`); ADC Engagement and Notification
 carry `EnableInbox: true` and the table but register no consumer today, so their inbox is provisioned
 and unused (functionally harmless).

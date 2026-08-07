@@ -89,8 +89,11 @@ rather than by absence.
   `ModuleSettings.cs:38`). With `RequiresDependencies = true` an unsatisfied dependency throws at
   startup with remediation text naming the three options (`ModuleLoader.cs:154-162`); with the
   default `false` the loader logs a warning and the module runs against the stub
-  (`ModuleLoader.cs:164-167,347-348`). Both branches are covered
-  (`ModuleLoaderTests.cs:87-97,118-128`).
+  (`ModuleLoader.cs:164-167,347-348`). Only the strict branch is under test:
+  `ModuleLoaderTests.cs:87-97` asserts that a `RequiresDependencies = true` module with an
+  unsatisfied disabled dependency throws, and `ModuleLoaderTests.cs:118-128` asserts that the same
+  strictness passes once that dependency is declared under `RemoteDependencies`. The default `false`
+  warn-and-continue path has no test of its own.
 - **Per-module configuration arrives by naming convention.** Immediately before `Register`, the
   loader adds `modules.{name}.json` and, when the host passes an environment name,
   `modules.{name}.{environment}.json`, both optional and reload-on-change
@@ -148,7 +151,7 @@ and ADC Notification declares `["Identity"]` remote
 Conference enables one module and declares nothing remote
 (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/appsettings.json:20-25`) even though it wires
 Engagement's `IBookmarkCountService` as a gRPC client
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:291`), because
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:303`), because
 `ConferenceModule` never declares Engagement in `Dependencies`.
 
 ## Rationale
@@ -196,7 +199,7 @@ Engagement's `IBookmarkCountService` as a gRPC client
   (`DependencyInjection.cs:181-188`, `ModuleLoader.cs:338-339,347-348`).
 - **The dependency graph is a hand-written declaration, not a derived fact.** ADC Conference consumes
   Engagement's `IBookmarkCountService` over gRPC without listing Engagement in `Dependencies`
-  (`ConferenceModule.cs:15-30` versus `Conference.Service/Program.cs:291`), so neither the
+  (`ConferenceModule.cs:15-30` versus `Conference.Service/Program.cs:303`), so neither the
   topological sort nor the `RequiresDependencies` check knows about that edge. Nothing enforces that
   `Dependencies` matches the interfaces a module actually resolves.
 - **The one guard against a forgotten cross-process rewire is unadopted.** `ValidateRemoteDependencies`

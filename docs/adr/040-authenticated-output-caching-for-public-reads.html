@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 65 ADRs</summary>
+        <summary>All 70 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -165,6 +165,11 @@
         <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
         <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
         <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -189,10 +194,10 @@
           endpoints (<code>[AllowAnonymous]</code> GETs like event/session/speaker catalogs) carry named policies with
           tag-based eviction, primed by startup warmup and load-tested by k6. Five minutes is the usual TTL
           and every Store Catalog policy uses it
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:132-137</code>), but it is a default,
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:134-139</code>), but it is a default,
           not a rule: ADC runs two 60-second policies whose payload cannot wait five minutes (<code>NowNextCache</code>,
           a clock-dependent now-and-next snapshot, and <code>BookmarkCountsCache</code>, written by another service;
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:216,224</code>).</p>
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:228,236</code>).</p>
           <p>That design was silently inert for the traffic that matters. The shared UI HttpClient pipeline
           attaches the stored Bearer token to every outgoing API request via <code>AuthDelegatingHandler</code>,
           including reads of public endpoints whose payload is identical for every caller. ASP.NET Core&#39;s
@@ -239,11 +244,11 @@
           Two lists naming different roles would put a privileged payload in the shared public entries and
           serve it to everyone, so the single declaration is the guard, not a convention. Nor is the bypass a
           narrow exception in practice: eight of ADC&#39;s nine public policies pass it
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:201-224</code>), the exception being
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:213-236</code>), the exception being
           <code>NowNextCache</code>, whose published-data payload is identical for every role. Breadth has a second
           driver that role-shaped variance does not cover: the admin surfaces read back right after mutating
           and not every write path evicts tags, so a cached stale row version makes the next save throw
-          <code>DbUpdateConcurrencyException</code> (<code>Program.cs:191-197</code>).</p>
+          <code>DbUpdateConcurrencyException</code> (<code>Program.cs:203-207</code>).</p>
           <h2 id="rationale">Rationale</h2>
           <ul>
           <li>The response payload, not the request&#39;s auth state, is what determines cacheability. For a
@@ -285,9 +290,9 @@
           registration (<code>AddStackExchangeRedisOutputCache</code>) rather than new infrastructure. Both hosts put
           that registration in the same Redis-connection-string branch as <code>AddRedisDistributedCache</code> rather
           than next to <code>AddOutputCache</code>
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:135</code>,
-          <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:96</code>), leaning on the framework
-          behavior their comments state (<code>Program.cs:131</code> and <code>:93</code>): <code>AddOutputCache</code> registers its store
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:147</code>,
+          <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:98</code>), leaning on the framework
+          behavior their comments state (<code>Program.cs:143</code> and <code>:95-96</code>): <code>AddOutputCache</code> registers its store
           with <code>TryAdd</code>, so an explicit Redis registration wins regardless of call order. Read that as
           framework behavior per those host comments; nothing in these repos verifies it.</p>
           <p>A single-replica service may still use the in-memory store: with one replica there is no
@@ -297,9 +302,9 @@
           DIFFERENT service cannot evict this one&#39;s entries at all, and no store choice fixes that: ADC&#39;s
           bookmark counts are written by Engagement and read through Conference, so they carry a short TTL
           instead of relying on eviction (<code>BookmarkCountsCache</code>, 60 seconds,
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:224</code>). A payload that changes on
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:236</code>). A payload that changes on
           the clock is the same shape of problem with the same answer, since no mutation exists to evict on
-          (<code>NowNextCache</code>, 60 seconds, <code>Program.cs:216</code>). When adding a cached endpoint, check which
+          (<code>NowNextCache</code>, 60 seconds, <code>Program.cs:228</code>). When adding a cached endpoint, check which
           process owns every write that can change its payload, and whether time alone changes it.</p>
           </li>
           <li><p>Cache hit rate becomes meaningful for authenticated load tests; k6 scripts that log in now

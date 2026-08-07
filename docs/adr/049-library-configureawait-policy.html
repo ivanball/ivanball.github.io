@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 65 ADRs</summary>
+        <summary>All 70 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -165,6 +165,11 @@
         <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
         <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
         <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -196,9 +201,11 @@
           <code>TreatWarningsAsErrors</code>), scoped back to <code>none</code> for <code>[Source/Presentation/MMCA.Common.UI*/**.cs]</code>.
           Tests keep the baseline (xUnit has no synchronization context worth preserving, and test code is
           not shipped).</li>
-          <li><strong>UI component packages are excluded deliberately.</strong> <code>MMCA.Common.UI</code> and <code>MMCA.Common.UI.Maui</code>
-          contain Blazor components and MAUI capability adapters whose continuations must resume on the
-          renderer/UI context; <code>ConfigureAwait(false)</code> there would be a bug, not hygiene.</li>
+          <li><strong>UI component packages are excluded deliberately.</strong> The exemption glob covers the whole
+          <code>MMCA.Common.UI*</code> family, which is three packaged projects, not two: <code>MMCA.Common.UI</code> (the Blazor
+          component library), <code>MMCA.Common.UI.Web</code> (the Blazor Web host services) and <code>MMCA.Common.UI.Maui</code>
+          (the MAUI capability adapters). Their continuations must resume on the renderer/UI context;
+          <code>ConfigureAwait(false)</code> there would be a bug, not hygiene.</li>
           <li><strong>The application repos keep the baseline.</strong> Store, ADC and Helpdesk are ASP.NET Core hosts
           (plus Blazor/MAUI heads); <code>CA2007</code>/<code>MA0004</code> stay off in the shared analyzer baseline, per the
           same guidance that libraries and applications have opposite defaults.</li>
@@ -213,15 +220,21 @@
           context. <code>ConfigureAwait(false)</code> removes the failure mode at the source.</li>
           <li><strong>Standard .NET library guidance, applied at the boundary where it holds.</strong> The rule is scoped to
           exactly the code that ships in packages; it is not blanket-applied to the apps, where it would be
-          360+ sites of pure noise (measured across Store/ADC before this decision).</li>
-          <li><strong>Mechanical and self-maintaining.</strong> The fix is <code>dotnet format analyzers --diagnostics CA2007</code>;
-          the build gate keeps new awaits compliant without review effort.</li>
+          360+ sites of pure noise (measured across Store/ADC before this decision, and the scale has only
+          grown: a raw <code>await</code> scan on 2026-08-07 counts 593 occurrences in <code>MMCA.Store/Source</code> and 1,175 in
+          <code>MMCA.ADC/Source</code>, 1,768 combined, which is the upper bound on the CA2007 sites the rule would open
+          there).</li>
+          <li><strong>Mechanical, with the enforcement and the remediation at different levels.</strong> The build gate is the
+          enforced half: a new context-capturing await in packaged non-UI code fails the build, so it costs no
+          review effort. The remediation is a convention rather than an artifact: <code>dotnet format analyzers --diagnostics CA2007</code> fixes a batch in place, but no script, CI step or <code>CONTRIBUTING.md</code> entry
+          invokes it, so it is guidance for whoever trips the gate and not automation the repo runs.</li>
           </ul>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
           <li><strong>Visual noise in framework source.</strong> Every await in <code>Source/</code> (except UI packages) carries
-          <code>.ConfigureAwait(false)</code> (324 sites at adoption). The gate makes it uniform, so the noise is
-          consistent rather than sporadic.</li>
+          <code>.ConfigureAwait(false)</code> (324 sites at adoption; 629 gated sites as of the 2026-08-07 snapshot, out
+          of 719 across <code>Source/</code> once the exempt UI packages are counted back in). The gate makes it uniform,
+          so the noise is consistent rather than sporadic.</li>
           <li><strong>A per-repo delta in an otherwise shared analyzer baseline.</strong> The workspace keeps one
           byte-identical <code>.editorconfig</code> baseline across the four repos; this policy lives in the marked
           repo-delta section of MMCA.Common&#39;s file and is verified by the workspace drift script
@@ -235,6 +248,40 @@
           <p>ADR-042 (the MAUI package whose synchronization context motivates the policy), ADR-027 (the same
           &quot;machine-boundary hygiene as a build gate&quot; posture applied to culture-explicit formatting via
           MA0076), ADR-015 (fitness-function philosophy: invariants enforced by the build, not by review).</p>
+          <h2 id="revision-2026-08-07">Revision (2026-08-07)</h2>
+          <p>An audit against the code. The policy did not change; three statements about it did.</p>
+          <ol>
+          <li><strong>The exemption covers three packages, not the two the Decision named.</strong> The glob is
+          <code>[Source/Presentation/MMCA.Common.UI*/**.cs]</code> with severity <code>none</code>
+          (<code>MMCA.Common/.editorconfig:831-832</code>), sitting under the <code>[Source/**.cs]</code> gate at <code>:828-829</code>, and
+          <code>Source/Presentation/</code> holds three projects whose names start with <code>MMCA.Common.UI</code>:
+          <code>MMCA.Common.UI</code> (<code>Source/Presentation/MMCA.Common.UI/MMCA.Common.UI.csproj</code>),
+          <code>MMCA.Common.UI.Web</code> (<code>Source/Presentation/MMCA.Common.UI.Web/MMCA.Common.UI.Web.csproj</code>) and
+          <code>MMCA.Common.UI.Maui</code> (<code>Source/Presentation/MMCA.Common.UI.Maui/MMCA.Common.UI.Maui.csproj</code>). All
+          three are packaged (<code>MMCA.Common.UI.Web</code> declares <code>&lt;PackageId&gt;MMCA.Common.UI.Web&lt;/PackageId&gt;</code> at
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/MMCA.Common.UI.Web.csproj:3</code>), so naming only
+          two of them left a reader concluding that <code>MMCA.Common.UI.Web</code> was gated when it is not. The
+          exclusion is right on the merits (its services run on the Blazor circuit and the SSR prerender
+          path, for example <code>ServerTokenStorageService</code> at
+          <code>MMCA.Common/Source/Presentation/MMCA.Common.UI.Web/Services/ServerTokenStorageService.cs:17</code>),
+          but it was undocumented. The Decision bullet now names the family and all three members.</li>
+          <li><strong>The site counts are re-measured and dated.</strong> The &quot;324 sites at adoption&quot; figure is a
+          2026-07-20 snapshot and stays as history. Measured on 2026-08-07, <code>MMCA.Common/Source/**/*.cs</code>
+          holds 719 <code>ConfigureAwait(false)</code> occurrences across 147 files, of which 90 sit inside the exempt
+          packages (<code>MMCA.Common.UI</code> 47, <code>MMCA.Common.UI.Maui</code> 41, <code>MMCA.Common.UI.Web</code> 2), leaving 629
+          under the gate. The consumer-scale figure in the Rationale is likewise re-anchored: a raw <code>await</code>
+          scan gives 593 occurrences in <code>MMCA.Store/Source/**/*.cs</code> (112 files) and 1,175 in
+          <code>MMCA.ADC/Source/**/*.cs</code> (217 files). Raw <code>await</code> overcounts CA2007 sites (it catches
+          <code>await using</code>, <code>await foreach</code> and awaits the analyzer would not flag), so those two numbers are
+          an upper bound, which is the same direction the original &quot;360+&quot; phrasing pointed.</li>
+          <li><strong>&quot;Mechanical and self-maintaining&quot; conflated an enforced gate with an unenforced habit.</strong> The
+          gate is real and enforced: <code>warning</code> under <code>TreatWarningsAsErrors</code> (<code>true</code> at
+          <code>MMCA.Common/Directory.Build.props:7</code>, with <code>CodeAnalysisTreatWarningsAsErrors</code> at <code>:13</code> and
+          CA2007 absent from every <code>NoWarn</code> list) is a build error. The remediation command is not backed
+          by any repo artifact: nothing in the repo invokes <code>dotnet format analyzers --diagnostics CA2007</code>,
+          so the Rationale now presents it as guidance for a developer who trips the gate, not as tooling
+          the build or CI runs.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -251,6 +298,7 @@
             <li><a href="#rationale">Rationale</a></li>
             <li><a href="#trade-offs">Trade-offs</a></li>
             <li><a href="#related">Related</a></li>
+            <li><a href="#revision-2026-08-07">Revision (2026-08-07)</a></li>
             </ul>
           </nav>
         </aside>

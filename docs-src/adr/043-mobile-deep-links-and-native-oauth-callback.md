@@ -5,7 +5,9 @@ Accepted (2026-07-15). Revised 2026-07-28 (the Android https App Links leg is re
 the outstanding Android item is restated as the served certificate fingerprint, and the client-flow
 attribution is corrected; see Revision below). Revised 2026-08-01 (the served Android fingerprint is
 no longer a placeholder, which closes the last outstanding ADC item, and one `Program.cs` anchor is
-corrected). The framework leg is fully implemented in MMCA.Common:
+corrected). Revised 2026-08-07 (the two `Program.cs` anchors moved one line again, and the
+hostname trade-off now names its three occurrences instead of calling them parameterized). The
+framework leg is fully implemented in MMCA.Common:
 the OAuth custom-scheme returnUrl allowlist in `CompleteAsync`, the app-association endpoint helper
 `MapAppAssociationEndpoints`
 (`Source/Presentation/MMCA.Common.API/Startup/AppAssociationEndpointExtensions.cs:35`, with
@@ -13,7 +15,7 @@ the OAuth custom-scheme returnUrl allowlist in `CompleteAsync`, the app-associat
 (`Source/Presentation/MMCA.Common.UI.Maui/Capabilities/MauiExternalAuthBroker.cs:19`). The ADC
 consumer's deep-link wave has shipped: `MMCA.ADC.UI.Web` serves the two well-known association
 documents through the shared helper
-(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:159`), the Identity service allow-lists the
+(`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:160`), the Identity service allow-lists the
 `atldevcon` scheme (`MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/appsettings.json:37`), and
 the native heads register the callback: iOS carries both the custom-scheme URL type
 (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/Platforms/iOS/Info.plist:16`) and the associated-domains
@@ -102,8 +104,16 @@ single-use code and the UI exchanges it out-of-band via POST.
 ## Trade-offs
 - The app-facing hostname is baked into store binaries (intent filters, entitlements). The apps
   currently ride the Azure Container Apps default domain, which changes if the environment is ever
-  recreated and would force store resubmissions. Every occurrence stays parameterized; a custom
-  domain is the durable fix.
+  recreated and would force store resubmissions. The host string occurs in exactly three places in
+  the ADC repo, and all three ship inside the app binary: `PublicSite:BaseUrl` in the MAUI head's
+  `appsettings.json` (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/appsettings.json:22`, compiled in as an
+  `EmbeddedResource` per `MMCA.ADC.UI.csproj:122`), a raw literal in the iOS associated-domains
+  array (`Platforms/iOS/Entitlements.plist:11`), and the `PublicWebHost` compile-time constant that
+  feeds the Android intent-filter attribute (`Platforms/Android/MainActivity.cs:31`). Only the first
+  is read through configuration; the two native manifests take literals, because neither an
+  entitlement nor an attribute argument can read config. A cutover is therefore a three-spot edit
+  plus a rebuild, not a setting change (the comment at `MainActivity.cs:29-30` still describes it as
+  touching two spots); a custom domain is the durable fix.
 - A custom-scheme URI's host and path are attacker-choosable on a device with a hostile app
   registered for the same scheme (scheme hijack). Accepted: the redirect carries only a two-minute
   single-use code, the exchange is one-shot, and platform app-link verification does not exist for
@@ -146,9 +156,9 @@ Android leg backwards and the Decision section attributed the token exchange to 
    division of labor is not, and it matters because the native path reuses the web completion page
    rather than duplicating it.
 4. **Anchor and tense maintenance.** `MapAppAssociationEndpoints` is called at
-   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:159` (the previously cited `:162` pointed at
-   the `AndroidCertFingerprints` line inside the options initializer, which now sits at `:166`; see
-   the 2026-08-01 entry). The Context statement about
+   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:160` (the previously cited `:162` pointed at
+   the `AndroidCertFingerprints` line inside the options initializer, which now sits at `:167`; see
+   the 2026-08-01 and 2026-08-07 entries). The Context statement about
    `CompleteAsync` redirecting only to `OAuth:UIBaseUrl` is now past tense, since the decision
    shipped: `BuildSuccessRedirectUrl` targets the allow-listed native URL whenever one is in play
    (`Source/Presentation/MMCA.Common.API/Controllers/OAuthControllerBase.cs:123-126`).
@@ -171,5 +181,28 @@ revision left open is closed, and the anchor that revision itself introduced had
    `AndroidPackageName` assignment (explaining that the Release Android head overrides
    `ApplicationId`, so that is the package Digital Asset Links must name), which pushed the options
    initializer down. `AndroidCertFingerprints` is now at
-   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:166`, not `:162`, and `:162` is now one line
-   of that comment. The `MapAppAssociationEndpoints` call site at `:159` was re-checked and holds.
+   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:167`, not `:162`, and `:162` is still one
+   line of that comment. The `MapAppAssociationEndpoints` call site is at `:160`. (Both anchors sat
+   one line earlier when this entry was written; a later commit shifted them, see the 2026-08-07
+   entry.)
+
+## Revision (2026-08-07)
+Anchor and precision pass from an ADR audit. No decision and no behavior changed.
+
+1. **The two `Program.cs` anchors moved one line.** MMCA.ADC commit `886fa189` (PR #100, merged
+   2026-08-03, DataProtection plus client idempotency keys) inserted a line above the association
+   block. `app.MapAppAssociationEndpoints(new AppAssociationOptions` is now at
+   `MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:160` (`:159` is the preceding
+   `GetSection("AppAssociation")` line), and `AndroidCertFingerprints` is at `:167`, with
+   `AndroidPackageName` at `:166` and the four-line comment from the 2026-08-01 entry at `:162-165`.
+   Every citation of those two anchors is updated above, the ones inside the earlier revisions
+   included.
+2. **The hostname trade-off names its three occurrences.** The bullet said every occurrence "stays
+   parameterized", which reads as if the host were configurable everywhere. It is not: the string
+   occurs three times in the ADC repo and only one of them is read through configuration
+   (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI/appsettings.json:22`). The other two are compile-time
+   literals the platforms require: `Platforms/iOS/Entitlements.plist:11` and the `PublicWebHost`
+   constant at `Platforms/Android/MainActivity.cs:31`. All three ship inside the binary, so the
+   resubmission cost the bullet warns about is unchanged; what changed is the description of the
+   edit. The in-code comment at `MainActivity.cs:29-30` still calls the cutover a two-spot change,
+   which is a documentation lag in MMCA.ADC, not a behavior difference.

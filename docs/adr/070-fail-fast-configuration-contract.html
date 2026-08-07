@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
+  <title>ADR-070: Fail-Fast Configuration Contract · MMCA · Ivan Ball-llovera</title>
+  <meta name="description" content="Accepted (2026-08-07).">
+  <link rel="canonical" href="https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html">
+  <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Ivan Ball-llovera">
+  <meta property="og:title" content="ADR-070: Fail-Fast Configuration Contract">
+  <meta property="og:description" content="Accepted (2026-08-07).">
+  <meta property="og:url" content="https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html">
+  <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ADR-070: Fail-Fast Configuration Contract">
+  <meta name="twitter:description" content="Accepted (2026-08-07).">
+  <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"070 · Fail-Fast Configuration Contract","item":"https://ivanball.github.io/docs/adr/070-fail-fast-configuration-contract.html"}]}</script>
+  <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
+  <link rel="preload" href="../../assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../../assets/fonts/jetbrains-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/styles.css">
+  <link rel="stylesheet" href="../../assets/css/docs.css">
+  <script defer src="../../assets/js/main.js"></script>
+  <script defer src="../../assets/js/search.js"></script>
+  <script defer src="../../assets/js/analytics.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="../../index.html">
+        <span class="brand-mark" aria-hidden="true">IB</span>
+        <span>Ivan Ball-llovera</span>
+      </a>
+      <nav aria-label="Primary">
+        <ul class="nav-links" id="nav-links">
+          <li><a href="../../index.html">Home</a></li>
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html" aria-current="page">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+        </ul>
+      </nav>
+      <div class="nav-tools">
+        <button class="icon-btn search-open" type="button" aria-label="Search the site" data-search-open>
+          <span aria-hidden="true">⌕</span>
+        </button>
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <span class="sun" aria-hidden="true">☀</span><span class="moon" aria-hidden="true">☾</span>
+        </button>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">☰</button>
+      </div>
+    </div>
+  </header>
+  <dialog class="search-dialog" id="site-search" aria-label="Search this site">
+    <form class="search-box" method="dialog" role="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="search-input" type="search" id="site-search-input" placeholder="Search ADRs, guides, chapters, articles…"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             aria-controls="site-search-results" aria-describedby="site-search-status">
+      <button class="btn btn--ghost search-close" type="button" data-search-close>Esc</button>
+    </form>
+    <p class="search-status" id="site-search-status" role="status" aria-live="polite"></p>
+    <ul class="search-results" id="site-search-results"></ul>
+    <p class="search-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> to navigate</span>
+      <span><kbd>Enter</kbd> to open</span>
+      <span><kbd>"…"</kbd> exact phrase</span>
+      <span><kbd>AND</kbd><kbd>OR</kbd> to combine</span>
+    </p>
+  </dialog>
+
+  <main id="main">
+    <div class="container doc-container">
+      <nav class="doc-breadcrumb" aria-label="Breadcrumb">
+        <a href="../../platform.html">Platform</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/index.html">Reference</a>
+        <span aria-hidden="true">/</span>
+        <a href="../../docs/adr/index.html">Architecture Decision Records</a>
+        <span aria-hidden="true">/</span>
+        <span class="current">070 · Fail-Fast Configuration Contract</span>
+        <button class="rail-toggle" type="button" data-rail-toggle aria-expanded="true" aria-controls="doc-rail">On this page</button>
+      </nav>
+      <div class="doc-layout doc-layout--toc">
+      <aside class="doc-sidebar">
+      <details class="doc-sidebar-details" open>
+        <summary>All 70 ADRs</summary>
+        <nav class="doc-nav" aria-label="Architecture Decision Records">
+          <ol>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="001-manual-dto-mapping.html">001 · Manual DTO Mapping over AutoMapper</a></li>
+        <li><a href="002-navigation-populators.html">002 · NavigationPopulators for Cross-Container Loading</a></li>
+        <li><a href="003-outbox-dual-dispatch.html">003 · Outbox Pattern with Dual Dispatch</a></li>
+        <li><a href="004-authentication-dual-fetch.html">004 · Cross-Service Token Validation via JWKS / OIDC Discovery</a></li>
+        <li><a href="005-soft-delete-vs-erasure.html">005 · Soft-Delete vs. Right-to-Erasure</a></li>
+        <li><a href="006-database-per-service.html">006 · Database per Service</a></li>
+        <li><a href="007-grpc-extraction.html">007 · Synchronous Cross-Service Calls via gRPC Contracts</a></li>
+        <li><a href="008-service-extraction-topology.html">008 · Extraction of the Modular Monolith into Per-Module Services + Gateway</a></li>
+        <li><a href="009-resilience-and-recovery-objectives.html">009 · Resilience Policies &amp; Recovery Objectives</a></li>
+        <li><a href="010-integration-event-schema-versioning.html">010 · Integration-Event Schema Versioning &amp; Upcaster Policy</a></li>
+        <li><a href="011-single-locale-i18n.html">011 · Single-Locale by Design (No Internationalization)</a></li>
+        <li><a href="012-grpc-host-transport.html">012 · gRPC-Host Transport Convention (Http2-only h2c vs. Http1AndHttp2 + ALPN)</a></li>
+        <li><a href="013-result-pattern.html">013 · Result Pattern over Exceptions for Flow Control</a></li>
+        <li><a href="014-cqrs-decorator-pipeline.html">014 · CQRS Handlers with a Decorator Pipeline</a></li>
+        <li><a href="015-architecture-fitness-functions.html">015 · Architecture Invariants Enforced as Fitness Functions</a></li>
+        <li><a href="016-lockstep-versioning-masstransit-pin.html">016 · Lockstep Package Versioning and the MassTransit-v8 Pin</a></li>
+        <li><a href="017-request-idempotency.html">017 · HTTP Request Idempotency via Client-Supplied Keys</a></li>
+        <li><a href="018-polyglot-persistence.html">018 · Polyglot Persistence (Multiple Storage Engines Behind One Model)</a></li>
+        <li><a href="019-rate-limiting.html">019 · Layered Rate Limiting with an Authenticated-Only Global Limiter</a></li>
+        <li><a href="020-permission-based-authorization.html">020 · Permission-Based Authorization Layered over Roles</a></li>
+        <li><a href="021-consumer-inbox-idempotency.html">021 · Consumer-Side Inbox for Integration-Event Idempotency</a></li>
+        <li><a href="022-browser-session-cookie-auth.html">022 · Browser Session-Cookie Authentication for Blazor SSR</a></li>
+        <li><a href="023-security-response-headers.html">023 · Centralized Security-Response-Headers Middleware with a Pluggable CSP</a></li>
+        <li><a href="024-push-notifications.html">024 · Two-Channel User Notifications (Transient SignalR Push + Durable Inbox)</a></li>
+        <li><a href="025-startup-warmup-readiness.html">025 · Startup Warm-Up and Readiness Gating for Cold-Start Mitigation</a></li>
+        <li><a href="026-caching-strategy.html">026 · Two-Tier Caching: a Swappable ICacheService Substrate plus an HTTP Output-Cache Edge</a></li>
+        <li><a href="027-multi-locale-i18n.html">027 · Multi-Locale Internationalization (Supersedes ADR-011)</a></li>
+        <li><a href="028-dark-theme-mode.html">028 · Day/Dark Theme Mode</a></li>
+        <li><a href="029-authentication-brute-force-protection.html">029 · Authentication Brute-Force Protection and Registration Throttling</a></li>
+        <li><a href="030-startup-sole-migrator.html">030 · Each Service Self-Applies Its Migrations at Startup (Sole Migrator)</a></li>
+        <li><a href="031-feature-flag-management.html">031 · Config-Driven Feature Flags with Dual-Surface Enforcement</a></li>
+        <li><a href="032-password-hashing.html">032 · Password Hashing (PBKDF2-HMAC-SHA512) with Legacy-Hash Backward Compatibility</a></li>
+        <li><a href="033-resource-ownership-authorization.html">033 · Resource-Ownership Authorization (Row-Level + Action Filter)</a></li>
+        <li><a href="034-generic-entity-query-layer.html">034 · Generic Entity Controllers with a Dynamic Query Contract</a></li>
+        <li><a href="035-optimistic-concurrency.html">035 · Optimistic Concurrency via RowVersion Round-Trip</a></li>
+        <li><a href="036-external-oauth-login.html">036 · External OAuth Login (Federated Google/GitHub) with Local-JWT Exchange</a></li>
+        <li><a href="037-field-level-encryption-at-rest.html">037 · Field-Level Encryption at Rest (AES-256-GCM EF Converter)</a></li>
+        <li><a href="038-supply-chain-provenance.html">038 · Supply-Chain Provenance (SBOM Release Gate + Lock Files + Vulnerability Audit)</a></li>
+        <li><a href="039-live-channel-push.html">039 · Live channel push (ephemeral events over the notification hub)</a></li>
+        <li><a href="040-authenticated-output-caching-for-public-reads.html">040 · Authenticated output caching for public reads</a></li>
+        <li><a href="041-observability-and-telemetry.html">041 · Observability and Telemetry Strategy</a></li>
+        <li><a href="042-device-capability-abstraction.html">042 · Device Capability Abstraction (MAUI Blazor Hybrid)</a></li>
+        <li><a href="043-mobile-deep-links-and-native-oauth-callback.html">043 · Mobile Deep Links, App Association, and the Native OAuth Callback</a></li>
+        <li><a href="044-native-push-delivery.html">044 · Native Push Delivery (the Third Notification Channel)</a></li>
+        <li><a href="045-managed-file-storage-and-avatars.html">045 · Managed File Storage and User Avatars</a></li>
+        <li><a href="046-http-api-versioning.html">046 · HTTP API Versioning Strategy</a></li>
+        <li><a href="047-soft-deleted-user-session-revocation.html">047 · Runtime Revocation of Soft-Deleted Users&#39; Active Sessions</a></li>
+        <li><a href="048-primitive-identifier-type-aliases.html">048 · Primitive Identifier Type Aliases over Strongly-Typed ID Structs</a></li>
+        <li><a href="049-library-configureawait-policy.html">049 · Library-Scoped ConfigureAwait(false) Policy (CA2007)</a></li>
+        <li><a href="050-jwt-refresh-token-rotation.html">050 · JWT Access Tokens with a Single Rotating Refresh Token and Reuse Detection</a></li>
+        <li><a href="051-client-auth-token-lifecycle.html">051 · Client-Side Authentication Token Lifecycle Across Render Modes</a></li>
+        <li><a href="052-background-job-execution.html">052 · Background Job Execution (Bounded Queue plus Hosted Drain)</a></li>
+        <li><a href="053-dual-registry-package-publishing.html">053 · Dual-Registry Package Publishing (nuget.org plus GitHub Packages)</a></li>
+        <li><a href="054-saga-compensation-and-reconciliation.html">054 · Choreographed Saga Compensation with a Reconciliation Backstop</a></li>
+        <li><a href="055-repository-and-specification-contract.html">055 · Repository plus Specification as the Data-Access Contract</a></li>
+        <li><a href="056-blazor-render-mode-strategy.html">056 · Blazor Render-Mode Strategy for the Web Heads</a></li>
+        <li><a href="057-expand-contract-schema-evolution-gate.html">057 · Expand/Contract Schema Evolution Enforced as a CI Gate</a></li>
+        <li><a href="058-runtime-conformance-suites-as-a-package.html">058 · Runtime Conformance Suites Shipped as a Package</a></li>
+        <li><a href="059-module-contract-and-composition.html">059 · The IModule Contract and Reflection-Based Module Composition</a></li>
+        <li><a href="060-performance-regression-gate.html">060 · Performance-Regression Gate (Committed Benchmark Baseline in CI)</a></li>
+        <li><a href="061-runtime-secret-management.html">061 · Runtime Secret Management via Key Vault References and Managed Identity</a></li>
+        <li><a href="062-slo-alerting-as-code.html">062 · SLO Alerting as Code with an Alert-to-Runbook Build Gate</a></li>
+        <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
+        <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
+        <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html" aria-current="page">070 · Fail-Fast Configuration Contract</a></li>
+          </ol>
+        </nav>
+      </details>
+    </aside>
+        <article class="doc-content">
+          <p class="eyebrow doc-kicker">Architecture Decision Record</p>
+          <h1 id="adr-070-fail-fast-configuration-contract">ADR-070: Fail-Fast Configuration Contract</h1>
+          <h2 id="status">Status</h2>
+          <p>Accepted (2026-08-07).</p>
+          <h2 id="context">Context</h2>
+          <p>Every host in the workspace reads a dozen or more configuration sections: connection strings, SMTP,
+          JWT key material, outbox tuning, message-bus provider, module enablement, page-size limits. A settings
+          value can go wrong in two places. It can be discovered at <strong>first use</strong>, where a missing SMTP host
+          becomes a 500 on the first password-reset mail and an unparseable outbox interval becomes a background
+          loop that never drains, both on a replica that already passed its readiness probe and is taking live
+          traffic. Or it can be discovered at <strong>boot</strong>, where the host refuses to start and the platform never
+          routes to it.</p>
+          <p>Nothing in the record decided which. ADR-025 gates a replica out of rotation until warm-up has had its
+          chance, but warm-up runs only on a host that started. ADR-031 decides that feature flags are read from
+          configuration without saying what happens when the section is absent. ADR-061 decides where a secret
+          <em>value</em> comes from at runtime, not what a host does when the value never arrives.</p>
+          <p>A second, related question had no recorded answer: how code below the host reaches a bound setting. The
+          options pipeline is a Microsoft.Extensions.Options concern, and a layer that is supposed to be free of
+          hosting concerns taking an <code>IOptions&lt;T&gt;</code> constructor parameter drags that pipeline into it.</p>
+          <h2 id="decision">Decision</h2>
+          <p><strong>Bind every settings section through a validating chain that runs at startup, and expose a settings
+          type through a read-only interface when it must be read above Infrastructure.</strong></p>
+          <ul>
+          <li><strong>One binding shape, used everywhere.</strong>
+          <code>AddOptions&lt;T&gt;().Bind(configuration.GetSection(T.SectionName)).ValidateDataAnnotations().ValidateOnStart()</code>
+          is the required form (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:60-63</code>).
+          <code>.BindConfiguration(T.SectionName)</code> is the accepted shorthand for the <code>Bind(GetSection(...))</code> step and
+          is what Store&#39;s Sales module uses
+          (<code>MMCA.Store/Source/Modules/Sales/MMCA.Store.Sales.API/SalesModule.cs:35-38</code>, <code>:40-43</code>).
+          <code>ValidateOnStart()</code> is the load-bearing link: without it the annotations are evaluated lazily on first
+          resolution, which is exactly the first-use failure the contract exists to prevent.</li>
+          <li><strong>The framework owns the base set.</strong> Eight sections are bound this way in the Infrastructure package&#39;s
+          <code>DependencyInjection.cs</code> alone: seven inside <code>AddInfrastructure</code> (<code>ConnectionStringSettings</code> <code>:60-63</code>,
+          <code>SmtpSettings</code> <code>:74-77</code>, <code>PersistenceSettings</code> <code>:116-119</code>, <code>OutboxSettings</code> <code>:121-124</code>,
+          <code>LoginProtectionSettings</code> <code>:126-129</code>, <code>MessageBusSettings</code> <code>:132-135</code>, <code>JwksSettings</code> <code>:137-140</code>) and an
+          eighth in the opt-in <code>AddPushNotifications</code> (<code>PushNotificationSettings</code> <code>:292-295</code>). Three more are bound
+          by the Presentation packages: <code>IdempotencySettings</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/DependencyInjection.cs:60-63</code>), <code>JwtSettings</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Startup/WebApplicationBuilderExtensions.cs:318-321</code>),
+          and <code>ApiSettings</code> (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:32-35</code>).</li>
+          <li><strong>Each service host adds exactly two of its own</strong>, <code>ApplicationSettings</code> and <code>ModulesSettings</code>, and all
+          eight hosts across the three application repos do it identically: ADC&#39;s four services (for example
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:153-156</code> and <code>:273-276</code>), Store&#39;s three
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:104-107</code> and <code>:195-198</code>), and the
+          Helpdesk monolith seed (<code>MMCA.Helpdesk/Source/Hosts/MMCA.Helpdesk.Web/Program.cs:17-20</code> and <code>:62-65</code>).
+          Modules may add their own sections on the same chain, as Store&#39;s Sales module does for Stripe.</li>
+          <li><strong>Validation is data annotations, extended by <code>IValidatableObject</code> where a rule spans fields.</strong>
+          <code>JwtSettings</code> marks <code>Issuer</code> and <code>Audience</code> <code>[Required]</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/JwtSettings.cs:34-39</code>) and implements
+          <code>IValidatableObject</code> (<code>:16</code>) so key material is checked conditionally on the selected algorithm: HS256
+          demands a <code>SecretForKey</code> of at least 32 characters, RS256 demands <code>RsaPrivateKeyPem</code> (<code>:51-66</code>).
+          <code>ValidateDataAnnotations()</code> invokes that method, so a host configured for RS256 with no private key
+          fails to boot rather than failing to sign its first token.</li>
+          <li><strong>Read-only interface facades over <code>IOptions</code>.</strong> Five settings types are additionally registered as
+          singletons that resolve <code>IOptions&lt;T&gt;.Value</code> and hand back an interface: <code>IApplicationSettings</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Application/DependencyInjection.cs:30</code>), <code>IJwtSettings</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:58</code>),
+          <code>IConnectionStringSettings</code> (<code>:64</code>), <code>ISmtpSettings</code> (<code>:78</code>), and <code>IPushNotificationSettings</code> (<code>:296-297</code>).
+          The interfaces declare <code>get</code>/<code>init</code> members only
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/ISmtpSettings.cs:6-28</code>), so a consumer can
+          read a setting and cannot rebind it. The interface for <code>IJwtSettings</code> lives in a file named
+          <code>IJwSettings.cs</code> (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Settings/IJwSettings.cs:10</code>); the
+          type name, not the filename, is the contract.</li>
+          <li><strong>Three recorded exceptions to the chain, all in the framework.</strong> <code>CacheKeyPrefixOptions</code> is bound with
+          a bare <code>services.Configure</code> and no validation, because an absent section must leave cache keys exactly
+          as callers write them (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:163-166</code>).
+          <code>LayoutSettings</code> is bound without validation for the same reason: it is optional footer copy
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.UI/DependencyInjection.cs:38-39</code>). <code>DataSourcesSettings</code> is
+          constructed directly from the section rather than through <code>AddOptions</code>, because a root-level dictionary
+          section does not bind through the options pipeline
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/DependencyInjection.cs:68-70</code>).</li>
+          </ul>
+          <p><strong>Adoption of the facade half is partial, and this ADR settles the direction rather than claiming the
+          state.</strong> Only five of the framework&#39;s settings types have a facade; the rest are consumed as <code>IOptions&lt;T&gt;</code>
+          inside Infrastructure and API, which is where they belong: <code>OutboxProcessor</code>
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Outbox/OutboxProcessor.cs:48</code>),
+          <code>BrokerEventBus</code> (<code>.../Services/BrokerEventBus.cs:34</code>), <code>LoginProtectionService</code>
+          (<code>.../Auth/LoginProtectionService.cs:21</code>), <code>RsaJwksProvider</code> (<code>.../Auth/RsaJwksProvider.cs:15</code>),
+          <code>SQLServerDbContext</code> (<code>.../Persistence/DbContexts/SQLServerDbContext.cs:37</code>), and <code>IdempotencyFilter</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Idempotency/IdempotencyFilter.cs:432</code>). The facades are
+          consumed only inside the framework: <code>EntityControllerBase</code> resolves <code>IApplicationSettings</code>
+          (<code>MMCA.Common/Source/Presentation/MMCA.Common.API/Controllers/EntityControllerBase.cs:54</code>),
+          <code>RepositoryFactory</code> takes it in its constructor
+          (<code>MMCA.Common/Source/Core/MMCA.Common.Infrastructure/Persistence/Repositories/Factory/RepositoryFactory.cs:14</code>),
+          <code>TokenService</code> takes <code>IJwtSettings</code> (<code>.../Services/TokenService.cs:47</code>), and <code>SmtpEmailSender</code> takes
+          <code>ISmtpSettings</code> (<code>.../Services/SmtpEmailSender.cs:12</code>). No consumer repo resolves a facade at all: ADC,
+          Store, and Helpdesk contain zero references to <code>IApplicationSettings</code>, <code>IJwtSettings</code>, or <code>ISmtpSettings</code>,
+          and where their own code reads a setting it injects <code>IOptions&lt;T&gt;</code> directly (Store&#39;s Sales Infrastructure
+          in <code>StripeClientFactory.cs:21</code>, <code>StripePaymentService.cs:62</code>, <code>StripeWebhookRegistrationService.cs:29</code>,
+          <code>PaymentReconciliationService.cs:35-36</code>; ADC&#39;s web host in
+          <code>MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:136</code> and its calendar component in
+          <code>MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Components/AddToCalendarButton.razor:7</code>).</p>
+          <p>The Application-layer invariant nevertheless holds today: no Application-layer file in any of the four
+          repos takes an <code>IOptions</code> dependency, because settings are read at the Infrastructure, API, and host
+          edges. The settled direction is therefore narrower than &quot;never use <code>IOptions</code>&quot;: the <strong>fail-fast chain is
+          mandatory for every section</strong> other than the three recorded exceptions, and the <strong>facade is the required
+          form only when a settings type must be read above Infrastructure</strong>. Below that boundary <code>IOptions&lt;T&gt;</code> at
+          the point of consumption stays correct, and the direct injections listed above are conformant, not debt,
+          with the exception that new framework settings crossing into Application or controller code get a facade.</p>
+          <h2 id="rationale">Rationale</h2>
+          <ul>
+          <li><strong>A boot failure is cheaper than a first-use failure.</strong> A host that will not start is caught by the
+          deployment, by a local <code>dotnet run</code>, or by CI. A host that starts and fails on the first mail send is
+          caught by a user, on a replica the platform already considers healthy.</li>
+          <li><strong><code>ValidateOnStart</code> is the whole point of the chain.</strong> <code>ValidateDataAnnotations()</code> alone defers
+          evaluation to first resolution, which for a section only a background service reads can be minutes
+          after the replica takes traffic. Pairing the two is what converts &quot;configured wrong&quot; into &quot;did not
+          start&quot;.</li>
+          <li><strong>Validation belongs on the settings type.</strong> Annotations plus <code>IValidatableObject</code> keep the rule next
+          to the property it constrains, so <code>JwtSettings</code> can express &quot;RS256 requires a private key&quot; once instead
+          of every host re-checking it.</li>
+          <li><strong>A facade keeps the options pipeline out of layers that should not name it.</strong> <code>EntityControllerBase</code>
+          and <code>RepositoryFactory</code> need one number each; taking <code>IApplicationSettings</code> rather than
+          <code>IOptions&lt;ApplicationSettings&gt;</code> keeps <code>Microsoft.Extensions.Options</code> out of their signatures, and the
+          <code>init</code>-only members make the setting unwritable at the point of use.</li>
+          <li><strong>One shape makes the contract auditable.</strong> Because the chain is textually identical in all eleven
+          framework registrations and all sixteen host registrations, a grep for <code>ValidateOnStart</code> is a complete
+          inventory of what a host validates at boot.</li>
+          </ul>
+          <h2 id="trade-offs">Trade-offs</h2>
+          <ul>
+          <li><strong>Nothing enforces it.</strong> There is no architecture fitness test asserting that a new <code>AddOptions&lt;T&gt;</code> call
+          carries <code>ValidateDataAnnotations().ValidateOnStart()</code>. The uniformity above is convention held by review,
+          not a gate, which is weaker than the invariant-over-discipline posture ADR-015 applies elsewhere. A
+          section added without the chain fails silently, which is to say it fails later.</li>
+          <li><strong>Bad configuration becomes a crash loop, not a degraded start.</strong> A deployed replica with a missing
+          required value never reaches the warm-up and readiness machinery of ADR-025: it terminates at host build.
+          That is the intended trade (no half-configured replica serves traffic), but it means a configuration
+          mistake takes the whole rollout rather than one code path.</li>
+          <li><strong>Two ways to read a setting coexist.</strong> Five types have a facade and the rest do not, and no consumer
+          repo uses a facade at all, so a reader encounters both forms. The boundary above sets which is correct
+          where, but it does not make the codebase look uniform today.</li>
+          <li><strong>Data annotations are the vocabulary.</strong> Anything richer needs <code>IValidatableObject</code> or a custom
+          <code>IValidateOptions&lt;T&gt;</code>, and only <code>JwtSettings</code> reaches for the former today.</li>
+          <li><strong>A facade is a snapshot.</strong> Each facade is a singleton resolved from <code>IOptions&lt;T&gt;.Value</code>, so it captures
+          the bound instance once and never observes a configuration reload. <code>IOptions&lt;T&gt;</code> itself has the same
+          property; a section that genuinely needs reload would have to move to <code>IOptionsMonitor&lt;T&gt;</code>, and none
+          does today.</li>
+          </ul>
+          <h2 id="related">Related</h2>
+          <p>ADR-025 (startup warm-up and readiness gating: this contract decides what happens <em>before</em> a host reaches
+          that machinery), ADR-031 (feature flags read from configuration, whose section this contract governs the
+          binding of), ADR-061 (where a secret value comes from at runtime; this decides what the host does when it
+          does not arrive), ADR-015 (architecture fitness functions, the enforcement mechanism this contract
+          currently lacks).</p>
+          
+        <div class="doc-foot btn-row">
+          <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
+          <a class="btn btn--ghost" href="https://github.com/ivanball/ivanball.github.io/blob/main/docs-src/adr/070-fail-fast-configuration-contract.md" target="_blank" rel="noopener">View source on GitHub ↗</a>
+        </div>
+        </article>
+        <aside class="doc-aside" id="doc-rail">
+          <nav class="doc-toc" aria-label="On this page">
+            <p class="doc-toc-title">On this page</p>
+            <ul>
+            <li><a href="#status">Status</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#rationale">Rationale</a></li>
+            <li><a href="#trade-offs">Trade-offs</a></li>
+            <li><a href="#related">Related</a></li>
+            </ul>
+          </nav>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <p class="footer-meta mb-0"><strong>Ivan Ball-llovera</strong> · Senior Software Architect · Douglasville, GA</p>
+        <ul class="footer-links">
+          <li><a href="../../resume.html">Résumé</a></li>
+          <li><a href="../../platform.html">Platform</a></li>
+          <li><a href="../../docs/index.html">Reference</a></li>
+          <li><a href="../../writing.html">Writing</a></li>
+          <li><a href="../../speaking.html">Speaking</a></li>
+          <li><a href="../../contact.html">Contact</a></li>
+          <li><a href="https://github.com/ivanball" target="_blank" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/ivan-ball-llovera-6549a911" target="_blank" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+      <p class="footer-meta" style="margin-top:1rem">© <span class="js-year">2026</span> Ivan Ball-llovera. Reference docs generated from source.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 65 ADRs</summary>
+        <summary>All 70 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -165,6 +165,11 @@
         <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
         <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
         <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -197,7 +202,7 @@
           Caching decorators, <code>LoginProtectionService</code>) depends only on this interface, never on a concrete
           cache or on Redis.</li>
           <li><strong>The backing store is chosen at startup, not in code.</strong> <code>AddCaching()</code>
-          (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:150</code>, called from <code>AddInfrastructure</code>) registers
+          (<code>MMCA.Common.Infrastructure/DependencyInjection.cs:157</code>, called from <code>AddInfrastructure</code>) registers
           <code>DistributedCacheService</code> when a real <code>IDistributedCache</code> is present (one that is not the in-memory
           <code>MemoryDistributedCache</code>, i.e. Aspire registered Redis), and otherwise <code>MemoryCacheService</code>. The
           monolith with no distributed cache gets in-process caching for free; a host that wires Redis gets the
@@ -210,7 +215,8 @@
           when no multiplexer is registered it treats prefix removal as a no-op and relies on the TTL backstop
           below.</li>
           <li><strong>A short default TTL bounds staleness.</strong> <code>CacheOptions.DefaultExpiration</code> is a 30-second absolute
-          expiration; callers may override per entry. The short default means even a prefix invalidation that
+          expiration (<code>AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30)</code>,
+          <code>MMCA.Common.Infrastructure/Caching/CacheOptions.cs:14-17</code>); callers may override per entry. The short default means even a prefix invalidation that
           cannot reach every replica (memory mode, or distributed mode without a multiplexer) self-heals within
           seconds.</li>
           </ul>
@@ -241,8 +247,8 @@
           <code>AddOutputCache</code> defaults to a per-replica in-memory store, so a tag eviction reaches only the replica
           that served the mutation. Both adopters now register a shared store inside the same
           redis-connection-string conditional that wires Tier 1: ADC Conference
-          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:135</code>) and Store Catalog
-          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:96</code>) both call
+          (<code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:147</code>) and Store Catalog
+          (<code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:98</code>) both call
           <code>builder.Services.AddStackExchangeRedisOutputCache(...)</code>. <code>AddOutputCache</code> registers its store with
           <code>TryAdd</code>, so the explicit registration wins regardless of call order, and with no Redis configured the
           in-memory store still applies, which is correct at a single replica. ADR-040&#39;s 2026-07-25 amendment
@@ -276,13 +282,13 @@
           container. All seven services now register <code>AddRedisClient(&quot;redis&quot;)</code> immediately alongside
           <code>AddRedisDistributedCache(&quot;redis&quot;)</code>, gated by the same redis-connection-string conditional, precisely so
           the multiplexer is present for SCAN-based prefix eviction (ADC Conference
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:119,124</code>, Notification
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:105,110</code>, Engagement
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:94,99</code>, Identity
-          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:114,119</code>; Store Catalog
-          <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:81,86</code>, Sales
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:131,136</code>, Notification
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Notification.Service/Program.cs:106,111</code>, Engagement
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Engagement.Service/Program.cs:96,101</code>, Identity
+          <code>MMCA.ADC/Source/Services/MMCA.ADC.Identity.Service/Program.cs:123,128</code>; Store Catalog
+          <code>MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:83,88</code>, Sales
           <code>MMCA.Store/Source/Services/MMCA.Store.Sales.Service/Program.cs:82,87</code>, Identity
-          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:85,90</code>). So whenever Redis is
+          <code>MMCA.Store/Source/Services/MMCA.Store.Identity.Service/Program.cs:87,92</code>). So whenever Redis is
           configured, prefix-based invalidation against Redis is live and cached entries are evicted on write; the
           30s TTL is now the backstop only for the no-Redis case (memory mode), where prefix removal self-heals
           within seconds instead. Single-key <code>RemoveAsync</code> is unaffected in either mode.</li>
@@ -397,6 +403,32 @@
           itself treated the 2026-07-25 entry: the anchors it recorded were correct on 2026-07-28 and have
           since drifted again.</li>
           </ol>
+          <h2 id="revision-2026-08-07">Revision (2026-08-07)</h2>
+          <p>Line anchors only, re-verified against the current source. No decision, no behavior, and no
+          substantive prose changed.</p>
+          <ol>
+          <li><strong><code>AddCaching</code>.</strong> Now at <code>MMCA.Common.Infrastructure/DependencyInjection.cs:157</code> (from <code>:150</code>);
+          line 150 is now the closing brace of the preceding method. The registration behavior it describes
+          (<code>DistributedCacheService</code> when a real, non-<code>MemoryDistributedCache</code> <code>IDistributedCache</code> is
+          present, <code>MemoryCacheService</code> otherwise) is unchanged.</li>
+          <li><strong>The 30-second default TTL now cites its source.</strong> The figure was asserted without an anchor;
+          it is verified and the anchor added
+          (<code>MMCA.Common.Infrastructure/Caching/CacheOptions.cs:14-17</code>, <code>TimeSpan.FromSeconds(30)</code>).</li>
+          <li><strong>Tier 2.</strong> ADC Conference&#39;s <code>AddStackExchangeRedisOutputCache(...)</code> moved to <code>Program.cs:147</code>
+          (from <code>:135</code>) and Store Catalog&#39;s to <code>Program.cs:98</code> (from <code>:96</code>).</li>
+          <li><strong>Trade-offs, the seven paired Redis registrations.</strong> Six moved: ADC Conference to
+          <code>Program.cs:131,136</code> (from <code>:119,124</code>), Notification to <code>Program.cs:106,111</code> (from <code>:105,110</code>),
+          Engagement to <code>Program.cs:96,101</code> (from <code>:94,99</code>), Identity to <code>Program.cs:123,128</code> (from
+          <code>:114,119</code>); Store Catalog to <code>Program.cs:83,88</code> (from <code>:81,86</code>), Identity to <code>Program.cs:87,92</code>
+          (from <code>:85,90</code>). Store Sales was re-checked and is unchanged at <code>:82,87</code>. The Tier 2 policy
+          anchors in <code>MMCA.Common.API</code> (<code>WebApplicationExtensions.cs:104</code>,
+          <code>OutputCacheOptionsExtensions.cs:20</code>, <code>PublicEndpointOutputCachePolicy.cs:35</code>, <code>:71-75</code>,
+          <code>:109-113</code>) and the counter anchors (<code>ICacheService.cs:57</code>,
+          <code>DistributedCacheService.cs:156-174</code> and <code>:175-181</code>) were re-checked and are unchanged.</li>
+          <li><strong>The 2026-08-01 anchor claim is annotated rather than removed</strong>, consistent with how the two
+          preceding revisions treated their predecessors: the anchors it recorded were correct on
+          2026-08-01 and have since drifted again.</li>
+          </ol>
           
         <div class="doc-foot btn-row">
           <a class="btn btn--ghost" href="../../docs/adr/index.html">← Back to Architecture Decision Records</a>
@@ -417,6 +449,7 @@
             <li><a href="#revision-2026-07-25">Revision (2026-07-25)</a></li>
             <li><a href="#revision-2026-07-28">Revision (2026-07-28)</a></li>
             <li><a href="#revision-2026-08-01">Revision (2026-08-01)</a></li>
+            <li><a href="#revision-2026-08-07">Revision (2026-08-07)</a></li>
             </ul>
           </nav>
         </aside>

@@ -6,21 +6,21 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e151f" media="(prefers-color-scheme: dark)">
   <title>ADR-065: Scaffolding templates derived from the reference app · MMCA · Ivan Ball-llovera</title>
-  <meta name="description" content="Status: Accepted (2026-08-02)">
+  <meta name="description" content="Status: Accepted (2026-08-02). Revised 2026-08-07: the staged analyzer delta relaxes three rules rather than one; mmca-module prints seven wire-ups…">
   <link rel="canonical" href="https://ivanball.github.io/docs/adr/065-scaffolding-templates.html">
   <link rel="icon" href="../../assets/img/favicon.svg" type="image/svg+xml">
   <link rel="alternate" type="application/rss+xml" title="Ivan Ball-llovera: deep dives on enterprise .NET" href="https://ivanball.github.io/feed.xml">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Ivan Ball-llovera">
   <meta property="og:title" content="ADR-065: Scaffolding templates derived from the reference app">
-  <meta property="og:description" content="Status: Accepted (2026-08-02)">
+  <meta property="og:description" content="Status: Accepted (2026-08-02). Revised 2026-08-07: the staged analyzer delta relaxes three rules rather than one; mmca-module prints seven wire-ups…">
   <meta property="og:url" content="https://ivanball.github.io/docs/adr/065-scaffolding-templates.html">
   <meta property="og:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <meta property="og:image:alt" content="Ivan Ball-llovera, Senior Software Architect">
   <meta property="og:locale" content="en_US">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="ADR-065: Scaffolding templates derived from the reference app">
-  <meta name="twitter:description" content="Status: Accepted (2026-08-02)">
+  <meta name="twitter:description" content="Status: Accepted (2026-08-02). Revised 2026-08-07: the staged analyzer delta relaxes three rules rather than one; mmca-module prints seven wire-ups…">
   <meta name="twitter:image" content="https://ivanball.github.io/assets/img/og-image.png">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Platform","item":"https://ivanball.github.io/platform.html"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://ivanball.github.io/docs/index.html"},{"@type":"ListItem","position":3,"name":"Architecture Decision Records","item":"https://ivanball.github.io/docs/adr/index.html"},{"@type":"ListItem","position":4,"name":"065 · Scaffolding templates derived from the reference app","item":"https://ivanball.github.io/docs/adr/065-scaffolding-templates.html"}]}</script>
   <script>(function(){try{var t=localStorage.getItem('mmca-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);if(localStorage.getItem('mmca-rail')==='hidden')document.documentElement.setAttribute('data-rail','hidden');}catch(e){}})();</script>
@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 65 ADRs</summary>
+        <summary>All 70 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -165,6 +165,11 @@
         <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
         <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
         <li><a href="065-scaffolding-templates.html" aria-current="page">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -172,19 +177,27 @@
         <article class="doc-content">
           <p class="eyebrow doc-kicker">Architecture Decision Record</p>
           <h1 id="adr-065-scaffolding-templates-derived-from-the-reference-app">ADR-065: Scaffolding templates derived from the reference app</h1>
-          <p><strong>Status:</strong> Accepted (2026-08-02)</p>
+          <p><strong>Status:</strong> Accepted (2026-08-02). Revised 2026-08-07: the staged analyzer delta relaxes three rules
+          rather than one; <code>mmca-module</code> prints seven wire-ups rather than five, and a solution generated by
+          <code>mmca-app</code> now applies them through its own <code>build/add-module.ps1</code>; the seed measurements and the
+          guide reference were refreshed against HEAD.</p>
           <h2 id="context">Context</h2>
-          <p><a href="../guides/common-GETTING-STARTED.html">Getting Started</a> is accurate and complete, and phases 1 through
-          6 of it are transcription work. Its own instruction for the load-bearing parts is &quot;copy
-          <code>MMCA.Helpdesk/Directory.Build.props</code>&quot;, &quot;copy MMCA.ADC&#39;s <code>.editorconfig</code> verbatim&quot;, &quot;copy the
-          relevant rows from MMCA.ADC/Directory.Packages.props&quot;.</p>
+          <p><a href="../guides/common-BUILD-BY-HAND.html">Build by hand</a> is accurate and complete, and phases 1 through 6
+          of it are transcription work (<code>common-BUILD-BY-HAND.md:96</code> through <code>:1049</code>). Its own instruction for
+          the load-bearing parts is &quot;copy <code>MMCA.Helpdesk/Directory.Build.props</code>&quot; (<code>:170</code>), &quot;copy MMCA.ADC&#39;s
+          <code>.editorconfig</code> verbatim&quot; (<code>:114</code>), &quot;copy the relevant rows from MMCA.ADC/Directory.Packages.props&quot;
+          (<code>:157</code>). That walkthrough was the whole of
+          <a href="../guides/common-GETTING-STARTED.html">Getting Started</a> when this decision was taken; Getting Started
+          is now the six-step <code>dotnet new install MMCA.Templates</code> path
+          (<code>common-GETTING-STARTED.md:10-22</code>) and the by-hand transcription moved to its own guide.</p>
           <p>Measured against MMCA.Helpdesk, the deliberately minimal seed, a brand-new app on the framework
-          starts by hand-creating <strong>12 projects, around 85 files, and roughly 5,300 lines</strong> before a line of
-          its own business logic: an 823-line <code>.editorconfig</code>, a 127-line <code>Directory.Packages.props</code> carrying
-          114 pins, a 75-line <code>Directory.Build.props</code>, the 75-line local-source swap in
-          <code>Directory.Build.targets</code>, the module project set, the vertical slice, the migrations project and
-          its design-time factory, two hosts, the Aspire AppHost, six <code>.resx</code> pairs, and the architecture map
-          with its fitness subclasses.</p>
+          starts by hand-creating <strong>12 projects, 105 files, and 6,596 lines</strong> before a line of its own
+          business logic (98 files and 5,439 lines under <code>Source/</code> and <code>Tests/</code>, plus the seven root build
+          files below): an 823-line <code>.editorconfig</code>, a 127-line <code>Directory.Packages.props</code> carrying 113 pins,
+          a 75-line <code>Directory.Build.props</code>, the 74-line local-source swap in <code>Directory.Build.targets</code>,
+          <code>global.json</code>, <code>nuget.config</code>, the solution file, the module project set, the vertical slice, the
+          migrations project and its design-time factory, two hosts, the Aspire AppHost, three <code>.resx</code> pairs,
+          and the architecture map with its fitness subclasses.</p>
           <p>Several of those lines are load-bearing and quiet about it. <code>AddApplicationDecorators()</code> must be the
           last DI call. The AppHost must <code>WaitFor</code> the SQL server and not the database resource. A missing
           AppHost <code>launchSettings.json</code> presents as a hang. A module absent from <code>IArchitectureMap</code> silently
@@ -225,16 +238,26 @@
           symbol replacement at instantiation.</p>
           <p>The pack is published from MMCA.Helpdesk on a <code>templates-vX.Y.Z</code> tag, under its own nuget.org
           trusted-publishing policy.</p>
-          <p><strong>Two things the scaffold deliberately does not hand over</strong>, because a rename invalidates them and
-          no fixed value is correct for every generated name:</p>
+          <p><strong>Two things the scaffold deliberately does not hand over</strong>, because a rename or a shape flag
+          invalidates them and no fixed value is correct for every generated name:</p>
           <ul>
-          <li><strong>Using-directive order.</strong> An app namespace sorts above <code>MMCA.Common.*</code> for <code>Contoso.Support</code> and
-          below it for <code>Zeta.App</code>. <code>SA1210</code> has no notion of blank-line-separated groups, so no checked-in
-          order survives both. Staging appends a scoped <code>SA1210 = suggestion</code> delta to the <strong>staged</strong>
-          <code>.editorconfig</code>; the seed&#39;s own copy, which is the shared analyzer baseline that
-          <code>Tools/Scripts/compare-analyzer-config.ps1</code> holds identical across the four repos, is untouched.
-          The other 213 severities stay at error, and the generated README carries the
-          <code>dotnet format analyzers --diagnostics SA1210</code> command that restores full strictness.</li>
+          <li><strong>Declaration order, and one constructor shape.</strong> An app namespace sorts above <code>MMCA.Common.*</code> for
+          <code>Contoso.Support</code> and below it for <code>Zeta.App</code>. <code>SA1210</code> has no notion of blank-line-separated
+          groups, so no checked-in order survives both. <code>SA1211</code> is the same story one level down, on the
+          identifier-alias file whose two aliases re-sort when <code>--child</code> renames them. <code>IDE0021</code> is the
+          shape flags rather than the renames: the aggregate&#39;s private constructor assigns one property per
+          optional axis, so <code>--no-status --no-description --no-owner</code> together leave it with a single
+          statement, which the baseline then requires as an expression body. Staging appends a scoped delta
+          dropping those three to <code>suggestion</code> in the <strong>staged</strong> <code>.editorconfig</code> (<code>stage.ps1:807-810</code>); the
+          seed&#39;s own copy, which is the shared analyzer baseline that
+          <code>Tools/Scripts/compare-analyzer-config.ps1</code> holds identical across the four repos, is untouched,
+          and it declares none of the three among its 214 explicit <code>dotnet_diagnostic.*.severity</code> lines.
+          Every other analyzer stays at error, as the delta&#39;s own header says (<code>stage.ps1:805</code>). The
+          generated README carries
+          <code>dotnet format analyzers MMCA.Helpdesk.slnx --diagnostics SA1210 SA1211 --severity info</code>
+          (<code>build/templates/overlay/mmca-app/README.md:75</code>), which restores the two ordering rules.
+          <code>IDE0021</code> is not fixable by that command, so the README tells the adopter to fold the constructor
+          by hand and delete the line (<code>README.md:81-84</code>).</li>
           <li><strong>The <code>IntegrationEventContractTests</code> subclass.</strong> <code>IntegrationEventContractTestsBase</code> compares a
           checked-in literal against the actual events with members sorted alphabetically, so
           <code>{ RequesterUserId, TicketId }</code> is right for <code>Ticket</code> and wrong for <code>Invoice</code>. The subclass is
@@ -242,15 +265,27 @@
           makes that a build error), and the generated README carries the class to paste plus the command
           that prints the value to freeze.</li>
           </ul>
-          <p><code>mmca-module</code> additionally prints five wire-ups <code>dotnet new</code> cannot perform: the solution entries,
-          the host and architecture-test project references, the identifier-alias <code>&lt;Compile Include ... Link&gt;</code>
-          block, the five <code>IArchitectureMap</code> lines, and the host&#39;s <code>AddErrorResources&lt;&gt;</code> call.</p>
+          <p><code>mmca-module</code> additionally prints seven numbered wire-ups <code>dotnet new</code> cannot perform
+          (<code>templates/mmca-module/.template.config/template.json:205</code>): the solution entries for the eight new
+          projects, the host and architecture-test project references, the identifier-alias
+          <code>&lt;Compile Include ... Link&gt;</code> block, the five <code>IArchitectureMap</code> lines, the host&#39;s
+          <code>AddErrorResources&lt;&gt;</code> call, the module&#39;s own database (the AppHost <code>AddDatabase</code> /
+          <code>WithSQLServerDataSource</code> pair, the <code>appsettings.json</code> <code>Modules</code> / <code>DataSources</code> / <code>Outbox</code> entries,
+          and the removal of the now-conflicting top-level <code>SQLServerMigrationsAssembly</code>), and the first EF
+          migration. That text now opens by telling anyone whose solution came from <code>mmca-app</code> to run
+          <code>pwsh build/add-module.ps1</code> instead, which performs all seven; the printed steps are the fallback
+          for a hand-built solution.</p>
           <p><strong>The correctness gate is a <code>template-smoke</code> CI job in MMCA.Helpdesk</strong>, not the seed&#39;s own build. The
           seed builds in local-source mode against <code>MMCA.Common@main</code>; a generated app builds in package mode
           against a released version, and a source-mode build can pass where package-mode Release fails on an
           analyzer. The smoke generates two solutions whose names share no substring with the seed, sweeps for
-          residual <code>Helpdesk</code> / <code>Ticket</code> tokens, builds package-mode, runs the tests, then generates a module
-          and applies all five printed wire-ups.</p>
+          residual <code>Helpdesk</code> / <code>Ticket</code> tokens, builds package-mode, runs the tests, then adds a second module
+          to the first of the two (<code>smoke.ps1:324</code>) through that generated app&#39;s own <code>build/add-module.ps1</code>,
+          launched in a child pwsh so the run proves the exit code an adopter would see
+          (<code>smoke.ps1:415-444</code>). That script performs all seven wire-ups plus the first migration, and the
+          smoke asserts the result on the files rather than on the script&#39;s output, wire-up by wire-up
+          (<code>smoke.ps1:530-630</code>), including the migration (<code>:632-650</code>) and a rerun that must fail at the
+          preflight before editing anything (<code>:655</code>).</p>
           <h2 id="rationale">Rationale</h2>
           <p><strong>Deriving from the seed rather than maintaining a template tree</strong> is the whole design. A
           hand-maintained copy of a 12-project solution drifts within one release, and drift in a scaffold is
@@ -262,30 +297,47 @@
           <p><strong>Named <code>MMCA.Templates</code>, not <code>MMCA.Common.Templates</code>.</strong> The <code>MMCA.Common.*</code> names carry the ADR-016
           lockstep-versioning contract and ship from the MMCA.Common repo under its own trusted-publishing
           policy. This package ships from a different repo on a different cadence and pins the framework
-          version as a <code>--framework-version</code> parameter instead. Keeping it outside that family also leaves
-          <code>FACTS.md</code>&#39;s package count at 15, since its generator counts only packable projects under
-          <code>MMCA.Common/Source/</code>, so the CI drift gate is unaffected.</p>
+          version as a <code>--framework-version</code> parameter instead. Keeping it outside that family also leaves the
+          package count in
+          <a href="https://github.com/ivanball/MMCA.Common/blob/main/FACTS.md" target="_blank" rel="noopener">FACTS.md</a> unchanged, since its generator
+          counts only packable projects under <code>MMCA.Common/Source/</code> (<code>MMCA.Common/FACTS.md:71</code>), so the CI
+          drift gate is unaffected.</p>
           <p><strong>The token sweep is in the gate on purpose.</strong> <code>sourceName</code> and the symbol replacements run as
           separate passes, so a token that only ever appears nested inside another (<code>Ticket</code> inside <code>Tickets</code>,
           <code>Helpdesk</code> inside <code>MMCA.Helpdesk</code>) is precisely where a rename half-applies, and it half-applies
           silently: the output still compiles, it just carries someone else&#39;s domain vocabulary.</p>
           <h2 id="trade-offs">Trade-offs</h2>
           <ul>
-          <li><strong>Two documented one-time fixups</strong> in every generated app, above. The alternative to the <code>SA1210</code>
-          delta was moving every app-local <code>using</code> into per-project global usings, which is not rename-stable
-          either once a project&#39;s usings span more than one second-level segment, and which costs the seed
-          the didactic value of showing where each type comes from.</li>
-          <li><strong><code>mmca-module</code> cannot finish the job.</strong> Five edits stay manual because <code>dotnet new</code> cannot patch
-          existing files. They are printed as post-action instructions and applied by the smoke job, so they
-          cannot silently go stale, but a new module is not usable until a human makes them.</li>
+          <li><strong>Two documented one-time fixups</strong> in every generated app, above (one of them covering all three
+          relaxed rules). The alternative to the <code>SA1210</code> half of the delta was moving every app-local
+          <code>using</code> into per-project global usings, which is not rename-stable either once a project&#39;s usings
+          span more than one second-level segment, and which costs the seed the didactic value of showing
+          where each type comes from.</li>
+          <li><strong><code>mmca-module</code> alone cannot finish the job.</strong> Seven edits are beyond it because <code>dotnet new</code>
+          cannot patch existing files. For a solution generated by <code>mmca-app</code> that is no longer manual: the
+          overlay ships <code>build/add-module.ps1</code> (<code>build/templates/overlay/mmca-app/build/add-module.ps1</code>,
+          declared <code>copyOnly</code> at <code>stage.ps1:1077</code> and exempted from the smoke&#39;s rename sweeps at
+          <code>smoke.ps1:114</code>), which runs
+          <code>dotnet new mmca-module</code> and then performs all seven plus the first migration, on the same code
+          path CI exercises. The manual path survives only for a solution the template did not generate,
+          where the printed instructions are the fallback and a new module is not usable until a human
+          applies them.</li>
           <li><strong>The template lags a framework release by one step.</strong> <code>--framework-version</code> defaults to whatever
           the seed pins, so a <code>MMCA.Common</code> release needs the seed bumped and the pack re-tagged before the
           default is current. Adopters can pass the flag in the meantime.</li>
           <li><strong><code>release-templates.yml</code>&#39;s filename is load-bearing.</strong> Trusted publishing is keyless OIDC pinned
           to owner, repository, and workflow filename, with no API-key fallback, so renaming that file
           breaks publishing silently. Same property as the MMCA.Common release workflow (ADR-053).</li>
-          <li><strong>The generated app&#39;s first test run is 90 tests, not 91</strong>, and its fitness subclass count is one
-          below the seed&#39;s, until the adopter freezes their own wire contract.</li>
+          <li><strong>The generated app&#39;s first test run is one test short of the seed&#39;s</strong>, and its fitness subclass
+          count is one below the seed&#39;s (19 sealed subclasses in
+          <code>Tests/Architecture/MMCA.Helpdesk.Architecture.Tests/ArchitectureTests.cs</code>, of which staging
+          removes exactly one at <code>:88</code>, <code>stage.ps1:875-882</code>), until the adopter freezes their own wire
+          contract. The delta is exactly one because <code>IntegrationEventContractTestsBase</code> declares a single
+          <code>[Fact]</code>
+          (<code>MMCA.Common/Source/Hosting/MMCA.Common.Testing.Architecture/Bases/IntegrationEventContractTestsBase.cs:18-19</code>).
+          The absolute figure was 90 against 91 as of 2026-08-02 and is not pinned by any gate (both
+          <code>smoke.ps1:318</code> and <code>ci.yml:45</code> pass <code>--minimum-expected-tests 1</code>); a generated app that turns off
+          shape axes runs fewer still.</li>
           </ul>
           
         <div class="doc-foot btn-row">

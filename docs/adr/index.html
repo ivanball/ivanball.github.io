@@ -95,7 +95,7 @@
       <div class="doc-layout">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 65 ADRs</summary>
+        <summary>All 70 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html" aria-current="page">Overview</a></li>
@@ -164,6 +164,11 @@
         <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
         <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
         <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -194,7 +199,7 @@
           <tr>
           <td><a href="003-outbox-dual-dispatch.html">003</a></td>
           <td>Outbox dual dispatch</td>
-          <td>Outbox + in-process dispatch + background processor; at-least-once delivery. Revised 2026-07-19: integration events route through the outbox to <code>IMessageBus</code> (never local dispatch), lease columns (<code>LockedUntil</code>/<code>LockToken</code>) make replica scale-out safe by construction, and retry exhaustion is dead-lettered loudly (metric + Error log + <code>DeadLetterRetentionDays</code>).</td>
+          <td>Outbox + in-process dispatch + background processor; at-least-once delivery. Revised 2026-07-19: integration events route through the outbox to <code>IMessageBus</code> (never local dispatch), lease columns (<code>LockedUntil</code>/<code>LockToken</code>) make replica scale-out safe by construction, and retry exhaustion is dead-lettered loudly (metric + Error log + <code>DeadLetterRetentionDays</code>). Revised 2026-08-07: the exponential retry backoff is jittered (0.8-1.2x per wait, capped at the lease) so a batch that fails together does not retry in lockstep.</td>
           </tr>
           <tr>
           <td><a href="004-authentication-dual-fetch.html">004</a></td>
@@ -239,7 +244,7 @@
           <tr>
           <td><a href="012-grpc-host-transport.html">012</a></td>
           <td>gRPC-host transport convention</td>
-          <td>Two coherent profiles; the Kestrel choice forces the gateway-forward mode + JWKS routing. <strong>Both consumers default to Profile A</strong> (<code>Http2</code>-only h2c) after Store converged on 2026-06-22; Profile B (<code>Http1AndHttp2</code> + ALPN) is retained only for the SignalR/WebSocket hosts (ADC&#39;s Notification service and Store&#39;s Sales service). Since 2026-07-09 ADC&#39;s Notification runs a <strong>mixed-endpoint profile</strong>: <code>Http1AndHttp2</code> default endpoint plus a dedicated <code>Http2</code>-only named <code>grpc</code> endpoint for the ADR-039 live-channel push ingress. Corrected 2026-07-25: gateway-routed JWKS is the local Aspire wiring only, both consumers inject the direct in-cluster Identity authority in production; and probe posture splits three ways (ADC hosts get a dedicated Http1-only probe listener, Store&#39;s <code>Http2</code>-only hosts use TCP probes).</td>
+          <td>Two coherent profiles; the Kestrel choice forces the gateway-forward mode + JWKS routing. <strong>Both consumers default to Profile A</strong> (<code>Http2</code>-only h2c) after Store converged on 2026-06-22; Profile B (<code>Http1AndHttp2</code> + ALPN) is retained only for the SignalR/WebSocket hosts (ADC&#39;s Notification service and Store&#39;s Sales service). Since 2026-07-09 ADC&#39;s Notification runs a <strong>mixed-endpoint profile</strong>: <code>Http1AndHttp2</code> default endpoint plus a dedicated <code>Http2</code>-only named <code>grpc</code> endpoint for the ADR-039 live-channel push ingress. Corrected 2026-07-25: gateway-routed JWKS is the local Aspire wiring only, both consumers inject the direct in-cluster Identity authority in production; and probe posture splits three ways (ADC hosts get a dedicated Http1-only probe listener, Store&#39;s <code>Http2</code>-only hosts use TCP probes). Updated 2026-08-07: the per-service Kestrel wiring is now one shared framework method, <code>ConfigureEndpointsWithHealthProbe</code> in <code>MMCA.Common.Aspire</code> (<code>redeclareCleartextEndpoint: false</code> expresses the mixed profile), and ADC&#39;s Notification maps a second authorized gRPC service (user-notification export) on the same <code>grpc</code> endpoint.</td>
           </tr>
           <tr>
           <td><a href="013-result-pattern.html">013</a></td>
@@ -299,7 +304,7 @@
           <tr>
           <td><a href="024-push-notifications.html">024</a></td>
           <td>Two-channel user notifications</td>
-          <td>One application use case writes a durable per-user <code>UserNotification</code> inbox (read/unread) <em>and</em> fires a transient SignalR push; transport is behind <code>IPushNotificationSender</code> (no-op <code>Null</code> default, swapped by <code>AddPushNotifications</code> with an optional Redis backplane) and audience behind <code>INotificationRecipientProvider</code>. Push failure is non-fatal (the inbox is the source of truth). ADR-044 adds an optional third OS-level native-push leg after these two, and the hub also carries ADR-039&#39;s ephemeral live-channel events. ADC runs a dedicated Notification service on these abstractions.</td>
+          <td>One application use case writes a durable per-user <code>UserNotification</code> inbox (read/unread) <em>and</em> fires a transient SignalR push; transport is behind <code>IPushNotificationSender</code> (no-op <code>Null</code> default, swapped by <code>AddPushNotifications</code> with an optional Redis backplane) and audience behind <code>INotificationRecipientProvider</code>. Push failure is non-fatal (the inbox is the source of truth). ADR-044 adds an optional third OS-level native-push leg after these two, and the hub also carries ADR-039&#39;s ephemeral live-channel events. ADC runs a dedicated Notification service on these abstractions. Revised 2026-08-07: transactional email (<code>IEmailSender</code>, framework-registered SMTP primitive) is recorded as an app-level concern outside this channel model, consumed only by Store Sales handlers today.</td>
           </tr>
           <tr>
           <td><a href="025-startup-warmup-readiness.html">025</a></td>
@@ -329,7 +334,7 @@
           <tr>
           <td><a href="030-startup-sole-migrator.html">030</a></td>
           <td>Startup sole-migrator</td>
-          <td>Each service self-applies its EF migrations at boot (<code>DatabaseInitStrategy=Migrate</code>, <code>minReplicas:1</code>) and is the sole migrator (no deploy-step <code>sqlcmd</code> backstop) deliberately overriding the framework&#39;s <code>None</code>-for-prod default after a startup-race incident.</td>
+          <td>Each service self-applies its EF migrations at boot (<code>DatabaseInitStrategy=Migrate</code>, <code>minReplicas:1</code>) and is the sole migrator (no deploy-step <code>sqlcmd</code> backstop) deliberately overriding the framework&#39;s <code>None</code>-for-prod default after a startup-race incident. Revised 2026-08-07: the same startup owner also runs every module seeder unconditionally (all environments, even under <code>None</code>), with idempotency delegated to each seeder.</td>
           </tr>
           <tr>
           <td><a href="031-feature-flag-management.html">031</a></td>
@@ -414,7 +419,7 @@
           <tr>
           <td><a href="047-soft-deleted-user-session-revocation.html">047</a></td>
           <td>Soft-deleted-user session revocation</td>
-          <td><code>SoftDeletedUserMiddleware</code> (BR-133, after authentication, before authorization) returns 401 for authenticated callers whose <code>User.IsDeleted</code>, via <code>ISoftDeletedUserValidator</code> behind a 30-second cached check; the validator is lazily resolved so hosts that do not register one (non-Identity services, Helpdesk) no-op. Bounds the stateless-JWT revocation window (ADR-004) to roughly the cache duration instead of the token lifetime.</td>
+          <td><code>SoftDeletedUserMiddleware</code> (BR-133, after authentication, before authorization) returns 401 for authenticated callers whose <code>User.IsDeleted</code>, via <code>ISoftDeletedUserValidator</code> behind a 30-second cached check (<code>SoftDeletedUserCache.MarkerDuration</code>); the validator is lazily resolved so hosts that do not register one (non-Identity services, Helpdesk) no-op, and cache or validator failure deliberately fails open. Since 2026-08-07 the record reflects the shared generic <code>SoftDeletedUserValidator&lt;TUser&gt;</code> in MMCA.Common (no per-app query classes) and the adoption asymmetry: ADC writes an immediate deletion marker on delete, Store relies on the passive 30-second TTL. Bounds the stateless-JWT revocation window (ADR-004) to roughly the cache duration instead of the token lifetime.</td>
           </tr>
           <tr>
           <td><a href="048-primitive-identifier-type-aliases.html">048</a></td>
@@ -434,7 +439,7 @@
           <tr>
           <td><a href="051-client-auth-token-lifecycle.html">051</a></td>
           <td>Client-side auth token lifecycle across render modes</td>
-          <td>One <code>ITokenRefresher</code> abstraction with two head-specific strategies: browser heads (Server/WASM) refresh through the same-origin proxy (<code>SameOriginProxyTokenRefresher</code>, HttpOnly cookie via <code>/auth/session/token</code>, ADR-022) while MAUI refreshes directly against the API (<code>DirectApiTokenRefresher</code>) persisting the rotated pair in OS SecureStorage; <code>AuthDelegatingHandler</code> stamps the bearer on the APIClient pipeline, render-mode-aware <code>ITokenStorageService</code> implementations (WASM in-memory / Server SSR-vs-interactive, single-flight with 30s skew) hold the tokens, and <code>JwtAuthenticationStateProvider</code> drives Blazor auth state. Client half of ADR-022/ADR-050.</td>
+          <td>One <code>ITokenRefresher</code> abstraction with two head-specific strategies: browser heads (Server/WASM) refresh through the same-origin proxy (<code>SameOriginProxyTokenRefresher</code>, HttpOnly cookie via <code>/auth/session/token</code>, ADR-022) while MAUI refreshes directly against the API (<code>DirectApiTokenRefresher</code>) persisting the rotated pair in OS SecureStorage; <code>AuthDelegatingHandler</code> stamps the bearer on the APIClient pipeline, render-mode-aware <code>ITokenStorageService</code> implementations (WASM in-memory / Server SSR-vs-interactive, single-flight with 30s skew) hold the tokens, and <code>JwtAuthenticationStateProvider</code> drives Blazor auth state. Client half of ADR-022/ADR-050. Revised 2026-08-07: the MAUI SecureStorage implementation is the shared <code>MauiTokenStorageService</code> in <code>MMCA.Common.UI.Maui</code> (<code>AddCommonMauiTokenStorage()</code>), consumed by both apps instead of per-app copies.</td>
           </tr>
           <tr>
           <td><a href="052-background-job-execution.html">052</a></td>
@@ -504,7 +509,32 @@
           <tr>
           <td><a href="065-scaffolding-templates.html">065</a></td>
           <td>Scaffolding templates derived from the reference app</td>
-          <td>A <code>dotnet new</code> pack, <strong><code>MMCA.Templates</code></strong> (<code>mmca-app</code>, <code>mmca-module</code>, <code>mmca-command</code>, <code>mmca-query</code>), replaces the transcription work in phases 1-6 of Getting Started: standing up a new app by hand meant 12 projects and roughly 5,300 lines before any business logic, several of them silently load-bearing (<code>AddApplicationDecorators()</code> last, <code>WaitFor(sql)</code> not the database resource, a module absent from <code>IArchitectureMap</code>). The template content is the MMCA.Helpdesk reference app ITSELF, staged at pack time from its own tree with <code>.template.config/</code> at the repo root, so no second copy of the solution exists to drift and the app whose CI keeps it green is what adopters receive. Two things are deliberately withheld because a rename invalidates them and no fixed value suits every generated name: using-directive order (<code>SA1210</code> relaxed in the STAGED <code>.editorconfig</code> only, leaving the shared analyzer baseline untouched) and the <code>IntegrationEventContractTests</code> subclass (an inherited wire-contract freeze guarantees nothing; adopters freeze their own). The gate is a <code>template-smoke</code> job, not the seed&#39;s build: the seed builds local-source against <code>MMCA.Common@main</code> while a generated app builds package-mode against a release, and it sweeps for residual <code>Helpdesk</code>/<code>Ticket</code> tokens, since <code>sourceName</code> and symbol replacement run as separate passes and a nested token half-applies silently. Named outside the <code>MMCA.Common.*</code> family on purpose (ADR-016 lockstep, different repo, different cadence), which also leaves <code>FACTS.md</code>&#39;s package count at 15.</td>
+          <td>A <code>dotnet new</code> pack, <strong><code>MMCA.Templates</code></strong> (<code>mmca-app</code>, <code>mmca-module</code>, <code>mmca-command</code>, <code>mmca-query</code>), replaces the transcription work of the build-by-hand guide (Getting Started is now the six-step <code>dotnet new</code> path): standing up a new app by hand meant 12 projects and thousands of lines before any business logic, several of them silently load-bearing (<code>AddApplicationDecorators()</code> last, <code>WaitFor(sql)</code> not the database resource, a module absent from <code>IArchitectureMap</code>). The template content is the MMCA.Helpdesk reference app ITSELF, staged at pack time from its own tree with <code>.template.config/</code> at the repo root, so no second copy of the solution exists to drift and the app whose CI keeps it green is what adopters receive. A few things are deliberately withheld because a rename or shape flag invalidates them and no fixed value suits every generated name: using-directive and alias order plus one expression-body preference (<code>SA1210</code>/<code>SA1211</code>/<code>IDE0021</code> relaxed in the STAGED <code>.editorconfig</code> only, leaving the shared analyzer baseline untouched) and the <code>IntegrationEventContractTests</code> subclass (an inherited wire-contract freeze guarantees nothing; adopters freeze their own). Generated apps ship <code>build/add-module.ps1</code>, which runs <code>dotnet new mmca-module</code> and performs the seven wire-ups the template can only print, plus the first migration. The gate is a <code>template-smoke</code> job, not the seed&#39;s build: the seed builds local-source against <code>MMCA.Common@main</code> while a generated app builds package-mode against a release, and it sweeps for residual <code>Helpdesk</code>/<code>Ticket</code> tokens, since <code>sourceName</code> and symbol replacement run as separate passes and a nested token half-applies silently. Named outside the <code>MMCA.Common.*</code> family on purpose (ADR-016 lockstep, different repo, different cadence), which also leaves <code>FACTS.md</code>&#39;s package count at 15.</td>
+          </tr>
+          <tr>
+          <td><a href="066-broker-transport-selection.html">066</a></td>
+          <td>Broker transport selection + dev/prod parity</td>
+          <td>One <code>IMessageBus</code> abstraction with three <code>MessageBusProvider</code> values: <code>InProcess</code> for tests and the monolith, RabbitMQ wired by the Aspire AppHost locally (<code>WithBroker</code>), Azure Service Bus injected by both apps&#39; <code>infra/main.bicep</code> in production (Standard tier; MassTransit&#39;s topology needs <code>Manage</code> rights). Identical exponential retry is configured per transport, and a dedicated Service Bus emulator test tier exists to prove the production transport binding (non-gating, cron). Helpdesk stays <code>InProcess</code>. Fills the transport gap ADR-003 and ADR-016 both leave open.</td>
+          </tr>
+          <tr>
+          <td><a href="067-ui-module-shell-composition.html">067</a></td>
+          <td>Shared Blazor shell + <code>IUIModule</code> composition</td>
+          <td>The framework package ships the router, layout, nav menu and routable shell pages (login, register, home, not-found, forbidden, notification inbox); each module plugs in by implementing <code>IUIModule</code> (<code>NavItems</code>, <code>Assembly</code> for <code>AdditionalAssemblies</code> route discovery, app-bar and layout component extension points), and <code>Routes.razor</code> enumerates the registered modules at runtime. The UI-layer counterpart of ADR-059&#39;s <code>IModule</code>; adopted by every ADC/Store module, Common&#39;s Notification module and the UI gallery. MMCA.Helpdesk keeps its own shell and does not adopt it.</td>
+          </tr>
+          <tr>
+          <td><a href="068-value-objects-as-validated-primitives.html">068</a></td>
+          <td>Value objects as validated domain primitives</td>
+          <td>Seven sealed <code>record</code> value objects over an abstract <code>ValueObject</code> base (Email, Money, Currency, PhoneNumber, Address, DateRange, DateTimeRange), each a private constructor plus a <code>Result</code>-returning <code>Create</code> factory (fitness-enforced); shared constraints live in <code>*Invariants</code> classes where reused. EF mapping is <code>OwnsMoney</code> (owned type) or value converters (no schema change); <code>Currency.None</code> is the null-object sentinel on materialization; JSON/XML round-trip via <code>[JsonConstructor]</code>, converters and DataContract, gRPC via a hand-mapped <code>MoneyV1</code>. The deliberate opposite of ADR-048&#39;s primitive identifier aliases: identifiers cross boundaries, domain values carry invariants.</td>
+          </tr>
+          <tr>
+          <td><a href="069-shared-data-protection-key-ring.html">069</a></td>
+          <td>Shared DataProtection key ring for scaled-out hosts</td>
+          <td><code>AddCommonDataProtection</code> persists the DataProtection key ring to one Azure blob under <code>DefaultAzureCredential</code> so cookies and antiforgery tokens minted by one replica decrypt on another; key-ring encryption at rest (Key Vault) is a deliberately independent second gate, so a lagging role assignment cannot take authentication down. Absent config is a full no-op (dev/test/Helpdesk take no Azure dependency). Adopted by ADC (Identity service + UI.Web, container provisioned in bicep); NOT adopted by Store, whose two-replica cookie hosts still run per-replica key rings.</td>
+          </tr>
+          <tr>
+          <td><a href="070-fail-fast-configuration-contract.html">070</a></td>
+          <td>Fail-fast configuration contract</td>
+          <td>Every settings section binds through <code>AddOptions().Bind().ValidateDataAnnotations().ValidateOnStart()</code> so a misconfigured host refuses to boot instead of failing at first use: 11 framework sections plus two per service host across all four repos. Settings consumed above Infrastructure go through read-only singleton facades (<code>IApplicationSettings</code>, <code>ISmtpSettings</code>, <code>IJwtSettings</code>) instead of <code>IOptions&lt;T&gt;</code>; direct <code>IOptions</code> injection stays legitimate inside Infrastructure and UI hosts. Nothing gates the chain today (recorded trade-off).</td>
           </tr>
           </tbody></table></div>
           <h2 id="writing-a-new-adr">Writing a new ADR</h2>

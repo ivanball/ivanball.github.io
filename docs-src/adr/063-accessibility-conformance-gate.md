@@ -64,9 +64,9 @@ the package's own workflow bases, and wire it as a required merge check and a de
   three contexts block merges (`MMCA.Common/CONTRIBUTING.md:63-64`, enumerated in the branch-protection
   payload at `:174-176`).
 - **Both deployed apps gate the deploy on it.** `MMCA.ADC/.github/workflows/deploy.yml:531` and
-  `MMCA.Store/.github/workflows/deploy.yml:532` call the reusable `e2e.yml` workflow chromium-only
-  (ADC `:541`, Store `:542`) against the full Aspire stack, and the `deploy` job waits on that gate
-  (ADC `:866`, Store `:857`).
+  `MMCA.Store/.github/workflows/deploy.yml:537` call the reusable `e2e.yml` workflow chromium-only
+  (ADC `:541`, Store `:547`) against the full Aspire stack, and the `deploy` job waits on that gate
+  (ADC `:866`, Store `:862`).
 - **The gate already owns design-token decisions.** Contrast values in the shared theme are set to
   what the scan will accept, with the ratio recorded in place: light-palette `WarningContrastText`
   (`MMCA.Common/Source/Presentation/MMCA.Common.UI/Theme/MMCATheme.cs:33`, rationale at `:29-32`,
@@ -134,8 +134,8 @@ accessibility gate today.
   not machine-checkable and are covered by the manual screen-reader checklist in
   [common-ACCESSIBILITY.md](../guides/common-ACCESSIBILITY.md), which is a periodic human pass, not a gate.
 - **The deploy gate is ui-scoped and may legitimately skip.** Both apps gate `e2e-gate` on a `ui` change
-  filter (ADC `deploy.yml:538`, Store `deploy.yml:539`), and `deploy` accepts `success` or `skipped` for it
-  (ADC `:896`, Store `:888`), so a backend-only or infra-only deploy ships without a browser scan. That
+  filter (ADC `deploy.yml:538`, Store `deploy.yml:544`), and `deploy` accepts `success` or `skipped` for it
+  (ADC `:896`, Store `:893`), so a backend-only or infra-only deploy ships without a browser scan. That
   is the intended cost trade (a backend change cannot alter rendered markup) with the post-deploy smoke
   gate as backstop, but it does mean "deployed" does not always mean "axe ran on this commit".
 - **Consumer breadth is hand-maintained.** Nothing forces a new page into `AccessibilityTests`, so

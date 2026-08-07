@@ -43,7 +43,7 @@ layer rather than by weakening the render mode.
   both sides of the pipeline: `AddInteractiveServerComponents()` + `AddInteractiveWebAssemblyComponents()`
   at service registration and `AddInteractiveServerRenderMode()` + `AddInteractiveWebAssemblyRenderMode()`
   on `MapRazorComponents<App>()`
-  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:33-35`, `Program.cs:187-189`;
+  (`MMCA.ADC/Source/Hosts/UI/MMCA.ADC.UI.Web/Program.cs:34-36`, `Program.cs:188-190`;
   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:67-69`, `Program.cs:180-188`).
 - **Prerendering stays enabled.** No host anywhere in the workspace passes `prerender: false` or
   constructs a render mode with prerendering disabled; every render mode in use is the stock static
@@ -76,7 +76,7 @@ layer rather than by weakening the render mode.
   `if (!RendererInfo.IsInteractive) return;` guard in `OnParametersSetAsync` / `OnInitializedAsync` appears
   across both apps, with two different stated reasons: avoiding the doubled reads under `InteractiveAuto`
   (`MMCA.ADC/Source/Modules/Conference/MMCA.ADC.Conference.UI/Pages/Public/PublicSessionDetail.razor.cs:81-90`,
-  `.../Pages/Public/PublicSpeakerDetail.razor.cs:59`, `.../Pages/Home/ADCHome.razor.cs:90`,
+  `.../Pages/Public/PublicSpeakerDetail.razor.cs:59`, `.../Pages/Home/ADCHome.razor.cs:92`,
   `.../Pages/Speaker/SpeakerDashboard.razor.cs:65`,
   `MMCA.ADC/Source/Modules/Engagement/MMCA.ADC.Engagement.UI/Pages/SessionLive/SessionLive.razor.cs:69`,
   `.../Pages/SessionLive/PresenterView.razor.cs:56`) and the fact that no auth token can be read at
@@ -98,7 +98,7 @@ layer rather than by weakening the render mode.
   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web.Client/Program.cs:30-63` against
   `MMCA.Store/Source/Hosts/UI/MMCA.Store.UI.Web/Program.cs:61-108`), and each client bootstraps its thread
   culture from the same cookie before running so hydration does not disagree with the prerender
-  (`MMCA.ADC/.../MMCA.ADC.UI.Web.Client/Program.cs:74`,
+  (`MMCA.ADC/.../MMCA.ADC.UI.Web.Client/Program.cs:86`,
   `MMCA.Store/.../MMCA.Store.UI.Web.Client/Program.cs:69`, ADR-027).
 - **A build-time layer rule is what keeps the shared UI package runnable in the browser.**
   `MMCA.Common.UI` may not reference Domain, Application, Infrastructure or API, and the enforcement
@@ -126,7 +126,7 @@ layer rather than by weakening the render mode.
   (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Program.cs:14-15`, `Program.cs:85-86`). It has **no `.Client` project at
   all**, so `InteractiveAuto` is not available to it, and its two ticket pages use `MudTable` directly
   rather than the shared list-page base
-  (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Components/Pages/Tickets.razor:30`), so none of the
+  (`MMCA.Helpdesk/Source/Hosts/UI/MMCA.Helpdesk.UI.Web/Components/Pages/Tickets.razor:32`), so none of the
   persistence machinery above applies there. The framework's own component gallery is likewise
   `InteractiveServer`-only (`MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/Components/App.razor:22`,
   `App.razor:26`, `MMCA.Common/Tests/Presentation/MMCA.Common.UI.Gallery/GalleryHost.cs:123-124`). ADR-028

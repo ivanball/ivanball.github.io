@@ -96,7 +96,7 @@
       <div class="doc-layout doc-layout--toc">
       <aside class="doc-sidebar">
       <details class="doc-sidebar-details" open>
-        <summary>All 65 ADRs</summary>
+        <summary>All 70 ADRs</summary>
         <nav class="doc-nav" aria-label="Architecture Decision Records">
           <ol>
         <li><a href="index.html">Overview</a></li>
@@ -165,6 +165,11 @@
         <li><a href="063-accessibility-conformance-gate.html">063 · WCAG 2.1 AA Accessibility as a Shipped Test Contract and CI Gate</a></li>
         <li><a href="064-deploy-recency-gates.html">064 · Deploy Preconditions as Proof-of-Recency Gates</a></li>
         <li><a href="065-scaffolding-templates.html">065 · Scaffolding templates derived from the reference app</a></li>
+        <li><a href="066-broker-transport-selection.html">066 · Broker Transport Selection and Dev/Prod Parity</a></li>
+        <li><a href="067-ui-module-shell-composition.html">067 · Shared Blazor Application Shell and IUIModule Composition</a></li>
+        <li><a href="068-value-objects-as-validated-primitives.html">068 · Value Objects as Validated Domain Primitives</a></li>
+        <li><a href="069-shared-data-protection-key-ring.html">069 · Shared DataProtection Key Ring for Scaled-Out Hosts</a></li>
+        <li><a href="070-fail-fast-configuration-contract.html">070 · Fail-Fast Configuration Contract</a></li>
           </ol>
         </nav>
       </details>
@@ -179,12 +184,12 @@
           <h2 id="context">Context</h2>
           <p>ADR-030 decides <strong>who</strong> applies a migration: every service host runs <code>DatabaseInitStrategy = Migrate</code>
           and self-applies its pending EF Core migrations at startup as the sole migrator, with no deploy-step
-          <code>sqlcmd</code> backstop (<code>MMCA.Store/.github/workflows/deploy.yml:1037-1046</code>,
+          <code>sqlcmd</code> backstop (<code>MMCA.Store/.github/workflows/deploy.yml:1042-1050</code>,
           <code>MMCA.ADC/.github/workflows/deploy.yml:1078-1088</code>). It says nothing about what <strong>shape</strong> a migration
           may take.</p>
           <p>That gap is load-bearing because production rollback is <strong>revision-only</strong>. When the post-deploy smoke
           gate fails, the deploy rolls every container app back to its previous revision with
-          <code>az containerapp revision copy --from-revision</code> (<code>MMCA.Store/.github/workflows/deploy.yml:1053,1105-1120</code>,
+          <code>az containerapp revision copy --from-revision</code> (<code>MMCA.Store/.github/workflows/deploy.yml:1058,1110-1125</code>,
           <code>MMCA.ADC/.github/workflows/deploy.yml:1099,1156-1169</code>). That reverts the <strong>image</strong> and nothing else:
           the new revision already migrated the database on boot, and no down-migration runs. The previous
           release therefore keeps serving traffic against the <strong>new</strong> schema, which is exactly the statement
@@ -192,7 +197,7 @@
           A <code>DropColumn</code> shipped alongside the code that stopped reading it makes the rollback path a broken
           release rather than a recovery.</p>
           <p>The existing build-time gate does not cover this. <code>dotnet ef migrations has-pending-model-changes</code>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:211-225</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:262-276</code>)
+          (<code>MMCA.Store/.github/workflows/deploy.yml:216-230</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:262-276</code>)
           asserts a migration <strong>exists</strong> for every model change; it has no opinion on whether that migration is
           survivable one release back. The gate below is the shape rule that ADR-030 left open. It arrived in
           MMCA.ADC with the 2026-07-19 security/resilience/ops review batch (commit <code>adee5058</code>, PR #38) and was
@@ -206,27 +211,27 @@
           (<code>MMCA.Store/CONTRIBUTING.md:62-65</code>, <code>MMCA.ADC/CONTRIBUTING.md:62-65</code>).</li>
           <li><strong>A migration ADDED by a PR may not drop without a marker.</strong> The <code>Expand/contract migration guard (schema rollback safety)</code> step fails the build when a newly added migration&#39;s <code>Up()</code> matches
           <code>\.(DropColumn|DropTable|DropIndex)\s*(&lt;[^&gt;]*&gt;)?\s*\(</code> and the same <code>Up()</code> body does not carry the
-          override marker (<code>MMCA.Store/.github/workflows/deploy.yml:227-273</code>,
+          override marker (<code>MMCA.Store/.github/workflows/deploy.yml:232-278</code>,
           <code>MMCA.ADC/.github/workflows/deploy.yml:138-184</code>). Those three operations are the entire matched set.</li>
           <li><strong>The marker&#39;s documented format is one comment line:</strong>
           <code>// EXPAND-CONTRACT-OVERRIDE: &lt;why this drop is safe one release back&gt;</code>
           (<code>MMCA.Store/CONTRIBUTING.md:73-75</code>, <code>MMCA.ADC/CONTRIBUTING.md:73-75</code>). What the step actually
           enforces is looser: <code>grep -q &#39;EXPAND-CONTRACT-OVERRIDE&#39;</code> over the <code>Up()</code> body
-          (<code>MMCA.Store/.github/workflows/deploy.yml:266</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:177</code>), so the
+          (<code>MMCA.Store/.github/workflows/deploy.yml:271</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:177</code>), so the
           token must appear inside <code>Up()</code>, but the <code>//</code> prefix, the colon and the reason text are convention,
           not validation.</li>
           <li><strong>&quot;Added by this PR&quot; means git-added, base-relative, path-scoped.</strong> The step fetches the PR base and
           runs <code>git diff --diff-filter=A --name-only &quot;origin/&lt;base_ref&gt;...HEAD&quot;</code> limited to
           <code>Source/Hosting/MMCA.Store.Migrations.SqlServer.*/Migrations/*.cs</code> (respectively
-          <code>MMCA.ADC.Migrations.SqlServer.*</code>) (<code>MMCA.Store/.github/workflows/deploy.yml:249-250</code>,
+          <code>MMCA.ADC.Migrations.SqlServer.*</code>) (<code>MMCA.Store/.github/workflows/deploy.yml:254-255</code>,
           <code>MMCA.ADC/.github/workflows/deploy.yml:160-161</code>). <code>*.Designer.cs</code> files are skipped explicitly
-          (<code>MMCA.Store/.github/workflows/deploy.yml:261-263</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:172-174</code>),
+          (<code>MMCA.Store/.github/workflows/deploy.yml:266-268</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:172-174</code>),
           the model snapshot is a modification rather than an addition so it never enters the list, and the
           frozen combined-archive projects (<code>MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer/</code>,
           <code>MMCA.ADC/Source/Hosting/MMCA.ADC.Migrations.SqlServer/</code>) fall outside the pathspec.</li>
           <li><strong>Only the <code>Up()</code> body is scanned.</strong> The body is extracted with
           <code>awk &#39;/protected override void Up\(/{flag=1} /protected override void Down\(/{flag=0} flag&#39;</code>
-          (<code>MMCA.Store/.github/workflows/deploy.yml:264</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:175</code>), because
+          (<code>MMCA.Store/.github/workflows/deploy.yml:269</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:175</code>), because
           every additive migration&#39;s <code>Down()</code> legitimately drops what <code>Up()</code> added and <code>Down()</code> never runs at
           startup: down-migration is explicit tooling only.</li>
           <li><strong>It is a merge gate, not a deploy gate.</strong> The step lives in the <code>build-and-test</code> job, which both
@@ -246,8 +251,9 @@
           <code>MMCA.Store/Source/Hosting/MMCA.Store.Migrations.SqlServer.Sales/Migrations/20260725044543_AddOrderStatusAndCreatedOnIndexes.cs:13-17</code>.</li>
           </ul>
           <p><strong>Adoption is partial, and deliberately so at the deployed repos only.</strong> MMCA.ADC and MMCA.Store both
-          run the gate, in identical form. <strong>MMCA.Helpdesk does not have it</strong>: its CI is a single build-and-test
-          job with no migration steps at all (<code>MMCA.Helpdesk/.github/workflows/ci.yml:13-45</code>), and its tree
+          run the gate, in identical form. <strong>MMCA.Helpdesk does not have it</strong>: neither of its two CI jobs runs a
+          migration step (<code>build-and-test</code> at <code>MMCA.Helpdesk/.github/workflows/ci.yml:14-45</code>, <code>template-smoke</code>
+          at <code>:61-74</code>), and its tree
           already carries an unmarked <code>DropIndex</code> in an <code>Up()</code> body
           (<code>MMCA.Helpdesk/Source/Hosting/MMCA.Helpdesk.Migrations.SqlServer.Tickets/Migrations/20260725121253_AddOutboxInboxRetentionIndexes.cs:13-16</code>),
           which is consistent: Helpdesk has no deploy workflow and therefore no revision-rollback model to
@@ -287,10 +293,10 @@
           reaches <code>main</code> without a PR.</li>
           <li><strong>The diff fails closed, and the checkout it depends on is elsewhere in the file.</strong> Neither repo
           wraps the diff in <code>|| true</code> any more: an unresolvable diff prints an <code>::error::</code> and exits 1
-          (<code>MMCA.Store/.github/workflows/deploy.yml:246-253</code>,
+          (<code>MMCA.Store/.github/workflows/deploy.yml:251-258</code>,
           <code>MMCA.ADC/.github/workflows/deploy.yml:155-164</code>), and only a diff that resolves to an empty added
           list prints &quot;No new migration files in this diff: expand/contract guard passes.&quot; and exits 0
-          (<code>MMCA.Store/.github/workflows/deploy.yml:254-257</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:165-168</code>).
+          (<code>MMCA.Store/.github/workflows/deploy.yml:259-262</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:165-168</code>).
           Both <code>build-and-test</code> checkouts now set <code>fetch-depth: 0</code>
           (<code>MMCA.Store/.github/workflows/deploy.yml:135-141</code>, <code>MMCA.ADC/.github/workflows/deploy.yml:133-136</code>),
           so the two repos run the same step against the same git object graph. The residual cost is that the

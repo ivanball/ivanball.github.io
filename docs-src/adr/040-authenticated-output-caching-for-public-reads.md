@@ -20,10 +20,10 @@ The framework's read-scaling design leans on ASP.NET Core output caching: anonym
 endpoints (`[AllowAnonymous]` GETs like event/session/speaker catalogs) carry named policies with
 tag-based eviction, primed by startup warmup and load-tested by k6. Five minutes is the usual TTL
 and every Store Catalog policy uses it
-(`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:132-137`), but it is a default,
+(`MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:134-139`), but it is a default,
 not a rule: ADC runs two 60-second policies whose payload cannot wait five minutes (`NowNextCache`,
 a clock-dependent now-and-next snapshot, and `BookmarkCountsCache`, written by another service;
-`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:216,224`).
+`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:228,236`).
 
 That design was silently inert for the traffic that matters. The shared UI HttpClient pipeline
 attaches the stored Bearer token to every outgoing API request via `AuthDelegatingHandler`,
@@ -81,11 +81,11 @@ and the API-layer visibility check reads the same list
 Two lists naming different roles would put a privileged payload in the shared public entries and
 serve it to everyone, so the single declaration is the guard, not a convention. Nor is the bypass a
 narrow exception in practice: eight of ADC's nine public policies pass it
-(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:201-224`), the exception being
+(`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:213-236`), the exception being
 `NowNextCache`, whose published-data payload is identical for every role. Breadth has a second
 driver that role-shaped variance does not cover: the admin surfaces read back right after mutating
 and not every write path evicts tags, so a cached stale row version makes the next save throw
-`DbUpdateConcurrencyException` (`Program.cs:191-197`).
+`DbUpdateConcurrencyException` (`Program.cs:203-207`).
 
 ## Rationale
 
@@ -130,9 +130,9 @@ and not every write path evicts tags, so a cached stale row version makes the ne
   registration (`AddStackExchangeRedisOutputCache`) rather than new infrastructure. Both hosts put
   that registration in the same Redis-connection-string branch as `AddRedisDistributedCache` rather
   than next to `AddOutputCache`
-  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:135`,
-  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:96`), leaning on the framework
-  behavior their comments state (`Program.cs:131` and `:93`): `AddOutputCache` registers its store
+  (`MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:147`,
+  `MMCA.Store/Source/Services/MMCA.Store.Catalog.Service/Program.cs:98`), leaning on the framework
+  behavior their comments state (`Program.cs:143` and `:95-96`): `AddOutputCache` registers its store
   with `TryAdd`, so an explicit Redis registration wins regardless of call order. Read that as
   framework behavior per those host comments; nothing in these repos verifies it.
 
@@ -143,9 +143,9 @@ and not every write path evicts tags, so a cached stale row version makes the ne
   DIFFERENT service cannot evict this one's entries at all, and no store choice fixes that: ADC's
   bookmark counts are written by Engagement and read through Conference, so they carry a short TTL
   instead of relying on eviction (`BookmarkCountsCache`, 60 seconds,
-  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:224`). A payload that changes on
+  `MMCA.ADC/Source/Services/MMCA.ADC.Conference.Service/Program.cs:236`). A payload that changes on
   the clock is the same shape of problem with the same answer, since no mutation exists to evict on
-  (`NowNextCache`, 60 seconds, `Program.cs:216`). When adding a cached endpoint, check which
+  (`NowNextCache`, 60 seconds, `Program.cs:228`). When adding a cached endpoint, check which
   process owns every write that can change its payload, and whether time alone changes it.
 - Cache hit rate becomes meaningful for authenticated load tests; k6 scripts that log in now
   exercise the same cache path as anonymous ones.
