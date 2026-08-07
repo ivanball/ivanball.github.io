@@ -112,8 +112,6 @@
   --radius: 12px;
   --radius-sm: 8px;
   --radius-lg: 18px;
-  --maxw: 1140px;
-  --maxw-prose: 760px;
 }
 
 :root[data-theme="dark"] {
@@ -234,10 +232,11 @@ code, kbd { font-family: var(--font-mono); font-size: 0.9em; }
 .ink :focus-visible { outline-color: var(--ink-accent); }
 
 /* ----- Layout helpers ----- */
-.container { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 1.25rem; }
+/* The layout is fully fluid: no width cap, the page uses the whole viewport.
+   .prose keeps no cap either, for the same reason. */
+.container { width: 100%; margin: 0 auto; padding: 0 1.25rem; }
 .section { padding: var(--space-8) 0; }
 .section--alt { background: var(--bg-alt); }
-.prose { max-width: var(--maxw-prose); }
 .muted { color: var(--text-muted); }
 .center { text-align: center; }
 
@@ -1136,7 +1135,7 @@ figcaption { font-size: var(--step--1); color: var(--text-muted); margin-top: 0.
   .ink h1, .ink h2, .ink h3 { color: var(--text) !important; }
 
   /* Full-bleed content */
-  .container { max-width: none; padding: 0; }
+  .container { padding: 0; }
   main { padding: 0 !important; }
   .section, .section--alt, .page-head {
     padding: 0.35rem 0 !important;

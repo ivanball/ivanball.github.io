@@ -5,15 +5,9 @@
    ========================================================================== */
 
 /* ----- Two-column doc layout ----- */
-/* This stylesheet loads only on reference-library pages, so the containers go
-   fluid on doc pages alone: the sidebar and on-this-page rail are fixed
-   widths, so the article column takes all the horizontal room the viewport
-   offers (the site-wide 1140px cap left it ~590px on a wide monitor). The
-   header and footer stretch with it so all three keep the same edges. */
-.site-header > .container,
-.site-footer > .container,
-.doc-container { max-width: none; }
-
+/* The site layout is fully fluid (no .container width cap in styles.css), so
+   the fixed-width sidebar and on-this-page rail leave the article column all
+   the horizontal room the viewport offers. */
 .doc-container { padding-top: 1.5rem; padding-bottom: 3.5rem; }
 
 .doc-breadcrumb {
@@ -145,7 +139,7 @@
 
 /* ----- Rendered markdown content ----- */
 /* min-width: 0 lets the grid column shrink content instead of overflowing;
-   no width cap: the column is bounded only by the fluid layout above. */
+   no width cap: the column is bounded only by the fluid site layout. */
 .doc-content { min-width: 0; }
 .doc-kicker { margin-bottom: 0.4rem; }
 
