@@ -371,12 +371,10 @@ function makeRenderer(slugCounts) {
       const id = uniqueId(text);
       const inner = this.parser.parseInline(tokens);
       /* Collect the H2s for the on-this-page rail. Plain text only: the rail is a
-         narrow column, so inline code and links inside a heading are flattened.
-         H3s are collected separately: a dozen onboarding chapters section with
-         H3s under a single H1 and would otherwise get no rail at all. */
-      const railText = () => String(text).replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[`*_]/g, "").trim();
-      if (depth === 2 && CTX.toc) { CTX.toc.push({ id, text: railText() }); }
-      if (depth === 3 && CTX.toc3) { CTX.toc3.push({ id, text: railText() }); }
+         narrow column, so inline code and links inside a heading are flattened. */
+      if (depth === 2 && CTX.toc) {
+        CTX.toc.push({ id, text: String(text).replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[`*_]/g, "").trim() });
+      }
       return `<h${depth} id="${escapeAttr(id)}">${inner}</h${depth}>\n`;
     },
     html({ text }) {
@@ -790,10 +788,8 @@ const MAX_SECTIONS_PER_DOC = 60;
    fence is not a heading, and the renderer does not treat it as one either).
    Returns the lead text before the first H2, then one entry per section, in
    document order, so it can be zipped with the ids the renderer already
-   assigned in ctx.toc. `level` follows the same H3 fallback the rail uses, so
-   the search records and the rail always agree on what a section is. */
-function splitSections(md, level = 2) {
-  const headingRe = level === 3 ? /^###\s+\S/ : /^##\s+\S/;
+   assigned in ctx.toc. */
+function splitSections(md) {
   const lines = md.split(/\r?\n/);
   const lead = [];
   const sections = [];
@@ -801,7 +797,7 @@ function splitSections(md, level = 2) {
   let fenced = false;
   for (const line of lines) {
     if (/^\s{0,3}(```|~~~)/.test(line)) { fenced = !fenced; }
-    if (!fenced && headingRe.test(line)) {
+    if (!fenced && /^##\s+\S/.test(line)) {
       current = { body: [] };
       sections.push(current);
       continue;
@@ -873,38 +869,28 @@ function addSearchRecord({ url, section, doc, kind, source }) {
 const WRITTEN_DOCS = new Set();
 for (const col of collections) {
   for (const doc of col.docs) {
-    const ctx = { srcDir: col.srcDir, outRel: doc.outRel, hasMermaid: false, toc: [], toc3: [] };
+    const ctx = { srcDir: col.srcDir, outRel: doc.outRel, hasMermaid: false, toc: [] };
     const body = renderMarkdown(doc.md, ctx);
     if (ctx.hasMermaid) mermaidPages++;
     const isIndex = doc.file === col.indexSrc;
     const currentLabel = isIndex ? "Overview" : doc.label;
     const prefix = assetPrefix(doc.outRel);
-    /* H3 fallback: a document with NO H2s at all sections with H3s instead (a
-       dozen onboarding chapters do), so the rail and the search records fall
-       back to that level. Documents that merely have FEW H2s keep the H2
-       reading: mixing levels would put subsections beside their parents. */
-    let sectionLevel = 2;
-    let railToc = ctx.toc;
-    if (ctx.toc.length === 0 && ctx.toc3.length >= TOC_MIN_HEADINGS) {
-      sectionLevel = 3;
-      railToc = ctx.toc3;
-    }
-    const aside = tocHtml(railToc);
+    const aside = tocHtml(ctx.toc);
     if (aside) tocPages++;
 
     /* Index this document: one record for the document itself (its lead text),
-       then one per section. railToc holds the ids the renderer just assigned,
-       in document order, so zipping it with the split source keeps every anchor
+       then one per H2. ctx.toc holds the ids the renderer just assigned, in
+       document order, so zipping it with the split source keeps every anchor
        exactly in step with the page. */
     {
-      const { lead, sections } = splitSections(doc.md, sectionLevel);
+      const { lead, sections } = splitSections(doc.md);
       const docUrl = `/${toPosix(doc.outRel)}`;
       addSearchRecord({ url: docUrl, section: "", doc: doc.title, kind: col.title, source: lead });
-      const limit = Math.min(sections.length, railToc.length, MAX_SECTIONS_PER_DOC);
+      const limit = Math.min(sections.length, ctx.toc.length, MAX_SECTIONS_PER_DOC);
       for (let i = 0; i < limit; i++) {
         addSearchRecord({
-          url: `${docUrl}#${railToc[i].id}`,
-          section: railToc[i].text,
+          url: `${docUrl}#${ctx.toc[i].id}`,
+          section: ctx.toc[i].text,
           doc: doc.title,
           kind: col.title,
           source: sections[i],
