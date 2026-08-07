@@ -11,28 +11,28 @@ explained, and lists what could not be determined from source. All counts are re
 
 | Quantity | Count | Source |
 |----------|------:|--------|
-| `.cs` files scanned | 2,321 | `00-inventory.md` |
-|, in-scope | 2,233 | |
-|, generated/excluded | 88 | logged exception §2.1 |
-| Type declaration rows (incl. partial-class fragments) | 2,833 | `00-inventory.md` |
-| **Distinct type nodes (partials collapsed)** | **2,737** | the master checklist |
-| → mapped to a functional group | 2,737 | `classify.ps1` (0 unmapped) |
-| → individually sectioned (named in a chapter) | 1,556 | `verify.ps1` |
-| → rolled up by project (G25 test classes) | 1,181 | logged exception §2.2 |
-| Distinct `###` sections written across 27 chapters | 1,442 | covering the 1,556 (sibling families share a section, §2.3) |
+| `.cs` files scanned | 2,388 | `00-inventory.md` |
+|, in-scope | 2,294 | |
+|, generated/excluded | 94 | logged exception §2.1 |
+| Type declaration rows (incl. partial-class fragments) | 2,966 | `00-inventory.md` |
+| **Distinct type nodes (partials collapsed)** | **2,864** | the master checklist |
+| → mapped to a functional group | 2,864 | `classify.ps1` (0 unmapped) |
+| → individually sectioned (named in a chapter) | 1,598 | `verify.ps1` |
+| → rolled up by project (G25 test classes) | 1,266 | logged exception §2.2 |
+| Distinct `###` sections written across 27 chapters | 1,388 | covering the 1,598 (sibling families share a section, §2.3) |
 | Chapter overviews written | 27 | one per group |
 
-**Cross-check result:** `verify.ps1` confirms **0** of the 1,556 individually-sectioned types are
+**Cross-check result:** `verify.ps1` confirms **0** of the 1,598 individually-sectioned types are
 missing from their group chapter, every one appears as a `###` heading or in a sibling-family
-`File:Line` table. 2,737 = 1,556 individually-sectioned + 1,181 rolled-up. Nothing dropped, nothing
+`File:Line` table. 2,864 = 1,598 individually-sectioned + 1,266 rolled-up. Nothing dropped, nothing
 double-counted (each type maps to exactly one group).
 
 > **Caveat on what `verify.ps1` proves.** Its check is name presence: a type counts as covered when
 > its name appears as a `###` heading, in a sibling-family `File:Line` cell, **or anywhere in the
 > chapter text**. A type that is only named in passing therefore passes. A stricter check (heading or
-> table cell only) run at this pass reports **64** types that are cross-linked from other sections but
-> have no section of their own, so those anchors resolve nowhere. They are listed in §5 as an open
-> item, not a silent omission.
+> table cell only) run at the v1.135.0 pass reported **64** types that are cross-linked from other
+> sections but have no section of their own, so those anchors resolve nowhere. They are listed in §5
+> as an open item, not a silent omission (not re-measured at the v1.142.0 pass).
 
 > **Regeneration note (re-verified against current source, polyglot-persistence update).** This audit
 > was regenerated after the **polyglot-persistence framework enhancement** (MMCA.Common commit
@@ -702,6 +702,62 @@ double-counted (each type maps to exactly one group).
 >   elsewhere, which is exactly what produced the 42 duplicates above. New sections were inserted into
 >   the part where their siblings already live, leaving every other section byte-identical.
 
+> **Regeneration note (re-verified against current source, v1.142.0 full drift sweep).** Regenerated at
+> **framework v1.142.0** (MMCA.Common `710d29d`; MMCA.ADC `e50ce9b8`; both clean; `FACTS.md` is the
+> source of truth for the version and package figures). Net change since the v1.135.0 pass: **+127**
+> distinct nodes (2,737 to **2,864**), individually-sectioned 1,556 to **1,598**, rolled-up 1,181 to
+> **1,266**, cycles 20 to **21**. `classify.ps1`: **0 unmapped**, no new functional group needed, the
+> chapter count stays at 27. `verify.ps1`: **0 missing, rubric 34/34**. `###` sections 1,442 to
+> **1,388** (28 stale duplicate copies deleted after the full-roster re-author, plus sibling-family
+> consolidation in the rewritten parts; measured from `concat.ps1`'s per-chapter output). The delta
+> traces to the production-patterns extraction program and releases v1.136.0 through v1.142.0.
+> - **The dominant cluster is the user-account use-case extraction to Common.** The generic
+>   `ChangePassword`/`ChangePreferences`/`DeleteUser`/`GetUserPreferences` handler bases plus the
+>   user-scoping contracts (`IUserScopedRequest`, `IUserOwnedRequest`, `UserOwnershipRule`,
+>   `SoftDeletedUserValidator<TUser>`, `UserUseCaseLog`) landed in G14
+>   (`MMCA.Common.Application/Users/`), the preference/erasure domain contracts (`IErasableUser`,
+>   `IPasswordChangeableUser`, `IUserPreferences`) in G08 (`MMCA.Common.Domain/Auth/`),
+>   `OwnedByUserSpecification<TEntity, TIdentifierType>` in G03
+>   (`MMCA.Common.Domain/Specifications/OwnedByUserSpecification.cs:20`), and
+>   `UserAccountAuthControllerBase` in G12. The ADC Identity originals (`ChangePreferencesRequest`,
+>   `GetUserPreferencesQuery`, `UserPreferencesResponse`, the non-generic `SoftDeletedUserValidator`)
+>   were deleted from G23, and the Conference `OwnEventQuestionAnswerSpecification` /
+>   `OwnSessionQuestionAnswerSpecification` pair was replaced by the generic specification (G18).
+> - **Hosting extraction (G16/G24/G27-device).** The four per-service `KestrelConfiguration` classes
+>   were replaced by `KestrelEndpointExtensions` + `KestrelListenerSpec`
+>   (`MMCA.Common.Aspire/Kestrel/`), self-warmup gained the shared `SelfHttpWarmupTaskBase`
+>   (`MMCA.Common.Aspire/Warmup/`), and `MauiTokenStorageService` moved from `MMCA.ADC.UI` to
+>   `MMCA.Common.UI.Maui` (joined by the new `MainPageBase`).
+> - **New framework surface.** G07 +9 (the four value converters under
+>   `MMCA.Common.Infrastructure/Persistence/Conversions/`, `EntityTypeBuilderExtensions` /
+>   `IndexBuilderExtensions`, `IdentityModuleDbSeederBase<TUser>` + `SeedAccount`,
+>   `SoftDeleteFilterSql`); G04 +1 (`OutboxMetrics`); G12 +2 (`IdempotencyMetrics`,
+>   `UserAccountAuthControllerBase`); G08 +7; G14 +12; G16 +4; G18 +2 (`SessionizeSyncWarnings`,
+>   `SessionScoringWorkItem`); G20 -2 (`PublicLookupReader` removed, Kestrel config extracted);
+>   G25 +99 net rolled-up test types plus new individually-sectioned testing bases
+>   (`CrossServiceFixtureBase`, `DependencyInjectionAssert`, `TestPolling`,
+>   `ModuleConformanceTestsBase<TModule>`, `WebVitalsBudget`).
+> - **The 21st cycle is genuine and test-only.** `RecordingDistributedLock` and its nested `Handle`
+>   (`MMCA.ADC.Conference.Infrastructure.Tests/Services/SessionScoringProcessorTests.cs:197` and
+>   `:235`) reference each other; both are rolled-up test doubles, so no chapter section is affected.
+>   Edge resolution: **9,964** namespace-visible (~97%), **358** globally-unique fallback (348 to
+>   358), **28** dropped ambiguous (unchanged).
+> - **Method note: this pass re-authored to the new rosters, then deduplicated.** 53 approved units
+>   were re-authored from current source (15 overviews, 37 sections units, the G25 rollup), and the
+>   G18 repack fallout was closed by re-authoring **all 18** of its sections units so parts and unit
+>   boundaries are back in sync there. The re-author left 28 stale duplicate section copies behind in
+>   six not-re-authored parts; each was deleted in favor of the freshly authored owner copy, which
+>   emptied three part files entirely (`group-07-...-p07`, `group-26-...-p09`, `group-27-...-p07`,
+>   removed). A duplicate scan against the prior corpus now reports only legitimate same-name
+>   families (e.g. the five per-assembly Identity `DependencyInjection` classes, the fifth being the
+>   newly added `MMCA.ADC.Identity.API/DependencyInjection.cs:18`).
+> - **Spot-checks.** All 15 re-authored overviews plus the G25 rollup were adversarially spot-checked:
+>   14 CONFIRMED, one DRIFTED on a citation nit (the G10 overview called all four notification
+>   defaults no-ops; `IEmailSender`'s default is the real `SmtpEmailSender`,
+>   `MMCA.Common.Infrastructure/DependencyInjection.cs:234`, and `INotificationRecipientProvider`'s
+>   no-op default lives at `MMCA.Common.Application/Notifications/DependencyInjection.cs:67`); the
+>   sentence was corrected in place and re-verified against source.
+
 ---
 
 ## 2. Exceptions log (every deliberate omission, with reason)
@@ -714,10 +770,10 @@ the `.proto`/gRPC contracts (see [group-07](group-07-persistence-ef-core.md),
 [group-13](group-13-grpc-contracts.md), and [devops-testing](devops-testing.md)). The full file list is
 in [`00-inventory.md`](00-inventory.md#generated--excluded-artifacts-no-type-sections-written).
 
-### 2.2 Per-`[Fact]` test classes, rolled up by project (1,181 types)
+### 2.2 Per-`[Fact]` test classes, rolled up by project (1,266 types)
 Per the guide's TESTS note, individual test classes are **not** given per-type sections. The
 [Testing chapter (group-27)](group-27-testing-infrastructure.md) instead:
-- sections the **reusable** test infrastructure in full (the **154** types in `MMCA.Common.Testing`,
+- sections the **reusable** test infrastructure in full (the **168** types in `MMCA.Common.Testing`,
   `.Testing.E2E`, `.Testing.UI`, the shared **`.Testing.Architecture`** rule library + bases, now
   including the six convention/fitness bases added since v1.93.0, the web-vitals collector, the
   localization resx-parity base, the slice-cohesion base, the markup-snapshot helper, the new
@@ -725,12 +781,14 @@ Per the guide's TESTS note, individual test classes are **not** given per-type s
   ServiceInfo-versioning contract bases) and the shared `HttpTestDoubles` UI harness added since
   v1.111.0, the shared `ProductionHostApplicationFactory<TEntryPoint>` /
   `GracefulShutdownTestsBase<TEntryPoint>` host bases and the `ObservabilityConventionTestsBase`
-  fitness base added this pass, and the per-repo architecture-fitness test classes plus the `Gallery`
-  harness), and
-- rolls the remaining **1,121** per-suite test classes (including the `MMCA.Common.Benchmarks`
+  fitness base added at the v1.135.0 pass, plus the cross-service fixture/data-source bases,
+  `DependencyInjectionAssert`, `TestPolling`, `ModuleConformanceTestsBase<TModule>` and the
+  `WebVitalsBudget` added at the v1.142.0 pass, and the per-repo architecture-fitness test classes
+  plus the `Gallery` harness), and
+- rolls the remaining **1,266** per-suite test classes (including the `MMCA.Common.Benchmarks`
   perf-smoke project) into a **per-project table** (purpose + style:
   unit / integration / fitness / E2E / component / performance-smoke).
-Every one of the 1,121 remains individually listed with `file:line` in
+Every one of the 1,266 remains individually listed with `file:line` in
 [`00-inventory.md`](00-inventory.md). This is the only category of first-party type not given its own
 prose section.
 
